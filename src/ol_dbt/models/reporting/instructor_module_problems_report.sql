@@ -55,7 +55,9 @@ inner join user
 inner join course_run
     on enrollment.courserun_fk = course_run.courserun_pk
 inner join problem
-    on course_run.courserun_readable_id = problem.courserun_readable_id
+    on
+        course_run.courserun_readable_id = problem.courserun_readable_id
+        and course_run.platform = problem.platform
 left join problem_events
     on
         problem.problem_block_pk = problem_events.problem_block_fk
