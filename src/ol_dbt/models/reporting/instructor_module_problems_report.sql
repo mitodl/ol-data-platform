@@ -34,7 +34,7 @@ with enrollment as (
     select * from {{ ref('dim_organization') }}
 )
 
-select 
+select
     user.email as user_email
     , user.full_name
     , course_run.courserun_readable_id
@@ -55,19 +55,19 @@ inner join course_run
 inner join problem
     on course_run.courserun_readable_id = problem.courserun_readable_id
 left join problem_events
-    on 
+    on
         problem.problem_block_pk = problem_events.problem_block_fk
         and user.user_pk = problem_events.user_fk
 left join course_content as content
-    on 
+    on
         problem.content_block_fk = content.content_block_pk
         and content.is_latest = true
 left join course_content as section
-    on 
+    on
         content.chapter_block_id = section.block_id
         and section.is_latest = true
 left join course_content as subsection
-    on 
+    on
         content.sequential_block_id = subsection.block_id
         and subsection.is_latest = true
 left join course
