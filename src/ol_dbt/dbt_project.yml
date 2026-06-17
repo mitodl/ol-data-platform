@@ -38,12 +38,13 @@ vars:
 
   open_learning:
     platforms: ["Bootcamps", "xPro", "xPRO Emeritus", "xPRO Global Alumni", "MITx\
-        \ Online", "MicroMasters", "edX.org", "Residential MITx"]
+        \ Online", "MicroMasters", "edX.org", "Residential MITx", "MIT Learn"]
     bootcamps: "Bootcamps"
     edxorg: "edX.org"
     mitxpro: "xPro"
     micromasters: "MicroMasters"
     mitxonline: "MITx Online"
+    mitlearn: "MIT Learn"
     residential: "Residential MITx"
     emeritus: "xPRO Emeritus"
     global_alumni: "xPRO Global Alumni"

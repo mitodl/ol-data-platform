@@ -43,9 +43,9 @@ models:
     - unique
   - name: user_email
     description: string, user email on the corresponding platform including xpro,
-      bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
-      and MITx Online then the email will be chosen from the last platform they joined
-      if their account is active. May be null for some xPRO Emeritus learners.
+      bootcamps, edX.org, MITx Online, Residential MITx, and MIT Learn. If the user
+      is on edX.org and MITx Online then the email will be chosen from the last platform
+      they joined if their account is active. May be null for some xPRO Emeritus learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
@@ -105,6 +105,8 @@ models:
     description: int, user ID on MITxPRO
   - name: user_bootcamps_id
     description: int, user ID on bootcamps
+  - name: user_mitlearn_id
+    description: int, user ID on MIT Learn
   - name: user_mitxonline_username
     description: string, username on MITxOnline
   - name: user_edxorg_username
@@ -141,7 +143,8 @@ models:
       arguments:
         column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
           "user_bootcamps_username", "platforms"]
-        row_condition: "platforms not in ('xPRO Emeritus', 'xPRO Global Alumni')"
+        row_condition: "platforms not in ('xPRO Emeritus', 'xPRO Global Alumni', 'MIT\
+          \ Learn')"
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
   columns:
