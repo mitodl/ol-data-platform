@@ -71,6 +71,8 @@ left join course_content as content
 left join course_content as section
     on
         content.chapter_block_id = section.block_id
+        and content.platform = section.platform
+        and content.courserun_readable_id = section.courserun_readable_id
         and section.is_latest = true
 left join course_content as subsection
     on
