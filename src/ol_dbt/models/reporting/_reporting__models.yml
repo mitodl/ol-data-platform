@@ -1369,3 +1369,31 @@ models:
   - name: user_latest_row_desc
     description: integer, row number indicating the latest row for each user based
       on application and course run dates
+
+- name: instructor_module_problems_report
+  description: A report showing learner problem data for later roll-up at the instructor level.
+  columns:
+  - name: user_email
+    description: string, email address of the user
+  - name: full_name
+    description: string, full name of the user
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course code}+{run_tag}
+  - name: section_title
+    description: string, title of the chapter (section) block within the course
+  - name: subsection_title
+    description: string, title of the sequential (subsection) block within the course
+  - name: problem_name
+    description: string, name of the problem 
+  - name: attempt
+    description: int, number of attempt the user made on this problem
+  - name: success
+    description: int, whether the attempt was successful 1 or 0
+  - name: grade
+    description: decimal, grade received for this attempt
+  - name: platform
+    description: string, name of the platform (e.g. MITx Online, edX.org, xPRO, etc.)
+  - name: course_title
+    description: string, title of the course
+  - name: organization_name
+    description: string, name of the organization
