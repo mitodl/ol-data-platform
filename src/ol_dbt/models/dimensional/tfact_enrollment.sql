@@ -20,7 +20,6 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_status as enrollment_status
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
-        , courserunenrollment_is_edx_enrolled as enrollment_is_edx_enrolled
     from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
@@ -38,7 +37,6 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_status as enrollment_status
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
-        , courserunenrollment_is_edx_enrolled as enrollment_is_edx_enrolled
     from {{ ref('int__mitxpro__courserunenrollments') }}
 )
 
@@ -57,7 +55,6 @@ with mitxonline_enrollments as (
         , null as enrollment_status
         , 'edxorg' as platform
         , 'edxorg' as platform_code
-        , true as enrollment_is_edx_enrolled
     from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
 )
 
@@ -80,7 +77,6 @@ with mitxonline_enrollments as (
         , programenrollment_enrollment_status as enrollment_status
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
-        , cast(null as boolean) as enrollment_is_edx_enrolled
     from {{ ref('int__mitxonline__programenrollments') }}
 )
 
@@ -98,7 +94,6 @@ with mitxonline_enrollments as (
         , null as enrollment_status
         , 'residential' as platform
         , 'residential' as platform_code
-        , true as enrollment_is_edx_enrolled
     from {{ ref('int__mitxresidential__courserun_enrollments') }}
 )
 
@@ -116,7 +111,6 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_status as enrollment_status
         , 'bootcamps' as platform
         , 'bootcamps' as platform_code
-        , cast(null as boolean) as enrollment_is_edx_enrolled
     from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
@@ -269,7 +263,6 @@ with mitxonline_enrollments as (
         , enrollment_status
         , enrollment_created_on
         , enrollment_updated_on
-        , enrollment_is_edx_enrolled
     from enrollments_with_fks as ewf
 
     {% if is_incremental() %}
@@ -313,7 +306,6 @@ with mitxonline_enrollments as (
         , enrollment_status
         , enrollment_created_on
         , enrollment_updated_on
-        , enrollment_is_edx_enrolled
         , row_number() over (
             partition by enrollment_key
             order by coalesce(enrollment_updated_on, enrollment_created_on) desc nulls last
@@ -336,6 +328,5 @@ select
     , enrollment_status
     , enrollment_created_on
     , enrollment_updated_on
-    , enrollment_is_edx_enrolled
 from final_deduped
 where _row_num = 1
