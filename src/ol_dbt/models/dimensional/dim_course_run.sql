@@ -19,6 +19,7 @@ with mitxonline_courseruns as (
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'mitxonline' as platform
+        , courserun_upgrade_deadline
     from {{ ref('int__mitxonline__course_runs') }}
 )
 
@@ -36,6 +37,7 @@ with mitxonline_courseruns as (
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'mitxpro' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__mitxpro__course_runs') }}
 )
 
@@ -53,6 +55,7 @@ with mitxonline_courseruns as (
         , cast(null as varchar) as courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'edxorg' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
 
@@ -70,6 +73,7 @@ with mitxonline_courseruns as (
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'residential' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__mitxresidential__courseruns') }}
 )
 
@@ -87,6 +91,7 @@ with mitxonline_courseruns as (
         , cast(null as varchar) as courserun_created_on
         , runs.course_readable_id
         , 'bootcamps' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__bootcamps__course_runs') }} as runs
 )
 
@@ -136,6 +141,7 @@ with mitxonline_courseruns as (
                 else courserun_readable_id
             end
         ) as course_readable_id
+        , courserun_upgrade_deadline
     from combined_courseruns
 )
 
@@ -201,6 +207,7 @@ with mitxonline_courseruns as (
         , current_timestamp as effective_date
         , cast(null as timestamp) as end_date
         , true as is_current
+        , courserun_upgrade_deadline
     from courseruns_with_all_fks
 
     {% if is_incremental() %}
@@ -245,6 +252,7 @@ with mitxonline_courseruns as (
         , existing.effective_date
         , current_timestamp as end_date
         , false as is_current
+        , existing.courserun_upgrade_deadline
     from {{ this }} as existing
     inner join final as new_records
         on existing.courserun_readable_id = new_records.courserun_readable_id
