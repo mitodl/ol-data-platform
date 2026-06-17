@@ -603,6 +603,38 @@ with mitx_users as (
     where row_num = 1
 )
 
+-- address_state is MITxOnline-specific (state from legal address); sparse for other platforms.
+, mitxonline_address_state as (
+    select
+        user_id as mitxonline_application_user_id
+        , user_address_state as address_state
+    from {{ ref('int__mitxonline__users') }}
+    where user_address_state is not null
+)
+
+-- Most recent flexible pricing (financial aid) application per MITxOnline user.
+-- Sparse: only populated for users who have submitted an income-based aid application.
+, latest_income as (
+    select
+        user_id
+        , flexiblepriceapplication_income_usd as latest_income_usd
+        , flexiblepriceapplication_original_income as latest_original_income
+        , flexiblepriceapplication_original_currency as latest_original_currency
+    from (
+        select
+            user_id
+            , flexiblepriceapplication_income_usd
+            , flexiblepriceapplication_original_income
+            , flexiblepriceapplication_original_currency
+            , row_number() over (
+                partition by user_id
+                order by flexiblepriceapplication_updated_on desc
+            ) as rn
+        from {{ ref('int__mitxonline__flexiblepricing_flexiblepriceapplication') }}
+    )
+    where rn = 1
+)
+
 , agg_view as (
     select
         user_pk
@@ -666,6 +698,10 @@ select
     , base.company
     , base.job_title
     , base.industry
+    , mitxonline_address_state.address_state
+    , latest_income.latest_income_usd
+    , latest_income.latest_original_income
+    , latest_income.latest_original_currency
     , learn_user_topic_interests.topic_interests as topic_interests
     , learn_profile.user_goals as goals
     , learn_profile.user_delivery_preference as delivery_preference
@@ -688,3 +724,6 @@ from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id
 left join learn_user_topic_interests on learn_profile.profile_id = learn_user_topic_interests.profile_id
+left join mitxonline_address_state
+    on agg.mitxonline_application_user_id = mitxonline_address_state.mitxonline_application_user_id
+left join latest_income on agg.mitxonline_application_user_id = latest_income.user_id
