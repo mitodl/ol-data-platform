@@ -12,44 +12,59 @@ from dagster import (
     AssetKey,
     AssetSpec,
 )
+from dagster._core.definitions.metadata.metadata_set import TableMetadataSet
 from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
 from dagster_dlt.translator import DltResourceTranslatorData
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
 from .loads import (
+    dagster_env,
     edxorg_s3_pipeline,
     edxorg_s3_source,
     edxorg_s3_source_instance,
     table_format,
 )
 
+_STORAGE_KIND = "iceberg" if dagster_env in ("qa", "production") else "filesystem"
+
 
 class EdxorgDltTranslator(DagsterDltTranslator):
     """Custom translator for edxorg dlt assets with upstream dependencies."""
 
     def get_asset_spec(self, data: DltResourceTranslatorData) -> AssetSpec:
-        """
-        Map dlt resource to Dagster asset spec with one-to-one upstream deps.
-        """
-        # Get the default spec from parent
         default_spec = super().get_asset_spec(data)
 
         # The resource name is raw__edxorg__s3__tables__{table}
         resource_name = data.resource.name
-
-        # Create asset key with ol_warehouse_raw_data prefix
         asset_key = AssetKey(["ol_warehouse_raw_data", resource_name])
 
-        # Extract table name and create upstream dependency
         deps = []
+        table_name_meta = {}
         if resource_name.startswith("raw__edxorg__s3__tables__"):
-            table_name = resource_name.replace("raw__edxorg__s3__tables__", "")
-            # Add non-blocking dependency on upstream partitioned asset
-            deps = [AssetDep(AssetKey(["edxorg", "raw_data", "db_table", table_name]))]
+            short_name = resource_name.replace("raw__edxorg__s3__tables__", "")
+            deps = [AssetDep(AssetKey(["edxorg", "raw_data", "db_table", short_name]))]
+            # Assemble the Glue catalog fully-qualified name.  dlt does not
+            # populate schema_name in load_info for filesystem+Iceberg
+            # destinations, so extract_resource_metadata leaves table_name
+            # as None.  Set it explicitly here from the pipeline dataset_name.
+            if data.pipeline and data.pipeline.dataset_name:
+                table_name_meta = dict(
+                    TableMetadataSet(
+                        table_name=f"{data.pipeline.dataset_name}.{resource_name}"
+                    )
+                )
 
         return default_spec.replace_attributes(
             key=asset_key,
             deps=deps,
+            # storage_kind defaults to the named destination ("production"),
+            # not the actual storage type.  Override with the real kind.
+            kinds={"dlt", _STORAGE_KIND},
+            metadata={
+                **default_spec.metadata,
+                **table_name_meta,
+                **TableMetadataSet(storage_kind=_STORAGE_KIND),
+            },
         )
 
 
@@ -106,7 +121,11 @@ def edxorg_s3_consolidated_tables(
     # between tables via AssumeRoleWithWebIdentity (IRSA).
     for table_name in selected_tables:
         table_source = edxorg_s3_source(tables=[table_name], table_format=table_format)
-        yield from dlt.run(context=context, dlt_source=table_source)
+        yield from dlt.run(
+            context=context,
+            dlt_source=table_source,
+            loader_file_format="parquet",
+        )
 
 
 __all__ = ["edxorg_s3_consolidated_tables"]

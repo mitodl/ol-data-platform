@@ -28,7 +28,6 @@ from pathlib import Path
 
 import dlt
 import s3fs
-from dlt.extract import DltResource
 from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv_duckdb
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
@@ -68,94 +67,96 @@ def edxorg_s3_source(
     tables_to_load = tables if tables is not None else EDXORG_DB_TABLES
 
     for table_name in tables_to_load:
-        # Create a resource for each table with standardized naming
-        @dlt.resource(
-            name=f"raw__edxorg__s3__tables__{table_name}",
-            write_disposition="merge",
+        resource_name = f"raw__edxorg__s3__tables__{table_name}"
+        # Pattern to match ONLY prod TSV files for this table
+        # Matches: db_table/{table_name}/prod/*/*.tsv
+        # Excludes: db_table/{table_name}/edge/*/*.tsv (edge staging files)
+        file_glob = f"db_table/{table_name}/prod/**/*.tsv"
+
+        # Create an s3fs filesystem WITHOUT explicit credentials.
+        #
+        # dlt's AwsCredentials.to_session_credentials() calls
+        # get_frozen_credentials(), which snapshots the live IRSA
+        # RefreshableCredentials object as static strings and passes
+        # them to s3fs.S3FileSystem(key=..., secret=..., token=...).
+        # Once s3fs holds explicit static strings there is no refresh
+        # path: when the STS session token expires (~1 hour by default)
+        # every subsequent GetObject call fails with ExpiredToken.
+        #
+        # By constructing S3FileSystem with no explicit key/secret/token
+        # we bypass dlt's credential snapshotting entirely.  aiobotocore
+        # then uses its own credential chain which, for IRSA pods, invokes
+        # AioAssumeRoleWithWebIdentityFetcher and wraps the result in
+        # AioRefreshableCredentials.  Those credentials automatically call
+        # AssumeRoleWithWebIdentity again whenever the token expires, so
+        # the pipeline can run indefinitely without hitting ExpiredToken.
+        #
+        # dlt's filesystem() source accepts an AbstractFileSystem instance
+        # as its `credentials` parameter and uses it directly, skipping
+        # its own credential-dispatch logic.
+        #
+        # Do NOT pass extract_content=True.  That flag reads the entire
+        # file into Python bytes in a single blocking request before
+        # passing it to read_csv_duckdb, which can itself exceed a token
+        # lifetime for very large tables.  Leaving it False lets
+        # read_csv_duckdb stream the content chunk-by-chunk via PyArrow.
+        fs = s3fs.S3FileSystem()
+
+        # Pass incremental directly to filesystem() so dlt tracks the
+        # modification_date cursor per-resource.  Only files newer than
+        # the cursor from the last successful run are processed.
+        files = filesystem(
+            bucket_url=bucket_url,
+            file_glob=file_glob,
+            credentials=fs,
+            incremental=incremental("modification_date"),
+        )
+
+        # Pipe filesystem items through read_csv_duckdb, then rename and
+        # configure the resulting resource.  Using with_name() + apply_hints()
+        # is required here: a @dlt.resource wrapper that *returns* another
+        # DltResource causes dlt to replace the outer resource entirely,
+        # discarding its name, write_disposition, primary_key, and
+        # table_format hints.  The resulting writes land under the
+        # transformer's own name ("read_csv_duckdb"), making schema and job
+        # lookups fail.  Applying hints directly on the pipe avoids this.
+        yield (
+            (
+                files
+                | read_csv_duckdb(
+                    use_pyarrow=True,
+                    delimiter="\t",  # TSV files use tabs
+                    ignore_errors=True,
+                    # Force all columns to VARCHAR to prevent pyarrow schema mismatches.
+                    # This occurs when DuckDB infers different types for the same column
+                    # across files (e.g., TIMESTAMP vs. VARCHAR for columns that are
+                    # empty in some files). Downstream dbt models handle type casting.
+                    all_varchar=True,
+                )
+            )
+            .with_name(resource_name)
             # All edxorg TSV exports include a row_hash column. Use a composite key
             # with extracted_course_key because row_hash is computed from only the
             # original CSV columns (excluding the extracted_* fields added during
             # archive processing), so identical rows from different courses would
             # otherwise collide on row_hash alone.
-            primary_key=["row_hash", "extracted_course_key"],
-            table_format=table_format,
+            .apply_hints(
+                write_disposition="merge",
+                primary_key=["row_hash", "extracted_course_key"],
+                table_format=table_format,
+            )
         )
-        def load_table(table=table_name) -> DltResource:
-            """
-            Load TSV files for a specific table from S3.
-
-            Uses incremental loading based on file modification_date to avoid
-            reprocessing unchanged files on subsequent runs.
-
-            Only processes 'prod' source files, excluding 'edge' staging environment.
-            """
-
-            # Pattern to match ONLY prod TSV files for this table
-            # Matches: db_table/{table_name}/prod/*/*.tsv (prod/course_id/*.tsv)
-            # Excludes: db_table/{table_name}/edge/*/*.tsv (edge staging files)
-            file_glob = f"db_table/{table}/prod/**/*.tsv"
-
-            # Create an s3fs filesystem WITHOUT explicit credentials.
-            #
-            # dlt's AwsCredentials.to_session_credentials() calls
-            # get_frozen_credentials(), which snapshots the live IRSA
-            # RefreshableCredentials object as static strings and passes
-            # them to s3fs.S3FileSystem(key=..., secret=..., token=...).
-            # Once s3fs holds explicit static strings there is no refresh
-            # path: when the STS session token expires (~1 hour by default)
-            # every subsequent GetObject call fails with ExpiredToken.
-            #
-            # By constructing S3FileSystem with no explicit key/secret/token
-            # we bypass dlt's credential snapshotting entirely.  aiobotocore
-            # then uses its own credential chain which, for IRSA pods, invokes
-            # AioAssumeRoleWithWebIdentityFetcher and wraps the result in
-            # AioRefreshableCredentials.  Those credentials automatically call
-            # AssumeRoleWithWebIdentity again whenever the token expires, so
-            # the pipeline can run indefinitely without hitting ExpiredToken.
-            #
-            # dlt's filesystem() source accepts an AbstractFileSystem instance
-            # as its `credentials` parameter and uses it directly, skipping
-            # its own credential-dispatch logic.
-            #
-            # Do NOT pass extract_content=True.  That flag reads the entire
-            # file into Python bytes in a single blocking request before
-            # passing it to read_csv_duckdb, which can itself exceed a token
-            # lifetime for very large tables.  Leaving it False lets
-            # read_csv_duckdb stream the content chunk-by-chunk via PyArrow.
-            fs = s3fs.S3FileSystem()
-            files = filesystem(
-                bucket_url=bucket_url,
-                file_glob=file_glob,
-                credentials=fs,
-            )
-
-            # Enable incremental loading based on file modification date
-            # Only processes files modified since the last successful run
-            files.apply_hints(incremental=incremental("modification_date"))
-
-            return files | read_csv_duckdb(
-                use_pyarrow=True,
-                delimiter="\t",  # TSV files use tabs
-                ignore_errors=True,
-                # Force all columns to VARCHAR to prevent pyarrow schema mismatches.
-                # This occurs when DuckDB infers different types for the same column
-                # across files (e.g., TIMESTAMP vs. VARCHAR for columns that are
-                # empty in some files). Downstream dbt models handle type casting.
-                all_varchar=True,
-            )
-
-        yield load_table
 
 
 # Determine environment and destination
 # Use DAGSTER_ENVIRONMENT to determine destination and Glue database
-dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+dagster_env: str = os.getenv("DAGSTER_ENVIRONMENT", "dev")
 
 # Map DAGSTER_ENVIRONMENT to destination config
 # dev/ci -> local filesystem (Parquet, no Iceberg, no Glue)
 # qa -> filesystem + Iceberg (S3 + ol_warehouse_qa_raw Glue database)
 # production -> filesystem + Iceberg (S3 + ol_warehouse_production_raw Glue database)
-table_format = "iceberg"
+table_format = "iceberg" if dagster_env in ("qa", "production") else "parquet"
 if dagster_env in ("qa", "production"):
     destination_env = dagster_env
     dataset_name = f"ol_warehouse_{dagster_env}_raw"
