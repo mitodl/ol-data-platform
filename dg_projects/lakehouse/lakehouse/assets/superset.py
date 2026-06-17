@@ -61,9 +61,14 @@ def create_superset_asset(
         context: AssetExecutionContext,
         superset_api: SupersetApiClientFactory,
     ):
+        # StarRocks (and most non-Trino databases) normalize identifiers to
+        # lowercase. Trino preserves the original case from the dbt model name.
+        table_name = (
+            dbt_model_name if database_name == "trino" else dbt_model_name.lower()
+        )
         dataset_id = superset_api.client.get_or_create_dataset(
             schema_suffix=dbt_asset_group_name,
-            table_name=dbt_model_name,
+            table_name=table_name,
             database_id=database_id,
             schema_base=schema_base,
         )
