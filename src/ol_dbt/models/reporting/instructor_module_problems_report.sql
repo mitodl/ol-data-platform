@@ -61,6 +61,8 @@ inner join problem
 left join problem_events
     on
         problem.problem_block_pk = problem_events.problem_block_fk
+        and problem.platform = problem_events.platform
+        and problem.courserun_readable_id = problem_events.courserun_readable_id
         and user.user_pk = problem_events.user_fk
 left join course_content as content
     on
