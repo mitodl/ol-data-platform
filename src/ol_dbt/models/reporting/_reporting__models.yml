@@ -1391,9 +1391,9 @@ models:
   - name: attempt
     description: int, attempt number for the user's submission
   - name: success
-    description: int, whether the attempt was successful 1 or 0
+    description: string, correctness of the attempt (e.g. 'correct' or 'incorrect')
   - name: grade
-    description: decimal, grade received for this attempt
+    description: number, grade received for this attempt
   - name: platform
     description: string, name of the platform (e.g. MITx Online, edX.org, xPRO, etc.)
   - name: course_title
