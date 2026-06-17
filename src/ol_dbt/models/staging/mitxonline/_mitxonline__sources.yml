@@ -2101,6 +2101,27 @@ sources:
       description: the method to use to manage membership in the contract. e.g. SSO,
         Non-SSO
 
+  - name: raw__mitxonline__app__postgres__b2b_userorganization
+    description: MITx Online B2B user-to-organization membership records
+    columns:
+    - name: id
+      data_type: bigint
+      description: primary key for this table
+    - name: user_id
+      data_type: bigint
+      description: foreign key to users_user
+    - name: organization_id
+      data_type: bigint
+      description: foreign key to b2b_organizationpage (page_ptr_id)
+    - name: keep_until_seen
+      data_type: boolean
+      description: if true, the user is retained in the organization until their SSO
+        data is next observed
+    - name: is_manager
+      data_type: boolean
+      description: if true, the user is a manager of this organization and can access
+        organization dashboard features
+
   - name: raw__mitxonline__app__postgres__wagtailimages_image
     description: Images uploaded to MITx Online Wagtail CMS image library. NOTE -
       this table must be added to the MITx Online Airbyte ingest before this source

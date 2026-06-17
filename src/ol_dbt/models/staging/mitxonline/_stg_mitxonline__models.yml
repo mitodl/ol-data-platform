@@ -2100,6 +2100,34 @@ models:
     description: the method to use to manage membership in the contract. e.g. SSO,
       Non-SSO
 
+- name: stg__mitxonline__app__postgres__b2b_userorganization
+  description: MITx Online B2B user-to-organization membership records
+  columns:
+  - name: userorganization_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique
+  - name: user_id
+    data_type: bigint
+    description: foreign key to users_user
+    data_tests:
+    - not_null
+  - name: organization_id
+    data_type: bigint
+    description: foreign key to b2b_organizationpage
+    data_tests:
+    - not_null
+  - name: userorganization_keep_until_seen
+    data_type: boolean
+    description: if true, the user is retained in the organization until their SSO
+      data is next observed
+  - name: userorganization_is_manager
+    data_type: boolean
+    description: if true, the user is a manager of this organization and can access
+      organization dashboard features
+
 - name: stg__mitxonline__app__postgres__wagtailimages_image
   description: Images uploaded to MITx Online's Wagtail CMS image library. Used to
     resolve image_id foreign keys on CMS page tables to their file paths. Requires

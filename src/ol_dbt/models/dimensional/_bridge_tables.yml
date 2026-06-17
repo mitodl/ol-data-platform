@@ -144,3 +144,34 @@ models:
       combination_of_columns:
       - course_fk
       - department_fk
+
+- name: bridge_user_organization
+  description: >
+    MITx Online B2B user-to-organization membership bridge.
+    Grain: one row per (user, organization) membership.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - user_fk
+      - organization_fk
+  columns:
+  - name: user_fk
+    description: Foreign key to dim_user.user_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: organization_fk
+    description: Foreign key to dim_organization.organization_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_organization')
+        field: organization_pk
+  - name: userorganization_keep_until_seen
+    description: If true, the user is retained in the organization until their SSO
+      data is next observed.
+  - name: userorganization_is_manager
+    description: If true, the user is a manager of this organization and can access
+      organization dashboard features.
