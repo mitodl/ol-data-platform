@@ -77,6 +77,8 @@ left join course_content as section
 left join course_content as subsection
     on
         content.sequential_block_id = subsection.block_id
+        and content.platform = subsection.platform
+        and content.courserun_readable_id = subsection.courserun_readable_id
         and subsection.is_latest = true
 left join course
     on course_run.course_fk = course.course_pk
