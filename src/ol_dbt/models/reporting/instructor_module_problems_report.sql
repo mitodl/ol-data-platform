@@ -25,6 +25,7 @@ with enrollment as (
 
 , course as (
     select * from {{ ref('dim_course') }}
+    where is_current = true
 )
 
 , organization_courserun as (
