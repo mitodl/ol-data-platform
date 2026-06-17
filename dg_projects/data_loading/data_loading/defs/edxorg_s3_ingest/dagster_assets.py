@@ -63,7 +63,7 @@ class EdxorgDltTranslator(DagsterDltTranslator):
             metadata={
                 **default_spec.metadata,
                 **table_name_meta,
-                **TableMetadataSet(storage_kind=_STORAGE_KIND),
+                **dict(TableMetadataSet(storage_kind=_STORAGE_KIND)),
             },
         )
 

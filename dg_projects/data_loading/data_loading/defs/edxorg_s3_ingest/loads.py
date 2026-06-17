@@ -141,6 +141,7 @@ def edxorg_s3_source(
             # archive processing), so identical rows from different courses would
             # otherwise collide on row_hash alone.
             .apply_hints(
+                table_name=resource_name,
                 write_disposition="merge",
                 primary_key=["row_hash", "extracted_course_key"],
                 table_format=table_format,
