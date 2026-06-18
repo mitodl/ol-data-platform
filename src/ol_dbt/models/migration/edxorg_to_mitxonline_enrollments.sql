@@ -302,6 +302,17 @@ where
         edxorg_enrollment.courseruncertificate_created_on is not null
         or future_run_id_mapping.edxorg_courserun_readable_id is not null
     )
-    and mitxonline_enrollment.user_email is null
-    and mitxonline_enrollment_by_userid.user_id is null
+    and (
+        (mitxonline_enrollment.user_email is null and mitxonline_enrollment_by_userid.user_id is null)
+        -- Include future-run enrollments where edX mode was upgraded to verified but the
+        -- existing MITx Online enrollment is still audit
+        or (
+            future_run_id_mapping.edxorg_courserun_readable_id is not null
+            and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
+            and coalesce(
+                mitxonline_enrollment.courserunenrollment_enrollment_mode
+                , mitxonline_enrollment_by_userid.courserunenrollment_enrollment_mode
+            ) = 'audit'
+        )
+    )
     and retired_users.user_id is null
