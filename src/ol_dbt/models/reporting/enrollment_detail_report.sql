@@ -110,6 +110,8 @@ with enrollment as (
     group by
         order_id
         , platform
+        , courserun_readable_id
+        , user_email
         , redeemed_email
 )
 
