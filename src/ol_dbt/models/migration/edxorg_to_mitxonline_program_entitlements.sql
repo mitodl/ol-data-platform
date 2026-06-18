@@ -11,6 +11,8 @@ with mitxonline_programs as (
           -- Supply Chain Management: edX.org uses short title, MITx Online uses full branding
           when program_title like 'Supply Chain Management'
               then 'MITx MicroMasters® Program in Supply Chain Management'
+          when program_title like 'Finance'
+              then 'MITx MicroMasters Program in Finance'
           else program_title
         end as program_title
         , user_email
