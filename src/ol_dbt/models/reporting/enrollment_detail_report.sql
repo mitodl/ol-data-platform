@@ -132,6 +132,15 @@ with enrollment as (
         , user_email
 )
 
+, course_passed_counts as (
+    select
+        user_email
+        , count(distinct course_title) as num_of_course_passed
+    from combined_enrollment_detail
+    where courserungrade_is_passing = true
+    group by user_email
+)
+
 select
     case enrollment.platform
         when 'bootcamps' then '{{ var("bootcamps") }}'
@@ -177,6 +186,7 @@ select
         else null
       end as user_username
     , d_user.email as user_email
+    , course_passed_counts.num_of_course_passed
     , discount.discount_code as coupon_code
     , discount_names.discount_name as coupon_name
     , discount_amount as discount
@@ -272,3 +282,5 @@ left join order_emails
     end = order_emails.platform
     and course_run.courserun_readable_id = order_emails.courserun_readable_id
     and d_user.email = order_emails.user_email
+left join course_passed_counts
+    on d_user.email = course_passed_counts.user_email
