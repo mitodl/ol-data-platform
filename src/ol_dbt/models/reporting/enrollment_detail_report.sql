@@ -193,7 +193,7 @@ select
     , discount_type_name
     , order_emails.redeemed_email
     , if(
-        enrollment.platform = '{{ var("mitxonline") }}'
+        enrollment.platform = 'mitxonline'
         , concat('https://mitxonline.mit.edu/orders/receipt/', cast(f_order.order_id as varchar))
         , null
     ) as receipt_url
