@@ -244,7 +244,16 @@ left join discount_names
     on discount.discount_code = discount_names.discount_code
 left join enrollment_upgrades
     on f_order.order_id = enrollment_upgrades.order_id
-    and enrollment.platform = enrollment_upgrades.platform
+     and case enrollment.platform
+        when 'bootcamps' then '{{ var("bootcamps") }}'
+        when 'edxorg' then '{{ var("edxorg") }}'
+        when 'emeritus' then '{{ var("emeritus") }}'
+        when 'global_alumni' then '{{ var("global_alumni") }}'
+        when 'mitxonline' then '{{ var("mitxonline") }}'
+        when 'mitxpro' then '{{ var("mitxpro") }}'
+        when 'residential' then '{{ var("residential") }}'
+        else enrollment.platform
+    end = enrollment_upgrades.platform
     and course_run.courserun_readable_id = enrollment_upgrades.courserun_readable_id
     and d_user.email = enrollment_upgrades.user_email
 left join order_emails
