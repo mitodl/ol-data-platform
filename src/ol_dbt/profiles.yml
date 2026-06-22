@@ -77,3 +77,21 @@ open_learning:
         s3_region: '{{ env_var("AWS_DEFAULT_REGION", "us-east-1") }}'
         s3_access_key_id: '{{ env_var("AWS_ACCESS_KEY_ID", "") }}'
         s3_secret_access_key: '{{ env_var("AWS_SECRET_ACCESS_KEY", "") }}'
+    starrocks_qa:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
+        }}'
+      port: 9030
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}'
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
+    starrocks_production:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
+        }}'
+      port: 9030
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}'
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
