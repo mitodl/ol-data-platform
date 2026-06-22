@@ -233,11 +233,11 @@ models:
     description: string, order state. Options are "cancelled", "created", "declined",
       "errored", "failed", "fulfilled", "refunded", "partially_refunded",  "pending",
       "review".
-  - name: order_created_on
-    description: timestamp, specifying when the order was initially created. If this
-      is a b2b order it will be the timestamp that order was created otherwise it
-      will be when the regular order was created. For edX.org, it is the timestamp
-      that order was created in MicroMasters application.
+  - name: order_updated_on
+    description: timestamp, specifying when the order was last updated. If this is
+      a b2b order it will be the timestamp that order was updated otherwise it will
+      be when the regular order was updated. For edX.org, it is the timestamp that
+      order was updated in MicroMasters application.
   - name: receipt_payment_amount
     description: numeric, total amount for the order - req_amount from cybersource
       payment
@@ -252,9 +252,8 @@ models:
     description: numeric, price for the order line item before discount
   - name: program_name
     description: string, name of the program the course belongs to
-  - name: order_type
-    description: string, type of the order. Only populated for some platforms/orders
-      and may be null for others.
+  - name: discount_type_name
+    description: string, type of discount
   - name: redeemed_email
     description: string, email address associated with the redeemed order/seat. For
       some platforms this may differ from the purchaser email, while for others (for
