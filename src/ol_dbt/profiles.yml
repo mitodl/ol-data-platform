@@ -82,6 +82,7 @@ open_learning:
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
         }}'
       port: 9030
+      database: default_catalog
       schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}'
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
@@ -91,6 +92,7 @@ open_learning:
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
         }}'
       port: 9030
+      database: default_catalog
       schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}'
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
