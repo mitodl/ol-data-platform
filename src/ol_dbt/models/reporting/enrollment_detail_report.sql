@@ -170,8 +170,6 @@ select
     , certificate_created_on as courseruncertificate_created_on
     , certificate_issued_on as courseruncertificate_issued_on
     , case when certificate_issued_on is not null then true else false end as courseruncertificate_is_earned
-    , case when certificate_uuid is not null
-        then concat('https://mitxonline.mit.edu/certificate/', certificate_uuid)
     , case enrollment.platform
         when 'mitxonline' then
             case when certificate_uuid is not null
