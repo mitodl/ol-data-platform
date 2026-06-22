@@ -172,7 +172,21 @@ select
     , case when certificate_issued_on is not null then true else false end as courseruncertificate_is_earned
     , case when certificate_uuid is not null
         then concat('https://mitxonline.mit.edu/certificate/', certificate_uuid)
-        else null end as courseruncertificate_url
+    , case enrollment.platform
+        when 'mitxonline' then
+            case when certificate_uuid is not null
+            then concat('https://mitxonline.mit.edu/certificate/', certificate_uuid)
+            else null end
+        when 'mitxpro' then
+            case when certificate_uuid is not null
+            then concat('https://xpro.mit.edu/certificate/', certificate_uuid)
+            else null end
+        when 'bootcamps' then
+            case when certificate_uuid is not null
+            then concat('https://bootcamps.mit.edu/certificate/', certificate_uuid)
+            else null end
+        else null
+    end as courseruncertificate_url
     , grade_value as courserungrade_grade
     , is_passing as courserungrade_is_passing
     , organization_key
