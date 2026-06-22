@@ -142,6 +142,15 @@ models:
       +schema: integrations
       +grants:
         select: ["read_only_production", "ol_data_analyst", "reverse_etl", "mit_learn_etl"]
+    b2b_analytics:
+      +materialized: table
+      +schema: b2b_analytics
+      +grants: {}
+      +properties: {}
+      +meta:
+        required_docs: true
+        iceberg_maintenance:
+          enabled: false
     external:
       +materialized: table
       +schema: external
