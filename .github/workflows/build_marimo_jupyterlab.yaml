@@ -41,7 +41,7 @@ jobs:
       uses: docker/setup-buildx-action@v4
 
     - name: Build and push image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: images/marimo-jupyterlab
         platforms: linux/amd64
