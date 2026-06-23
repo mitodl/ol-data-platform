@@ -59,7 +59,7 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "etl_source": "mit_climate",
         "offered_by": {"code": "climate"},
         "platform": "climate",
-        "resource_category": "Article",
+        "resource_type": "Article",
         "created_on": row.get("last_modified"),
     }
 
