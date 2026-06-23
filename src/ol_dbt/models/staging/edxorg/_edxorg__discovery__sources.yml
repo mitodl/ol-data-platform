@@ -1,0 +1,45 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database }}'
+  schema: >
+    {{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw
+  tables:
+  - name: raw__edxorg__discovery__api__programs
+    description: >
+      MIT-authored edX.org programs ingested from the edX Programs API via
+      the mit_edx_programs dlt pipeline. Full replace on every run; filtered
+      to active, non-MicroMasters programs authored by a known MIT
+      organization key. One row per program, keyed by uuid.
+    columns:
+    - name: uuid
+      description: >
+        str, unique program UUID from edX.org (used as primary key by dlt)
+    - name: title
+      description: str, program title
+    - name: subtitle
+      description: str, optional short subtitle for the program
+    - name: overview
+      description: str, optional longer overview/description text
+    - name: marketing_url
+      description: str, full marketing URL for the program on edX.org
+    - name: status
+      description: >
+        str, program status — always "active" after pipeline filtering
+    - name: type
+      description: >
+        str, program type (e.g. "Professional Certificate",
+        "MicroBachelors")
+    - name: card_image_url
+      description: str, URL for the program card image
+    - name: subjects
+      description: >
+        str, JSON array of subject objects
+        (e.g. '[{"name": "Engineering"}]')
+    - name: courses
+      description: >
+        str, JSON array of course objects
+        (e.g. '[{"key": "MITx/6.00.1x"}]')
