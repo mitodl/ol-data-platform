@@ -1,0 +1,5 @@
+---
+catalog:
+  aws_glue:
+    type: glue
+    py-io-impl: pyiceberg.io.pyarrow.PyArrowFileIO

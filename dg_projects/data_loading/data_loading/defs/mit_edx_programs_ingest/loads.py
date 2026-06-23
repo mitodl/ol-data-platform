@@ -176,14 +176,15 @@ def mit_edx_programs_source(
 # or environment variables when the source is actually executed.
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
-_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"mit_edx_programs_{_dagster_env}"
     _dataset_name = f"ol_warehouse_{_dagster_env}_raw"
+    _table_format = "iceberg"
 else:
     _destination_name = "mit_edx_programs_local"
     _dataset_name = "mit_edx_programs_local"
+    _table_format = "parquet"
 
 mit_edx_programs_load_source = mit_edx_programs_source()
 
