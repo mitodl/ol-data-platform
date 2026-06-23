@@ -224,6 +224,7 @@ with mitxonline_courseruns as (
             and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
             and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
             and coalesce(existing.courserun_is_live, false) = coalesce(courseruns_with_all_fks.courserun_is_live, false)
+            and coalesce(existing.courserun_upgrade_deadline, '') = coalesce(courseruns_with_all_fks.courserun_upgrade_deadline, '')
     )
     {% endif %}
 )
