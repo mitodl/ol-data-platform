@@ -79,14 +79,15 @@ def mitpe_source(
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
-_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"mitpe_{_dagster_env}"
     _dataset_name = f"ol_warehouse_{_dagster_env}_raw"
+    _table_format = "iceberg"
 else:
     _destination_name = "mitpe_local"
     _dataset_name = "mitpe_local"
+    _table_format = "parquet"
 
 mitpe_load_source = mitpe_source(
     base_url=os.getenv("MITPE_BASE_URL", _MITPE_BASE_URL_DEFAULT),

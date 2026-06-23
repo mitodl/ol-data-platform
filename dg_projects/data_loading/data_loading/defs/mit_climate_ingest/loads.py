@@ -83,14 +83,15 @@ def mit_climate_source(
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
-_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"mit_climate_{_dagster_env}"
     _dataset_name = f"ol_warehouse_{_dagster_env}_raw"
+    _table_format = "iceberg"
 else:
     _destination_name = "mit_climate_local"
     _dataset_name = "mit_climate_local"
+    _table_format = "parquet"
 
 mit_climate_load_source = mit_climate_source(
     explainers_url=os.getenv("MIT_CLIMATE_EXPLAINERS_API_URL", _EXPLAINERS_URL_DEFAULT),

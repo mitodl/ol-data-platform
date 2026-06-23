@@ -302,14 +302,15 @@ def podcast_rss_source(  # noqa: C901
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
-_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"podcast_{_dagster_env}"
     _dataset_name = f"ol_warehouse_{_dagster_env}_raw"
+    _table_format = "iceberg"
 else:
     _destination_name = "podcast_local"
     _dataset_name = "podcast_rss_local"
+    _table_format = "parquet"
 
 podcast_rss_load_source = podcast_rss_source()
 
