@@ -39,6 +39,10 @@ with fp as (
         on course_enrollments.user_id = fp.user_id
     inner join runs
         on course_enrollments.courserun_readable_id = runs.courserun_readable_id
+    where
+        course_enrollments.mitxonline_program_id in (1, 2, 3)
+        and fp.flexiblepriceapplication_status in ('approved', 'auto-approved')
+        and cast(fp.flexiblepriceapplication_income_usd as decimal(38,2)) < 10000
 )
 
 select
