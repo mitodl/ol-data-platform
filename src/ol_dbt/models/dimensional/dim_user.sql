@@ -21,6 +21,7 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , user_address_state
         , user_is_active_on_mitxonline
         , user_is_active_on_edxorg
         , user_joined_on_mitxonline
@@ -62,6 +63,7 @@ with mitx_users as (
     select
         user_id
         , user_address_country
+        , user_address_state_or_territory
     from {{ ref('stg__mitxpro__app__postgres__users_legaladdress') }}
 )
 
@@ -91,6 +93,7 @@ with mitx_users as (
         , mitxpro_users.user_email
         , mitxpro_users.user_full_name
         , mitxpro_legaladdress.user_address_country
+        , mitxpro_legaladdress.user_address_state_or_territory
         , mitxpro_profile.user_highest_education
         , mitxpro_profile.user_gender
         , mitxpro_profile.user_birth_year
@@ -211,6 +214,7 @@ with mitx_users as (
         , mitx_users.company
         , mitx_users.job_title
         , mitx_users.industry
+        , mitx_users.user_address_state
         , mitx_users.user_is_active_on_mitxonline
         , mitx_users.user_joined_on_mitxonline
         , mitx_users.user_is_active_on_edxorg
@@ -282,6 +286,7 @@ with mitx_users as (
         , mitx_users_view.company
         , mitx_users_view.job_title
         , mitx_users_view.industry
+        , mitx_users_view.user_address_state
         , learn_user_view.user_is_active_on_mitlearn
         , learn_user_view.user_joined_on_mitlearn
         , mitx_users_view.user_is_active_on_mitxonline
@@ -332,6 +337,7 @@ with mitx_users as (
         , company
         , job_title
         , industry
+        , user_address_state as address_state
         , user_is_active_on_mitlearn
         , user_joined_on_mitlearn
         , user_is_active_on_mitxonline
@@ -378,6 +384,7 @@ with mitx_users as (
         , mitxpro_user_view.user_company as company
         , mitxpro_user_view.user_job_title as job_title
         , mitxpro_user_view.user_industry as industry
+        , mitxpro_user_view.user_address_state_or_territory as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -426,6 +433,7 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , null as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -471,6 +479,7 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , null as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -516,6 +525,7 @@ with mitx_users as (
         , null as company
         , null as job_title
         , null as industry
+        , null as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -560,6 +570,7 @@ with mitx_users as (
         , bootcamps_user_view.user_company as company
         , bootcamps_user_view.user_job_title as job_title
         , bootcamps_user_view.user_industry as industry
+        , bootcamps_user_view.user_address_state_or_territory as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -603,15 +614,6 @@ with mitx_users as (
     where row_num = 1
 )
 
--- address_state is MITxOnline-specific (state from legal address); sparse for other platforms.
-, mitxonline_address_state as (
-    select
-        user_id as mitxonline_application_user_id
-        , user_address_state as address_state
-    from {{ ref('int__mitxonline__users') }}
-    where user_address_state is not null
-)
-
 -- Most recent flexible pricing (financial aid) application per MITxOnline user.
 -- Sparse: only populated for users who have submitted an income-based aid application.
 , latest_income as (
@@ -631,7 +633,7 @@ with mitx_users as (
                 order by flexiblepriceapplication_updated_on desc
             ) as rn
         from {{ ref('int__mitxonline__flexiblepricing_flexiblepriceapplication') }}
-    )
+    ) as ranked
     where rn = 1
 )
 
@@ -698,7 +700,7 @@ select
     , base.company
     , base.job_title
     , base.industry
-    , mitxonline_address_state.address_state
+    , base.address_state
     , latest_income.latest_income_usd
     , latest_income.latest_original_income
     , latest_income.latest_original_currency
@@ -724,6 +726,4 @@ from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id
 left join learn_user_topic_interests on learn_profile.profile_id = learn_user_topic_interests.profile_id
-left join mitxonline_address_state
-    on agg.mitxonline_application_user_id = mitxonline_address_state.mitxonline_application_user_id
 left join latest_income on agg.mitxonline_application_user_id = latest_income.user_id
