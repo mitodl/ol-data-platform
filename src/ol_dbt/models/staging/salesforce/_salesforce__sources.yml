@@ -8,7 +8,13 @@ sources:
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
   - name: raw__thirdparty__salesforce___destination_v2__Opportunity
-    description: Salesforce opportunity, which is a sale or pending deal
+    description: >
+      Salesforce opportunity, which is a sale or pending deal.
+
+      WARNING: This source is unreliable. The Salesforce seat license used for the
+      Airbyte integration is periodically revoked to control costs, which causes
+      syncs to fail and leaves data stale. Do not build hard dependencies on this
+      source without confirming the integration is currently active.
     columns:
     - name: id
       description: string, globally unique string that identifies an opportunity
@@ -180,7 +186,13 @@ sources:
         records.
 
   - name: raw__thirdparty__salesforce___destination_v2__OpportunityLineItem
-    description: Salesforce opportunity product line items
+    description: >
+      Salesforce opportunity product line items.
+
+      WARNING: This source is unreliable. The Salesforce seat license used for the
+      Airbyte integration is periodically revoked to control costs, which causes
+      syncs to fail and leaves data stale. Do not build hard dependencies on this
+      source without confirming the integration is currently active.
     columns:
     - name: id
       description: string, unique string that identifies this opportunity product
