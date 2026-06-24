@@ -344,8 +344,6 @@ models:
     description: string, readable product type
     tests:
     - not_null
-  - name: salesforce_opportunity_id
-    description: string, ID of Salesforce Opportunity
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       arguments:

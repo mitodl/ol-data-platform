@@ -3,7 +3,12 @@ version: 2
 
 models:
 - name: stg__salesforce__opportunity
-  description: Salesforce opportunity data which can be a sale or pending deal
+  description: >
+    Salesforce opportunity data which can be a sale or pending deal.
+
+    WARNING: The Salesforce seat license used for the Airbyte integration is
+    periodically revoked for cost reasons, causing syncs to fail and data to go
+    stale. This model should not be used as a hard dependency in downstream logic.
   columns:
   - name: opportunity_id
     description: string, globally unique string that identifies an opportunity
@@ -96,7 +101,12 @@ models:
     - not_null
 
 - name: stg__salesforce__opportunitylineitem
-  description: Salesforce opportunity product line items
+  description: >
+    Salesforce opportunity product line items.
+
+    WARNING: The Salesforce seat license used for the Airbyte integration is
+    periodically revoked for cost reasons, causing syncs to fail and data to go
+    stale. This model should not be used as a hard dependency in downstream logic.
   columns:
   - name: opportunitylineitem_id
     description: string, unique string that identifies this opportunity product line
