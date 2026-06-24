@@ -669,6 +669,9 @@ with mitx_users as (
         , max(bootcamps_application_user_id) as bootcamps_application_user_id
         , max(user_is_active_on_bootcamps) as user_is_active_on_bootcamps
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
+        -- Fallback full_name in case the base row (most recent platform) has a null name.
+        -- Cross-platform users may have their base row on a platform with null full_name.
+        , max(full_name) as agg_full_name
     from combined_users
     group by user_pk
 )
@@ -692,7 +695,7 @@ select
     , agg.global_alumni_user_id
     , agg.micromasters_user_id
     , base.email
-    , base.full_name
+    , coalesce(base.full_name, agg.agg_full_name) as full_name
     , base.address_country
     , base.highest_education
     , base.gender

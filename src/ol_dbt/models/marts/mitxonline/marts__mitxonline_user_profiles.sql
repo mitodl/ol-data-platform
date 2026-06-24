@@ -12,3 +12,4 @@ select
     , latest_original_currency
 from {{ ref('dim_user') }}
 where user_mitxonline_username is not null
+    and mitxonline_application_user_id is not null
