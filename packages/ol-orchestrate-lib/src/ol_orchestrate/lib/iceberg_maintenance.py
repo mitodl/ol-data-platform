@@ -87,6 +87,28 @@ class RawLayerTableInfo:
     latest_snapshot_timestamp_ms: int | None = None
 
 
+@dataclass(frozen=True)
+class SnapshotPointerLag:
+    """A table whose Iceberg current-snapshot-id lags behind the latest snapshot.
+
+    This indicates that Airbyte wrote new snapshots to the history but did not
+    advance the current-snapshot-id pointer, leaving dbt/Trino reading stale data.
+    """
+
+    table_name: str
+    database: str
+    current_snapshot_id: int
+    current_snapshot_timestamp_ms: int
+    latest_snapshot_id: int
+    latest_snapshot_timestamp_ms: int
+
+    @property
+    def lag_hours(self) -> float:
+        return (
+            self.latest_snapshot_timestamp_ms - self.current_snapshot_timestamp_ms
+        ) / 3_600_000
+
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 # Source-group-level overrides for raw-layer maintenance.
@@ -473,3 +495,219 @@ def load_raw_layer_maintenance_work(
         sum(t.eligible_snapshot_count for t in results),
     )
     return results
+
+
+def find_snapshot_pointer_lag(  # noqa: C901
+    glue_database: str,
+    table_prefixes: list[str],
+    min_lag_hours: float = 2.0,
+    region: str = AWS_REGION,
+) -> list[SnapshotPointerLag]:
+    """Scan Iceberg tables and return those whose current-snapshot-id is stale.
+
+    Airbyte incremental syncs append new snapshots to the Iceberg history but
+    occasionally fail to advance ``current-snapshot-id`` — a bug observed when
+    a connection reset triggers a full-refresh that pins the pointer, after which
+    subsequent incremental syncs accumulate in the history without becoming
+    visible to Trino/dbt.
+
+    Only tables whose names start with one of *table_prefixes* are scanned, which
+    keeps this fast when called from a sensor.  Pass the high-frequency group
+    prefixes (e.g. ``["raw__xpro__app", "raw__mitxonline__app"]``) to limit scope.
+
+    A table is reported only when the gap between the current-snapshot timestamp
+    and the latest-snapshot timestamp exceeds *min_lag_hours*.  Short gaps (< 2 h)
+    are expected during the write window and should not alert.
+    """
+    glue_client = boto3.client("glue", region_name=region)
+    catalog = get_glue_catalog(region=region)
+    min_lag_ms = int(min_lag_hours * 3_600_000)
+
+    iceberg_table_names: list[str] = []
+    paginator = glue_client.get_paginator("get_tables")
+    for page in paginator.paginate(DatabaseName=glue_database):
+        for table in page.get("TableList", []):
+            name = table["Name"]
+            if not any(name.startswith(p) for p in table_prefixes):
+                continue
+            if table.get("Parameters", {}).get("table_type", "").upper() == "ICEBERG":
+                iceberg_table_names.append(name)
+
+    log.info(
+        "Snapshot pointer scan: checking %d tables in %s",
+        len(iceberg_table_names),
+        glue_database,
+    )
+
+    lagging: list[SnapshotPointerLag] = []
+    for table_name in iceberg_table_names:
+        try:
+            table = catalog.load_table(f"{glue_database}.{table_name}")
+            snapshots = table.metadata.snapshots
+            if not snapshots:
+                continue
+
+            current_id = table.metadata.current_snapshot_id
+            current_snap = next(
+                (s for s in snapshots if s.snapshot_id == current_id), None
+            )
+            latest_snap = max(snapshots, key=lambda s: s.timestamp_ms)
+
+            if current_id == latest_snap.snapshot_id:
+                continue
+
+            if current_snap is None:
+                log.warning(
+                    "%s: current_snapshot_id %s not found in snapshot list",
+                    table_name,
+                    current_id,
+                )
+                continue
+
+            lag_ms = latest_snap.timestamp_ms - current_snap.timestamp_ms
+            if lag_ms < min_lag_ms:
+                continue
+
+            lagging.append(
+                SnapshotPointerLag(
+                    table_name=table_name,
+                    database=glue_database,
+                    current_snapshot_id=current_snap.snapshot_id,
+                    current_snapshot_timestamp_ms=current_snap.timestamp_ms,
+                    latest_snapshot_id=latest_snap.snapshot_id,
+                    latest_snapshot_timestamp_ms=latest_snap.timestamp_ms,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Could not check snapshot pointer for %s: %s", table_name, exc)
+
+    lagging.sort(key=lambda t: t.lag_hours, reverse=True)
+    log.info(
+        "Snapshot pointer scan complete: %d/%d tables have stale pointer",
+        len(lagging),
+        len(iceberg_table_names),
+    )
+    return lagging
+
+
+def advance_snapshot_pointer(
+    glue_database: str,
+    table_name: str,
+    region: str = AWS_REGION,
+) -> dict[str, Any]:
+    """Advance ``current-snapshot-id`` to the latest snapshot for a lagging table.
+
+    This repairs the Airbyte bug where incremental syncs append new Iceberg
+    snapshots to the history but do not advance the ``current-snapshot-id``
+    pointer.  Trino and dbt always read the current snapshot, so without this
+    fix they see stale data even though newer snapshots exist.
+
+    The repair is a safe, additive operation:
+
+    1. Read the existing Iceberg metadata JSON from S3.
+    2. Write a *new* metadata JSON (with a fresh UUID filename) that sets
+       ``current-snapshot-id`` to the latest snapshot and appends an entry to
+       ``snapshot-log`` if one is missing.
+    3. Update the Glue ``metadata_location`` parameter to point at the new file.
+
+    Returns a result dict with keys ``skipped``, ``old_snapshot_id``,
+    ``new_snapshot_id``, ``lag_hours``, and ``new_metadata_location``.
+    """
+    import json  # noqa: PLC0415
+    import uuid  # noqa: PLC0415
+
+    glue_client = boto3.client("glue", region_name=region)
+    s3_client = boto3.client("s3", region_name=region)
+    catalog = get_glue_catalog(region=region)
+
+    table = catalog.load_table(f"{glue_database}.{table_name}")
+    snapshots = table.metadata.snapshots
+    current_id = table.metadata.current_snapshot_id
+
+    if not snapshots:
+        return {"skipped": True, "reason": "no snapshots"}
+
+    latest_snap = max(snapshots, key=lambda s: s.timestamp_ms)
+
+    if current_id == latest_snap.snapshot_id:
+        return {"skipped": True, "reason": "already current"}
+
+    current_snap = next((s for s in snapshots if s.snapshot_id == current_id), None)
+    lag_hours: float | None = (
+        (latest_snap.timestamp_ms - current_snap.timestamp_ms) / 3_600_000
+        if current_snap
+        else None
+    )
+
+    glue_response = glue_client.get_table(DatabaseName=glue_database, Name=table_name)
+    params = glue_response["Table"].get("Parameters", {})
+    metadata_location = params.get("metadata_location", "")
+    if not metadata_location.startswith("s3://"):
+        return {
+            "skipped": True,
+            "reason": f"unexpected metadata_location: {metadata_location}",
+        }
+
+    bucket, old_key = metadata_location[5:].split("/", 1)
+    metadata_dir = old_key.rsplit("/", 1)[0]
+
+    obj = s3_client.get_object(Bucket=bucket, Key=old_key)
+    metadata: dict[str, Any] = json.loads(obj["Body"].read())
+
+    metadata["current-snapshot-id"] = latest_snap.snapshot_id
+
+    existing_log_ids = {
+        entry.get("snapshot-id") for entry in metadata.get("snapshot-log", [])
+    }
+    if latest_snap.snapshot_id not in existing_log_ids:
+        metadata.setdefault("snapshot-log", []).append(
+            {
+                "snapshot-id": latest_snap.snapshot_id,
+                "timestamp-ms": latest_snap.timestamp_ms,
+            }
+        )
+
+    new_key = f"{metadata_dir}/{uuid.uuid4()}.metadata.json"
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=new_key,
+        Body=json.dumps(metadata),
+        ContentType="application/json",
+    )
+    new_metadata_location = f"s3://{bucket}/{new_key}"
+
+    # Build the minimal TableInput Glue needs for an update call — strip
+    # read-only fields that the API rejects.
+    _read_only = {
+        "DatabaseName",
+        "CreateTime",
+        "UpdateTime",
+        "IsRegisteredWithLakeFormation",
+        "CatalogId",
+        "VersionId",
+        "IsMultiDialectView",
+    }
+    table_input = {
+        k: v for k, v in glue_response["Table"].items() if k not in _read_only
+    }
+    table_input.setdefault("Parameters", {})["metadata_location"] = (
+        new_metadata_location
+    )
+
+    glue_client.update_table(DatabaseName=glue_database, TableInput=table_input)
+
+    log.info(
+        "Advanced snapshot pointer for %s.%s: %s → %s (%.1fh lag resolved)",
+        glue_database,
+        table_name,
+        current_id,
+        latest_snap.snapshot_id,
+        lag_hours or 0,
+    )
+    return {
+        "skipped": False,
+        "old_snapshot_id": current_id,
+        "new_snapshot_id": latest_snap.snapshot_id,
+        "lag_hours": lag_hours,
+        "new_metadata_location": new_metadata_location,
+    }
