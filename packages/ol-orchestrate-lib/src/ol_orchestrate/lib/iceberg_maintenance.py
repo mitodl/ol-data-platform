@@ -643,10 +643,11 @@ def advance_snapshot_pointer(
     params = glue_response["Table"].get("Parameters", {})
     metadata_location = params.get("metadata_location", "")
     if not metadata_location.startswith("s3://"):
-        return {
-            "skipped": True,
-            "reason": f"unexpected metadata_location: {metadata_location}",
-        }
+        msg = (
+            f"{glue_database}.{table_name}: unexpected metadata_location "
+            f"{metadata_location!r} — cannot repair safely"
+        )
+        raise ValueError(msg)
 
     bucket, old_key = metadata_location[5:].split("/", 1)
     metadata_dir = old_key.rsplit("/", 1)[0]
@@ -671,7 +672,7 @@ def advance_snapshot_pointer(
     s3_client.put_object(
         Bucket=bucket,
         Key=new_key,
-        Body=json.dumps(metadata),
+        Body=json.dumps(metadata).encode("utf-8"),
         ContentType="application/json",
     )
     new_metadata_location = f"s3://{bucket}/{new_key}"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 
@@ -14,20 +15,33 @@ from dagster import (
     op,
     sensor,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
-    RAW_LAYER_GROUP_CONFIGS,
     advance_snapshot_pointer,
     find_snapshot_pointer_lag,
 )
 
 log = logging.getLogger(__name__)
 
-RAW_DATABASE = "ol_warehouse_production_raw"
+# dev mirrors production so engineers can test against live data without a
+# separate QA raw database (same pattern as the iceberg_maintenance asset).
+_RAW_DATABASE_BY_ENV: dict[str, str] = {
+    "production": "ol_warehouse_production_raw",
+    "qa": "ol_warehouse_qa_raw",
+    "dev": "ol_warehouse_production_raw",
+    "ci": "ol_warehouse_qa_raw",
+}
+RAW_DATABASE = _RAW_DATABASE_BY_ENV.get(DAGSTER_ENV, "ol_warehouse_production_raw")
 
-# Only scan the high-frequency groups (≤ 12 h sync interval).  Pointer lag in
-# low-frequency tables is less urgent and would generate noise.
+# Explicit list of high-frequency (6 h) Airbyte source groups to scan.
+# The thirdparty groups (salesforce, zendesk) sync much less often and are
+# deliberately excluded to keep the sensor fast and the alert signal clean.
 _HIGH_FREQUENCY_PREFIXES = [
-    prefix for prefix in RAW_LAYER_GROUP_CONFIGS if prefix != "_default"
+    "raw__mitxonline__app",
+    "raw__xpro__app",
+    "raw__mitlearn__app",
+    "raw__learn_ai__app",
+    "raw__ocw__studio",
 ]
 
 # Alert when the pointer lags behind the latest snapshot by more than this.
@@ -77,11 +91,21 @@ def repair_lagging_snapshot_pointers(context):
             continue
 
         if result.get("skipped"):
-            context.log.warning(
-                "Skipped %s: %s",
-                info.table_name,
-                result.get("reason", "unknown"),
-            )
+            reason = result.get("reason", "unknown")
+            if reason == "already current":
+                # Resolved between sensor tick and job run — harmless.
+                context.log.info(
+                    "%s pointer is already current, skipping.", info.table_name
+                )
+            else:
+                # Unexpected skip: treat as failure so the Slack run-failure
+                # alert fires and the issue is not silently masked.
+                context.log.error(
+                    "Unexpected skip for %s: %s — treating as failure.",
+                    info.table_name,
+                    reason,
+                )
+                failed.append(info.table_name)
         else:
             context.log.info(
                 "Repaired %s: %s → %s",
@@ -131,25 +155,32 @@ def iceberg_snapshot_pointer_lag_sensor(
     new_lagging = currently_lagging - previously_lagging
     recovered = previously_lagging - currently_lagging
 
-    run_requests = []
     if new_lagging:
         context.log.warning(
-            "Snapshot pointer lag detected in %d new table(s): %s — "
-            "triggering repair run.",
+            "Snapshot pointer lag detected in %d new table(s): %s",
             len(new_lagging),
             ", ".join(sorted(new_lagging)),
         )
-        # run_key deduplicates: one repair run per unique set of newly-lagging tables.
-        run_requests.append(
-            RunRequest(run_key=f"repair-{'_'.join(sorted(new_lagging))}")
+    if currently_lagging - new_lagging:
+        context.log.warning(
+            "Snapshot pointer lag persists in %d table(s): %s",
+            len(currently_lagging - new_lagging),
+            ", ".join(sorted(currently_lagging - new_lagging)),
         )
-
     if recovered:
         context.log.info(
             "Snapshot pointer lag resolved for %d table(s): %s",
             len(recovered),
             ", ".join(sorted(recovered)),
         )
+
+    run_requests = []
+    if currently_lagging:
+        # Include the UTC hour in the run_key so that failed repair runs are
+        # retried on the next hourly tick rather than being silently skipped
+        # (Dagster's run_key deduplication prevents re-running the same key).
+        hour_bucket = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H")
+        run_requests.append(RunRequest(run_key=f"repair-{hour_bucket}"))
 
     return SensorResult(
         run_requests=run_requests,
