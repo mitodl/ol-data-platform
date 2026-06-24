@@ -1,0 +1,108 @@
+slice_name: Enrollment Detail
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 148__table
+  viz_type: table
+  slice_id: 218
+  matrixify_enable: false
+  matrixify_mode_columns: disabled
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_topn_value_columns: 10
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_topn_order_columns: true
+  matrixify_show_column_headers: true
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_rows: disabled
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_topn_value_rows: 10
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_topn_order_rows: true
+  matrixify_show_row_labels: true
+  matrixify_row_height: 300
+  matrixify_charts_per_row: 3
+  matrixify_cell_title_template: ''
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - platform
+  - user_email
+  - user_full_name
+  - courserun_readable_id
+  - courserun_title
+  - courserun_start_on
+  - courserun_end_on
+  - order_id
+  - courserunenrollment_id
+  - program_name
+  - courserunenrollment_enrollment_mode
+  - courserunenrollment_created_on
+  - courserunenrollment_enrollment_status
+  - courserunenrollment_is_active
+  - courserunenrollment_upgraded_on
+  - courserungrade_grade
+  - courserungrade_is_passing
+  - courseruncertificate_is_earned
+  - courseruncertificate_created_on
+  - courseruncertificate_url
+  - order_reference_number
+  - receipt_payment_timestamp
+  - receipt_payer_email
+  - receipt_payment_method
+  - receipt_payment_amount
+  - coupon_code
+  - coupon_name
+  - unit_price
+  - discount
+  - order_state
+  - receipt_url
+  - user_username
+  - user_country_code
+  - organization_name
+  - redeemed_email
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  server_pagination: false
+  row_limit: 50000
+  percent_metric_calculation: row_limit
+  show_totals: false
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_rearrange_columns: false
+  allow_render_html: true
+  column_config:
+    courserunenrollment_id:
+      showCellBars: false
+    courserungrade_grade:
+      showCellBars: false
+    order_id:
+      showCellBars: false
+    receipt_payment_amount:
+      showCellBars: false
+    unit_price:
+      showCellBars: false
+  show_cell_bars: true
+  align_pn: false
+  color_pn: false
+  comparison_color_enabled: false
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 50
+query_context: '{"datasource":{"id":148,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","user_email","user_full_name","courserun_readable_id","courserun_title","courserun_start_on","courserun_end_on","order_id","courserunenrollment_id","program_name","courserunenrollment_enrollment_mode","courserunenrollment_created_on","courserunenrollment_enrollment_status","courserunenrollment_is_active","courserunenrollment_upgraded_on","courserungrade_grade","courserungrade_is_passing","courseruncertificate_is_earned","courseruncertificate_created_on","courseruncertificate_url","order_reference_number","receipt_payment_timestamp","receipt_payer_email","receipt_payment_method","receipt_payment_amount","coupon_code","coupon_name","unit_price","discount","order_state","receipt_url","user_username","user_country_code","organization_name","redeemed_email"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"148__table","viz_type":"table","slice_id":218,"matrixify_enable":false,"matrixify_mode_columns":"disabled","matrixify_dimension_selection_mode_columns":"members","matrixify_dimension_columns":{"dimension":"","values":[]},"matrixify_topn_value_columns":10,"matrixify_all_sort_by_columns":"a_to_z","matrixify_topn_order_columns":true,"matrixify_show_column_headers":true,"matrixify_fit_columns_dynamically":true,"matrixify_mode_rows":"disabled","matrixify_dimension_selection_mode_rows":"members","matrixify_dimension_rows":{"dimension":"","values":[]},"matrixify_topn_value_rows":10,"matrixify_all_sort_by_rows":"a_to_z","matrixify_topn_order_rows":true,"matrixify_show_row_labels":true,"matrixify_row_height":300,"matrixify_charts_per_row":3,"matrixify_cell_title_template":"","query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["platform","user_email","user_full_name","courserun_readable_id","courserun_title","courserun_start_on","courserun_end_on","order_id","courserunenrollment_id","program_name","courserunenrollment_enrollment_mode","courserunenrollment_created_on","courserunenrollment_enrollment_status","courserunenrollment_is_active","courserunenrollment_upgraded_on","courserungrade_grade","courserungrade_is_passing","courseruncertificate_is_earned","courseruncertificate_created_on","courseruncertificate_url","order_reference_number","receipt_payment_timestamp","receipt_payer_email","receipt_payment_method","receipt_payment_amount","coupon_code","coupon_name","unit_price","discount","order_state","receipt_url","user_username","user_country_code","organization_name","redeemed_email"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"server_pagination":false,"row_limit":50000,"percent_metric_calculation":"row_limit","show_totals":false,"table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":false,"allow_render_html":true,"column_config":{"courserunenrollment_id":{"showCellBars":false},"courserungrade_grade":{"showCellBars":false},"order_id":{"showCellBars":false},"receipt_payment_amount":{"showCellBars":false},"unit_price":{"showCellBars":false}},"show_cell_bars":true,"align_pn":false,"color_pn":false,"comparison_color_enabled":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[50],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout: null
+uuid: 1cf394ec-8561-4b0d-9d9b-f394a6029b33
+version: 1.0.0
+dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
