@@ -2,4 +2,7 @@
 catalog:
   aws_glue:
     type: glue
-    py-io-impl: pyiceberg.io.pyarrow.PyArrowFileIO
+    py-io-impl: pyiceberg.io.fsspec.FsspecFileIO
+    s3.region: us-east-1
+    s3.connect-timeout: "10"
+    s3.request-timeout: "120"
