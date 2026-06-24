@@ -158,7 +158,7 @@ select
     , course_readable_id
     , course_title
     , course_run.is_current as courserun_is_current
-    , courserun_readable_id
+    , course_run.courserun_readable_id
     , courserun_start_on
     , courserun_end_on
     , courserun_title
