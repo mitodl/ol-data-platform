@@ -41,7 +41,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import cyclopts
 from cyclopts import Parameter
@@ -57,7 +57,7 @@ _STARROCKS_PORT = 9030
 _PORT_FORWARD_TIMEOUT = 15
 
 # Mirrors ENVS in bin/starrocks-auth; keep in sync when adding environments.
-_ENVS: dict[str, dict[str, str]] = {
+_ENVS: dict[str, dict[str, Any]] = {
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
@@ -84,11 +84,12 @@ _ENVS: dict[str, dict[str, str]] = {
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-ci",
         "dbt_target": "starrocks_production",
+        "port_forward": False,
     },
 }
 
 
-def _start_port_forward(env_cfg: dict[str, str]) -> None:
+def _start_port_forward(env_cfg: dict[str, Any]) -> None:
     proc = subprocess.Popen(
         [
             "kubectl",
@@ -158,12 +159,12 @@ def run(  # noqa: PLR0913
         ),
     ] = "developer",
     port_forward: Annotated[
-        bool,
+        bool | None,
         Parameter(
             name="--port-forward",
-            help="Tunnel StarRocks MySQL port via kubectl port-forward (default: true).",
+            help="Tunnel StarRocks MySQL port via kubectl port-forward (default: true; false for ci).",
         ),
-    ] = True,
+    ] = None,
     target: Annotated[
         str | None,
         Parameter(name=["--target", "-t"], help="dbt target profile to use."),
@@ -210,6 +211,8 @@ def run(  # noqa: PLR0913
         sys.exit(1)
 
     env_cfg = _ENVS[env]
+    if port_forward is None:
+        port_forward = env_cfg.get("port_forward", True)
     console.print(
         f"[bold]ol-dbt starrocks[/] — env: [cyan]{env}[/], "
         f"role: [cyan]{vault_role}[/], "

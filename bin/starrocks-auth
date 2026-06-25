@@ -523,7 +523,7 @@ def _output_env(
     print(f"export STARROCKS_HOST={host!r}")  # noqa: T201
     if password is not None:
         # Vault dynamic credentials — native-password auth (dbt / service accounts)
-        print(f"export STARROCKS_PASSWORD={password!r}")  # noqa: T201
+        print(f"export STARROCKS_PASSWORD={password!r}")  # noqa: T201  # nosec B106 — intentional: output is eval'd by shell, not a log sink
     else:
         # OIDC access token — human interactive sessions
         print(f"export STARROCKS_TOKEN={token!r}")  # noqa: T201
