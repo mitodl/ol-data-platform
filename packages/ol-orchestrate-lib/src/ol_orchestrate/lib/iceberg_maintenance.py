@@ -657,6 +657,13 @@ def advance_snapshot_pointer(
 
     metadata["current-snapshot-id"] = latest_snap.snapshot_id
 
+    # Keep refs.main in sync with current-snapshot-id.  The Java Iceberg library
+    # (used by the Airbyte destination connector) validates that these are equal
+    # and throws IllegalArgumentException if they differ.  PyIceberg does not
+    # enforce this, so mismatches go undetected until Airbyte tries to write.
+    if "refs" in metadata and "main" in metadata["refs"]:
+        metadata["refs"]["main"]["snapshot-id"] = latest_snap.snapshot_id
+
     existing_log_ids = {
         entry.get("snapshot-id") for entry in metadata.get("snapshot-log", [])
     }
