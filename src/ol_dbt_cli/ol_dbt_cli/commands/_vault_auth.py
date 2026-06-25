@@ -50,9 +50,9 @@ def _oidc_callback() -> str:
     return result["code"]
 
 
-def load_vault_token(vault_addr: str, env_name: str) -> str:
+def load_vault_token(vault_addr: str, env_name: str, oidc_role: str = _VAULT_OIDC_ROLE) -> str:
     """Return a valid Vault token, triggering OIDC browser login if needed."""
-    cache_path = _CACHE_DIR / f"vault-token-{env_name}.json"
+    cache_path = _CACHE_DIR / f"vault-token-{env_name}-{oidc_role}.json"
     if cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text())
@@ -66,7 +66,7 @@ def load_vault_token(vault_addr: str, env_name: str) -> str:
 
     client = _vault_client(vault_addr)
     auth_resp = client.auth.oidc.oidc_authorization_url_request(
-        role=_VAULT_OIDC_ROLE,
+        role=oidc_role,
         redirect_uri=_VAULT_REDIRECT_URI,
     )
     auth_url: str = auth_resp["data"]["auth_url"]
@@ -93,9 +93,15 @@ def load_vault_token(vault_addr: str, env_name: str) -> str:
     return token
 
 
-def fetch_vault_db_credentials(vault_addr: str, vault_mount: str, env_name: str, role: str) -> tuple[str, str]:
+def fetch_vault_db_credentials(
+    vault_addr: str,
+    vault_mount: str,
+    env_name: str,
+    role: str,
+    oidc_role: str = _VAULT_OIDC_ROLE,
+) -> tuple[str, str]:
     """Fetch dynamic database credentials from Vault's database secrets engine."""
-    token = load_vault_token(vault_addr, env_name)
+    token = load_vault_token(vault_addr, env_name, oidc_role)
     client = _vault_client(vault_addr, token)
     response: dict[str, Any] = client.read(f"{vault_mount}/creds/{role}")
     data: dict[str, str] = response["data"]
