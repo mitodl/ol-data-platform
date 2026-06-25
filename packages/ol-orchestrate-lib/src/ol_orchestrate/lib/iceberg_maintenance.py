@@ -590,7 +590,7 @@ def find_snapshot_pointer_lag(  # noqa: C901
     return lagging
 
 
-def advance_snapshot_pointer(
+def advance_snapshot_pointer(  # noqa: PLR0915
     glue_database: str,
     table_name: str,
     region: str = AWS_REGION,
@@ -614,6 +614,7 @@ def advance_snapshot_pointer(
     ``new_snapshot_id``, ``lag_hours``, and ``new_metadata_location``.
     """
     import json  # noqa: PLC0415
+    import re  # noqa: PLC0415
     import uuid  # noqa: PLC0415
 
     glue_client = boto3.client("glue", region_name=region)
@@ -675,7 +676,23 @@ def advance_snapshot_pointer(
             }
         )
 
-    new_key = f"{metadata_dir}/{uuid.uuid4()}.metadata.json"
+    # Iceberg requires metadata files named {version}-{uuid}.metadata.json.
+    # Trino rejects files whose names don't match this pattern.  Derive the
+    # next version from the current filename or fall back to the metadata-log.
+    _ver_re = re.compile(r"^(\d+)-[0-9a-f-]+\.metadata\.json$")
+    old_filename = old_key.rsplit("/", 1)[-1]
+    prev_version = 0
+    m = _ver_re.match(old_filename)
+    if m:
+        prev_version = int(m.group(1))
+    else:
+        for entry in metadata.get("metadata-log", []):
+            mf = entry.get("metadata-file", "").rsplit("/", 1)[-1]
+            mv = _ver_re.match(mf)
+            if mv:
+                prev_version = max(prev_version, int(mv.group(1)))
+    new_filename = f"{prev_version + 1:05d}-{uuid.uuid4()}.metadata.json"
+    new_key = f"{metadata_dir}/{new_filename}"
     s3_client.put_object(
         Bucket=bucket,
         Key=new_key,
@@ -684,19 +701,26 @@ def advance_snapshot_pointer(
     )
     new_metadata_location = f"s3://{bucket}/{new_key}"
 
-    # Build the minimal TableInput Glue needs for an update call — strip
-    # read-only fields that the API rejects.
-    _read_only = {
-        "DatabaseName",
-        "CreateTime",
-        "UpdateTime",
-        "IsRegisteredWithLakeFormation",
-        "CatalogId",
-        "VersionId",
-        "IsMultiDialectView",
+    # Use an allowlist rather than a blocklist — Glue occasionally adds new
+    # read-only fields that would cause update_table to fail if passed through.
+    _valid_table_input = {
+        "Name",
+        "Description",
+        "Owner",
+        "LastAccessTime",
+        "LastAnalyzedTime",
+        "Retention",
+        "StorageDescriptor",
+        "PartitionKeys",
+        "ViewOriginalText",
+        "ViewExpandedText",
+        "TableType",
+        "Parameters",
+        "TargetTable",
+        "ViewDefinition",
     }
     table_input = {
-        k: v for k, v in glue_response["Table"].items() if k not in _read_only
+        k: v for k, v in glue_response["Table"].items() if k in _valid_table_input
     }
     table_input.setdefault("Parameters", {})["metadata_location"] = (
         new_metadata_location
