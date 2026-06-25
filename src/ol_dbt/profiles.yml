@@ -88,6 +88,15 @@ open_learning:
       password: '{{ env_var("DBT_STARROCKS_OIDC_TOKEN") }}'
       auth_plugin: mysql_clear_password
       threads: 4
+    starrocks_qa_vault:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      database: default_catalog
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}'
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
     starrocks_production:
       type: starrocks
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
