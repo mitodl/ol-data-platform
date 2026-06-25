@@ -122,6 +122,14 @@ def fetch_vault_db_credentials(
     """Fetch dynamic database credentials from Vault's database secrets engine."""
     token = load_vault_token(vault_addr, env_name, oidc_role)
     client = _vault_client(vault_addr, token)
-    response: dict[str, Any] = client.read(f"{vault_mount}/creds/{role}")
+    vault_path = f"{vault_mount}/creds/{role}"
+    try:
+        response: dict[str, Any] | None = client.read(vault_path)
+    except hvac.exceptions.Forbidden as exc:
+        msg = f"Vault permission denied: {vault_path!r} — check token policy"
+        raise RuntimeError(msg) from exc
+    if response is None:
+        msg = f"Vault path not found: {vault_path!r} — check vault_mount and role name"
+        raise RuntimeError(msg)
     data: dict[str, str] = response["data"]
     return data["username"], data["password"]
