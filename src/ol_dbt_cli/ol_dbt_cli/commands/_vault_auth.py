@@ -39,15 +39,29 @@ def _oidc_callback() -> str:
 
         def do_GET(self) -> None:
             params = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query))
-            result["code"] = params.get("code", "")
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"<h2>Vault authentication successful. You can close this tab.</h2>")
+            error = params.get("error")
+            if error:
+                result["error"] = error
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(f"<h2>Vault authentication failed: {error}. You can close this tab.</h2>".encode())
+            else:
+                result["code"] = params.get("code", "")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"<h2>Vault authentication successful. You can close this tab.</h2>")
             threading.Thread(target=self.server.shutdown, daemon=True).start()
 
     server = http.server.HTTPServer(("localhost", _VAULT_CALLBACK_PORT), _Handler)
     server.serve_forever()
-    return result["code"]
+    if "error" in result:
+        msg = f"Vault OIDC authentication denied: {result['error']}"
+        raise RuntimeError(msg)
+    code = result.get("code", "")
+    if not code:
+        msg = "Vault OIDC callback received no authorization code"
+        raise RuntimeError(msg)
+    return code
 
 
 def load_vault_token(vault_addr: str, env_name: str, oidc_role: str = _VAULT_OIDC_ROLE) -> str:
@@ -75,8 +89,13 @@ def load_vault_token(vault_addr: str, env_name: str, oidc_role: str = _VAULT_OID
         raise RuntimeError(msg)
 
     qs = urllib.parse.parse_qs(urllib.parse.urlparse(auth_url).query)
-    nonce = qs["nonce"][0]
-    state = qs["state"][0]
+    nonce_list = qs.get("nonce")
+    state_list = qs.get("state")
+    if not nonce_list or not state_list:
+        msg = f"Vault OIDC auth URL missing nonce/state parameters: {auth_url}"
+        raise RuntimeError(msg)
+    nonce = nonce_list[0]
+    state = state_list[0]
 
     print(  # noqa: T201
         f"Opening browser for Vault login ({vault_addr})…\nIf it does not open automatically, visit:\n{auth_url}",
