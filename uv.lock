@@ -1667,6 +1667,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/55/33/71e45a6bd6875f44a26f99da31c63b6840123e88bedf2c0b1ce429b8be12/hvac-2.4.0-py3-none-any.whl", hash = "sha256:008db5efd8c2f77bd37d2368ea5f713edceae1c65f11fd608393179478649e0f", size = 155921, upload-time = "2025-10-30T12:57:46.253Z" },
 ]
 
+[package.optional-dependencies]
+parser = [
+    { name = "pyhcl" },
+]
+
 [[package]]
 name = "identify"
 version = "2.6.19"
@@ -2350,6 +2355,7 @@ dependencies = [
     { name = "dbt-duckdb" },
     { name = "dbt-starrocks" },
     { name = "dbt-trino" },
+    { name = "hvac", extra = ["parser"] },
     { name = "pypika" },
     { name = "rich" },
     { name = "sqlglot" },
@@ -2380,6 +2386,7 @@ requires-dist = [
     { name = "dbt-duckdb", specifier = ">=1.10.0" },
     { name = "dbt-starrocks", specifier = ">=1.9.0" },
     { name = "dbt-trino", specifier = ">=1.10.0" },
+    { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },
     { name = "pypika", specifier = "~=0.51.0" },
     { name = "rich", specifier = ">=13.0" },
     { name = "sqlglot", specifier = ">=25.0" },
@@ -2411,6 +2418,7 @@ dependencies = [
     { name = "boto3" },
     { name = "cyclopts" },
     { name = "duckdb" },
+    { name = "hvac", extra = ["parser"] },
     { name = "jinja2" },
     { name = "markupsafe" },
     { name = "pyyaml" },
@@ -2424,6 +2432,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35" },
     { name = "cyclopts", specifier = ">=4.0" },
     { name = "duckdb", specifier = ">=1.0,!=1.5.0,!=1.5.1" },
+    { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "markupsafe", specifier = ">=2.1" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -3001,6 +3010,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/87/4589262da7fdc9cc8c609099a5525dcbd05bd0f4ee22c28f640f261a4292/pygsheets-2.0.6.tar.gz", hash = "sha256:bff46c812e99f9b8b81a09b456581365281c797620ec08530b0d0e48fa9299e2", size = 154743, upload-time = "2022-11-30T17:27:27.065Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/c5/f462089614ae9d9f3354b34ec6e527c2d520d5cdad85925ad89f65beaf2d/pygsheets-2.0.6-py3-none-any.whl", hash = "sha256:3338c2eb8990fdee9f463b42a370ec0870c118d607d775471a6dfb8b08f6cd87", size = 158205, upload-time = "2022-11-30T17:27:23.164Z" },
+]
+
+[[package]]
+name = "pyhcl"
+version = "0.4.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/b9/ff5019eef43b613f49a4695253d8814f8a7012745ae570158e5b64967200/pyhcl-0.4.5.tar.gz", hash = "sha256:c47293a51ccdd25e18bb5c8c0ab0ffe355b37c87f8d6f9d3280dc41efd4740bc", size = 61772, upload-time = "2023-09-01T05:25:16.788Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/b4/b766fd33774b55cc15f240916219c4ce9c1bd7bef4acd997ad36ff3622d0/pyhcl-0.4.5-py3-none-any.whl", hash = "sha256:30ee337d330d1f90c9f5ed8f49c468f66c8e6e43192bdc7c6ece1420beb3070c", size = 50160, upload-time = "2023-09-01T05:25:15.237Z" },
 ]
 
 [[package]]

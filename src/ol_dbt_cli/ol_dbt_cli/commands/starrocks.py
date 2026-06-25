@@ -36,7 +36,6 @@ dbt ``profiles.yml`` must reference the env vars this command injects::
 from __future__ import annotations
 
 import atexit
-import json
 import os
 import socket
 import subprocess
@@ -48,6 +47,7 @@ import cyclopts
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.commands._vault_auth import fetch_vault_db_credentials
 from ol_dbt_cli.commands.run import run as _dbt_run
 
 console = Console()
@@ -86,22 +86,6 @@ _ENVS: dict[str, dict[str, str]] = {
         "dbt_target": "starrocks_production",
     },
 }
-
-
-def _fetch_vault_creds(vault_addr: str, vault_mount: str, role: str) -> tuple[str, str]:
-    env = {**os.environ, "VAULT_ADDR": vault_addr}
-    result = subprocess.run(
-        ["vault", "read", "-format=json", f"{vault_mount}/creds/{role}"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
-    if result.returncode != 0:
-        err_console.print(f"[red]vault read failed ({vault_addr}):[/] {result.stderr.strip()}")
-        sys.exit(1)
-    data = json.loads(result.stdout)["data"]
-    return data["username"], data["password"]
 
 
 def _start_port_forward(env_cfg: dict[str, str]) -> None:
@@ -225,7 +209,7 @@ def run(  # noqa: PLR0913
     )
 
     console.print(f"[dim]Fetching Vault credentials ({env_cfg['vault_mount']}/creds/{vault_role})...[/]")
-    username, password = _fetch_vault_creds(env_cfg["vault_addr"], env_cfg["vault_mount"], vault_role)
+    username, password = fetch_vault_db_credentials(env_cfg["vault_addr"], env_cfg["vault_mount"], env, vault_role)
     console.print(f"[dim]Vault user:[/] {username}")
 
     host = "127.0.0.1" if port_forward else env_cfg["host"]
