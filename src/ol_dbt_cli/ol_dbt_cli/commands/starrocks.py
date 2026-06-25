@@ -149,6 +149,14 @@ def run(  # noqa: PLR0913
         str,
         Parameter(name="--vault-role", help="Vault database role: readonly, app (default), admin."),
     ] = "app",
+    vault_oidc_role: Annotated[
+        str,
+        Parameter(
+            name="--vault-oidc-role",
+            help="Vault OIDC auth role used to obtain a Vault token (default: developer). "
+            "Use 'admin' when the developer role lacks policy for the target database mount.",
+        ),
+    ] = "developer",
     port_forward: Annotated[
         bool,
         Parameter(
@@ -209,7 +217,9 @@ def run(  # noqa: PLR0913
     )
 
     console.print(f"[dim]Fetching Vault credentials ({env_cfg['vault_mount']}/creds/{vault_role})...[/]")
-    username, password = fetch_vault_db_credentials(env_cfg["vault_addr"], env_cfg["vault_mount"], env, vault_role)
+    username, password = fetch_vault_db_credentials(
+        env_cfg["vault_addr"], env_cfg["vault_mount"], env, vault_role, vault_oidc_role
+    )
     console.print(f"[dim]Vault user:[/] {username}")
 
     host = "127.0.0.1" if port_forward else env_cfg["host"]
