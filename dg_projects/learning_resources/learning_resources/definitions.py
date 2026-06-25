@@ -2,8 +2,11 @@
 
 Extracts course and program metadata from various learning platforms:
 - MIT Sloan Executive Education API
-- OVS public videos API
-- Open Learning Library (future)
+- OVS (Open Video Studio) public videos
+- MIT Climate Portal articles
+- MIT Professional Education courses and programs
+- Open Learning Library courses
+- MIT edX programs
 """
 
 from dagster import (
@@ -20,6 +23,10 @@ from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
+from learning_resources.assets.mit_climate import mit_climate_webhook
+from learning_resources.assets.mit_edx_programs import mit_edx_programs_webhook
+from learning_resources.assets.mitpe import mitpe_webhook
+from learning_resources.assets.open_learning_library import oll_webhook
 from learning_resources.assets.ovs_videos import (
     video_api,
     video_delete_webhook,
@@ -49,6 +56,36 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     )
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
 
+
+# Daily schedules for REST API webhook delivery sources.
+# All run after 06:00 UTC to allow upstream APIs to settle overnight.
+mit_climate_schedule = ScheduleDefinition(
+    name="mit_climate_schedule",
+    target=AssetSelection.assets(mit_climate_webhook),
+    cron_schedule="0 6 * * *",
+    execution_timezone="Etc/UTC",
+)
+
+mitpe_schedule = ScheduleDefinition(
+    name="mitpe_schedule",
+    target=AssetSelection.assets(mitpe_webhook),
+    cron_schedule="15 6 * * *",
+    execution_timezone="Etc/UTC",
+)
+
+oll_schedule = ScheduleDefinition(
+    name="oll_schedule",
+    target=AssetSelection.assets(oll_webhook),
+    cron_schedule="30 6 * * *",
+    execution_timezone="Etc/UTC",
+)
+
+mit_edx_programs_schedule = ScheduleDefinition(
+    name="mit_edx_programs_schedule",
+    target=AssetSelection.assets(mit_edx_programs_webhook),
+    cron_schedule="45 6 * * *",
+    execution_timezone="Etc/UTC",
+)
 
 # Daily schedule for learning resource API extraction
 extract_api_daily_schedule = ScheduleDefinition(
@@ -110,10 +147,19 @@ defs = Definitions(
         video_metadata,
         video_webhook,
         video_delete_webhook,
+        # REST API webhook delivery
+        mit_climate_webhook,
+        mitpe_webhook,
+        oll_webhook,
+        mit_edx_programs_webhook,
     ],
     schedules=[
         extract_api_daily_schedule,
         ovs_videos_api_schedule,
+        mit_climate_schedule,
+        mitpe_schedule,
+        oll_schedule,
+        mit_edx_programs_schedule,
     ],
     sensors=[
         ovs_videos_discovery_sensor,

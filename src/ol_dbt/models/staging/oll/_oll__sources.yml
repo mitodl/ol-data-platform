@@ -1,0 +1,52 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database }}'
+  schema: >
+    {{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw
+  tables:
+  - name: raw__oll__google_sheets__courses
+    description: >
+      Open Learning Library course metadata ingested from the mit-learn
+      static CSV (learning_resources/data/oll_metadata.csv) via the oll
+      dlt pipeline. Full replace on every run. Primary key is readable_id
+      (a run-level identifier e.g. "MITx+0.501x+2T2019").
+    columns:
+    - name: oll_course
+      description: >
+        str, OLL course code (e.g. "0.501x") — from "OLL Course" CSV header
+    - name: readable_id
+      description: >
+        str, run-level readable identifier
+        (e.g. "MITx+0.501x+2T2019") — from "readable_id" CSV header.
+        Used as the dlt primary key.
+    - name: title
+      description: str, course title — from "title" CSV header
+    - name: url
+      description: >
+        str, public URL for the OLL course — from "url" CSV header
+    - name: description
+      description: str, course description — from "description" CSV header
+    - name: course_image_url_flat
+      description: >
+        str, flat image URL — from "Course Image URL Flat" CSV header
+    - name: duration
+      description: >
+        str, duration in weeks (decimal, e.g. "14") — from "Duration" CSV
+        header
+    - name: ed_x_subject_1
+      description: >
+        str, first edX subject label — from "edX Subject 1" CSV header
+    - name: ed_x_subject_2
+      description: >
+        str, second edX subject label — from "edX Subject 2" CSV header
+    - name: ed_x_subject_3
+      description: >
+        str, third edX subject label — from "edX Subject 3" CSV header
+    - name: offered_by
+      description: >
+        str, offering institution (e.g. "MITx", "OCW") — from "Offered by"
+        CSV header
