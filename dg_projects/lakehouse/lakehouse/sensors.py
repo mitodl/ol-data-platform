@@ -33,17 +33,6 @@ _RAW_DATABASE_BY_ENV: dict[str, str] = {
 }
 RAW_DATABASE = _RAW_DATABASE_BY_ENV.get(DAGSTER_ENV, "ol_warehouse_production_raw")
 
-# Explicit list of high-frequency (6 h) Airbyte source groups to scan.
-# The thirdparty groups (salesforce, zendesk) sync much less often and are
-# deliberately excluded to keep the sensor fast and the alert signal clean.
-_HIGH_FREQUENCY_PREFIXES = [
-    "raw__mitxonline__app",
-    "raw__xpro__app",
-    "raw__mitlearn__app",
-    "raw__learn_ai__app",
-    "raw__ocw__studio",
-]
-
 # Alert when the pointer lags behind the latest snapshot by more than this.
 # Two hours provides a buffer for the normal write window without masking a
 # genuine stuck-pointer condition (which gaps by days, not minutes).
@@ -61,7 +50,6 @@ def repair_lagging_snapshot_pointers(context):
     """
     lagging = find_snapshot_pointer_lag(
         glue_database=RAW_DATABASE,
-        table_prefixes=_HIGH_FREQUENCY_PREFIXES,
         min_lag_hours=_MIN_LAG_HOURS,
     )
 
@@ -144,7 +132,6 @@ def iceberg_snapshot_pointer_lag_sensor(
 ) -> SensorResult:
     lagging = find_snapshot_pointer_lag(
         glue_database=RAW_DATABASE,
-        table_prefixes=_HIGH_FREQUENCY_PREFIXES,
         min_lag_hours=_MIN_LAG_HOURS,
     )
 

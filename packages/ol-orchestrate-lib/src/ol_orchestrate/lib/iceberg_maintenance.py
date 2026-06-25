@@ -499,21 +499,24 @@ def load_raw_layer_maintenance_work(
 
 def find_snapshot_pointer_lag(  # noqa: C901
     glue_database: str,
-    table_prefixes: list[str],
+    table_prefixes: list[str] | None = None,
     min_lag_hours: float = 2.0,
     region: str = AWS_REGION,
 ) -> list[SnapshotPointerLag]:
     """Scan Iceberg tables and return those whose current-snapshot-id is stale.
 
-    Airbyte incremental syncs append new snapshots to the Iceberg history but
-    occasionally fail to advance ``current-snapshot-id`` — a bug observed when
-    a connection reset triggers a full-refresh that pins the pointer, after which
-    subsequent incremental syncs accumulate in the history without becoming
-    visible to Trino/dbt.
+    The Airbyte S3 Data Lake connector uses a staging branch pattern: data is
+    written to ``refs.airbyte_staging_<id>`` and promoted to ``refs.main`` via
+    ``replaceBranch`` in ``teardown(true)``.  When a sync fails, ``teardown(false)``
+    is called instead, leaving the staging branch un-promoted and
+    ``current-snapshot-id`` stuck at an earlier snapshot.  Iceberg 1.11.0 (used
+    by the connector) also validates that ``refs.main.snapshot-id ==
+    current-snapshot-id`` on table load, so any pre-existing inconsistency
+    (written by an older connector version) causes every subsequent sync to fail
+    with ``IllegalArgumentException``, compounding the lag.
 
-    Only tables whose names start with one of *table_prefixes* are scanned, which
-    keeps this fast when called from a sensor.  Pass the high-frequency group
-    prefixes (e.g. ``["raw__xpro__app", "raw__mitxonline__app"]``) to limit scope.
+    If *table_prefixes* is ``None`` (the default), all Iceberg tables in the
+    database are scanned.  Pass a list of name prefixes to restrict the scan.
 
     A table is reported only when the gap between the current-snapshot timestamp
     and the latest-snapshot timestamp exceeds *min_lag_hours*.  Short gaps (< 2 h)
@@ -528,7 +531,9 @@ def find_snapshot_pointer_lag(  # noqa: C901
     for page in paginator.paginate(DatabaseName=glue_database):
         for table in page.get("TableList", []):
             name = table["Name"]
-            if not any(name.startswith(p) for p in table_prefixes):
+            if table_prefixes is not None and not any(
+                name.startswith(p) for p in table_prefixes
+            ):
                 continue
             if table.get("Parameters", {}).get("table_type", "").upper() == "ICEBERG":
                 iceberg_table_names.append(name)
