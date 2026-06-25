@@ -595,7 +595,7 @@ def find_snapshot_pointer_lag(  # noqa: C901
     return lagging
 
 
-def advance_snapshot_pointer(  # noqa: PLR0915
+def advance_snapshot_pointer(  # noqa: PLR0915, C901
     glue_database: str,
     table_name: str,
     region: str = AWS_REGION,
@@ -684,7 +684,16 @@ def advance_snapshot_pointer(  # noqa: PLR0915
     # Per the Iceberg spec, each new metadata file must record the previous
     # metadata file in metadata-log so that history traversal tools and
     # expire_snapshots can reconstruct the full chain.
+    #
+    # The timestamp for the log entry must be the OLD file's own last-updated-ms
+    # (i.e. when that file was the active metadata), NOT the latest snapshot
+    # timestamp.  Using the snapshot timestamp can produce unsorted entries when
+    # current-snapshot-id is stuck at an old snapshot whose timestamp predates
+    # newer staging-branch metadata written by the connector.  Iceberg 1.11.0
+    # validates that metadata-log is sorted and throws IllegalArgumentException
+    # if entries are out of order.
     old_metadata_location = f"s3://{bucket}/{old_key}"
+    old_last_updated_ms = metadata.get("last-updated-ms", latest_snap.timestamp_ms)
     existing_meta_log_files = {
         e.get("metadata-file") for e in metadata.get("metadata-log", [])
     }
@@ -692,9 +701,19 @@ def advance_snapshot_pointer(  # noqa: PLR0915
         metadata.setdefault("metadata-log", []).append(
             {
                 "metadata-file": old_metadata_location,
-                "timestamp-ms": latest_snap.timestamp_ms,
+                "timestamp-ms": old_last_updated_ms,
             }
         )
+    # Sort the metadata-log by timestamp so the invariant enforced by Iceberg
+    # 1.11.0 (entries must be non-decreasing) is always satisfied after repair.
+    # Duplicate file paths can accumulate from repeated repairs; deduplicate
+    # keeping the LAST occurrence (most recent timestamp for a given file).
+    seen_files: dict[str, dict[str, Any]] = {}
+    for entry in metadata.get("metadata-log", []):
+        seen_files[entry.get("metadata-file", "")] = entry
+    metadata["metadata-log"] = sorted(
+        seen_files.values(), key=lambda e: e.get("timestamp-ms", 0)
+    )
 
     # Iceberg requires metadata files named {version}-{uuid}.metadata.json.
     # Trino rejects files whose names don't match this pattern.  Derive the
