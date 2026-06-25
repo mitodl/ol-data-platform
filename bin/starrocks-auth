@@ -109,6 +109,7 @@ ENVS: dict[str, dict[str, str]] = {
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-qa",
     },
     "production": {
@@ -117,6 +118,7 @@ ENVS: dict[str, dict[str, str]] = {
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-production",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-production.odl.mit.edu",
         "vault_mount": "database-starrocks-production",
     },
     "ci": {
@@ -125,6 +127,7 @@ ENVS: dict[str, dict[str, str]] = {
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-ci",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-ci",
     },
 }
@@ -378,16 +381,18 @@ def _get_browser_token(
     return _browser_pkce(issuer, env_name)
 
 
-def _vault_credentials(vault_mount: str, role: str) -> tuple[str, str]:
+def _vault_credentials(vault_addr: str, vault_mount: str, role: str) -> tuple[str, str]:
     """Fetch short-lived StarRocks credentials from Vault's dynamic database engine."""
+    env = {**os.environ, "VAULT_ADDR": vault_addr}
     result = subprocess.run(  # noqa: S603
         ["vault", "read", "-format=json", f"{vault_mount}/creds/{role}"],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
     if result.returncode != 0:
-        sys.exit(f"vault read failed: {result.stderr.strip()}")
+        sys.exit(f"vault read failed ({vault_addr}): {result.stderr.strip()}")
     data = json.loads(result.stdout)["data"]
     return data["username"], data["password"]
 
@@ -621,7 +626,9 @@ def main() -> None:
     elif args.mode == "ci":
         username, token = _client_credentials(issuer)
     else:  # vault
-        username, password = _vault_credentials(env_cfg["vault_mount"], args.vault_role)
+        username, password = _vault_credentials(
+            env_cfg["vault_addr"], env_cfg["vault_mount"], args.vault_role
+        )
         token = password  # native password reused by _output_mysql / _output_token
 
     cmd = [a for a in args.cmd if a != "--"]

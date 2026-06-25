@@ -63,6 +63,7 @@ _ENVS: dict[str, dict[str, str]] = {
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-qa",
         "dbt_target": "starrocks_qa_vault",
     },
@@ -71,6 +72,7 @@ _ENVS: dict[str, dict[str, str]] = {
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-production",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-production.odl.mit.edu",
         "vault_mount": "database-starrocks-production",
         "dbt_target": "starrocks_production",
     },
@@ -79,20 +81,24 @@ _ENVS: dict[str, dict[str, str]] = {
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-ci",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-ci",
         "dbt_target": "starrocks_production",
     },
 }
 
 
-def _fetch_vault_creds(vault_mount: str, role: str) -> tuple[str, str]:
+def _fetch_vault_creds(vault_addr: str, vault_mount: str, role: str) -> tuple[str, str]:
+    env = {**os.environ, "VAULT_ADDR": vault_addr}
     result = subprocess.run(
         ["vault", "read", "-format=json", f"{vault_mount}/creds/{role}"],
         capture_output=True,
         text=True,
+        check=False,
+        env=env,
     )
     if result.returncode != 0:
-        err_console.print(f"[red]vault read failed:[/] {result.stderr.strip()}")
+        err_console.print(f"[red]vault read failed ({vault_addr}):[/] {result.stderr.strip()}")
         sys.exit(1)
     data = json.loads(result.stdout)["data"]
     return data["username"], data["password"]
@@ -219,7 +225,7 @@ def run(  # noqa: PLR0913
     )
 
     console.print(f"[dim]Fetching Vault credentials ({env_cfg['vault_mount']}/creds/{vault_role})...[/]")
-    username, password = _fetch_vault_creds(env_cfg["vault_mount"], vault_role)
+    username, password = _fetch_vault_creds(env_cfg["vault_addr"], env_cfg["vault_mount"], vault_role)
     console.print(f"[dim]Vault user:[/] {username}")
 
     host = "127.0.0.1" if port_forward else env_cfg["host"]
