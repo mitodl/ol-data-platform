@@ -5,7 +5,14 @@
     on_schema_change='append_new_columns'
 ) }}
 
-with mitxonline_courseruns as (
+-- EdxOrg course runs don't carry upgrade_deadline in their own source; the value is stored
+-- in MicroMasters course run records keyed by courserun_edxorg_readable_id.
+with micromasters_courseruns as (
+    select courserun_edxorg_readable_id, courserun_upgrade_deadline
+    from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
+)
+
+, mitxonline_courseruns as (
     select
         courserun_readable_id
         , courserun_id as source_id
@@ -19,6 +26,7 @@ with mitxonline_courseruns as (
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'mitxonline' as platform
+        , courserun_upgrade_deadline
     from {{ ref('int__mitxonline__course_runs') }}
 )
 
@@ -36,24 +44,27 @@ with mitxonline_courseruns as (
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'mitxpro' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__mitxpro__course_runs') }}
 )
 
 , edxorg_courseruns as (
     select
-        courserun_readable_id
+        cr.courserun_readable_id
         , cast(null as integer) as source_id
         , cast(null as integer) as course_id
-        , courserun_title
-        , courserun_start_date as courserun_start_on  -- edxorg uses _date suffix
-        , courserun_end_date as courserun_end_on
-        , courserun_enrollment_start_date as enrollment_start
-        , courserun_enrollment_end_date as enrollment_end
-        , courserun_is_published as courserun_is_live
+        , cr.courserun_title
+        , cr.courserun_start_date as courserun_start_on  -- edxorg uses _date suffix
+        , cr.courserun_end_date as courserun_end_on
+        , cr.courserun_enrollment_start_date as enrollment_start
+        , cr.courserun_enrollment_end_date as enrollment_end
+        , cr.courserun_is_published as courserun_is_live
         , cast(null as varchar) as courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'edxorg' as platform
-    from {{ ref('int__edxorg__mitx_courseruns') }}
+        , mc.courserun_upgrade_deadline
+    from {{ ref('int__edxorg__mitx_courseruns') }} as cr
+    left join micromasters_courseruns as mc on cr.courserun_readable_id = mc.courserun_edxorg_readable_id
 )
 
 , residential_courseruns as (
@@ -70,6 +81,7 @@ with mitxonline_courseruns as (
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
         , 'residential' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__mitxresidential__courseruns') }}
 )
 
@@ -87,6 +99,7 @@ with mitxonline_courseruns as (
         , cast(null as varchar) as courserun_created_on
         , runs.course_readable_id
         , 'bootcamps' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__bootcamps__course_runs') }} as runs
 )
 
@@ -136,6 +149,7 @@ with mitxonline_courseruns as (
                 else courserun_readable_id
             end
         ) as course_readable_id
+        , courserun_upgrade_deadline
     from combined_courseruns
 )
 
@@ -201,6 +215,7 @@ with mitxonline_courseruns as (
         , current_timestamp as effective_date
         , cast(null as timestamp) as end_date
         , true as is_current
+        , courserun_upgrade_deadline
     from courseruns_with_all_fks
 
     {% if is_incremental() %}
@@ -217,6 +232,7 @@ with mitxonline_courseruns as (
             and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
             and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
             and coalesce(existing.courserun_is_live, false) = coalesce(courseruns_with_all_fks.courserun_is_live, false)
+            and coalesce(existing.courserun_upgrade_deadline, '') = coalesce(courseruns_with_all_fks.courserun_upgrade_deadline, '')
     )
     {% endif %}
 )
@@ -245,6 +261,7 @@ with mitxonline_courseruns as (
         , existing.effective_date
         , current_timestamp as end_date
         , false as is_current
+        , existing.courserun_upgrade_deadline
     from {{ this }} as existing
     inner join final as new_records
         on existing.courserun_readable_id = new_records.courserun_readable_id
