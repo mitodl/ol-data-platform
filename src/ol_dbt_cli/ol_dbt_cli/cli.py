@@ -8,6 +8,7 @@ from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
 from ol_dbt_cli.commands.local_dev import local_app
 from ol_dbt_cli.commands.run import run_app
+from ol_dbt_cli.commands.starrocks import starrocks_app
 from ol_dbt_cli.commands.validate import validate
 
 app = cyclopts.App(
@@ -52,6 +53,7 @@ app = cyclopts.App(
 app.command(local_app)
 app.command(generate_app)
 app.command(run_app)
+app.command(starrocks_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 
