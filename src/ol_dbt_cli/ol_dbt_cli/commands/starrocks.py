@@ -27,10 +27,10 @@ dbt ``profiles.yml`` must reference the env vars this command injects::
       outputs:
         dev:
           type: starrocks
-          host: "{{ env_var('STARROCKS_HOST') }}"
+          host: "{{ env_var('DBT_STARROCKS_HOST') }}"
           port: 9030
-          username: "{{ env_var('STARROCKS_USER') }}"
-          password: "{{ env_var('STARROCKS_PASSWORD') }}"
+          username: "{{ env_var('DBT_STARROCKS_USERNAME') }}"
+          password: "{{ env_var('DBT_STARROCKS_PASSWORD') }}"
 """
 
 from __future__ import annotations
@@ -64,6 +64,7 @@ _ENVS: dict[str, dict[str, str]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_mount": "database-starrocks-qa",
+        "dbt_target": "starrocks_qa_vault",
     },
     "production": {
         "host": "lakehouse.starrocks.ol.mit.edu",
@@ -71,6 +72,7 @@ _ENVS: dict[str, dict[str, str]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_mount": "database-starrocks-production",
+        "dbt_target": "starrocks_production",
     },
     "ci": {
         "host": "lakehouse.ci.starrocks.ol.mit.edu",
@@ -78,6 +80,7 @@ _ENVS: dict[str, dict[str, str]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_mount": "database-starrocks-ci",
+        "dbt_target": "starrocks_production",
     },
 }
 
@@ -200,8 +203,8 @@ def run(  # noqa: PLR0913
 
     Fetches a short-lived native-password credential from Vault's dynamic
     database secrets engine, optionally starts a kubectl port-forward to the
-    StarRocks FE service, injects STARROCKS_USER / STARROCKS_PASSWORD /
-    STARROCKS_HOST into the environment, then delegates to ``ol-dbt run``
+    StarRocks FE service, injects DBT_STARROCKS_USERNAME / DBT_STARROCKS_PASSWORD /
+    DBT_STARROCKS_HOST into the environment, then delegates to ``ol-dbt run``
     with full state-based incremental selection.
     """
     if env not in _ENVS:
@@ -225,13 +228,17 @@ def run(  # noqa: PLR0913
 
     # Inject credentials into the current process environment so that the dbt
     # subprocess launched by _dbt_run() inherits them automatically.
-    os.environ["STARROCKS_USER"] = username
-    os.environ["STARROCKS_PASSWORD"] = password
-    os.environ["STARROCKS_HOST"] = host
+    # Use the DBT_STARROCKS_* names that profiles.yml already references.
+    os.environ["DBT_STARROCKS_USERNAME"] = username
+    os.environ["DBT_STARROCKS_PASSWORD"] = password
+    os.environ["DBT_STARROCKS_HOST"] = host
+
+    # Default to the env-appropriate dbt target if the caller didn't specify one.
+    effective_target = target or env_cfg["dbt_target"]
 
     _dbt_run(
         subcommand,
-        target=target,
+        target=effective_target,
         select=select,
         full_refresh=full_refresh,
         defer=defer,
