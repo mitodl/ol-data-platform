@@ -676,6 +676,21 @@ def advance_snapshot_pointer(  # noqa: PLR0915
             }
         )
 
+    # Per the Iceberg spec, each new metadata file must record the previous
+    # metadata file in metadata-log so that history traversal tools and
+    # expire_snapshots can reconstruct the full chain.
+    old_metadata_location = f"s3://{bucket}/{old_key}"
+    existing_meta_log_files = {
+        e.get("metadata-file") for e in metadata.get("metadata-log", [])
+    }
+    if old_metadata_location not in existing_meta_log_files:
+        metadata.setdefault("metadata-log", []).append(
+            {
+                "metadata-file": old_metadata_location,
+                "timestamp-ms": latest_snap.timestamp_ms,
+            }
+        )
+
     # Iceberg requires metadata files named {version}-{uuid}.metadata.json.
     # Trino rejects files whose names don't match this pattern.  Derive the
     # next version from the current filename or fall back to the metadata-log.
