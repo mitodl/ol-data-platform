@@ -5,21 +5,33 @@
     on_schema_change='append_new_columns'
 ) }}
 
-with mitxonline_courseruns as (
+-- MicroMasters stores exam run metadata (semester label and passing grade threshold)
+-- keyed by examrun_readable_id, which matches the MITxOnline courserun_readable_id for
+-- proctored exam course runs. These are the only platform-specific dimensional attributes
+-- that originate outside the platform's own course run record.
+with micromasters_examruns as (
+    select examrun_readable_id, examrun_semester, examrun_passing_grade
+    from {{ ref('stg__micromasters__app__postgres__exams_examrun') }}
+)
+
+, mitxonline_courseruns as (
     select
-        courserun_readable_id
-        , courserun_id as source_id
-        , course_id
-        , courserun_title
-        , courserun_start_on
-        , courserun_end_on
-        , courserun_enrollment_start_on as enrollment_start
-        , courserun_enrollment_end_on as enrollment_end
-        , courserun_is_live
-        , courserun_created_on
+        cr.courserun_readable_id
+        , cr.courserun_id as source_id
+        , cr.course_id
+        , cr.courserun_title
+        , cr.courserun_start_on
+        , cr.courserun_end_on
+        , cr.courserun_enrollment_start_on as enrollment_start
+        , cr.courserun_enrollment_end_on as enrollment_end
+        , cr.courserun_is_live
+        , cr.courserun_created_on
         , cast(null as varchar) as course_readable_id
+        , er.examrun_semester as semester
+        , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
-    from {{ ref('int__mitxonline__course_runs') }}
+    from {{ ref('int__mitxonline__course_runs') }} as cr
+    left join micromasters_examruns as er on cr.courserun_readable_id = er.examrun_readable_id
 )
 
 , mitxpro_courseruns as (
@@ -35,6 +47,8 @@ with mitxonline_courseruns as (
         , courserun_is_live
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
         , 'mitxpro' as platform
     from {{ ref('int__mitxpro__course_runs') }}
 )
@@ -52,6 +66,8 @@ with mitxonline_courseruns as (
         , courserun_is_published as courserun_is_live
         , cast(null as varchar) as courserun_created_on
         , cast(null as varchar) as course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
         , 'edxorg' as platform
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -69,6 +85,8 @@ with mitxonline_courseruns as (
         , cast(null as boolean) as courserun_is_live
         , courserun_created_on
         , cast(null as varchar) as course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
         , 'residential' as platform
     from {{ ref('int__mitxresidential__courseruns') }}
 )
@@ -86,6 +104,8 @@ with mitxonline_courseruns as (
         , false as courserun_is_live
         , cast(null as varchar) as courserun_created_on
         , runs.course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
         , 'bootcamps' as platform
     from {{ ref('int__bootcamps__course_runs') }} as runs
 )
@@ -116,6 +136,8 @@ with mitxonline_courseruns as (
         , courserun_is_live
         , courserun_created_on
         , platform
+        , semester
+        , passing_grade
         , coalesce(
             course_readable_id,
             case
@@ -198,6 +220,8 @@ with mitxonline_courseruns as (
         , enrollment_end
         , courserun_is_live
         , courserun_created_on
+        , semester
+        , passing_grade
         , current_timestamp as effective_date
         , cast(null as timestamp) as end_date
         , true as is_current
@@ -217,6 +241,8 @@ with mitxonline_courseruns as (
             and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
             and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
             and coalesce(existing.courserun_is_live, false) = coalesce(courseruns_with_all_fks.courserun_is_live, false)
+            and coalesce(existing.semester, '') = coalesce(courseruns_with_all_fks.semester, '')
+            and coalesce(existing.passing_grade, -1.0) = coalesce(courseruns_with_all_fks.passing_grade, -1.0)
     )
     {% endif %}
 )
@@ -242,6 +268,8 @@ with mitxonline_courseruns as (
         , existing.enrollment_end
         , existing.courserun_is_live
         , existing.courserun_created_on
+        , existing.semester
+        , existing.passing_grade
         , existing.effective_date
         , current_timestamp as end_date
         , false as is_current
