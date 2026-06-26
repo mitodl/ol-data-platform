@@ -595,7 +595,7 @@ def find_snapshot_pointer_lag(  # noqa: C901
     return lagging
 
 
-def advance_snapshot_pointer(  # noqa: PLR0915, C901
+def advance_snapshot_pointer(  # noqa: PLR0912, PLR0915, C901
     glue_database: str,
     table_name: str,
     region: str = AWS_REGION,
@@ -646,6 +646,7 @@ def advance_snapshot_pointer(  # noqa: PLR0915, C901
     )
 
     glue_response = glue_client.get_table(DatabaseName=glue_database, Name=table_name)
+    glue_version_id = glue_response["Table"].get("VersionId")
     params = glue_response["Table"].get("Parameters", {})
     metadata_location = params.get("metadata_location", "")
     if not metadata_location.startswith("s3://"):
@@ -717,7 +718,10 @@ def advance_snapshot_pointer(  # noqa: PLR0915, C901
 
     # Iceberg requires metadata files named {version}-{uuid}.metadata.json.
     # Trino rejects files whose names don't match this pattern.  Derive the
-    # next version from the current filename or fall back to the metadata-log.
+    # next version from the current filename; if that doesn't match (legacy
+    # non-versioned names), fall back to an S3 listing of the metadata prefix
+    # so the version stays monotonically increasing even when the metadata-log
+    # has gaps.  The UUID suffix guarantees uniqueness regardless of version.
     _ver_re = re.compile(r"^(\d+)-[0-9a-f-]+\.metadata\.json$")
     old_filename = old_key.rsplit("/", 1)[-1]
     prev_version = 0
@@ -725,11 +729,13 @@ def advance_snapshot_pointer(  # noqa: PLR0915, C901
     if m:
         prev_version = int(m.group(1))
     else:
-        for entry in metadata.get("metadata-log", []):
-            mf = entry.get("metadata-file", "").rsplit("/", 1)[-1]
-            mv = _ver_re.match(mf)
-            if mv:
-                prev_version = max(prev_version, int(mv.group(1)))
+        paginator = s3_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=f"{metadata_dir}/"):
+            for obj_meta in page.get("Contents", []):
+                fname = obj_meta["Key"].rsplit("/", 1)[-1]
+                mv = _ver_re.match(fname)
+                if mv:
+                    prev_version = max(prev_version, int(mv.group(1)))
     new_filename = f"{prev_version + 1:05d}-{uuid.uuid4()}.metadata.json"
     new_key = f"{metadata_dir}/{new_filename}"
     s3_client.put_object(
@@ -765,7 +771,16 @@ def advance_snapshot_pointer(  # noqa: PLR0915, C901
         new_metadata_location
     )
 
-    glue_client.update_table(DatabaseName=glue_database, TableInput=table_input)
+    # Pass VersionId for optimistic locking — Glue raises
+    # ConcurrentModificationException if another writer advanced the pointer
+    # between our get_table and update_table calls, preventing a stale overwrite.
+    update_kwargs: dict[str, Any] = {
+        "DatabaseName": glue_database,
+        "TableInput": table_input,
+    }
+    if glue_version_id is not None:
+        update_kwargs["VersionId"] = glue_version_id
+    glue_client.update_table(**update_kwargs)
 
     log.info(
         "Advanced snapshot pointer for %s.%s: %s → %s (%.1fh lag resolved)",
