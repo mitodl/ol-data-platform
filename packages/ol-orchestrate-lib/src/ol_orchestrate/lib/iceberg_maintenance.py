@@ -87,6 +87,28 @@ class RawLayerTableInfo:
     latest_snapshot_timestamp_ms: int | None = None
 
 
+@dataclass(frozen=True)
+class SnapshotPointerLag:
+    """A table whose Iceberg current-snapshot-id lags behind the latest snapshot.
+
+    This indicates that Airbyte wrote new snapshots to the history but did not
+    advance the current-snapshot-id pointer, leaving dbt/Trino reading stale data.
+    """
+
+    table_name: str
+    database: str
+    current_snapshot_id: int
+    current_snapshot_timestamp_ms: int
+    latest_snapshot_id: int
+    latest_snapshot_timestamp_ms: int
+
+    @property
+    def lag_hours(self) -> float:
+        return (
+            self.latest_snapshot_timestamp_ms - self.current_snapshot_timestamp_ms
+        ) / 3_600_000
+
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 # Source-group-level overrides for raw-layer maintenance.
@@ -473,3 +495,305 @@ def load_raw_layer_maintenance_work(
         sum(t.eligible_snapshot_count for t in results),
     )
     return results
+
+
+def find_snapshot_pointer_lag(  # noqa: C901
+    glue_database: str,
+    table_prefixes: list[str] | None = None,
+    min_lag_hours: float = 2.0,
+    region: str = AWS_REGION,
+) -> list[SnapshotPointerLag]:
+    """Scan Iceberg tables and return those whose current-snapshot-id is stale.
+
+    The Airbyte S3 Data Lake connector uses a staging branch pattern: data is
+    written to ``refs.airbyte_staging_<id>`` and promoted to ``refs.main`` via
+    ``replaceBranch`` in ``teardown(true)``.  When a sync fails, ``teardown(false)``
+    is called instead, leaving the staging branch un-promoted and
+    ``current-snapshot-id`` stuck at an earlier snapshot.  Iceberg 1.11.0 (used
+    by the connector) also validates that ``refs.main.snapshot-id ==
+    current-snapshot-id`` on table load, so any pre-existing inconsistency
+    (written by an older connector version) causes every subsequent sync to fail
+    with ``IllegalArgumentException``, compounding the lag.
+
+    If *table_prefixes* is ``None`` (the default), all Iceberg tables in the
+    database are scanned.  Pass a list of name prefixes to restrict the scan.
+
+    A table is reported only when the gap between the current-snapshot timestamp
+    and the latest-snapshot timestamp exceeds *min_lag_hours*.  Short gaps (< 2 h)
+    are expected during the write window and should not alert.
+    """
+    glue_client = boto3.client("glue", region_name=region)
+    catalog = get_glue_catalog(region=region)
+    min_lag_ms = int(min_lag_hours * 3_600_000)
+
+    iceberg_table_names: list[str] = []
+    paginator = glue_client.get_paginator("get_tables")
+    for page in paginator.paginate(DatabaseName=glue_database):
+        for table in page.get("TableList", []):
+            name = table["Name"]
+            if table_prefixes is not None and not any(
+                name.startswith(p) for p in table_prefixes
+            ):
+                continue
+            if table.get("Parameters", {}).get("table_type", "").upper() == "ICEBERG":
+                iceberg_table_names.append(name)
+
+    log.info(
+        "Snapshot pointer scan: checking %d tables in %s",
+        len(iceberg_table_names),
+        glue_database,
+    )
+
+    lagging: list[SnapshotPointerLag] = []
+    for table_name in iceberg_table_names:
+        try:
+            table = catalog.load_table(f"{glue_database}.{table_name}")
+            snapshots = table.metadata.snapshots
+            if not snapshots:
+                continue
+
+            current_id = table.metadata.current_snapshot_id
+            current_snap = next(
+                (s for s in snapshots if s.snapshot_id == current_id), None
+            )
+            latest_snap = max(snapshots, key=lambda s: s.timestamp_ms)
+
+            if current_id == latest_snap.snapshot_id:
+                continue
+
+            if current_snap is None:
+                log.warning(
+                    "%s: current_snapshot_id %s not found in snapshot list",
+                    table_name,
+                    current_id,
+                )
+                continue
+
+            lag_ms = latest_snap.timestamp_ms - current_snap.timestamp_ms
+            if lag_ms < min_lag_ms:
+                continue
+
+            lagging.append(
+                SnapshotPointerLag(
+                    table_name=table_name,
+                    database=glue_database,
+                    current_snapshot_id=current_snap.snapshot_id,
+                    current_snapshot_timestamp_ms=current_snap.timestamp_ms,
+                    latest_snapshot_id=latest_snap.snapshot_id,
+                    latest_snapshot_timestamp_ms=latest_snap.timestamp_ms,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Could not check snapshot pointer for %s: %s", table_name, exc)
+
+    lagging.sort(key=lambda t: t.lag_hours, reverse=True)
+    log.info(
+        "Snapshot pointer scan complete: %d/%d tables have stale pointer",
+        len(lagging),
+        len(iceberg_table_names),
+    )
+    return lagging
+
+
+def advance_snapshot_pointer(  # noqa: PLR0912, PLR0915, C901
+    glue_database: str,
+    table_name: str,
+    region: str = AWS_REGION,
+) -> dict[str, Any]:
+    """Advance ``current-snapshot-id`` to the latest snapshot for a lagging table.
+
+    This repairs the Airbyte bug where incremental syncs append new Iceberg
+    snapshots to the history but do not advance the ``current-snapshot-id``
+    pointer.  Trino and dbt always read the current snapshot, so without this
+    fix they see stale data even though newer snapshots exist.
+
+    The repair is a safe, additive operation:
+
+    1. Read the existing Iceberg metadata JSON from S3.
+    2. Write a *new* metadata JSON (with a fresh UUID filename) that sets
+       ``current-snapshot-id`` to the latest snapshot and appends an entry to
+       ``snapshot-log`` if one is missing.
+    3. Update the Glue ``metadata_location`` parameter to point at the new file.
+
+    Returns a result dict with keys ``skipped``, ``old_snapshot_id``,
+    ``new_snapshot_id``, ``lag_hours``, and ``new_metadata_location``.
+    """
+    import json  # noqa: PLC0415
+    import re  # noqa: PLC0415
+    import uuid  # noqa: PLC0415
+
+    glue_client = boto3.client("glue", region_name=region)
+    s3_client = boto3.client("s3", region_name=region)
+    catalog = get_glue_catalog(region=region)
+
+    table = catalog.load_table(f"{glue_database}.{table_name}")
+    snapshots = table.metadata.snapshots
+    current_id = table.metadata.current_snapshot_id
+
+    if not snapshots:
+        return {"skipped": True, "reason": "no snapshots"}
+
+    latest_snap = max(snapshots, key=lambda s: s.timestamp_ms)
+
+    if current_id == latest_snap.snapshot_id:
+        return {"skipped": True, "reason": "already current"}
+
+    current_snap = next((s for s in snapshots if s.snapshot_id == current_id), None)
+    lag_hours: float | None = (
+        (latest_snap.timestamp_ms - current_snap.timestamp_ms) / 3_600_000
+        if current_snap
+        else None
+    )
+
+    glue_response = glue_client.get_table(DatabaseName=glue_database, Name=table_name)
+    glue_version_id = glue_response["Table"].get("VersionId")
+    params = glue_response["Table"].get("Parameters", {})
+    metadata_location = params.get("metadata_location", "")
+    if not metadata_location.startswith("s3://"):
+        msg = (
+            f"{glue_database}.{table_name}: unexpected metadata_location "
+            f"{metadata_location!r} — cannot repair safely"
+        )
+        raise ValueError(msg)
+
+    bucket, old_key = metadata_location[5:].split("/", 1)
+    metadata_dir = old_key.rsplit("/", 1)[0]
+
+    obj = s3_client.get_object(Bucket=bucket, Key=old_key)
+    metadata: dict[str, Any] = json.loads(obj["Body"].read())
+
+    metadata["current-snapshot-id"] = latest_snap.snapshot_id
+
+    # Keep refs.main in sync with current-snapshot-id.  The Java Iceberg library
+    # (used by the Airbyte destination connector) validates that these are equal
+    # and throws IllegalArgumentException if they differ.  PyIceberg does not
+    # enforce this, so mismatches go undetected until Airbyte tries to write.
+    if "refs" in metadata and "main" in metadata["refs"]:
+        metadata["refs"]["main"]["snapshot-id"] = latest_snap.snapshot_id
+
+    existing_log_ids = {
+        entry.get("snapshot-id") for entry in metadata.get("snapshot-log", [])
+    }
+    if latest_snap.snapshot_id not in existing_log_ids:
+        metadata.setdefault("snapshot-log", []).append(
+            {
+                "snapshot-id": latest_snap.snapshot_id,
+                "timestamp-ms": latest_snap.timestamp_ms,
+            }
+        )
+
+    # Per the Iceberg spec, each new metadata file must record the previous
+    # metadata file in metadata-log so that history traversal tools and
+    # expire_snapshots can reconstruct the full chain.
+    #
+    # The timestamp for the log entry must be the OLD file's own last-updated-ms
+    # (i.e. when that file was the active metadata), NOT the latest snapshot
+    # timestamp.  Using the snapshot timestamp can produce unsorted entries when
+    # current-snapshot-id is stuck at an old snapshot whose timestamp predates
+    # newer staging-branch metadata written by the connector.  Iceberg 1.11.0
+    # validates that metadata-log is sorted and throws IllegalArgumentException
+    # if entries are out of order.
+    old_metadata_location = f"s3://{bucket}/{old_key}"
+    old_last_updated_ms = metadata.get("last-updated-ms", latest_snap.timestamp_ms)
+    existing_meta_log_files = {
+        e.get("metadata-file") for e in metadata.get("metadata-log", [])
+    }
+    if old_metadata_location not in existing_meta_log_files:
+        metadata.setdefault("metadata-log", []).append(
+            {
+                "metadata-file": old_metadata_location,
+                "timestamp-ms": old_last_updated_ms,
+            }
+        )
+    # Sort the metadata-log by timestamp so the invariant enforced by Iceberg
+    # 1.11.0 (entries must be non-decreasing) is always satisfied after repair.
+    # Duplicate file paths can accumulate from repeated repairs; deduplicate
+    # keeping the LAST occurrence (most recent timestamp for a given file).
+    seen_files: dict[str, dict[str, Any]] = {}
+    for entry in metadata.get("metadata-log", []):
+        seen_files[entry.get("metadata-file", "")] = entry
+    metadata["metadata-log"] = sorted(
+        seen_files.values(), key=lambda e: e.get("timestamp-ms", 0)
+    )
+
+    # Iceberg requires metadata files named {version}-{uuid}.metadata.json.
+    # Trino rejects files whose names don't match this pattern.  Derive the
+    # next version from the current filename; if that doesn't match (legacy
+    # non-versioned names), fall back to an S3 listing of the metadata prefix
+    # so the version stays monotonically increasing even when the metadata-log
+    # has gaps.  The UUID suffix guarantees uniqueness regardless of version.
+    _ver_re = re.compile(r"^(\d+)-[0-9a-f-]+\.metadata\.json$")
+    old_filename = old_key.rsplit("/", 1)[-1]
+    prev_version = 0
+    m = _ver_re.match(old_filename)
+    if m:
+        prev_version = int(m.group(1))
+    else:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=f"{metadata_dir}/"):
+            for obj_meta in page.get("Contents", []):
+                fname = obj_meta["Key"].rsplit("/", 1)[-1]
+                mv = _ver_re.match(fname)
+                if mv:
+                    prev_version = max(prev_version, int(mv.group(1)))
+    new_filename = f"{prev_version + 1:05d}-{uuid.uuid4()}.metadata.json"
+    new_key = f"{metadata_dir}/{new_filename}"
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=new_key,
+        Body=json.dumps(metadata).encode("utf-8"),
+        ContentType="application/json",
+    )
+    new_metadata_location = f"s3://{bucket}/{new_key}"
+
+    # Use an allowlist rather than a blocklist — Glue occasionally adds new
+    # read-only fields that would cause update_table to fail if passed through.
+    _valid_table_input = {
+        "Name",
+        "Description",
+        "Owner",
+        "LastAccessTime",
+        "LastAnalyzedTime",
+        "Retention",
+        "StorageDescriptor",
+        "PartitionKeys",
+        "ViewOriginalText",
+        "ViewExpandedText",
+        "TableType",
+        "Parameters",
+        "TargetTable",
+        "ViewDefinition",
+    }
+    table_input = {
+        k: v for k, v in glue_response["Table"].items() if k in _valid_table_input
+    }
+    table_input.setdefault("Parameters", {})["metadata_location"] = (
+        new_metadata_location
+    )
+
+    # Pass VersionId for optimistic locking — Glue raises
+    # ConcurrentModificationException if another writer advanced the pointer
+    # between our get_table and update_table calls, preventing a stale overwrite.
+    update_kwargs: dict[str, Any] = {
+        "DatabaseName": glue_database,
+        "TableInput": table_input,
+    }
+    if glue_version_id is not None:
+        update_kwargs["VersionId"] = glue_version_id
+    glue_client.update_table(**update_kwargs)
+
+    log.info(
+        "Advanced snapshot pointer for %s.%s: %s → %s (%.1fh lag resolved)",
+        glue_database,
+        table_name,
+        current_id,
+        latest_snap.snapshot_id,
+        lag_hours or 0,
+    )
+    return {
+        "skipped": False,
+        "old_snapshot_id": current_id,
+        "new_snapshot_id": latest_snap.snapshot_id,
+        "lag_hours": lag_hours,
+        "new_metadata_location": new_metadata_location,
+    }
