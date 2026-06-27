@@ -12,7 +12,7 @@ dependencies = [
     "httpx2 >= 2.2.0",
     "scikit-learn>=1.2.2",
     "ol-orchestrate-lib",
-    "polars<1.42",
+    "polars<1.43",
 ]
 
 [project.entry-points]
