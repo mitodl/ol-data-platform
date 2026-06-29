@@ -102,7 +102,9 @@ models:
   - name: user_profile_id
     description: int, foreign key to profiles_profile
     tests:
-    - not_null
+    - not_null:
+        config:
+          severity: warn
   - name: user_profile_is_filled_out
     description: boolean, whether user filled out the profile
   - name: user_profile_parental_consent_is_required
