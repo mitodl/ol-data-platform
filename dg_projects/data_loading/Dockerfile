@@ -43,4 +43,9 @@ COPY --from=builder /app/dg_projects/data_loading /app
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Tell pyiceberg where to find .pyiceberg.yaml (dlt places it in .dlt/).
+# Without this, pyiceberg's load_catalog() falls back to ~/.pyiceberg.yaml
+# and cannot find the aws_glue catalog definition, causing a URI missing error.
+ENV PYICEBERG_HOME="/app/.dlt"
+
 WORKDIR /app
