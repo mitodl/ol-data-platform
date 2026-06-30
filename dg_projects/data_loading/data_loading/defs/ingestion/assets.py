@@ -39,7 +39,7 @@ def build_ingest_assets(
         dlt_source=source,
         dlt_pipeline=pipeline,
         name=name,
-        group_name="ingestion",
+        # group_name is set per-asset by the translator (scoped by source system).
         dagster_dlt_translator=translator or RawDataDltTranslator(),
     )
     def _assets(
@@ -88,7 +88,7 @@ def _edxorg_asset_key(table_name: str) -> AssetKey:
     dlt_source=edxorg_s3.edxorg_s3_source(tables=list(EDXORG_DB_TABLES)),
     dlt_pipeline=edxorg_s3.edxorg_s3_pipeline,
     name="edxorg_s3_tables",
-    group_name="ingestion",
+    # group_name is set per-asset by the translator (scoped by source system).
     dagster_dlt_translator=EdxorgDltTranslator(),
 )
 def edxorg_s3_consolidated_tables(

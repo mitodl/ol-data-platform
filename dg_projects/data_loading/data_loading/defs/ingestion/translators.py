@@ -20,6 +20,17 @@ def _storage_kind() -> str:
     return "iceberg" if config.active_table_format() == "iceberg" else "filesystem"
 
 
+def _source_system(resource_name: str) -> str:
+    """Return the source-system group for a ``raw__<system>__...`` resource.
+
+    Used as the Dagster ``group_name`` so assets are scoped by source system
+    (e.g. ``oll``, ``mitpe``, ``edxorg``, ``podcast``). edxorg programs and
+    edxorg S3 tables both resolve to ``edxorg``.
+    """
+    parts = resource_name.split("__")
+    return parts[1] if len(parts) > 1 and parts[1] else "ingestion"
+
+
 class RawDataDltTranslator(DagsterDltTranslator):
     """Shared translator for raw-data dlt assets.
 
@@ -45,6 +56,8 @@ class RawDataDltTranslator(DagsterDltTranslator):
 
         return default_spec.replace_attributes(
             key=AssetKey(["ol_warehouse_raw_data", resource_name]),
+            # Scope assets by source system (oll, mitpe, edxorg, podcast, ...).
+            group_name=_source_system(resource_name),
             # These are root extracts. dagster_dlt's default spec adds a phantom
             # "<source>_<resource>" external dep (keyed off the un-remapped name);
             # drop it so the asset has no orphaned upstream. EdxorgDltTranslator

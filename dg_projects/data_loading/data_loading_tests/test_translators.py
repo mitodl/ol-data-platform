@@ -21,7 +21,7 @@ def test_simple_source_spec_conventions() -> None:
     assert spec.key == AssetKey(
         ["ol_warehouse_raw_data", "raw__oll__google_sheets__courses"]
     )
-    assert spec.group_name == "ingestion"
+    assert spec.group_name == "oll"  # scoped by source system
     assert "dlt" in spec.kinds
     assert "filesystem" in spec.kinds  # dev profile
     # Root extract: no orphaned phantom upstream dep.
@@ -55,6 +55,16 @@ def test_edxorg_spec_has_upstream_archive_dep() -> None:
         AssetKey(["edxorg", "raw_data", "db_table", "auth_user"])
     ]
     assert "dlt" in spec.kinds
+    assert spec.group_name == "edxorg"  # scoped by source system
+
+
+def test_edxorg_programs_grouped_with_edxorg() -> None:
+    # edxorg programs (discovery API) shares the edxorg source-system group with
+    # the edxorg S3 tables.
+    spec = _specs_by_key(assets.mit_edx_programs_assets)[
+        "ol_warehouse_raw_data/raw__edxorg__discovery__api__programs"
+    ]
+    assert spec.group_name == "edxorg"
 
 
 def test_storage_kind_tracks_profile(monkeypatch: pytest.MonkeyPatch) -> None:

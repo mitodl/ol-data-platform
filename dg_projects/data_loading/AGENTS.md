@@ -70,9 +70,9 @@ Create `src/ol_dlt/ol_dlt/sources/<name>/__init__.py` (model on
 
 - `@dlt.source(name="<name>_ingest")` and one `@dlt.resource(name="raw__...")`
   per table. **No environment branching, no Dagster imports.**
-- `table_format=config.active_table_format()` on each resource (iceberg in
-  qa/production, `None` for plain parquet locally — never the string `"parquet"`,
-  which dlt rejects).
+- `table_format=config.active_table_format()` on each resource (`iceberg` in
+  qa/production, `native` for plain filesystem parquet locally — never the string
+  `"parquet"`, which dlt rejects).
 - Build the pipeline with `config.pipeline_for("<bucket_prefix>")`; the prefix is
   the per-source S3 path segment (`s3://ol-data-lake-raw-<env>/<prefix>`).
 - For credentialed sources, resolve secrets **inside the resource generator**
@@ -100,10 +100,11 @@ from ol_dlt.sources import <name>
 ```
 
 and add `<name>_assets` to the `defs = Definitions(assets=[...])` list. The shared
-`RawDataDltTranslator` applies the `ol_warehouse_raw_data` key prefix, the
-`ingestion` group, the `dlt` + storage kinds, and the Glue `table_name` metadata.
-Sources with upstream Dagster dependencies (like edxorg_s3) get a translator
-subclass — see `EdxorgDltTranslator`.
+`RawDataDltTranslator` applies the `ol_warehouse_raw_data` key prefix, a
+`group_name` scoped by **source system** (the `raw__<source_system>__...` segment,
+e.g. `oll`, `mitpe`, `edxorg`, `podcast`), the `dlt` + storage kinds, and the Glue
+`table_name` metadata. Sources with upstream Dagster dependencies (like edxorg_s3)
+get a translator subclass — see `EdxorgDltTranslator`.
 
 ### Validate
 
