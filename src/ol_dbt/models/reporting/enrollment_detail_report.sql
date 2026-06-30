@@ -225,7 +225,7 @@ from enrollment
 inner join course_run
     on enrollment.courserun_fk = course_run.courserun_pk
 left join course
-    on course_run.course_fk=course.course_pk
+    on course_run.course_fk = course.course_pk
 left join f_certificate
     on
         enrollment.user_fk = f_certificate.user_fk
