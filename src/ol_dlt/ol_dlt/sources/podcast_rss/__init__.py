@@ -1,29 +1,22 @@
-"""
-MIT Learn Podcast RSS ingestion via dlt.
+"""MIT Learn Podcast RSS ingestion via dlt.
 
-Fetches podcast configuration from the mitodl/open-podcast-data GitHub repository,
-then loads raw podcast channel and episode data from each configured RSS feed
-into Iceberg tables for the raw data layer.
+Fetches podcast configuration from the mitodl/open-podcast-data GitHub
+repository, then loads raw podcast channel and episode data from each configured
+RSS feed.
 
 Data flow:
     GitHub (mitodl/open-podcast-data/podcasts/*.yaml)
-        → RSS feed URLs
-        → raw__podcast__rss__channels  (one row per podcast)
-        → raw__podcast__rss__episodes  (one row per episode across all podcasts)
+        -> RSS feed URLs
+        -> raw__podcast__rss__channels  (one row per podcast)
+        -> raw__podcast__rss__episodes  (one row per episode across all podcasts)
 
-Usage (standalone):
-    # Local development (default - writes to /tmp/.dlt/data/)
-    python -m data_loading.defs.podcast_rss_ingest.loads
-
-    # Production
-    DAGSTER_ENVIRONMENT=production python -m data_loading.defs.podcast_rss_ingest.loads
+Run standalone:
+    DLT_PROFILE=dev python -m ol_dlt.sources.podcast_rss
 """
 
 import base64
 import logging
-import os
 from collections.abc import Generator
-from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -31,12 +24,9 @@ import dlt
 import requests
 import yaml
 
-logger = logging.getLogger(__name__)
+from ol_dlt import config
 
-# Set dlt project directory to data_loading project root so .dlt/config.toml is found
-_DLT_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
-if _DLT_PROJECT_DIR.exists():
-    os.environ.setdefault("DLT_PROJECT_DIR", str(_DLT_PROJECT_DIR))
+logger = logging.getLogger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
 ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
@@ -63,11 +53,10 @@ def _fetch_podcast_configs(
     branch: str,
     token: str | None,
 ) -> list[dict[str, Any]]:
-    """
-    Fetch and parse all podcast YAML config files from a GitHub repository.
+    """Fetch and parse all podcast YAML config files from a GitHub repository.
 
     Returns a list of validated config dicts. Each dict must contain at least
-    `rss_url` and `website` keys to be included.
+    ``rss_url`` and ``website`` keys to be included.
     """
     headers = _github_headers(token)
     listing_url = f"{GITHUB_API_BASE}/repos/{repo}/contents/{folder}?ref={branch}"
@@ -84,23 +73,23 @@ def _fetch_podcast_configs(
         raw_content = base64.b64decode(file_resp.json()["content"]).decode("utf-8")
 
         try:
-            config = yaml.safe_load(raw_content)
+            podcast_config = yaml.safe_load(raw_content)
         except yaml.YAMLError:
             logger.exception("Failed to parse YAML config: %s", file_meta["name"])
             continue
 
-        if not isinstance(config, dict):
+        if not isinstance(podcast_config, dict):
             logger.warning("Skipping non-dict podcast config: %s", file_meta["name"])
             continue
 
-        if "rss_url" not in config or "website" not in config:
+        if "rss_url" not in podcast_config or "website" not in podcast_config:
             logger.warning(
                 "Skipping config missing required keys (rss_url, website): %s",
                 file_meta["name"],
             )
             continue
 
-        configs.append(config)
+        configs.append(podcast_config)
 
     logger.info("Loaded %d podcast configs from %s/%s", len(configs), repo, folder)
     return configs
@@ -113,10 +102,10 @@ def _elem_text(parent: ET.Element, tag: str) -> str | None:
 
 
 def _parse_channel_record(
-    channel_elem: ET.Element, config: dict[str, Any]
+    channel_elem: ET.Element, podcast_config: dict[str, Any]
 ) -> dict[str, Any]:
     """Extract channel-level fields from an RSS <channel> element."""
-    rss_url = config["rss_url"]
+    rss_url = podcast_config["rss_url"]
     # Derive a stable readable_id from the URL path, matching Learn's convention
     readable_id = rss_url.split("//")[-1].rstrip("/")
 
@@ -132,17 +121,19 @@ def _parse_channel_record(
     return {
         "readable_id": readable_id,
         "rss_url": rss_url,
-        "website": config.get("website"),
+        "website": podcast_config.get("website"),
         # YAML config may override the RSS channel title
-        "title": config.get("podcast_title") or _elem_text(channel_elem, "title"),
+        "title": (
+            podcast_config.get("podcast_title") or _elem_text(channel_elem, "title")
+        ),
         "description": _elem_text(channel_elem, "description"),
         "language": _elem_text(channel_elem, "language"),
         "last_build_date": _elem_text(channel_elem, "lastBuildDate"),
         "image_url": image_url,
-        "offered_by": config.get("offered_by"),
-        "topics": config.get("topics"),
-        "apple_podcasts_url": config.get("apple_podcasts_url"),
-        "google_podcasts_url": config.get("google_podcasts_url"),
+        "offered_by": podcast_config.get("offered_by"),
+        "topics": podcast_config.get("topics"),
+        "apple_podcasts_url": podcast_config.get("apple_podcasts_url"),
+        "google_podcasts_url": podcast_config.get("google_podcasts_url"),
         "etl_source": "podcast",
     }
 
@@ -153,8 +144,7 @@ def _parse_episode_record(
     channel_rss_url: str,
     channel_image_url: str | None,
 ) -> dict[str, Any] | None:
-    """
-    Extract episode fields from an RSS <item> element.
+    """Extract episode fields from an RSS <item> element.
 
     Returns None if the item has no <enclosure> (i.e. no audio file).
     """
@@ -192,27 +182,22 @@ def _parse_episode_record(
     }
 
 
-@dlt.source
+@dlt.source(name="podcast_rss_ingest")
 def podcast_rss_source(  # noqa: C901
     github_access_token: str | None = None,
     github_repo: str = "mitodl/open-podcast-data",
     github_folder: str = "podcasts",
     github_branch: str = "master",
-):
-    """
-    Load MIT Learn podcast data from RSS feeds configured in GitHub.
+) -> Generator[Any]:
+    """Load MIT Learn podcast data from RSS feeds configured in GitHub.
 
-    Reads YAML config files from the mitodl/open-podcast-data GitHub repository,
-    fetches each configured RSS feed, and yields normalized records into two tables:
-
+    Yields normalized records into two tables:
       raw__podcast__rss__channels - one record per configured podcast channel
       raw__podcast__rss__episodes - one record per episode across all channels
 
     Args:
-        github_access_token: Optional GitHub personal access token. The public
-            repository works without a token but is limited to 60 unauthenticated
-            requests/hr. Set this to raise the limit to 5,000 req/hr.
-        github_repo: GitHub repository containing the podcast YAML configs.
+        github_access_token: Optional GitHub PAT to raise the API rate limit.
+        github_repo: Repository containing the podcast YAML configs.
         github_folder: Folder within the repo containing YAML config files.
         github_branch: Git branch to read configs from.
     """
@@ -221,9 +206,9 @@ def podcast_rss_source(  # noqa: C901
         name="raw__podcast__rss__channels",
         write_disposition="merge",
         primary_key="readable_id",
-        table_format=_table_format,
+        table_format=config.active_table_format(),
     )
-    def podcast_channels() -> Generator[dict[str, Any], None, None]:
+    def podcast_channels() -> Generator[dict[str, Any]]:
         """Yield one record per configured podcast channel."""
         configs = _fetch_podcast_configs(
             repo=github_repo,
@@ -231,8 +216,8 @@ def podcast_rss_source(  # noqa: C901
             branch=github_branch,
             token=github_access_token,
         )
-        for config in configs:
-            rss_url = config["rss_url"]
+        for podcast_config in configs:
+            rss_url = podcast_config["rss_url"]
             try:
                 resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)
                 resp.raise_for_status()
@@ -249,15 +234,15 @@ def podcast_rss_source(  # noqa: C901
                 logger.warning("No <channel> element in RSS for: %s", rss_url)
                 continue
 
-            yield _parse_channel_record(channel_elem, config)
+            yield _parse_channel_record(channel_elem, podcast_config)
 
     @dlt.resource(
         name="raw__podcast__rss__episodes",
         write_disposition="merge",
         primary_key="readable_id",
-        table_format=_table_format,
+        table_format=config.active_table_format(),
     )
-    def podcast_episodes() -> Generator[dict[str, Any], None, None]:
+    def podcast_episodes() -> Generator[dict[str, Any]]:
         """Yield one record per episode across all configured podcasts."""
         configs = _fetch_podcast_configs(
             repo=github_repo,
@@ -265,8 +250,8 @@ def podcast_rss_source(  # noqa: C901
             branch=github_branch,
             token=github_access_token,
         )
-        for config in configs:
-            rss_url = config["rss_url"]
+        for podcast_config in configs:
+            rss_url = podcast_config["rss_url"]
             try:
                 resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)
                 resp.raise_for_status()
@@ -282,7 +267,7 @@ def podcast_rss_source(  # noqa: C901
             if channel_elem is None:
                 continue
 
-            channel_record = _parse_channel_record(channel_elem, config)
+            channel_record = _parse_channel_record(channel_elem, podcast_config)
             for item_elem in channel_elem.findall("item"):
                 episode = _parse_episode_record(
                     item_elem,
@@ -297,42 +282,17 @@ def podcast_rss_source(  # noqa: C901
     yield podcast_episodes
 
 
-# ---------------------------------------------------------------------------
-# Module-level source and pipeline instances referenced by defs.yaml
-# ---------------------------------------------------------------------------
-
-_dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
-
-if _dagster_env in ("qa", "production"):
-    _destination_name = f"podcast_{_dagster_env}"
-    _dataset_name = f"ol_warehouse_{_dagster_env}_raw"
-    _table_format = "iceberg"
-else:
-    _destination_name = "podcast_local"
-    _dataset_name = "podcast_rss_local"
-    _table_format = "parquet"
-
-podcast_rss_load_source = podcast_rss_source()
-
-podcast_rss_pipeline = dlt.pipeline(
-    pipeline_name="podcast_rss",
-    destination=_destination_name,
-    dataset_name=_dataset_name,
-    progress="log",
-)
+# Bucket prefix is "podcast" (not "podcast_rss") to preserve the existing
+# s3://ol-data-lake-raw-<env>/podcast destination path.
+podcast_rss_pipeline = config.pipeline_for("podcast", pipeline_name="podcast_rss")
 
 
-def _run_pipeline() -> None:
-    """Execute the podcast RSS pipeline (for standalone testing)."""
-    logging.basicConfig(level=logging.INFO)
-    logger.info(
-        "Running podcast RSS pipeline: destination=%s dataset=%s",
-        _destination_name,
-        _dataset_name,
-    )
-    load_info = podcast_rss_pipeline.run(podcast_rss_load_source)
-    logger.info("Pipeline completed: %s", load_info)
+def build_source() -> Any:  # noqa: ANN401
+    """Instantiate the podcast source (uniform entrypoint for the wrapper)."""
+    return podcast_rss_source()
 
 
 if __name__ == "__main__":
-    _run_pipeline()
+    logging.basicConfig(level=logging.INFO)
+    _info = podcast_rss_pipeline.run(build_source())
+    logger.info("Pipeline completed: %s", _info)

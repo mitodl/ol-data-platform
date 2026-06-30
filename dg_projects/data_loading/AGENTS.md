@@ -1,167 +1,133 @@
 # data_loading: AI Developer Guide
 
-The `data_loading` code location houses all dlt (data load tool) pipelines that
-ingest raw data from external sources into the `ol_warehouse_raw_data` Iceberg
-schema. This is the primary landing zone for REST API, RSS feed, file export,
-and S3-based sources.
+The `data_loading` code location wraps the standalone **`ol_dlt`** dlt project
+(`src/ol_dlt`) and exposes its pipelines as Dagster assets in the
+`ol_warehouse_raw_data` schema. This mirrors how `src/ol_dbt` is a standalone dbt
+project wrapped by the `lakehouse` code location.
+
+The split:
+
+- **`src/ol_dlt`** owns all *pure dlt* code — sources, resources, and the
+  profile-based pipeline/destination configuration. It must **never import
+  Dagster** (enforced by a ruff `banned-api` rule).
+- **`data_loading`** owns the *orchestration* — thin `@dlt_assets` wrappers,
+  translators, schedules, and the edxorg sensor — and imports `ol_dlt`.
 
 See the root [`AGENTS.md`](../../AGENTS.md) for repo-wide build and validation
-workflows. This file covers `data_loading`-specific patterns only.
+workflows, and [`src/ol_dlt/README.md`](../../src/ol_dlt/README.md) for the dlt
+project itself.
 
 ---
 
 ## Structure
 
 ```
-data_loading/
+src/ol_dlt/                         # the standalone dlt project (pure dlt)
+├── ol_dlt/config.py                # DLT_PROFILE -> destination/dataset/table_format
+├── ol_dlt/sources/<name>/__init__.py   # @dlt.source / @dlt.resource bodies
+├── .dlt/{config.toml,.pyiceberg.yaml}  # runtime + Glue catalog config
+└── tests/
+
+dg_projects/data_loading/
 ├── data_loading/
-│   ├── definitions.py          # Auto-loads all defs/ components + DagsterDltResource
-│   └── defs/
-│       ├── <source_ingest>/    # One directory per source
-│       │   ├── __init__.py
-│       │   ├── loads.py        # dlt @dlt.source / @dlt.resource definitions
-│       │   ├── defs.yaml       # DltLoadCollectionComponent wiring
-│       │   └── README.md       # Source-specific docs and local dev instructions
-│       └── ...
-├── .dlt/
-│   ├── config.toml             # Non-secret pipeline and destination config
-│   └── secrets.toml.template   # Template for required secrets (not committed)
-└── pyproject.toml
+│   ├── definitions.py              # load_from_defs_folder + DagsterDltResource
+│   └── defs/ingestion/
+│       ├── __init__.py             # maps DAGSTER_ENVIRONMENT -> DLT_PROFILE
+│       ├── translators.py          # RawDataDltTranslator + EdxorgDltTranslator
+│       ├── assets.py               # build_ingest_assets() factory + per-source @dlt_assets
+│       ├── schedules.py
+│       └── sensor.py               # edxorg upstream multi_asset_sensor
+└── data_loading_tests/test_translators.py
 ```
 
-`definitions.py` uses `load_from_defs_folder` — adding a new `defs/<source>/`
-directory with a valid `defs.yaml` automatically registers its assets; no manual
-changes to `definitions.py` are needed.
+There is **no** `dlt.yml` / dlt+ project manifest and no per-source `defs.yaml` —
+profiles are a plain `DLT_PROFILE` env var resolved in `ol_dlt.config`, and assets
+are wired uniformly through the `build_ingest_assets` factory.
 
 ---
 
 ## Raw Table Naming Convention
 
-**This is the most common mistake when adding a new source. Read before writing
-any `@dlt.resource` decorator.**
-
-All raw tables must follow:
+**The most common mistake when adding a source. Read before writing any
+`@dlt.resource` decorator.**
 
 ```
 raw__{source_system}__{subsystem}__{storage_technology}__{entity_name}
 ```
 
 See [`docs/raw_table_naming_conventions.md`](../../docs/raw_table_naming_conventions.md)
-for the full reference including:
-- When to include `subsystem` vs. when to omit it
-- The complete `storage_technology` vocabulary (`api`, `rss`, `postgres`, `google_sheets`, etc.)
-- Worked examples for every existing source
-- A five-step checklist for naming new tables
-
-Set the name directly on the `@dlt.resource` decorator:
-
-```python
-@dlt.resource(
-    name="raw__mitpe__api__courses",   # full canonical name — no shortcuts
-    primary_key=["title", "url"],
-    write_disposition="replace",
-)
-def courses() -> Generator[dict[str, Any], None, None]:
-    ...
-```
+for the full reference. Set the name directly on the `@dlt.resource` decorator;
+the asset key becomes `["ol_warehouse_raw_data", <resource name>]`.
 
 ---
 
-## Adding a New dlt Source
+## Adding a New dlt Source (two steps)
 
-### 1. Create the source directory
+### Step 1 — author the source in `src/ol_dlt`
 
-```bash
-mkdir -p data_loading/defs/<source>_ingest
-touch data_loading/defs/<source>_ingest/__init__.py
+Create `src/ol_dlt/ol_dlt/sources/<name>/__init__.py` (model on
+`sources/mit_climate`):
+
+- `@dlt.source(name="<name>_ingest")` and one `@dlt.resource(name="raw__...")`
+  per table. **No environment branching, no Dagster imports.**
+- `table_format=config.active_table_format()` on each resource (iceberg in
+  qa/production, `None` for plain parquet locally — never the string `"parquet"`,
+  which dlt rejects).
+- Build the pipeline with `config.pipeline_for("<bucket_prefix>")`; the prefix is
+  the per-source S3 path segment (`s3://ol-data-lake-raw-<env>/<prefix>`).
+- For credentialed sources, resolve secrets **inside the resource generator**
+  using `config.resolve_secret(...)` + `config.require_secrets(...)` so the module
+  imports cleanly without secrets present.
+- Expose a `build_source()` returning the instantiated source (applies any env
+  overrides), used by the Dagster wrapper.
+
+Add unit + materialization tests under `src/ol_dlt/tests/sources/` and run
+`cd src/ol_dlt && uv run pytest` and `uv run ruff check .` (the banned-api rule
+fails the build if `dagster` leaks in).
+
+### Step 2 — wrap it as a Dagster asset
+
+In `dg_projects/data_loading/data_loading/defs/ingestion/assets.py`:
+
+```python
+from ol_dlt.sources import <name>
+
+<name>_assets = build_ingest_assets(
+    name="<name>_ingest",
+    source=<name>.build_source(),
+    pipeline=<name>.<name>_pipeline,
+)
 ```
 
-### 2. Write `loads.py`
+and add `<name>_assets` to the `defs = Definitions(assets=[...])` list. The shared
+`RawDataDltTranslator` applies the `ol_warehouse_raw_data` key prefix, the
+`ingestion` group, the `dlt` + storage kinds, and the Glue `table_name` metadata.
+Sources with upstream Dagster dependencies (like edxorg_s3) get a translator
+subclass — see `EdxorgDltTranslator`.
 
-Follow the pattern in any existing source (e.g., `mit_climate_ingest/loads.py`):
-
-- Decorate the source with `@dlt.source(name="<source>_ingest")`
-- Decorate each resource with `@dlt.resource(name="raw__<...>", ...)`
-- Use `write_disposition="replace"` for full catalog sources (small, no history needed)
-- Use `write_disposition="merge"` with a `primary_key` for incremental sources
-- Define module-level `<source>_load_source` and `<source>_pipeline` instances —
-  these are referenced by `defs.yaml`
-- For sources requiring secrets (OAuth2, API tokens): resolve credentials **inside
-  the `@dlt.resource` generator**, not in the outer `@dlt.source` body. The source
-  body runs at code location load time; the resource generator runs at pipeline
-  execution time. Failing to do this causes load-time errors when secrets are absent
-  in local development.
-
-### 3. Write `defs.yaml`
-
-```yaml
-type: dagster_dlt.DltLoadCollectionComponent
-
-attributes:
-  loads:
-    - source: .loads.<source>_load_source
-      pipeline: .loads.<source>_pipeline
-      translation:
-        group_name: ingestion
-        key: "{{ resource.name }}"       # required — keeps asset key = table name
-        key_prefix: "ol_warehouse_raw_data"
-        description: "..."
-```
-
-The `key: "{{ resource.name }}"` line is required. Without it, dlt embeds the
-pipeline name in the asset key, creating a 3-segment key that diverges from the
-2-segment convention used by all other raw assets.
-
-### 4. Add destinations to `.dlt/config.toml`
-
-Add local, QA, and production named destinations for the new pipeline:
-
-```toml
-[destination.<source>_local]
-destination_type = "filesystem"
-bucket_url = "file:///tmp/.dlt/data/<source>"
-layout = "{table_name}/{load_id}.{file_id}.{ext}"
-
-[destination.<source>_qa]
-destination_type = "filesystem"
-bucket_url = "s3://ol-data-lake-raw-qa/<source>"
-layout = "{table_name}/{load_id}.{file_id}.{ext}"
-
-[destination.<source>_production]
-destination_type = "filesystem"
-bucket_url = "s3://ol-data-lake-raw-production/<source>"
-layout = "{table_name}/{load_id}.{file_id}.{ext}"
-```
-
-And the corresponding Iceberg catalog entries for QA and production (see existing
-entries in `config.toml` for the pattern).
-
-### 5. Validate the code location loads
+### Validate
 
 ```bash
 cd dg_projects/data_loading
-uv run python -c "from data_loading.definitions import defs; print('OK')"
+uv run dg list defs            # the new asset appears under ol_warehouse_raw_data
+uv run python -m pytest data_loading_tests/
 ```
-
-This must succeed with no errors before opening a PR. A failure here means either
-the `defs.yaml` references a missing attribute, or a module-level secret resolution
-is happening too early (see step 2 note above).
 
 ---
 
 ## Local Development
 
-Run a pipeline locally against the filesystem destination:
-
 ```bash
-cd dg_projects/data_loading
-
-# Run standalone (writes Parquet to /tmp/.dlt/data/<source>/)
-uv run python -m data_loading.defs.<source>_ingest.loads
+cd src/ol_dlt
+# Run a source standalone against the local filesystem destination
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.<name>
 
 # Inspect output with DuckDB
-duckdb -c "SELECT * FROM read_parquet('/tmp/.dlt/data/raw__<source>__*/**/*.parquet') LIMIT 10"
+duckdb -c "SELECT * FROM read_parquet('/tmp/.dlt/data/<prefix>/**/*.parquet') LIMIT 10"
 ```
+
+Materialize end-to-end via Dagster from `dg_projects/data_loading` with
+`uv run dg dev`.
 
 ---
 
@@ -170,8 +136,9 @@ duckdb -c "SELECT * FROM read_parquet('/tmp/.dlt/data/raw__<source>__*/**/*.parq
 Secrets are **never** stored in `config.toml`. They are provided at runtime via:
 
 - **Kubernetes (production/QA)**: environment variables injected by Helm
-- **Local development**: create `.dlt/secrets.toml` (gitignored) using
-  `.dlt/secrets.toml.template` as a guide
+- **Local development**: `src/ol_dlt/.dlt/secrets.toml` (gitignored), or exported
+  env vars
 
-For OAuth2 sources (e.g., `mit_edx_programs_ingest`), the required env var names
-are documented at the top of each `loads.py` file.
+Required env var names are documented at the top of each source's `__init__.py`
+(e.g. `mit_edx_programs` needs `EDX_API_CLIENT_ID`/`EDX_API_CLIENT_SECRET`/
+`EDX_API_ACCESS_TOKEN_URL`/`EDX_PROGRAMS_API_URL`).

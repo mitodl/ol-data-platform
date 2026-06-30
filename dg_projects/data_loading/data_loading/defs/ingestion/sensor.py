@@ -27,13 +27,14 @@ edxorg_s3_ingest_job = dg.define_asset_job(
     minimum_interval_seconds=86400,
     name="edxorg_upstream_changes_sensor",
     description=(
-        "Triggers edxorg S3 ingest when any upstream edxorg/raw_data/db_table/* asset "
-        "is materialized. Polls at most once per day."
+        "Triggers edxorg S3 ingest when any upstream edxorg/raw_data/db_table/* "
+        "asset is materialized. Polls at most once per day."
     ),
 )
 def edxorg_upstream_changes_sensor(
     context: dg.MultiAssetSensorEvaluationContext,
 ) -> dg.RunRequest | dg.SkipReason:
+    """Trigger the edxorg S3 ingest job when upstream archive assets change."""
     latest_records = context.latest_materialization_records_by_key()
 
     has_new = any(record is not None for record in latest_records.values())
@@ -42,3 +43,9 @@ def edxorg_upstream_changes_sensor(
 
     context.advance_all_cursors()
     return dg.RunRequest()
+
+
+defs = dg.Definitions(
+    jobs=[edxorg_s3_ingest_job],
+    sensors=[edxorg_upstream_changes_sensor],
+)

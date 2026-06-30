@@ -23,7 +23,7 @@ dependencies = [
 repository = "https://github.com/mitodl/ol-data-platform"
 
 [tool.uv.workspace]
-members = ["packages/*", "src/ol_dbt_cli"]
+members = ["packages/*", "src/ol_dbt_cli", "src/ol_dlt"]
 
 [tool.uv]
 package = false  # This is a workspace root, not a package
@@ -211,6 +211,7 @@ builtins-allowed-modules = ["secrets", "platform"]
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["T201", "ERA001", "B", "BLE001", "PLR", "E501", "G004", "FBT", "C90", "INP001"]
 "**/tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001"]
+"**/*_tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001", "D103"]
 "test_*.py" = ["S101"]
 
 [tool.dg]
