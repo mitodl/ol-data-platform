@@ -73,9 +73,3 @@ def build_source() -> Any:  # noqa: ANN401
     explainers = os.getenv("MIT_CLIMATE_EXPLAINERS_API_URL", _EXPLAINERS_URL_DEFAULT)
     ask = os.getenv("ASK_MIT_CLIMATE_API_URL", _ASK_URL_DEFAULT)
     return mit_climate_source(explainers_url=explainers, ask_url=ask)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    _info = mit_climate_pipeline.run(build_source())
-    logger.info("Pipeline completed: %s", _info)

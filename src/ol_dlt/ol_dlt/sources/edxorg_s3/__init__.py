@@ -175,16 +175,3 @@ def edxorg_s3_source(
 # Bucket prefix is "edxorg" to preserve the existing
 # s3://ol-data-lake-raw-<env>/edxorg destination path.
 edxorg_s3_pipeline = config.pipeline_for("edxorg", pipeline_name="edxorg_s3")
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    # Load a small subset for a standalone smoke run.
-    _test_tables = ["auth_user", "student_courseenrollment"]
-    logger.info(
-        "Pipeline completed: %s",
-        edxorg_s3_pipeline.run(
-            edxorg_s3_source(tables=_test_tables),
-            loader_file_format="parquet",
-        ),
-    )

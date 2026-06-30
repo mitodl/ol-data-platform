@@ -62,8 +62,3 @@ oll_pipeline = config.pipeline_for("oll")
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the OLL source (uniform entrypoint for the Dagster wrapper)."""
     return oll_source()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    logger.info("Pipeline completed: %s", oll_pipeline.run(build_source()))

@@ -64,6 +64,41 @@ uv run pytest
 uv run pytest -m integration   # materialization only
 ```
 
+## Smoke tests — verifying the non-Dagster path
+
+These exercise `ol_dlt` entirely on its own (no Dagster installed/imported).
+
+```bash
+cd src/ol_dlt
+
+# 1. Hermetic suite: unit + materialization against the ephemeral test profile.
+#    This is the reliable, network-free smoke test (mocks all HTTP).
+uv run pytest
+
+# 2. ol_dlt has NO dagster in its dependency closure (the separation holds).
+uv tree --package ol-dlt | grep -i dagster   # expect: no output
+
+# 3. The banned-api rule keeps dagster out of the source.
+uv run ruff check --select TID251 .          # expect: All checks passed!
+
+# 4. Live standalone runs (hit real upstreams; write parquet to the local fs).
+#    Credential-free sources:
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.oll
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.mitpe
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.mit_climate
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.podcast_rss
+#    Needs EDX_API_* creds:
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.mit_edx_programs
+#    Needs AWS creds (reads the prod S3 landing zone):
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.edxorg_s3
+
+# 5. Inspect a pipeline's state / last load after a run.
+DLT_PROFILE=dev uv run dlt pipeline oll info
+```
+
+The hermetic suite (step 1) is what CI runs and what should gate merges; the
+live runs (step 4) depend on the upstream services being reachable.
+
 ## Adding a new source
 
 1. Author the `@dlt.source` in `ol_dlt/sources/<name>/__init__.py` — no env

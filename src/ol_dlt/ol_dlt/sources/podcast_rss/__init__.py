@@ -290,9 +290,3 @@ podcast_rss_pipeline = config.pipeline_for("podcast", pipeline_name="podcast_rss
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the podcast source (uniform entrypoint for the wrapper)."""
     return podcast_rss_source()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    _info = podcast_rss_pipeline.run(build_source())
-    logger.info("Pipeline completed: %s", _info)

@@ -136,9 +136,3 @@ mit_edx_programs_pipeline = config.pipeline_for("mit_edx_programs")
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the source (uniform entrypoint for the Dagster wrapper)."""
     return mit_edx_programs_source()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    _info = mit_edx_programs_pipeline.run(build_source())
-    logger.info("Pipeline completed: %s", _info)
