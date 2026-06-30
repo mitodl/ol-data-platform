@@ -60,17 +60,16 @@ def _make_deduplicator():
 
         tbl = item if isinstance(item, pa.Table) else pa.Table.from_batches([item])
 
-        active_pk = [k for k in _EDXORG_PRIMARY_KEY if k in tbl.schema.names]
-        if not active_pk:
+        # Require ALL primary key columns to be present.  Partial-key
+        # deduplication (e.g. on row_hash alone) would silently drop valid rows
+        # because row_hash is not course-unique on its own.
+        if not all(k in tbl.schema.names for k in _EDXORG_PRIMARY_KEY):
             return tbl
 
-        key_cols = [tbl.column(k).to_pylist() for k in active_pk]
-        row_keys = (
-            list(zip(*key_cols)) if len(key_cols) > 1 else [(v,) for v in key_cols[0]]
-        )
+        key_cols = [tbl.column(k).to_pylist() for k in _EDXORG_PRIMARY_KEY]
 
         keep = []
-        for key in row_keys:
+        for key in zip(*key_cols):
             keep.append(key not in seen)
             seen.add(key)
 
