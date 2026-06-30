@@ -147,19 +147,34 @@ with combined_enrollments as (
         and {{ element_at_array("split(edxorg_runs.courserun_readable_id, '/')", 3) }}
             = {{ element_at_array("split(mitxonline__course_runs.courserun_readable_id, '+')", 3) }}
     where edxorg_runs.courserun_readable_id in (
-        'MITx/CTL.SC2x/2T2026',
-        'MITx/CTL.SC4x/2T2026',
-        'MITx/IDS.S24x/1T2027',
         'MITx/15.763x/2T2026',
+        'MITx/18.6501x/3T2026',
         'MITx/2.830.1x/2T2026',
         'MITx/2.830.2x/3T2026',
+        'MITx/2.854.2x/1T2027',
         'MITx/2.961.1x/3T2026',
         'MITx/2.961.2x/1T2027',
-        'MITx/2.854.2x/1T2027',
+        'MITx/6.419x/1T2027',
         'MITx/6.431x/3T2026',
-        'MITx/18.6501x/3T2026'
+        'MITx/6.86x/1T2027',
+        'MITx/CTL.SC2x/2T2026',
+        'MITx/CTL.SC3x/3T2026',
+        'MITx/CTL.SC4x/2T2026',
+        'MITx/IDS.S24x/1T2027'
     )
         and mitxonline__course_runs.courserun_platform = '{{ var("mitxonline") }}'
+
+    union all
+
+    -- Special case: MITx/CTL.SC1x_1/3T2026 maps to course-v1:MITxT+CTL.SC1x+3T2026.
+    -- The edX course number has a _1 suffix that is absent in the MITx Online counterpart,
+    -- so the standard course/run tag matching logic above cannot resolve this automatically.
+    select
+        'course-v1:MITx+CTL.SC1x_1+3T2026' as edxorg_courserun_readable_id
+        , courserun_readable_id as mitxonline_courserun_readable_id
+    from mitxonline__course_runs
+    where courserun_readable_id = 'course-v1:MITxT+CTL.SC1x+3T2026'
+        and courserun_platform = '{{ var("mitxonline") }}'
 )
 
 , product_versions as (
