@@ -671,7 +671,7 @@ with mitx_users as (
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
-        , max(full_name) as agg_full_name
+        , arbitrary(full_name) as agg_full_name
     from combined_users
     group by user_pk
 )
