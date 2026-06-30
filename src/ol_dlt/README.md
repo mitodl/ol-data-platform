@@ -49,9 +49,14 @@ before importing pipeline factories.
 
 ## Local development loop
 
+`ol_dlt` is a **standalone uv project** (deliberately excluded from the repo's
+root uv workspace), so `uv sync` here creates a scoped `src/ol_dlt/.venv` with
+only the dlt dependencies — no Dagster. `data_loading` consumes it via a path
+source, not via the workspace.
+
 ```bash
 cd src/ol_dlt
-uv sync
+uv sync                       # creates a scoped, dlt-only src/ol_dlt/.venv
 
 # run a source against the local filesystem destination
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.oll

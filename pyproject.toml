@@ -23,7 +23,12 @@ dependencies = [
 repository = "https://github.com/mitodl/ol-data-platform"
 
 [tool.uv.workspace]
-members = ["packages/*", "src/ol_dbt_cli", "src/ol_dlt"]
+members = ["packages/*", "src/ol_dbt_cli"]
+# src/ol_dlt is intentionally NOT a workspace member: it is a standalone uv
+# project so `cd src/ol_dlt && uv sync` produces a scoped, dlt-only venv (no
+# Dagster) for the pure-dlt dev/test loop. It is consumed by the data_loading
+# code location via a path source, not by this root workspace.
+exclude = ["src/ol_dlt"]
 
 [tool.uv]
 package = false  # This is a workspace root, not a package
