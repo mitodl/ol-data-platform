@@ -27,12 +27,64 @@ import os
 from pathlib import Path
 
 import dlt
+import pyarrow as pa
 import s3fs
 from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv_duckdb
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
 logger = logging.getLogger(__name__)
+
+_EDXORG_PRIMARY_KEY = ["row_hash", "extracted_course_key"]
+
+
+def _make_deduplicator():
+    """
+    Return a stateful per-run deduplication function for use with add_map.
+
+    Tracks seen (row_hash, extracted_course_key) pairs and drops rows whose
+    key was already seen earlier in the same extraction run.  Scoped per
+    call, so each edxorg_s3_source() invocation (one table, one pipeline run)
+    starts with an empty seen-set.
+
+    pyiceberg's upsert raises ValueError when the source DataFrame contains
+    duplicate join-key rows, even if those rows are identical.  This happens
+    when multiple TSV files from overlapping archive runs are extracted in one
+    dlt run and combined into a single normalised parquet file.
+    """
+    seen: set[tuple[str | None, ...]] = set()
+
+    def _dedup(item: object) -> object:
+        if not isinstance(item, (pa.Table, pa.RecordBatch)):
+            return item
+
+        tbl = item if isinstance(item, pa.Table) else pa.Table.from_batches([item])
+
+        # Require ALL primary key columns to be present.  Partial-key
+        # deduplication (e.g. on row_hash alone) would silently drop valid rows
+        # because row_hash is not course-unique on its own.
+        if not all(k in tbl.schema.names for k in _EDXORG_PRIMARY_KEY):
+            return tbl
+
+        key_cols = [tbl.column(k).to_pylist() for k in _EDXORG_PRIMARY_KEY]
+
+        keep = []
+        for key in zip(*key_cols):
+            keep.append(key not in seen)
+            seen.add(key)
+
+        if all(keep):
+            return tbl
+        if not any(keep):
+            # Return an empty table (same schema) rather than None.
+            # The add_map docs say to use add_filter for dropping records;
+            # returning None from add_map is undefined and may propagate as data.
+            return tbl.slice(0, 0)
+
+        return tbl.filter(pa.array(keep, type=pa.bool_()))
+
+    return _dedup
+
 
 # Set dlt project directory to the data_loading project root
 # This ensures .dlt/config.toml is found when running from repo root
@@ -135,6 +187,12 @@ def edxorg_s3_source(
                 )
             )
             .with_name(resource_name)
+            # Drop rows whose (row_hash, extracted_course_key) was already seen earlier
+            # in this extraction run.  Multiple TSV files from overlapping archive runs
+            # can carry the same logical row; dlt's normaliser combines them into one
+            # parquet file, and pyiceberg's upsert raises ValueError on duplicate
+            # join-key rows in the source DataFrame.
+            .add_map(_make_deduplicator())
             # All edxorg TSV exports include a row_hash column. Use a composite key
             # with extracted_course_key because row_hash is computed from only the
             # original CSV columns (excluding the extracted_* fields added during
@@ -143,7 +201,7 @@ def edxorg_s3_source(
             .apply_hints(
                 table_name=resource_name,
                 write_disposition="merge",
-                primary_key=["row_hash", "extracted_course_key"],
+                primary_key=_EDXORG_PRIMARY_KEY,
                 table_format=table_format,
             )
         )
