@@ -32,12 +32,17 @@ There is no `dlt.yml` / dlt+ project manifest — we run open-source dlt. The
 read in `ol_dlt/config.py`. It is the single source of truth that replaces the
 old per-`loads.py` `DAGSTER_ENVIRONMENT` branching.
 
-| `DLT_PROFILE`     | destination                                   | table format |
-| ----------------- | --------------------------------------------- | ------------ |
-| `dev` / `ci`      | local filesystem (parquet)                    | parquet      |
-| `test`            | ephemeral DuckDB / tmp filesystem (tests)     | parquet      |
-| `qa`              | `s3://ol-data-lake-raw-qa/<source>` + Glue    | iceberg      |
-| `production`      | `s3://ol-data-lake-raw-production/<source>`    | iceberg      |
+| `DLT_PROFILE`     | destination                                   | `table_format` hint |
+| ----------------- | --------------------------------------------- | ------------------- |
+| `dev` / `ci`      | local filesystem (parquet files)              | `native`            |
+| `test`            | ephemeral tmp filesystem (parquet files)      | `native`            |
+| `qa`              | `s3://ol-data-lake-raw-qa/<source>` + Glue    | `iceberg`           |
+| `production`      | `s3://ol-data-lake-raw-production/<source>`    | `iceberg`           |
+
+The `table_format` column is the value `config.active_table_format()` passes to
+`@dlt.resource(table_format=...)`. dlt only accepts `iceberg`/`delta`/`hive`/
+`native` — **never `"parquet"`** (and not `None`). `native` means the
+destination's native format, i.e. plain parquet files on the filesystem.
 
 The `data_loading` code location maps `DAGSTER_ENVIRONMENT` → `DLT_PROFILE`
 before importing pipeline factories.
