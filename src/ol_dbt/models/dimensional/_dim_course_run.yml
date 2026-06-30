@@ -79,7 +79,7 @@ models:
       mitxonline, mitxpro, and residential platforms. Null for edxorg and bootcamps.
   - name: semester
     description: >
-      Academic term label for a MicroMasters proctored exam run (e.g. "Fall 2023").
+      Academic term identifier for a MicroMasters proctored exam run (e.g. "2T2022").
       Populated only for MITxOnline course runs that correspond to a MicroMasters
       exam
       run. Null for all other platforms and non-exam MITxOnline course runs.
