@@ -19,6 +19,7 @@ WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
+COPY src/ol_dlt src/ol_dlt
 COPY dg_projects/data_loading dg_projects/data_loading
 
 # Install dependencies from the data_loading project
@@ -40,12 +41,19 @@ FROM python:3.14-slim-bookworm
 # Copy the application from the builder
 COPY --from=builder /app/dg_projects/data_loading /app
 
+# The dlt config (.dlt/config.toml, .pyiceberg.yaml) lives in the ol_dlt project,
+# which is installed into the venv as a package (its .dlt/ data dir is not). Copy
+# it into the image and point dlt/pyiceberg at it.
+COPY --from=builder /app/src/ol_dlt/.dlt /app/.dlt
+
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Tell pyiceberg where to find .pyiceberg.yaml (dlt places it in .dlt/).
-# Without this, pyiceberg's load_catalog() falls back to ~/.pyiceberg.yaml
-# and cannot find the aws_glue catalog definition, causing a URI missing error.
+# Tell dlt where to find .dlt/config.toml and pyiceberg where to find
+# .pyiceberg.yaml. Without these, dlt cannot resolve [iceberg_catalog] and
+# pyiceberg's load_catalog() falls back to ~/.pyiceberg.yaml and cannot find the
+# aws_glue catalog definition, causing a URI missing error.
+ENV DLT_PROJECT_DIR="/app"
 ENV PYICEBERG_HOME="/app/.dlt"
 
 WORKDIR /app

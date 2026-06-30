@@ -1,0 +1,31 @@
+# dlt Configuration
+# Non-sensitive configuration committed to git. Credentials are managed via AWS
+# IAM (IRSA for K8s, ~/.aws/credentials for local dev).
+#
+# Destinations, datasets, and table formats are NOT defined here — they are built
+# in ol_dlt/config.py from the active DLT_PROFILE. This file holds only the
+# runtime/extract tuning and the Iceberg catalog wiring.
+
+[runtime]
+log_level = "INFO"
+dlthub_telemetry = true
+
+# Limit extraction parallelism to 1 worker.
+#
+# dlt's default workers=5 launches concurrent threads that all share a single
+# non-thread-safe injectable-context dict. When threads race to enter/exit their
+# own context managers the dict ends up in an inconsistent state and dlt raises
+# ContainerInjectableContextMangled. Using a single worker makes the context
+# stack strictly sequential and eliminates the race.
+[extract]
+workers = 1
+max_parallel_items = 20
+
+# Iceberg Catalog Configuration
+#
+# dlt reads [iceberg_catalog] (flat, not named sub-sections). The "aws_glue"
+# catalog is defined in .dlt/.pyiceberg.yaml; pyiceberg's load_catalog handles
+# Glue natively via boto3/IRSA. The target Glue database is determined by the
+# pipeline dataset_name at runtime (e.g. "ol_warehouse_production_raw").
+[iceberg_catalog]
+iceberg_catalog_name = "aws_glue"

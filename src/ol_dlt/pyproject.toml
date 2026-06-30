@@ -1,0 +1,54 @@
+[project]
+name = "ol-dlt"
+version = "0.1.0"
+description = "Standalone dlt pipelines (sources, config) for the MIT Open Learning data platform, wrapped by the data_loading Dagster code location"
+authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
+requires-python = "~=3.13,<3.15"
+license = "BSD-3-Clause"
+dependencies = [
+    "dlt[filesystem,parquet,pyiceberg]>=1.28,<2",
+    "pyiceberg[glue]>=0.9",
+    "requests>=2.32",
+    "duckdb>=1.0,!=1.5.0,!=1.5.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1,<10",
+    "pytest-cov>=7.1,<8",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["ol_dlt"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "S", "B", "UP", "D", "TID"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D107", "D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "D"]
+
+# ol_dlt must stay pure dlt. Dagster (orchestration) lives in the
+# data_loading code location and must never be imported here. Enforced in CI.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"dagster".msg = "ol_dlt must not import dagster — keep orchestration in the data_loading code location."
+"dagster_dlt".msg = "ol_dlt must not import dagster_dlt — keep orchestration in the data_loading code location."
+"dagster_pipes".msg = "ol_dlt must not import dagster_pipes — keep orchestration in the data_loading code location."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests that run a real dlt pipeline against the ephemeral test profile",
+]
