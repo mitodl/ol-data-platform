@@ -59,7 +59,11 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "etl_source": "mit_climate",
         "offered_by": {"code": "climate"},
         "platform": "climate",
-        "resource_type": "article",
+        # MIT Learn has no "article" resource_type; the legacy Celery ETL loads
+        # Climate articles as documents (load_documents) with an "Article"
+        # resource_category, so match that contract for the webhook path too.
+        "resource_type": "document",
+        "resource_category": "Article",
         "created_on": row.get("last_modified"),
     }
 
