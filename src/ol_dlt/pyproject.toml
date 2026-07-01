@@ -10,6 +10,7 @@ dependencies = [
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
     "duckdb>=1.0,!=1.5.0,!=1.5.1",
+    "youtube-transcript-api>=1.0,<2",
 ]
 
 [dependency-groups]
