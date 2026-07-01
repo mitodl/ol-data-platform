@@ -30,6 +30,8 @@ def test_schedules_and_sensors_load() -> None:
     assert {s.name for s in _REPO.schedule_defs} >= {
         "oll_ingest_daily_schedule",
         "mitpe_ingest_daily_schedule",
+        "mit_climate_ingest_daily_schedule",
+        "mit_edx_programs_ingest_daily_schedule",
     }
     assert "edxorg_upstream_changes_sensor" in {s.name for s in _REPO.sensor_defs}
 
