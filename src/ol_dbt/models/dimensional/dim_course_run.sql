@@ -14,8 +14,18 @@
 with
     micromasters_examruns as (
         select examrun_readable_id, examrun_semester, examrun_passing_grade
-        from {{ ref("stg__micromasters__app__postgres__exams_examrun") }}
-        qualify row_number() over (partition by examrun_readable_id order by examrun_updated_on desc nulls last) = 1
+        from
+            (
+                select
+                    examrun_readable_id,
+                    examrun_semester,
+                    examrun_passing_grade,
+                    row_number() over (
+                        partition by examrun_readable_id order by examrun_updated_on desc nulls last
+                    ) as _row_num
+                from {{ ref("stg__micromasters__app__postgres__exams_examrun") }}
+            )
+        where _row_num = 1
     ),
     mitxonline_courseruns as (
         select
