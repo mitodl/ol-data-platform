@@ -42,6 +42,10 @@ from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.superset_api import SupersetApiClientFactory
+from lakehouse.sensors import (
+    iceberg_snapshot_pointer_lag_sensor,
+    iceberg_snapshot_pointer_repair_job,
+)
 
 trino_host_map = {
     "dev": "mitol-ol-data-lake-production.trino.galaxy.starburst.io",
@@ -385,6 +389,7 @@ defs = Definitions(
     ],
     resources=resources_dict,
     sensors=[
+        iceberg_snapshot_pointer_lag_sensor,
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour
@@ -397,7 +402,7 @@ defs = Definitions(
             | AssetSelection.groups("superset_starrocks_dataset"),
         ),
     ],
-    jobs=[*airbyte_asset_jobs],
+    jobs=[*airbyte_asset_jobs, iceberg_snapshot_pointer_repair_job],
     schedules=[
         *airbyte_update_schedules,
         instructor_onboarding_schedule,
