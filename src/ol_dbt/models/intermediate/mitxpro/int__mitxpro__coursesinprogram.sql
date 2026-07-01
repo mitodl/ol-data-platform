@@ -40,9 +40,10 @@ with coursesinprogram as (
 )
 
 select
-    coursepages.course_id
-    , programpageswithpath.program_id
-    , unnestedcoursesinprogram.course_order
+    distinct
+    course_id
+    , program_id
+    , course_order
 from unnestedcoursesinprogram
 left join coursepages
     on unnestedcoursesinprogram.coursepage_wagtail_page_id = coursepages.wagtail_page_id
