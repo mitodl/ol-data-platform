@@ -294,5 +294,7 @@ with
 
     select *
     from combined
-{% else %} select * from final
+{% else %}
+    select *
+    from final
 {% endif %}
