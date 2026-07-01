@@ -6,9 +6,19 @@ application. Wrapped as Dagster assets by the `data_loading` code location
 (`data_loading/defs/ingestion/assets.py`).
 
 **Config source:** [mitodl/open-video-data](https://github.com/mitodl/open-video-data)
-(`youtube/*.yaml`, one file per channel). Each config provides a `channel_id`
-and an optional `playlists` list (`{id, ignore?}`). A config with no `playlists`,
-or one containing the `all` wildcard id, ingests every playlist on the channel.
+(`youtube/*.yaml` — e.g. `channels.yaml`, `shorts.yaml` — on the `main` branch).
+Each file is a **YAML list** of channel config dicts; add or edit a channel by
+adding a `- channel_id: ...` entry. Each entry provides a `channel_id` and an
+optional `playlists` list (entries may be `{id, ignore?}` dicts or bare id
+strings). A channel with no `playlists`, or one containing the `all` wildcard id,
+ingests every playlist on the channel.
+
+```yaml
+- channel_id: UCEBb1b_L6zDS3xTUrIALZOw
+  offered_by: ocw
+  playlists:
+    - id: all
+```
 
 ## Data flow
 

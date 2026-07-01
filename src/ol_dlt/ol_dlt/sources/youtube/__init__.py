@@ -59,10 +59,13 @@ def _fetch_channel_configs(
 ) -> list[dict[str, Any]]:
     """Fetch and parse all YouTube channel YAML config files from a GitHub repo.
 
-    Each config must contain a ``channel_id`` to be included. The ``playlists``
-    key (a list of ``{id, ignore?}`` dicts) is optional; a config with no
-    ``playlists`` is treated as a wildcard (ingest all of the channel's
-    playlists).
+    The mitodl/open-video-data ``youtube/`` folder holds a few YAML files
+    (``channels.yaml``, ``shorts.yaml``) each containing a *list* of channel
+    config dicts (``- channel_id: ...``). A single top-level dict is also
+    accepted for robustness. Each channel dict must contain a ``channel_id``;
+    its ``playlists`` key (a list of ``{id, ignore?}`` dicts or bare id
+    strings) is optional and a channel with no ``playlists`` is treated as a
+    wildcard (ingest all of the channel's playlists).
     """
     headers = _github_headers(token)
     listing_url = f"{GITHUB_API_BASE}/repos/{repo}/contents/{folder}?ref={branch}"
@@ -79,23 +82,21 @@ def _fetch_channel_configs(
         raw_content = base64.b64decode(file_resp.json()["content"]).decode("utf-8")
 
         try:
-            channel_config = yaml.safe_load(raw_content)
+            parsed = yaml.safe_load(raw_content)
         except yaml.YAMLError:
             logger.exception("Failed to parse YAML config: %s", file_meta["name"])
             continue
 
-        if not isinstance(channel_config, dict):
-            logger.warning("Skipping non-dict youtube config: %s", file_meta["name"])
-            continue
-
-        if "channel_id" not in channel_config:
-            logger.warning(
-                "Skipping config missing required key (channel_id): %s",
-                file_meta["name"],
-            )
-            continue
-
-        configs.append(channel_config)
+        # A file is either a single channel dict or a list of channel dicts.
+        entries = parsed if isinstance(parsed, list) else [parsed]
+        for entry in entries:
+            if not isinstance(entry, dict) or "channel_id" not in entry:
+                logger.warning(
+                    "Skipping youtube config entry without channel_id in %s",
+                    file_meta["name"],
+                )
+                continue
+            configs.append(entry)
 
     logger.info("Loaded %d youtube configs from %s/%s", len(configs), repo, folder)
     return configs
@@ -144,9 +145,15 @@ def _playlist_ids_for_config(
     """
     channel_id = channel_config["channel_id"]
     playlist_configs = channel_config.get("playlists") or []
-    configs_by_id = {
-        pc["id"]: pc for pc in playlist_configs if isinstance(pc, dict) and "id" in pc
-    }
+    # Each entry is either {"id": ..., "ignore"?: ...} or a bare id string;
+    # accept both so a config like `playlists: [all]` still triggers the
+    # wildcard instead of silently ingesting nothing.
+    configs_by_id: dict[str, dict[str, Any]] = {}
+    for pc in playlist_configs:
+        if isinstance(pc, str):
+            configs_by_id[pc] = {"id": pc}
+        elif isinstance(pc, dict) and "id" in pc:
+            configs_by_id[pc["id"]] = pc
 
     if not playlist_configs or WILDCARD_PLAYLIST_ID in configs_by_id:
         for playlist in _yt_paged_items(
@@ -203,7 +210,7 @@ def youtube_source(  # noqa: C901
     github_access_token: str | None = None,
     github_repo: str = _CONFIG_FILE_REPO_DEFAULT,
     github_folder: str = _CONFIG_FILE_FOLDER_DEFAULT,
-    github_branch: str = "master",
+    github_branch: str = "main",
 ) -> Generator[Any]:
     """Load MIT Learn YouTube data from the Data API v3 into four raw tables.
 
