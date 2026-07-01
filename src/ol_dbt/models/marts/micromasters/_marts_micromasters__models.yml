@@ -39,9 +39,8 @@ models:
     tests:
     - not_null
   - name: semester
-    description: str, semester for the exam, e.g., 2T2022.
-    tests:
-    - not_null
+    description: str, semester for the exam, e.g., 2T2022. Null for MITx Online exam
+      runs that do not have a corresponding MicroMasters exam run record.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
