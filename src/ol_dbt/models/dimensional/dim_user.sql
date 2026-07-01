@@ -672,6 +672,9 @@ with mitx_users as (
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
         , arbitrary(full_name) as agg_full_name
+        -- Fallback address_state for cross-platform users whose base row is from a platform
+        -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
+        , arbitrary(address_state) as agg_address_state
     from combined_users
     group by user_pk
 )
@@ -703,7 +706,7 @@ select
     , base.company
     , base.job_title
     , base.industry
-    , base.address_state
+    , coalesce(base.address_state, agg.agg_address_state) as address_state
     , latest_income.latest_income_usd
     , latest_income.latest_original_income
     , latest_income.latest_original_currency
