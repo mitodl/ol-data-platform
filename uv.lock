@@ -980,6 +980,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dbt-starrocks"
+version = "1.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dbt-core" },
+    { name = "mysql-connector-python" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/b0/c45ff4cf943df96110a55a5c71eeb10ebcf6cc74e26c3ba65ae9355b78fe/dbt_starrocks-1.12.0.tar.gz", hash = "sha256:1a6aac8ad865287b6a77475e18218d52d0dd1c9203d75039e01137b273318ba2", size = 34726, upload-time = "2026-06-16T21:08:51.712Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/7f/fe6ec3242d15c836d2c8a593b722e9a8343a34463672b892ab14b8cd0abf/dbt_starrocks-1.12.0-py3-none-any.whl", hash = "sha256:175dec03dcf64b91560f2c39da039e662ba89e6c455c7b6ab132e1fd5dcf9e9d", size = 48345, upload-time = "2026-06-16T21:08:50.573Z" },
+]
+
+[[package]]
 name = "dbt-trino"
 version = "1.10.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1656,6 +1669,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/55/33/71e45a6bd6875f44a26f99da31c63b6840123e88bedf2c0b1ce429b8be12/hvac-2.4.0-py3-none-any.whl", hash = "sha256:008db5efd8c2f77bd37d2368ea5f713edceae1c65f11fd608393179478649e0f", size = 155921, upload-time = "2025-10-30T12:57:46.253Z" },
 ]
 
+[package.optional-dependencies]
+parser = [
+    { name = "pyhcl" },
+]
+
 [[package]]
 name = "identify"
 version = "2.6.19"
@@ -2244,6 +2262,25 @@ wheels = [
 ]
 
 [[package]]
+name = "mysql-connector-python"
+version = "9.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/c9/a9446dbebbcdf7d828d0a3be9049607eab6eeffb4e46ef1ee8ac304baede/mysql_connector_python-9.7.0.tar.gz", hash = "sha256:933887e71c871b6e9d8908459fe8303ebcf8feb5cc1e1c49caa6490e525cf78e", size = 12254829, upload-time = "2026-04-30T07:55:39.797Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6f/f5/9b07250bc98c7abae0e538423fe8a2fda0f799c606dbe82014412299340c/mysql_connector_python-9.7.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:e3842ecd62391a28c1dda5eb817f40418715e68482a8c146b3c478ac8bb7a23f", size = 20270283, upload-time = "2026-04-30T07:54:21.23Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/2e/70a1549a52add00775e073fdd7b7b57c21a330ea6f01b26ea8ef0ac3dba8/mysql_connector_python-9.7.0-cp313-cp313-macosx_14_0_x86_64.whl", hash = "sha256:9da73e212bb08e4df286506ffbda943063bbce448375a7db29748bb367f4e0af", size = 19830388, upload-time = "2026-04-30T07:54:23.51Z" },
+    { url = "https://files.pythonhosted.org/packages/81/f1/ef64f3c715f55d238ac56b0e0278408501ddc60aa62affa056eab167e28c/mysql_connector_python-9.7.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:39bf31cdbe920eae08801eb829584dc27f70dadbdb3a5c3b78402f54cea87ab0", size = 21925396, upload-time = "2026-04-30T07:54:25.657Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/17/e957dad49741680b7d0f69aef2b2144b22061c50581aaf0022ccf8de7e38/mysql_connector_python-9.7.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:236a4b8abfac8217517ce9e9edc735decf55282ada3890b3cd33770009f33d68", size = 21695834, upload-time = "2026-04-30T07:54:28.179Z" },
+    { url = "https://files.pythonhosted.org/packages/08/b6/bc9018fb02748ef83acbabbb4ef8467162cf39fc207e4e575595ffe22fd0/mysql_connector_python-9.7.0-cp313-cp313-win_amd64.whl", hash = "sha256:229ffce2333b88b59f8f034881e12dc85b309615338be9f843ed63923db99d52", size = 17678686, upload-time = "2026-04-30T07:54:30.317Z" },
+    { url = "https://files.pythonhosted.org/packages/46/db/453c6916b4b1cad6c8e56631e67f81e0d01b52690de541894728c2122f70/mysql_connector_python-9.7.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:9e17ceb79c1c4c137a5994f8ca8c6a1ce8ebf83eda3ccc21dd67f2c1398680f0", size = 20270277, upload-time = "2026-04-30T07:54:32.628Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/6d/3ff4dc01806511a3741764eafd5c28b73de18d3a3dfb391d4e4cfe51e1ca/mysql_connector_python-9.7.0-cp314-cp314-macosx_14_0_x86_64.whl", hash = "sha256:272c4e8263f6a514e4ae65e9553ed214fc9d4cf1f0f6bedca30def20c2ae1d52", size = 19830318, upload-time = "2026-04-30T07:54:34.952Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/79/b55c8f84a86071e5038567849c9cae4e3c96b211ce843c0f1808528bc202/mysql_connector_python-9.7.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:9549a2974353407427b574f005c92f03972e303182b4c3b4a272bf4ca10855ed", size = 21924702, upload-time = "2026-04-30T07:54:37.418Z" },
+    { url = "https://files.pythonhosted.org/packages/61/3e/2ab7a525209826bde620f9029b2c8f340a16b4151384813827477d475569/mysql_connector_python-9.7.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:ea4e05ab864ab8b0b5066d885d89ca51e5ba1320dba520c20a6f9388a8eca022", size = 21696426, upload-time = "2026-04-30T07:54:39.938Z" },
+    { url = "https://files.pythonhosted.org/packages/af/94/e370c40a6863752ba6886f20b960284daeef78b2a0e23f38d141b4aa7e76/mysql_connector_python-9.7.0-cp314-cp314-win_amd64.whl", hash = "sha256:5a5abbc152bc28cb2e64a04605ecd9941eff6b0dc5f9528cb84adb873e9a1e49", size = 18197576, upload-time = "2026-04-30T07:54:42.041Z" },
+    { url = "https://files.pythonhosted.org/packages/38/55/4ebb602d270108ea6e81ccdfe4aa0a511fedffdc3ef6c193ac9ff76402fe/mysql_connector_python-9.7.0-py2.py3-none-any.whl", hash = "sha256:af80b1e7179d5c2d983cf62470ad9b134a7e9ef05cf31108ae587f15873530cc", size = 480646, upload-time = "2026-04-30T07:54:43.82Z" },
+]
+
+[[package]]
 name = "networkx"
 version = "3.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2318,7 +2355,9 @@ dependencies = [
     { name = "boto3" },
     { name = "cyclopts" },
     { name = "dbt-duckdb" },
+    { name = "dbt-starrocks" },
     { name = "dbt-trino" },
+    { name = "hvac", extra = ["parser"] },
     { name = "pypika" },
     { name = "rich" },
     { name = "sqlglot" },
@@ -2347,7 +2386,9 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.42" },
     { name = "cyclopts", specifier = "~=4.19.0" },
     { name = "dbt-duckdb", specifier = ">=1.10.0" },
+    { name = "dbt-starrocks", specifier = ">=1.9.0" },
     { name = "dbt-trino", specifier = ">=1.10.0" },
+    { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },
     { name = "pypika", specifier = "~=0.51.0" },
     { name = "rich", specifier = ">=13.0" },
     { name = "sqlglot", specifier = ">=25.0" },
@@ -2379,6 +2420,7 @@ dependencies = [
     { name = "boto3" },
     { name = "cyclopts" },
     { name = "duckdb" },
+    { name = "hvac", extra = ["parser"] },
     { name = "jinja2" },
     { name = "markupsafe" },
     { name = "pyyaml" },
@@ -2392,6 +2434,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35" },
     { name = "cyclopts", specifier = ">=4.0" },
     { name = "duckdb", specifier = ">=1.0,!=1.5.0,!=1.5.1" },
+    { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "markupsafe", specifier = ">=2.1" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -2962,6 +3005,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/87/4589262da7fdc9cc8c609099a5525dcbd05bd0f4ee22c28f640f261a4292/pygsheets-2.0.6.tar.gz", hash = "sha256:bff46c812e99f9b8b81a09b456581365281c797620ec08530b0d0e48fa9299e2", size = 154743, upload-time = "2022-11-30T17:27:27.065Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/c5/f462089614ae9d9f3354b34ec6e527c2d520d5cdad85925ad89f65beaf2d/pygsheets-2.0.6-py3-none-any.whl", hash = "sha256:3338c2eb8990fdee9f463b42a370ec0870c118d607d775471a6dfb8b08f6cd87", size = 158205, upload-time = "2022-11-30T17:27:23.164Z" },
+]
+
+[[package]]
+name = "pyhcl"
+version = "0.4.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/b9/ff5019eef43b613f49a4695253d8814f8a7012745ae570158e5b64967200/pyhcl-0.4.5.tar.gz", hash = "sha256:c47293a51ccdd25e18bb5c8c0ab0ffe355b37c87f8d6f9d3280dc41efd4740bc", size = 61772, upload-time = "2023-09-01T05:25:16.788Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/b4/b766fd33774b55cc15f240916219c4ce9c1bd7bef4acd997ad36ff3622d0/pyhcl-0.4.5-py3-none-any.whl", hash = "sha256:30ee337d330d1f90c9f5ed8f49c468f66c8e6e43192bdc7c6ece1420beb3070c", size = 50160, upload-time = "2023-09-01T05:25:15.237Z" },
 ]
 
 [[package]]

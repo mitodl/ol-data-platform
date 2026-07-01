@@ -4,7 +4,7 @@ version: 2
 sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
-  database: '{{ target.database }}'
+  database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
   - name: raw__irx__edxorg__bigquery__mitx_course

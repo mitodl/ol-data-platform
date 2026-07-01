@@ -1,0 +1,754 @@
+#!/usr/bin/env python3
+"""StarRocks authentication helper.
+
+Obtains credentials for StarRocks via one of three flows:
+  --mode browser  PKCE authorization-code flow via Keycloak (default)
+  --mode ci       Non-interactive client-credentials flow (reads
+                  STARROCKS_CLIENT_SECRET)
+  --mode vault    Vault dynamic database credentials (native-password service account)
+
+Output modes:
+  --output token  Print the raw access token / password
+  --output env    Emit shell export statements (eval-able)
+  --output exec   Exec a command with credentials in the environment
+  --output mysql  Open an interactive mysql session
+
+Tokens from the browser flow are cached in ~/.cache/starrocks-auth/<env>.json
+and silently reused until expiry. The refresh token extends the session without
+reopening the browser. Use --refresh to force a new browser session.
+
+Use --port-forward to tunnel the StarRocks MySQL port (9030) from the EKS
+cluster to localhost via kubectl. Required for local development since the
+NLB is internal to the data VPC.
+
+--- dbt workflow (Vault dynamic credentials, recommended for service/automation) ---
+
+  # One-shot: port-forward lives for the duration of the dbt run
+  starrocks-auth --env qa --mode vault --port-forward --output exec -- dbt run
+
+  # Two-step: export creds, then run dbt (port-forward must be started separately)
+  eval "$(starrocks-auth --env qa --mode vault --port-forward --output env)"
+  dbt run --select my_model
+
+  Vault role choices (--vault-role):  readonly | app (default) | admin
+  Emits: STARROCKS_USER, STARROCKS_PASSWORD, STARROCKS_HOST
+
+--- Interactive SQL (OIDC, human users) ---
+
+  # MySQL 9.2+ community client — JWT via authentication_openid_connect_client
+  starrocks-auth --env qa --port-forward --output mysql
+
+  # Shell session with OIDC token exported (e.g. for DBeaver / DataGrip via JDBC)
+  eval "$(starrocks-auth --env qa --port-forward --output env)"
+  Emits: STARROCKS_USER, STARROCKS_TOKEN, STARROCKS_HOST
+
+--- CI / non-interactive ---
+
+  export STARROCKS_CLIENT_SECRET=$(
+      vault kv get -field=client_secret secret-operations/sso/starrocks
+  )
+  starrocks-auth --env qa --mode ci --output env
+
+--- Force a fresh browser login ---
+
+  starrocks-auth --env qa --refresh
+
+NOTE on StarRocks auth architecture
+-------------------------------------
+StarRocks has two disjoint authentication paths:
+
+  1. authentication_jwt (keycloak_jwt Security Integration):
+       MySQL wire protocol — client pre-fetches an id_token (PKCE via this
+       script), then connects using the authentication_openid_connect_client
+       plugin (MySQL 9.2+ only; not available in MariaDB).
+       Use: --output mysql with MySQL 9.2+ community client.
+
+  2. authentication_oauth2 (keycloak_oauth2 Security Integration):
+       Java JDBC only — the JDBC driver opens a browser for the auth code
+       exchange; StarRocks completes the token exchange server-side at
+       /api/oauth2. Not usable from the mysql CLI or MariaDB client.
+       The StarRocks FE web dashboard (port 8030) is NOT the OAuth2 web UI —
+       it uses HTTP Basic Auth exclusively.
+
+  - Native-auth service accounts (dbt, Vault dynamic users): use --mode vault.
+    dbt profiles must reference STARROCKS_USER / STARROCKS_PASSWORD env vars,
+    not an OIDC token. Arrow Flight SQL also only supports native-password auth.
+"""
+
+import argparse
+import atexit
+import base64
+import hashlib
+import http.server
+import json
+import os
+import re
+import secrets
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import hvac
+
+# ---------------------------------------------------------------------------
+# Environment configuration
+# ---------------------------------------------------------------------------
+
+ENVS: dict[str, dict[str, str]] = {
+    "qa": {
+        "issuer": "https://sso-qa.ol.mit.edu/realms/ol-data-platform",
+        "host": "lakehouse.qa.starrocks.ol.mit.edu",
+        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
+        "k8s_namespace": "starrocks",
+        "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-qa.odl.mit.edu",
+        "vault_mount": "database-starrocks-qa",
+    },
+    "production": {
+        "issuer": "https://sso.ol.mit.edu/realms/ol-data-platform",
+        "host": "lakehouse.starrocks.ol.mit.edu",
+        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-production",
+        "k8s_namespace": "starrocks",
+        "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-production.odl.mit.edu",
+        "vault_mount": "database-starrocks-production",
+    },
+    "ci": {
+        "issuer": "https://sso-ci.ol.mit.edu/realms/ol-data-platform",
+        "host": "lakehouse.ci.starrocks.ol.mit.edu",
+        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-ci",
+        "k8s_namespace": "starrocks",
+        "fe_service": "lakehouse-starrocks-fe-service",
+        "vault_addr": "https://vault-qa.odl.mit.edu",
+        "vault_mount": "database-starrocks-ci",
+    },
+}
+
+# Public client — no secret, PKCE only
+_CLI_CLIENT_ID = "ol-starrocks-cli"
+# Confidential client — used for CI client-credentials flow
+_SVC_CLIENT_ID = "ol-starrocks-client"
+
+_CALLBACK_PORT = 18080
+_REDIRECT_URI = f"http://localhost:{_CALLBACK_PORT}/callback"
+_STARROCKS_PORT = 9030
+_VAULT_CALLBACK_PORT = 8250
+_VAULT_REDIRECT_URI = f"http://localhost:{_VAULT_CALLBACK_PORT}/oidc/callback"
+_VAULT_OIDC_ROLE = "developer"
+
+_EXPIRY_BUFFER = 30  # seconds before stated expiry to treat token as stale
+_PORT_FORWARD_TIMEOUT = 15  # seconds to wait for the tunnel to become ready
+
+_CACHE_DIR = (
+    Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "starrocks-auth"
+)
+
+
+# ---------------------------------------------------------------------------
+# kubectl port-forward
+# ---------------------------------------------------------------------------
+
+
+def _start_port_forward(env_cfg: dict[str, str]) -> "subprocess.Popen[bytes]":
+    """Start kubectl port-forward and block until port 9030 is accepting connections."""
+    context = env_cfg["eks_context"]
+    namespace = env_cfg["k8s_namespace"]
+    service = env_cfg["fe_service"]
+
+    proc = subprocess.Popen(  # noqa: S603
+        [  # noqa: S607
+            "kubectl",
+            "--context",
+            context,
+            "-n",
+            namespace,
+            "port-forward",
+            f"svc/{service}",
+            f"{_STARROCKS_PORT}:{_STARROCKS_PORT}",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+    deadline = time.monotonic() + _PORT_FORWARD_TIMEOUT
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            err = proc.stderr.read().decode().strip() if proc.stderr else ""
+            sys.exit(f"kubectl port-forward exited early: {err}")
+        try:
+            with socket.create_connection(("127.0.0.1", _STARROCKS_PORT), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.2)
+    else:
+        proc.terminate()
+        sys.exit(
+            f"kubectl port-forward to {service}:{_STARROCKS_PORT} "
+            f"did not become ready within {_PORT_FORWARD_TIMEOUT}s"
+        )
+
+    print(  # noqa: T201
+        f"Port-forward active: localhost:{_STARROCKS_PORT} -> "
+        f"{service}:{_STARROCKS_PORT}",
+        file=sys.stderr,
+    )
+    atexit.register(proc.terminate)
+    return proc
+
+
+# ---------------------------------------------------------------------------
+# Token cache
+# ---------------------------------------------------------------------------
+
+
+def _cache_path(env_name: str) -> Path:
+    return _CACHE_DIR / f"{env_name}.json"
+
+
+def _save_cache(env_name: str, username: str, token_response: dict[str, Any]) -> None:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    entry = {
+        "username": username,
+        "access_token": token_response["access_token"],
+        "expires_at": now + token_response.get("expires_in", 300) - _EXPIRY_BUFFER,
+        "id_token": token_response.get("id_token"),
+        "refresh_token": token_response.get("refresh_token"),
+        "refresh_expires_at": now
+        + token_response.get("refresh_expires_in", 0)
+        - _EXPIRY_BUFFER,
+    }
+    path = _cache_path(env_name)
+    path.write_text(json.dumps(entry))
+    path.chmod(0o600)
+
+
+def _load_cache(env_name: str) -> dict[str, Any] | None:
+    path = _cache_path(env_name)
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _clear_cache(env_name: str) -> None:
+    _cache_path(env_name).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Token helpers
+# ---------------------------------------------------------------------------
+
+
+def _decode_jwt_payload(token: str) -> dict[str, Any]:
+    payload = token.split(".")[1]
+    payload += "=" * (-len(payload) % 4)
+    return json.loads(base64.urlsafe_b64decode(payload))
+
+
+def _token_request(url: str, data: dict[str, str]) -> dict[str, Any]:
+    body = urllib.parse.urlencode(data).encode()
+    req = urllib.request.Request(url, data=body, method="POST")  # noqa: S310
+    try:
+        with urllib.request.urlopen(req) as resp:  # noqa: S310
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        sys.exit(f"Token request failed {exc.code}: {exc.read().decode()}")
+
+
+def _try_refresh(
+    issuer: str, env_name: str, refresh_token: str
+) -> tuple[str, str] | None:
+    """Attempt a silent token refresh. Returns (username, access_token) or None."""
+    try:
+        body = urllib.parse.urlencode(
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": _CLI_CLIENT_ID,
+            }
+        ).encode()
+        req = urllib.request.Request(  # noqa: S310
+            f"{issuer}/protocol/openid-connect/token", data=body, method="POST"
+        )
+        with urllib.request.urlopen(req) as resp:  # noqa: S310
+            token_response = json.loads(resp.read())
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        return None
+
+    access_token = token_response["access_token"]
+    username = _decode_jwt_payload(access_token).get("preferred_username", "")
+    _save_cache(env_name, username, token_response)
+    return username, access_token
+
+
+# ---------------------------------------------------------------------------
+# Auth flows
+# ---------------------------------------------------------------------------
+
+
+def _pkce_pair() -> tuple[str, str]:
+    verifier = secrets.token_urlsafe(48)
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
+    return verifier, challenge
+
+
+def _browser_pkce(issuer: str, env_name: str) -> tuple[str, str]:
+    """Authorization-code + PKCE via a temporary localhost HTTP server."""
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(16)
+
+    auth_url = (
+        f"{issuer}/protocol/openid-connect/auth"
+        f"?response_type=code"
+        f"&client_id={_CLI_CLIENT_ID}"
+        f"&redirect_uri={urllib.parse.quote(_REDIRECT_URI)}"
+        f"&scope=openid+profile+email"
+        f"&code_challenge={challenge}"
+        f"&code_challenge_method=S256"
+        f"&state={state}"
+    )
+
+    result: dict[str, str] = {}
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_GET(self):
+            params = dict(
+                urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query)
+            )
+            if params.get("state") != state:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"State mismatch - possible CSRF. Try again.")
+                return
+            result["code"] = params.get("code", "")
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<h2>Authenticated. You can close this tab.</h2>")
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+    server = http.server.HTTPServer(("localhost", _CALLBACK_PORT), _Handler)
+    print("Opening browser for Keycloak login...", file=sys.stderr)  # noqa: T201
+    webbrowser.open(auth_url)
+    server.serve_forever()
+
+    token_response = _token_request(
+        f"{issuer}/protocol/openid-connect/token",
+        {
+            "grant_type": "authorization_code",
+            "code": result["code"],
+            "redirect_uri": _REDIRECT_URI,
+            "client_id": _CLI_CLIENT_ID,
+            "code_verifier": verifier,
+        },
+    )
+    access_token = token_response["access_token"]
+    username = _decode_jwt_payload(access_token).get("preferred_username", "")
+    _save_cache(env_name, username, token_response)
+    return username, access_token
+
+
+def _get_browser_token(
+    issuer: str, env_name: str, *, force_refresh: bool
+) -> tuple[str, str]:
+    """Return a valid (username, access_token), using the cache when possible."""
+    if not force_refresh:
+        cached = _load_cache(env_name)
+        if cached:
+            now = time.time()
+            if cached.get("expires_at", 0) > now:
+                return cached["username"], cached["access_token"]
+            refresh_token = cached.get("refresh_token")
+            if refresh_token and cached.get("refresh_expires_at", 0) > now:
+                result = _try_refresh(issuer, env_name, refresh_token)
+                if result:
+                    print("Session refreshed silently.", file=sys.stderr)  # noqa: T201
+                    return result
+
+    _clear_cache(env_name)
+    return _browser_pkce(issuer, env_name)
+
+
+def _vault_client(vault_addr: str, token: str | None = None) -> hvac.Client:
+    return hvac.Client(url=vault_addr, token=token)
+
+
+def _vault_oidc_callback() -> str:
+    """Start a one-shot HTTP server on port 8250 and return the Vault auth code."""
+    result: dict[str, str] = {}
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_: Any) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            params = dict(
+                urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query)
+            )
+            result["code"] = params.get("code", "")
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(
+                b"<h2>Vault authentication successful. You can close this tab.</h2>"
+            )
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+    server = http.server.HTTPServer(("localhost", _VAULT_CALLBACK_PORT), _Handler)
+    server.serve_forever()
+    return result["code"]
+
+
+def _load_vault_token(
+    vault_addr: str, env_name: str, oidc_role: str = _VAULT_OIDC_ROLE
+) -> str:
+    """Return a valid Vault token, triggering OIDC browser login if needed.
+
+    Tokens are cached at ~/.cache/starrocks-auth/vault-token-{env}-{role}.json and
+    shared with ol-dbt starrocks, so a single login serves both tools.
+    """
+    cache_path = _CACHE_DIR / f"vault-token-{env_name}-{oidc_role}.json"
+    if cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text())
+            token = str(cached.get("token", ""))
+            if token and _vault_client(vault_addr, token).is_authenticated():
+                return token
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    client = _vault_client(vault_addr)
+    auth_resp = client.auth.oidc.oidc_authorization_url_request(
+        role=oidc_role,
+        redirect_uri=_VAULT_REDIRECT_URI,
+    )
+    auth_url: str = auth_resp["data"]["auth_url"]
+    if not auth_url:
+        sys.exit(f"Vault at {vault_addr} did not return an auth URL")
+
+    qs = urllib.parse.parse_qs(urllib.parse.urlparse(auth_url).query)
+    nonce = qs["nonce"][0]
+    state = qs["state"][0]
+
+    print(  # noqa: T201
+        f"Opening browser for Vault login ({vault_addr})…\n"
+        "If it does not open automatically, visit:\n"
+        f"{auth_url}",
+        file=sys.stderr,
+    )
+    webbrowser.open(auth_url)
+    code = _vault_oidc_callback()
+
+    login_resp = client.auth.oidc.oidc_callback(code=code, nonce=nonce, state=state)
+    token = str(login_resp["auth"]["client_token"])
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({"token": token}))
+    return token
+
+
+def _vault_credentials(
+    vault_addr: str,
+    vault_mount: str,
+    env_name: str,
+    role: str,
+    oidc_role: str = _VAULT_OIDC_ROLE,
+) -> tuple[str, str]:
+    """Fetch short-lived StarRocks credentials from Vault's dynamic database engine."""
+    token = _load_vault_token(vault_addr, env_name, oidc_role)
+    client = _vault_client(vault_addr, token)
+    vault_path = f"{vault_mount}/creds/{role}"
+    try:
+        response: dict[str, Any] | None = client.read(vault_path)
+    except hvac.exceptions.Forbidden as exc:
+        msg = f"Vault permission denied: {vault_path!r} — check token policy"
+        raise RuntimeError(msg) from exc
+    if response is None:
+        msg = f"Vault path not found: {vault_path!r} — check vault_mount and role name"
+        raise RuntimeError(msg)
+    data: dict[str, str] = response["data"]
+    return data["username"], data["password"]
+
+
+def _client_credentials(issuer: str) -> tuple[str, str]:
+    """Client-credentials flow for non-interactive / CI use.
+
+    Reads the client secret from STARROCKS_CLIENT_SECRET in the environment.
+      export STARROCKS_CLIENT_SECRET=$(vault kv get -field=client_secret \
+          secret-operations/sso/starrocks)
+    """
+    client_secret = os.environ.get("STARROCKS_CLIENT_SECRET", "")
+    if not client_secret:
+        sys.exit(
+            "STARROCKS_CLIENT_SECRET must be set for --mode ci.\n"
+            "Fetch it with:\n"
+            "  export STARROCKS_CLIENT_SECRET="
+            "$(vault kv get -field=client_secret secret-operations/sso/starrocks)"
+        )
+    token_response = _token_request(
+        f"{issuer}/protocol/openid-connect/token",
+        {
+            "grant_type": "client_credentials",
+            "client_id": _SVC_CLIENT_ID,
+            "client_secret": client_secret,
+        },
+    )
+    access_token = token_response["access_token"]
+    username = _decode_jwt_payload(access_token).get(
+        "preferred_username", f"service-account-{_SVC_CLIENT_ID}"
+    )
+    return username, access_token
+
+
+# ---------------------------------------------------------------------------
+# Output modes
+# ---------------------------------------------------------------------------
+
+
+def _output_token(username: str, token: str, **_) -> None:  # noqa: ARG001
+    print(token)  # noqa: T201
+
+
+def _output_env(
+    username: str, token: str, host: str, password: str | None = None, **_
+) -> None:
+    print(f"export STARROCKS_USER={username!r}")  # noqa: T201
+    print(f"export STARROCKS_HOST={host!r}")  # noqa: T201
+    if password is not None:
+        # Vault dynamic credentials — native-password auth (dbt / service accounts)
+        print(f"export STARROCKS_PASSWORD={password!r}")  # noqa: T201  # nosec B106 — intentional: output is eval'd by shell, not a log sink
+    else:
+        # OIDC access token — human interactive sessions
+        print(f"export STARROCKS_TOKEN={token!r}")  # noqa: T201
+
+
+def _output_exec(
+    username: str,
+    token: str,
+    host: str,
+    cmd: list[str],
+    password: str | None = None,
+    **_,
+) -> None:
+    if not cmd:
+        sys.exit("--output exec requires a command after --")
+    env = {**os.environ, "STARROCKS_USER": username, "STARROCKS_HOST": host}
+    if password is not None:
+        env["STARROCKS_PASSWORD"] = password
+    else:
+        env["STARROCKS_TOKEN"] = token
+    os.execvpe(cmd[0], cmd, env)  # noqa: S606
+
+
+def _mysql_supports_openid_connect() -> bool:
+    """Return True if the installed mysql binary is MySQL 9.2+ (not MariaDB)."""
+    result = subprocess.run(
+        ["mysql", "--version"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    ver_str = (result.stdout + result.stderr).strip()
+    if "MariaDB" in ver_str:
+        return False
+    m = re.search(r"(\d+)\.(\d+)", ver_str)
+    if not m:
+        return False
+    return (int(m.group(1)), int(m.group(2))) >= (9, 2)
+
+
+def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> None:
+    """Connect to StarRocks via mysql CLI.
+
+    OIDC users: uses authentication_openid_connect_client (MySQL 9.2+ only).
+      The id_token from the PKCE cache is written to a temp file and passed
+      via --authentication-openid-connect-client-id-token-file. StarRocks
+      verifies it against the keycloak_jwt Security Integration.
+
+    Native users / CI mode: falls back to -p<access_token> (native password).
+    """
+    cached = _load_cache(env_name)
+    id_token = cached.get("id_token") if cached else None
+
+    if id_token:
+        if not _mysql_supports_openid_connect():
+            result = subprocess.run(
+                ["mysql", "--version"],  # noqa: S607
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            ver_str = (result.stdout + result.stderr).strip().splitlines()[0]
+            sys.exit(
+                f"JWT auth requires MySQL 9.2+ community client (found: {ver_str})\n"
+                "MariaDB does not implement authentication_openid_connect_client.\n"
+                "Install MySQL 9.2+ from https://dev.mysql.com/downloads/mysql/ or\n"
+                "use --output exec with a JDBC tool (DBeaver, DataGrip) for OIDC login."
+            )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jwt", delete=False) as tf:
+            tf.write(id_token)
+            tf_path = tf.name
+        try:
+            subprocess.run(  # noqa: S603
+                [  # noqa: S607
+                    "mysql",
+                    f"-h{host}",
+                    f"-P{_STARROCKS_PORT}",
+                    f"-u{username}",
+                    f"--authentication-openid-connect-client-id-token-file={tf_path}",
+                ],
+                check=False,
+            )
+        finally:
+            Path(tf_path).unlink()
+    else:
+        # Native-password or service-account login (--mode ci / no id_token cached).
+        subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                "mysql",
+                f"-h{host}",
+                f"-P{_STARROCKS_PORT}",
+                f"-u{username}",
+                f"-p{token}",
+                "--ssl",
+                "--ssl-verify-server-cert=OFF",
+            ],
+            check=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """Parse arguments and dispatch to the requested output mode."""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--env",
+        choices=list(ENVS),
+        default="qa",
+        help="Target environment (default: qa)",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["browser", "ci", "vault"],
+        default="browser",
+        help=(
+            "Auth flow: browser PKCE (default), CI client-credentials, "
+            "or Vault dynamic credentials"
+        ),
+    )
+    parser.add_argument(
+        "--vault-role",
+        choices=["readonly", "app", "admin"],
+        default="app",
+        help="Vault database role for --mode vault (default: app)",
+    )
+    parser.add_argument(
+        "--vault-oidc-role",
+        default=_VAULT_OIDC_ROLE,
+        help=(
+            f"Vault OIDC auth role for token acquisition"
+            f" (default: {_VAULT_OIDC_ROLE})."
+            " Use 'admin' when the developer role lacks policy for the database mount."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        choices=["token", "env", "exec", "mysql"],
+        default="token",
+        help=(
+            "Output mode: token (raw JWT), env (shell exports), "
+            "exec (exec a command), mysql (JWT via MySQL 9.2+ or native-auth fallback)"
+        ),
+    )
+    parser.add_argument(
+        "--port-forward",
+        action="store_true",
+        help=(
+            "Tunnel StarRocks MySQL port via kubectl port-forward. "
+            "Required for local development (NLB is VPC-internal). "
+            "The tunnel is torn down when the script exits."
+        ),
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Force a new browser login, ignoring any cached session",
+    )
+    parser.add_argument(
+        "cmd",
+        nargs=argparse.REMAINDER,
+        metavar="CMD",
+        help="Command to exec (with --output exec); separate with --",
+    )
+    args = parser.parse_args()
+
+    env_cfg = ENVS[args.env]
+    issuer = env_cfg["issuer"]
+
+    # Resolve the effective host: localhost when port-forwarding, remote NLB otherwise
+    if args.port_forward:
+        _start_port_forward(env_cfg)
+        host = "127.0.0.1"
+    else:
+        host = env_cfg["host"]
+
+    password: str | None = None
+    if args.mode == "browser":
+        username, token = _get_browser_token(
+            issuer, args.env, force_refresh=args.refresh
+        )
+    elif args.mode == "ci":
+        username, token = _client_credentials(issuer)
+    else:  # vault
+        username, password = _vault_credentials(
+            env_cfg["vault_addr"],
+            env_cfg["vault_mount"],
+            args.env,
+            args.vault_role,
+            args.vault_oidc_role,
+        )
+        token = password  # native password reused by _output_mysql / _output_token
+
+    cmd = [a for a in args.cmd if a != "--"]
+
+    dispatch: dict[str, Callable[..., None]] = {
+        "token": _output_token,
+        "env": _output_env,
+        "exec": _output_exec,
+        "mysql": _output_mysql,
+    }
+    dispatch[args.output](
+        username=username,
+        token=token,
+        host=host,
+        cmd=cmd,
+        env_name=args.env,
+        password=password,
+    )
+
+
+if __name__ == "__main__":
+    main()

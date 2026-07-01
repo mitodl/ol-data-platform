@@ -4,7 +4,7 @@ version: 2
 sources:
 - name: reporting
   loader: airbyte
-  database: '{{ target.database }}'
+  database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_reporting'
   tables:
   - name: student_risk_probability
