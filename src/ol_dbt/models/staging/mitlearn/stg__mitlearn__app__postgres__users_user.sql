@@ -4,6 +4,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__users_user') }}
 )
 
+{{ deduplicate_raw_table(order_by='updated_on desc, _airbyte_extracted_at' , partition_columns = 'id') }}
+
 , cleaned as (
     select
         id as user_id
@@ -22,7 +24,7 @@ with source as (
         , {{ cast_timestamp_to_iso8601('updated_on') }} as user_updated_on
         , {{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
         , {{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
-    from source
+    from most_recent_source
 )
 
 select * from cleaned
