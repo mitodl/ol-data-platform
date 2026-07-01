@@ -21,7 +21,7 @@ with
                     examrun_semester,
                     examrun_passing_grade,
                     row_number() over (
-                        partition by examrun_readable_id order by examrun_updated_on desc nulls last
+                        partition by examrun_readable_id order by examrun_updated_on desc nulls last, examrun_id desc
                     ) as _row_num
                 from {{ ref("stg__micromasters__app__postgres__exams_examrun") }}
             )
