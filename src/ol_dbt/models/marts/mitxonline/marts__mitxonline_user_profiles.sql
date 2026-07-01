@@ -12,4 +12,6 @@ select
     , latest_original_currency
 from {{ ref('dim_user') }}
 where user_mitxonline_username is not null
+    -- exclude MicroMasters-only users: they may have user_mitxonline_username populated
+    -- via a MicroMasters linkage but have never created a MITxOnline application account
     and mitxonline_application_user_id is not null
