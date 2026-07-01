@@ -22,7 +22,7 @@ with
                     row_number() over (partition by courserun_edxorg_readable_id order by courserun_id desc) as _row_num
                 from {{ ref("stg__micromasters__app__postgres__courses_courserun") }}
                 where courserun_platform = '{{ var("edxorg") }}'
-            )
+            ) as mcr_deduped
         where _row_num = 1
     ),
     mitxonline_courseruns as (
