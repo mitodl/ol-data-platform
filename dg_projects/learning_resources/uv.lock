@@ -1298,6 +1298,7 @@ dependencies = [
     { name = "pygsheets" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -1319,6 +1320,7 @@ requires-dist = [
     { name = "pygsheets", specifier = ">=2.0.6" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "requests", specifier = ">=2.32.0" },
 ]
 
 [package.metadata.requires-dev]

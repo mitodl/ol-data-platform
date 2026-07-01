@@ -1,0 +1,28 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__mitpe__api__courses
+    description: >
+      MIT Professional Education courses ingested from the /feeds/courses/ API
+      via the mitpe dlt pipeline. Full replace on every run; deduplicated by
+      title+url composite key.
+    columns:
+    - name: title
+      description: str, course title
+    - name: url
+      description: str, relative URL path for the course (e.g. /course/data-science)
+    - name: description
+      description: str, short course description
+    - name: image__src
+      description: str, relative URL path to the course image (dlt-flattened from
+        image.src)
+    - name: image__alt
+      description: str, alt text for the course image (dlt-flattened from image.alt)
+    - name: topics
+      description: str, pipe-separated topic labels
