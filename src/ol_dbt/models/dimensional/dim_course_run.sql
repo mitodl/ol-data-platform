@@ -16,6 +16,11 @@ with
         select courserun_edxorg_readable_id, courserun_upgrade_deadline
         from {{ ref("stg__micromasters__app__postgres__courses_courserun") }}
         where courserun_platform = '{{ var("edxorg") }}'
+        qualify
+            row_number() over (
+                partition by courserun_edxorg_readable_id order by courserun_id desc
+            )
+            = 1
     ),
     mitxonline_courseruns as (
         select
