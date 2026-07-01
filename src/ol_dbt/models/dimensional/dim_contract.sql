@@ -23,7 +23,6 @@ select
     , b2b_contract_start_date
     , b2b_contract_end_date
     , b2b_contract_max_learners
-    , b2b_contract_integration_type
     , b2b_contract_enrollment_fixed_price
     , b2b_contract_membership_type
     , org.organization_pk as organization_fk

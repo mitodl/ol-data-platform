@@ -38,10 +38,9 @@ models:
   - name: b2b_contract_max_learners
     description: Maximum number of seats allowed under this contract. Zero or null
       means unlimited.
-  - name: b2b_contract_integration_type
-    description: Integration type for the contract (e.g. SSO, Non-SSO).
   - name: b2b_contract_enrollment_fixed_price
     description: Fixed price per enrollment under this contract. Zero or null for
       no fixed price.
   - name: b2b_contract_membership_type
-    description: Membership management method for the contract (e.g. SSO, Non-SSO).
+    description: Membership management method for the contract. Values are 'managed'
+      or 'code'.

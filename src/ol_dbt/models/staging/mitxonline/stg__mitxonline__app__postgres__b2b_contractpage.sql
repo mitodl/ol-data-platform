@@ -12,7 +12,6 @@ with source as (
         contract_start as b2b_contract_start_date,
         contract_end as b2b_contract_end_date,
         max_learners as b2b_contract_max_learners,
-        integration_type as b2b_contract_integration_type,
         enrollment_fixed_price as b2b_contract_enrollment_fixed_price,
         membership_type as b2b_contract_membership_type
     from source
