@@ -180,22 +180,61 @@ def test_transcripts_resource_yields_formatted_text(monkeypatch):
     ]
 
 
+# Matches the real mitodl/open-video-data format: a YAML *list* of channel dicts.
+_CHANNELS_YAML = (
+    b"---\n- channel_id: CHAN\n  offered_by: ocw\n  playlists:\n    - id: all\n"
+)
+
+
 def _fake_channel_get(url, params=None, **_kwargs):
     """Serve GitHub config listing + a single channel from the Data API."""
     if "contents" in url:
         return FakeResponse(
-            json_data=[{"name": "c.yaml", "url": "https://api/file/c.yaml"}]
+            json_data=[
+                {"name": "channels.yaml", "url": "https://api/file/channels.yaml"}
+            ]
         )
     if "api/file" in url:
-        yaml_bytes = b"channel_id: CHAN\noffered_by: ocw\n"
         return FakeResponse(
-            json_data={"content": base64.b64encode(yaml_bytes).decode("ascii")}
+            json_data={"content": base64.b64encode(_CHANNELS_YAML).decode("ascii")}
         )
     if "youtube/v3/channels" in url:
         return FakeResponse(
             json_data={"items": [{"id": "CHAN", "snippet": {"title": "A channel"}}]}
         )
     return FakeResponse(json_data={"items": []})
+
+
+def test_fetch_channel_configs_parses_yaml_list(monkeypatch):
+    """A YAML file that is a list of channel dicts loads every valid entry."""
+    yaml_bytes = (
+        b"---\n"
+        b"- channel_id: CHAN_A\n  offered_by: ocw\n"
+        b"- channel_id: CHAN_B\n"
+        b"- offered_by: no_channel_id\n"  # invalid: skipped
+    )
+
+    def _fake_get(url, params=None, **_kwargs):
+        if "contents" in url:
+            return FakeResponse(
+                json_data=[{"name": "channels.yaml", "url": "https://api/f.yaml"}]
+            )
+        return FakeResponse(
+            json_data={"content": base64.b64encode(yaml_bytes).decode("ascii")}
+        )
+
+    monkeypatch.setattr(youtube.requests, "get", _fake_get)
+    configs = youtube._fetch_channel_configs(
+        repo="mitodl/open-video-data", folder="youtube", branch="main", token=None
+    )
+    assert [c["channel_id"] for c in configs] == ["CHAN_A", "CHAN_B"]
+
+
+def test_playlist_ids_bare_string_wildcard(monkeypatch):
+    """A bare-string ``all`` entry (not ``{id: all}``) still triggers the wildcard."""
+    _queue_get(monkeypatch, [{"items": [{"id": "p1"}, {"id": "p2"}]}])
+    channel_config = {"channel_id": "chan", "playlists": ["all"]}
+    assert list(youtube._playlist_ids_for_config(channel_config, "k")) == ["p1", "p2"]
 
 
 def test_channels_resource_builds_record(monkeypatch):
