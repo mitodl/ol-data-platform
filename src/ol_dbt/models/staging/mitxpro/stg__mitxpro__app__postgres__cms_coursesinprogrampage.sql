@@ -2,6 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_coursesinprogrampage') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'page_ptr_id') }}
+
 , cleaned as (
     select
         page_ptr_id as wagtail_page_id
@@ -9,7 +11,7 @@ with source as (
         , body as cms_coursesinprogrampage_body
         , cast(json_parse(json_query(contents, 'lax $[*].value' with array wrapper)) as array(integer)) --noqa
             as cms_coursesinprogrampage_coursepage_wagtail_page_ids
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

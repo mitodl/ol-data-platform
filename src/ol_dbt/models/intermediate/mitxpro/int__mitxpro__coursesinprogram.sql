@@ -40,6 +40,7 @@ with coursesinprogram as (
 )
 
 select
+    distinct
     coursepages.course_id
     , programpageswithpath.program_id
     , unnestedcoursesinprogram.course_order
