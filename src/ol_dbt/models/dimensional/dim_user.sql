@@ -671,10 +671,11 @@ with mitx_users as (
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
-        , arbitrary(full_name) as agg_full_name
+        -- FILTER ensures arbitrary() only sees non-null values, making the fallback reliable.
+        , arbitrary(full_name) filter (where full_name is not null) as agg_full_name
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
-        , arbitrary(address_state) as agg_address_state
+        , arbitrary(address_state) filter (where address_state is not null) as agg_address_state
     from combined_users
     group by user_pk
 )
