@@ -14,13 +14,16 @@
 with
     micromasters_courseruns as (
         select courserun_edxorg_readable_id, courserun_upgrade_deadline
-        from {{ ref("stg__micromasters__app__postgres__courses_courserun") }}
-        where courserun_platform = '{{ var("edxorg") }}'
-        qualify
-            row_number() over (
-                partition by courserun_edxorg_readable_id order by courserun_id desc
+        from
+            (
+                select
+                    courserun_edxorg_readable_id,
+                    courserun_upgrade_deadline,
+                    row_number() over (partition by courserun_edxorg_readable_id order by courserun_id desc) as _row_num
+                from {{ ref("stg__micromasters__app__postgres__courses_courserun") }}
+                where courserun_platform = '{{ var("edxorg") }}'
             )
-            = 1
+        where _row_num = 1
     ),
     mitxonline_courseruns as (
         select
