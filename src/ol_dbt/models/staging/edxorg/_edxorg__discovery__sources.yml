@@ -5,8 +5,7 @@ sources:
 - name: ol_warehouse_raw_data
   loader: dlt
   database: '{{ target.database }}'
-  schema: >
-    {{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
   - name: raw__edxorg__discovery__api__programs
     description: >
