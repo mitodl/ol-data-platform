@@ -391,7 +391,8 @@ models:
     description: int, user ID on the MicroMasters platform
   - name: address_state
     description: str, state or territory code from the user's legal address. Populated
-      for MITxOnline users (coalesced with MicroMasters), MITx Pro users, and Bootcamps
+      for MITxOnline and edX.org users (sourced via int__mitx__users, which coalesces
+      MITxOnline, edX.org, and MicroMasters records), MITx Pro users, and Bootcamps
       users. Null for Emeritus, Global Alumni, and Residential users.
   - name: latest_income_usd
     description: numeric, the most recent income amount in USD from the user's flexible
