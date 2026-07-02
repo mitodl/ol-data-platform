@@ -269,4 +269,39 @@ with mitxonline_orders as (
     {% endif %}
 )
 
-select * from final
+-- Dimension joins can fan out rows when a source dimension has multiple qualifying
+-- rows for the same key. Deduplicate to one row per (order_id, line_id, platform),
+-- keeping the most recently updated row.
+, deduped as (
+    select
+        *
+        , row_number() over (
+            partition by order_key
+            order by order_updated_on desc nulls last
+        ) as _row_num
+    from final
+)
+
+select
+    order_key
+    , order_id
+    , line_id
+    , order_date_key
+    , order_updated_date_key
+    , user_fk
+    , platform_fk
+    , discount_fk
+    , discount_type_fk
+    , product_fk
+    , platform
+    , order_state
+    , line_price
+    , order_total_price_paid
+    , tax_rate_fk
+    , order_total_price_paid_plus_tax
+    , order_tax_amount
+    , order_tax_rate
+    , order_reference_number
+    , order_updated_on
+from deduped
+where _row_num = 1
