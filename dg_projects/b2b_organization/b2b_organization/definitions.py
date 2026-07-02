@@ -33,15 +33,13 @@ starrocks_host_map = {
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
-# Placeholder naming, following the mariadb-{deployment} convention used by
-# VaultMySQLClientFactory (legacy_openedx/definitions.py) -- needs confirming
-# against the actual ol-infrastructure StarRocks Vault config
-# (see https://github.com/mitodl/hq/issues/10012) before this runs for real.
+# Matches the database-starrocks-{env} mount convention used by
+# bin/starrocks-auth and ol_dbt_cli/commands/starrocks.py.
 starrocks_vault_mount_map = {
-    "dev": "mysql-starrocks-qa",
-    "ci": "mysql-starrocks-qa",
-    "qa": "mysql-starrocks-qa",
-    "production": "mysql-starrocks-production",
+    "dev": "database-starrocks-qa",
+    "ci": "database-starrocks-qa",
+    "qa": "database-starrocks-qa",
+    "production": "database-starrocks-production",
 }
 
 # Initialize vault with resilient loading
