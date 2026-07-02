@@ -210,6 +210,11 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
+, openedx_users as (
+    select user_id, openedxuser_has_been_synced
+    from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
+)
+
 , edxorg_enrollment as (
     select
         combined_enrollments.courserunenrollment_created_on
@@ -275,6 +280,7 @@ select
             and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
             then purchased_on_edx_discount.discount_id
     end as discount_id
+    , openedx_users.openedxuser_has_been_synced
 from edxorg_enrollment
 left join edxorg_grade
     on edxorg_enrollment.user_id = edxorg_grade.user_id
@@ -312,6 +318,8 @@ left join retired_users
 left join courserun_product_version
     on mitxonline__course_runs.courserun_id = courserun_product_version.courserun_id
 left join purchased_on_edx_discount on true
+left join openedx_users
+    on coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) = openedx_users.user_id
 where
     (
         edxorg_enrollment.courseruncertificate_created_on is not null
