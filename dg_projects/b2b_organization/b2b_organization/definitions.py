@@ -1,4 +1,8 @@
 from b2b_organization.assets.data_export import export_b2b_organization_data
+from b2b_organization.assets.starrocks_mv_refresh import (
+    refresh_starrocks_analytics_mvs,
+)
+from b2b_organization.resources.starrocks import StarRocksResource
 from b2b_organization.sensors.b2b_organization import b2b_organization_list_sensor
 from dagster import (
     Definitions,
@@ -17,6 +21,27 @@ b2b_bucket_map = {
     "ci": {"bucket": "ol-b2b-partners-storage-ci", "prefix": ""},
     "qa": {"bucket": "ol-b2b-partners-storage-qa", "prefix": ""},
     "production": {"bucket": "ol-b2b-partners-storage-production", "prefix": ""},
+}
+
+# Hosts match the starrocks_qa / starrocks_production target defaults in
+# src/ol_dbt/profiles.yml. dev/ci fall back to the QA FE for schema parity;
+# the MV-refresh asset isn't expected to run for real outside qa/production.
+starrocks_host_map = {
+    "dev": "lakehouse.qa.starrocks.ol.mit.edu",
+    "ci": "lakehouse.qa.starrocks.ol.mit.edu",
+    "qa": "lakehouse.qa.starrocks.ol.mit.edu",
+    "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
+}
+
+# Placeholder naming, following the mariadb-{deployment} convention used by
+# VaultMySQLClientFactory (legacy_openedx/definitions.py) -- needs confirming
+# against the actual ol-infrastructure StarRocks Vault config
+# (see https://github.com/mitodl/hq/issues/10012) before this runs for real.
+starrocks_vault_mount_map = {
+    "dev": "mysql-starrocks-qa",
+    "ci": "mysql-starrocks-qa",
+    "qa": "mysql-starrocks-qa",
+    "production": "mysql-starrocks-production",
 }
 
 # Initialize vault with resilient loading
@@ -52,8 +77,14 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
+        "starrocks": StarRocksResource(
+            vault=vault,
+            vault_mount_point=starrocks_vault_mount_map[DAGSTER_ENV],
+            host=starrocks_host_map[DAGSTER_ENV],
+            database="b2b_analytics",
+        ),
     },
-    assets=[export_b2b_organization_data],
+    assets=[export_b2b_organization_data, refresh_starrocks_analytics_mvs],
     jobs=[b2b_organization_data_export_job],
     sensors=[b2b_organization_list_sensor],
 )

@@ -10,6 +10,7 @@ dependencies = [
     "dagster-postgres>=0.27.13",
     "httpx2 >= 2.2.0",
     "ol-orchestrate-lib",
+    "pymysql ~= 1.1",
 ]
 
 [project.entry-points]
