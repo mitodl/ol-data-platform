@@ -402,17 +402,34 @@ def _vault_oidc_callback() -> str:
             params = dict(
                 urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query)
             )
-            result["code"] = params.get("code", "")
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(
-                b"<h2>Vault authentication successful. You can close this tab.</h2>"
-            )
+            error = params.get("error")
+            if error:
+                result["error"] = error
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(
+                    f"<h2>Vault authentication failed: {error}. "
+                    "You can close this tab.</h2>".encode()
+                )
+            else:
+                result["code"] = params.get("code", "")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(
+                    b"<h2>Vault authentication successful. You can close this tab.</h2>"
+                )
             threading.Thread(target=self.server.shutdown, daemon=True).start()
 
     server = http.server.HTTPServer(("localhost", _VAULT_CALLBACK_PORT), _Handler)
     server.serve_forever()
-    return result["code"]
+    if "error" in result:
+        msg = f"Vault OIDC authentication denied: {result['error']}"
+        raise RuntimeError(msg)
+    code = result.get("code", "")
+    if not code:
+        msg = "Vault OIDC callback received no authorization code"
+        raise RuntimeError(msg)
+    return code
 
 
 def _load_vault_token(
@@ -443,8 +460,13 @@ def _load_vault_token(
         sys.exit(f"Vault at {vault_addr} did not return an auth URL")
 
     qs = urllib.parse.parse_qs(urllib.parse.urlparse(auth_url).query)
-    nonce = qs["nonce"][0]
-    state = qs["state"][0]
+    nonce_list = qs.get("nonce")
+    state_list = qs.get("state")
+    if not nonce_list or not state_list:
+        msg = f"Vault OIDC auth URL missing nonce/state parameters: {auth_url}"
+        raise RuntimeError(msg)
+    nonce = nonce_list[0]
+    state = state_list[0]
 
     print(  # noqa: T201
         f"Opening browser for Vault login ({vault_addr})…\n"
@@ -521,7 +543,10 @@ def _client_credentials(issuer: str) -> tuple[str, str]:
 
 
 def _output_token(username: str, token: str, **_) -> None:  # noqa: ARG001
-    print(token)  # noqa: T201
+    # token may be a Vault-issued password (--mode vault) rather than an OIDC
+    # access token -- printing it here is the intended output for shell capture
+    # (e.g. `PASS=$(starrocks-auth --output token)`), not a log sink.
+    print(token)  # noqa: T201  # nosec B106
 
 
 def _output_env(
