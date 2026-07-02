@@ -630,7 +630,7 @@ with mitx_users as (
             , flexiblepriceapplication_original_currency
             , row_number() over (
                 partition by user_id
-                order by flexiblepriceapplication_updated_on desc
+                order by flexiblepriceapplication_updated_on desc, flexiblepriceapplication_id desc
             ) as rn
         from {{ ref('int__mitxonline__flexiblepricing_flexiblepriceapplication') }}
     ) as ranked
