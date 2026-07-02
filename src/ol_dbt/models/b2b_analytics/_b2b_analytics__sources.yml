@@ -1,0 +1,51 @@
+---
+version: 2
+sources:
+- name: dimensional
+  description: >
+    Dimensional-layer Iceberg tables, accessed from StarRocks via the
+    `ol_data_lake_{qa,production}` external catalog. Same physical tables the
+    Trino-backed ol_dbt project materializes into `ol_warehouse_{env}_dimensional`.
+  database: "{{ 'ol_data_lake_qa' if 'qa' in target.name else 'ol_data_lake_production'\
+    \ }}"
+  schema: "{{ 'ol_warehouse_qa_dimensional' if 'qa' in target.name else 'ol_warehouse_production_dimensional'\
+    \ }}"
+  tables:
+  - name: dim_organization
+    description: One row per organization per platform. organization_key is null for
+      xPro.
+  - name: dim_contract
+    description: "MITx Online B2B contracts. Grain: one row per contract."
+  - name: dim_course_run
+    description: Course run dimension. Filter to platform='mitxonline' and is_current=true
+      for B2B joins.
+  - name: dim_program
+    description: Program metadata.
+  - name: bridge_organization_courserun
+    description: >
+      Maps MITx Online B2B organizations to course runs via contracts.
+      Grain: one row per (organization, contract, course_run). xPro B2B is out of
+      scope.
+  - name: bridge_program_course
+    description: "Program-to-course membership. Grain: one row per (program, course)."
+  - name: tfact_enrollment
+    description: "Enrollment fact. Grain: one row per enrollment."
+  - name: tfact_certificate
+    description: "Certificate fact. Grain: one row per certificate."
+  - name: tfact_grade
+    description: "Grade fact. Grain: one row per (user, course_run)."
+- name: reporting
+  description: >
+    Reporting-layer Iceberg tables, accessed from StarRocks via the
+    `ol_data_lake_{qa,production}` external catalog.
+  database: "{{ 'ol_data_lake_qa' if 'qa' in target.name else 'ol_data_lake_production'\
+    \ }}"
+  schema: "{{ 'ol_warehouse_qa_reporting' if 'qa' in target.name else 'ol_warehouse_production_reporting'\
+    \ }}"
+  tables:
+  - name: organization_administration_report
+    description: >
+      Per-learner x course_run x activity_date engagement report. Grain:
+      (courserun_readable_id, organization_key, user_email, activity_date).
+      organization_key is COALESCE'd from contract mapping and a free-text
+      fallback field -- filter WHERE organization_key IS NOT NULL for B2B use.
