@@ -101,6 +101,9 @@ models:
     description: int, the discount ID for the 'purchased-on-edx' discount code on
       MITx Online. Populated only for verified future enrollments (null for certificate
       records and audit enrollments).
+  - name: openedxuser_has_been_synced
+    description: boolean, whether the MITx Online user has been synced to edX. Null
+      if no matching MITx Online account was found for the edx.org user.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
