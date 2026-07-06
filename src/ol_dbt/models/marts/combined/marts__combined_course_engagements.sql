@@ -163,16 +163,7 @@ with combined_course_activities_daily as (
 )
 
 , combined_users as (
-    select * from (
-        select
-            *
-            , row_number() over (
-                partition by user_username, platform
-                order by openedx_user_id asc nulls last
-            ) as row_num
-        from {{ ref('int__combined__users') }}
-    )
-    where row_num = 1
+    select * from {{ ref('int__combined__users') }}
 )
 
 , combined_runs as (

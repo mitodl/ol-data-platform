@@ -1,5 +1,8 @@
 --- This model combines intermediate users from different platforms, deduped one row per
---  (user_username, platform).
+--  (dedup_key, platform), where dedup_key is coalesce(user_username, user_id, user_email,
+--  user_full_name) -- platforms with no user_username (emeritus, global_alumni) would
+--  otherwise collapse every user in that platform into one row, since PARTITION BY
+--  treats all NULLs as one group.
 {{ config(materialized='view') }}
 
 with mitxonline_users as (
@@ -258,7 +261,7 @@ with mitxonline_users as (
         end as user_hashed_id
         , *
         , row_number() over (
-            partition by user_username, platform
+            partition by coalesce(user_username, user_id, user_email, user_full_name), platform
             order by openedx_user_id asc nulls last
         ) as row_num
     from combined_users
