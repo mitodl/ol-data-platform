@@ -353,6 +353,7 @@ with mitx_users as (
         , null as user_is_active_on_bootcamps
         , null as user_joined_on_bootcamps
     from users_with_global_id
+    where email is not null
 
     union all
 
@@ -404,6 +405,7 @@ with mitx_users as (
         on mitxpro_user_view.user_username = openedx_users_username.user_username
     left join mitxpro_openedx_users as openedx_users_email
         on lower(mitxpro_user_view.user_email) = lower(openedx_users_email.user_email)
+    where mitxpro_user_view.user_email is not null
 
     union all
 
@@ -541,6 +543,7 @@ with mitx_users as (
         , null as user_is_active_on_bootcamps
         , null as user_joined_on_bootcamps
     from mitxresidential_user_view
+    where mitxresidential_user_view.user_email is not null
 
     union all
 

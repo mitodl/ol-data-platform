@@ -1,5 +1,5 @@
---- This model combines intermediate users from different platforms, it contains duplicates for
---  MITx Online and edX.org users, deduplication is handled in int__mitx__users
+--- This model combines intermediate users from different platforms, deduped one row per
+--  (user_username, platform).
 {{ config(materialized='view') }}
 
 with mitxonline_users as (
@@ -246,14 +246,45 @@ with mitxonline_users as (
     from residential_users
 )
 
+, hashed_users as (
+    select
+        case
+            when user_id is not null
+                then {{ generate_hash_id('user_id || platform') }}
+            when user_email is not null
+                then {{ generate_hash_id('user_email || platform') }}
+            else
+                {{ generate_hash_id('user_full_name || platform') }}
+        end as user_hashed_id
+        , *
+        , row_number() over (
+            partition by user_username, platform
+            order by openedx_user_id asc nulls last
+        ) as row_num
+    from combined_users
+)
+
 select
-    case
-        when user_id is not null
-            then {{ generate_hash_id('user_id || platform') }}
-        when user_email is not null
-            then {{ generate_hash_id('user_email || platform') }}
-        else
-            {{ generate_hash_id('user_full_name || platform') }}
-    end as user_hashed_id
-    , *
-from combined_users
+    user_hashed_id
+    , platform
+    , user_id
+    , openedx_user_id
+    , user_username
+    , user_email
+    , user_full_name
+    , user_address_country
+    , user_highest_education
+    , user_gender
+    , user_birth_year
+    , user_company
+    , user_job_title
+    , user_industry
+    , user_joined_on
+    , user_last_login
+    , user_is_active
+    , user_street_address
+    , user_address_city
+    , user_address_state_or_territory
+    , user_address_postal_code
+from hashed_users
+where row_num = 1

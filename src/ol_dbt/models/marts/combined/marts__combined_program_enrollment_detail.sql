@@ -361,7 +361,7 @@ select
         as capstone_indicator
     , date_diff(
         'day'
-        , final_combined_programs.programcertificate_created_on_date
         , final_combined_programs.first_courserun_start_on_date
+        , final_combined_programs.programcertificate_created_on_date
     ) as program_completion_days
 from final_combined_programs

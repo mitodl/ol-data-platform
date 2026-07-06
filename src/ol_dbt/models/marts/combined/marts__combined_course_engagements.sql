@@ -260,13 +260,16 @@ left join combined_problem_submitted_daily
         and combined_course_activities_daily.courserun_readable_id
         = combined_problem_submitted_daily.courserun_readable_id
         and combined_course_activities_daily.user_username = combined_problem_submitted_daily.user_username
+        and combined_course_activities_daily.platform = combined_problem_submitted_daily.platform
 left join combined_play_video_daily
     on
         combined_course_activities_daily.courseactivity_date = combined_play_video_daily.courseactivity_date
         and combined_course_activities_daily.courserun_readable_id = combined_play_video_daily.courserun_readable_id
         and combined_course_activities_daily.user_username = combined_play_video_daily.user_username
+        and combined_course_activities_daily.platform = combined_play_video_daily.platform
 left join combined_discussion_daily
     on
         combined_course_activities_daily.courseactivity_date = combined_discussion_daily.courseactivity_date
         and combined_course_activities_daily.courserun_readable_id = combined_discussion_daily.courserun_readable_id
         and combined_course_activities_daily.user_username = combined_discussion_daily.user_username
+        and combined_course_activities_daily.platform = combined_discussion_daily.platform
