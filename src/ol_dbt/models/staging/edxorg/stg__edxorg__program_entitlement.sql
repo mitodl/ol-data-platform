@@ -2,7 +2,10 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__edxorg__program_entitlement') }}
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns='"program title", email') }}
+{{ deduplicate_raw_table(
+    order_by="_airbyte_extracted_at desc, cast(date_parse(\"purchase date\", '%m/%d/%Y') as date)",
+    partition_columns='"program title", email'
+) }}
 
 , cleaned as (
     select

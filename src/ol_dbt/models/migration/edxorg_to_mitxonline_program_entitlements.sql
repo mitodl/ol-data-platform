@@ -24,6 +24,29 @@ with mitxonline_programs as (
         , number_of_redeemed_entitlements
     from {{ ref('stg__edxorg__program_entitlement') }}
     where user_email is not null
+        and (expiration_date is null or expiration_date >= current_date)
+)
+
+, deduped_program_entitlements as (
+    select
+        program_title
+        , user_email
+        , user_id
+        , program_type
+        , purchase_date
+        , expiration_date
+        , number_of_entitlements
+        , number_of_redeemed_entitlements
+    from (
+        select
+            *
+            , row_number() over (
+                partition by lower(user_email), program_title
+                order by purchase_date desc nulls last, expiration_date desc nulls last
+            ) as _row_num
+        from program_entitlements
+    ) as ranked_program_entitlements
+    where _row_num = 1
 )
 
 , mitx_user as (
@@ -98,7 +121,7 @@ select
         mitx_user.user_mitxonline_id
         , mitx_user_by_edxorg_id.user_mitxonline_id
     ) as user_mitxonline_id
-from program_entitlements
+from deduped_program_entitlements as program_entitlements
 left join mitxonline_programs
     on mitxonline_programs.program_title = program_entitlements.program_title
 left join program_product_versions
