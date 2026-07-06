@@ -5,6 +5,9 @@ with mitxonline_programs as (
 , program_entitlements as (
     select
         case
+          --- Handle titles such as Statistics and Data Science (Social Sciences Track) -Retired "old version"
+          when program_title like 'Statistics and Data Science (Social Sciences Track)%'
+              then 'Statistics and Data Science (Social Sciences Track)'
           --- Handle titles such as Statistics and Data Science (General track) - RETIRED "old version"
           when program_title like 'Statistics and Data Science (General track)%'
               then 'Statistics and Data Science (General Track)'
