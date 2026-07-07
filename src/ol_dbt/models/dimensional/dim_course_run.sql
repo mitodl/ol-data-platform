@@ -24,7 +24,7 @@ with
                         partition by examrun_readable_id order by examrun_updated_on desc nulls last, examrun_id desc
                     ) as _row_num
                 from {{ ref("stg__micromasters__app__postgres__exams_examrun") }}
-            )
+            ) as deduped_examruns
         where _row_num = 1
     ),
     mitxonline_courseruns as (
