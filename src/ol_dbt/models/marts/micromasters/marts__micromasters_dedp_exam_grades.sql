@@ -11,7 +11,7 @@ with micromasters_exam_grades as (
 )
 
 -- semester + passing_grade for MITxOnline proctored exam runs are now sourced from
--- dim_course_run (added in #2088) instead of being re-derived here. The pure MicroMasters
+-- dim_course_run (added in #2319) instead of being re-derived here. The pure MicroMasters
 -- branch below (micromasters_exam_grades) still reads these fields directly from
 -- int__micromasters__dedp_proctored_exam_grades because those exam runs are not represented
 -- in dim_course_run until MicroMasters grades are added to tfact_grade (tracked in epic #2072).
