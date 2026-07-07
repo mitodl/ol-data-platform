@@ -8,7 +8,7 @@
 Runtime Error
   No dbt_project.yml found at expected path /private/tmp/ol-data-platform/dbt_project.yml
   Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
-  
+
 [0m17:02:16.338215 [debug] [MainThread]: Resource report: {"command_name": "compile", "command_success": false, "command_wall_clock_time": 0.058058582, "process_in_blocks": "0", "process_kernel_time": 0.195369, "process_mem_max_rss": "121487360", "process_out_blocks": "0", "process_user_time": 0.919255}
 [0m17:02:16.338519 [debug] [MainThread]: Command `dbt compile` failed at 17:02:16.338466 after 0.06 seconds
 [0m17:02:16.338713 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10b69e2c0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10b63a450>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10b7145a0>]}
