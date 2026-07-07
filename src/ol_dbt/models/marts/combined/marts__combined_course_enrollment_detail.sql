@@ -79,7 +79,11 @@ with enrollments as (
 , bootcamps_users as (
     -- dim_user does not expose a bootcamps username attribute; join directly to the
     -- intermediate model to restore user_username for Bootcamps enrollments/certificates.
-    select user_id, user_username
+    -- int__bootcamps__users joins profiles_legaladdress without dedup and can have
+    -- multiple rows per user_id; since user_username is invariant per user_id (it
+    -- doesn't come from legaladdress), a plain distinct is sufficient to prevent
+    -- fan-out downstream without needing a tie-breaker.
+    select distinct user_id, user_username
     from {{ ref('int__bootcamps__users') }}
 )
 
