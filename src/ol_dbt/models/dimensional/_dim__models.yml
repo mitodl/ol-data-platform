@@ -389,6 +389,23 @@ models:
     description: str, when the user joined on Bootcamps.
   - name: micromasters_user_id
     description: int, user ID on the MicroMasters platform
+  - name: address_state
+    description: str, state or territory code from the user's legal address. Populated
+      for MITxOnline and edX.org users (sourced via int__mitx__users, which coalesces
+      MITxOnline, edX.org, and MicroMasters records), MITx Pro users, and Bootcamps
+      users. Null for Emeritus, Global Alumni, and Residential users.
+  - name: latest_income_usd
+    description: numeric, the most recent income amount in USD from the user's flexible
+      pricing (financial aid) application on MITxOnline. Null if the user has never
+      submitted a financial aid application.
+  - name: latest_original_income
+    description: numeric, the most recent income amount in the user's original currency
+      from their flexible pricing application on MITxOnline. Null if no application
+      exists.
+  - name: latest_original_currency
+    description: str, the currency code (e.g. USD, EUR) of the original income reported
+      in the user's most recent flexible pricing application on MITxOnline. Null if
+      no application exists.
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course

@@ -8,8 +8,9 @@ dependencies = [
     "dagster-dlt>=0.28.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
-    "dlt[filesystem,parquet,pyiceberg]>=1.21.0",
-    "duckdb>=1.2.0",
+    # dlt, pyiceberg, and duckdb are inherited transitively via ol-dlt so there
+    # is a single resolved version across the image (no two-manifest drift).
+    "ol-dlt",
     "ol-orchestrate-lib",
     "sqlalchemy>=2.0.46",
 ]
@@ -21,7 +22,11 @@ dependencies = [
 dev = [
     "dagster-dg-cli>=1.11.12",
     "dagster-webserver",
+    "pytest>=9.0.1,<10",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["data_loading_tests"]
 
 [build-system]
 requires = ["setuptools"]
@@ -42,4 +47,5 @@ code_location_target_module = "data_loading.definitions"
 exclude=["data_loading_tests"]
 
 [tool.uv.sources]
+ol-dlt = { path = "../../src/ol_dlt", editable = true }
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

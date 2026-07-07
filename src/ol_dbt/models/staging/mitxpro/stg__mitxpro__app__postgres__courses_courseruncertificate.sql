@@ -4,6 +4,13 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_courseruncertificate') }}
 )
 
+, source_deduped as (
+    select
+        *
+        , row_number() over (partition by id order by _airbyte_extracted_at desc) as row_num
+    from source
+)
+
 , cleaned as (
     select
         id as courseruncertificate_id
@@ -15,7 +22,8 @@ with source as (
         , if(is_revoked = false, concat('https://xpro.mit.edu/certificate/', uuid), null) as courseruncertificate_url
         ,{{ cast_timestamp_to_iso8601('created_on') }} as courseruncertificate_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as courseruncertificate_updated_on
-    from source
+    from source_deduped
+    where row_num = 1
 )
 
 select * from cleaned

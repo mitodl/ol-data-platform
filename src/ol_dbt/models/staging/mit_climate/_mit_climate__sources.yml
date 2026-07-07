@@ -1,0 +1,38 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__mit_climate__api__articles
+    description: >
+      MIT Climate Portal articles ingested from two JSON feeds (Explainers and
+      Ask MIT Climate) via the mit_climate dlt pipeline. One row per article,
+      deduplicated by uuid on merge.
+    columns:
+    - name: uuid
+      description: str, unique identifier for the article (used as primary key by
+        dlt)
+    - name: url
+      description: str, relative URL path for the article (e.g. /explainers/carbon-capture)
+    - name: title
+      description: str, title of the article
+    - name: summary
+      description: str, short summary / description of the article
+    - name: image_src
+      description: str, relative URL path to the article's cover image
+    - name: image_alt
+      description: str, alt text for the cover image
+    - name: topics
+      description: str, pipe-separated topic labels (e.g. "Energy|Climate Policy")
+    - name: created
+      description: str, ISO date string when the article was created (e.g. "2024-01-15")
+    - name: footnotes
+      description: str, optional footnote text appended to the full description
+    - name: byline
+      description: str, optional author byline
+    - name: feed_type
+      description: str, source feed — "explainer" or "ask_mit_climate"

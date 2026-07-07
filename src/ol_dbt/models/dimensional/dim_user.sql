@@ -21,6 +21,7 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , user_address_state
         , user_is_active_on_mitxonline
         , user_is_active_on_edxorg
         , user_joined_on_mitxonline
@@ -62,6 +63,7 @@ with mitx_users as (
     select
         user_id
         , user_address_country
+        , user_address_state_or_territory
     from {{ ref('stg__mitxpro__app__postgres__users_legaladdress') }}
 )
 
@@ -91,6 +93,7 @@ with mitx_users as (
         , mitxpro_users.user_email
         , mitxpro_users.user_full_name
         , mitxpro_legaladdress.user_address_country
+        , mitxpro_legaladdress.user_address_state_or_territory
         , mitxpro_profile.user_highest_education
         , mitxpro_profile.user_gender
         , mitxpro_profile.user_birth_year
@@ -211,6 +214,7 @@ with mitx_users as (
         , mitx_users.company
         , mitx_users.job_title
         , mitx_users.industry
+        , mitx_users.user_address_state
         , mitx_users.user_is_active_on_mitxonline
         , mitx_users.user_joined_on_mitxonline
         , mitx_users.user_is_active_on_edxorg
@@ -282,6 +286,7 @@ with mitx_users as (
         , mitx_users_view.company
         , mitx_users_view.job_title
         , mitx_users_view.industry
+        , mitx_users_view.user_address_state
         , learn_user_view.user_is_active_on_mitlearn
         , learn_user_view.user_joined_on_mitlearn
         , mitx_users_view.user_is_active_on_mitxonline
@@ -332,6 +337,7 @@ with mitx_users as (
         , company
         , job_title
         , industry
+        , user_address_state as address_state
         , user_is_active_on_mitlearn
         , user_joined_on_mitlearn
         , user_is_active_on_mitxonline
@@ -378,6 +384,7 @@ with mitx_users as (
         , mitxpro_user_view.user_company as company
         , mitxpro_user_view.user_job_title as job_title
         , mitxpro_user_view.user_industry as industry
+        , mitxpro_user_view.user_address_state_or_territory as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -426,6 +433,7 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , null as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -471,6 +479,7 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , null as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -516,6 +525,7 @@ with mitx_users as (
         , null as company
         , null as job_title
         , null as industry
+        , null as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -560,6 +570,7 @@ with mitx_users as (
         , bootcamps_user_view.user_company as company
         , bootcamps_user_view.user_job_title as job_title
         , bootcamps_user_view.user_industry as industry
+        , bootcamps_user_view.user_address_state_or_territory as address_state
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -603,6 +614,29 @@ with mitx_users as (
     where row_num = 1
 )
 
+-- Most recent flexible pricing (financial aid) application per MITxOnline user.
+-- Sparse: only populated for users who have submitted an income-based aid application.
+, latest_income as (
+    select
+        user_id
+        , flexiblepriceapplication_income_usd as latest_income_usd
+        , flexiblepriceapplication_original_income as latest_original_income
+        , flexiblepriceapplication_original_currency as latest_original_currency
+    from (
+        select
+            user_id
+            , flexiblepriceapplication_income_usd
+            , flexiblepriceapplication_original_income
+            , flexiblepriceapplication_original_currency
+            , row_number() over (
+                partition by user_id
+                order by flexiblepriceapplication_updated_on desc, flexiblepriceapplication_id desc
+            ) as rn
+        from {{ ref('int__mitxonline__flexiblepricing_flexiblepriceapplication') }}
+    ) as ranked
+    where rn = 1
+)
+
 , agg_view as (
     select
         user_pk
@@ -635,6 +669,13 @@ with mitx_users as (
         , max(bootcamps_application_user_id) as bootcamps_application_user_id
         , max(user_is_active_on_bootcamps) as user_is_active_on_bootcamps
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
+        -- Fallback full_name in case the base row (most recent platform) has a null name.
+        -- Cross-platform users may have their base row on a platform with null full_name.
+        -- FILTER ensures arbitrary() only sees non-null values, making the fallback reliable.
+        , arbitrary(full_name) filter (where full_name is not null) as agg_full_name
+        -- Fallback address_state for cross-platform users whose base row is from a platform
+        -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
+        , arbitrary(address_state) filter (where address_state is not null) as agg_address_state
     from combined_users
     group by user_pk
 )
@@ -658,7 +699,7 @@ select
     , agg.global_alumni_user_id
     , agg.micromasters_user_id
     , base.email
-    , base.full_name
+    , coalesce(base.full_name, agg.agg_full_name) as full_name
     , base.address_country
     , base.highest_education
     , base.gender
@@ -666,6 +707,10 @@ select
     , base.company
     , base.job_title
     , base.industry
+    , coalesce(base.address_state, agg.agg_address_state) as address_state
+    , latest_income.latest_income_usd
+    , latest_income.latest_original_income
+    , latest_income.latest_original_currency
     , learn_user_topic_interests.topic_interests as topic_interests
     , learn_profile.user_goals as goals
     , learn_profile.user_delivery_preference as delivery_preference
@@ -688,3 +733,4 @@ from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id
 left join learn_user_topic_interests on learn_profile.profile_id = learn_user_topic_interests.profile_id
+left join latest_income on agg.mitxonline_application_user_id = latest_income.user_id

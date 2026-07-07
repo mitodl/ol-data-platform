@@ -12,7 +12,7 @@ classifiers = [
 dependencies = [
     "PyPika ~=0.51.0",
     "boto3>=1.42.42",
-    "cyclopts~=4.18.0",
+    "cyclopts~=4.20.0",
     "dbt-duckdb>=1.10.0",
     "dbt-trino>=1.10.0",
     "rich>=13.0",
@@ -24,6 +24,11 @@ repository = "https://github.com/mitodl/ol-data-platform"
 
 [tool.uv.workspace]
 members = ["packages/*", "src/ol_dbt_cli"]
+# src/ol_dlt is intentionally NOT a workspace member: it is a standalone uv
+# project so `cd src/ol_dlt && uv sync` produces a scoped, dlt-only venv (no
+# Dagster) for the pure-dlt dev/test loop. It is consumed by the data_loading
+# code location via a path source, not by this root workspace.
+exclude = ["src/ol_dlt"]
 
 [tool.uv]
 package = false  # This is a workspace root, not a package
@@ -211,6 +216,7 @@ builtins-allowed-modules = ["secrets", "platform"]
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["T201", "ERA001", "B", "BLE001", "PLR", "E501", "G004", "FBT", "C90", "INP001"]
 "**/tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001"]
+"**/*_tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001", "D103"]
 "test_*.py" = ["S101"]
 
 [tool.dg]

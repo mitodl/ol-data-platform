@@ -5,12 +5,17 @@ with mitxonline_programs as (
 , program_entitlements as (
     select
         case
+          --- Handle titles such as Statistics and Data Science (Social Sciences Track) -Retired "old version"
+          when program_title like 'Statistics and Data Science (Social Sciences Track)%'
+              then 'Statistics and Data Science (Social Sciences Track)'
           --- Handle titles such as Statistics and Data Science (General track) - RETIRED "old version"
           when program_title like 'Statistics and Data Science (General track)%'
               then 'Statistics and Data Science (General Track)'
           -- Supply Chain Management: edX.org uses short title, MITx Online uses full branding
           when program_title like 'Supply Chain Management'
               then 'MITx MicroMasters® Program in Supply Chain Management'
+          when program_title in ('Finance', 'MIT Finance')
+              then 'MITx MicroMasters Program in Finance'
           else program_title
         end as program_title
         , user_email
@@ -21,6 +26,30 @@ with mitxonline_programs as (
         , number_of_entitlements
         , number_of_redeemed_entitlements
     from {{ ref('stg__edxorg__program_entitlement') }}
+    where user_email is not null
+        and (expiration_date is null or expiration_date >= date '2026-01-01')
+)
+
+, deduped_program_entitlements as (
+    select
+        program_title
+        , user_email
+        , user_id
+        , program_type
+        , purchase_date
+        , expiration_date
+        , number_of_entitlements
+        , number_of_redeemed_entitlements
+    from (
+        select
+            *
+            , row_number() over (
+                partition by lower(user_email), program_title
+                order by purchase_date desc nulls last, expiration_date desc nulls last
+            ) as _row_num
+        from program_entitlements
+    ) as ranked_program_entitlements
+    where _row_num = 1
 )
 
 , mitx_user as (
@@ -95,7 +124,7 @@ select
         mitx_user.user_mitxonline_id
         , mitx_user_by_edxorg_id.user_mitxonline_id
     ) as user_mitxonline_id
-from program_entitlements
+from deduped_program_entitlements as program_entitlements
 left join mitxonline_programs
     on mitxonline_programs.program_title = program_entitlements.program_title
 left join program_product_versions

@@ -4,6 +4,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__profiles_profile') }}
 )
 
+{{ deduplicate_raw_table(order_by='updated_at desc, _airbyte_extracted_at' , partition_columns = 'user_id') }}
+
 , cleaned as (
     select
         id as profile_id
@@ -27,7 +29,7 @@ with source as (
         , nullif(image_small_file, '') as user_image_small_file
         , nullif(image_medium_file, '') as user_image_medium_file
         , {{ cast_timestamp_to_iso8601('updated_at') }} as profile_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

@@ -147,19 +147,34 @@ with combined_enrollments as (
         and {{ element_at_array("split(edxorg_runs.courserun_readable_id, '/')", 3) }}
             = {{ element_at_array("split(mitxonline__course_runs.courserun_readable_id, '+')", 3) }}
     where edxorg_runs.courserun_readable_id in (
-        'MITx/CTL.SC2x/2T2026',
-        'MITx/CTL.SC4x/2T2026',
-        'MITx/IDS.S24x/1T2027',
         'MITx/15.763x/2T2026',
+        'MITx/18.6501x/3T2026',
         'MITx/2.830.1x/2T2026',
         'MITx/2.830.2x/3T2026',
+        'MITx/2.854.2x/1T2027',
         'MITx/2.961.1x/3T2026',
         'MITx/2.961.2x/1T2027',
-        'MITx/2.854.2x/1T2027',
+        'MITx/6.419x/1T2027',
         'MITx/6.431x/3T2026',
-        'MITx/18.6501x/3T2026'
+        'MITx/6.86x/1T2027',
+        'MITx/CTL.SC2x/2T2026',
+        'MITx/CTL.SC3x/3T2026',
+        'MITx/CTL.SC4x/2T2026',
+        'MITx/IDS.S24x/1T2027'
     )
         and mitxonline__course_runs.courserun_platform = '{{ var("mitxonline") }}'
+
+    union all
+
+    -- Special case: MITx/CTL.SC1x_1/3T2026 maps to course-v1:MITxT+CTL.SC1x+3T2026.
+    -- The edX course number has a _1 suffix that is absent in the MITx Online counterpart,
+    -- so the standard course/run tag matching logic above cannot resolve this automatically.
+    select
+        'course-v1:MITx+CTL.SC1x_1+3T2026' as edxorg_courserun_readable_id
+        , courserun_readable_id as mitxonline_courserun_readable_id
+    from mitxonline__course_runs
+    where courserun_readable_id = 'course-v1:MITxT+CTL.SC1x+3T2026'
+        and courserun_platform = '{{ var("mitxonline") }}'
 )
 
 , product_versions as (
@@ -193,6 +208,11 @@ with combined_enrollments as (
 
 , mitxonline_enrollment as (
     select * from {{ ref('int__mitxonline__courserunenrollments') }}
+)
+
+, openedx_users as (
+    select user_id, openedxuser_has_been_synced
+    from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
 )
 
 , edxorg_enrollment as (
@@ -260,6 +280,7 @@ select
             and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
             then purchased_on_edx_discount.discount_id
     end as discount_id
+    , openedx_users.openedxuser_has_been_synced
 from edxorg_enrollment
 left join edxorg_grade
     on edxorg_enrollment.user_id = edxorg_grade.user_id
@@ -297,11 +318,24 @@ left join retired_users
 left join courserun_product_version
     on mitxonline__course_runs.courserun_id = courserun_product_version.courserun_id
 left join purchased_on_edx_discount on true
+left join openedx_users
+    on coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) = openedx_users.user_id
 where
     (
         edxorg_enrollment.courseruncertificate_created_on is not null
         or future_run_id_mapping.edxorg_courserun_readable_id is not null
     )
-    and mitxonline_enrollment.user_email is null
-    and mitxonline_enrollment_by_userid.user_id is null
+    and (
+        (mitxonline_enrollment.user_email is null and mitxonline_enrollment_by_userid.user_id is null)
+        -- Include future-run enrollments where edX mode was upgraded to verified but the
+        -- existing MITx Online enrollment is still audit
+        or (
+            future_run_id_mapping.edxorg_courserun_readable_id is not null
+            and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
+            and coalesce(
+                mitxonline_enrollment.courserunenrollment_enrollment_mode
+                , mitxonline_enrollment_by_userid.courserunenrollment_enrollment_mode
+            ) = 'audit'
+        )
+    )
     and retired_users.user_id is null

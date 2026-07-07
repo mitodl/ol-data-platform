@@ -3,19 +3,8 @@ cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
-  column_name: receipt_payment_amount
-  description: null
-  expression: ''
-  extra: {}
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: DECIMAL(38, 2)
-  verbose_name: null
-- advanced_data_type: null
   column_name: unit_price
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -28,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -40,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: course_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -52,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_created_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -64,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: receipt_payer_email
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -76,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: receipt_payment_timestamp
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -88,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_created_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -100,18 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_upgraded_on
-  description: null
-  expression: ''
-  extra: {}
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: order_created_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -124,6 +108,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: receipt_payment_method
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -136,6 +121,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_highest_education
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -148,6 +134,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_enrollment_status
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -160,6 +147,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_start_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -172,6 +160,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_full_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -184,6 +173,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: order_reference_number
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -196,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_country_code
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -208,6 +199,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_enrollment_mode
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -220,6 +212,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_end_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -232,6 +225,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -244,6 +238,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_url
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -256,6 +251,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: coupon_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -268,6 +264,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: order_state
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -280,6 +277,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_username
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -292,6 +290,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_email
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -304,6 +303,20 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: coupon_code
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserunenrollment_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -316,6 +329,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_title
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -328,6 +342,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: course_title
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -340,6 +355,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: receipt_url
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -352,18 +368,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform
-  description: null
-  expression: ''
-  extra: {}
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: discount
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -376,6 +381,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_is_earned
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -388,6 +394,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserungrade_is_passing
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -400,6 +407,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_is_active
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -412,6 +420,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_is_current
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -423,7 +432,34 @@ columns:
   type: BOOLEAN
   verbose_name: null
 - advanced_data_type: null
+  column_name: receipt_payment_amount
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DOUBLE
+  verbose_name: null
+- advanced_data_type: null
   column_name: courserungrade_grade
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DOUBLE
+  verbose_name: null
+- advanced_data_type: null
+  column_name: discount
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -436,18 +472,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: num_of_course_passed
-  description: null
-  expression: ''
-  extra: {}
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BIGINT
-  verbose_name: null
-- advanced_data_type: null
-  column_name: courserunenrollment_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -460,6 +485,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: order_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -471,7 +497,47 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
+  column_name: courseruncertificate_issued_on
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: discount_type_name
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: order_updated_on
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: organization_name
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -484,6 +550,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: organization_key
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -496,6 +563,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: redeemed_email
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -506,19 +574,8 @@ columns:
   python_date_format: null
   type: VARCHAR
   verbose_name: null
-- advanced_data_type: null
-  column_name: order_type
-  description: null
-  expression: null
-  extra: {}
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+currency_code_column: null
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
 default_endpoint: null
 description: Auto refreshed at 2026-02-05T13:51:23.850823+00:00
 extra:
