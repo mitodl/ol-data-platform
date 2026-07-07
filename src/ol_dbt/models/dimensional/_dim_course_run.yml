@@ -77,6 +77,21 @@ models:
     description: >
       Timestamp when the course run was created in the source system. Populated for
       mitxonline, mitxpro, and residential platforms. Null for edxorg and bootcamps.
+  - name: semester
+    description: >
+      Academic term identifier for a MicroMasters proctored exam run (e.g. "2T2022").
+      Populated only for MITxOnline course runs that correspond to a MicroMasters
+      exam
+      run. Null for all other platforms and non-exam MITxOnline course runs.
+  - name: passing_grade
+    description: >
+      Passing score threshold (0.0–1.0) set per MicroMasters proctored exam run.
+      Populated only for MITxOnline course runs that correspond to a MicroMasters
+      exam
+      run. Null for all other platforms and non-exam MITxOnline course runs. Note:
+      a
+      stored value of null and an actual passing grade of 0.0 are distinct; -1.0 is
+      used as the SCD2 change-detection sentinel to distinguish them.
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Always set for
