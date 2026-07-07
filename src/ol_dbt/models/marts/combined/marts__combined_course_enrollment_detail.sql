@@ -72,6 +72,7 @@ with enrollments as (
         , user_mitxonline_username
         , user_mitxpro_username
         , user_edxorg_username
+        , user_residential_username
     from {{ ref('dim_user') }}
 )
 
