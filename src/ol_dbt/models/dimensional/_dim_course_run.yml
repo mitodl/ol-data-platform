@@ -77,6 +77,13 @@ models:
     description: >
       Timestamp when the course run was created in the source system. Populated for
       mitxonline, mitxpro, and residential platforms. Null for edxorg and bootcamps.
+  - name: courserun_upgrade_deadline
+    description: >
+      ISO 8601 timestamp of the deadline for upgrading from audit to verified enrollment
+      on this course run. Populated for MITxOnline course runs directly from the source.
+      Also populated for edxorg course runs via the MicroMasters course run records
+      (joined on courserun_edxorg_readable_id). Null for MITxPro, residential, and
+      bootcamp platforms.
   - name: semester
     description: >
       Academic term identifier for a MicroMasters proctored exam run (e.g. "2T2022").

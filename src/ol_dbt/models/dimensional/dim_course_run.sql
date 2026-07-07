@@ -5,11 +5,31 @@
     on_schema_change='append_new_columns'
 ) }}
 
+-- EdxOrg course runs don't carry upgrade_deadline in their own source; the value is stored
+-- in MicroMasters course run records keyed by courserun_edxorg_readable_id.
+-- Filter to edxorg-platform rows only to prevent cross-platform false matches and
+-- avoid 1:N fan-out if multiple MicroMasters rows share the same readable ID.
+with micromasters_courseruns as (
+    select courserun_edxorg_readable_id, courserun_upgrade_deadline
+    from
+        (
+            select
+                courserun_edxorg_readable_id
+                , courserun_upgrade_deadline
+                , row_number() over (
+                    partition by courserun_edxorg_readable_id order by courserun_id desc
+                ) as _row_num
+            from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
+            where courserun_platform = '{{ var("edxorg") }}'
+        ) as mcr_deduped
+    where _row_num = 1
+)
+
 -- MicroMasters stores exam run metadata (semester label and passing grade threshold)
 -- keyed by examrun_readable_id, which matches the MITxOnline courserun_readable_id for
 -- proctored exam course runs. These are the only platform-specific dimensional attributes
 -- that originate outside the platform's own course run record.
-with micromasters_examruns as (
+, micromasters_examruns as (
     select examrun_readable_id, examrun_semester, examrun_passing_grade
     from (
         select
@@ -41,6 +61,7 @@ with micromasters_examruns as (
         , er.examrun_semester as semester
         , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
+        , cr.courserun_upgrade_deadline
     from {{ ref('int__mitxonline__course_runs') }} as cr
     left join micromasters_examruns as er
         on cr.courserun_readable_id = er.examrun_readable_id
@@ -62,26 +83,29 @@ with micromasters_examruns as (
         , cast(null as varchar) as semester
         , cast(null as double) as passing_grade
         , 'mitxpro' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__mitxpro__course_runs') }}
 )
 
 , edxorg_courseruns as (
     select
-        courserun_readable_id
+        cr.courserun_readable_id
         , cast(null as integer) as source_id
         , cast(null as integer) as course_id
-        , courserun_title
-        , courserun_start_date as courserun_start_on  -- edxorg uses _date suffix
-        , courserun_end_date as courserun_end_on
-        , courserun_enrollment_start_date as enrollment_start
-        , courserun_enrollment_end_date as enrollment_end
-        , courserun_is_published as courserun_is_live
+        , cr.courserun_title
+        , cr.courserun_start_date as courserun_start_on  -- edxorg uses _date suffix
+        , cr.courserun_end_date as courserun_end_on
+        , cr.courserun_enrollment_start_date as enrollment_start
+        , cr.courserun_enrollment_end_date as enrollment_end
+        , cr.courserun_is_published as courserun_is_live
         , cast(null as varchar) as courserun_created_on
         , cast(null as varchar) as course_readable_id
         , cast(null as varchar) as semester
         , cast(null as double) as passing_grade
         , 'edxorg' as platform
-    from {{ ref('int__edxorg__mitx_courseruns') }}
+        , mc.courserun_upgrade_deadline
+    from {{ ref('int__edxorg__mitx_courseruns') }} as cr
+    left join micromasters_courseruns as mc on cr.courserun_readable_id = mc.courserun_edxorg_readable_id
 )
 
 , residential_courseruns as (
@@ -100,6 +124,7 @@ with micromasters_examruns as (
         , cast(null as varchar) as semester
         , cast(null as double) as passing_grade
         , 'residential' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__mitxresidential__courseruns') }}
 )
 
@@ -119,6 +144,7 @@ with micromasters_examruns as (
         , cast(null as varchar) as semester
         , cast(null as double) as passing_grade
         , 'bootcamps' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
     from {{ ref('int__bootcamps__course_runs') }} as runs
 )
 
@@ -170,6 +196,7 @@ with micromasters_examruns as (
                 else courserun_readable_id
             end
         ) as course_readable_id
+        , courserun_upgrade_deadline
     from combined_courseruns
 )
 
@@ -237,6 +264,7 @@ with micromasters_examruns as (
         , current_timestamp as effective_date
         , cast(null as timestamp) as end_date
         , true as is_current
+        , courserun_upgrade_deadline
     from courseruns_with_all_fks
 
     {% if is_incremental() %}
@@ -253,6 +281,8 @@ with micromasters_examruns as (
             and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
             and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
             and coalesce(existing.courserun_is_live, false) = coalesce(courseruns_with_all_fks.courserun_is_live, false)
+            and coalesce(existing.courserun_upgrade_deadline, '')
+            = coalesce(courseruns_with_all_fks.courserun_upgrade_deadline, '')
             and coalesce(existing.semester, '') = coalesce(courseruns_with_all_fks.semester, '')
             and coalesce(existing.passing_grade, -1.0) = coalesce(courseruns_with_all_fks.passing_grade, -1.0)
     )
@@ -285,6 +315,7 @@ with micromasters_examruns as (
         , existing.effective_date
         , current_timestamp as end_date
         , false as is_current
+        , existing.courserun_upgrade_deadline
     from {{ this }} as existing
     inner join final as new_records
         on existing.courserun_readable_id = new_records.courserun_readable_id

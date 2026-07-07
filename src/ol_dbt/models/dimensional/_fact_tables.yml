@@ -77,6 +77,15 @@ models:
     description: Enrollment status
   - name: enrollment_created_on
     description: Enrollment creation timestamp (for incremental processing)
+  - name: enrollment_updated_on
+    description: Enrollment last-updated timestamp (for incremental processing). Null
+      for edxorg and residential platforms.
+  - name: enrollment_is_edx_enrolled
+    description: >
+      Boolean indicating whether the learner is enrolled on the edX side of the platform.
+      True for edxorg (always) and residential (always). For mitxonline and mitxpro,
+      sourced from the application's edx_enrolled flag. Null for program enrollments
+      and bootcamps (not edX-hosted).
 
 - name: tfact_order
   description: >
