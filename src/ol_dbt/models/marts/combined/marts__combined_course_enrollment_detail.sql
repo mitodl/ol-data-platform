@@ -5,7 +5,9 @@
 -- MITxPro order join uses a supplemental CTE for ecommerce_order_id (not in tfact_enrollment).
 -- Bootcamps order join changed from username-based to user_id-based (username not in dim_user).
 -- edX.org certificate MITxOnline cross-lookup uses dim_user.user_mitxonline_username + user_email.
--- Certificate join for all platforms uses user_email (from dim_user) as the join key.
+-- Certificate join for all platforms uses the platform-specific username (restores
+-- pre-migration int__combined__courserun_enrollments semantics); Bootcamps username is
+-- joined in directly from int__bootcamps__users since dim_user doesn't expose it.
 
 with enrollments as (
     select
@@ -73,6 +75,13 @@ with enrollments as (
     from {{ ref('dim_user') }}
 )
 
+, bootcamps_users as (
+    -- dim_user does not expose a bootcamps username attribute; join directly to the
+    -- intermediate model to restore user_username for Bootcamps enrollments/certificates.
+    select user_id, user_username
+    from {{ ref('int__bootcamps__users') }}
+)
+
 , grades as (
     select
         user_fk
@@ -121,8 +130,11 @@ with enrollments as (
 , micromasters_completed_orders as (
     select
         *
+        -- Partition matches the courserun_edxorg_readable_id join key below (not the
+        -- MicroMasters-native courserun_readable_id, a different id namespace), otherwise
+        -- row_num=1 can be assigned within the wrong partition and drop valid orders.
         , row_number() over (
-            partition by user_id, courserun_readable_id
+            partition by user_id, courserun_edxorg_readable_id
             order by order_created_on desc, order_id desc
         ) as row_num
     from {{ ref('int__micromasters__orders') }}
@@ -194,6 +206,10 @@ with enrollments as (
                 then users.user_edxorg_username
             when enrollments.platform = '{{ var("mitxpro") }}'
                 then users.user_mitxpro_username
+            when enrollments.platform = '{{ var("residential") }}'
+                then users.user_residential_username
+            when enrollments.platform = '{{ var("bootcamps") }}'
+                then bootcamps_users.user_username
             else null
         end as user_username
         , users.user_email
@@ -210,8 +226,13 @@ with enrollments as (
         , course_runs.courserun_end_on
         , course_runs.courserun_is_current
         , course_runs.courserun_upgrade_deadline
-        -- Course attributes from dim_course (via dim_course_run.course_fk)
-        , coalesce(dim_course_cte.course_readable_id, course_runs.courserun_readable_id) as course_readable_id
+        -- Course attributes from dim_course (via dim_course_run.course_fk); fall back to
+        -- extracting the course id from the course run id (matches int__combined__course_runs
+        -- logic) rather than the run id itself when dim_course does not join.
+        , coalesce(
+            dim_course_cte.course_readable_id
+            , {{ extract_course_readable_id('course_runs.courserun_readable_id') }}
+        ) as course_readable_id
         , coalesce(dim_course_cte.course_title, course_runs.courserun_title) as course_title
         -- Grade from tfact_grade (user_fk + courserun_fk grain matches tfact_enrollment)
         , grades.grade_value as courserungrade_grade
@@ -329,15 +350,28 @@ with enrollments as (
     left join course_runs on enrollments.courserun_fk = course_runs.courserun_pk
     left join dim_course_cte on course_runs.course_fk = dim_course_cte.course_pk
     left join users on enrollments.user_fk = users.user_pk
+    left join bootcamps_users
+        on enrollments.platform = '{{ var("bootcamps") }}'
+        and users.bootcamps_application_user_id = bootcamps_users.user_id
     left join grades
         on enrollments.user_fk = grades.user_fk
         and enrollments.courserun_fk = grades.courserun_fk
-    -- Certificate join: use user_email as join key (in dim_user for all platforms);
-    -- bootcamps username is not in dim_user so email is the reliable cross-table key here.
+    -- Certificate join: match on the platform-specific username (restores pre-migration
+    -- int__combined__courserun_enrollments semantics); email is a deduped/canonicalized
+    -- value on dim_user and can silently miss platform-specific certificate records.
     left join combined_certificates
         on combined_certificates.platform = enrollments.platform
-        and combined_certificates.user_email = users.user_email
         and combined_certificates.courserun_readable_id = course_runs.courserun_readable_id
+        and combined_certificates.user_username = case
+            when enrollments.platform = '{{ var("mitxonline") }}'
+                then users.user_mitxonline_username
+            when enrollments.platform = '{{ var("edxorg") }}'
+                then users.user_edxorg_username
+            when enrollments.platform = '{{ var("mitxpro") }}'
+                then users.user_mitxpro_username
+            when enrollments.platform = '{{ var("bootcamps") }}'
+                then bootcamps_users.user_username
+        end
     -- edX.org: also check MITxOnline certificate table for MicroMasters-linked certs
     left join mitxonline_certificates
         on enrollments.platform = '{{ var("edxorg") }}'
