@@ -46,7 +46,13 @@ ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = tr
 
 # Override dagster-iceberg's <0.11 upper bound until upstream loosens it.
 # See https://github.com/dagster-io/community-integrations/pull/289
+#
+# Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py
+# pre-generated with protobuf 7.35.0 gencode while declaring protobuf>=6.33.5,
+# so it crashes at import time under dagster's required protobuf<7 (upstream
+# metadata/gencode mismatch in the 1.82.0 release).
 [tool.uv]
 override-dependencies = [
     "pyiceberg>=0.11.1",
+    "grpcio-health-checking<1.82.0",
 ]

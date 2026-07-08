@@ -32,6 +32,13 @@ exclude = ["src/ol_dlt"]
 
 [tool.uv]
 package = false  # This is a workspace root, not a package
+# Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py
+# pre-generated with protobuf 7.35.0 gencode while declaring protobuf>=6.33.5,
+# so it crashes at import time under dagster's required protobuf<7 (upstream
+# metadata/gencode mismatch in the 1.82.0 release).
+override-dependencies = [
+    "grpcio-health-checking<1.82.0",
+]
 
 [dependency-groups]
 dev = [
