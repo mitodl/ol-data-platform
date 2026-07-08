@@ -180,7 +180,7 @@ with mitxonline_enrollments as (
         ) as courserun_readable_id
         , null as program_id
         , emeritus_enrollments.enrollment_created_on
-        , cast(null as varchar) as enrollment_updated_on
+        , emeritus_enrollments.enrollment_updated_on
         , emeritus_enrollments.is_enrolled as enrollment_is_active
         , cast(null as varchar) as enrollment_mode
         , emeritus_enrollments.enrollment_status
@@ -205,11 +205,13 @@ with mitxonline_enrollments as (
             , global_alumni_enrollments.courserun_external_readable_id
         ) as courserun_readable_id
         , null as program_id
-        , global_alumni_enrollments.enrollment_created_on
+        -- source has no enrollment_created_on/enrollment_updated_on; falls back to the
+        -- 7-day lookback path in incremental_watermarks for platforms without timestamps
+        , cast(null as varchar) as enrollment_created_on
         , cast(null as varchar) as enrollment_updated_on
         , global_alumni_enrollments.is_enrolled as enrollment_is_active
         , cast(null as varchar) as enrollment_mode
-        , null as enrollment_status
+        , global_alumni_enrollments.enrollment_status
         , 'global_alumni' as platform
         , 'global_alumni' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
@@ -266,7 +268,7 @@ with mitxonline_enrollments as (
 , dim_course_run_mitxpro as (
     select courserun_pk, courserun_readable_id
     from {{ ref('dim_course_run') }}
-    where is_current = true and platform = '{{ var("mitxpro") }}'
+    where is_current = true and platform = 'mitxpro'
 )
 
 , dim_program as (
