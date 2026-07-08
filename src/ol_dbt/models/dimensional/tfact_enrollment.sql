@@ -157,6 +157,68 @@ with mitxonline_enrollments as (
     from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
+-- Emeritus/Global Alumni don't own course run records; their enrollments map onto
+-- existing MITxPro course runs via courserun_external_readable_id, mirroring the join
+-- logic in int__combined__courserun_enrollments. This lookup resolves that external id
+-- to the MITxPro-platform courserun_readable_id used elsewhere in dim_course_run.
+, mitxpro_external_readable_id_lookup as (
+    select courserun_external_readable_id, courserun_readable_id
+    from {{ ref('int__mitxpro__course_runs') }}
+    where courserun_external_readable_id is not null
+)
+
+, emeritus_enrollments as (
+    select
+        -- Stable surrogate key: source has no native enrollment_id
+        {{ dbt_utils.generate_surrogate_key(['cast(emeritus_enrollments.user_id as varchar)', 'emeritus_enrollments.courserun_external_readable_id']) }}
+            as enrollment_id
+        , emeritus_enrollments.user_id
+        , null as courserun_id
+        , coalesce(
+            mitxpro_external_readable_id_lookup.courserun_readable_id
+            , emeritus_enrollments.courserun_external_readable_id
+        ) as courserun_readable_id
+        , null as program_id
+        , emeritus_enrollments.enrollment_created_on
+        , cast(null as varchar) as enrollment_updated_on
+        , emeritus_enrollments.is_enrolled as enrollment_is_active
+        , cast(null as varchar) as enrollment_mode
+        , emeritus_enrollments.enrollment_status
+        , 'emeritus' as platform
+        , 'emeritus' as platform_code
+        , cast(null as boolean) as enrollment_is_edx_enrolled
+    from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }} as emeritus_enrollments
+    left join mitxpro_external_readable_id_lookup
+        on emeritus_enrollments.courserun_external_readable_id
+            = mitxpro_external_readable_id_lookup.courserun_external_readable_id
+)
+
+, global_alumni_enrollments as (
+    select
+        -- Stable surrogate key: source has no native enrollment_id
+        {{ dbt_utils.generate_surrogate_key(['cast(global_alumni_enrollments.user_id as varchar)', 'global_alumni_enrollments.courserun_external_readable_id']) }}
+            as enrollment_id
+        , global_alumni_enrollments.user_id
+        , null as courserun_id
+        , coalesce(
+            mitxpro_external_readable_id_lookup.courserun_readable_id
+            , global_alumni_enrollments.courserun_external_readable_id
+        ) as courserun_readable_id
+        , null as program_id
+        , global_alumni_enrollments.enrollment_created_on
+        , cast(null as varchar) as enrollment_updated_on
+        , global_alumni_enrollments.is_enrolled as enrollment_is_active
+        , cast(null as varchar) as enrollment_mode
+        , null as enrollment_status
+        , 'global_alumni' as platform
+        , 'global_alumni' as platform_code
+        , cast(null as boolean) as enrollment_is_edx_enrolled
+    from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }} as global_alumni_enrollments
+    left join mitxpro_external_readable_id_lookup
+        on global_alumni_enrollments.courserun_external_readable_id
+            = mitxpro_external_readable_id_lookup.courserun_external_readable_id
+)
+
 , combined_enrollments as (
     select * from mitxonline_enrollments
     union all
@@ -169,6 +231,10 @@ with mitxonline_enrollments as (
     select * from program_enrollments
     union all
     select * from bootcamps_enrollments
+    union all
+    select * from emeritus_enrollments
+    union all
+    select * from global_alumni_enrollments
 )
 
 -- Join to dimensions for FKs
@@ -183,6 +249,8 @@ with mitxonline_enrollments as (
         , micromasters_user_id
         , residential_openedx_user_id
         , bootcamps_application_user_id
+        , emeritus_user_id
+        , global_alumni_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -191,6 +259,14 @@ with mitxonline_enrollments as (
     select courserun_pk, courserun_readable_id, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
+)
+
+-- Emeritus/Global Alumni enrollments resolve their course run FK against MITxPro-platform
+-- dim_course_run rows (see mitxpro_external_readable_id_lookup above).
+, dim_course_run_mitxpro as (
+    select courserun_pk, courserun_readable_id
+    from {{ ref('dim_course_run') }}
+    where is_current = true and platform = '{{ var("mitxpro") }}'
 )
 
 , dim_program as (
@@ -235,9 +311,15 @@ with mitxonline_enrollments as (
             end,
             case when combined_enrollments.platform = 'bootcamps'
                 then ul_bootcamps.user_pk
+            end,
+            case when combined_enrollments.platform = 'emeritus'
+                then ul_emeritus.user_pk
+            end,
+            case when combined_enrollments.platform = 'global_alumni'
+                then ul_global_alumni.user_pk
             end
         ) as user_fk
-        , dim_course_run.courserun_pk as courserun_fk
+        , coalesce(dim_course_run.courserun_pk, dim_course_run_mitxpro.courserun_pk) as courserun_fk
         , coalesce(dim_program.program_pk, micromasters_program_lookup.micromasters_program_pk) as program_fk
         , dim_platform_lookup.platform_pk as platform_fk
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
@@ -257,9 +339,18 @@ with mitxonline_enrollments as (
     left join user_lookup as ul_bootcamps
         on combined_enrollments.platform = 'bootcamps'
         and combined_enrollments.user_id = ul_bootcamps.bootcamps_application_user_id
+    left join user_lookup as ul_emeritus
+        on combined_enrollments.platform = 'emeritus'
+        and combined_enrollments.user_id = ul_emeritus.emeritus_user_id
+    left join user_lookup as ul_global_alumni
+        on combined_enrollments.platform = 'global_alumni'
+        and combined_enrollments.user_id = ul_global_alumni.global_alumni_user_id
     left join dim_course_run
         on combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id
         and combined_enrollments.platform = dim_course_run.platform
+    left join dim_course_run_mitxpro
+        on combined_enrollments.platform in ('emeritus', 'global_alumni')
+        and combined_enrollments.courserun_readable_id = dim_course_run_mitxpro.courserun_readable_id
     left join dim_program
         on cast(combined_enrollments.program_id as varchar) = dim_program.source_id
         and combined_enrollments.platform_code = dim_program.platform_code
