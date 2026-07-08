@@ -376,6 +376,8 @@ with enrollments as (
                 then users.user_mitxpro_username
             when enrollments.platform = '{{ var("bootcamps") }}'
                 then bootcamps_users.user_username
+            when enrollments.platform = '{{ var("residential") }}'
+                then users.user_residential_username
         end
     -- edX.org: also check MITxOnline certificate table for MicroMasters-linked certs
     left join mitxonline_certificates
