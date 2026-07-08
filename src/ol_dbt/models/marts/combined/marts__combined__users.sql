@@ -1,6 +1,7 @@
 -- Migrated to dim_user for user identity.
--- user_last_login, user_street_address, user_address_state_or_territory, and
--- user_address_postal_code are not yet in dim_user; they remain sourced from
+-- user_last_login, user_street_address, user_address_city,
+-- user_address_state_or_territory, user_address_postal_code, and
+-- user_bootcamps_username are not yet in dim_user; they remain sourced from
 -- int__combined__users until dim_user is extended to include those fields.
 
 with users as (
@@ -17,6 +18,7 @@ with users as (
         , max(user_address_city) as user_address_city
         , max(user_address_state_or_territory) as user_address_state_or_territory
         , max(user_address_postal_code) as user_address_postal_code
+        , max(case when platform = '{{ var("bootcamps") }}' then user_username end) as user_bootcamps_username
     from {{ ref('int__combined__users') }}
     group by lower(user_email)
 )
@@ -43,7 +45,7 @@ with users as (
 
 , program_stats as (
     select
-        user_email
+        lower(user_email) as user_email
         , count(distinct programcertificate_uuid) as cert_count
         , sum(case
             when
@@ -58,20 +60,20 @@ with users as (
             else 0
         end) as dedp_program_cred_count
     from combined_programs
-    group by user_email
+    group by lower(user_email)
 )
 
 , orders_stats as (
     select
-        user_email
+        lower(user_email) as user_email
         , sum(order_total_price_paid) as total_amount_paid_orders
     from orders
-    group by user_email
+    group by lower(user_email)
 )
 
 , course_stats as (
     select
-        combined_enrollments.user_email
+        lower(combined_enrollments.user_email) as user_email
         , count(distinct combined_enrollments.course_title) as num_of_course_enrolled
         , count(
             distinct
@@ -86,7 +88,7 @@ with users as (
     from combined_enrollments
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    group by combined_enrollments.user_email
+    group by lower(combined_enrollments.user_email)
 )
 
 select
@@ -147,14 +149,19 @@ select
     end as user_joined_on
     -- Not yet in dim_user; sourced from int__combined__users supplement
     , users_supplement.user_last_login
-    -- Derived: is_active — prefer MITx Online, fallback across platforms
-    , coalesce(
-        users.user_is_active_on_mitxonline
-        , users.user_is_active_on_edxorg
-        , users.user_is_active_on_mitxpro
-        , users.user_is_active_on_bootcamps
-        , users.user_is_active_on_mitlearn
-    ) as user_is_active
+    -- Derived: is_active — prefer MITx Online's actual state (even if false) when the
+    -- user has a MITx Online account; only fall back to other platforms when there is no
+    -- MITx Online account at all. A plain coalesce() would incorrectly let a later TRUE
+    -- override an explicit FALSE from MITx Online.
+    , case
+        when users.mitxonline_application_user_id is not null then users.user_is_active_on_mitxonline
+        else coalesce(
+            users.user_is_active_on_edxorg
+            , users.user_is_active_on_mitxpro
+            , users.user_is_active_on_bootcamps
+            , users.user_is_active_on_mitlearn
+        )
+    end as user_is_active
     , users.full_name as user_full_name
     , users.address_country as user_address_country
     , users.highest_education as user_highest_education
@@ -178,8 +185,8 @@ select
     , users.user_mitxonline_username
     , users.user_edxorg_username
     , users.user_mitxpro_username
-    -- Not yet in dim_user
-    , null as user_bootcamps_username
+    -- Not yet in dim_user; sourced from int__combined__users supplement
+    , users_supplement.user_bootcamps_username as user_bootcamps_username
     -- Stats (upstream sources being migrated by other epic tickets)
     , course_stats.num_of_course_enrolled
     , course_stats.num_of_course_passed
@@ -195,7 +202,7 @@ select
     -- to change (edxorg_id-based → mitxonline_id-based). This column preserves the
     -- old edX.org hash so that downstream consumers (Hightouch, cross-model joins) can
     -- perform a graceful key migration without a hard cutover.
-    -- Track removal in: https://github.com/mitodl/ol-data-platform/issues/TODO
+    -- Track removal in: https://github.com/mitodl/ol-data-platform/issues/2409
     -- Remove once all consumers have migrated to user_hashed_id.
     , case
         when users.edxorg_openedx_user_id is not null
@@ -203,9 +210,9 @@ select
     end as user_hashed_id_edxorg_legacy
 from users
 left join users_supplement on users.email = users_supplement.user_email_lower
-left join course_stats on users.email = lower(course_stats.user_email)
-left join program_stats on users.email = lower(program_stats.user_email)
-left join orders_stats on users.email = lower(orders_stats.user_email)
+left join course_stats on users.email = course_stats.user_email
+left join program_stats on users.email = program_stats.user_email
+left join orders_stats on users.email = orders_stats.user_email
 left join income on users.user_mitxonline_username = income.user_username
 -- Exclude MicroMasters-only users: the original mart filtered to
 -- (is_mitxonline_user OR is_edxorg_user) for the MITx branch, and MITxPro,
