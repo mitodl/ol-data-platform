@@ -33,10 +33,12 @@ with enrollment as (
 
 , product as (
     select * from {{ ref('dim_product') }}
+    where is_current = true
 )
 
 , f_order as (
     select * from {{ ref('tfact_order') }}
+    where order_state in ('fulfilled', 'refunded')
 )
 
 , discount as (
@@ -143,8 +145,23 @@ with enrollment as (
     group by user_email
 )
 
+-- An enrollment's courserun_fk/program_fk can each independently match a distinct
+-- product (e.g. the course sold standalone AND bundled into a program the learner
+-- actually purchased), fanning this join out to one row per matching order. Dedup
+-- below keeps whichever match actually has a real order, preferring the more
+-- specific course-level match and, within a priority tier, the most recent order.
+-- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
+, report_rows as (
 select
-    case enrollment.platform
+    enrollment.enrollment_key
+    , row_number() over (
+        partition by enrollment.enrollment_key
+        order by
+            case when f_order.order_id is not null then 0 else 1 end
+            , case when enrollment.courserun_fk = product.courserun_fk then 1 else 2 end
+            , f_order.order_updated_on desc nulls last
+    ) as row_num
+    , case enrollment.platform
         when 'bootcamps' then '{{ var("bootcamps") }}'
         when 'edxorg' then '{{ var("edxorg") }}'
         when 'emeritus' then '{{ var("emeritus") }}'
@@ -298,3 +315,52 @@ left join order_emails
     and d_user.email = order_emails.user_email
 left join course_passed_counts
     on d_user.email = course_passed_counts.user_email
+)
+
+select
+    platform
+    , courserunenrollment_id
+    , course_readable_id
+    , course_title
+    , courserun_is_current
+    , courserun_readable_id
+    , courserun_start_on
+    , courserun_end_on
+    , courserun_title
+    , courserunenrollment_created_on
+    , courserunenrollment_enrollment_mode
+    , courserunenrollment_enrollment_status
+    , courserunenrollment_is_active
+    , courserunenrollment_upgraded_on
+    , courseruncertificate_created_on
+    , courseruncertificate_issued_on
+    , courseruncertificate_is_earned
+    , courseruncertificate_url
+    , courserungrade_grade
+    , courserungrade_is_passing
+    , organization_key
+    , organization_name
+    , user_country_code
+    , user_highest_education
+    , user_full_name
+    , user_username
+    , user_email
+    , num_of_course_passed
+    , coupon_code
+    , coupon_name
+    , discount
+    , order_id
+    , order_reference_number
+    , order_state
+    , order_updated_on
+    , receipt_payment_amount
+    , receipt_payment_method
+    , receipt_payment_timestamp
+    , receipt_payer_email
+    , unit_price
+    , program_name
+    , discount_type_name
+    , redeemed_email
+    , receipt_url
+from report_rows
+where row_num = 1
