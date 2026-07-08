@@ -53,7 +53,15 @@ models:
         to: ref('dim_course_run')
         field: courserun_pk
   - name: program_fk
-    description: Foreign key to dim_program (null for course enrollments)
+    description: >
+      Foreign key to dim_program. Null for most course enrollments (courserun_fk is
+      the relevant key there), but populated for mitxpro course enrollments (enrollment_type
+      = 'course') that resulted from a program-purchase order, since xPRO creates
+      one
+      ProgramEnrollment plus one CourseRunEnrollment per course in the program, sharing
+      the same source order — program_fk is recovered via that shared order and reflects
+      the program the course was purchased under, not the course's curriculum membership.
+      Always populated for program enrollments (enrollment_type = 'program').
     tests:
     - relationships:
         to: ref('dim_program')

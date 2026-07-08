@@ -13,6 +13,7 @@ with mitxonline_enrollments as (
         , courserun_id
         , courserun_readable_id
         , null as program_id
+        , 'course' as enrollment_scope
         , courserunenrollment_created_on as enrollment_created_on
         , courserunenrollment_updated_on as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
@@ -24,22 +25,42 @@ with mitxonline_enrollments as (
     from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
+-- A program-purchase order creates one ProgramEnrollment plus one CourseRunEnrollment per
+-- course in the program, all sharing the same ecommerce_order_id. Use that shared order to
+-- recover the program_id for course-run enrollments that came from a program order.
+, mitxpro_program_enrollments_by_order as (
+    select
+        ecommerce_order_id
+        , program_id
+        , row_number() over (
+            partition by ecommerce_order_id
+            order by programenrollment_created_on desc, programenrollment_id desc
+        ) as row_num
+    from {{ ref('int__mitxpro__programenrollments') }}
+    where ecommerce_order_id is not null
+)
+
 , mitxpro_enrollments as (
     select
-        cast(courserunenrollment_id as varchar) as enrollment_id
-        , user_id
-        , courserun_id
-        , courserun_readable_id
-        , null as program_id
-        , courserunenrollment_created_on as enrollment_created_on
-        , courserunenrollment_updated_on as enrollment_updated_on
-        , courserunenrollment_is_active as enrollment_is_active
-        , courserunenrollment_enrollment_mode as enrollment_mode
-        , courserunenrollment_enrollment_status as enrollment_status
+        cast(enrollments.courserunenrollment_id as varchar) as enrollment_id
+        , enrollments.user_id
+        , enrollments.courserun_id
+        , enrollments.courserun_readable_id
+        , mitxpro_program_enrollments_by_order.program_id
+        , 'course' as enrollment_scope
+        , enrollments.courserunenrollment_created_on as enrollment_created_on
+        , enrollments.courserunenrollment_updated_on as enrollment_updated_on
+        , enrollments.courserunenrollment_is_active as enrollment_is_active
+        , enrollments.courserunenrollment_enrollment_mode as enrollment_mode
+        , enrollments.courserunenrollment_enrollment_status as enrollment_status
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
-        , courserunenrollment_is_edx_enrolled as enrollment_is_edx_enrolled
-    from {{ ref('int__mitxpro__courserunenrollments') }}
+        , enrollments.courserunenrollment_is_edx_enrolled as enrollment_is_edx_enrolled
+    from {{ ref('int__mitxpro__courserunenrollments') }} as enrollments
+    left join mitxpro_program_enrollments_by_order
+        on
+            enrollments.ecommerce_order_id = mitxpro_program_enrollments_by_order.ecommerce_order_id
+            and mitxpro_program_enrollments_by_order.row_num = 1
 )
 
 , edxorg_enrollments as (
@@ -50,6 +71,7 @@ with mitxonline_enrollments as (
         , null as courserun_id  -- edxorg has no integer source_id
         , courserun_readable_id
         , null as program_id
+        , 'course' as enrollment_scope
         , courserunenrollment_created_on as enrollment_created_on
         , cast(null as varchar) as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
@@ -73,6 +95,7 @@ with mitxonline_enrollments as (
         , null as courserun_id
         , cast(null as varchar) as courserun_readable_id
         , program_id
+        , 'program' as enrollment_scope
         , programenrollment_created_on as enrollment_created_on
         , programenrollment_updated_on as enrollment_updated_on
         , programenrollment_is_active as enrollment_is_active
@@ -91,6 +114,7 @@ with mitxonline_enrollments as (
         , null as courserun_id
         , courserun_readable_id
         , null as program_id
+        , 'course' as enrollment_scope
         , courserunenrollment_created_on as enrollment_created_on
         , cast(null as varchar) as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
@@ -109,6 +133,7 @@ with mitxonline_enrollments as (
         , courserun_id
         , courserun_readable_id
         , null as program_id
+        , 'course' as enrollment_scope
         , courserunenrollment_created_on as enrollment_created_on
         , courserunenrollment_updated_on as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
@@ -254,10 +279,10 @@ with mitxonline_enrollments as (
         {{ dbt_utils.generate_surrogate_key([
             'cast(enrollment_id as varchar)',
             'platform',
-            "case when program_id is not null then 'program' else 'course' end"
+            'enrollment_scope'
         ]) }} as enrollment_key
         , enrollment_id
-        , case when program_id is not null then 'program' else 'course' end as enrollment_type
+        , enrollment_scope as enrollment_type
         , enrollment_date_key
         , user_fk
         , courserun_fk
@@ -276,7 +301,7 @@ with mitxonline_enrollments as (
     -- left join preserves enrollments from platforms/types not yet in the target table
     left join incremental_watermarks w
         on w.watermark_platform = ewf.platform
-        and w.watermark_enrollment_type = case when ewf.program_id is not null then 'program' else 'course' end
+        and w.watermark_enrollment_type = ewf.enrollment_scope
     where (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
