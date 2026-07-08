@@ -34,7 +34,7 @@ with mitxonline_enrollments as (
         , program_id
         , row_number() over (
             partition by ecommerce_order_id
-            order by programenrollment_created_on desc
+            order by programenrollment_created_on desc, programenrollment_id desc
         ) as row_num
     from {{ ref('int__mitxpro__programenrollments') }}
     where ecommerce_order_id is not null

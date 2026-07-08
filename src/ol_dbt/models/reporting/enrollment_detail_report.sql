@@ -160,6 +160,10 @@ select
             case when f_order.order_id is not null then 0 else 1 end
             , case when enrollment.courserun_fk = product.courserun_fk then 1 else 2 end
             , f_order.order_updated_on desc nulls last
+            -- order_updated_on is order-level and shared by every line on a multi-line
+            -- order, so it alone can leave ties unresolved; break ties deterministically.
+            , f_order.order_id desc nulls last
+            , f_order.line_id desc nulls last
     ) as row_num
     , case enrollment.platform
         when 'bootcamps' then '{{ var("bootcamps") }}'
