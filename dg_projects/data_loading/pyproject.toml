@@ -49,3 +49,12 @@ exclude=["data_loading_tests"]
 [tool.uv.sources]
 ol-dlt = { path = "../../src/ol_dlt", editable = true }
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
+
+# Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py
+# pre-generated with protobuf 7.35.0 gencode while declaring protobuf>=6.33.5,
+# so it crashes at import time under dagster's required protobuf<7 (upstream
+# metadata/gencode mismatch in the 1.82.0 release).
+[tool.uv]
+override-dependencies = [
+    "grpcio-health-checking<1.82.0",
+]
