@@ -4,6 +4,7 @@ import sys
 
 import cyclopts
 
+from ol_dbt_cli.commands.diff import diff_app
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
 from ol_dbt_cli.commands.local_dev import local_app
@@ -44,6 +45,10 @@ app = cyclopts.App(
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
 
+      9. QA a migrated model against its pre-migration source (field-level diff):
+         $ ol-dbt run --select old_model new_model --target dev_local
+         $ ol-dbt diff --old old_model --new new_model
+
     Use --help on any subcommand for detailed usage.
     """,
     version="0.1.0",
@@ -54,6 +59,7 @@ app.command(generate_app)
 app.command(run_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
+app.command(diff_app)
 
 
 def main() -> None:
