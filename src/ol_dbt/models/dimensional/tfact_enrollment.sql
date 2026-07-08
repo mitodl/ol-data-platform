@@ -205,8 +205,12 @@ with mitxonline_enrollments as (
             , global_alumni_enrollments.courserun_external_readable_id
         ) as courserun_readable_id
         , null as program_id
-        -- source has no enrollment_created_on/enrollment_updated_on; falls back to the
-        -- 7-day lookback path in incremental_watermarks for platforms without timestamps
+        -- source has no enrollment_created_on/enrollment_updated_on. Unlike edxorg/residential
+        -- (which have enrollment_created_on and use the 7-day lookback path), the unconditional
+        -- `or ewf.enrollment_created_on is null` branch in incremental_watermarks means every
+        -- Global Alumni row is reprocessed on every incremental run (volume is low, so this is
+        -- an acceptable tradeoff for now; revisit if an ingestion timestamp becomes available
+        -- upstream).
         , cast(null as varchar) as enrollment_created_on
         , cast(null as varchar) as enrollment_updated_on
         , global_alumni_enrollments.is_enrolled as enrollment_is_active
