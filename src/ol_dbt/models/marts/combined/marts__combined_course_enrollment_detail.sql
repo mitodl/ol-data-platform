@@ -101,7 +101,12 @@ with enrollments as (
 )
 
 , mitxonline_certificates as (
+    -- Exclude revoked certificates to stay consistent with int__combined__courserun_certificates
+    -- (which also filters these out); otherwise a revoked cert's URL/UUID/timestamps could still
+    -- populate downstream even though courseruncertificate_is_earned is false, and multiple
+    -- certificate records for the same enrollment could fan out rows.
     select * from {{ ref('int__mitxonline__courserun_certificates') }}
+    where courseruncertificate_is_revoked = false
 )
 
 -- Keep supplemental CTE for MITxPro ecommerce_order_id (not stored in tfact_enrollment)
