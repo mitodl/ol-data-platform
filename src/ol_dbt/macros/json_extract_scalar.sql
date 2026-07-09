@@ -14,3 +14,9 @@
 {% macro default__json_extract_scalar(json_col, json_path) %}
   {{ return(trino__json_extract_scalar(json_col, json_path)) }}
 {% endmacro %}
+
+{% macro starrocks__json_extract_scalar(json_col, json_path) %}
+  {# StarRocks: get_json_string returns a plain string for scalar paths; a non-scalar path returns
+     the serialized JSON structure rather than NULL (acceptable difference from Trino) #}
+  get_json_string({{ json_col }}, {{ json_path }})
+{% endmacro %}

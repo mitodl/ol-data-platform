@@ -104,6 +104,11 @@
     try_cast({{ timestamp_str }} as timestamptz)
 {%- endmacro %}
 
+{% macro starrocks__from_iso8601_timestamp_nanos(timestamp_str) -%}
+    {# StarRocks: max precision is microseconds (v3.3.5+); strip timezone marker and truncate to 6 fractional digits #}
+    cast(substr(replace(regexp_replace({{ timestamp_str }}, '([Zz]|[+-][0-9]{2}:?[0-9]{2})$', ''), 'T', ' '), 1, 26) as datetime)
+{%- endmacro %}
+
 
 {% macro array_join(array_expr, delimiter, null_replacement='') -%}
     {{ adapter.dispatch('array_join', 'open_learning')(array_expr, delimiter, null_replacement) }}
@@ -204,6 +209,11 @@
     strftime({{ datetime_expr }}, '{{ strftime_format }}')
 {%- endmacro %}
 
+{% macro starrocks__format_datetime(datetime_expr, java_format) -%}
+    {# StarRocks: jodatime_format accepts Java DateTime patterns directly (v3.1+), no conversion needed #}
+    jodatime_format({{ datetime_expr }}, '{{ java_format }}')
+{%- endmacro %}
+
 
 {#
     date_format: Format a date/timestamp using a MySQL-style format string (Trino date_format).
@@ -223,6 +233,11 @@
     strftime({{ datetime_expr }}, {{ format_string }})
 {%- endmacro %}
 
+{% macro starrocks__date_format(datetime_expr, format_string) -%}
+    {# StarRocks: date_format uses the same MySQL-style format language as Trino date_format #}
+    date_format({{ datetime_expr }}, {{ format_string }})
+{%- endmacro %}
+
 
 {#
     day_of_week: ISO day of week (1=Monday, 7=Sunday) consistent with Trino day_of_week().
@@ -239,6 +254,11 @@
 {% macro duckdb__day_of_week(date_expr) -%}
     {# DuckDB: isodow returns 1=Mon, 7=Sun (same as Trino) #}
     isodow({{ date_expr }})
+{%- endmacro %}
+
+{% macro starrocks__day_of_week(date_expr) -%}
+    {# StarRocks: dayofweek_iso returns 1=Mon, 7=Sun. Plain dayofweek() is 1=Sun — do not use. #}
+    dayofweek_iso({{ date_expr }})
 {%- endmacro %}
 
 
@@ -275,6 +295,18 @@
     END
 {%- endmacro %}
 
+{% macro starrocks__iso8601_to_date_key(varchar_field) -%}
+    {# StarRocks: str_to_date returns NULL on parse failure, no try wrapper needed #}
+    CASE
+        WHEN {{ varchar_field }} IS NULL THEN NULL
+        WHEN LENGTH({{ varchar_field }}) = 10 THEN
+            CAST(date_format(str_to_date({{ varchar_field }}, '%Y-%m-%d'), '%Y%m%d') AS INT)
+        WHEN LENGTH({{ varchar_field }}) >= 19 THEN
+            CAST(date_format(str_to_date(SUBSTR({{ varchar_field }}, 1, 10), '%Y-%m-%d'), '%Y%m%d') AS INT)
+        ELSE NULL
+    END
+{%- endmacro %}
+
 {#
     iso8601_to_time_key: Convert an ISO8601 varchar datetime field to an integer HHMM time key.
     Matches the dim_time.time_key format (hour * 100 + minute).
@@ -307,14 +339,31 @@
     END
 {%- endmacro %}
 
+{% macro starrocks__iso8601_to_time_key(varchar_field) -%}
+    {# StarRocks: identical string-based extraction #}
+    CASE
+        WHEN {{ varchar_field }} IS NULL THEN NULL
+        WHEN LENGTH({{ varchar_field }}) >= 16 THEN
+            CAST(SUBSTR({{ varchar_field }}, 12, 2) AS INTEGER) * 100
+            + CAST(SUBSTR({{ varchar_field }}, 15, 2) AS INTEGER)
+        ELSE NULL
+    END
+{%- endmacro %}
+
 
 {#
     last_value_ignore_nulls: Cross-db wrapper for last_value with IGNORE NULLS.
     Trino: last_value(expr) IGNORE NULLS OVER (window)
     DuckDB: last_value(expr IGNORE NULLS) OVER (window)
+    StarRocks: last_value(expr IGNORE NULLS) OVER (window) (v2.5+)
 
     Usage (write the OVER clause inline after the macro call):
       {{ last_value_ignore_nulls('my_expr') }} over (partition by ... order by ...)
+
+    NOTE: StarRocks' default window frame is ROWS, while Trino's is RANGE.
+    Call sites that rely on the default frame must specify an explicit
+    frame (e.g. "rows between unbounded preceding and current row") to get
+    matching results across engines.
 #}
 {% macro last_value_ignore_nulls(expr) -%}
     {{ adapter.dispatch('last_value_ignore_nulls', 'open_learning')(expr) }}
@@ -327,6 +376,11 @@
 
 {% macro duckdb__last_value_ignore_nulls(expr) -%}
     {# DuckDB: IGNORE NULLS sits inside the function arguments #}
+    last_value({{ expr }} ignore nulls)
+{%- endmacro %}
+
+{% macro starrocks__last_value_ignore_nulls(expr) -%}
+    {# StarRocks: IGNORE NULLS sits inside the function arguments, like DuckDB (v2.5+) #}
     last_value({{ expr }} ignore nulls)
 {%- endmacro %}
 
@@ -381,6 +435,25 @@
     ) as {{ alias }}
 {%- endmacro %}
 
+{% macro starrocks__unnest_json_map(json_expr, alias, key_col, val_col) -%}
+    {#
+        StarRocks: json_each() has FIXED output column names ('key', 'value') that
+        cannot be aliased, unlike Trino/DuckDB's UNNEST. Callers must pass
+        key_col='key' and val_col='value' literally; this macro renames nothing,
+        it only validates the contract and lets the call site re-alias downstream
+        (e.g. `select t.value as topic`). The value column is JSON-typed, so
+        downstream consumers need to cast it to varchar.
+    #}
+    {%- if key_col != 'key' or val_col != 'value' -%}
+        {{ exceptions.raise_compiler_error(
+            "starrocks__unnest_json_map requires key_col='key' and val_col='value' "
+            ~ "(StarRocks json_each() output column names are fixed and cannot be "
+            ~ "aliased); got key_col='" ~ key_col ~ "', val_col='" ~ val_col ~ "'."
+        ) }}
+    {%- endif -%}
+    lateral json_each(parse_json(cast({{ json_expr }} as varchar))) {{ alias }}
+{%- endmacro %}
+
 
 {#
     json_is_object: Cross-db predicate that returns TRUE when a JSON expression
@@ -407,6 +480,11 @@
 {% macro duckdb__json_is_object(json_expr) -%}
     {# DuckDB: json_type() returns 'OBJECT' for JSON objects #}
     json_type({{ json_expr }}) = 'OBJECT'
+{%- endmacro %}
+
+{% macro starrocks__json_is_object(json_expr) -%}
+    {# StarRocks: no dedicated json_type(); a JSON object's cast-to-varchar text starts with '{' #}
+    substr(cast({{ json_expr }} as varchar), 1, 1) = '{'
 {%- endmacro %}
 
 
@@ -459,12 +537,22 @@
     cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[])
 {%- endmacro %}
 
+{% macro starrocks__json_extract_varchar_array(json_col, json_path) -%}
+    {# StarRocks: json_query returns a JSON value; array casts require v2.4+ #}
+    cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<varchar>)
+{%- endmacro %}
+
 {% macro duckdb__unnest_json_array(json_expr, alias, col_name) -%}
     {#
         DuckDB: cast the varchar JSON array string directly to json[] (list of json values).
         try_cast returns NULL for malformed input → unnest of NULL produces 0 rows.
     #}
     unnest(try_cast({{ json_expr }} as json[])) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+{% macro starrocks__unnest_json_array(json_expr, alias, col_name) -%}
+    {# StarRocks: parse the JSON string, cast to an array of JSON elements, then unnest #}
+    unnest(cast(parse_json({{ json_expr }}) as array<json>)) as {{ alias }} ({{ col_name }})
 {%- endmacro %}
 
 
@@ -493,6 +581,20 @@
             and (
                 {{ end_on_timestamp_str }} is null
                 or cast({{ end_on_timestamp_str }} as date) >= current_date
+            )
+        then true
+        else false
+    end
+{%- endmacro %}
+
+{% macro starrocks__is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
+    {# StarRocks: str_to_date returns NULL on parse failure, no try wrapper needed #}
+    case
+        when
+            str_to_date(substr({{ start_on_timestamp_str }}, 1, 10), '%Y-%m-%d') <= current_date
+            and (
+                {{ end_on_timestamp_str }} is null
+                or str_to_date(substr({{ end_on_timestamp_str }}, 1, 10), '%Y-%m-%d') >= current_date
             )
         then true
         else false

@@ -109,13 +109,13 @@ with problems as (
         , arbitrary(problem_events.problem_name) as problem_name
         , array_agg(
             distinct
-            {{ json_query_string('t.submission_data', "'$.response_type'") }}
+            {{ json_query_string('t.value', "'$.response_type'") }}
         ) as problem_types
     from problem_events
-    cross join {{ unnest_json_map('problem_events.submission', 't', 'key', 'submission_data') }}
+    cross join {{ unnest_json_map('problem_events.submission', 't', 'key', 'value') }}
     where
-        {{ json_query_string('t.submission_data', "'$.response_type'") }} is not null
-        and {{ json_query_string('t.submission_data', "'$.response_type'") }} <> ''
+        {{ json_query_string('t.value', "'$.response_type'") }} is not null
+        and {{ json_query_string('t.value', "'$.response_type'") }} <> ''
     group by problem_events.courserun_readable_id, problem_events.problem_block_id
 )
 

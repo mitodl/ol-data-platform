@@ -38,3 +38,20 @@
               )
     end
 {% endmacro %}
+
+{% macro starrocks__generate_micromasters_program_readable_id(micromasters_program_id, program_title) %}
+    -- StarRocks-compatible version: || is logical OR (not string concat), use concat() instead
+    case
+        when {{ micromasters_program_id }} = 4
+             --- Statistics and Data Science has multiple tracks, we need to extract the track name and add it to
+             --- the readable id
+             then concat('program-v1:MITx+SDS+', replace(regexp_extract({{ program_title }}, '\((.*?)\)', 1), ' ', '-'))
+        when {{ micromasters_program_id }} = 5
+             --- Finance (active) and MIT Finance (retired) has the same readable ID
+             then 'program-v1:MITx+FIN'
+        when {{ micromasters_program_id }} is not null then
+              concat('program-v1:MITx+', upper(
+                  array_join(array_map(x -> substring(x, 1, 1), split({{ program_title }}, ' ')), '')
+              ))
+    end
+{% endmacro %}

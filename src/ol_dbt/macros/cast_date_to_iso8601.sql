@@ -24,3 +24,13 @@ end
   {# Default to Trino behavior for backward compatibility #}
   {{ return(trino__cast_date_to_iso8601(column_name)) }}
 {% endmacro %}
+
+{% macro starrocks__cast_date_to_iso8601(column_name) %}
+  {# StarRocks has no try_cast; a failed cast returns NULL, so cast doubles as the "is it already a date" check #}
+  case
+    when cast({{ column_name }} as date) is not null
+       then date_format(cast({{ column_name }} as date), '%Y-%m-%d')
+
+    else date_format(str_to_date(cast({{ column_name }} as varchar), '%Y-%m-%d'), '%Y-%m-%d')
+end
+{% endmacro %}
