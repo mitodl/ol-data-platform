@@ -277,7 +277,7 @@ with micromasters_courseruns as (
             existing.courserun_readable_id = courseruns_with_all_fks.courserun_readable_id
             and existing.platform = courseruns_with_all_fks.platform
             and existing.is_current = true
-            and existing.courserun_title = courseruns_with_all_fks.courserun_title
+            and coalesce(existing.courserun_title, '') = coalesce(courseruns_with_all_fks.courserun_title, '')
             and coalesce(existing.courserun_start_on, '') = coalesce(courseruns_with_all_fks.courserun_start_on, '')
             and coalesce(existing.courserun_end_on, '') = coalesce(courseruns_with_all_fks.courserun_end_on, '')
             and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')

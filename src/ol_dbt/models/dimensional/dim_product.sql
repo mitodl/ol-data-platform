@@ -119,7 +119,7 @@ with mitxonline_products as (
             existing.source_product_id = products_with_fks.product_id
             and existing.platform = products_with_fks.platform
             and existing.is_current = true
-            and existing.product_price = products_with_fks.product_price
+            and coalesce(existing.product_price, -1) = coalesce(products_with_fks.product_price, -1)
     )
     {% endif %}
 )
