@@ -61,7 +61,12 @@ models:
       ProgramEnrollment plus one CourseRunEnrollment per course in the program, sharing
       the same source order — program_fk is recovered via that shared order and reflects
       the program the course was purchased under, not the course's curriculum membership.
-      Always populated for program enrollments (enrollment_type = 'program').
+      Also populated for edxorg/mitxonline course enrollments (enrollment_type = 'course')
+      whose course run is part of a MicroMasters curriculum, since MicroMasters has
+      no
+      explicit ProgramEnrollment record on either platform — program_fk is recovered
+      via a (courserun_readable_id, platform) lookup against MicroMasters program
+      membership. Always populated for program enrollments (enrollment_type = 'program').
     tests:
     - relationships:
         to: ref('dim_program')
