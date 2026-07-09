@@ -33,12 +33,6 @@ with enrollment_detail as (
                 else 0
             end
         ) as capstone_sum
-        , min(
-            case
-                when course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
-                then cast(substring(course_enrollment_detail.courserun_start_on, 1, 10) as date)
-            end
-        ) as first_courserun_start_on_date
     from courses_in_program
     inner join course_enrollment_detail
         on courses_in_program.course_readable_id = course_enrollment_detail.course_readable_id
@@ -97,11 +91,7 @@ select
         combined_users.user_address_postal_code, combined_users2.user_address_postal_code
     ) as user_address_postal_code
     , case when courses_detail.capstone_sum > 0 then 'Y' else 'N' end as capstone_ind
-    , date_diff(
-        'day'
-        , courses_detail.first_courserun_start_on_date
-        , cast(substring(enrollment_detail.programcertificate_created_on, 1, 10) as date)
-    ) as program_complete_days
+    , enrollment_detail.program_completion_days as program_complete_days
 from enrollment_detail
 left join combined_users
     on enrollment_detail.platform_name = '{{ var("edxorg") }}'
