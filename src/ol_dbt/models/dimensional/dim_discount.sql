@@ -80,7 +80,9 @@ with mitxonline_discounts as (
         *
         , row_number() over (
             partition by platform_code, source_discount_id
-            order by updated_on desc nulls last, created_on desc nulls last
+            -- discount_code as a final tie-breaker keeps the pick deterministic when
+            -- updated_on/created_on are identical (or both null) across duplicate rows
+            order by updated_on desc nulls last, created_on desc nulls last, discount_code desc nulls last
         ) as _row_num
     from combined_discounts
 )

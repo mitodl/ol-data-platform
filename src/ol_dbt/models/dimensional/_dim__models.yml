@@ -1043,6 +1043,11 @@ models:
   description: Dimension table combining discount/coupon records across MITxOnline
     and MITxPro platforms. Each row represents a unique discount or coupon identified
     by a surrogate key derived from the source platform and source discount ID.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - source_discount_id
+      - platform_code
   columns:
   - name: discount_pk
     description: string, surrogate primary key for this table, generated from source_discount_id
