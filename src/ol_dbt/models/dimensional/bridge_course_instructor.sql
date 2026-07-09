@@ -31,7 +31,7 @@ with mitxonline_course_instructors as (
 , ocw_course_instructors as (
     select
         ocw_courses.course_readable_id
-        , ocw_instructors.course_instructor_uuid as instructor_source_id
+        , cast(ocw_instructors.course_instructor_uuid as varchar) as instructor_source_id
         , ocw_instructors.course_instructor_title as instructor_name
         , 'ocw' as platform
     from {{ ref('int__ocw__course_instructors') }} as ocw_instructors

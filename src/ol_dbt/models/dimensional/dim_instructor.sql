@@ -5,7 +5,7 @@
 -- Consolidate instructors from all platforms
 with mitxonline_instructors as (
     select
-        instructor_source_id
+        cast(instructor_source_id as varchar) as instructor_source_id
         , instructor_name
         , instructor_title
         , instructor_bio_short
@@ -32,7 +32,7 @@ with mitxonline_instructors as (
 
 , ocw_instructors as (
     select
-        course_instructor_uuid as instructor_source_id
+        cast(course_instructor_uuid as varchar) as instructor_source_id
         , course_instructor_title as instructor_name
         , course_instructor_salutation as instructor_title
         , cast(null as varchar) as instructor_bio_short
