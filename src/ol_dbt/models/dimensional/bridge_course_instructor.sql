@@ -6,6 +6,7 @@
 with mitxonline_course_instructors as (
     select
         course_id
+        , instructor_source_id
         , instructor_name
         , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_instructors') }}
@@ -14,6 +15,7 @@ with mitxonline_course_instructors as (
 , mitxpro_course_instructors as (
     select
         course_id
+        , cast(null as varchar) as instructor_source_id
         , cms_facultymemberspage_facultymember_name as instructor_name
         , 'mitxpro' as platform
     from {{ ref('int__mitxpro__coursesfaculty') }}
@@ -29,6 +31,7 @@ with mitxonline_course_instructors as (
 , ocw_course_instructors as (
     select
         ocw_courses.course_readable_id
+        , ocw_instructors.course_instructor_uuid as instructor_source_id
         , ocw_instructors.course_instructor_title as instructor_name
         , 'ocw' as platform
     from {{ ref('int__ocw__course_instructors') }} as ocw_instructors
@@ -50,6 +53,7 @@ with mitxonline_course_instructors as (
 , dim_instructor as (
     select
         instructor_pk
+        , instructor_source_id
         , instructor_name
         , primary_platform
     from {{ ref('dim_instructor') }}
@@ -64,7 +68,9 @@ with mitxonline_course_instructors as (
         on source_id_course_instructors.course_id = dim_course.source_id
         and source_id_course_instructors.platform = dim_course.primary_platform
     left join dim_instructor
-        on source_id_course_instructors.instructor_name = dim_instructor.instructor_name
+        on
+            coalesce(source_id_course_instructors.instructor_source_id, source_id_course_instructors.instructor_name)
+            = coalesce(dim_instructor.instructor_source_id, dim_instructor.instructor_name)
         and source_id_course_instructors.platform = dim_instructor.primary_platform
 )
 
@@ -77,7 +83,9 @@ with mitxonline_course_instructors as (
         on ocw_course_instructors.course_readable_id = dim_course.course_readable_id
         and ocw_course_instructors.platform = dim_course.primary_platform
     left join dim_instructor
-        on ocw_course_instructors.instructor_name = dim_instructor.instructor_name
+        on
+            coalesce(ocw_course_instructors.instructor_source_id, ocw_course_instructors.instructor_name)
+            = coalesce(dim_instructor.instructor_source_id, dim_instructor.instructor_name)
         and ocw_course_instructors.platform = dim_instructor.primary_platform
 )
 
