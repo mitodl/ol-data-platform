@@ -325,18 +325,20 @@ with mitxonline_certificates as (
         , certificate_updated_on
         , certificate_issued_on
     from cross_source_deduped as cwf
-    where cwf._cross_source_row_num = 1
 
     {% if is_incremental() %}
     -- left join preserves certificates from platforms not yet in the target table
     left join incremental_watermarks w
         on w.watermark_platform = cwf.platform
         and w.watermark_certificate_type = cwf.certificate_scope
-    where (
+    where cwf._cross_source_row_num = 1
+    and (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
     )
+    {% else %}
+    where cwf._cross_source_row_num = 1
     {% endif %}
 )
 
