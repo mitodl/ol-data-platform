@@ -16,16 +16,16 @@ with combined__users as (
 
 , dedp_indicators as (
     select
-        user_hashed_id
+        user_email
         , 1 as Any_DEDP_Program_Indicator
         , count(distinct case
             when program_title =
             'Data, Economics, and Design of Policy: International Development'
-            then user_hashed_id else null end) as DEDP_International_Program_Indicator
+            then user_email else null end) as DEDP_International_Program_Indicator
         , count (distinct case
             when program_title =
             'Data, Economics, and Design of Policy: Public Policy'
-            then user_hashed_id else null end) as DEDP_Public_Policy_Program_Indicator
+            then user_email else null end) as DEDP_Public_Policy_Program_Indicator
     from program_enrollment_detail
     where program_title in
         ('Data, Economics, and Design of Policy'
@@ -33,12 +33,12 @@ with combined__users as (
         , 'Data, Economics, and Design of Policy: Public Policy')
         and programcertificate_uuid is not null
         and (programcertificate_is_revoked = false or programcertificate_is_revoked is null)
-    group by user_hashed_id
+    group by user_email
 )
 
 , dedp_certs as (
     select
-        combined_course_enrollment_detail.user_hashed_id
+        combined_course_enrollment_detail.user_email
         , count(distinct combined_course_enrollment_detail.course_readable_id) as DEDP_Course_Cert_Count
     from combined_course_enrollment_detail
     inner join combined_coursesinprogram
@@ -48,7 +48,7 @@ with combined__users as (
         , 'Data, Economics, and Design of Policy: International Development'
         , 'Data, Economics, and Design of Policy: Public Policy')
         and combined_course_enrollment_detail.courseruncertificate_is_earned = true
-    group by combined_course_enrollment_detail.user_hashed_id
+    group by combined_course_enrollment_detail.user_email
 )
 
 select
@@ -75,7 +75,7 @@ select
     , case when dedp_indicators.DEDP_Public_Policy_Program_Indicator= 1 then 'Y' else null end as dedp_public_policy_program_cert_ind
 from combined__users
 left join dedp_indicators
-    on combined__users.user_hashed_id = dedp_indicators.user_hashed_id
+    on combined__users.user_email = dedp_indicators.user_email
 left join dedp_certs
-    on combined__users.user_hashed_id = dedp_certs.user_hashed_id
+    on combined__users.user_email = dedp_certs.user_email
 where combined__users.user_hashed_id is not null
