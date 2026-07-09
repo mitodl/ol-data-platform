@@ -354,7 +354,10 @@ models:
 - name: tfact_certificate
   description: >
     Transaction fact table for certificate issuance events.
-    Grain: One row per certificate issued (course or program).
+    Grain: One row per certificate issued (course or program). MicroMasters course
+    certificates are earned on and issued by edX.org, so the micromasters and edxorg
+    sources both produce a row for the same (user, course run) pair; these are collapsed
+    to a single row, preferring the edxorg record as canonical.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
