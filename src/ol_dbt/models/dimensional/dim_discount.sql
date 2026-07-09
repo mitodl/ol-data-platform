@@ -71,8 +71,22 @@ with mitxonline_discounts as (
     from micromasters_discounts
 )
 
+-- A discount can be re-saved under a new discount_code over its lifetime, so
+-- dedupe to one row per (source_discount_id, platform_code), keeping the most
+-- recently updated code, to match the documented grain and prevent downstream
+-- fact joins keyed on (source_discount_id, platform_code) from fanning out.
+, deduped_discounts as (
+    select
+        *
+        , row_number() over (
+            partition by platform_code, source_discount_id
+            order by updated_on desc nulls last, created_on desc nulls last
+        ) as _row_num
+    from combined_discounts
+)
+
 select
-    {{ dbt_utils.generate_surrogate_key(['cast(source_discount_id as varchar)', 'discount_code', 'platform_code']) }} as discount_pk
+    {{ dbt_utils.generate_surrogate_key(['cast(source_discount_id as varchar)', 'platform_code']) }} as discount_pk
     , platform_code
     , source_discount_id
     , discount_code
@@ -85,4 +99,5 @@ select
     , expires_on
     , created_on
     , updated_on
-from combined_discounts
+from deduped_discounts
+where _row_num = 1

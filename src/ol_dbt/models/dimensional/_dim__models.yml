@@ -1057,7 +1057,9 @@ models:
   - name: source_discount_id
     description: integer, original discount or coupon ID from the source platform
   - name: discount_code
-    description: string, the discount or coupon code used at checkout
+    description: string, the discount or coupon code used at checkout. If a discount's
+      code was changed over its lifetime, this reflects the most recently updated
+      code on file, not necessarily the code used on every order that redeemed it
   - name: discount_type
     description: string, type of discount. e.g. percent-off, dollars-off, fixed-price
   - name: discount_amount
