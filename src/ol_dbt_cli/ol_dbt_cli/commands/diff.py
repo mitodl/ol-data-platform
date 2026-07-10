@@ -24,12 +24,13 @@ docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md §3.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from cyclopts import Parameter
 from rich.console import Console
@@ -53,6 +54,27 @@ err_console = Console(stderr=True)
 # Cap on how many columns we run a per-column value comparison for, to bound the
 # number of dbt invocations. When exceeded we log it (never silently truncate).
 _MAX_PER_COLUMN_COMPARISONS = 25
+
+# Model and column names are interpolated into inline Jinja SQL passed to
+# `dbt show --inline`, so they must be plain dbt identifiers — anything else
+# (quotes, braces, whitespace) could inject Jinja/SQL and is rejected up front.
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class InvalidIdentifierError(ValueError):
+    """Raised when a user-supplied name is not a safe dbt identifier."""
+
+
+def _validate_identifiers(kind: str, names: list[str]) -> None:
+    """Reject any *names* that are not plain dbt identifiers.
+
+    Guards against Jinja/SQL injection through the inline template built for
+    ``dbt show``. Raises :class:`InvalidIdentifierError` naming the offenders.
+    """
+    bad = [n for n in names if not _IDENTIFIER_RE.match(n)]
+    if bad:
+        msg = f"Invalid {kind}: {', '.join(repr(b) for b in bad)}. Expected plain identifiers ([A-Za-z_][A-Za-z0-9_]*)."
+        raise InvalidIdentifierError(msg)
 
 
 class Verdict(StrEnum):
@@ -153,10 +175,10 @@ def reconcile_columns(
 def _extract_show_rows(stdout: str) -> list[dict[str, Any]]:
     """Extract the row list from ``dbt show --output json`` stdout.
 
-    dbt interleaves log lines with a JSON document on stdout. The document is an
-    object carrying a ``show`` key whose value is the list of row dicts. We parse
-    tolerantly: try the whole payload first, then fall back to scanning for the
-    JSON object on its own line(s).
+    dbt interleaves log lines with a JSON document on stdout. The document is
+    either an object carrying a ``show`` key whose value is the list of row dicts,
+    or a bare list. We parse tolerantly: try the whole payload first, then fall
+    back to scanning for a JSON value (object or array) embedded in the output.
     """
 
     def _rows_from(obj: Any) -> list[dict[str, Any]] | None:
@@ -175,17 +197,19 @@ def _extract_show_rows(stdout: str) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             pass
 
-    # Fall back: scan for a JSON object spanning to the end of the payload.
-    start = stdout.find("{")
-    while start != -1:
-        candidate = stdout[start:]
+    # Fall back: scan for a JSON document (object OR array) embedded among log
+    # lines. raw_decode parses one value from the offset and ignores trailing text.
+    decoder = json.JSONDecoder()
+    for idx, char in enumerate(stdout):
+        if char not in "{[":
+            continue
         try:
-            rows = _rows_from(json.loads(candidate))
-            if rows is not None:
-                return rows
+            obj, _ = decoder.raw_decode(stdout[idx:])
         except json.JSONDecodeError:
-            pass
-        start = stdout.find("{", start + 1)
+            continue
+        rows = _rows_from(obj)
+        if rows is not None:
+            return rows
     return []
 
 
@@ -432,7 +456,7 @@ def diff(
         ),
     ] = (),
     output_format: Annotated[
-        str,
+        Literal["text", "json"],
         Parameter(name=["--format", "-f"], help="Output format: text (default) or json."),
     ] = "text",
     limit: Annotated[
@@ -468,6 +492,15 @@ def diff(
     primary_key_list = list(primary_key)
     exclude_list = list(exclude_columns)
     notes: list[str] = []
+
+    # Validate every value interpolated into inline Jinja SQL before use.
+    try:
+        _validate_identifiers("model name", [old, new])
+        _validate_identifiers("primary key", primary_key_list)
+        _validate_identifiers("excluded column", exclude_list)
+    except InvalidIdentifierError as exc:
+        err_console.print(f"[red]Error:[/] {exc}")
+        sys.exit(1)
 
     # Resolve dbt project directory (shared preamble with impact/validate).
     if dbt_dir_path:
@@ -521,7 +554,9 @@ def diff(
         try:
             subprocess.run(build_cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603, S607
         except subprocess.CalledProcessError as exc:
-            err_console.print(f"[red]Error:[/] dbt build failed: {(exc.stderr or '')[-500:]}")
+            # dbt often logs useful detail to stdout, not stderr — prefer either.
+            detail = (exc.stderr or exc.stdout or str(exc)).strip()
+            err_console.print(f"[red]Error:[/] dbt build failed: {detail[-500:]}")
             sys.exit(1)
         except FileNotFoundError:
             err_console.print("[red]Error:[/] 'dbt' command not found; install dbt and ensure it is on PATH.")

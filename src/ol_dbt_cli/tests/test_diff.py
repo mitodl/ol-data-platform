@@ -68,6 +68,16 @@ class TestExtractShowRows:
     def test_empty(self) -> None:
         assert _extract_show_rows("no json here") == []
 
+    def test_log_prefixed_bare_list(self) -> None:
+        # A bare JSON array preceded by log lines must still be extracted.
+        payload = '12:00:00  Running with dbt=1.9\n[{"in_a": true, "in_b": true, "count": 5}]\n'
+        assert _extract_show_rows(payload) == [{"in_a": True, "in_b": True, "count": 5}]
+
+    def test_json_with_trailing_log_lines(self) -> None:
+        # raw_decode must tolerate trailing text after the JSON document.
+        payload = '{"show": [{"x": 1}]}\n12:00:02  Done.\n'
+        assert _extract_show_rows(payload) == [{"x": 1}]
+
 
 class TestSummarizeRelations:
     def test_perfect_match(self) -> None:
@@ -128,10 +138,38 @@ def _make_project(tmp_path: Path, old_sql: str, new_sql: str) -> Path:
     return dbt_dir
 
 
+class TestValidateIdentifiers:
+    def test_accepts_plain_identifiers(self) -> None:
+        # Should not raise.
+        diff_mod._validate_identifiers("model name", ["dim_user", "_stg__x", "a1"])
+
+    @pytest.mark.parametrize(
+        "bad",
+        ["x{{ config }}", "a b", "a'b", "1abc", "a);drop", "ref('x')", ""],
+    )
+    def test_rejects_injection_and_non_identifiers(self, bad: str) -> None:
+        with pytest.raises(diff_mod.InvalidIdentifierError):
+            diff_mod._validate_identifiers("model name", [bad])
+
+
 class TestDiffCommand:
     def test_missing_project_exits_1(self, tmp_path: Path) -> None:
         with pytest.raises(SystemExit) as exc:
             diff(old="a", new="b", dbt_dir_path=str(tmp_path / "does_not_exist"))
+        assert exc.value.code == 1
+
+    def test_injection_identifier_exits_1_before_comparison(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dbt_dir = _make_project(tmp_path, "select 1 as id", "select 1 as id")
+
+        def boom(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            msg = "must reject the bad identifier before ever invoking dbt"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", boom)
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", primary_key=("id; drop table x",), dbt_dir_path=str(dbt_dir))
         assert exc.value.code == 1
 
     def test_match_exits_0(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
