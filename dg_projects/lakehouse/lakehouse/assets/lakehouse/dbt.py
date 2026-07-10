@@ -28,10 +28,28 @@ DBT_REPO_DIR = (
     else Path("/opt/dbt")
 )
 
-dbt_project = DbtProject(
-    project_dir=DBT_REPO_DIR, target=os.environ.get("DAGSTER_DBT_TARGET", DAGSTER_ENV)
-)
+
+def _resolve_dbt_target() -> str:
+    """Resolve the dbt profile target for this environment.
+
+    Single source of truth shared by the DbtProject (which parses the manifest,
+    and therefore the Dagster asset graph) and the DbtCliResource that executes
+    it, so the graph always matches what actually runs. ``DAGSTER_DBT_TARGET``
+    overrides the mapping when set.
+    """
+    if override := os.environ.get("DAGSTER_DBT_TARGET"):
+        return override
+    # qa and production both execute against the production target.
+    return {"dev": "dev_production", "ci": "ci"}.get(DAGSTER_ENV, "production")
+
+
+DBT_TARGET = _resolve_dbt_target()
+
+dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
+
+# Built once and reused rather than reconstructed for every dbt node.
+_DBT_AUTOMATION_CONDITION = upstream_or_code_changes()
 
 
 class DbtAutomationTranslator(DagsterDbtTranslator):
@@ -39,7 +57,7 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
     ) -> AutomationCondition | None:
-        return upstream_or_code_changes()
+        return _DBT_AUTOMATION_CONDITION
 
     def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> str | None:
         """

@@ -2,7 +2,6 @@
 
 import os
 import re
-from pathlib import Path
 
 from dagster import (
     AssetSelection,
@@ -21,7 +20,6 @@ from dagster_airbyte import (
 )
 from dagster_dbt import (
     DbtCliResource,
-    DbtProject,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
@@ -39,6 +37,7 @@ from lakehouse.assets.instructor_onboarding import (
 )
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
+    DBT_TARGET,
     dbt_docs_artifacts_job,
     full_dbt_project,
 )
@@ -78,20 +77,19 @@ airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_E
 # Set SKIP_AIRBYTE=1 to disable Airbyte connection and asset loading
 SKIP_AIRBYTE = os.environ.get("SKIP_AIRBYTE", "").lower() in ("1", "true", "yes")
 
-# Determine dagster URL and dbt target based on environment
+# Determine dagster URL based on environment. The dbt target is resolved once in
+# lakehouse.assets.lakehouse.dbt (DBT_TARGET) and shared by the DbtProject and the
+# DbtCliResource so the parsed asset graph matches what executes.
 if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
-    dbt_target = "dev_production"
 elif DAGSTER_ENV == "ci":
     dagster_url = "https://pipelines-ci.odl.mit.edu"
-    dbt_target = "ci"
 else:
     dagster_url = (
         "https://pipelines.odl.mit.edu"
         if DAGSTER_ENV == "production"
         else "https://pipelines-qa.odl.mit.edu"
     )
-    dbt_target = "production"
 
 # Initialize vault with proper auth
 try:
@@ -109,7 +107,6 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault_authenticated = False
     dagster_url = "http://localhost:3000"
-    dbt_target = "dev_production"
 
 airbyte_workspace = (
     AirbyteOSSWorkspace(
@@ -131,19 +128,9 @@ airbyte_workspace = (
 dbt_config = {
     "project_dir": str(DBT_REPO_DIR),
     "profiles_dir": str(DBT_REPO_DIR),
-    "target": dbt_target,
+    "target": DBT_TARGET,
 }
 dbt_cli = DbtCliResource(**dbt_config)
-
-# Initialize dbt project - handle both local dev and Docker paths
-if Path("/app/ol_dbt").exists():
-    # In Docker container
-    DBT_PROJECT_DIR = Path("/app/ol_dbt")
-else:
-    # Local development
-    DBT_PROJECT_DIR = Path(__file__).resolve().parents[3] / "src" / "ol_dbt"
-
-dbt_project = DbtProject(project_dir=DBT_PROJECT_DIR)
 
 
 class OLAirbyteTranslator(DagsterAirbyteTranslator):
