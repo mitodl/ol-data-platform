@@ -13,6 +13,12 @@ from data_loading.defs.ingestion.sensor import (
     edxorg_s3_ingest_job,
     edxorg_upstream_changes_sensor,
 )
+from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
+
+# Postgres run storage indexes run_tags(key, value) unconditionally (the
+# dagster schema's mysql_length hint on that index is MySQL-only); a btree
+# index row over ~2712 bytes fails outright on Postgres.
+_POSTGRES_BTREE_INDEX_ROW_LIMIT = 2712
 
 _TABLE_A_KEY = dg.AssetKey(["edxorg", "raw_data", "db_table", "auth_user"])
 _TABLE_B_KEY = dg.AssetKey(
@@ -164,3 +170,39 @@ def test_new_materialization_during_a_failure_retries_the_combined_batch(
     # A fresh batch (now includes table B too) -- first attempt at THIS batch.
     assert second.run_key.endswith("__attempt0")
     assert second.tags[_BATCH_ID_TAG] != first.tags[_BATCH_ID_TAG]
+
+
+def test_batch_id_and_run_key_stay_under_postgres_index_limit_at_full_scale(
+    instance: dg.DagsterInstance,
+) -> None:
+    """All 44 monitored tables materializing in one tick -- the realistic
+    worst case, since no full run has ever completed and the first backfill
+    across every table could land in the same window -- must not produce a
+    tag/run_key long enough to fail run creation on Postgres run storage.
+    """
+    assets = [
+        dg.asset(key=dg.AssetKey(["edxorg", "raw_data", "db_table", table]))(
+            lambda: None
+        )
+        for table in EDXORG_DB_TABLES
+    ]
+    definitions = dg.Definitions(
+        assets=assets,
+        jobs=[edxorg_s3_ingest_job],
+        sensors=[edxorg_upstream_changes_sensor],
+    )
+    dg.materialize(assets, instance=instance)
+
+    context = dg.build_multi_asset_sensor_context(
+        monitored_assets=_EDXORG_UPSTREAM_ASSET_KEYS,
+        instance=instance,
+        cursor=None,
+        definitions=definitions,
+    )
+    result = edxorg_upstream_changes_sensor(context)
+
+    assert isinstance(result, dg.RunRequest)
+    assert len(result.run_key) < _POSTGRES_BTREE_INDEX_ROW_LIMIT
+    assert len(result.tags[_BATCH_ID_TAG]) < _POSTGRES_BTREE_INDEX_ROW_LIMIT
+    # Fixed-length hash regardless of how many tables are in the batch.
+    assert len(result.tags[_BATCH_ID_TAG]) == 64

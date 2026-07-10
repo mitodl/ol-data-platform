@@ -1,5 +1,7 @@
 """Sensor for edxorg S3 ingest triggered by upstream asset materializations."""
 
+import hashlib
+
 import dagster as dg
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
@@ -42,13 +44,27 @@ _BATCH_ID_TAG = "edxorg_s3/upstream_batch_id"
 
 
 def _batch_id(new_records: dict[dg.AssetKey, dg.EventLogRecord]) -> str:
-    """Return a deterministic id for a set of new upstream materializations."""
-    return "-".join(
+    """Return a deterministic, length-bounded id for a set of new materializations.
+
+    The raw concatenation of every unconsumed asset key + storage_id can run
+    to thousands of characters when many of the 44 monitored tables have new
+    materializations in the same tick (all monitored tables materializing
+    close together is exactly what happens on the very first successful
+    backfill, since no full run has ever completed). Postgres run storage
+    indexes ``run_tags(key, value)`` unconditionally (the dagster schema's
+    ``mysql_length`` hint on that index only applies to MySQL), and Postgres's
+    btree index has a hard ~2712-byte per-row limit -- a raw batch id that
+    long would fail run creation outright instead of just being a long tag.
+    Hashing to a fixed-length digest keeps this well under any such limit
+    while remaining just as deterministic (same batch -> same id).
+    """
+    raw = "-".join(
         f"{key.to_user_string()}:{record.storage_id}"
         for key, record in sorted(
             new_records.items(), key=lambda kv: kv[0].to_user_string()
         )
     )
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _attempts_for_batch(
