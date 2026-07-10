@@ -548,7 +548,8 @@ def diff(
 
     # Optionally build both relations first.
     if auto_build:
-        build_cmd = ["dbt", "build", "--target", target, "--select", old, new]
+        # Single space-joined --select value, consistent with ol-dbt run/impact.
+        build_cmd = ["dbt", "build", "--target", target, "--select", f"{old} {new}"]
         if output_format == "text":
             console.print(f"[dim]Running: {' '.join(build_cmd)} ...[/]")
         try:
