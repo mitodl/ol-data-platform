@@ -89,7 +89,29 @@ _ENVS: dict[str, dict[str, Any]] = {
 }
 
 
+def _port_is_free(port: int) -> bool:
+    """Return True if nothing is currently listening on 127.0.0.1:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+        return True
+
+
 def _start_port_forward(env_cfg: dict[str, Any]) -> None:
+    # Check before spawning kubectl, not after: the readiness poll below only
+    # tests "can I connect", which a stale/unrelated listener from a prior
+    # crashed run would satisfy instantly, before this run's kubectl even
+    # attempts to bind -- silently tunneling dbt to the wrong process/environment.
+    if not _port_is_free(_STARROCKS_PORT):
+        err_console.print(
+            f"[red]Port {_STARROCKS_PORT} is already in use locally[/] -- refusing "
+            "to start a new port-forward. Check for a leftover `kubectl port-forward` "
+            "from a previous run (e.g. `lsof -i :9030`) and stop it first."
+        )
+        sys.exit(1)
+
     proc = subprocess.Popen(
         [
             "kubectl",

@@ -84,6 +84,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import socket
 import subprocess
 import sys
@@ -159,11 +160,32 @@ _CACHE_DIR = (
 # ---------------------------------------------------------------------------
 
 
+def _port_is_free(port: int) -> bool:
+    """Return True if nothing is currently listening on 127.0.0.1:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+        return True
+
+
 def _start_port_forward(env_cfg: dict[str, str]) -> "subprocess.Popen[bytes]":
     """Start kubectl port-forward and block until port 9030 is accepting connections."""
     context = env_cfg["eks_context"]
     namespace = env_cfg["k8s_namespace"]
     service = env_cfg["fe_service"]
+
+    # Check before spawning kubectl, not after: the readiness poll below only
+    # tests "can I connect", which a stale/unrelated listener from a prior
+    # crashed run would satisfy instantly, before this run's kubectl even
+    # attempts to bind -- silently tunneling to the wrong process/environment.
+    if not _port_is_free(_STARROCKS_PORT):
+        sys.exit(
+            f"Port {_STARROCKS_PORT} is already in use locally -- refusing to start "
+            "a new port-forward. Check for a leftover `kubectl port-forward` from a "
+            "previous run (e.g. `lsof -i :9030`) and stop it first."
+        )
 
     proc = subprocess.Popen(  # noqa: S603
         [  # noqa: S607
@@ -481,6 +503,7 @@ def _load_vault_token(
     token = str(login_resp["auth"]["client_token"])
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"token": token}))
+    cache_path.chmod(0o600)
     return token
 
 
@@ -552,14 +575,18 @@ def _output_token(username: str, token: str, **_) -> None:  # noqa: ARG001
 def _output_env(
     username: str, token: str, host: str, password: str | None = None, **_
 ) -> None:
-    print(f"export STARROCKS_USER={username!r}")  # noqa: T201
-    print(f"export STARROCKS_HOST={host!r}")  # noqa: T201
+    # shlex.quote (not repr) — this output is eval'd by a shell, and repr's
+    # quoting rules are for Python syntax, not POSIX shell syntax: a value
+    # containing a "'" makes repr switch to double quotes, under which "$(...)"
+    # still runs as command substitution when eval'd.
+    print(f"export STARROCKS_USER={shlex.quote(username)}")  # noqa: T201
+    print(f"export STARROCKS_HOST={shlex.quote(host)}")  # noqa: T201
     if password is not None:
         # Vault dynamic credentials — native-password auth (dbt / service accounts)
-        print(f"export STARROCKS_PASSWORD={password!r}")  # noqa: T201  # nosec B106 — intentional: output is eval'd by shell, not a log sink
+        print(f"export STARROCKS_PASSWORD={shlex.quote(password)}")  # noqa: T201  # nosec B106 — intentional: output is eval'd by shell, not a log sink
     else:
         # OIDC access token — human interactive sessions
-        print(f"export STARROCKS_TOKEN={token!r}")  # noqa: T201
+        print(f"export STARROCKS_TOKEN={shlex.quote(token)}")  # noqa: T201
 
 
 def _output_exec(
@@ -644,16 +671,18 @@ def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> N
             Path(tf_path).unlink()
     else:
         # Native-password or service-account login (--mode ci / no id_token cached).
+        # Password goes via MYSQL_PWD, not `-p<token>` argv, so it isn't visible
+        # to other local users via `ps`/`/proc/<pid>/cmdline` for the process lifetime.
         subprocess.run(  # noqa: S603
             [  # noqa: S607
                 "mysql",
                 f"-h{host}",
                 f"-P{_STARROCKS_PORT}",
                 f"-u{username}",
-                f"-p{token}",
                 "--ssl",
                 "--ssl-verify-server-cert=OFF",
             ],
+            env={**os.environ, "MYSQL_PWD": token},
             check=False,
         )
 

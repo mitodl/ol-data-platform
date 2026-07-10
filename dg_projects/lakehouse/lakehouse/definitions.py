@@ -41,7 +41,10 @@ from lakehouse.assets.lakehouse.dbt import (
     dbt_docs_artifacts_job,
     full_dbt_project,
 )
-from lakehouse.assets.lakehouse.dbt_starrocks import b2b_analytics_starrocks_dbt_assets
+from lakehouse.assets.lakehouse.dbt_starrocks import (
+    b2b_analytics_starrocks_dbt_assets,
+    starrocks_dbt_cli,
+)
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
@@ -417,6 +420,8 @@ resources_dict = {
         host=starrocks_host_map[DAGSTER_ENV],
         database="b2b_analytics",
     ),
+    # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
+    "starrocks_dbt": starrocks_dbt_cli,
 }
 
 if not SKIP_AIRBYTE:

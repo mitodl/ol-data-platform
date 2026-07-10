@@ -145,7 +145,16 @@ models:
     b2b_analytics:
       +enabled: "{{ target.type == 'starrocks' }}"
       +materialized: table
-      +grants: {}
+      # dbt's grants merge behavior is dict_key_append: an empty dict merges
+      # no keys and leaves the root `open_learning` grants (Trino/Snowflake
+      # roles that don't exist in StarRocks) fully intact. Each root key must
+      # be explicitly re-declared empty to actually clobber it.
+      +grants:
+        select: []
+        insert: []
+        update: []
+        delete: []
+        all privileges: []
       +properties: {}
       +meta:
         required_docs: true

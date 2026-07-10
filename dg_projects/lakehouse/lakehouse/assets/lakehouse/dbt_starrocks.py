@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 
 from dagster import AssetExecutionContext
 from dagster_dbt import (
@@ -8,6 +10,7 @@ from dagster_dbt import (
     DbtProject,
     dbt_assets,
 )
+from dagster_dbt.errors import DagsterDbtCliRuntimeError
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR
@@ -20,7 +23,9 @@ from lakehouse.resources.starrocks import StarRocksResource
 # src/ol_dbt_cli/ol_dbt_cli/commands/starrocks.py's _ENVS map.
 STARROCKS_DBT_TARGET_MAP = {
     "dev": "starrocks_qa_vault",
-    "ci": "starrocks_qa_vault",
+    # ci connects directly to its own FE service (no port-forward), same
+    # connection shape as production -- matches _ENVS["ci"]["dbt_target"].
+    "ci": "starrocks_production",
     "qa": "starrocks_qa_vault",
     "production": "starrocks_production",
 }
@@ -46,6 +51,32 @@ starrocks_dbt_project = DbtProject(
 )
 starrocks_dbt_project.prepare_if_dev()
 
+# Passing a DbtProject to project_dir makes DbtCliResource pick up its target/
+# profiles_dir automatically (see dagster_dbt.core.resource.DbtCliResource).
+# This must be a SEPARATE resource from the shared "dbt" key used by
+# full_dbt_project, which is pinned to a Trino target -- reusing that one here
+# would silently run `dbt build --target production` and build nothing, since
+# b2b_analytics is disabled for any non-starrocks target.
+starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
+
+# Serializes credential-injection + dbt invocation so two b2b_analytics builds
+# materializing in the same process (e.g. a manual run overlapping the
+# schedule) can't clobber each other's DBT_STARROCKS_* env vars between the
+# assignment below and dagster_dbt's env snapshot at subprocess spawn.
+_ENV_LOCK = threading.Lock()
+
+_MAX_BUILD_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
+# Same MySQL-wire-protocol error signatures StarRocksResource.execute() retries
+# on: a freshly-generated Vault user may not yet be visible on the FE node dbt
+# connects to. dbt build has no adapter-level retry of its own, so without this
+# a replication-lag race fails the whole build instead of a single statement.
+_RETRIABLE_ERROR_MARKERS = ("1044", "1045", "2006", "2013")
+
+
+def _looks_retriable(exc: Exception) -> bool:
+    return any(marker in str(exc) for marker in _RETRIABLE_ERROR_MARKERS)
+
 
 @dbt_assets(
     manifest=starrocks_dbt_project.manifest_path,
@@ -57,7 +88,7 @@ starrocks_dbt_project.prepare_if_dev()
 )
 def b2b_analytics_starrocks_dbt_assets(
     context: AssetExecutionContext,
-    dbt: DbtCliResource,
+    starrocks_dbt: DbtCliResource,
     starrocks: StarRocksResource,
 ):
     """Build the b2b_analytics dbt models directly against StarRocks.
@@ -69,10 +100,32 @@ def b2b_analytics_starrocks_dbt_assets(
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
     """
-    username, password = starrocks.generate_credentials()
-    os.environ["DBT_STARROCKS_USERNAME"] = username
-    os.environ["DBT_STARROCKS_PASSWORD"] = password
-    os.environ["DBT_STARROCKS_HOST"] = starrocks.host
+    last_exc: DagsterDbtCliRuntimeError | None = None
+    for attempt in range(_MAX_BUILD_ATTEMPTS):
+        if attempt:
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            context.log.warning(
+                "dbt build failed (attempt %d/%d) -- retrying in %ds with fresh "
+                "Vault credentials: %s",
+                attempt,
+                _MAX_BUILD_ATTEMPTS,
+                delay,
+                last_exc,
+            )
+            time.sleep(delay)
 
-    build_invocation = dbt.cli(["build"], context=context)
-    yield from build_invocation.stream()
+        username, password = starrocks.generate_credentials()
+        with _ENV_LOCK:
+            os.environ["DBT_STARROCKS_USERNAME"] = username
+            os.environ["DBT_STARROCKS_PASSWORD"] = password
+            os.environ["DBT_STARROCKS_HOST"] = starrocks.host
+            try:
+                events = list(starrocks_dbt.cli(["build"], context=context).stream())
+            except DagsterDbtCliRuntimeError as exc:
+                if attempt == _MAX_BUILD_ATTEMPTS - 1 or not _looks_retriable(exc):
+                    raise
+                last_exc = exc
+                continue
+
+        yield from events
+        return
