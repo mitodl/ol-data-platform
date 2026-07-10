@@ -2,6 +2,7 @@
 
 import base64
 from pathlib import Path
+from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -144,7 +145,7 @@ def test_malicious_feed_is_skipped_not_fatal(monkeypatch: pytest.MonkeyPatch) ->
             return FakeResponse(
                 json_data={"content": base64.b64encode(_MALICIOUS_YAML).decode("ascii")}
             )
-        if "malicious.example.com" in url:
+        if urlparse(url).hostname == "malicious.example.com":
             return FakeResponse(content=_MALICIOUS_RSS_XML)
         return FakeResponse(content=_RSS_XML)
 
