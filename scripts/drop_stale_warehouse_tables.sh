@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
     --force) FORCE=true; shift ;;
     --database) DATABASE="$2"; shift 2 ;;
     --max-age-days) MAX_AGE_DAYS="$2"; shift 2 ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) grep '^#' "$0" | grep -v '^#!' | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "Unknown flag: $1" >&2; exit 2 ;;
     *) TABLES+=("$1"); shift ;;
   esac
@@ -79,12 +79,21 @@ for table in "${TABLES[@]}"; do
   echo "  s3:      ${location}"
 
   # Freshness guard: refuse to drop a table touched within the age window.
+  # aws CLI returns UpdateTime as an ISO-8601 string (e.g. 2026-03-16T02:51:06-04:00),
+  # which `date -d` parses directly. If parsing ever fails, fail CLOSED (refuse)
+  # rather than silently skipping the guard and deleting a possibly-live table.
   if [[ -n "${update_time}" ]]; then
-    update_epoch=$(date -d "${update_time}" +%s 2>/dev/null || echo 0)
-    age_seconds=$((now_epoch - update_epoch))
-    if [[ ${update_epoch} -gt 0 && ${age_seconds} -lt ${max_age_seconds} ]]; then
+    update_epoch=$(date -d "${update_time}" +%s 2>/dev/null || echo "")
+    if [[ -z "${update_epoch}" ]]; then
       if ! $FORCE; then
-        echo "  ⚠️  updated $((age_seconds / 86400))d ago (< ${MAX_AGE_DAYS}d) — refusing without --force"
+        echo "  ⚠️  could not parse update time '${update_time}' — refusing without --force"
+        echo
+        continue
+      fi
+      echo "  ⚠️  could not parse update time but --force given — proceeding"
+    elif [[ $((now_epoch - update_epoch)) -lt ${max_age_seconds} ]]; then
+      if ! $FORCE; then
+        echo "  ⚠️  updated $(((now_epoch - update_epoch) / 86400))d ago (< ${MAX_AGE_DAYS}d) — refusing without --force"
         echo
         continue
       fi

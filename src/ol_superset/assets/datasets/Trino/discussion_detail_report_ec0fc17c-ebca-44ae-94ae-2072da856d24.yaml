@@ -166,6 +166,7 @@ sql: |
   from ol_warehouse_production_dimensional.tfact_discussion_events as de
   inner join ol_warehouse_production_intermediate.int__combined__course_runs as cr
       on de.courserun_readable_id = cr.courserun_readable_id
+      and de.platform = cr.platform
 table_name: discussion_detail_report
 template_params: null
 uuid: ec0fc17c-ebca-44ae-94ae-2072da856d24
