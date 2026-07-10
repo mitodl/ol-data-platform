@@ -4,6 +4,7 @@ import sys
 
 import cyclopts
 
+from ol_dbt_cli.commands.diff import diff
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
 from ol_dbt_cli.commands.local_dev import local_app
@@ -40,6 +41,9 @@ app = cyclopts.App(
       7. Validate model SQL/YAML consistency:
          $ ol-dbt validate --model staging
 
+      7b. Diff an old model against its migrated replacement (same-engine):
+         $ ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
+
       8. JSON output for CI pipelines:
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
@@ -54,6 +58,7 @@ app.command(generate_app)
 app.command(run_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
+app.command(diff, name="diff")
 
 
 def main() -> None:
