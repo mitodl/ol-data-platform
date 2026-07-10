@@ -35,7 +35,7 @@ excluded (filter to `*.created`).
 
 ```
 -- surrogate + conformed FKs
-feedback_pk           -- generate_surrogate_key([feedback_source, source_natural_key])  (see §6)
+feedback_pk           -- generate_surrogate_key([source_slug, source_record_ref])  (see §6)
 feedback_source_fk    -> dim_feedback_source.feedback_source_pk
 user_fk               -> dim_user.user_pk            (nullable; anonymous/aggregate sources)
 platform_fk           -> dim_platform.platform_pk    (nullable; non-course sources e.g. Zendesk)
@@ -161,11 +161,12 @@ tracking logs share ingress semantics.
 
 ## 6. Business-key strategy (migration-proof)
 
-`feedback_pk = generate_surrogate_key([feedback_source, source_natural_key])` where `source_natural_key` is a
-**stable business identifier from the source system**, never a warehouse/Airbyte/Postgres row PK:
+`feedback_pk = generate_surrogate_key([source_slug, source_record_ref])` where `source_record_ref` is a
+**stable business identifier from the source system**, never a warehouse/Airbyte/Postgres row PK
+(terminology matches the event contract + Zendesk MVP spec):
 
-| Source | source_natural_key |
-|--------|--------------------|
+| Source | source_record_ref |
+|--------|-------------------|
 | Zendesk | `ticket_id` |
 | edX forum | `post_id` |
 | Learn AI tutor | `thread_id` + `checkpoint_pk` (or message index) |
@@ -197,8 +198,9 @@ raw__<source>__…                         (existing per source; new: raw__learn
       → tfact_feedback                    (resolve conformed FKs, generate feedback_pk §6)
         → afact_feedback_cluster_daily    (aggregate fact: cluster × category × sentiment × date × source — strategic rollup)
 ```
-Clustering/labeling jobs (Dagster asset) read `int__feedback__unioned` (redacted) → write `feedback_embeddings`
-+ `dim_feedback_category` + `category_fk`/`sentiment_fk` back onto the fact (late-arriving update).
+Clustering/labeling jobs (Dagster asset) read `int__feedback__unioned` (redacted) and write
+`feedback_embeddings`, `dim_feedback_category`, and `category_fk`/`sentiment_fk` back onto the fact
+(late-arriving update).
 
 ---
 

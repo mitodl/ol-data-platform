@@ -209,14 +209,16 @@ sidecar. This ordering lets the fact ship first.
 ## 8. Tests / contract (`_dim__models.yml` entries)
 
 Mirror the `tfact_discussion_events` yml style:
-- Per-column `not_null` on: `feedback_pk`, `feedback_source_fk`, `source_slug` equivalent,
-  `source_record_id`, `feedback_occurred_at`, `time_fk`, `date_fk`.
+- Per-column `not_null` on: `feedback_pk`, `feedback_source_fk`, `source_record_id`,
+  `feedback_occurred_at`, `time_fk`, `date_fk`.
 - `unique` on `feedback_pk`.
 - Nullable (description-only, no not_null): `user_fk`, `courserun_fk`, `platform_fk`,
   `organization_fk`, `category_fk`, `sentiment_fk`, `embedding_id`.
 - Model-level `dbt_expectations.expect_compound_columns_to_be_unique` on
-  `['source_slug', 'source_record_id']` (belt-and-suspenders alongside the `feedback_pk`
-  unique test — matches the precedent's compound-uniqueness convention).
+  `['feedback_source_fk', 'source_record_id']` (belt-and-suspenders alongside the `feedback_pk`
+  unique test — matches the precedent's compound-uniqueness convention; both columns exist on the
+  fact, and `feedback_source_fk = generate_surrogate_key([source_slug])` so this is the same
+  business grain as `[source_slug, source_record_ref]`).
 - `relationships` tests from each `*_fk` to its dim PK (richer-contract style, as
   `dim_course_run` does).
 - New dims get their own entries; `dim_feedback_category` gets a `unique` on `category_slug`.

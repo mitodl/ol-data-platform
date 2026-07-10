@@ -147,7 +147,7 @@ class LLMClientFactory(ConfigurableResource):
     vault_mount_point: str = Field(default="secret-data")
     vault_secret_path: str = Field(default="pipelines/feedback-llm")  # NEW Vault path to provision
     vault_secret_key: str = Field(default="api_key")
-    _client = PrivateAttr(default=None)
+    _client: Anthropic | None = PrivateAttr(default=None)
 
     def get_client(self):
         if self._client is None:
