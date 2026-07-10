@@ -186,6 +186,22 @@ class TestDiffCommand:
         # A clean match returns normally (no SystemExit).
         diff(old="m_old", new="m_new", dbt_dir_path=str(dbt_dir))
 
+    def test_unresolved_columns_warns_that_schema_gate_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # Models whose columns cannot be resolved (no such files, no manifest/YAML)
+        # must not silently pass the schema gate — a stderr warning is emitted.
+        dbt_dir = _make_project(tmp_path, "select 1 as id", "select 1 as id")
+        monkeypatch.setattr(
+            diff_mod,
+            "_run_dbt_show",
+            lambda *a, **k: [{"in_a": True, "in_b": True, "count": 1}],
+        )
+        diff(old="ghost_old", new="ghost_new", dbt_dir_path=str(dbt_dir))
+        err = capsys.readouterr().err
+        assert "schema-divergence" in err
+        assert "Warning" in err
+
     def test_row_mismatch_exits_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         dbt_dir = _make_project(
             tmp_path,

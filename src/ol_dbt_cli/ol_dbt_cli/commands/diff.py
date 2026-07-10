@@ -546,6 +546,24 @@ def diff(
         notes.append(unresolved_note.format(new))
     recon = reconcile_columns(old_cols, new_cols, set(exclude_list))
 
+    # When a column set can't be resolved statically, the schema-divergence gate
+    # cannot run — an empty reconciliation is "unverified", NOT "verified equal".
+    # Surface this loudly (both output modes) so it is never mistaken for a clean
+    # schema check: audit_helper.compare_relations derives its column list from
+    # the OLD relation, so a column *added* in the new model would be ignored by
+    # the value comparison and is normally caught only by this static gate.
+    schema_gate_skipped = not (old_cols and new_cols)
+    if schema_gate_skipped:
+        notes.append(
+            "Schema-divergence gate SKIPPED (columns unresolved) — comparison alone is authoritative "
+            "and will not detect columns added in the new model. Run `dbt parse` for full schema validation."
+        )
+        err_console.print(
+            "[yellow]Warning:[/] could not resolve column sets for both models; the schema-divergence "
+            "gate was skipped. Columns added in the new model may go undetected — run `dbt parse` "
+            "(or point --dbt-dir at a compiled project) for full schema validation."
+        )
+
     # Optionally build both relations first.
     if auto_build:
         # Single space-joined --select value, consistent with ol-dbt run/impact.
