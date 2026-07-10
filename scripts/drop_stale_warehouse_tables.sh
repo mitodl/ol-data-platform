@@ -80,25 +80,25 @@ for table in "${TABLES[@]}"; do
 
   # Freshness guard: refuse to drop a table touched within the age window.
   # aws CLI returns UpdateTime as an ISO-8601 string (e.g. 2026-03-16T02:51:06-04:00),
-  # which `date -d` parses directly. If parsing ever fails, fail CLOSED (refuse)
-  # rather than silently skipping the guard and deleting a possibly-live table.
-  if [[ -n "${update_time}" ]]; then
-    update_epoch=$(date -d "${update_time}" +%s 2>/dev/null || echo "")
-    if [[ -z "${update_epoch}" ]]; then
-      if ! $FORCE; then
-        echo "  ⚠️  could not parse update time '${update_time}' — refusing without --force"
-        echo
-        continue
-      fi
-      echo "  ⚠️  could not parse update time but --force given — proceeding"
-    elif [[ $((now_epoch - update_epoch)) -lt ${max_age_seconds} ]]; then
-      if ! $FORCE; then
-        echo "  ⚠️  updated $(((now_epoch - update_epoch) / 86400))d ago (< ${MAX_AGE_DAYS}d) — refusing without --force"
-        echo
-        continue
-      fi
-      echo "  ⚠️  updated recently but --force given — proceeding"
+  # which `date -d` parses directly. Fail CLOSED for anything we can't confirm is old
+  # — a missing OR unparseable timestamp refuses without --force, rather than silently
+  # skipping the guard and deleting a possibly-live table.
+  update_epoch=""
+  [[ -n "${update_time}" ]] && update_epoch=$(date -d "${update_time}" +%s 2>/dev/null || echo "")
+  if [[ -z "${update_epoch}" ]]; then
+    if ! $FORCE; then
+      echo "  ⚠️  no parseable update time (got '${update_time}') — refusing without --force"
+      echo
+      continue
     fi
+    echo "  ⚠️  no parseable update time but --force given — proceeding"
+  elif [[ $((now_epoch - update_epoch)) -lt ${max_age_seconds} ]]; then
+    if ! $FORCE; then
+      echo "  ⚠️  updated $(((now_epoch - update_epoch) / 86400))d ago (< ${MAX_AGE_DAYS}d) — refusing without --force"
+      echo
+      continue
+    fi
+    echo "  ⚠️  updated recently but --force given — proceeding"
   fi
 
   # Location sanity: must be a non-empty s3:// path containing the table name.
