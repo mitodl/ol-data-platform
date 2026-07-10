@@ -30,6 +30,7 @@ params:
   - flexiblepriceapplication_updated_on
   allow_rearrange_columns: false
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_enabled: false
   comparison_color_scheme: Green

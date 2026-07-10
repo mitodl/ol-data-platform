@@ -3,7 +3,8 @@ cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
-  column_name: courserun_readable_id
+  column_name: parent_topic_name
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -12,10 +13,11 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: VARCHAR
+  type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: course_readable_id
+  column_name: parent_topic_fk
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -24,10 +26,11 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: VARCHAR
+  type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: chapter_title
+  column_name: primary_platform
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -36,10 +39,11 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: VARCHAR
+  type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: user_email
+  column_name: topic_name
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -48,10 +52,11 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: VARCHAR
+  type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: platform
+  column_name: topic_pk
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -60,59 +65,12 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: VARCHAR
+  type: VARCHAR(1073741824)
   verbose_name: null
-- advanced_data_type: null
-  column_name: courserun_is_current
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BOOLEAN
-  verbose_name: null
-- advanced_data_type: null
-  column_name: user_watched_video_count
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BIGINT
-  verbose_name: null
-- advanced_data_type: null
-  column_name: total_video_count
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BIGINT
-  verbose_name: null
-- advanced_data_type: null
-  column_name: max_video_index
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BIGINT
-  verbose_name: null
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+currency_code_column: null
+database_uuid: d5ed5344-297b-43af-ba38-4bc04744f1ef  # StarRocks - Lakehouse
 default_endpoint: null
-description: null
+description: Auto refreshed at 2026-06-15T08:35:17.817493+00:00
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true
@@ -131,9 +89,9 @@ metrics:
 normalize_columns: false
 offset: 0
 params: null
-schema: ol_warehouse_production_reporting
+schema: ol_warehouse_production_dimensional
 sql: null
-table_name: video_engagements_report
+table_name: dim_topic
 template_params: null
-uuid: 4168432c-fd99-4ef6-bf8c-14acd0cb9b33
+uuid: c0870d47-1148-4e9e-808e-dc2ea9fb54a4
 version: 1.0.0

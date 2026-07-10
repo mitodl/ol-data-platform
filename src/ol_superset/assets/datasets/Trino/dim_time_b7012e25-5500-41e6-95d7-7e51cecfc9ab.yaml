@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: hour_12
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -16,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: hour_of_day_label
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -28,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: time_of_day_bucket
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -40,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: am_pm
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -52,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: minute_of_day
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -64,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: time_key
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -76,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: minute
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -88,6 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: hour
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -98,6 +106,7 @@ columns:
   python_date_format: null
   type: INTEGER
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
 description: Auto refreshed at 2026-04-14T18:44:01.150864+00:00

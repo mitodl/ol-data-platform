@@ -5,27 +5,27 @@ dashboard_title: Products
 description: null
 metadata:
   chart_configuration:
-    '121':
+    '112':
       crossFilters:
         chartsInScope:
         - 138
         - 154
         scope: global
-      id: 121
-    '138':
-      crossFilters:
-        chartsInScope:
-        - 121
-        - 154
-        scope: global
-      id: 138
-    '154':
+      id: 112
+    '67':
       crossFilters:
         chartsInScope:
         - 121
         - 138
         scope: global
-      id: 154
+      id: 67
+    '82':
+      crossFilters:
+        chartsInScope:
+        - 121
+        - 154
+        scope: global
+      id: 82
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -234,7 +234,7 @@ position:
     children: []
     id: CHART-GsXfncenrZrCTj6zp7Ym1
     meta:
-      chartId: 154
+      chartId: 67
       height: 50
       sliceName: Course to Program Reference
       uuid: 5a5e1d10-7bbe-4329-891d-029255d6efe0
@@ -250,7 +250,7 @@ position:
     children: []
     id: CHART-explore-121-1
     meta:
-      chartId: 121
+      chartId: 112
       height: 50
       sliceName: Product Dashboard (Last Updated)
       uuid: 6733b1cd-bb65-44e6-959e-ca21305807e7
@@ -266,7 +266,7 @@ position:
     children: []
     id: CHART-explore-138-1
     meta:
-      chartId: 138
+      chartId: 82
       height: 77
       sliceName: Products
       uuid: 36ade680-7ae9-4d35-89b0-a46235139418

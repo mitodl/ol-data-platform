@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: programcertificate_is_earned
+  datetime_format: null
   description: null
   expression: if(programcertificate_created_on is not null, true, false)
   extra:
@@ -17,6 +18,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -30,6 +32,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programcertificate_created_on
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -43,6 +46,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programenrollment_created_on
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -56,6 +60,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programenrollment_enrollment_status
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -69,6 +74,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_hashed_id
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -82,6 +88,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_full_name
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -95,6 +102,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programcertificate_uuid
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -108,6 +116,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programcertificate_url
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -121,6 +130,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_track
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -134,6 +144,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform_name
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -147,6 +158,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_name
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -160,6 +172,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_username
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -173,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_email
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -186,6 +200,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_title
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -199,6 +214,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_type
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -212,6 +228,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programcertificate_is_revoked
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -225,6 +242,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: programenrollment_is_active
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -238,6 +256,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_is_live
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -251,6 +270,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_id
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -264,6 +284,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_id
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -277,6 +298,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_has_completed_program
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -288,7 +310,21 @@ columns:
   type: BOOLEAN
   verbose_name: null
 - advanced_data_type: null
+  column_name: programcertificate_issued_on
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: capstone_indicator
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -301,6 +337,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: unique_courses_taken_in_program
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -313,6 +350,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: program_completion_days
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -323,9 +361,10 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
-description: Auto refreshed at 2026-03-16T07:03:32.321363+00:00
+description: Auto refreshed at 2026-07-10T16:23:14.137476+00:00
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true

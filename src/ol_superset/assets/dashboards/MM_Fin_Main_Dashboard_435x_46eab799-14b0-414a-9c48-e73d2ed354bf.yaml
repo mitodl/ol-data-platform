@@ -1,0 +1,278 @@
+certification_details: null
+certified_by: null
+css: ''
+dashboard_title: '[MM Fin] Main Dashboard (435x)'
+description: null
+metadata:
+  chart_configuration:
+    '189':
+      crossFilters:
+        chartsInScope:
+        - 190
+        - 191
+        - 192
+        - 193
+        - 194
+        - 195
+        scope: global
+      id: 189
+    '190':
+      crossFilters:
+        chartsInScope:
+        - 189
+        - 191
+        - 192
+        - 193
+        - 194
+        - 195
+        scope: global
+      id: 190
+    '191':
+      crossFilters:
+        chartsInScope:
+        - 189
+        - 190
+        - 192
+        - 193
+        - 194
+        - 195
+        scope: global
+      id: 191
+    '192':
+      crossFilters:
+        chartsInScope:
+        - 189
+        - 190
+        - 191
+        - 193
+        - 194
+        - 195
+        scope: global
+      id: 192
+    '193':
+      crossFilters:
+        chartsInScope:
+        - 189
+        - 190
+        - 191
+        - 192
+        - 194
+        - 195
+        scope: global
+      id: 193
+    '194':
+      crossFilters:
+        chartsInScope:
+        - 189
+        - 190
+        - 191
+        - 192
+        - 193
+        - 195
+        scope: global
+      id: 194
+    '195':
+      crossFilters:
+        chartsInScope:
+        - 189
+        - 190
+        - 191
+        - 192
+        - 193
+        - 194
+        scope: global
+      id: 195
+  chart_customization_config: []
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 189
+    - 190
+    - 191
+    - 192
+    - 193
+    - 194
+    - 195
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors:
+    audit_count: '#454E7C'
+    certificate_count: '#FF7F44'
+    certs_earned_count: '#FF7F44'
+    total_enrollment_count: '#1FA8C9'
+    unenrollment_count: '#5AC189'
+    verified_count: '#5AC189'
+  native_filter_configuration: []
+  refresh_frequency: 0
+  shared_label_colors:
+  - audit_count
+  - certs_earned_count
+  - total_enrollment_count
+  - verified_count
+  show_chart_timestamps: false
+  timed_refresh_immune_slices: []
+position:
+  CHART-explore-183-1:
+    children: []
+    id: CHART-explore-183-1
+    meta:
+      chartId: 220
+      height: 50
+      sliceName: '[MM Fin] 455x Course Enrollments (Lifetime Cumulative)'
+      uuid: 9524682f-d444-4314-a0cb-25bc2c951f6b
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    type: CHART
+  CHART-explore-184-1:
+    children: []
+    id: CHART-explore-184-1
+    meta:
+      chartId: 221
+      height: 50
+      sliceName: '[MM Fin] 455x Courses Learner Enrollments Timeline (Lifetime Cumulative)'
+      uuid: 1804c9b9-e1b7-4d2d-abc3-e266ee8f7707
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    type: CHART
+  CHART-explore-185-1:
+    children: []
+    id: CHART-explore-185-1
+    meta:
+      chartId: 222
+      height: 50
+      sliceName: '[MM Fin] 455x Courses Learner Enrollments Timeline Bar (Daily Non-Cumulative)'
+      uuid: f2ecf912-479d-4f2c-8263-612f10797960
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    type: CHART
+  CHART-explore-186-1:
+    children: []
+    id: CHART-explore-186-1
+    meta:
+      chartId: 223
+      height: 50
+      sliceName: '[MM Fin] 455x Enrollment Activity Over Time (Lifetime Cumulative)'
+      uuid: 80f69990-a4ed-4c99-8117-93b965152e27
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-W-PEsm2W6ukWYhMxrVo-m
+    type: CHART
+  CHART-explore-187-1:
+    children: []
+    id: CHART-explore-187-1
+    meta:
+      chartId: 219
+      height: 50
+      sliceName: '[MM Fin] 455x Learner Enrollments Timeline (Daily Non-Cumulative)'
+      uuid: b06341d1-69de-44a0-a6fc-956984d6c139
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    type: CHART
+  CHART-explore-194-1:
+    children: []
+    id: CHART-explore-194-1
+    meta:
+      chartId: 224
+      height: 50
+      sliceName: '[MM Fin] 455x Courses Learner Enrollments Timeline Bar (Weekly Non-Cumulative)'
+      uuid: dd260366-e6b0-4006-99eb-c78a26e60c8a
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    type: CHART
+  CHART-explore-195-1:
+    children: []
+    id: CHART-explore-195-1
+    meta:
+      chartId: 225
+      height: 50
+      sliceName: '[MM Fin] 455x Learner Enrollments Timeline (Weekly Non-Cumulative)'
+      uuid: ce54651a-5767-4738-8ddc-0f2f81bb7fcb
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    - ROW-W-PEsm2W6ukWYhMxrVo-m
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: '[MM Fin] Main Dashboard (455x)'
+    type: HEADER
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-W-PEsm2W6ukWYhMxrVo-m:
+    children:
+    - CHART-explore-186-1
+    id: ROW-W-PEsm2W6ukWYhMxrVo-m
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-ZGyk_HwIaLioK5P8Lg1Kf:
+    children:
+    - CHART-explore-183-1
+    - CHART-explore-185-1
+    - CHART-explore-194-1
+    id: ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-oYvoBrdMGFs4nSv0IFvw-:
+    children:
+    - CHART-explore-184-1
+    - CHART-explore-187-1
+    - CHART-explore-195-1
+    id: ROW-oYvoBrdMGFs4nSv0IFvw-
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+published: false
+slug: null
+theme_uuid: null
+uuid: 46eab799-14b0-414a-9c48-e73d2ed354bf
+version: 1.0.0

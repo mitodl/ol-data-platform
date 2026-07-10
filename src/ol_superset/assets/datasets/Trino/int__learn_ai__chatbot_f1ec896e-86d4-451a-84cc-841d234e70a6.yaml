@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: courserun_readable_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -16,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatsession_created_on
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -28,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatsession_thread_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -40,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatsession_updated_on
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -52,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatsession_object_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -64,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_global_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -76,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: parent_checkpoint_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -88,6 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_full_name
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -100,6 +108,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_metadata
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -112,6 +121,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_namespace
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -124,6 +134,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatsession_agent
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -136,6 +147,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: agent_message
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -148,6 +160,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: human_message
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -160,6 +173,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatsession_title
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -172,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_username
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -184,6 +199,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_email
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -196,6 +212,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_source
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -208,6 +225,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -220,6 +238,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_type
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -232,6 +251,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_json
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -244,6 +264,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_id
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -256,6 +277,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: checkpoint_step
+  datetime_format: null
   description: null
   expression: null
   extra: {}
@@ -266,6 +288,7 @@ columns:
   python_date_format: null
   type: INTEGER
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
 description: null

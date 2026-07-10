@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: list_price
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -16,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_parent_run_id
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -28,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: productversion_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -40,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -52,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: short_program_code
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -64,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseware_format
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -76,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: start_date
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -88,6 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform_name
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -100,6 +108,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: coursetopic_names
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -112,6 +121,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_name
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -124,6 +134,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_platform
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -136,6 +147,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: end_date
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -148,6 +160,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: enrollment_start
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -160,6 +173,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_description
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -172,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_type
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -184,6 +199,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: time_commitment
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -196,6 +212,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: enrollment_end
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -208,6 +225,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: duration
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -220,6 +238,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: link
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -232,6 +251,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_is_private
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -244,6 +264,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: productid
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -254,9 +275,10 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
-description: Auto refreshed at 2026-03-15T15:26:55.242442+00:00
+description: Auto refreshed at 2026-07-10T16:23:56.637398+00:00
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true

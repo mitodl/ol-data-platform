@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: courserunenrollment_created_on_date
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -16,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: combined_orders_hash_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -28,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_readable_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -40,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: course_readable_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -52,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_created_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -64,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_upgrade_deadline
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -76,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_created_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -88,6 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_upgraded_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -100,6 +108,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_highest_education
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -112,6 +121,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_enrollment_status
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -124,6 +134,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_start_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -136,6 +147,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_hashed_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -148,6 +160,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_full_name
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -160,6 +173,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: order_reference_number
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -172,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_job_title
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -184,6 +199,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_country_code
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -196,6 +212,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_enrollment_mode
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -208,6 +225,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_end_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -220,6 +238,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_uuid
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -232,6 +251,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_url
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -244,6 +264,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_company
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -256,6 +277,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_username
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -268,6 +290,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_email
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -280,6 +303,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_title
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -292,6 +316,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: course_title
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -304,6 +329,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_gender
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -316,6 +342,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_industry
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -328,6 +355,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -340,6 +368,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -352,6 +381,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_is_edx_enrolled
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -364,6 +394,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courseruncertificate_is_earned
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -376,6 +407,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserungrade_is_passing
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -388,6 +420,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_is_active
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -400,6 +433,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_is_current
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -412,6 +446,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserungrade_grade
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -424,6 +459,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserunenrollment_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -436,6 +472,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -448,6 +485,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: order_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -460,6 +498,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: line_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -470,6 +509,7 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
 description: null
