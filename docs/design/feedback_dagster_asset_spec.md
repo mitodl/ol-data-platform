@@ -9,17 +9,23 @@ LLM-proposed categories, and sentiment. Grounded in the existing repo orchestrat
 patterns. **The fact ships without this asset**; this is purely additive (fills
 `embedding_id`, `category_fk`, `sentiment_fk`, and the `feedback_embeddings` sidecar).
 
-> **REVISED 2026-07-10 (rev. 2) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
+> **REVISED 2026-07-10 (rev. 3) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
 > Because the strategic direction is to **retire Trino for StarRocks**, all AI compute stays
 > **engine-external and portable** — no engine-native AI SQL functions (Starburst's are
-> Galaxy-only; StarRocks has none). So the embedding stage stays a Dagster asset, but it is a
-> **thin boto3 AWS Bedrock call** (`amazon.titan-embed-text-v2:0`), **not** torch/sentence-transformers
-> and **not** a Starburst `trino_only` dbt model. Auth via the Dagster pod IAM role
-> (`bedrock:InvokeModel`), likely no Vault secret. Vectors land in an open Iceberg `ARRAY<float>`
-> sidecar (StarRocks reads it later to build an HNSW index — a load, not a re-embed). Sentiment
-> stays the explicit-CSAT + embedding-kNN path (no `analyze_sentiment`). §2–§6 below describe the
-> asset shape; substitute the boto3-Bedrock client for the local embedding model where §4 lists
-> `sentence-transformers` (that is now the fallback, not the default).
+> Galaxy-only; StarRocks has none). The embedding/sentiment/labeling stages run via **Fenic
+> (Apache-2.0)** inside a Dagster asset — not torch, not a Starburst `trino_only` dbt model.
+> **Embedding provider is a PII-policy choice:** in-account AWS Bedrock
+> `amazon.titan-embed-text-v2:0` (via boto3 today — native Fenic Bedrock *embeddings* are
+> roadmap-not-shipped — or contribute the provider), or a Fenic-native managed provider
+> (Cohere/OpenAI/Google) over redacted text if policy allows. Bedrock auth via the Dagster pod
+> IAM role (`bedrock:InvokeModel`), likely no Vault secret; a managed provider uses a
+> Vault-stored key via the existing `ConfigurableResource` pattern. Vectors land in an open
+> Iceberg `ARRAY<float>` sidecar (StarRocks reads it later to build an HNSW index — a load, not a
+> re-embed). **Clustering stays our own sklearn UMAP+HDBSCAN** (Fenic has K-means only, no noise
+> class). Sentiment defaults to the explicit-CSAT + embedding-kNN path. Fenic does not read
+> Iceberg natively — stage via Parquet/S3 or hand it the in-memory frame (confirm at
+> implementation). §2–§6 below describe the asset shape; substitute Fenic (or a boto3 Bedrock
+> client) for the local `sentence-transformers` model where §4 lists it (now a fallback).
 
 ---
 

@@ -1,140 +1,134 @@
 # ADR: Where feedback embedding / AI inference runs
 
 Status: **proposed** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-07-10 (rev. 2 — engine-portability constraint) · Amends
+Date: 2026-07-10 (rev. 3 — Fenic as the engine-external framework) · Amends
 [`feedback_ml_approach.md`](./feedback_ml_approach.md) §B/§E and
 [`feedback_dagster_asset_spec.md`](./feedback_dagster_asset_spec.md).
 
 ## Context
 
-The original ML spec (`feedback_ml_approach.md` §B) proposed a net-new Dagster code location
-running `sentence-transformers`/`torch` to embed feedback locally, for the learner-PII posture.
-The Dagster explore flagged this as the heaviest part of the system (large image, first ML
-service, all-new deps).
+Original spec (`feedback_ml_approach.md` §B) proposed a net-new Dagster location running
+`sentence-transformers`/`torch` to embed locally — the heaviest infra in the system. Two
+constraints then reshaped the decision:
 
-Two facts then reshaped the decision:
+1. **Production runs Trino on Starburst Galaxy**; local dev is DuckDB; **StarRocks is not yet
+   deployed**. And the **strategic direction is to retire Trino for StarRocks** (warehouse
+   transforms + data bus + OLAP serving). ⇒ **No Galaxy-only functionality on the critical
+   path.** This vetoes pushing embedding into SQL via Starburst's `generate_embedding`
+   (Galaxy-proprietary; StarRocks has no embedding-generation equivalent — its vector support
+   is *store + ANN search* only). Embedding generation is inherently **engine-external**.
+2. **Fenic** ([typedef-ai/fenic](https://github.com/typedef-ai/fenic)) is a viable
+   engine-external framework for this layer — this revision evaluates it as a first-class option
+   rather than a footnote.
 
-1. **Production runs Trino on Starburst Galaxy** (`src/ol_dbt/profiles.yml`); local dev is
-   DuckDB; **StarRocks is not deployed** (only `starrocks__` dispatch branches in
-   `macros/cross_db_functions.sql`).
-2. **Strategic direction (owner, 2026-07-10): retire Trino in favour of StarRocks** as the
-   single engine for warehouse/Iceberg transformations, the "data bus", and OLAP serving.
-   **Therefore: no Galaxy-only (Starburst-proprietary) functionality may sit on the critical
-   path** — anything we build on the SQL engine must survive the Trino→StarRocks migration.
+### What Fenic actually is (verified against the source, 2026-07-10)
 
-Rev. 1 of this ADR recommended pushing embedding into SQL via Starburst Galaxy's
-`generate_embedding`. **Fact 2 vetoes that**: it is a Galaxy-proprietary SQL function living in
-exactly the layer being migrated to StarRocks, and StarRocks has **no** embedding-generation
-function to migrate it to (StarRocks vector support is *store + ANN search* only —
-`cosine_similarity`, HNSW/IVFPQ indexes — not generation). Adopting it would guarantee a
-rewrite. This revision removes it from the critical path.
-
-## The three candidates, disambiguated
-
-| Candidate | What it is | Runs where | Generates embeddings? | Engine-portable (Trino→StarRocks)? |
-|---|---|---|---|---|
-| **Starburst Galaxy AI functions** | in-SQL `starburst.ai.generate_embedding` etc. (Galaxy preview) | inside the SQL engine | yes (Bedrock/OpenAI **wrapper**) | **no — Galaxy-only; StarRocks has no equivalent** |
-| **Direct AWS Bedrock client** (boto3) | `bedrock-runtime.invoke_model('amazon.titan-embed-text-v2:0', …)` | an **engine-external** Dagster asset | yes (Bedrock, **in our AWS account**) | **yes — indifferent to the SQL engine** |
-| **Fenic** (typedef.ai) | client-side DataFrame lib w/ semantic ops + K-means | an engine-external Dagster asset | yes (OpenAI/Google/Cohere APIs — cloud only) | yes (engine-external) but **cloud-egress**, K-means only |
-| **local `sentence-transformers`** | self-hosted model in a Dagster asset | engine-external | yes (local, $0 egress) | yes, but heaviest image |
-| **StarRocks vector index** | HNSW/IVFPQ + `approx_cosine_similarity` | inside StarRocks (future) | **no** (store/search only) | it *is* the target — for serving, not generation |
-
-Two corrections to the earlier framing that matter here:
-- **Starburst's `generate_embedding` is only a SQL wrapper over Bedrock models.** We can call the
-  *same* Bedrock model directly with boto3 from the Dagster layer — keeping the in-account /
-  PII-safe benefit while dropping the Galaxy dependency. The wrapper buys nothing we can't get
-  portably.
-- **StarRocks does not generate embeddings.** So "do it in the future engine's SQL" is not an
-  option either. Embedding generation is inherently engine-external; the only question is which
-  external tool.
+- **License: Apache-2.0** (`LICENSE` on `main`). Genuinely open source — no Galaxy-style
+  lock-in.
+- **Engine-external**, PySpark-style DataFrame framework with a query engine built for LLM
+  inference: semantic operators (`embed`, `semantic.classify`, `semantic.analyze_sentiment`,
+  `semantic.extract`, `semantic.join`, `semantic.reduce`), a native `EmbeddingType`, plus
+  `with_cluster_labels(by, num_clusters)` (**K-means**), and built-in batching, rate-limiting,
+  retries, token/cost accounting, and row-level lineage. Reads CSV/Parquet/S3/HF datasets.
+- **Embedding providers in the shipped `SessionConfig`:** `OpenAIEmbeddingModel`,
+  `CohereEmbeddingModel`, `GoogleDeveloperEmbeddingModel`, `GoogleVertexEmbeddingModel`
+  (language models: OpenAI, Anthropic, Google Developer/Vertex, OpenRouter). So it is
+  **embedding-provider-agnostic** across those vendors.
+- **AWS Bedrock status — important nuance:** there is **no `BedrockEmbeddingModel` config class
+  today.** In `config.py`, "Bedrock" appears only as an *OpenRouter routing target for language
+  models* (a third-party hop through openrouter.ai, and for LLMs, not embeddings), and
+  `ROADMAP.md` lists Bedrock as planned. So **native, in-account Bedrock *embeddings* through
+  Fenic are not yet available** — but because Fenic is Apache-2.0, a Bedrock embedding provider
+  can be contributed/added if we require it. (If a Fenic+Bedrock embedding path has landed in a
+  newer release than what `main` showed here, confirm the exact `SessionConfig` class before
+  relying on it.)
 
 ## Decision
 
-**Keep all AI/embedding compute in the engine-external orchestration (Dagster/Python) layer,
-reading and writing open Iceberg tables — so it is indifferent to whether the SQL engine is
-Trino today or StarRocks tomorrow. Generate embeddings by calling AWS Bedrock
-(`amazon.titan-embed-text-v2:0`) directly via boto3, not through any engine's SQL AI function.**
-
-Revised pipeline:
+**Keep all AI/embedding compute engine-external so it is indifferent to Trino-today vs.
+StarRocks-tomorrow, and use Fenic (Apache-2.0) as that engine-external framework** for the
+embed → (classify/sentiment) → label pipeline, running in a Dagster asset that reads the dbt
+outputs and writes vectors/labels back to open Iceberg. **Clustering stays our own
+sklearn/UMAP + HDBSCAN** (Fenic offers only K-means; we need HDBSCAN's noise class to separate
+one-off complaints from systemic signal — `feedback_ml_approach.md` §C).
 
 ```
-int__feedback__unioned (redacted text, feedback_pk)                         [dbt/SQL — portable, no AI funcs]
-  → feedback_embeddings  : Dagster asset, boto3 Bedrock invoke_model         [engine-external]
-                           → vectors into Iceberg ARRAY<float> sidecar
-  → feedback_clusters    : Dagster asset, read vectors → UMAP+HDBSCAN         [engine-external]
-  → dim_feedback_category: Dagster asset, LLM-label clusters (Bedrock)        [engine-external]
-  → sentiment_fk         : explicit CSAT seed + embedding-kNN (reuse vectors) [portable dbt/py, NO analyze_sentiment]
+int__feedback__unioned (redacted text, feedback_pk)                    [dbt/SQL — portable, no AI funcs]
+  → Fenic pipeline in a Dagster asset:                                  [engine-external, Apache-2.0]
+       .semantic.embed        → EmbeddingType column → Iceberg ARRAY<float> sidecar
+       .semantic.analyze_sentiment / .classify (optional; see §E note)
+  → feedback_clusters : our sklearn UMAP+HDBSCAN over the vectors       [engine-external]
+  → dim_feedback_category : LLM-label clusters (Fenic semantic op or a client call)
+  → sentiment_fk : explicit-CSAT seed + embedding-kNN (default) or Fenic analyze_sentiment
 ```
 
-Rationale:
-1. **Zero engine lock-in.** Nothing AI-specific touches Trino or StarRocks SQL. The dbt models
-   stay pure, portable, and continue to compile through the existing Trino/DuckDB/`starrocks__`
-   dispatch. When transforms move to StarRocks, the embedding path doesn't change at all.
-2. **Keeps the PII win without the wrapper.** Bedrock Titan runs in **our own AWS account**
-   (we're already on AWS: Glue/S3/EKS) over Presidio-redacted text — same posture Rev. 1 gained
-   from Starburst AI, obtained instead by a direct boto3 call. Auth via the Dagster pod's IAM
-   role (IRSA) with `bedrock:InvokeModel` — likely **no Vault secret** needed (unlike a
-   third-party API key).
-3. **Light, not heavy.** A boto3 Bedrock client is a thin dependency — **no torch, no
-   sentence-transformers, no model in the image**. It removes the original spec's heaviest
-   infra *and* avoids the Galaxy dependency. Batching/retries are a modest amount of code around
-   `invoke_model` (or use Bedrock batch inference for the 1.18M backfill).
-4. **Open landing = free StarRocks path.** Vectors persist in an Iceberg `ARRAY<float>` sidecar
-   (open format). When StarRocks becomes the serving/OLAP + data-bus engine, it **reads those
-   Iceberg vectors and builds an HNSW index over them** — a load, not a re-embed. So the
-   target-state vector-serving tier (StarRocks ANN) is reached without rework, and it is now
-   **on the intended path**, not a Phase-3 afterthought.
-5. **Sentiment stays engine-agnostic.** Use the cheaper explicit-CSAT-seed + embedding-kNN path
-   (`feedback_ml_approach.md` §E) — which reuses the vectors and needs no per-row LLM call and
-   no engine AI function. Explicitly **do not** adopt Starburst `analyze_sentiment` (Galaxy-only).
-6. **Clustering stays Python** (sklearn/UMAP/**HDBSCAN** for the noise class — one-off vs.
-   systemic; Fenic's K-means can't do this) — already engine-external and portable.
+**Embedding provider is a PII-policy choice, decoupled from the framework:**
+- **If in-account AWS Bedrock is a hard requirement** (best PII posture — vectors never leave
+  our AWS account, over Presidio-redacted text): today that means either (a) **contribute/point a
+  Bedrock embedding provider into Fenic** (Apache-2.0 allows it; aligns with their roadmap), or
+  (b) compute the embedding with a thin **boto3 `bedrock-runtime.invoke_model`
+  (`amazon.titan-embed-text-v2:0`)** step and use Fenic for the *rest* of the semantic pipeline.
+  Both keep the compute engine-external and portable.
+- **If a supported managed provider on redacted text is acceptable** (Cohere / OpenAI / Google
+  via Fenic's shipped config): simplest path, at the cost of provider egress of
+  *already-redacted* text. Decide against the learner-PII policy.
+
+Either way the **vectors land in an open Iceberg `ARRAY<float>` sidecar**, so when StarRocks
+becomes the serving/OLAP + data-bus engine it **reads those vectors and builds an HNSW index**
+over them (a load, not a re-embed) — **StarRocks ANN is the intended vector-serving tier**,
+reached with no rework. dbt models stay pure and portable (existing
+`default__`/`duckdb__`/`starrocks__` dispatch); **no engine-native AI SQL functions, no
+`trino_only` AI models.**
+
+## Why Fenic over a hand-rolled boto3 pipeline
+
+Both are engine-external and portable; Fenic adds, for free, what we'd otherwise hand-build:
+automatic batching, rate-limiting, retries, token/cost accounting, response caching, row-level
+lineage, and typed semantic operators (`classify`/`analyze_sentiment`/`extract`) we can reuse
+for category assignment and sentiment. Apache-2.0 means no lock-in and the option to extend it
+(e.g. the Bedrock embedding provider). The one thing it does **not** replace is HDBSCAN — keep
+that ours.
 
 ## Consequences / caveats
 
-1. **Slightly more code than a SQL one-liner.** We write a small Bedrock-client Dagster asset
-   instead of a `generate_embedding` dbt model. That is the price of portability, and it is
-   small (thin boto3 wrapper cloned from `student_risk_probability`'s asset shape).
-2. **Bedrock model access + IAM.** Enable `amazon.titan-embed-text-v2:0` (and a text model for
-   cluster labels) in our AWS account/region and grant the Dagster role `bedrock:InvokeModel`.
-   No Galaxy AI feature, no preview dependency.
-3. **Cost is per-invocation Bedrock**, but cheap: Titan V2 text embeddings at ~$0.02 / 1M tokens
-   → low tens of dollars for ~1.18M short redacted utterances, one-time (persist-once +
-   `model_version`; never re-embed). Use Bedrock **batch inference** for the backfill to cut
-   cost/throughput pressure. Sanity-check at approval time.
-4. **Dimensions choice:** Titan V2 supports 256/512/1024 — pick 256 or 512 for a smaller sidecar
-   and faster HDBSCAN/HNSW unless retrieval quality needs 1024. Tune on the Zendesk sample.
-5. **No StarRocks work now.** StarRocks HNSW is the documented *target* serving tier but is not
-   built until StarRocks is deployed; MVP uses Iceberg-ARRAY brute-force (fine at ≤1.18M for
-   batch clustering; the "similar feedback"/RAG serving need is what later justifies the HNSW
-   index).
+1. **New dependency (Fenic) + provider setup.** Add `fenic` to the new Dagster project's
+   `pyproject.toml`. Configure the chosen embedding provider (Bedrock-via-boto3/contrib, or a
+   Fenic-native provider) and credentials (Bedrock → Dagster pod IAM role `bedrock:InvokeModel`,
+   likely no Vault secret; a managed provider → a Vault-stored API key via the existing
+   `ConfigurableResource` pattern).
+2. **Bedrock-embedding gap (see Context).** If in-account Bedrock embeddings are required *now*
+   and not yet native to Fenic, use the boto3-embed + Fenic-for-the-rest split, or add the
+   provider. Don't assume a `BedrockEmbeddingModel` exists without checking the installed version.
+3. **Iceberg I/O is not native to Fenic.** Fenic reads CSV/Parquet/S3/HF, not Iceberg directly.
+   Integration: load the dbt table to a DataFrame (existing `get_dbt_model_as_dataframe` →
+   Polars) and stage to Parquet/S3 for `session.read.parquet(...)`, or hand Fenic the frame if
+   in-memory ingestion is supported in the installed version; write vectors out as Parquet and
+   load to the Iceberg sidecar. Confirm the exact read/write surface at implementation.
+4. **Clustering is not Fenic's.** UMAP+HDBSCAN stays a small sklearn step reading the vectors.
+5. **Cost/PII depend on the provider, not Fenic.** Titan V2 embeddings ~$0.02/1M tokens → low
+   tens of $ one-time for ~1.18M redacted utterances; persist-once + `model_version`, never
+   re-embed; use batch inference for the backfill. A managed provider has similar cost but
+   egresses redacted text — a policy call.
 
-## Alternatives (kept, in preference order)
+## Alternatives (kept)
 
-- **Fenic** — optional ergonomics wrapper for the Python embedding/label path (batching, caching,
-  cost-accounting, row-level lineage, K-means + `analyze_sentiment` operators). Still
-  engine-external and portable, **but** its embedding providers are cloud APIs
-  (OpenAI/Google/Cohere) with **no in-account Bedrock path documented**, so it reintroduces
-  third-party egress and is less aligned than a direct Bedrock client on the PII axis; its
-  clustering is K-means (no noise class). Adopt only if the ergonomics outweigh the egress and
-  we keep clustering on our own HDBSCAN. (Confirm OSS license before use.)
-- **Local `sentence-transformers`** — the zero-egress fallback if in-account Bedrock is somehow
-  ruled out. Heaviest image/infra; no provider cost. Still engine-external/portable.
-- **Starburst Galaxy `generate_embedding` — REJECTED for the critical path.** Galaxy-proprietary,
-  sits in the SQL layer being migrated off, no StarRocks equivalent. Only reconsider as a throwaway
-  spike if we needed embeddings before any Dagster/Bedrock wiring existed — not worth the eventual
-  rewrite.
+- **Direct boto3 Bedrock client, no Fenic** — the minimal engine-external path; use if we don't
+  want the Fenic dependency. Loses the batching/caching/lineage ergonomics (hand-build them).
+- **Local `sentence-transformers`** — zero-egress, no provider cost, but the heaviest image;
+  fallback only if all managed/Bedrock options are ruled out. Still engine-external/portable;
+  could even be wired behind Fenic if/when it supports local models.
+- **Starburst Galaxy `generate_embedding` — REJECTED for the critical path** (Galaxy-proprietary,
+  in the layer being migrated off, no StarRocks equivalent).
+- **StarRocks vector index** — the *target serving tier*, not a generation option; built once
+  StarRocks is deployed, by loading the open Iceberg vectors.
 
 ## Net change to the spec
 
-- `feedback_ml_approach.md` §B default: **engine-external Dagster asset calling Bedrock
-  `amazon.titan-embed-text-v2:0` via boto3**, vectors in an Iceberg `ARRAY<float>` sidecar. (Rev. 1's
-  "Starburst AI `trino_only` dbt model" is withdrawn for engine lock-in.)
-- `feedback_dagster_asset_spec.md`: the embedding stage stays a Dagster asset but is a thin
-  Bedrock-client call (no torch); sentiment stays the CSAT-seed + kNN path; clustering + labeling
-  unchanged. No `trino_only` AI dbt models.
-- StarRocks HNSW vector index is elevated from a Phase-3 afterthought to the **intended
-  target vector-serving tier**, reached by loading the open Iceberg vectors (no re-embed).
+- `feedback_ml_approach.md` §B default: **engine-external Fenic pipeline (Apache-2.0), embedding
+  provider chosen by PII policy** (in-account Bedrock via boto3/contrib preferred; managed
+  provider on redacted text acceptable if policy allows). Vectors → Iceberg `ARRAY<float>` sidecar.
+- `feedback_dagster_asset_spec.md`: embedding/sentiment run via Fenic in the Dagster asset (not
+  torch, not a Starburst SQL function); clustering stays sklearn HDBSCAN; no `trino_only` AI models.
+- StarRocks HNSW is the **intended** vector-serving tier, reached by loading Iceberg vectors.
 - Schema, contract, and business keys unchanged — compute location was always meant to be
-  swappable (vectors in a sidecar; category/sentiment late-arriving FKs), which is exactly what
-  makes this a compute-only, engine-portable revision.
+  swappable (vectors in a sidecar; category/sentiment late-arriving FKs).
