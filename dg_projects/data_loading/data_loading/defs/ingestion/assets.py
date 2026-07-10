@@ -1,14 +1,16 @@
 """@dlt_assets wrappers that expose ol_dlt pipelines as Dagster assets.
 
 Six simple sources are wrapped uniformly via ``build_ingest_assets``. edxorg_s3
-keeps a custom asset because it adds upstream deps and materializes one table per
-``dlt.run()`` call (so STS credentials refresh between tables).
+keeps custom asset-building because it adds upstream deps and materializes each
+table as its OWN ``@dlt_assets`` op (see the edxorg_s3 section below) so tables
+of wildly different sizes can load concurrently instead of one giant table
+blocking the rest of the run behind it.
 """
 
 from collections.abc import Iterable
 from typing import Any
 
-from dagster import AssetExecutionContext, AssetKey, AssetsDefinition, Definitions
+from dagster import AssetExecutionContext, AssetsDefinition, Definitions
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     edxorg_s3,
@@ -73,50 +75,53 @@ podcast_rss_assets = build_ingest_assets(
 )
 
 
-# --- edxorg_s3: custom upstream deps + per-table materialization ------------
-_EDXORG_PREFIX = "raw__edxorg__s3__tables__"
+# --- edxorg_s3: custom upstream deps + one op per table ---------------------
+
+# Bounds how many tables load concurrently. Dagster's K8sRunLauncher gives each
+# RUN its own pod (not each step); with no executor_def override, steps within
+# that pod run via the default multiprocess executor -- genuinely separate OS
+# processes (safe: dlt's non-thread-safe injectable-context dict is
+# process-local, never shared across them), but still sharing that one pod's
+# fixed CPU/memory budget. Tune the slot count in the Dagster instance UI.
+_EDXORG_S3_POOL = "edxorg_s3"
 
 
-def _edxorg_asset_key(table_name: str) -> AssetKey:
-    return AssetKey(["ol_warehouse_raw_data", f"{_EDXORG_PREFIX}{table_name}"])
+def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
+    """Wrap one edxorg_s3 table as its own ``@dlt_assets`` op.
 
-
-# The full-tables instance lets @dlt_assets discover the complete set of asset
-# specs at import time; the execution function below overrides the source
-# per-table.
-@dlt_assets(
-    dlt_source=edxorg_s3.edxorg_s3_source(tables=list(EDXORG_DB_TABLES)),
-    dlt_pipeline=edxorg_s3.edxorg_s3_pipeline,
-    name="edxorg_s3_tables",
-    # group_name is set per-asset by the translator (scoped by source system).
-    dagster_dlt_translator=EdxorgDltTranslator(),
-)
-def edxorg_s3_consolidated_tables(
-    context: AssetExecutionContext, dlt: DagsterDltResource
-) -> Iterable[Any]:
-    """Load and consolidate EdX.org database tables from S3.
-
-    Tables are processed sequentially, one per ``dlt.run()`` call, so that STS
-    tokens refresh between tables, large tables do not exhaust a single token's
-    TTL, and dlt's non-thread-safe injectable-context dict is never accessed
-    concurrently (see also [extract] workers=1 in ol_dlt/.dlt/config.toml).
+    One op per table (rather than one op looping over every table) lets
+    Dagster's step executor run tables concurrently instead of a single huge
+    table head-of-line-blocking every smaller table behind it in one
+    sequential Python loop. Each table gets its own dlt pipeline_name (see
+    ``edxorg_s3_pipeline_for``) so concurrent table loads never share a local
+    working directory.
     """
-    if context.is_subset:
-        selected_tables = [
-            t
-            for t in EDXORG_DB_TABLES
-            if _edxorg_asset_key(t) in context.selected_asset_keys
-        ]
-    else:
-        selected_tables = list(EDXORG_DB_TABLES)
+    source = edxorg_s3.edxorg_s3_source(tables=[table_name])
+    pipeline = edxorg_s3.edxorg_s3_pipeline_for(table_name)
 
-    for table_name in selected_tables:
-        table_source = edxorg_s3.edxorg_s3_source(tables=[table_name])
+    @dlt_assets(
+        dlt_source=source,
+        dlt_pipeline=pipeline,
+        name=f"edxorg_s3_{table_name}",
+        # group_name is set per-asset by the translator (scoped by source system).
+        dagster_dlt_translator=EdxorgDltTranslator(),
+        pool=_EDXORG_S3_POOL,
+    )
+    def _asset(
+        context: AssetExecutionContext, dlt: DagsterDltResource
+    ) -> Iterable[Any]:
         yield from dlt.run(
             context=context,
-            dlt_source=table_source,
+            dlt_source=source,
             loader_file_format="parquet",
         )
+
+    return _asset
+
+
+edxorg_s3_table_assets = [
+    _build_edxorg_s3_table_asset(table_name) for table_name in EDXORG_DB_TABLES
+]
 
 
 defs = Definitions(
@@ -126,6 +131,6 @@ defs = Definitions(
         mit_climate_assets,
         mit_edx_programs_assets,
         podcast_rss_assets,
-        edxorg_s3_consolidated_tables,
+        *edxorg_s3_table_assets,
     ],
 )

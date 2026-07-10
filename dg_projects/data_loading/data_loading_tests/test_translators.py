@@ -8,6 +8,7 @@ default dev profile (filesystem storage).
 import pytest
 from dagster import AssetKey, AssetsDefinition, AssetSpec
 from data_loading.defs.ingestion import assets, translators
+from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
 
 def _specs_by_key(assets_def: AssetsDefinition) -> dict[str, AssetSpec]:
@@ -44,8 +45,19 @@ def test_all_simple_sources_have_no_deps() -> None:
             assert list(spec.deps) == [], spec.key
 
 
+def _edxorg_table_asset(table_name: str) -> AssetsDefinition:
+    for assets_def in assets.edxorg_s3_table_assets:
+        if any(
+            spec.key.path[-1] == f"raw__edxorg__s3__tables__{table_name}"
+            for spec in assets_def.specs
+        ):
+            return assets_def
+    msg = f"no edxorg_s3 asset found for table {table_name}"
+    raise AssertionError(msg)
+
+
 def test_edxorg_spec_has_upstream_archive_dep() -> None:
-    spec = _specs_by_key(assets.edxorg_s3_consolidated_tables)[
+    spec = _specs_by_key(_edxorg_table_asset("auth_user"))[
         "ol_warehouse_raw_data/raw__edxorg__s3__tables__auth_user"
     ]
     assert spec.key == AssetKey(
@@ -56,6 +68,28 @@ def test_edxorg_spec_has_upstream_archive_dep() -> None:
     ]
     assert "dlt" in spec.kinds
     assert spec.group_name == "edxorg"  # scoped by source system
+
+
+def test_edxorg_tables_are_separate_ops() -> None:
+    """Each table is its own op (not one op looping over every table).
+
+    This is what lets Dagster's step executor run tables concurrently instead
+    of one giant table head-of-line-blocking every smaller table behind it.
+    """
+    assert len(assets.edxorg_s3_table_assets) == len(EDXORG_DB_TABLES)
+    op_names = {a.op.name for a in assets.edxorg_s3_table_assets}
+    assert len(op_names) == len(EDXORG_DB_TABLES)  # every op name is distinct
+
+
+def test_edxorg_tables_share_a_concurrency_pool() -> None:
+    """All edxorg_s3 table ops share one pool so concurrency is centrally bounded.
+
+    They all run inside the same Dagster run pod (K8sRunLauncher launches one
+    pod per run, not per step), which has a fixed CPU/memory budget -- the pool
+    lets that budget be tuned centrally via the Dagster instance UI.
+    """
+    pools = {a.op.pool for a in assets.edxorg_s3_table_assets}
+    assert pools == {"edxorg_s3"}
 
 
 def test_edxorg_programs_grouped_with_edxorg() -> None:

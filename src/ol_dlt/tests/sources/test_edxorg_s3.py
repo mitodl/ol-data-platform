@@ -64,3 +64,35 @@ def test_source_yields_one_resource_per_table() -> None:
 def test_source_with_no_tables_yields_nothing() -> None:
     source = edxorg_s3.edxorg_s3_source(tables=[])
     assert dict(source.resources) == {}
+
+
+def test_pipeline_for_gives_each_table_a_distinct_stable_name() -> None:
+    """Each table's pipeline needs its own local working-directory identity.
+
+    Concurrent table loads sharing one pipeline_name race on dlt's local
+    extract/normalize staging files (reproduced independently: concurrent runs
+    sharing a pipeline_name fail with NormalizeJobFailed/FileNotFoundError).
+    """
+    a = edxorg_s3.edxorg_s3_pipeline_for("auth_user")
+    b = edxorg_s3.edxorg_s3_pipeline_for("student_courseenrollment")
+    assert a.pipeline_name == "edxorg_s3__auth_user"
+    assert b.pipeline_name == "edxorg_s3__student_courseenrollment"
+    # Same name every call -- required so the modification_date incremental
+    # cursor is found again on the next run instead of resetting.
+    assert edxorg_s3.edxorg_s3_pipeline_for("auth_user").pipeline_name == (
+        a.pipeline_name
+    )
+
+
+def test_pipeline_for_shares_destination_with_singleton_pipeline() -> None:
+    """Per-table pipelines still land in the same edxorg destination bucket."""
+    per_table = edxorg_s3.edxorg_s3_pipeline_for("auth_user")
+    singleton = edxorg_s3.edxorg_s3_pipeline
+    # destination_name is just the destination TYPE (e.g. "filesystem") and
+    # would match even if the bucket/prefix diverged -- assert the actual
+    # bucket_url so this test guards the intended behavior.
+    assert (
+        per_table.destination.config_params["bucket_url"]
+        == singleton.destination.config_params["bucket_url"]
+    )
+    assert per_table.dataset_name == singleton.dataset_name

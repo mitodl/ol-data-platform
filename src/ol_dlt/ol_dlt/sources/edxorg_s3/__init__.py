@@ -175,3 +175,27 @@ def edxorg_s3_source(
 # Bucket prefix is "edxorg" to preserve the existing
 # s3://ol-data-lake-raw-<env>/edxorg destination path.
 edxorg_s3_pipeline = config.pipeline_for("edxorg", pipeline_name="edxorg_s3")
+
+
+def edxorg_s3_pipeline_for(table_name: str) -> dlt.Pipeline:
+    """Return a per-table pipeline for concurrent per-table materialization.
+
+    dlt pipelines keep a LOCAL working directory (extract/normalize staging,
+    schema + state cache) keyed by ``pipeline_name``. Tables loaded through
+    the shared ``edxorg_s3_pipeline`` singleton must run strictly
+    sequentially -- two pipeline instances with the same name racing in
+    separate OS processes corrupt each other's staging files (reproduced:
+    concurrent runs sharing one pipeline_name fail with
+    ``NormalizeJobFailed``/``FileNotFoundError`` on the shared staging dir).
+    A distinct, STABLE per-table pipeline_name isolates each table's local
+    state so tables can load concurrently. Still writes into the same
+    ``s3://.../edxorg`` destination bucket and dataset as ``edxorg_s3_pipeline``
+    -- only the local working-directory identity changes, not where data lands.
+
+    NOTE: this pipeline_name must stay stable across deploys -- dlt keys the
+    incremental ``modification_date`` cursor by pipeline_name + resource name,
+    so renaming it resets that table's cursor and triggers a full S3 reprocess
+    on the next run (safe -- merge + primary_key dedup makes reprocessing
+    idempotent -- but slower and more expensive for that one run).
+    """
+    return config.pipeline_for("edxorg", pipeline_name=f"edxorg_s3__{table_name}")
