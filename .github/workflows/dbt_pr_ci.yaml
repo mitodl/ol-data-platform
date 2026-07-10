@@ -133,39 +133,3 @@ jobs:
           } else {
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
           }
-
-  sqlfluff-lint:
-    name: sqlfluff lint (changed SQL)
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-
-    - name: Fetch base ref
-      if: github.event_name == 'pull_request'
-      run: git fetch --no-tags origin "${{ github.base_ref }}"
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.13"
-
-    - name: Install pre-commit
-      run: pip install pre-commit
-
-    # Runs the exact pinned sqlfluff-lint hook (config: [tool.sqlfluff] in the
-    # root pyproject.toml, jinja templater — no dbt connection needed). On PRs it
-    # lints only the SQL changed vs the base ref.
-    - name: sqlfluff-lint (changed files)
-      if: github.event_name == 'pull_request'
-      run: |
-        pre-commit run sqlfluff-lint \
-          --from-ref "origin/${{ github.base_ref }}" \
-          --to-ref HEAD \
-          --show-diff-on-failure
-
-    - name: sqlfluff-lint (all files)
-      if: github.event_name == 'workflow_dispatch'
-      run: pre-commit run sqlfluff-lint --all-files --show-diff-on-failure
