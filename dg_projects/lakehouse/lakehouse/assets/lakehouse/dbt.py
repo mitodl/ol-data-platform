@@ -3,7 +3,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from dagster import AssetExecutionContext, AutomationCondition
+from dagster import (
+    AssetExecutionContext,
+    AutomationCondition,
+    OpExecutionContext,
+    job,
+    op,
+)
 from dagster_dbt import (
     DagsterDbtTranslator,
     DagsterDbtTranslatorSettings,
@@ -22,10 +28,28 @@ DBT_REPO_DIR = (
     else Path("/opt/dbt")
 )
 
-dbt_project = DbtProject(
-    project_dir=DBT_REPO_DIR, target=os.environ.get("DAGSTER_DBT_TARGET", DAGSTER_ENV)
-)
+
+def _resolve_dbt_target() -> str:
+    """Resolve the dbt profile target for this environment.
+
+    Single source of truth shared by the DbtProject (which parses the manifest,
+    and therefore the Dagster asset graph) and the DbtCliResource that executes
+    it, so the graph always matches what actually runs. ``DAGSTER_DBT_TARGET``
+    overrides the mapping when set.
+    """
+    if override := os.environ.get("DAGSTER_DBT_TARGET"):
+        return override
+    # qa and production both execute against the production target.
+    return {"dev": "dev_production", "ci": "ci"}.get(DAGSTER_ENV, "production")
+
+
+DBT_TARGET = _resolve_dbt_target()
+
+dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
+
+# Built once and reused rather than reconstructed for every dbt node.
+_DBT_AUTOMATION_CONDITION = upstream_or_code_changes()
 
 
 class DbtAutomationTranslator(DagsterDbtTranslator):
@@ -33,7 +57,7 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
     ) -> AutomationCondition | None:
-        return upstream_or_code_changes()
+        return _DBT_AUTOMATION_CONDITION
 
     def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> str | None:
         """
@@ -63,36 +87,57 @@ def full_dbt_project(
     build_invocation = dbt.cli(dbt_build_args, context=context)
     yield from (build_invocation.stream().fetch_column_metadata().fetch_row_counts())
 
+    # Upload this run's results to a per-run versioned S3 key so OpenMetadata can
+    # ingest the model/test outcomes of every incremental and full run.
+    #
+    # manifest.json and catalog.json are NOT generated here: producing the catalog
+    # recompiles the whole project and queries every relation, which is far too
+    # expensive to repeat on each incremental subset build. That work lives in the
+    # dedicated `dbt_docs_artifacts_job`, which runs on a daily schedule.
     if DAGSTER_ENV != "dev":
         if not dbt_s3_artifacts.s3_bucket:
             context.log.warning(
-                "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt artifacts will not "
-                "be uploaded to S3 for OpenMetadata ingestion."
+                "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt run results will "
+                "not be uploaded to S3 for OpenMetadata ingestion."
             )
         else:
-            # Run docs generate without context so it covers the full project and
-            # doesn't emit redundant Dagster events. Re-use the build's target_path
-            # so all artifacts land in the same directory.
-            # run_results.json is uploaded to a per-run versioned key so results
-            # from every incremental and full run are captured. manifest.json and
-            # catalog.json are deduplicated by content hash and only uploaded when
-            # their content has changed.
-            docs_invocation = dbt.cli(
-                ["docs", "generate"],
-                target_path=build_invocation.target_path,
-                raise_on_error=False,
-            )
-            docs_invocation.wait()
-
-            artifacts = ["manifest.json", "run_results.json"]
-            if (build_invocation.target_path / "catalog.json").exists():
-                artifacts.append("catalog.json")
-            else:
-                context.log.warning(
-                    "dbt docs generate did not produce catalog.json; "
-                    "it will be omitted from the OpenMetadata artifact upload"
-                )
-
             dbt_s3_artifacts.upload_artifacts(
-                build_invocation.target_path, artifacts, context
+                build_invocation.target_path, ["run_results.json"], context
             )
+
+
+@op(description="Generate dbt docs artifacts and upload them to S3 for OpenMetadata.")
+def generate_dbt_docs_artifacts(
+    context: OpExecutionContext,
+    dbt: DbtCliResource,
+    dbt_s3_artifacts: DbtS3ArtifactsResource,
+) -> None:
+    if not dbt_s3_artifacts.s3_bucket:
+        context.log.warning(
+            "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt docs artifacts will "
+            "not be uploaded to S3 for OpenMetadata ingestion."
+        )
+        return
+
+    # Run without a Dagster context so it covers the full project (not just a
+    # selected subset) and doesn't emit redundant asset materialization events.
+    docs_invocation = dbt.cli(["docs", "generate"], raise_on_error=False)
+    docs_invocation.wait()
+
+    # manifest.json and catalog.json are deduplicated by content hash, so they are
+    # only re-uploaded when their content has actually changed.
+    artifacts = ["manifest.json"]
+    if (docs_invocation.target_path / "catalog.json").exists():
+        artifacts.append("catalog.json")
+    else:
+        context.log.warning(
+            "dbt docs generate did not produce catalog.json; "
+            "it will be omitted from the OpenMetadata artifact upload"
+        )
+
+    dbt_s3_artifacts.upload_artifacts(docs_invocation.target_path, artifacts, context)
+
+
+@job(description="Regenerate dbt docs artifacts for OpenMetadata on a schedule.")
+def dbt_docs_artifacts_job() -> None:
+    generate_dbt_docs_artifacts()
