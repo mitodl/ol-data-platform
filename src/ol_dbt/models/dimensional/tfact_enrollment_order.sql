@@ -43,14 +43,13 @@ with enrollment as (
         , order_fact.discount_type_fk
         , order_fact.line_price
         , order_fact.line_id
-        -- the order is already known correct (direct FK); among its lines, just prefer
-        -- whichever one's product actually matches this enrollment (for an accurate
-        -- unit_price/discount), falling back to any line.
+        -- the order is already known correct (direct FK); among its lines, prefer
+        -- the course-run-specific match (for an accurate unit_price/discount), then a
+        -- program-level match, falling back to any other line.
         , case
-            when product.courserun_fk = enrollment.courserun_fk
-                or product.program_fk = enrollment.program_fk
-            then 1
-            else 2
+            when product.courserun_fk = enrollment.courserun_fk then 1
+            when product.program_fk = enrollment.program_fk then 2
+            else 3
         end as match_priority
     from enrollment
     inner join order_fact
