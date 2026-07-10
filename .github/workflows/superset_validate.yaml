@@ -3,8 +3,10 @@ name: Superset validate
 
 # Credential-free PR gate for the exported Superset assets (src/ol_superset/assets):
 # YAML syntax, dashboard → chart → dataset UUID chains, chart↔dataset column-case
-# consistency (Trino lowercases identifiers), and governance-role schema coverage.
-# Reads only checked-in files — no Superset/warehouse connection.
+# consistency (Trino lowercases identifiers), governance-role schema coverage, and
+# the Dataset → dbt-model chain (--dbt-dir): every physical Trino dataset must map to
+# a real dbt model. Reads only checked-in files (dbt registry is parsed statically
+# from models/_*.yml) — no Superset/warehouse connection.
 
 permissions:
   contents: read
@@ -13,6 +15,8 @@ on:
   pull_request:
     paths:
     - "src/ol_superset/**"
+    # dbt model renames/removals can orphan a Superset dataset, so re-validate on those too.
+    - "src/ol_dbt/**"
     - ".github/workflows/superset_validate.yaml"
   workflow_dispatch:
 
@@ -37,10 +41,9 @@ jobs:
       working-directory: src/ol_superset
       run: uv sync --all-extras
 
-    # Runs the always-on checks (asset chain + column case + governance). The
-    # richer Dataset → dbt-model chain (`--dbt-dir ../ol_dbt`) is intentionally
-    # left off until the 2 pre-existing unmatched-dataset errors are resolved, so
-    # this gate is green on introduction and blocks only new regressions.
+    # Full validation including the Dataset → dbt-model chain. Fails (exit 1) on any
+    # physical Trino dataset whose backing dbt model is missing/renamed — which
+    # surfaces datasets pointing at stale, unmaintained warehouse tables.
     - name: Validate Superset assets
       working-directory: src/ol_superset
-      run: uv run ol-superset validate
+      run: uv run ol-superset validate --dbt-dir ../ol_dbt
