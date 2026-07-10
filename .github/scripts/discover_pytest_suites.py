@@ -73,9 +73,11 @@ def discover(repo_root: Path) -> list[dict[str, str]]:
         if test_dir is None:
             continue
         rel_dir = project_dir.relative_to(repo_root)
+        # str(rel_dir) for the root is "." (truthy), so handle it explicitly.
+        name = "root" if rel_dir == Path() else str(rel_dir).replace("/", "-")
         suites.append(
             {
-                "name": str(rel_dir).replace("/", "-") or "root",
+                "name": name,
                 "directory": str(rel_dir),
                 "testpath": str(test_dir.relative_to(project_dir)),
             }

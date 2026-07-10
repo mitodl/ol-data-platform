@@ -44,6 +44,9 @@ jobs:
   test:
     name: pytest (${{ matrix.suite.name }})
     needs: discover
+    # Skip gracefully if discovery found no suites — an empty matrix dimension
+    # otherwise errors ("Matrix vector 'suite' does not contain any values").
+    if: needs.discover.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

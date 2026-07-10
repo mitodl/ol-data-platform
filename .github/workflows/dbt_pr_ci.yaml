@@ -116,7 +116,7 @@ jobs:
             for (const a of alerts) {
               const cols = (a.column_changes || []).map(c => c.column).filter(Boolean).join(', ');
               const ds = (a.downstream || []).length;
-              body += `- ${emoji[a.level] || ''} **${a.model}**` +
+              body += `- ${emoji[a.level] || ''} **${a.changed_model}**` +
                       `${cols ? ` — \`${cols}\`` : ''} → ${ds} downstream model(s)\n`;
             }
             body += '\n</details>';
@@ -125,7 +125,8 @@ jobs:
 
           const { owner, repo } = context.repo;
           const issue_number = context.issue.number;
-          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+          // Paginate so the sticky comment is found even on PRs with >30 comments.
+          const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
           const existing = comments.find(c => c.body && c.body.includes(marker));
           if (existing) {
             await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
