@@ -38,27 +38,28 @@ so a re-run never duplicates and never mutates the fact grain. Embedding is comp
 **Decision: one shared embedding, computed once, stored in the `feedback_embeddings`
 sidecar.** Both clustering and (semantic) sentiment consume it — do not embed twice.
 
-> **REVISED 2026-07-10 — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
-> Production runs Trino on **Starburst Galaxy**, whose in-SQL AI functions
-> (`starburst.ai.generate_embedding` → `ARRAY(DOUBLE)`, public preview) can generate
-> embeddings **inside the engine we already run**, on **AWS Bedrock in our own AWS account**,
-> writing vectors straight into the Iceberg sidecar. That both eliminates the net-new
-> torch/sentence-transformers service *and* removes the third-party-egress objection below
-> (Bedrock-in-account over Presidio-redacted text). **New default: Starburst AI
-> `generate_embedding` as a `trino_only` dbt model.** The local option below drops to a
-> last-resort fallback. StarRocks vector functions are irrelevant for now (not deployed) — see
-> the ADR for the Phase-3 note. The rest of §B (persist-once, `model_version`, Iceberg ARRAY
-> storage, redaction-upstream) is unchanged and applies regardless of who computes the vector.
+> **REVISED 2026-07-10 (rev. 2) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
+> Strategic direction is to **retire Trino for StarRocks** (transforms + data bus + OLAP
+> serving), so **no Galaxy-only functionality may sit on the critical path** — this rules out
+> Starburst's `generate_embedding` (Galaxy-proprietary; StarRocks has no embedding-generation
+> equivalent). **New default: keep embedding compute engine-external in a Dagster asset that
+> calls AWS Bedrock `amazon.titan-embed-text-v2:0` directly via boto3** — in our own AWS account
+> (PII-safe over redacted text), a thin dependency (no torch), and indifferent to whether the
+> SQL engine is Trino or StarRocks. Vectors land in an open Iceberg `ARRAY<float>` sidecar, which
+> StarRocks later reads to build an HNSW index (a load, not a re-embed) — making StarRocks ANN
+> the intended serving tier. The rest of §B (persist-once, `model_version`, Iceberg storage,
+> redaction-upstream) is unchanged and applies regardless of who computes the vector.
 
-- **Model choice (fallback path, if the Starburst AI preview is unavailable/undesired) —
-  an open/self-hostable model** (e.g. `BAAI/bge-small-en-v1.5` or
-  `sentence-transformers/all-MiniLM-L6-v2`, 384-dim): even post-redaction, sending ~1.18M
-  feedback utterances to a *third-party* embedding API is avoidable egress — but note this
-  concern does **not** apply to Bedrock-in-account via Starburst AI (the new default). A local
-  sentence-transformers model runs the full corpus in a single batch job on CPU/GPU for
-  effectively $0 marginal provider cost, at the price of the heaviest image/infra.
-  - Open question deferred to implementation: GPU vs CPU throughput at 1.18M rows. At
-    MVP scale (198K) CPU is fine (single-digit minutes to low hours).
+- **Model choice — default is Bedrock `amazon.titan-embed-text-v2:0`** (dims 256/512/1024 — pick
+  256/512 for a smaller sidecar + faster HDBSCAN/HNSW unless retrieval needs 1024), called via
+  boto3 from the Dagster layer. In-account Bedrock over Presidio-redacted text has no
+  third-party-egress concern. Use Bedrock **batch inference** for the 1.18M backfill.
+  - **Fallbacks (ADR):** local `sentence-transformers` (`BAAI/bge-small-en-v1.5` /
+    `all-MiniLM-L6-v2`, 384-dim) as the $0-egress-but-heaviest option; Fenic as an ergonomics
+    wrapper (but cloud-egress only). Both stay engine-external/portable.
+  - Open question deferred to implementation: GPU vs CPU throughput at 1.18M rows (moot for the
+    Bedrock path — it's an API call; relevant only for the local fallback). MVP scale (198K) is
+    trivial batch either way.
 - **Redaction is upstream and mandatory** (design §7): embeddings are computed on the
   Presidio-redacted text only. Raw text never reaches the embedding step.
 - **`model_version` is a first-class column** on `feedback_embeddings`. Changing the model

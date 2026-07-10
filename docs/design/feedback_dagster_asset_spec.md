@@ -9,16 +9,17 @@ LLM-proposed categories, and sentiment. Grounded in the existing repo orchestrat
 patterns. **The fact ships without this asset**; this is purely additive (fills
 `embedding_id`, `category_fk`, `sentiment_fk`, and the `feedback_embeddings` sidecar).
 
-> **REVISED 2026-07-10 — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
-> Because production runs **Starburst Galaxy** (Trino), the **embedding** and **model-based
-> sentiment** stages move OUT of this Python asset and INTO `trino_only` dbt models using
-> Starburst AI functions (`generate_embedding` → Iceberg `ARRAY(DOUBLE)`; `analyze_sentiment`).
-> This asset then shrinks to **only what SQL cannot do: clustering + LLM cluster-labeling** —
-> read pre-computed vectors from the Iceberg sidecar → UMAP+HDBSCAN → LLM-label clusters. No
-> embedding model in the image (no torch/sentence-transformers), so it stays a small
-> sklearn/UMAP CPU asset still cloned from `student_risk_probability`. §2–§6 below describe the
-> full-fat Python version; treat the embed/sentiment assets there as the fallback used only if
-> the Starburst AI preview is not adopted (ADR "Alternatives").
+> **REVISED 2026-07-10 (rev. 2) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
+> Because the strategic direction is to **retire Trino for StarRocks**, all AI compute stays
+> **engine-external and portable** — no engine-native AI SQL functions (Starburst's are
+> Galaxy-only; StarRocks has none). So the embedding stage stays a Dagster asset, but it is a
+> **thin boto3 AWS Bedrock call** (`amazon.titan-embed-text-v2:0`), **not** torch/sentence-transformers
+> and **not** a Starburst `trino_only` dbt model. Auth via the Dagster pod IAM role
+> (`bedrock:InvokeModel`), likely no Vault secret. Vectors land in an open Iceberg `ARRAY<float>`
+> sidecar (StarRocks reads it later to build an HNSW index — a load, not a re-embed). Sentiment
+> stays the explicit-CSAT + embedding-kNN path (no `analyze_sentiment`). §2–§6 below describe the
+> asset shape; substitute the boto3-Bedrock client for the local embedding model where §4 lists
+> `sentence-transformers` (that is now the fallback, not the default).
 
 ---
 
