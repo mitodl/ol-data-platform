@@ -680,3 +680,32 @@ class TestUpstreamRefsSeedResolution:
 
         cols = _resolve_upstream_columns("user_course_roles", YamlRegistry(), registry, {})
         assert cols == {"user_id", "course_id", "role"}
+
+
+class TestOnlySkipValidation:
+    """Unknown --only/--skip check names must error, not silently skip everything."""
+
+    def test_only_unknown_check_errors(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from ol_dbt_cli.commands.validate import validate
+
+        with pytest.raises(SystemExit) as exc:
+            validate(only_checks="dimensinal_layering")  # typo
+        assert exc.value.code == 1
+        assert "Unknown check(s) in --only" in capsys.readouterr().out
+
+    def test_skip_unknown_check_errors(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from ol_dbt_cli.commands.validate import validate
+
+        with pytest.raises(SystemExit) as exc:
+            validate(skip_checks="not_a_check")
+        assert exc.value.code == 1
+        assert "Unknown check(s) in --skip" in capsys.readouterr().out
+
+    def test_valid_only_passes_check_parsing(self, capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+        from ol_dbt_cli.commands.validate import validate
+
+        # A valid check name must NOT trigger the unknown-check error — it proceeds
+        # past parsing and fails later on the missing dbt project instead.
+        with pytest.raises(SystemExit):
+            validate(only_checks="dimensional_layering", dbt_dir_path=str(tmp_path))
+        assert "Unknown check(s)" not in capsys.readouterr().out

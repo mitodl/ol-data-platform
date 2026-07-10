@@ -1,0 +1,46 @@
+---
+name: Superset validate
+
+# Credential-free PR gate for the exported Superset assets (src/ol_superset/assets):
+# YAML syntax, dashboard → chart → dataset UUID chains, chart↔dataset column-case
+# consistency (Trino lowercases identifiers), and governance-role schema coverage.
+# Reads only checked-in files — no Superset/warehouse connection.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+    - "src/ol_superset/**"
+    - ".github/workflows/superset_validate.yaml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: ol-superset validate
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        version: "0.11.26"
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install ol-superset
+      working-directory: src/ol_superset
+      run: uv sync --all-extras
+
+    # Runs the always-on checks (asset chain + column case + governance). The
+    # richer Dataset → dbt-model chain (`--dbt-dir ../ol_dbt`) is intentionally
+    # left off until the 2 pre-existing unmatched-dataset errors are resolved, so
+    # this gate is green on introduction and blocks only new regressions.
+    - name: Validate Superset assets
+      working-directory: src/ol_superset
+      run: uv run ol-superset validate

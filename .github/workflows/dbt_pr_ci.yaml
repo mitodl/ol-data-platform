@@ -1,0 +1,135 @@
+---
+name: dbt PR CI
+
+# Fast, credential-free checks for dbt-warehouse changes on every PR (Phase 1 of
+# the dbt CI/QA hardening effort; see docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md §4).
+# Everything here runs against the local DuckDB `dev` target with no warehouse
+# network access, so no secrets are required. Credentialed build+test (Phase 2)
+# lives in Concourse, not here.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+    - "src/ol_dbt/**"
+    - "src/ol_dbt_cli/**"
+    - ".github/workflows/dbt_pr_ci.yaml"
+  workflow_dispatch:
+
+jobs:
+  dbt-validate:
+    name: dbt parse + validate + impact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # ol-dbt impact posts a sticky PR comment
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0   # ol-dbt validate/impact diff against the base ref
+
+    - name: Fetch base ref
+      if: github.event_name == 'pull_request'
+      run: git fetch --no-tags origin "${{ github.base_ref }}"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        version: "0.11.26"
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install ol-dbt CLI
+      run: uv sync --all-extras
+
+    # `dbt parse` builds target/manifest.json (authoritative parent/child +
+    # column metadata) that ol-dbt validate/impact consume. The `dev` target is
+    # plain DuckDB — no AWS/Trino credentials, no network. dbt-duckdb is pulled in
+    # ephemerally via `uv run --with` so it need not be a project dependency.
+    - name: dbt deps + parse
+      working-directory: src/ol_dbt
+      env:
+        DBT_PROFILES_DIR: ${{ github.workspace }}/src/ol_dbt
+      run: |
+        uv run --with dbt-duckdb dbt deps
+        uv run --with dbt-duckdb dbt parse -t dev
+
+    # Dimensional-layering gate (#2072 DoD): global, baselined — fails only on
+    # NEW marts/reporting → staging/intermediate references.
+    - name: Dimensional-layering lint
+      run: uv run ol-dbt validate --only dimensional_layering --format json
+
+    # Structural validation of the models changed in this PR. Scoped to changed
+    # models so pre-existing issues elsewhere don't block unrelated PRs; a
+    # changed model with an ERROR fails the check. (PR-only: needs a base ref.)
+    - name: Validate changed models
+      if: github.event_name == 'pull_request'
+      run: |
+        uv run ol-dbt validate \
+          --changed-only \
+          --base-ref "origin/${{ github.base_ref }}" \
+          --skip dimensional_layering \
+          --format json
+
+    # Column-level blast radius of the changed models, posted as a PR comment.
+    # Annotate-only: breaking changes are legitimate under review, so this never
+    # fails the job (see spec §10).
+    - name: Column-level impact analysis
+      if: github.event_name == 'pull_request'
+      run: |
+        uv run ol-dbt impact \
+          --format json \
+          --base-ref "origin/${{ github.base_ref }}" \
+          > impact.json 2> impact.err || true
+        echo "--- impact stderr ---"; cat impact.err || true
+
+    - name: Post impact PR comment
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- ol-dbt-impact -->';
+          let alerts = [];
+          try {
+            alerts = JSON.parse(fs.readFileSync('impact.json', 'utf8'));
+            if (!Array.isArray(alerts)) alerts = [];
+          } catch (e) {
+            // No changed models / non-JSON output → treat as no impact.
+          }
+          const counts = { BREAKING: 0, WARNING: 0, INFO: 0 };
+          for (const a of alerts) { counts[a.level] = (counts[a.level] || 0) + 1; }
+          const emoji = { BREAKING: '🔴', WARNING: '⚠️', INFO: 'ℹ️' };
+
+          let body = `${marker}\n## 🔎 ol-dbt impact — column-level blast radius\n\n`;
+          if (alerts.length === 0) {
+            body += '✅ No column-level downstream impact detected for the changed models.';
+          } else {
+            body += `**${counts.BREAKING} breaking**, **${counts.WARNING} warning**, ${counts.INFO} info` +
+                    ` across ${alerts.length} changed model(s).\n\n`;
+            body += '<details><summary>Details</summary>\n\n';
+            for (const a of alerts) {
+              const cols = (a.column_changes || []).map(c => c.column).filter(Boolean).join(', ');
+              const ds = (a.downstream || []).length;
+              body += `- ${emoji[a.level] || ''} **${a.changed_model}**` +
+                      `${cols ? ` — \`${cols}\`` : ''} → ${ds} downstream model(s)\n`;
+            }
+            body += '\n</details>';
+          }
+          body += '\n\n<sub>Posted by `ol-dbt impact` (annotate-only — does not block merge).</sub>';
+
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          // Paginate so the sticky comment is found even on PRs with >30 comments.
+          const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+          const existing = comments.find(c => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }

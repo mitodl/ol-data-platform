@@ -10,21 +10,48 @@ on:
     - main
     paths:
     - "packages/**/*.py"
+    - "src/**/*.py"
+    - "dg_projects/**/*.py"
+    - "**/pyproject.toml"
     - ".github/workflows/pytest.yaml"
-    - "pyproject.toml"
+    - ".github/scripts/discover_pytest_suites.py"
   pull_request:
     paths:
     - "packages/**/*.py"
+    - "src/**/*.py"
+    - "dg_projects/**/*.py"
+    - "**/pyproject.toml"
     - ".github/workflows/pytest.yaml"
-    - "pyproject.toml"
+    - ".github/scripts/discover_pytest_suites.py"
   workflow_dispatch:
 
 jobs:
+  # Discover every pytest suite (any pyproject.toml dir with a tests/ or
+  # <project>_tests/ folder that has test files) so new code locations —
+  # especially dg_projects/* — are covered automatically as tests are added.
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Discover pytest suites
+      id: find
+      run: python3 .github/scripts/discover_pytest_suites.py >> "$GITHUB_OUTPUT"
+
   test:
+    name: pytest (${{ matrix.suite.name }})
+    needs: discover
+    # Skip gracefully if discovery found no suites — an empty matrix dimension
+    # otherwise errors ("Matrix vector 'suite' does not contain any values").
+    if: needs.discover.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        suite: ${{ fromJson(needs.discover.outputs.matrix) }}
 
     steps:
     - name: Checkout code
@@ -36,17 +63,24 @@ jobs:
         version: "0.11.28"
         enable-cache: true
 
-    - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+    - name: Set up Python
+      run: uv python install 3.13
 
+    # Each suite syncs from its own directory: standalone projects (src/ol_dlt,
+    # src/ol_superset, dg_projects/*) resolve their own env; workspace members
+    # resolve the shared root environment.
     - name: Install dependencies
+      working-directory: ${{ matrix.suite.directory }}
       run: uv sync --all-extras
 
+    # pytest-cov is injected via --with so coverage works uniformly even for
+    # suites that don't declare it as a dev dependency.
     - name: Run pytest
+      working-directory: ${{ matrix.suite.directory }}
       run: |
-        uv run pytest packages/ \
+        uv run --with pytest-cov pytest ${{ matrix.suite.testpath }} \
           --verbose \
-          --cov=packages \
+          --cov \
           --cov-report=term-missing \
           --cov-report=xml
 
@@ -54,7 +88,7 @@ jobs:
       if: always()
       uses: codecov/codecov-action@v6
       with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+        file: ${{ matrix.suite.directory }}/coverage.xml
+        flags: ${{ matrix.suite.name }}
+        name: ${{ matrix.suite.name }}
         fail_ci_if_error: false

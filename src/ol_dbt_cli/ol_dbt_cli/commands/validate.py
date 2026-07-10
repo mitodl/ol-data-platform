@@ -832,12 +832,28 @@ def validate(
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
         raise SystemExit(1)
+
+    def _parse_check_list(raw: str, flag: str) -> set[str]:
+        """Parse a comma-separated check list, erroring on unknown names.
+
+        Without this, an unknown/misspelled check (e.g. ``--only dimensinal_layering``)
+        would silently skip *every* check and exit 0 — a false-green in CI.
+        """
+        names = {s.strip() for s in raw.split(",") if s.strip()}
+        unknown = names - all_checks
+        if unknown:
+            console.print(
+                f"[bold red]Error:[/] Unknown check(s) in {flag}: {sorted(unknown)}. "
+                f"Valid checks: {sorted(all_checks)}."
+            )
+            raise SystemExit(1)
+        return names
+
     skipped: set[str] = set()
     if skip_checks:
-        skipped = {s.strip() for s in skip_checks.split(",")}
+        skipped = _parse_check_list(skip_checks, "--skip")
     elif only_checks:
-        requested = {s.strip() for s in only_checks.split(",")}
-        skipped = all_checks - requested
+        skipped = all_checks - _parse_check_list(only_checks, "--only")
 
     # Resolve dbt project directory
     if dbt_dir_path:
