@@ -51,7 +51,13 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         description="StarRocks database/schema to connect to, e.g. 'b2b_analytics'."
     )
 
-    def _generate_credentials(self) -> tuple[str, str]:
+    def generate_credentials(self) -> tuple[str, str]:
+        """Fetch a fresh set of dynamic (username, password) credentials from Vault.
+
+        Public so callers that need StarRocks credentials outside of `execute()`
+        (e.g. injecting DBT_STARROCKS_USERNAME/PASSWORD for a dbt CLI invocation)
+        can reuse the same Vault database secrets engine call.
+        """
         creds = self.vault.client.secrets.database.generate_credentials(
             mount_point=self.vault_mount_point,
             name=self.vault_role,
@@ -81,7 +87,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                 )
                 time.sleep(delay)
 
-            username, password = self._generate_credentials()
+            username, password = self.generate_credentials()
             try:
                 conn = connect(
                     host=self.host,
