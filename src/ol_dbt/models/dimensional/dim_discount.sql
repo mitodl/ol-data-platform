@@ -87,6 +87,10 @@ with mitxonline_discounts as (
     from combined_discounts
 )
 
+-- This table is full-refresh (materialized='table' above), so every run regenerates
+-- discount_pk for all rows. Changing this hash's inputs requires a full-refresh of
+-- incremental consumers (e.g. tfact_order.discount_fk) in the same deploy, or their
+-- historical rows are left pointing at pks that no longer exist.
 select
     {{ dbt_utils.generate_surrogate_key(['cast(source_discount_id as varchar)', 'platform_code']) }} as discount_pk
     , platform_code
