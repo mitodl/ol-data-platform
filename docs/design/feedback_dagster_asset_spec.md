@@ -14,12 +14,12 @@ patterns. **The fact ships without this asset**; this is purely additive (fills
 > **engine-external and portable** — no engine-native AI SQL functions (Starburst's are
 > Galaxy-only; StarRocks has none). The embedding/sentiment/labeling stages run via **Fenic
 > (Apache-2.0)** inside a Dagster asset — not torch, not a Starburst `trino_only` dbt model.
-> **Embedding provider is a PII-policy choice:** in-account AWS Bedrock
-> `amazon.titan-embed-text-v2:0` (via boto3 today — native Fenic Bedrock *embeddings* are
-> roadmap-not-shipped — or contribute the provider), or a Fenic-native managed provider
-> (Cohere/OpenAI/Google) over redacted text if policy allows. Bedrock auth via the Dagster pod
-> IAM role (`bedrock:InvokeModel`), likely no Vault secret; a managed provider uses a
-> Vault-stored key via the existing `ConfigurableResource` pattern. Vectors land in an open
+> **Embedding model is chosen by task effectiveness** (Bedrock not required) — MTEB-narrowed
+> shortlist benchmarked on a labeled Zendesk sample (`feedback_ml_approach.md` §B.1): Fenic-native
+> managed (`gemini-embedding-001`/Cohere `embed-v4`/OpenAI `text-embedding-3-large`) or
+> self-hosted open (Qwen3/BGE-M3). Egress of Presidio-redacted text is acceptable. A managed
+> provider uses a Vault-stored key via the existing `ConfigurableResource` pattern; a self-hosted
+> model needs no secret but a heavier image. Choice is reversible via `model_version`. Vectors land in an open
 > Iceberg `ARRAY<float>` sidecar (StarRocks reads it later to build an HNSW index — a load, not a
 > re-embed). **Clustering stays our own sklearn UMAP+HDBSCAN** (Fenic has K-means only, no noise
 > class). Sentiment defaults to the explicit-CSAT + embedding-kNN path. Fenic does not read

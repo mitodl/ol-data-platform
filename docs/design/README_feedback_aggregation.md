@@ -34,17 +34,20 @@ signals for four audiences (support, engineering, instructors, leadership).
    tag-seeded categories + CSAT-derived sentiment; embeddings/clustering fill `category_fk`/
    `sentiment_fk`/`embedding_id` later. Embeddings persisted **once** (the one adopted lesson
    from prototype #10793).
-4. **Engine-portable AI compute via Fenic** (revised 2026-07-10 rev. 3, ADR): because the
-   strategic direction is to **retire Trino for StarRocks**, no Galaxy-only functionality sits
-   on the critical path (Starburst `generate_embedding` **rejected**). AI compute stays
-   engine-external using **Fenic (Apache-2.0)** in a Dagster asset — batching/caching/lineage for
-   free, indifferent to Trino vs. StarRocks. **Embedding provider is a PII-policy choice:**
-   in-account **AWS Bedrock** `amazon.titan-embed-text-v2:0` (best posture — via boto3 today, as
-   native Fenic Bedrock embeddings are roadmap-not-shipped) or a Fenic-native managed provider
-   (Cohere/OpenAI/Google) over redacted text. Vectors → open Iceberg `ARRAY<float>` sidecar;
-   **StarRocks HNSW is the intended vector-serving tier**, reached by loading those vectors (no
-   re-embed). Clustering stays our own HDBSCAN (Fenic has K-means only). Presidio redaction
-   mandatory pre-embed.
+4. **Engine-portable AI compute via Fenic; embedding model chosen by effectiveness** (revised
+   2026-07-10 rev. 4, ADR): because the strategic direction is to **retire Trino for StarRocks**,
+   no Galaxy-only functionality sits on the critical path (Starburst `generate_embedding`
+   **rejected**). AI compute stays engine-external using **Fenic (Apache-2.0)** in a Dagster asset
+   — batching/caching/lineage for free, portable across Trino→StarRocks. **Bedrock is not
+   required; the embedding model is selected by task effectiveness** — MTEB to narrow, then
+   benchmark the shortlist (Fenic-native `gemini-embedding-001`/Cohere `embed-v4`/OpenAI
+   `text-embedding-3-large`; or self-hosted Qwen3/BGE-M3) on a labeled Zendesk sample by
+   clustering agreement/coherence + cost, sweeping Matryoshka dims (`feedback_ml_approach.md`
+   §B.1). Choice is reversible via `model_version`. Vectors → open Iceberg `ARRAY<float>` sidecar;
+   **StarRocks HNSW is the intended vector-serving tier**. Clustering stays our own HDBSCAN (Fenic
+   is K-means only); LLM semantic-normalization-before-embedding is a first-class eval arm (2026
+   evidence: biggest lever for short-ticket cluster quality). Presidio redaction mandatory
+   pre-embed (data-minimization, independent of egress).
 5. **Superset-first consumption**; support + engineering are the MVP-served audiences
    (Zendesk is not course-scoped, so instructors wait for Phase 2 sources).
 

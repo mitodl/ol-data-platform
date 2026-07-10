@@ -38,51 +38,70 @@ so a re-run never duplicates and never mutates the fact grain. Embedding is comp
 **Decision: one shared embedding, computed once, stored in the `feedback_embeddings`
 sidecar.** Both clustering and (semantic) sentiment consume it — do not embed twice.
 
-> **REVISED 2026-07-10 (rev. 3) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
-> Strategic direction is to **retire Trino for StarRocks** (transforms + data bus + OLAP
-> serving), so **no Galaxy-only functionality may sit on the critical path** — this rules out
-> Starburst's `generate_embedding` (Galaxy-proprietary; StarRocks has no embedding-generation
-> equivalent). **New default: keep embedding compute engine-external, using Fenic (Apache-2.0)
-> as the framework** in a Dagster asset reading the dbt outputs and writing vectors to an open
-> Iceberg `ARRAY<float>` sidecar — indifferent to whether the SQL engine is Trino or StarRocks,
-> and giving batching/caching/cost-accounting/lineage for free. **Embedding provider is a
-> PII-policy choice, decoupled from the framework:** in-account **AWS Bedrock**
-> `amazon.titan-embed-text-v2:0` (best posture — via boto3 today, since a native Fenic Bedrock
-> *embedding* provider is roadmap-not-shipped; or contribute it, Apache-2.0), OR a Fenic-native
-> managed provider (Cohere/OpenAI/Google) over Presidio-redacted text if policy allows. Vectors
-> in Iceberg → StarRocks later builds an HNSW index over them (a load, not a re-embed) = intended
-> serving tier. The rest of §B (persist-once, `model_version`, Iceberg storage, redaction-upstream)
-> is unchanged regardless of who computes the vector.
+> **REVISED 2026-07-10 (rev. 4) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
+> Compute stays engine-external via **Fenic (Apache-2.0)** in a Dagster asset, writing vectors to
+> an open Iceberg `ARRAY<float>` sidecar (portable across Trino→StarRocks; StarRocks later indexes
+> those vectors with HNSW). **Bedrock/in-account is NOT a requirement** — the **embedding model is
+> chosen by task effectiveness** (clustering + retrieval on OUR feedback corpus), with egress of
+> Presidio-redacted text to a managed provider acceptable. Model selection is specified as an
+> evaluation below, not a fixed pick. Persist-once, `model_version`, Iceberg storage, and
+> mandatory upstream redaction are unchanged.
 
-- **Model choice — recommend Bedrock `amazon.titan-embed-text-v2:0`** (dims 256/512/1024 — pick
-  256/512 for a smaller sidecar + faster HDBSCAN/HNSW unless retrieval needs 1024) for the
-  in-account PII posture over Presidio-redacted text; use Bedrock **batch inference** for the
-  1.18M backfill. A Fenic-native managed provider (Cohere/OpenAI/Google) is the simpler
-  alternative if egress of *redacted* text is acceptable by policy.
-  - **Fallbacks (ADR):** direct boto3 Bedrock client without Fenic (minimal, hand-build the
-    batching); local `sentence-transformers` (`BAAI/bge-small-en-v1.5` / `all-MiniLM-L6-v2`,
-    384-dim) as the $0-egress-but-heaviest option. All stay engine-external/portable.
-  - Note: **HDBSCAN clustering stays our own sklearn step** — Fenic offers only K-means
-    (`with_cluster_labels`), which lacks the noise class we need (§C). Fenic covers embed +
-    classify/sentiment + labeling; not clustering.
-  - Open question deferred to implementation: throughput at 1.18M rows (moot for the Bedrock/API
-    path). MVP scale (198K) is trivial batch either way.
+### B.1 Embedding-model selection — by effectiveness, on our own labeled corpus
+
+Selection principle (industry consensus): **use the MTEB leaderboard to *narrow*, then benchmark
+the shortlist on our own labeled Zendesk sample — the decisive metric is performance on our
+corpus, not the public average.** Because embeddings are persisted with `model_version` (below),
+the choice is **reversible**: re-embed with a better model later without touching the fact.
+
+**Candidate shortlist (narrow with current MTEB *clustering + retrieval* standings at eval time;
+these move monthly).** Two tiers:
+
+| Tier | Candidates (2026) | Via | Notes |
+|---|---|---|---|
+| Managed (Fenic-native) | Google `gemini-embedding-001`; Cohere `embed-v4`; OpenAI `text-embedding-3-large` | Fenic `GoogleVertex/GoogleDeveloper/Cohere/OpenAI EmbeddingModel` | gemini + Cohere v4 currently edge OpenAI on MTEB; all support **Matryoshka dim truncation** (test 256/512/1024 — smaller = faster HDBSCAN/HNSW + smaller sidecar, usually minimal quality loss). Egress of redacted text. |
+| Self-hosted open (top of MTEB) | Qwen3-Embedding; BGE-M3; NV-Embed-v2 | `sentence-transformers` (outside Fenic's provider set) | Currently top the MTEB average / best open quality-cost (BGE-M3); $0 marginal cost, no egress, full control — at the price of hosting a model (heavier Dagster image / a GPU batch). Include if we're willing to self-host for effectiveness. |
+
+**Evaluation harness (run once on a labeled sample, ~2–5k tickets):**
+1. **Label set:** reuse the existing structure as ground truth — Zendesk `ticket_tags` /
+   `group_name` give a free (noisy) cluster/label reference; optionally hand-label a few hundred
+   for a cleaner set.
+2. **Task-aligned metrics, not MTEB average:**
+   - *Clustering* (our primary task): run the §C pipeline (UMAP+HDBSCAN) on each candidate's
+     vectors; score **silhouette** + **agreement with the tag reference** (adjusted Rand /
+     normalized mutual information) + a small **human-coherence** rating of the top clusters.
+   - *Retrieval* (future "similar feedback"/RAG serving): nearest-neighbour precision@k on
+     tag-matched pairs.
+3. **Also sweep dimension** (Matryoshka 256/512/1024) and **cost/latency per 1M** as tie-breakers.
+4. **Pick** the model×dim that maximizes clustering agreement/coherence at acceptable cost.
+
+**Starting default for the eval** (so implementation isn't blocked on the bake-off): a strong
+current all-rounder available via Fenic — `gemini-embedding-001` or Cohere `embed-v4` at 512-dim
+— with `text-embedding-3-large` as the "safe baseline" comparison and BGE-M3 as the self-hosted
+comparison. Let the harness decide; do not hardcode a winner in the spec.
+
+- **HDBSCAN clustering stays our own sklearn step** — Fenic offers only K-means
+  (`with_cluster_labels`), which lacks the noise class we need (§C). Fenic covers embed +
+  classify/sentiment + labeling; not clustering.
 - **Redaction is upstream and mandatory** (design §7): embeddings are computed on the
-  Presidio-redacted text only. Raw text never reaches the embedding step.
-- **`model_version` is a first-class column** on `feedback_embeddings`. Changing the model
-  = new `model_version` rows, old ones retained until re-cluster completes (no in-place
-  overwrite → no torn state).
-- **Vector storage:** at ~1.18M × 384 float32 ≈ 1.8 GB. Store as an Iceberg `ARRAY<float>`
-  column in `feedback_embeddings` for the MVP (no new operational service; aligns with the
-  lake). Revisit a dedicated vector index (StarRocks vector column, S3 Vectors, Qdrant)
-  only when an online nearest-neighbour/serving need appears — the batch clustering job
-  reads the whole set into memory, which is fine at this scale. This defers the RFC's
-  "embedding model & vector store" open question to a reversible, low-cost default.
+  Presidio-redacted text only. Raw text never reaches the embedding step. (Redaction remains
+  required even though provider egress is now acceptable — it is a data-minimization guarantee,
+  not just an egress control.)
+- **`model_version` is a first-class column** on `feedback_embeddings`. Changing the model (or the
+  dimension) = new `model_version` rows, old retained until re-cluster completes (no torn state).
+  This is what makes the model choice reversible and the eval low-risk.
+- **Vector storage:** ~1.18M × (256–1024) float32 ≈ 1.2–4.8 GB. Store as an Iceberg `ARRAY<float>`
+  column for the MVP (no new service; the batch clustering job reads the set into memory — fine at
+  this scale). StarRocks HNSW becomes the serving-tier index once deployed (ADR).
 
-**Rejected:** re-embedding on every run (the prototype #10793 flaw the RFC explicitly
-fixes); semantic-summary-before-embedding as a default (see §C, treated as a hypothesis
-to test, not a baseline — an LLM call per record turns a ~$2–16 job into a per-record LLM
-cost across 1M+ records and can distort short-text sources).
+**Rejected:** re-embedding on every run (the prototype #10793 flaw the RFC fixes).
+**Upgraded from "rejected" to "evaluate seriously" (new evidence, 2026-07):** LLM
+**semantic-normalization before embedding**. Recent support-ticket-clustering literature reports it
+is *the single largest contributor to cluster quality* on short/noisy ticket text (improved
+silhouette + human-rated coherence over baselines) — stronger than the RFC's earlier skeptical
+stance. Treat it as a **first-class arm of the §C evaluation**, not a default: it adds an LLM call
+per record (cost), so gate by measured lift vs. cost, and expect it to help most on the long noisy
+Zendesk descriptions (avg ~1,000 chars) and least on already-short sources (tutor ~58, ORA ~140).
 
 ---
 
@@ -107,6 +126,12 @@ cohesion signal that lets a human say "this is recurring."
   raw high-dim space). `n_neighbors`/`min_cluster_size` are the two knobs to tune on a
   Zendesk sample; `min_cluster_size` is effectively the "how many tickets before we call
   it systemic" threshold and should be a config, not hardcoded.
+- **Pre-embedding LLM semantic-normalization is a first-class eval arm here** (see §B.1): recent
+  support-ticket-clustering evidence (2026) reports it is the single largest lever on cluster
+  quality for short/noisy ticket text. Evaluate `normalize→embed→cluster` against `embed→cluster`
+  on the labeled sample (silhouette + tag-agreement + human coherence); adopt only where the
+  measured lift justifies the per-record LLM cost — likely worth it for the long Zendesk
+  descriptions, likely not for already-short sources.
 - **Re-clustering is cheap and expected:** each run writes a new `cluster_run_id`; the
   sidecar keeps prior runs. `dim_feedback_category` (curated) only advances when a human
   approves labels from a run (design §4a), decoupling churny clustering from the stable

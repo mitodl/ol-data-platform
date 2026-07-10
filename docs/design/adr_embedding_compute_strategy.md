@@ -62,16 +62,17 @@ int__feedback__unioned (redacted text, feedback_pk)                    [dbt/SQL 
   → sentiment_fk : explicit-CSAT seed + embedding-kNN (default) or Fenic analyze_sentiment
 ```
 
-**Embedding provider is a PII-policy choice, decoupled from the framework:**
-- **If in-account AWS Bedrock is a hard requirement** (best PII posture — vectors never leave
-  our AWS account, over Presidio-redacted text): today that means either (a) **contribute/point a
-  Bedrock embedding provider into Fenic** (Apache-2.0 allows it; aligns with their roadmap), or
-  (b) compute the embedding with a thin **boto3 `bedrock-runtime.invoke_model`
-  (`amazon.titan-embed-text-v2:0`)** step and use Fenic for the *rest* of the semantic pipeline.
-  Both keep the compute engine-external and portable.
-- **If a supported managed provider on redacted text is acceptable** (Cohere / OpenAI / Google
-  via Fenic's shipped config): simplest path, at the cost of provider egress of
-  *already-redacted* text. Decide against the learner-PII policy.
+**Embedding model is chosen by TASK EFFECTIVENESS, not by provider/PII** (owner direction,
+2026-07-10: Bedrock/in-account is **not** a requirement; select the model on how well it clusters
+and retrieves *our* feedback). Egress of Presidio-redacted text to a managed provider is
+acceptable. See `feedback_ml_approach.md` §B.1 for the selection harness (MTEB to narrow →
+benchmark the shortlist on a labeled Zendesk sample → pick by clustering agreement/coherence and
+cost; sweep Matryoshka dims). Candidate providers: Fenic-native managed
+(`gemini-embedding-001` / Cohere `embed-v4` / OpenAI `text-embedding-3-large`) and self-hosted
+open (Qwen3-Embedding / BGE-M3 via `sentence-transformers`) if we host for effectiveness. Because
+vectors persist with `model_version`, the choice is reversible (re-embed later without touching
+the fact). Bedrock (`amazon.titan-embed-text-v2:0` via boto3) remains *a* candidate — no longer
+the default, just one option in the bake-off.
 
 Either way the **vectors land in an open Iceberg `ARRAY<float>` sidecar**, so when StarRocks
 becomes the serving/OLAP + data-bus engine it **reads those vectors and builds an HNSW index**
