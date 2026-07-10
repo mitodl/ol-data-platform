@@ -179,5 +179,6 @@ def render_baseline(violations: list[LayeringViolation]) -> str:
 
 
 def write_baseline(path: Path, violations: list[LayeringViolation]) -> None:
-    """Write the baseline file for *violations*."""
+    """Write the baseline file for *violations*, creating parent dirs as needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_baseline(violations))

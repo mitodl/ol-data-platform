@@ -186,6 +186,12 @@ class TestBaseline:
     def test_load_missing_returns_empty(self, tmp_path: Path) -> None:
         assert load_baseline(tmp_path / "nope.txt") == set()
 
+    def test_write_creates_missing_parent_dirs(self, tmp_path: Path) -> None:
+        # A custom --baseline-file path whose parent doesn't exist yet must not crash.
+        path = tmp_path / "config" / "nested" / "baseline.txt"
+        write_baseline(path, [LayeringViolation("marts__a", "int__x", "marts", "intermediate")])
+        assert load_baseline(path) == {"marts__a -> int__x"}
+
     def test_comments_and_blanks_ignored(self, tmp_path: Path) -> None:
         path = tmp_path / "baseline.txt"
         path.write_text("# header\n\nmarts__a -> int__x\n  # indented comment\nrep_b -> stg__y  # trailing\n")
