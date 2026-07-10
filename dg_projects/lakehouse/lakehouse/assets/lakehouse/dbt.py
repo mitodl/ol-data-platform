@@ -1,12 +1,17 @@
 import os
 from collections.abc import Mapping
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from dagster import (
+    AssetCheckSeverity,
     AssetExecutionContext,
+    AssetSpec,
     AutomationCondition,
+    FreshnessPolicy,
     OpExecutionContext,
+    build_column_schema_change_checks,
     job,
     op,
 )
@@ -152,3 +157,96 @@ def generate_dbt_docs_artifacts(
 @job(description="Regenerate dbt docs artifacts for OpenMetadata on a schedule.")
 def dbt_docs_artifacts_job() -> None:
     generate_dbt_docs_artifacts()
+
+
+# ---------------------------------------------------------------------------
+# Runtime trust: freshness + column-schema-change signals on the dimensional layer.
+#
+# dagster-dbt already hoists every dbt test (including the dbt_expectations suite)
+# into Dagster asset checks automatically, so those are NOT reimplemented here.
+# These add the two runtime signals dbt tests cannot express, on the declared
+# contract boundary (models/dimensional, see models/dimensional/README.md):
+#   1. freshness      — has each dimensional table actually rebuilt recently?
+#   2. schema change  — did a table's column set/types drift between builds?
+#
+# The dimensional layer is the group whose asset-key first path component is
+# "dimensional" (dbt config schema == group name; same selector definitions.py
+# already uses to build the Superset datasets).
+# ---------------------------------------------------------------------------
+DIMENSIONAL_GROUP = "dimensional"
+
+# Dimensional models rebuild on the nightly dbt cadence (automation sensor +
+# 02:00 UTC layer schedule). Warn if a table has not updated in 30h (a run
+# slipped) and fail at 48h (roughly two missed cycles). Evaluated automatically
+# by the Dagster daemon — no sensor required.
+DIMENSIONAL_FRESHNESS_POLICY = FreshnessPolicy.time_window(
+    fail_window=timedelta(hours=48),
+    warn_window=timedelta(hours=30),
+)
+
+
+def _attach_dimensional_freshness(spec: AssetSpec) -> AssetSpec:
+    if spec.key.path[0] == DIMENSIONAL_GROUP:
+        return spec.replace_attributes(freshness_policy=DIMENSIONAL_FRESHNESS_POLICY)
+    return spec
+
+
+# Attach the freshness policy to the dimensional dbt assets. map_asset_specs
+# returns a new AssetsDefinition that preserves the dbt build op, the hoisted
+# dbt-test asset checks, and every key — it only augments the specs.
+full_dbt_project = full_dbt_project.map_asset_specs(_attach_dimensional_freshness)
+
+dimensional_asset_keys = [
+    key for key in full_dbt_project.keys if key.path[0] == DIMENSIONAL_GROUP
+]
+
+# Column-schema-change checks compare each build's recorded TableSchema against
+# the previous one; viable because full_dbt_project attaches column metadata via
+# .fetch_column_metadata(). They ride along with the dimensional assets' runs.
+# Guarded against an unparsed/empty manifest (the builder rejects empty input).
+if dimensional_asset_keys:
+    dimensional_schema_change_checks = build_column_schema_change_checks(
+        assets=dimensional_asset_keys,
+        severity=AssetCheckSeverity.WARN,
+    )
+else:
+    dimensional_schema_change_checks = []
+
+
+@op(
+    description=(
+        "Run `dbt source freshness` and upload sources.json to S3 for OpenMetadata."
+    )
+)
+def check_dbt_source_freshness(
+    context: OpExecutionContext,
+    dbt: DbtCliResource,
+    dbt_s3_artifacts: DbtS3ArtifactsResource,
+) -> None:
+    # `source freshness` emits warn/error states per source; don't fail the Dagster
+    # run on a stale source (raise_on_error=False) so the schedule keeps producing
+    # the signal. sources.json carries the per-source status for OpenMetadata.
+    freshness_invocation = dbt.cli(["source", "freshness"], raise_on_error=False)
+    freshness_invocation.wait()
+
+    if not dbt_s3_artifacts.s3_bucket:
+        context.log.warning(
+            "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt source freshness results "
+            "will not be uploaded to S3 for OpenMetadata ingestion."
+        )
+        return
+
+    if (freshness_invocation.target_path / "sources.json").exists():
+        dbt_s3_artifacts.upload_artifacts(
+            freshness_invocation.target_path, ["sources.json"], context
+        )
+    else:
+        context.log.warning(
+            "dbt source freshness did not produce sources.json; "
+            "nothing to upload for OpenMetadata."
+        )
+
+
+@job(description="Run dbt source freshness for configured sources on a schedule.")
+def dbt_source_freshness_job() -> None:
+    check_dbt_source_freshness()
