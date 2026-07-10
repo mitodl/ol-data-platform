@@ -87,8 +87,12 @@ def test_pipeline_for_gives_each_table_a_distinct_stable_name() -> None:
 def test_pipeline_for_shares_destination_with_singleton_pipeline() -> None:
     """Per-table pipelines still land in the same edxorg destination bucket."""
     per_table = edxorg_s3.edxorg_s3_pipeline_for("auth_user")
+    singleton = edxorg_s3.edxorg_s3_pipeline
+    # destination_name is just the destination TYPE (e.g. "filesystem") and
+    # would match even if the bucket/prefix diverged -- assert the actual
+    # bucket_url so this test guards the intended behavior.
     assert (
-        per_table.destination.destination_name
-        == edxorg_s3.edxorg_s3_pipeline.destination.destination_name
+        per_table.destination.config_params["bucket_url"]
+        == singleton.destination.config_params["bucket_url"]
     )
-    assert per_table.dataset_name == edxorg_s3.edxorg_s3_pipeline.dataset_name
+    assert per_table.dataset_name == singleton.dataset_name
