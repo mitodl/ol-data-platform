@@ -356,20 +356,26 @@ def _browser_pkce(issuer: str, env_name: str) -> tuple[str, str]:
                 urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query)
             )
             if params.get("state") != state:
+                result["error"] = "state mismatch - possible CSRF"
                 self.send_response(400)
                 self.end_headers()
                 self.wfile.write(b"State mismatch - possible CSRF. Try again.")
-                return
-            result["code"] = params.get("code", "")
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"<h2>Authenticated. You can close this tab.</h2>")
+            else:
+                result["code"] = params.get("code", "")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"<h2>Authenticated. You can close this tab.</h2>")
+            # Must shut down on every response, not just success -- serve_forever()
+            # otherwise blocks forever on a state mismatch (or any other rejected
+            # request), hanging the CLI indefinitely.
             threading.Thread(target=self.server.shutdown, daemon=True).start()
 
     server = http.server.HTTPServer(("localhost", _CALLBACK_PORT), _Handler)
     print("Opening browser for Keycloak login...", file=sys.stderr)  # noqa: T201
     webbrowser.open(auth_url)
     server.serve_forever()
+    if "error" in result:
+        sys.exit(f"Keycloak login failed: {result['error']}")
 
     token_response = _token_request(
         f"{issuer}/protocol/openid-connect/token",

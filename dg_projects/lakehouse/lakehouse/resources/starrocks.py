@@ -6,6 +6,7 @@ connection -- no passwords are held in Dagster config.
 """
 
 import logging
+import ssl
 import time
 
 from dagster import ConfigurableResource, ResourceDependency
@@ -18,6 +19,17 @@ from pymysql.err import OperationalError
 log = logging.getLogger(__name__)
 
 DEFAULT_STARROCKS_PORT = 9030
+
+
+def _make_ssl_context() -> ssl.SSLContext:
+    # Matches bin/starrocks-auth's `--ssl --ssl-verify-server-cert=OFF` mysql
+    # invocation and legacy_openedx/resources/mysql_db.py's MySQLClient:
+    # encrypted transport, no cert verification (internal cluster cert).
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
 
 # MySQL-wire-protocol error codes that warrant a fresh Vault credential + retry.
 # 1044 ER_DBACCESS_DENIED_ERROR / 1045 ER_ACCESS_DENIED_ERROR - the dynamic user
@@ -96,6 +108,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                     user=username,
                     password=password,
                     cursorclass=DictCursor,
+                    ssl=_make_ssl_context(),
                 )
             except OperationalError as exc:
                 if exc.args[0] not in _RETRIABLE_ERRORS:
