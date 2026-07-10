@@ -4,23 +4,29 @@ import time
 
 from dagster import AssetExecutionContext
 from dagster_dbt import (
-    DagsterDbtTranslator,
     DagsterDbtTranslatorSettings,
     DbtCliResource,
     DbtProject,
     dbt_assets,
 )
 from dagster_dbt.errors import DagsterDbtCliRuntimeError
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR
+from lakehouse.assets.lakehouse.dbt import (
+    DBT_REPO_DIR,
+    DbtAutomationTranslator,
+    resolve_dbt_target,
+)
 from lakehouse.resources.starrocks import StarRocksResource
 
-# b2b_analytics models are gated `+enabled: "{{ target.type == 'starrocks' }}"` in
-# dbt_project.yml, so they only exist in a manifest parsed against one of these
-# targets -- full_dbt_project's manifest is always parsed against a Trino target
-# and never sees them. Matches the dbt_target choices in
-# src/ol_dbt_cli/ol_dbt_cli/commands/starrocks.py's _ENVS map.
+# tag:starrocks models (see dbt_project.yml) are additionally gated
+# `+enabled: "{{ target.type == 'starrocks' }}"`, so they only exist in a
+# manifest parsed against one of these targets -- full_dbt_project's manifest
+# is always parsed against a Trino target and never sees them. Matches the
+# dbt_target choices in src/ol_dbt_cli/ol_dbt_cli/commands/starrocks.py's
+# _ENVS map. Migrating an existing model onto StarRocks means tagging it here
+# (dbt_project.yml or model-level config) and giving it a matching +enabled
+# condition -- this asset set and full_dbt_project's exclude="tag:starrocks"
+# then pick it up automatically, no Python change needed.
 STARROCKS_DBT_TARGET_MAP = {
     "dev": "starrocks_qa_vault",
     # ci connects directly to its own FE service (no port-forward), same
@@ -44,8 +50,10 @@ os.environ.setdefault("DBT_STARROCKS_PASSWORD", "dev")
 # manifest at the default "target/" (both dbt projects share the same project_dir).
 starrocks_dbt_project = DbtProject(
     project_dir=DBT_REPO_DIR,
-    target=os.environ.get(
-        "DAGSTER_DBT_STARROCKS_TARGET", STARROCKS_DBT_TARGET_MAP[DAGSTER_ENV]
+    target=resolve_dbt_target(
+        STARROCKS_DBT_TARGET_MAP,
+        override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
+        default="starrocks_production",
     ),
     target_path="target/starrocks",
 )
@@ -81,17 +89,18 @@ def _looks_retriable(exc: Exception) -> bool:
 @dbt_assets(
     manifest=starrocks_dbt_project.manifest_path,
     project=starrocks_dbt_project,
-    select="b2b_analytics",
-    dagster_dbt_translator=DagsterDbtTranslator(
+    # Complementary partition with full_dbt_project's exclude="tag:starrocks".
+    select="tag:starrocks",
+    dagster_dbt_translator=DbtAutomationTranslator(
         settings=DagsterDbtTranslatorSettings(enable_code_references=True)
     ),
 )
-def b2b_analytics_starrocks_dbt_assets(
+def starrocks_dbt_assets(
     context: AssetExecutionContext,
     starrocks_dbt: DbtCliResource,
     starrocks: StarRocksResource,
 ):
-    """Build the b2b_analytics dbt models directly against StarRocks.
+    """Build the tag:starrocks dbt models directly against StarRocks.
 
     The StarRocks profile (unlike the Trino profile used elsewhere in this
     project) has no static service-account password sitting in the pod

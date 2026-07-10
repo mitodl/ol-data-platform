@@ -42,7 +42,7 @@ from lakehouse.assets.lakehouse.dbt import (
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
-    b2b_analytics_starrocks_dbt_assets,
+    starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
@@ -363,18 +363,18 @@ dbt_docs_artifacts_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
-# Builds the b2b_analytics dbt models against StarRocks, then refreshes their
+# Builds the tag:starrocks dbt models against StarRocks, then refreshes their
 # downstream manual-refresh MVs. STOPPED by default -- enable in production via
 # the Dagster UI after verifying the first manual run succeeds.
 b2b_analytics_starrocks_schedule = ScheduleDefinition(
     name="b2b_analytics_starrocks_nightly",
     job=define_asset_job(
         name="b2b_analytics_starrocks_job",
-        selection=AssetSelection.assets(b2b_analytics_starrocks_dbt_assets).downstream(
+        selection=AssetSelection.assets(starrocks_dbt_assets).downstream(
             include_self=True
         ),
     ),
-    cron_schedule="0 4 * * *",
+    cron_schedule="0 6 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.STOPPED,
 )
@@ -430,7 +430,7 @@ if not SKIP_AIRBYTE:
 defs = Definitions(
     assets=[
         *with_source_code_references([full_dbt_project]),
-        *with_source_code_references([b2b_analytics_starrocks_dbt_assets]),
+        *with_source_code_references([starrocks_dbt_assets]),
         *airbyte_assets,
         *superset_assets,
         *superset_starrocks_assets,

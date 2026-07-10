@@ -29,21 +29,28 @@ DBT_REPO_DIR = (
 )
 
 
-def _resolve_dbt_target() -> str:
-    """Resolve the dbt profile target for this environment.
+def resolve_dbt_target(
+    target_map: Mapping[str, str], *, override_env_var: str, default: str
+) -> str:
+    """Resolve the dbt profile target for this environment from *target_map*.
 
-    Single source of truth shared by the DbtProject (which parses the manifest,
+    Single source of truth shared by a DbtProject (which parses the manifest,
     and therefore the Dagster asset graph) and the DbtCliResource that executes
-    it, so the graph always matches what actually runs. ``DAGSTER_DBT_TARGET``
-    overrides the mapping when set.
+    it, so the graph always matches what actually runs. *override_env_var*
+    takes precedence over the mapping when set. Shared across engine-scoped
+    dbt asset sets (see dbt_starrocks.py) so each just supplies its own map.
     """
-    if override := os.environ.get("DAGSTER_DBT_TARGET"):
+    if override := os.environ.get(override_env_var):
         return override
-    # qa and production both execute against the production target.
-    return {"dev": "dev_production", "ci": "ci"}.get(DAGSTER_ENV, "production")
+    return target_map.get(DAGSTER_ENV, default)
 
 
-DBT_TARGET = _resolve_dbt_target()
+# qa and production both execute against the production target.
+DBT_TARGET = resolve_dbt_target(
+    {"dev": "dev_production", "ci": "ci"},
+    override_env_var="DAGSTER_DBT_TARGET",
+    default="production",
+)
 
 dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
@@ -70,6 +77,10 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
 @dbt_assets(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
+    # Complementary partition with dbt_starrocks.py's starrocks_dbt_assets: tag a
+    # model `starrocks` to move it from this Trino-scoped asset set into that
+    # StarRocks-scoped one without touching either Python asset definition.
+    exclude="tag:starrocks",
     dagster_dbt_translator=DbtAutomationTranslator(
         settings=DagsterDbtTranslatorSettings(enable_code_references=True)
     ),

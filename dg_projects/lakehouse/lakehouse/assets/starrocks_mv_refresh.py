@@ -1,6 +1,6 @@
 from dagster import AssetExecutionContext, AssetKey, asset
 
-from lakehouse.assets.lakehouse.dbt_starrocks import b2b_analytics_starrocks_dbt_assets
+from lakehouse.assets.lakehouse.dbt_starrocks import starrocks_dbt_assets
 from lakehouse.resources.starrocks import StarRocksResource
 
 # Must match the model names in ol_dbt/models/b2b_analytics/.
@@ -18,7 +18,7 @@ MV_NAMES = [
     # Depend on the asset that actually builds these tables against StarRocks,
     # not a Trino-side mart -- the two engines have no materialization
     # relationship to each other.
-    deps=[b2b_analytics_starrocks_dbt_assets],
+    deps=[starrocks_dbt_assets],
     group_name="b2b_analytics",
     key=AssetKey(["b2b_analytics", "starrocks_mv_refresh"]),
 )
