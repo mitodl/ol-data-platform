@@ -7,6 +7,7 @@ Checks:
   4. Docs coverage: .sql models with no YAML definition
   5. YAML integrity: YAML entries for models that have no corresponding .sql file
   6. SELECT *: models using SELECT * that hides column-level lineage
+  7. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
 """
 
 from __future__ import annotations
@@ -22,6 +23,15 @@ from typing import Annotated, cast
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.dimensional_layering import (
+    LayeringViolation,
+    classify_layer,
+    default_baseline_path,
+    find_violations_from_manifest,
+    find_violations_from_sql,
+    load_baseline,
+    write_baseline,
+)
 from ol_dbt_cli.lib.git_utils import get_changed_sql_models, get_repo_root
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
 from ol_dbt_cli.lib.sql_parser import ParsedModel, find_compiled_dir, get_columns_read_from_ref, parse_model_file
@@ -321,6 +331,82 @@ def _check_yaml_integrity(
 
 
 # ---------------------------------------------------------------------------
+# Check 7: Dimensional-layering (enforces #2072 DoD)
+# ---------------------------------------------------------------------------
+
+
+def _compute_layering_violations(
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+    sql_file_map: dict[str, Path],
+) -> list[LayeringViolation]:
+    """Find marts/reporting → staging/intermediate references.
+
+    Prefers the authoritative manifest (parent edges + original_file_path). Falls
+    back to static ``ref()`` extraction mapped to each model's directory when no
+    manifest is available (e.g. locally before ``dbt parse``).
+    """
+    if manifest is not None:
+        return find_violations_from_manifest(manifest)
+    layer_by_name = {name: classify_layer(path) for name, path in sql_file_map.items()}
+    return find_violations_from_sql(sql_models_by_name, layer_by_name)
+
+
+def _check_dimensional_layering(
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+    sql_file_map: dict[str, Path],
+    baseline: set[str],
+    report: ValidationReport,
+) -> None:
+    """Flag marts/reporting models that reference staging/intermediate directly.
+
+    New violations (not in *baseline*) are ERRORs that fail the run. Known
+    baseline violations are collapsed into a single INFO summary so the #2072
+    migration debt stays visible without flooding the report. Baseline entries
+    that no longer occur are surfaced at INFO to prompt shrinking the baseline.
+    """
+    violations = _compute_layering_violations(manifest, sql_models_by_name, sql_file_map)
+    current_keys = {v.key for v in violations}
+
+    for violation in violations:
+        if violation.key in baseline:
+            continue
+        report.add(
+            "dimensional_layering",
+            Severity.ERROR,
+            violation.child,
+            (f"{violation.child_layer} model references {violation.parent_layer} model '{violation.parent}' directly"),
+            (
+                f"{violation.key}. Marts/reporting models must reference only dimensional "
+                "(dim_*/tfact_*/afact_*/bridge_*) or other mart/reporting models — see "
+                "models/dimensional/README.md. Add the needed data to the dimensional layer first."
+            ),
+        )
+
+    baselined = sorted(v.key for v in violations if v.key in baseline)
+    if baselined:
+        report.add(
+            "dimensional_layering",
+            Severity.INFO,
+            "(#2072 migration)",
+            f"{len(baselined)} known layering violation(s) tolerated by baseline",
+            "Pre-existing marts/reporting → staging/intermediate references; the #2072 "
+            "migration shrinks this over time. See dimensional_layering_baseline.txt for the full list.",
+        )
+
+    for stale_key in sorted(baseline - current_keys):
+        child = stale_key.split(" -> ", 1)[0]
+        report.add(
+            "dimensional_layering",
+            Severity.INFO,
+            child,
+            f"Resolved baseline entry: {stale_key}",
+            "This violation no longer exists — run `ol-dbt validate --update-baseline` to shrink the baseline.",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Registry-aware SELECT * resolution
 # ---------------------------------------------------------------------------
 
@@ -587,8 +673,8 @@ def validate(
         Parameter(
             name=["--skip"],
             help=(
-                "Comma-separated list of checks to skip: "
-                "yaml_sql_sync, upstream_refs, broken_ref_columns, docs_coverage, yaml_integrity, select_star."
+                "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, "
+                "broken_ref_columns, docs_coverage, yaml_integrity, select_star, dimensional_layering."
             ),
         ),
     ] = None,
@@ -598,8 +684,8 @@ def validate(
             name=["--only"],
             help=(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
-                "yaml_sql_sync, upstream_refs, broken_ref_columns, docs_coverage, yaml_integrity, select_star. "
-                "Mutually exclusive with --skip."
+                "yaml_sql_sync, upstream_refs, broken_ref_columns, docs_coverage, yaml_integrity, "
+                "select_star, dimensional_layering. Mutually exclusive with --skip."
             ),
         ),
     ] = None,
@@ -645,17 +731,40 @@ def validate(
             ),
         ),
     ] = "dev_local",
+    baseline_file: Annotated[
+        str | None,
+        Parameter(
+            name=["--baseline-file"],
+            help=(
+                "Path to the dimensional_layering baseline (allowlist of known #2072 "
+                "layering-debt references). Defaults to <dbt-dir>/dimensional_layering_baseline.txt."
+            ),
+        ),
+    ] = None,
+    update_baseline: Annotated[
+        bool,
+        Parameter(
+            name=["--update-baseline"],
+            help=(
+                "Regenerate the dimensional_layering baseline from the current models "
+                "(marts/reporting → staging/intermediate references), write it to "
+                "--baseline-file, and exit. Use after the #2072 migration removes violations."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs six checks:
+    Runs seven checks:
 
-    1. yaml_sql_sync       — columns in YAML match columns in SQL SELECT output
-    2. upstream_refs       — warns when an upstream ref()'s column list is unresolvable
-    3. broken_ref_columns  — columns read from a ref() that don't exist in the upstream output
-    4. docs_coverage       — every .sql model has a YAML definition
-    5. yaml_integrity      — every YAML model entry has a corresponding .sql file
-    6. select_star         — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
+    1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
+    2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
+    3. broken_ref_columns    — columns read from a ref() that don't exist in the upstream output
+    4. docs_coverage         — every .sql model has a YAML definition
+    5. yaml_integrity        — every YAML model entry has a corresponding .sql file
+    6. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
+    7. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
+                               (#2072 DoD); new violations error, known ones are baselined
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -698,6 +807,12 @@ def validate(
         Skip a specific check:
             ol-dbt validate --skip select_star
 
+        Run only the dimensional-layering lint (#2072 DoD gate for CI):
+            ol-dbt validate --only dimensional_layering --format json
+
+        Regenerate the dimensional-layering baseline after migrating models:
+            ol-dbt validate --update-baseline
+
         Regenerate manifest before validating (uses dev_local DuckDB by default):
             ol-dbt validate --auto-compile
 
@@ -712,6 +827,7 @@ def validate(
         "docs_coverage",
         "yaml_integrity",
         "select_star",
+        "dimensional_layering",
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -852,6 +968,19 @@ def validate(
                 parsed_model.has_star = False
                 parsed_model.star_resolved = True
 
+    # Resolve the dimensional-layering baseline path.
+    baseline_path = Path(baseline_file).resolve() if baseline_file else default_baseline_path(dbt_dir)
+
+    # --update-baseline: regenerate the baseline from current violations and exit.
+    if update_baseline:
+        violations = _compute_layering_violations(manifest, sql_models_by_name, sql_file_map_all)
+        write_baseline(baseline_path, violations)
+        source = "manifest" if manifest is not None else "static ref() analysis"
+        console.print(
+            f"[green]Wrote {len(violations)} dimensional-layering violation(s)[/] to {baseline_path} (via {source})."
+        )
+        return
+
     report = ValidationReport()
 
     # Emit parse errors as validation issues for targeted models so users know
@@ -895,6 +1024,13 @@ def validate(
     # YAML integrity is a global check — run once
     if "yaml_integrity" not in skipped:
         _check_yaml_integrity(yaml_registry, sql_model_names, report)
+
+    # Dimensional-layering is a global invariant (enforces #2072 DoD) — run once
+    # over ALL models regardless of --model/--changed-only, so a new violation
+    # anywhere fails the run. The baseline tolerates pre-existing debt.
+    if "dimensional_layering" not in skipped:
+        baseline = load_baseline(baseline_path)
+        _check_dimensional_layering(manifest, sql_models_by_name, sql_file_map_all, baseline, report)
 
     # Output
     if output_format == "json":
