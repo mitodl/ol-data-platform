@@ -1,9 +1,22 @@
 with enrollment as (
-    select * from {{ ref('tfact_enrollment') }}
+    select
+        *
+        , case platform
+            when 'bootcamps' then '{{ var("bootcamps") }}'
+            when 'edxorg' then '{{ var("edxorg") }}'
+            when 'emeritus' then '{{ var("emeritus") }}'
+            when 'global_alumni' then '{{ var("global_alumni") }}'
+            when 'mitxonline' then '{{ var("mitxonline") }}'
+            when 'mitxpro' then '{{ var("mitxpro") }}'
+            when 'residential' then '{{ var("residential") }}'
+            else platform
+        end as platform_display
+    from {{ ref('tfact_enrollment') }}
 )
 
 , course_run as (
     select * from {{ ref('dim_course_run') }}
+    where is_current = true
 )
 
 , course as (
@@ -31,14 +44,8 @@ with enrollment as (
     select * from {{ ref('dim_user') }}
 )
 
-, product as (
-    select * from {{ ref('dim_product') }}
-    where is_current = true
-)
-
 , f_order as (
-    select * from {{ ref('tfact_order') }}
-    where order_state in ('fulfilled', 'refunded')
+    select * from {{ ref('tfact_enrollment_order') }}
 )
 
 , discount as (
@@ -145,36 +152,8 @@ with enrollment as (
     group by user_email
 )
 
--- An enrollment's courserun_fk/program_fk can each independently match a distinct
--- product (e.g. the course sold standalone AND bundled into a program the learner
--- actually purchased), fanning this join out to one row per matching order. Dedup
--- below keeps whichever match actually has a real order, preferring the more
--- specific course-level match and, within a priority tier, the most recent order.
--- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
-, report_rows as (
 select
-    enrollment.enrollment_key
-    , row_number() over (
-        partition by enrollment.enrollment_key
-        order by
-            case when f_order.order_id is not null then 0 else 1 end
-            , case when enrollment.courserun_fk = product.courserun_fk then 1 else 2 end
-            , f_order.order_updated_on desc nulls last
-            -- order_updated_on is order-level and shared by every line on a multi-line
-            -- order, so it alone can leave ties unresolved; break ties deterministically.
-            , f_order.order_id desc nulls last
-            , f_order.line_id desc nulls last
-    ) as row_num
-    , case enrollment.platform
-        when 'bootcamps' then '{{ var("bootcamps") }}'
-        when 'edxorg' then '{{ var("edxorg") }}'
-        when 'emeritus' then '{{ var("emeritus") }}'
-        when 'global_alumni' then '{{ var("global_alumni") }}'
-        when 'mitxonline' then '{{ var("mitxonline") }}'
-        when 'mitxpro' then '{{ var("mitxpro") }}'
-        when 'residential' then '{{ var("residential") }}'
-        else enrollment.platform
-    end as platform
+    enrollment.platform_display as platform
     , enrollment_id as courserunenrollment_id
     , course_readable_id
     , course_title
@@ -263,22 +242,14 @@ left join organization
     on organization_courserun.organization_fk = organization.organization_pk
 inner join d_user
     on enrollment.user_fk = d_user.user_pk
-left join product
-    on
-        (enrollment.courserun_fk = product.courserun_fk
-        or enrollment.program_fk = product.program_fk)
-        and enrollment.platform_fk = product.platform_fk
 left join f_order
-    on
-        enrollment.user_fk = f_order.user_fk
-        and product.product_pk = f_order.product_fk
-        and enrollment.platform_fk = f_order.platform_fk
+    on enrollment.enrollment_key = f_order.enrollment_key
 left join discount
     on f_order.discount_fk = discount.discount_pk
 left join payment
     on
         f_order.order_id = payment.order_id
-        and f_order.platform_fk = payment.platform_fk
+        and enrollment.platform_fk = payment.platform_fk
 left join payment_method
     on payment.payment_method_fk = payment_method.payment_method_pk
 left join d_user_payer
@@ -291,80 +262,13 @@ left join discount_names
     on discount.discount_code = discount_names.discount_code
 left join enrollment_upgrades
     on f_order.order_id = enrollment_upgrades.order_id
-     and case enrollment.platform
-        when 'bootcamps' then '{{ var("bootcamps") }}'
-        when 'edxorg' then '{{ var("edxorg") }}'
-        when 'emeritus' then '{{ var("emeritus") }}'
-        when 'global_alumni' then '{{ var("global_alumni") }}'
-        when 'mitxonline' then '{{ var("mitxonline") }}'
-        when 'mitxpro' then '{{ var("mitxpro") }}'
-        when 'residential' then '{{ var("residential") }}'
-        else enrollment.platform
-    end = enrollment_upgrades.platform
+    and enrollment.platform_display = enrollment_upgrades.platform
     and course_run.courserun_readable_id = enrollment_upgrades.courserun_readable_id
     and d_user.email = enrollment_upgrades.user_email
 left join order_emails
     on f_order.order_id = order_emails.order_id
-    and case enrollment.platform
-        when 'bootcamps' then '{{ var("bootcamps") }}'
-        when 'edxorg' then '{{ var("edxorg") }}'
-        when 'emeritus' then '{{ var("emeritus") }}'
-        when 'global_alumni' then '{{ var("global_alumni") }}'
-        when 'mitxonline' then '{{ var("mitxonline") }}'
-        when 'mitxpro' then '{{ var("mitxpro") }}'
-        when 'residential' then '{{ var("residential") }}'
-        else enrollment.platform
-    end = order_emails.platform
+    and enrollment.platform_display = order_emails.platform
     and course_run.courserun_readable_id = order_emails.courserun_readable_id
     and d_user.email = order_emails.user_email
 left join course_passed_counts
     on d_user.email = course_passed_counts.user_email
-)
-
-select
-    platform
-    , courserunenrollment_id
-    , course_readable_id
-    , course_title
-    , courserun_is_current
-    , courserun_readable_id
-    , courserun_start_on
-    , courserun_end_on
-    , courserun_title
-    , courserunenrollment_created_on
-    , courserunenrollment_enrollment_mode
-    , courserunenrollment_enrollment_status
-    , courserunenrollment_is_active
-    , courserunenrollment_upgraded_on
-    , courseruncertificate_created_on
-    , courseruncertificate_issued_on
-    , courseruncertificate_is_earned
-    , courseruncertificate_url
-    , courserungrade_grade
-    , courserungrade_is_passing
-    , organization_key
-    , organization_name
-    , user_country_code
-    , user_highest_education
-    , user_full_name
-    , user_username
-    , user_email
-    , num_of_course_passed
-    , coupon_code
-    , coupon_name
-    , discount
-    , order_id
-    , order_reference_number
-    , order_state
-    , order_updated_on
-    , receipt_payment_amount
-    , receipt_payment_method
-    , receipt_payment_timestamp
-    , receipt_payer_email
-    , unit_price
-    , program_name
-    , discount_type_name
-    , redeemed_email
-    , receipt_url
-from report_rows
-where row_num = 1

@@ -94,6 +94,86 @@ models:
       True for edxorg (always) and residential (always). For mitxonline and mitxpro,
       sourced from the application's edx_enrolled flag. Null for program enrollments
       and bootcamps (not edX-hosted).
+  - name: order_id
+    description: >
+      Source system order ID, read directly off the enrollment record. Only xPRO
+      stores this FK on the enrollment itself (mitxonline, bootcamps, edxorg, and
+      residential have no order/purchase FK at the source, so this is null for those
+      platforms — see tfact_enrollment_order for how order attribution is resolved
+      for them instead). This value is authoritative for xPRO regardless of subsequent
+      deferral to a different course run or bundling into a program purchase, unlike
+      product-based reconstruction, which can't resolve an order for a course run
+      that was never itself purchased. Not a unique key on tfact_order (whose grain
+      is
+      order_id + line_id + platform), so no relationships test is applied here.
+
+- name: tfact_enrollment_order
+  description: >
+    Resolves which order produced each enrollment. xPRO enrollments carry a direct
+    order FK (tfact_enrollment.order_id) which is authoritative even after deferral
+    to
+    a different course run or bundling into a program purchase. Every other platform
+    has no such FK at the source, so their order is reconstructed by matching the
+    enrollment's course/program against dim_product, then to tfact_order — fragile
+    in
+    those same scenarios, but the only signal available for them. Materialized as
+    a
+    full-table rebuild (not incremental), since tfact_enrollment's own incremental
+    watermark has no visibility into order-side changes (refunds, price updates,
+    fulfillment).
+    Grain: one row per enrollment_key.
+  columns:
+  - name: enrollment_key
+    description: Foreign key to tfact_enrollment.enrollment_key
+    tests:
+    - unique
+    - not_null
+    - relationships:
+        to: ref('tfact_enrollment')
+        field: enrollment_key
+  - name: order_fk
+    description: >
+      Foreign key to tfact_order.order_key for the resolved order line. Consumers
+      needing order fields not denormalized onto this table (e.g. order_total_price_paid,
+      tax_rate_fk) should join tfact_order on this key rather than tfact_order.order_id,
+      since order_id alone is not unique there (tfact_order's grain is order_id +
+      line_id + platform) — order_fk points at the specific line this model resolved.
+      Null when no order could be resolved (e.g. free/audit enrollments with no
+      purchase).
+    tests:
+    - relationships:
+        to: ref('tfact_order')
+        field: order_key
+        where: "order_fk is not null"
+  - name: order_id
+    description: Source system order ID for the resolved order. Null when no order
+      could be resolved (e.g. free/audit enrollments with no purchase).
+  - name: order_reference_number
+    description: Order reference/confirmation number for the resolved order
+  - name: order_state
+    description: Order state (fulfilled or refunded) of the resolved order
+  - name: order_updated_on
+    description: Last-updated timestamp of the resolved order
+  - name: discount_fk
+    description: Foreign key to dim_discount for the resolved order
+    tests:
+    - relationships:
+        to: ref('dim_discount')
+        field: discount_pk
+        where: "discount_fk is not null"
+        config:
+          severity: warn
+  - name: discount_type_fk
+    description: Foreign key to dim_discount_type for the resolved order
+    tests:
+    - relationships:
+        to: ref('dim_discount_type')
+        field: discount_type_pk
+        where: "discount_type_fk is not null"
+        config:
+          severity: warn
+  - name: line_price
+    description: Price of the resolved order line, used as unit_price downstream
 
 - name: tfact_order
   description: >
