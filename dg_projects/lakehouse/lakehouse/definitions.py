@@ -37,7 +37,11 @@ from lakehouse.assets.instructor_onboarding import (
     generate_instructor_onboarding_user_list,
     update_access_forge_repo,
 )
-from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
+from lakehouse.assets.lakehouse.dbt import (
+    DBT_REPO_DIR,
+    dbt_docs_artifacts_job,
+    full_dbt_project,
+)
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
@@ -336,6 +340,18 @@ iceberg_raw_maintenance_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Regenerate dbt docs artifacts (manifest.json + catalog.json) for OpenMetadata
+# once daily. Decoupled from model materialization because catalog generation
+# recompiles the whole project and queries every relation. Default STOPPED; enable
+# in production via the Dagster UI or Terraform after verifying the first run.
+dbt_docs_artifacts_schedule = ScheduleDefinition(
+    name="dbt_docs_artifacts_daily",
+    job=dbt_docs_artifacts_job,
+    cron_schedule="0 4 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -402,11 +418,16 @@ defs = Definitions(
             | AssetSelection.groups("superset_starrocks_dataset"),
         ),
     ],
-    jobs=[*airbyte_asset_jobs, iceberg_snapshot_pointer_repair_job],
+    jobs=[
+        *airbyte_asset_jobs,
+        iceberg_snapshot_pointer_repair_job,
+        dbt_docs_artifacts_job,
+    ],
     schedules=[
         *airbyte_update_schedules,
         instructor_onboarding_schedule,
         iceberg_dbt_maintenance_schedule,
         iceberg_raw_maintenance_schedule,
+        dbt_docs_artifacts_schedule,
     ],
 )

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
-from dagster import AssetExecutionContext, ConfigurableResource
+from dagster import AssetExecutionContext, ConfigurableResource, OpExecutionContext
 from pydantic import Field, field_validator
 
 
@@ -29,7 +29,7 @@ class DbtS3ArtifactsResource(ConfigurableResource):
         self,
         target_path: Path,
         artifacts: list[str],
-        context: AssetExecutionContext,
+        context: AssetExecutionContext | OpExecutionContext,
     ) -> None:
         """Upload artifact files from *target_path* to S3 with content-based versioning.
 
