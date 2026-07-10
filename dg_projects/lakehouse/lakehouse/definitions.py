@@ -46,6 +46,8 @@ from lakehouse.assets.lakehouse.dbt import (
     DBT_TARGET,
     dbt_docs_artifacts_job,
     dbt_project,
+    dbt_source_freshness_job,
+    dimensional_schema_change_checks,
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
@@ -396,6 +398,18 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Run dbt source freshness daily after the nightly ingest + dbt build (02:00 UTC),
+# publishing sources.json to S3 for OpenMetadata. Default STOPPED; enable in
+# production after the first manual run confirms the configured loaded_at_field
+# expressions resolve against the warehouse.
+dbt_source_freshness_schedule = ScheduleDefinition(
+    name="dbt_source_freshness_daily",
+    job=dbt_source_freshness_job,
+    cron_schedule="0 6 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Airbyte inventory drift. Daily, which is exactly step 8's acceptance
 # criterion — "a connection edited in the UI is reported within a day". Runs
 # ahead of the ingestion schedules, so a report describes the workspace as it
@@ -609,7 +623,7 @@ defs = Definitions(
             *qa_mirror_assets,
         ]
     ),
-    asset_checks=dbt_layer_freshness_checks,
+    asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
     resources=resources_dict,
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
@@ -654,6 +668,7 @@ defs = Definitions(
         *airbyte_asset_jobs,
         iceberg_snapshot_pointer_repair_job,
         dbt_docs_artifacts_job,
+        dbt_source_freshness_job,
     ],
     # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
     # on each of these only seeds the instance's instigator state on first
@@ -669,6 +684,7 @@ defs = Definitions(
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
+            ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
             *airbyte_drift_schedules,
             ("posthog_staging_hourly", posthog_staging_schedule),
