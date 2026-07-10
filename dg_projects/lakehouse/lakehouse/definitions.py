@@ -381,7 +381,8 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
-# Run dbt source freshness daily after the nightly ingest + dbt build (02:00 UTC),
+# Run dbt source freshness daily at 06:00 UTC, chosen to fall after the nightly
+# ingest and dbt build window (the dbt layer materializes around 02:00 UTC),
 # publishing sources.json to S3 for OpenMetadata. Default STOPPED; enable in
 # production after the first manual run confirms the configured loaded_at_field
 # expressions resolve against the warehouse.
