@@ -22,6 +22,9 @@ with mitxonline_enrollments as (
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
         , courserunenrollment_is_edx_enrolled as enrollment_is_edx_enrolled
+        -- mitxonline has no order FK on the enrollment record; order attribution for
+        -- this platform relies on product-matching in downstream consumers.
+        , cast(null as bigint) as order_id
     from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
@@ -56,6 +59,11 @@ with mitxonline_enrollments as (
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
         , enrollments.courserunenrollment_is_edx_enrolled as enrollment_is_edx_enrolled
+        -- xPRO is the only platform that stores an order FK directly on the enrollment
+        -- record. This is authoritative regardless of subsequent deferral to a different
+        -- course run or bundling into a program purchase — downstream consumers should
+        -- prefer this over reconstructing order attribution via product-matching.
+        , cast(enrollments.ecommerce_order_id as bigint) as order_id
     from {{ ref('int__mitxpro__courserunenrollments') }} as enrollments
     left join mitxpro_program_enrollments_by_order
         on
@@ -80,6 +88,7 @@ with mitxonline_enrollments as (
         , 'edxorg' as platform
         , 'edxorg' as platform_code
         , true as enrollment_is_edx_enrolled
+        , cast(null as bigint) as order_id
     from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
 )
 
@@ -104,6 +113,7 @@ with mitxonline_enrollments as (
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
+        , cast(null as bigint) as order_id
     from {{ ref('int__mitxonline__programenrollments') }}
 )
 
@@ -123,6 +133,7 @@ with mitxonline_enrollments as (
         , 'residential' as platform
         , 'residential' as platform_code
         , true as enrollment_is_edx_enrolled
+        , cast(null as bigint) as order_id
     from {{ ref('int__mitxresidential__courserun_enrollments') }}
 )
 
@@ -142,6 +153,7 @@ with mitxonline_enrollments as (
         , 'bootcamps' as platform
         , 'bootcamps' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
+        , cast(null as bigint) as order_id
     from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
@@ -295,6 +307,7 @@ with mitxonline_enrollments as (
         , enrollment_created_on
         , enrollment_updated_on
         , enrollment_is_edx_enrolled
+        , order_id
     from enrollments_with_fks as ewf
 
     {% if is_incremental() %}
@@ -339,6 +352,7 @@ with mitxonline_enrollments as (
         , enrollment_created_on
         , enrollment_updated_on
         , enrollment_is_edx_enrolled
+        , order_id
         , row_number() over (
             partition by enrollment_key
             order by coalesce(enrollment_updated_on, enrollment_created_on) desc nulls last
@@ -362,5 +376,6 @@ select
     , enrollment_created_on
     , enrollment_updated_on
     , enrollment_is_edx_enrolled
+    , order_id
 from final_deduped
 where _row_num = 1
