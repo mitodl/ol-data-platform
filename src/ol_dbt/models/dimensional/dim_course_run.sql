@@ -57,7 +57,7 @@ with micromasters_courseruns as (
         , cr.courserun_enrollment_end_on as enrollment_end
         , cr.courserun_is_live
         , cr.courserun_created_on
-        , cast(null as varchar) as course_readable_id
+        , cs.course_readable_id
         , er.examrun_semester as semester
         , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
@@ -65,6 +65,8 @@ with micromasters_courseruns as (
     from {{ ref('int__mitxonline__course_runs') }} as cr
     left join micromasters_examruns as er
         on cr.courserun_readable_id = er.examrun_readable_id
+    left join {{ ref('stg__mitxonline__app__postgres__courses_course') }} as cs
+        on cr.course_id = cs.course_id
 )
 
 , mitxpro_courseruns as (
