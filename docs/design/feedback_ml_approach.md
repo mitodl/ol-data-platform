@@ -38,28 +38,35 @@ so a re-run never duplicates and never mutates the fact grain. Embedding is comp
 **Decision: one shared embedding, computed once, stored in the `feedback_embeddings`
 sidecar.** Both clustering and (semantic) sentiment consume it — do not embed twice.
 
-> **REVISED 2026-07-10 (rev. 2) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
+> **REVISED 2026-07-10 (rev. 3) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
 > Strategic direction is to **retire Trino for StarRocks** (transforms + data bus + OLAP
 > serving), so **no Galaxy-only functionality may sit on the critical path** — this rules out
 > Starburst's `generate_embedding` (Galaxy-proprietary; StarRocks has no embedding-generation
-> equivalent). **New default: keep embedding compute engine-external in a Dagster asset that
-> calls AWS Bedrock `amazon.titan-embed-text-v2:0` directly via boto3** — in our own AWS account
-> (PII-safe over redacted text), a thin dependency (no torch), and indifferent to whether the
-> SQL engine is Trino or StarRocks. Vectors land in an open Iceberg `ARRAY<float>` sidecar, which
-> StarRocks later reads to build an HNSW index (a load, not a re-embed) — making StarRocks ANN
-> the intended serving tier. The rest of §B (persist-once, `model_version`, Iceberg storage,
-> redaction-upstream) is unchanged and applies regardless of who computes the vector.
+> equivalent). **New default: keep embedding compute engine-external, using Fenic (Apache-2.0)
+> as the framework** in a Dagster asset reading the dbt outputs and writing vectors to an open
+> Iceberg `ARRAY<float>` sidecar — indifferent to whether the SQL engine is Trino or StarRocks,
+> and giving batching/caching/cost-accounting/lineage for free. **Embedding provider is a
+> PII-policy choice, decoupled from the framework:** in-account **AWS Bedrock**
+> `amazon.titan-embed-text-v2:0` (best posture — via boto3 today, since a native Fenic Bedrock
+> *embedding* provider is roadmap-not-shipped; or contribute it, Apache-2.0), OR a Fenic-native
+> managed provider (Cohere/OpenAI/Google) over Presidio-redacted text if policy allows. Vectors
+> in Iceberg → StarRocks later builds an HNSW index over them (a load, not a re-embed) = intended
+> serving tier. The rest of §B (persist-once, `model_version`, Iceberg storage, redaction-upstream)
+> is unchanged regardless of who computes the vector.
 
-- **Model choice — default is Bedrock `amazon.titan-embed-text-v2:0`** (dims 256/512/1024 — pick
-  256/512 for a smaller sidecar + faster HDBSCAN/HNSW unless retrieval needs 1024), called via
-  boto3 from the Dagster layer. In-account Bedrock over Presidio-redacted text has no
-  third-party-egress concern. Use Bedrock **batch inference** for the 1.18M backfill.
-  - **Fallbacks (ADR):** local `sentence-transformers` (`BAAI/bge-small-en-v1.5` /
-    `all-MiniLM-L6-v2`, 384-dim) as the $0-egress-but-heaviest option; Fenic as an ergonomics
-    wrapper (but cloud-egress only). Both stay engine-external/portable.
-  - Open question deferred to implementation: GPU vs CPU throughput at 1.18M rows (moot for the
-    Bedrock path — it's an API call; relevant only for the local fallback). MVP scale (198K) is
-    trivial batch either way.
+- **Model choice — recommend Bedrock `amazon.titan-embed-text-v2:0`** (dims 256/512/1024 — pick
+  256/512 for a smaller sidecar + faster HDBSCAN/HNSW unless retrieval needs 1024) for the
+  in-account PII posture over Presidio-redacted text; use Bedrock **batch inference** for the
+  1.18M backfill. A Fenic-native managed provider (Cohere/OpenAI/Google) is the simpler
+  alternative if egress of *redacted* text is acceptable by policy.
+  - **Fallbacks (ADR):** direct boto3 Bedrock client without Fenic (minimal, hand-build the
+    batching); local `sentence-transformers` (`BAAI/bge-small-en-v1.5` / `all-MiniLM-L6-v2`,
+    384-dim) as the $0-egress-but-heaviest option. All stay engine-external/portable.
+  - Note: **HDBSCAN clustering stays our own sklearn step** — Fenic offers only K-means
+    (`with_cluster_labels`), which lacks the noise class we need (§C). Fenic covers embed +
+    classify/sentiment + labeling; not clustering.
+  - Open question deferred to implementation: throughput at 1.18M rows (moot for the Bedrock/API
+    path). MVP scale (198K) is trivial batch either way.
 - **Redaction is upstream and mandatory** (design §7): embeddings are computed on the
   Presidio-redacted text only. Raw text never reaches the embedding step.
 - **`model_version` is a first-class column** on `feedback_embeddings`. Changing the model

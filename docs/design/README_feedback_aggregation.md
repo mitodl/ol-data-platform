@@ -34,15 +34,17 @@ signals for four audiences (support, engineering, instructors, leadership).
    tag-seeded categories + CSAT-derived sentiment; embeddings/clustering fill `category_fk`/
    `sentiment_fk`/`embedding_id` later. Embeddings persisted **once** (the one adopted lesson
    from prototype #10793).
-4. **Engine-portable AI compute** (revised 2026-07-10 rev. 2, ADR): because the strategic
-   direction is to **retire Trino for StarRocks**, no Galaxy-only functionality sits on the
-   critical path. Embedding stays engine-external in a Dagster asset calling **AWS Bedrock
-   `amazon.titan-embed-text-v2:0` directly via boto3** (in-account → PII-safe over redacted
-   text; no torch; indifferent to Trino vs. StarRocks). Vectors land in an open Iceberg
-   `ARRAY<float>` sidecar; **StarRocks HNSW is the intended vector-serving tier**, reached by
-   loading those vectors (no re-embed). Redaction (Presidio) mandatory pre-embed. Fenic and
-   local `sentence-transformers` are fallbacks; Starburst `generate_embedding` is **rejected**
-   for engine lock-in.
+4. **Engine-portable AI compute via Fenic** (revised 2026-07-10 rev. 3, ADR): because the
+   strategic direction is to **retire Trino for StarRocks**, no Galaxy-only functionality sits
+   on the critical path (Starburst `generate_embedding` **rejected**). AI compute stays
+   engine-external using **Fenic (Apache-2.0)** in a Dagster asset — batching/caching/lineage for
+   free, indifferent to Trino vs. StarRocks. **Embedding provider is a PII-policy choice:**
+   in-account **AWS Bedrock** `amazon.titan-embed-text-v2:0` (best posture — via boto3 today, as
+   native Fenic Bedrock embeddings are roadmap-not-shipped) or a Fenic-native managed provider
+   (Cohere/OpenAI/Google) over redacted text. Vectors → open Iceberg `ARRAY<float>` sidecar;
+   **StarRocks HNSW is the intended vector-serving tier**, reached by loading those vectors (no
+   re-embed). Clustering stays our own HDBSCAN (Fenic has K-means only). Presidio redaction
+   mandatory pre-embed.
 5. **Superset-first consumption**; support + engineering are the MVP-served audiences
    (Zendesk is not course-scoped, so instructors wait for Phase 2 sources).
 
