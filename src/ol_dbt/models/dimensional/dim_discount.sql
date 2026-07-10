@@ -36,7 +36,11 @@ with mitxonline_discounts as (
 
     select
         'mitxpro' as platform_code
-        , coupon_id as source_discount_id
+        -- b2b bulk-purchase coupons have no coupon_id (see int__mitxpro__ecommerce_allcoupons,
+        -- where it's explicitly nulled for b2b rows); their real identifier is b2bcoupon_id.
+        -- Negate it so it can't collide with a coupon_id from the unrelated ecommerce_coupon
+        -- table sharing the same numeric range, while keeping source_discount_id an integer.
+        , coalesce(coupon_id, -b2bcoupon_id) as source_discount_id
         , coupon_code as discount_code
         , discount_type
         , case
