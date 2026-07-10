@@ -1,0 +1,123 @@
+always_filter_main_dttm: false
+cache_timeout: null
+catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: courserun_readable_id
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: email
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: platform
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: openedx_user_id
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT(20)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: created_timestamp
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: true
+  python_date_format: null
+  type: DATETIME
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserungrade_grade
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DOUBLE
+  verbose_name: null
+- advanced_data_type: null
+  column_name: risk_probability
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DOUBLE
+  verbose_name: null
+currency_code_column: null
+database_uuid: d5ed5344-297b-43af-ba38-4bc04744f1ef  # StarRocks - Lakehouse
+default_endpoint: null
+description: Auto refreshed at 2026-06-15T08:36:56.612228+00:00
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: created_timestamp
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra: null
+  metric_name: count
+  metric_type: count
+  verbose_name: COUNT(*)
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
+schema: ol_warehouse_production_reporting
+sql: null
+table_name: student_risk_probability_report
+template_params: null
+uuid: cc5adad7-5b7b-4c8c-8718-bd0c6825fee2
+version: 1.0.0

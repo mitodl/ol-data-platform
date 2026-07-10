@@ -1,5 +1,5 @@
 database_name: StarRocks - Lakehouse
-sqlalchemy_uri: starrocks://${STARROCKS_USER}:${STARROCKS_PASS}@lakehouse-starrocks-fe-service.starrocks.svc.cluster.local:9030/ol_data_lake_iceberg.ol_warehouse_qa_mart
+sqlalchemy_uri: starrocks://${STARROCKS_USER}:XXXXXXXXXX@lakehouse-starrocks-fe-service.starrocks.svc.cluster.local:9030/ol_data_lake_production.ol_warehouse_production_mart
 cache_timeout: null
 expose_in_sqllab: true
 allow_run_async: true
@@ -9,6 +9,11 @@ allow_dml: false
 allow_file_upload: false
 extra:
   allows_virtual_table_explore: true
+  engine_params:
+    connect_args:
+      ssl:
+        verify_cert: false
 impersonate_user: false
-uuid: da98a974-deb5-4d44-8302-d97927fde706
+configuration_method: sqlalchemy_form
+uuid: d5ed5344-297b-43af-ba38-4bc04744f1ef
 version: 1.0.0

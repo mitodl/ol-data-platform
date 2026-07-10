@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: courserun_is_current
+  datetime_format: null
   description: null
   expression: "      case\n            when\n                end_on is null\n    \
     \            and from_iso8601_timestamp(start_on) <= current_date\n          \
@@ -20,6 +21,7 @@ columns:
   verbose_name: ''
 - advanced_data_type: null
   column_name: courserun_is_enrollable
+  datetime_format: null
   description: null
   expression: "      case\n            when \n               is_live = true\n    \
     \            and from_iso8601_timestamp(enrollment_start_on) <= current_date\n\
@@ -36,6 +38,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: list_price
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -48,6 +51,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -60,6 +64,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_created_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -72,6 +77,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: enrollment_start_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -84,6 +90,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: enrollment_end_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -96,6 +103,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: upgrade_deadline
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -108,6 +116,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: certification_type
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -120,6 +129,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -132,6 +142,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_platform
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -144,6 +155,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: start_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -156,6 +168,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: offered_by
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -168,6 +181,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_description
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -180,6 +194,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_type
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -192,6 +207,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: time_commitment
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -204,6 +220,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: end_on
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -216,6 +233,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: pace
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -228,6 +246,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: duration
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -240,6 +259,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -252,6 +272,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: instructors
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -264,6 +285,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: topics
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -276,6 +298,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: delivery
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -288,6 +311,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_is_active
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -300,6 +324,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_is_private
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -312,6 +337,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: is_live
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -324,6 +350,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: continuing_education_credits
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -336,6 +363,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: product_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -346,9 +374,10 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
-description: Auto refreshed at 2026-03-16T07:03:14.108472+00:00
+description: Auto refreshed at 2026-07-10T16:22:58.194856+00:00
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true
