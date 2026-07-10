@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import time
 
@@ -67,10 +68,12 @@ starrocks_dbt_project.prepare_if_dev()
 # b2b_analytics is disabled for any non-starrocks target.
 starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
 
-# Serializes credential-injection + dbt invocation so two b2b_analytics builds
-# materializing in the same process (e.g. a manual run overlapping the
+# Serializes credential-injection + dbt subprocess spawn so two b2b_analytics
+# builds materializing in the same process (e.g. a manual run overlapping the
 # schedule) can't clobber each other's DBT_STARROCKS_* env vars between the
-# assignment below and dagster_dbt's env snapshot at subprocess spawn.
+# assignment below and the subprocess spawn -- NOT held across the actual
+# build (dbt.cli() spawns the subprocess synchronously and it inherits
+# os.environ at that point; nothing after that call can still race).
 _ENV_LOCK = threading.Lock()
 
 _MAX_BUILD_ATTEMPTS = 3
@@ -79,11 +82,21 @@ _RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
 # on: a freshly-generated Vault user may not yet be visible on the FE node dbt
 # connects to. dbt build has no adapter-level retry of its own, so without this
 # a replication-lag race fails the whole build instead of a single statement.
-_RETRIABLE_ERROR_MARKERS = ("1044", "1045", "2006", "2013")
+#
+# dbt-starrocks connects via mysql-connector-python, whose Error.__str__
+# formats as "<errno> (<sqlstate>): <msg>" when the server returns a real
+# error code (verified by reading dbt/adapters/starrocks/connections.py and
+# mysql/connector/errors.py); dbt-core's exception handling preserves str(e)
+# unmodified through to the node's logged error message, so the code does
+# reach here -- but as plain text in a multi-line message, not a structured
+# field, so match on a word boundary rather than a bare substring to avoid
+# an unrelated number (a row count, a line number, part of a timestamp)
+# coincidentally tripping a retry.
+_RETRIABLE_ERROR_PATTERN = re.compile(r"\b(1044|1045|2006|2013)\b")
 
 
 def _looks_retriable(exc: Exception) -> bool:
-    return any(marker in str(exc) for marker in _RETRIABLE_ERROR_MARKERS)
+    return bool(_RETRIABLE_ERROR_PATTERN.search(str(exc)))
 
 
 @dbt_assets(
@@ -128,13 +141,20 @@ def starrocks_dbt_assets(
             os.environ["DBT_STARROCKS_USERNAME"] = username
             os.environ["DBT_STARROCKS_PASSWORD"] = password
             os.environ["DBT_STARROCKS_HOST"] = starrocks.host
-            try:
-                events = list(starrocks_dbt.cli(["build"], context=context).stream())
-            except DagsterDbtCliRuntimeError as exc:
-                if attempt == _MAX_BUILD_ATTEMPTS - 1 or not _looks_retriable(exc):
-                    raise
-                last_exc = exc
-                continue
+            invocation = starrocks_dbt.cli(["build"], context=context)
+
+        # The subprocess above is already spawned (and has already inherited
+        # the env set under the lock) by the time .cli() returns -- streaming
+        # its output takes minutes and must happen outside the lock, or a
+        # second concurrent build would be blocked from even starting until
+        # this one finishes instead of just for the moment of env injection.
+        try:
+            events = list(invocation.stream())
+        except DagsterDbtCliRuntimeError as exc:
+            if attempt == _MAX_BUILD_ATTEMPTS - 1 or not _looks_retriable(exc):
+                raise
+            last_exc = exc
+            continue
 
         yield from events
         return
