@@ -172,13 +172,20 @@ def reconcile_columns(
 # ---------------------------------------------------------------------------
 
 
-def _extract_show_rows(stdout: str) -> list[dict[str, Any]]:
+def _extract_show_rows(stdout: str) -> list[dict[str, Any]] | None:
     """Extract the row list from ``dbt show --output json`` stdout.
 
-    dbt interleaves log lines with a JSON document on stdout. The document is
-    either an object carrying a ``show`` key whose value is the list of row dicts,
-    or a bare list. We parse tolerantly: try the whole payload first, then fall
-    back to scanning for a JSON value (object or array) embedded in the output.
+    For our invocation (``dbt show --inline ... --output json``, default text
+    logging) dbt-core emits ``{"show": [ ...rows... ]}`` on stdout — see
+    ``dbt.events.types.ShowNode.message``. The non-inline form is
+    ``{"node": ..., "show": [...]}`` and a bare list is also accepted. dbt
+    interleaves log lines with that document, so we try the whole payload first,
+    then scan for an embedded JSON value.
+
+    Returns the row list (possibly empty) when a JSON document is found, or
+    ``None`` when no JSON document could be located at all. ``None`` is a *parse
+    anomaly* the caller must not treat as "no rows" — otherwise a parsing failure
+    would masquerade as a clean, difference-free comparison.
     """
 
     def _rows_from(obj: Any) -> list[dict[str, Any]] | None:
@@ -210,7 +217,7 @@ def _extract_show_rows(stdout: str) -> list[dict[str, Any]]:
         rows = _rows_from(obj)
         if rows is not None:
             return rows
-    return []
+    return None
 
 
 def _run_dbt_show(
@@ -251,7 +258,16 @@ def _run_dbt_show(
     except FileNotFoundError as exc:
         msg = "'dbt' command not found; install dbt and ensure it is on PATH."
         raise RuntimeError(msg) from exc
-    return _extract_show_rows(result.stdout)
+
+    rows = _extract_show_rows(result.stdout)
+    if rows is None:
+        # dbt exited 0 but we found no JSON document — a parse anomaly (e.g. an
+        # unexpected output format from a future dbt version). Fail loudly rather
+        # than return [] and let it masquerade as a difference-free comparison.
+        head = result.stdout.strip()[:300]
+        msg = f"could not parse rows from `dbt show` output (unexpected format). stdout starts: {head!r}"
+        raise RuntimeError(msg)
+    return rows
 
 
 def _jinja_list(values: list[str]) -> str:

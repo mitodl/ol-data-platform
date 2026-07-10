@@ -65,8 +65,17 @@ class TestExtractShowRows:
         rows = _extract_show_rows(payload)
         assert rows == [{"in_a": True, "in_b": False, "count": 3}]
 
-    def test_empty(self) -> None:
-        assert _extract_show_rows("no json here") == []
+    def test_no_json_document_returns_none(self) -> None:
+        # No JSON found at all is an anomaly (None), NOT an empty result ([]).
+        assert _extract_show_rows("no json here") is None
+        assert _extract_show_rows("") is None
+        assert _extract_show_rows("12:00 [info] running") is None
+
+    def test_explicit_empty_result_is_empty_list(self) -> None:
+        # A genuinely empty result set is [] (distinct from the None anomaly).
+        assert _extract_show_rows('{"show": []}') == []
+        assert _extract_show_rows("[]") == []
+        assert _extract_show_rows('12:00:00  Preview\n{"show": []}\n') == []
 
     def test_log_prefixed_bare_list(self) -> None:
         # A bare JSON array preceded by log lines must still be extracted.
@@ -77,6 +86,27 @@ class TestExtractShowRows:
         # raw_decode must tolerate trailing text after the JSON document.
         payload = '{"show": [{"x": 1}]}\n12:00:02  Done.\n'
         assert _extract_show_rows(payload) == [{"x": 1}]
+
+
+class TestRunDbtShowParseAnomaly:
+    def test_raises_when_dbt_exits_0_but_output_unparseable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        # dbt returns 0 but emits no JSON document (e.g. an unexpected future format).
+        # This must raise, not silently return [] and look like a difference-free run.
+        fake = subprocess.CompletedProcess(args=["dbt"], returncode=0, stdout="12:00 [info] weird output", stderr="")
+        monkeypatch.setattr(diff_mod.subprocess, "run", lambda *a, **k: fake)
+        with pytest.raises(RuntimeError, match="could not parse rows"):
+            diff_mod._run_dbt_show("{{ x }}", tmp_path, "dev_local", 10)
+
+    def test_returns_empty_for_explicit_empty_result(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import subprocess
+
+        fake = subprocess.CompletedProcess(args=["dbt"], returncode=0, stdout='{"show": []}', stderr="")
+        monkeypatch.setattr(diff_mod.subprocess, "run", lambda *a, **k: fake)
+        assert diff_mod._run_dbt_show("{{ x }}", tmp_path, "dev_local", 10) == []
 
 
 class TestSummarizeRelations:
