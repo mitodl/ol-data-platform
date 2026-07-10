@@ -16,6 +16,7 @@ with org_program_runs as (
         c.contract_pk,
         c.b2b_contract_name,
         bpc.program_fk,
+        bpc.course_fk,
         boc.courserun_fk
     from {{ source('dimensional', 'bridge_organization_courserun') }} boc
     join {{ source('dimensional', 'dim_contract') }} c
@@ -29,10 +30,14 @@ with org_program_runs as (
     where org.platform = 'mitxonline'
 ),
 
+-- Scoped to (contract, program), not just program: a contract may only cover a
+-- subset of a program's courses, so counting from the full bridge_program_course
+-- table (as opposed to org_program_runs) would systematically overstate the
+-- denominator and understate completion rates.
 program_course_counts as (
-    select program_fk, count(distinct course_fk) as total_courses
-    from {{ source('dimensional', 'bridge_program_course') }}
-    group by program_fk
+    select contract_pk, program_fk, count(distinct course_fk) as total_courses
+    from org_program_runs
+    group by contract_pk, program_fk
 )
 
 select
@@ -53,7 +58,7 @@ from org_program_runs opr
 join {{ source('dimensional', 'dim_program') }} p
     on opr.program_fk = p.program_pk
 join program_course_counts pcc
-    on opr.program_fk = pcc.program_fk
+    on opr.contract_pk = pcc.contract_pk and opr.program_fk = pcc.program_fk
 left join {{ source('dimensional', 'tfact_enrollment') }} e
     on opr.courserun_fk = e.courserun_fk
 left join {{ source('dimensional', 'tfact_certificate') }} cert
