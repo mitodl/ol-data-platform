@@ -12,5 +12,6 @@ extra:
   schema_options:
     expand_rows: true
 impersonate_user: false
+configuration_method: sqlalchemy_form
 uuid: 8702691f-d666-4dac-943b-9382c02233e3
 version: 1.0.0

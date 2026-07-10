@@ -1,0 +1,279 @@
+certification_details: ''
+certified_by: ''
+css: ''
+dashboard_title: '[MM Fin] Main Dashboard (All Courses)'
+description: null
+metadata:
+  chart_configuration:
+    '183':
+      crossFilters:
+        chartsInScope:
+        - 184
+        - 185
+        - 186
+        - 187
+        - 210
+        - 211
+        scope: global
+      id: 183
+    '184':
+      crossFilters:
+        chartsInScope:
+        - 183
+        - 185
+        - 186
+        - 187
+        - 210
+        - 211
+        scope: global
+      id: 184
+    '185':
+      crossFilters:
+        chartsInScope:
+        - 183
+        - 184
+        - 186
+        - 187
+        - 210
+        - 211
+        scope: global
+      id: 185
+    '186':
+      crossFilters:
+        chartsInScope:
+        - 183
+        - 184
+        - 185
+        - 187
+        - 210
+        - 211
+        scope: global
+      id: 186
+    '187':
+      crossFilters:
+        chartsInScope:
+        - 183
+        - 184
+        - 185
+        - 186
+        - 210
+        - 211
+        scope: global
+      id: 187
+    '210':
+      crossFilters:
+        chartsInScope:
+        - 183
+        - 184
+        - 185
+        - 186
+        - 187
+        - 211
+        scope: global
+      id: 210
+    '211':
+      crossFilters:
+        chartsInScope:
+        - 183
+        - 184
+        - 185
+        - 186
+        - 187
+        - 210
+        scope: global
+      id: 211
+  chart_customization_config: []
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 183
+    - 184
+    - 185
+    - 186
+    - 187
+    - 210
+    - 211
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors:
+    audit_count: '#454E7C'
+    certificate_count: '#FF7F44'
+    certs_earned_count: '#FF7F44'
+    total_enrollment_count: '#1FA8C9'
+    unenrollment_count: '#5AC189'
+    verified_count: '#5AC189'
+  native_filter_configuration: []
+  refresh_frequency: 0
+  shared_label_colors:
+  - audit_count
+  - certs_earned_count
+  - total_enrollment_count
+  - verified_count
+  show_chart_timestamps: false
+  timed_refresh_immune_slices: []
+position:
+  CHART-explore-183-1:
+    children: []
+    id: CHART-explore-183-1
+    meta:
+      chartId: 183
+      height: 50
+      sliceName: '[MM Fin] Overall Course Enrollments By Course Comparison (Lifetime
+        Cumulative)'
+      uuid: 0d9869b7-de4d-404d-918f-1ce711388acb
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    type: CHART
+  CHART-explore-184-1:
+    children: []
+    id: CHART-explore-184-1
+    meta:
+      chartId: 184
+      height: 50
+      sliceName: '[MM Fin] All Courses Learner Enrollments Timeline (Lifetime Cumulative)'
+      uuid: 13f9274e-aae3-4e2e-992c-0d547744fd73
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    type: CHART
+  CHART-explore-185-1:
+    children: []
+    id: CHART-explore-185-1
+    meta:
+      chartId: 185
+      height: 50
+      sliceName: '[MM Fin] All Courses Learner Enrollments Timeline Bar (Daily Non-Cumulative)'
+      uuid: 82a7c821-98c8-460d-af18-8f1c1c6abedd
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    type: CHART
+  CHART-explore-186-1:
+    children: []
+    id: CHART-explore-186-1
+    meta:
+      chartId: 186
+      height: 50
+      sliceName: '[MM Fin] Enrollment Activity Over Time (Lifetime Cumulative)'
+      uuid: 89f6849d-7909-42ac-8be2-1ee5717eb815
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-W-PEsm2W6ukWYhMxrVo-m
+    type: CHART
+  CHART-explore-187-1:
+    children: []
+    id: CHART-explore-187-1
+    meta:
+      chartId: 187
+      height: 50
+      sliceName: '[MM Fin] All Courses Learner Enrollments Timeline (Daily Non-Cumulative)'
+      uuid: 6188c876-1765-4997-839c-2799995dc3f7
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    type: CHART
+  CHART-explore-210-1:
+    children: []
+    id: CHART-explore-210-1
+    meta:
+      chartId: 210
+      height: 50
+      sliceName: '[MM Fin] All Courses Learner Enrollments Timeline Bar (Weekly Non-Cumulative)'
+      uuid: ab320f0a-d749-458b-a632-92c57bd88271
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    type: CHART
+  CHART-explore-211-1:
+    children: []
+    id: CHART-explore-211-1
+    meta:
+      chartId: 211
+      height: 50
+      sliceName: '[MM Fin] All Courses Learner Enrollments Timeline (Weekly Non-Cumulative)'
+      uuid: b524b2b6-c552-4ff4-b7f6-bd456867a9de
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    - ROW-oYvoBrdMGFs4nSv0IFvw-
+    - ROW-W-PEsm2W6ukWYhMxrVo-m
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: '[MM Fin] Main Dashboard (All Courses)'
+    type: HEADER
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-W-PEsm2W6ukWYhMxrVo-m:
+    children:
+    - CHART-explore-186-1
+    id: ROW-W-PEsm2W6ukWYhMxrVo-m
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-ZGyk_HwIaLioK5P8Lg1Kf:
+    children:
+    - CHART-explore-183-1
+    - CHART-explore-185-1
+    - CHART-explore-210-1
+    id: ROW-ZGyk_HwIaLioK5P8Lg1Kf
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-oYvoBrdMGFs4nSv0IFvw-:
+    children:
+    - CHART-explore-184-1
+    - CHART-explore-187-1
+    - CHART-explore-211-1
+    id: ROW-oYvoBrdMGFs4nSv0IFvw-
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+published: true
+slug: null
+theme_uuid: null
+uuid: fb8d872c-a0c8-4ba0-ad8e-766713f0c2dc
+version: 1.0.0

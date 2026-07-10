@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: user_avg_exam_grade
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -16,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_avg_hw_grade
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -28,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: grades
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -40,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: max_learner_grade
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -52,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -64,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: max_possible_grade
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -76,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: attempts_on_problem
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -88,6 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: problem_block_fk
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -100,6 +108,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chapter_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -112,6 +121,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: sequential_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -124,6 +134,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: unit_name
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -136,6 +147,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -148,6 +160,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: exam_indicator
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -160,6 +173,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserungrade_grade
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -172,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: time_spent_on_problem_nolimit
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -184,6 +199,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: time_spent_on_problem
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -196,6 +212,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: openedx_user_id
+  datetime_format: null
   description: null
   expression: ''
   extra: {}
@@ -208,6 +225,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: email
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -220,6 +238,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_taken_final_exam
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -232,6 +251,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: hw_indicator
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -244,6 +264,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_exam_median_solving_time
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -256,6 +277,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_non_exam_problem_count
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -268,6 +290,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_hw_attempts_on_problem
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -280,6 +303,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_hw_median_solving_time
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -292,6 +316,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_exam_time_flags
+  datetime_format: null
   description: null
   expression: ''
   extra: null
@@ -302,9 +327,10 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
-description: Auto refreshed at 2026-03-16T07:02:50.694907+00:00
+description: Auto refreshed at 2026-07-10T16:21:38.435551+00:00
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true

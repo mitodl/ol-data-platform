@@ -1,0 +1,240 @@
+always_filter_main_dttm: false
+cache_timeout: null
+catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_original_income
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DECIMAL(38, 2)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_income_usd
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DECIMAL(38, 2)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_exchange_rate_timestamp
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_original_currency
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_created_on
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_updated_on
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserun_start_on
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_full_name
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserun_end_on
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: flexiblepriceapplication_status
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_email
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_latest_row_desc
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT(20)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: mitxonline_program_id
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT(20)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_id
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT(20)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: income_less_than_10000
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BOOLEAN
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserunenrollment_is_active
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BOOLEAN
+  verbose_name: null
+currency_code_column: null
+database_uuid: d5ed5344-297b-43af-ba38-4bc04744f1ef  # StarRocks - Lakehouse
+default_endpoint: null
+description: Auto refreshed at 2026-06-21T16:10:12.361462+00:00
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: null
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra: null
+  metric_name: count
+  metric_type: count
+  verbose_name: COUNT(*)
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
+schema: ol_warehouse_production_reporting
+sql: null
+table_name: dedp_financial_assistance
+template_params: null
+uuid: 6dfdfdbf-5ecc-4a9c-8733-657362d9e129
+version: 1.0.0

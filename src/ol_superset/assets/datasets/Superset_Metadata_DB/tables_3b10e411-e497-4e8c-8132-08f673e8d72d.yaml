@@ -4,6 +4,7 @@ catalog: superset
 columns:
 - advanced_data_type: null
   column_name: created_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -16,6 +17,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: changed_on
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -28,6 +30,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: catalog_perm
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -40,6 +43,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: schema_perm
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -52,6 +56,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: perm
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -64,6 +69,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: main_dttm_col
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -76,6 +82,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: table_name
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -88,6 +95,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: schema
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -100,6 +108,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: catalog
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -112,6 +121,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: always_filter_main_dttm
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -124,6 +134,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: is_managed_externally
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -136,6 +147,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: filter_select_enabled
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -148,6 +160,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: is_sqllab_view
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -160,6 +173,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: normalize_columns
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -172,6 +186,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: is_featured
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -184,6 +199,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: uuid
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -196,6 +212,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: created_by_fk
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -208,6 +225,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: changed_by_fk
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -220,6 +238,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: database_id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -232,6 +251,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: cache_timeout
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -244,6 +264,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: id
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -256,6 +277,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: offset
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -268,6 +290,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: fetch_values_predicate
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -280,6 +303,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: template_params
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -292,6 +316,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: default_endpoint
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -304,6 +329,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: external_url
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -316,6 +342,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: params
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -328,6 +355,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: extra
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -340,6 +368,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: description
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -352,6 +381,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: sql
+  datetime_format: null
   description: null
   expression: null
   extra: null
@@ -362,6 +392,7 @@ columns:
   python_date_format: null
   type: TEXT
   verbose_name: null
+currency_code_column: null
 database_uuid: 6a4ddc2b-cd25-464d-99b4-f6c611eabb99  # Superset Metadata DB
 default_endpoint: null
 description: null

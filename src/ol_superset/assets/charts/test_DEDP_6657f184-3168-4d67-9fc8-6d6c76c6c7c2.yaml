@@ -1,0 +1,76 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: 29720b2d-fac5-44a0-88dd-b2cbed0482ba  # dedp_financial_assistance
+description: null
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: 1
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_msnn1ddp2x_gfdp2ehbctk
+    isExtra: false
+    isNew: false
+    operator: ==
+    operatorId: EQUALS
+    sqlExpression: null
+    subject: user_latest_row_desc
+  align_pn: false
+  all_columns:
+  - user_email
+  - user_full_name
+  - user_id
+  - flexiblepriceapplication_income_usd
+  - flexiblepriceapplication_original_currency
+  - flexiblepriceapplication_original_income
+  - flexiblepriceapplication_status
+  - flexiblepriceapplication_exchange_rate_timestamp
+  - flexiblepriceapplication_created_on
+  - flexiblepriceapplication_updated_on
+  allow_rearrange_columns: false
+  allow_render_html: true
+  color_pn: true
+  comparison_color_enabled: false
+  comparison_color_scheme: Green
+  comparison_type: values
+  conditional_formatting: []
+  extra_form_data: {}
+  groupby: []
+  include_search: true
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
+  order_by_cols: []
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  server_pagination: false
+  show_cell_bars: false
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  viz_type: table
+slice_name: test DEDP
+uuid: 6657f184-3168-4d67-9fc8-6d6c76c6c7c2
+version: 1.0.0
+viz_type: table

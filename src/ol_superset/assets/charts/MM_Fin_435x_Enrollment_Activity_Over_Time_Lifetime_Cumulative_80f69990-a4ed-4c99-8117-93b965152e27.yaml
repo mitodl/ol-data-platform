@@ -1,0 +1,162 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4  # Enrollment_Activity_Counts_Dataset
+description: null
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: null
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_jks91yppwy_eno4lblq1p5
+    isExtra: false
+    isNew: false
+    operator: null
+    sqlExpression: courserun_readable_id IN ('course-v1:MITxT+15.435x+2T2026')
+    subject: null
+  - clause: WHERE
+    comparator: No filter
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_mtiu03hdiui_uvhn5o6d28q
+    isExtra: false
+    isNew: false
+    operator: TEMPORAL_RANGE
+    sqlExpression: null
+    subject: activity_date
+  annotation_layers: []
+  area: false
+  color_scheme: supersetColors
+  comparison_type: values
+  echart_options: '{}'
+  extra_form_data: {}
+  force_max_interval: false
+  forecastEnabled: false
+  forecastInterval: 0.8
+  forecastPeriods: 10
+  groupby: []
+  legendOrientation: top
+  legendType: scroll
+  logAxis: false
+  markerEnabled: false
+  markerSize: 6
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 4
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
+  metrics:
+  - aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: verified_count
+    optionName: metric_0ym7799bz5gc_xxsod6r625g
+    sqlExpression: SUM(verified_count)
+  - aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: audit_count
+    optionName: metric_fbplr0zphfr_w91as3k80n
+    sqlExpression: SUM(audit_count)
+  - aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: total_enrollment_count
+    optionName: metric_iyyrprc7k48_4c2zni0r7z9
+    sqlExpression: SUM(enrollment_count)
+  - aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: certificate_count
+    optionName: metric_nvz2vjhocn_f04i24l8mr4
+    sqlExpression: SUM(certificate_count)
+  - aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: unenrollment_count
+    optionName: metric_cs90ny1lqvi_0mvrz3kfl4er
+    sqlExpression: SUM(unenrolled_count)
+  minorSplitLine: false
+  minorTicks: false
+  only_total: true
+  opacity: 0.2
+  order_desc: false
+  percentage_threshold: 0
+  rich_tooltip: true
+  rolling_type: cumsum
+  row_limit: 50000
+  showTooltipPercentage: false
+  showTooltipTotal: true
+  show_empty_columns: true
+  show_legend: true
+  show_value: false
+  sort_series_ascending: false
+  sort_series_type: sum
+  time_grain_sqla: P1D
+  time_shift_color: true
+  timeseries_limit_metric:
+    aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: false
+    label: MIN(activity_date)
+    optionName: metric_snte9rtepyq_y50923oh3b
+    sqlExpression: MIN(activity_date)
+  tooltipSortByMetric: false
+  tooltipTimeFormat: smart_date
+  truncateXAxis: true
+  truncateYAxis: false
+  truncate_metric: true
+  viz_type: echarts_timeseries_line
+  xAxisLabelInterval: auto
+  xAxisLabelRotation: 0
+  x_axis:
+    expressionType: SQL
+    label: activity_date
+    sqlExpression: activity_date
+  x_axis_number_format: ~g
+  x_axis_time_format: smart_date
+  x_axis_title: ''
+  x_axis_title_margin: 0
+  y_axis_bounds:
+  - null
+  - null
+  y_axis_format: SMART_NUMBER
+  y_axis_title: ''
+  y_axis_title_margin: 0
+  y_axis_title_position: Left
+  zoomable: false
+slice_name: '[MM Fin] 435x Enrollment Activity Over Time (Lifetime Cumulative)'
+uuid: 80f69990-a4ed-4c99-8117-93b965152e27
+version: 1.0.0
+viz_type: echarts_timeseries_line

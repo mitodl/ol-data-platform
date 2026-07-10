@@ -10,5 +10,6 @@ allow_file_upload: false
 extra:
   allows_virtual_table_explore: true
 impersonate_user: false
+configuration_method: dynamic_form
 uuid: 6a4ddc2b-cd25-464d-99b4-f6c611eabb99
 version: 1.0.0
