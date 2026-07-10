@@ -1,0 +1,29 @@
+# agent-config.toml — declarative install of this repo's agent skills via
+# agent-config-kit's `agent-kit` CLI.
+#
+# Scope is "project" (repository scope): skills install into this checkout's
+# agent config (e.g. .claude/skills), so they travel with the repo and are
+# available to anyone working in it — not into your global ~/ config.
+#
+# Usage (from the repo root):
+#   uv tool install 'agent-config-kit[cli]'
+#   agent-kit apply agent-config.toml                     # install every skill below
+#   agent-kit apply agent-config.toml --profile dbt       # just the dbt fast-QA skills
+#   agent-kit apply agent-config.toml --dry-run           # preview without writing
+#   agent-kit validate agent-config.toml                  # check for drift
+
+[options]
+scope = "project"
+
+[skills]
+ol-dbt-fast-validation = "skills/data/ol-dbt-fast-validation/SKILL.md"
+ol-dbt-local-dev       = "skills/data/ol-dbt-local-dev/SKILL.md"
+
+# The `dbt` profile is the fast, credential-light dbt-warehouse QA loop:
+# stand up the local DuckDB+Iceberg env (ol-dbt-local-dev) and validate changes
+# (ol-dbt-fast-validation) before opening or reviewing a PR.
+[profiles.dbt]
+skills = [
+    "ol-dbt-fast-validation",
+    "ol-dbt-local-dev",
+]
