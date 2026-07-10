@@ -70,29 +70,37 @@ def full_dbt_project(
                 "be uploaded to S3 for OpenMetadata ingestion."
             )
         else:
+            # `dbt docs generate` recompiles the project and writes its own
+            # run_results.json to the target path. Point it at a dedicated
+            # subdirectory so it does not overwrite the build's run_results.json
+            # (which records the actual model/test outcomes we ship per run).
+            docs_target_path = build_invocation.target_path / "docs"
             # Run docs generate without context so it covers the full project and
-            # doesn't emit redundant Dagster events. Re-use the build's target_path
-            # so all artifacts land in the same directory.
-            # run_results.json is uploaded to a per-run versioned key so results
-            # from every incremental and full run are captured. manifest.json and
-            # catalog.json are deduplicated by content hash and only uploaded when
-            # their content has changed.
+            # doesn't emit redundant Dagster events.
             docs_invocation = dbt.cli(
                 ["docs", "generate"],
-                target_path=build_invocation.target_path,
+                target_path=docs_target_path,
                 raise_on_error=False,
             )
             docs_invocation.wait()
 
-            artifacts = ["manifest.json", "run_results.json"]
-            if (build_invocation.target_path / "catalog.json").exists():
-                artifacts.append("catalog.json")
+            # run_results.json is uploaded to a per-run versioned key so results
+            # from every incremental and full run are captured; it must come from
+            # the build invocation, not docs generate.
+            dbt_s3_artifacts.upload_artifacts(
+                build_invocation.target_path, ["run_results.json"], context
+            )
+
+            # manifest.json and catalog.json describe the full project and are
+            # deduplicated by content hash, only uploaded when their content has
+            # changed.
+            docs_artifacts = ["manifest.json"]
+            if (docs_target_path / "catalog.json").exists():
+                docs_artifacts.append("catalog.json")
             else:
                 context.log.warning(
                     "dbt docs generate did not produce catalog.json; "
                     "it will be omitted from the OpenMetadata artifact upload"
                 )
 
-            dbt_s3_artifacts.upload_artifacts(
-                build_invocation.target_path, artifacts, context
-            )
+            dbt_s3_artifacts.upload_artifacts(docs_target_path, docs_artifacts, context)
