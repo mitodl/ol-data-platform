@@ -19,6 +19,7 @@ signals for four audiences (support, engineering, instructors, leadership).
 | [`feedback_ml_approach.md`](./feedback_ml_approach.md) | Embedding (local, PII-safe), clustering (UMAP+HDBSCAN), category discovery (seed + LLM-label), sentiment (explicit + kNN/classifier) | `...clustering-...a1d7d6`, `...category-...550aba`, `...sentiment-...92988e` |
 | [`feedback_dagster_asset_spec.md`](./feedback_dagster_asset_spec.md) | Batch ML Dagster asset cloned from `student_risk_probability`; Vault-backed LLM resource; net-new deps; scheduling | (ML pipeline orchestration) |
 | [`feedback_consumption_ux_spec.md`](./feedback_consumption_ux_spec.md) | Audiences × altitude, Superset-first surfaces, per-persona actions, access control | `...ui-ux-...476d23` |
+| [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md) | ADR: where embedding/AI inference runs — Starburst Galaxy AI functions (Bedrock, in-SQL) vs. Fenic vs. local vs. StarRocks | (revises embedding default) |
 
 ## Key decisions (spec phase)
 
@@ -33,8 +34,12 @@ signals for four audiences (support, engineering, instructors, leadership).
    tag-seeded categories + CSAT-derived sentiment; embeddings/clustering fill `category_fk`/
    `sentiment_fk`/`embedding_id` later. Embeddings persisted **once** (the one adopted lesson
    from prototype #10793).
-4. **Local, PII-safe embeddings** by default (learner-PII posture); redaction (Presidio)
-   mandatory pre-embed; raw text stays upstream under existing Lakekeeper/Cedar authz.
+4. **Embedding compute pushed into the engine we already run** (revised 2026-07-10, ADR):
+   production is Trino on **Starburst Galaxy**, so `generate_embedding` (Bedrock, in-account,
+   public preview) generates vectors in SQL/dbt into the Iceberg sidecar — eliminating the
+   net-new torch service. Redaction (Presidio) stays mandatory pre-embed. Local self-hosted
+   embeddings and Fenic are documented fallbacks; StarRocks vector search is a Phase-3 note
+   (not deployed today).
 5. **Superset-first consumption**; support + engineering are the MVP-served audiences
    (Zendesk is not course-scoped, so instructors wait for Phase 2 sources).
 

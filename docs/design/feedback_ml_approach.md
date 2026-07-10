@@ -38,13 +38,25 @@ so a re-run never duplicates and never mutates the fact grain. Embedding is comp
 **Decision: one shared embedding, computed once, stored in the `feedback_embeddings`
 sidecar.** Both clustering and (semantic) sentiment consume it — do not embed twice.
 
-- **Model choice — recommend an open/self-hostable model** (e.g. `BAAI/bge-small-en-v1.5`
-  or `sentence-transformers/all-MiniLM-L6-v2`, 384-dim) over a hosted API, for the
-  **learner-PII posture**: even post-redaction, sending ~1.18M feedback utterances to a
-  third-party embedding API is an avoidable data-egress and cost exposure. A local
+> **REVISED 2026-07-10 — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
+> Production runs Trino on **Starburst Galaxy**, whose in-SQL AI functions
+> (`starburst.ai.generate_embedding` → `ARRAY(DOUBLE)`, public preview) can generate
+> embeddings **inside the engine we already run**, on **AWS Bedrock in our own AWS account**,
+> writing vectors straight into the Iceberg sidecar. That both eliminates the net-new
+> torch/sentence-transformers service *and* removes the third-party-egress objection below
+> (Bedrock-in-account over Presidio-redacted text). **New default: Starburst AI
+> `generate_embedding` as a `trino_only` dbt model.** The local option below drops to a
+> last-resort fallback. StarRocks vector functions are irrelevant for now (not deployed) — see
+> the ADR for the Phase-3 note. The rest of §B (persist-once, `model_version`, Iceberg ARRAY
+> storage, redaction-upstream) is unchanged and applies regardless of who computes the vector.
+
+- **Model choice (fallback path, if the Starburst AI preview is unavailable/undesired) —
+  an open/self-hostable model** (e.g. `BAAI/bge-small-en-v1.5` or
+  `sentence-transformers/all-MiniLM-L6-v2`, 384-dim): even post-redaction, sending ~1.18M
+  feedback utterances to a *third-party* embedding API is avoidable egress — but note this
+  concern does **not** apply to Bedrock-in-account via Starburst AI (the new default). A local
   sentence-transformers model runs the full corpus in a single batch job on CPU/GPU for
-  effectively $0 marginal cost. Keep an OpenAI `text-embedding-3-small` adapter behind the
-  same resource interface as a fallback/benchmark, but default to local.
+  effectively $0 marginal provider cost, at the price of the heaviest image/infra.
   - Open question deferred to implementation: GPU vs CPU throughput at 1.18M rows. At
     MVP scale (198K) CPU is fine (single-digit minutes to low hours).
 - **Redaction is upstream and mandatory** (design §7): embeddings are computed on the
