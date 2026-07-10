@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from dlt.pipeline.exceptions import PipelineStepFailed
 
 from ol_dlt import config
 from ol_dlt.sources import oll
@@ -46,6 +47,37 @@ def test_oll_materialization(
     table = pipeline.dataset()["raw__oll__google_sheets__courses"].arrow()
     assert table.num_rows == 2  # noqa: PLR2004
     assert {"readable_id", "title", "url"} <= set(table.column_names)
+
+
+@pytest.mark.integration
+def test_truncated_csv_fetch_does_not_truncate_table(
+    test_profile: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A truncated/empty CSV fetch must not replace a good table with an empty one.
+
+    write_disposition="replace" means a truncated fetch would normally
+    overwrite the table with a short result.
+    config.guard_against_replace_truncation refuses to commit a fetch whose
+    row count dropped sharply from the last successful load, so the run fails
+    loudly instead, and the table keeps its previous, correct row count.
+    """
+    monkeypatch.setattr(
+        oll.requests,
+        "get",
+        lambda *_a, **_k: FakeResponse(content=_CSV.encode("utf-8")),
+    )
+    pipeline = config.pipeline_for("oll")
+    pipeline.run(oll.oll_source())
+    assert pipeline.dataset()["raw__oll__google_sheets__courses"].arrow().num_rows == 2  # noqa: PLR2004
+
+    monkeypatch.setattr(
+        oll.requests,
+        "get",
+        lambda *_a, **_k: FakeResponse(content=b"readable_id,title,url\n"),
+    )
+    with pytest.raises(PipelineStepFailed, match="refusing to replace"):
+        pipeline.run(oll.oll_source())
+    assert pipeline.dataset()["raw__oll__google_sheets__courses"].arrow().num_rows == 2  # noqa: PLR2004
 
 
 @pytest.mark.integration

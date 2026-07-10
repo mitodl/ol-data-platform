@@ -47,6 +47,18 @@ TableFormat = Literal["iceberg", "delta", "hive", "native"]
 # per-source [destination.*] blocks that used to live in .dlt/config.toml).
 _LAYOUT = "{table_name}/{load_id}.{file_id}.{ext}"
 
+# Schema contract for JSON API sources (mit_climate, mitpe, mit_edx_programs).
+# New tables/columns evolve freely — upstream APIs add fields routinely and
+# dropping them would be worse than a wider raw table. A TYPE FLIP on an
+# existing column is frozen (fails the load loudly) rather than silently
+# widening/retyping the column, since dbt casts specific columns downstream and
+# a silent retype there corrupts the raw table instead of erroring visibly.
+JSON_API_SCHEMA_CONTRACT: dict[str, str] = {
+    "tables": "evolve",
+    "columns": "evolve",
+    "data_type": "freeze",
+}
+
 
 def active_profile() -> str:
     """Return the active dlt profile from ``DLT_PROFILE`` (default ``dev``)."""
@@ -128,10 +140,14 @@ def pipeline_for(
 def resolve_secret(explicit: str | None, env_var: str) -> str | None:
     """Resolve a credential lazily: explicit value, else ``env_var``.
 
+    Looks ``env_var`` up via ``dlt.secrets`` (not ``os.getenv``) so the value is
+    resolved through dlt's standard config providers (env, secrets.toml, vault)
+    and marked as secret, which redacts it from dlt's run traces and logs.
+
     Call this inside a resource body (not at import) so a module imports cleanly
     when secrets are absent in local development.
     """
-    return explicit if explicit is not None else os.getenv(env_var)
+    return explicit if explicit is not None else dlt.secrets.get(env_var)
 
 
 def require_secrets(**named_values: str | None) -> dict[str, str]:
@@ -145,3 +161,44 @@ def require_secrets(**named_values: str | None) -> dict[str, str]:
         msg = f"Missing required credentials: {', '.join(missing)}"
         raise ValueError(msg)
     return {name: value for name, value in named_values.items() if value is not None}
+
+
+# Minimum fraction of the last successful load's row count a "replace" fetch
+# must reach before it's trusted to overwrite the table.
+REPLACE_ROW_COUNT_FLOOR = 0.8
+
+
+def guard_against_replace_truncation(
+    resource_name: str, row_count: int, floor_ratio: float = REPLACE_ROW_COUNT_FLOOR
+) -> None:
+    """Raise if ``row_count`` looks like a truncated fetch, else record it.
+
+    For a fetch-all source on ``write_disposition="replace"``, a transient
+    partial failure (e.g. a paginated API returning an empty page early) still
+    looks like a successful fetch and would silently truncate the table to
+    whatever was collected so far. Call this with the FULL row count *before*
+    yielding any rows: it compares against the last successful load's count
+    and raises rather than letting the load proceed if the count dropped by
+    more than ``floor_ratio``. Recording the new baseline only happens by
+    returning normally, and dlt only persists state alongside a load that
+    completes successfully — so a raised guard leaves the previously loaded
+    table untouched.
+
+    Uses ``dlt.current.source_state()`` under a dedicated key rather than
+    ``dlt.current.resource_state()``: dlt resets resource-scoped state for
+    every ``write_disposition="replace"`` resource before each extraction (by
+    design — replace is meant to be stateless), which would silently discard
+    the row-count baseline on every run. Source state isn't subject to that
+    reset, so the baseline survives across runs.
+    """
+    floor_state = dlt.current.source_state().setdefault("_replace_row_count_floor", {})
+    last_count = floor_state.get(resource_name)
+    if last_count and row_count < last_count * floor_ratio:
+        msg = (
+            f"{resource_name}: fetched {row_count} rows, below "
+            f"{floor_ratio:.0%} of the last successful load's {last_count} "
+            "rows -- refusing to replace the table with a likely-truncated "
+            "result."
+        )
+        raise ValueError(msg)
+    floor_state[resource_name] = row_count

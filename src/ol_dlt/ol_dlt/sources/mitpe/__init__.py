@@ -1,9 +1,12 @@
 """MIT Professional Education (MIT PE) course ingestion via dlt.
 
 Fetches courses from the MIT PE feeds API. The feed is page-based: incrementing
-``page`` from 0 until an empty array is returned. The table is fully replaced on
-each run. MIT PE has no separate programs endpoint — programs are mixed into the
-courses feed.
+``page`` from 0 until an empty array is returned. The table is fully replaced
+on each run; ``config.guard_against_replace_truncation`` refuses to commit a
+fetch whose row count dropped sharply from the last successful load, so a run
+that ends early on a transient empty page fails loudly instead of silently
+truncating the table. MIT PE has no separate programs endpoint — programs are
+mixed into the courses feed.
 
 Data flow:
     MITPE_BASE_URL/feeds/courses/  -> raw__mitpe__api__courses
@@ -19,7 +22,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 import dlt
-import requests
+from dlt.sources.helpers import requests
 
 from ol_dlt import config
 
@@ -45,21 +48,28 @@ def mitpe_source(
         primary_key=["title", "url"],
         write_disposition="replace",
         table_format=config.active_table_format(),
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def courses() -> Generator[dict[str, Any]]:
         """Yield all MIT PE courses, fetching pages until the API returns empty."""
         feed_url = urljoin(base_url, "/feeds/courses/")
+        records: list[dict[str, Any]] = []
         page = 0
         while True:
             logger.info("Fetching MIT PE courses page %d from %s", page, feed_url)
             resp = requests.get(feed_url, params={"page": page}, timeout=30)
             resp.raise_for_status()
-            records = resp.json()
-            if not records:
+            page_records = resp.json()
+            if not page_records:
                 logger.info("MIT PE courses: reached empty page at page=%d", page)
                 break
-            yield from records
+            records.extend(page_records)
             page += 1
+
+        config.guard_against_replace_truncation(
+            "raw__mitpe__api__courses", len(records)
+        )
+        yield from records
 
     yield courses
 

@@ -10,9 +10,13 @@ sources:
   - name: raw__edxorg__discovery__api__programs
     description: >
       MIT-authored edX.org programs ingested from the edX Programs API via
-      the mit_edx_programs dlt pipeline. Full replace on every run; filtered
-      to active, non-MicroMasters programs authored by a known MIT
-      organization key. One row per program, keyed by uuid.
+      the mit_edx_programs dlt pipeline. Merge on uuid every run; filtered to
+      active, non-MicroMasters programs authored by a known MIT organization
+      key. A program that becomes inactive/withdrawn stops being yielded but
+      its row is NOT deleted (merge never deletes) -- consumers should use
+      _dlt_load_id to tell reconfirmed-active rows from stale ones (see
+      integrations__learn__mit_edx_programs's `published` column). One row
+      per program, keyed by uuid.
     columns:
     - name: uuid
       description: >

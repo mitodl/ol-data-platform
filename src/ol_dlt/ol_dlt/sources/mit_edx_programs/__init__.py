@@ -21,7 +21,7 @@ from collections.abc import Generator
 from typing import Any
 
 import dlt
-import requests
+from dlt.sources.helpers import requests
 
 from ol_dlt import config
 
@@ -75,9 +75,12 @@ def mit_edx_programs_source(
 
     @dlt.resource(
         name="raw__edxorg__discovery__api__programs",
+        # merge (not replace) so a paginated fetch that fails partway through
+        # upserts what it got rather than truncating the table to a short page.
         primary_key="uuid",
-        write_disposition="replace",
+        write_disposition="merge",
         table_format=config.active_table_format(),
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def programs() -> Generator[dict[str, Any]]:
         """Fetch and yield MIT-authored programs from the edX Programs API."""

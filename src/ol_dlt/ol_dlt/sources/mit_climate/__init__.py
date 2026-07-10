@@ -21,7 +21,7 @@ from collections.abc import Generator
 from typing import Any
 
 import dlt
-import requests
+from dlt.sources.helpers import requests
 
 from ol_dlt import config
 
@@ -48,6 +48,7 @@ def mit_climate_source(
         primary_key="uuid",
         write_disposition="merge",
         table_format=config.active_table_format(),
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def articles() -> Generator[dict[str, Any]]:
         """Yield articles from both MIT Climate feeds, tagged by feed_type."""

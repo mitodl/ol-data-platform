@@ -2,6 +2,7 @@
 
 import base64
 from pathlib import Path
+from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -76,6 +77,88 @@ def test_episodes_resource_filters_audioless(monkeypatch: pytest.MonkeyPatch) ->
     source = podcast_rss.podcast_rss_source()
     episodes = list(source.resources["raw__podcast__rss__episodes"])
     assert [e["readable_id"] for e in episodes] == ["ep-1"]
+
+
+def test_configs_and_feed_fetched_once_across_both_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """channels + episodes share one config listing and one feed fetch/parse.
+
+    Both tables are derived from a single upstream ``podcast_feeds`` resource
+    (see ``podcast_rss_source``) rather than each independently re-fetching
+    GitHub configs and re-fetching/re-parsing every RSS feed.
+    """
+    feed_fetches = 0
+    config_fetches = 0
+
+    def _counting_get(url: str, **kwargs: object) -> object:
+        nonlocal feed_fetches, config_fetches
+        if "contents" in url or "api/file" in url:
+            config_fetches += 1
+        else:
+            feed_fetches += 1
+        return _fake_get(url, **kwargs)
+
+    monkeypatch.setattr(podcast_rss.requests, "get", _counting_get)
+    source = podcast_rss.podcast_rss_source()
+    items = list(source)
+
+    assert len(items) == 2  # one channel record, one episode record
+    assert feed_fetches == 1
+    # 1 listing call + 1 per-file fetch for the single configured podcast.
+    assert config_fetches == 2
+
+
+_MALICIOUS_YAML = (
+    b"rss_url: https://malicious.example.com/feed.xml\n"
+    b"website: https://malicious.example.com\n"
+)
+_MALICIOUS_RSS_XML = (
+    b'<?xml version="1.0"?>'
+    b'<!DOCTYPE rss [<!ENTITY xxe "pwned">]>'
+    b"<rss><channel><title>&xxe;</title></channel></rss>"
+)
+
+
+def test_malicious_feed_is_skipped_not_fatal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A feed defusedxml rejects must be skipped, not crash the whole run.
+
+    defusedxml raises DefusedXmlException (e.g. EntitiesForbidden) for a
+    hostile DOCTYPE/entity declaration -- a different exception class than
+    ET.ParseError. Both must be caught so one bad feed doesn't abort every
+    other configured podcast's channel/episode records.
+    """
+
+    def _get(url: str, **_kwargs: object) -> FakeResponse:
+        if "contents" in url:
+            return FakeResponse(
+                json_data=[
+                    {"name": "good.yaml", "url": "https://api/file/good.yaml"},
+                    {"name": "evil.yaml", "url": "https://api/file/evil.yaml"},
+                ]
+            )
+        if "good.yaml" in url:
+            return FakeResponse(
+                json_data={"content": base64.b64encode(_YAML).decode("ascii")}
+            )
+        if "evil.yaml" in url:
+            return FakeResponse(
+                json_data={"content": base64.b64encode(_MALICIOUS_YAML).decode("ascii")}
+            )
+        if urlparse(url).hostname == "malicious.example.com":
+            return FakeResponse(content=_MALICIOUS_RSS_XML)
+        return FakeResponse(content=_RSS_XML)
+
+    monkeypatch.setattr(podcast_rss.requests, "get", _get)
+    source = podcast_rss.podcast_rss_source()
+    items = list(source)
+
+    # Only the good feed's channel + episode records survive; the malicious
+    # feed is logged and skipped rather than raising out of the whole run.
+    assert len(items) == 2
+    assert {i.get("rss_url") or i.get("channel_rss_url") for i in items} == {
+        "https://example.com/feed.xml"
+    }
 
 
 @pytest.mark.integration
