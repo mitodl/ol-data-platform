@@ -65,7 +65,7 @@ with micromasters_courseruns as (
     from {{ ref('int__mitxonline__course_runs') }} as cr
     left join micromasters_examruns as er
         on cr.courserun_readable_id = er.examrun_readable_id
-    left join {{ ref('int__mitxonline__courses') }} as cs
+    left join {{ ref('stg__mitxonline__app__postgres__courses_course') }} as cs
         on cr.course_id = cs.course_id
 )
 
