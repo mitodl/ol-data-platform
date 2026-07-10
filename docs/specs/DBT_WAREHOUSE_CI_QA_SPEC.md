@@ -5,7 +5,10 @@
 **Epic:** `tk-epic-dbt-warehouse-ci-qa-hardening-data-trust-9bf237`
 **Origin issue:** [#2407](https://github.com/mitodl/ol-data-platform/issues/2407) — "Add ol-dbt diff command to QA migrated mart/reporting models"
 **Related epic:** #2072 (dimensional-layer migration)
-**Gap analysis:** witan memory `pf-dbt-warehouse-ci-qa-gap-analysis-phased-hardenin-4a7ae1`
+**Gap analysis:** the discovery-phase analysis this spec builds on lives in the team's
+internal witan agent-memory graph (slug `pf-dbt-warehouse-ci-qa-gap-analysis-phased-hardenin-4a7ae1`);
+its findings are summarized in §1–§2 below, so this document is self-contained for readers
+without witan access.
 
 ---
 
@@ -73,8 +76,8 @@ wiring into four credential/engine-gated phases.
   `macros/override_source.sql` (`source`) fall back to these views for unbuilt models on the
   `dev_local` target; `macros/duckdb_glue_integration.sql` holds `duckdb_init` /
   `iceberg_source`. This lets old+new build side-by-side against real prod data, no copy.
-- **Slim-CI backbone:** `ol-dbt run` builds `dbt <sub> --select "state:modified+
-  result:error+ result:fail+" --state <.dbt-state> --defer`. Saved-state dir default is
+- **Slim-CI backbone:** `ol-dbt run` builds a selection like `dbt build --select state:modified+ result:error+ result:fail+ --state <.dbt-state> --defer`
+  (the subcommand is `build`/`run`/`test`). Saved-state dir default is
   `<dbt_project>/.dbt-state/` (`manifest.json`, `run_results.json`). The **prod manifest is
   already published to S3** (`DbtS3ArtifactsResource`, prefix `openmetadata/dbt-artifacts`) —
   a ready-made deferral/`--state` baseline.
@@ -98,7 +101,7 @@ wiring into four credential/engine-gated phases.
 ### 3.1 Purpose
 A by-hand, same-engine row/column diff of two model relations (typically an old vs migrated
 mart/reporting model) built on the same engine so dialect differences cancel. Must be
-driveable **both by hand and by CI** (Phase 2 auto-diff vs base ref).
+drivable **both by hand and by CI** (Phase 2 auto-diff vs base ref).
 
 ### 3.2 Package dependency
 Add to `src/ol_dbt/packages.yml`:
