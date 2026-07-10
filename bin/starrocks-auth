@@ -418,8 +418,14 @@ def _vault_client(vault_addr: str, token: str | None = None) -> hvac.Client:
     return hvac.Client(url=vault_addr, token=token)
 
 
-def _vault_oidc_callback() -> str:
-    """Start a one-shot HTTP server on port 8250 and return the Vault auth code."""
+def _vault_oidc_callback(expected_state: str) -> str:
+    """Start a one-shot HTTP server on port 8250 and return the Vault auth code.
+
+    Validates the returned `state` against *expected_state* -- without this,
+    the local callback has no way to tell a legitimate redirect from Vault
+    apart from an attacker directing the browser at
+    localhost:8250/oidc/callback?code=... directly (CSRF / login mix-up).
+    """
     result: dict[str, str] = {}
 
     class _Handler(http.server.BaseHTTPRequestHandler):
@@ -438,6 +444,14 @@ def _vault_oidc_callback() -> str:
                 self.wfile.write(
                     f"<h2>Vault authentication failed: {error}. "
                     "You can close this tab.</h2>".encode()
+                )
+            elif params.get("state") != expected_state:
+                result["error"] = "state mismatch"
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(
+                    b"<h2>Vault authentication failed: state mismatch. "
+                    b"You can close this tab.</h2>"
                 )
             else:
                 result["code"] = params.get("code", "")
@@ -503,7 +517,7 @@ def _load_vault_token(
         file=sys.stderr,
     )
     webbrowser.open(auth_url)
-    code = _vault_oidc_callback()
+    code = _vault_oidc_callback(state)
 
     login_resp = client.auth.oidc.oidc_callback(code=code, nonce=nonce, state=state)
     token = str(login_resp["auth"]["client_token"])
