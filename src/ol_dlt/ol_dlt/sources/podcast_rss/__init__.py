@@ -18,11 +18,13 @@ import base64
 import logging
 from collections.abc import Generator
 from typing import Any
-from xml.etree import ElementTree as ET
+from xml.etree.ElementTree import Element
 
 import dlt
-import requests
 import yaml
+from defusedxml import ElementTree as ET  # noqa: N817
+from defusedxml.common import DefusedXmlException
+from dlt.sources.helpers import requests
 
 from ol_dlt import config
 
@@ -95,14 +97,14 @@ def _fetch_podcast_configs(
     return configs
 
 
-def _elem_text(parent: ET.Element, tag: str) -> str | None:
+def _elem_text(parent: Element, tag: str) -> str | None:
     """Return the text of the first matching child element, or None."""
     elem = parent.find(tag)
     return elem.text if elem is not None else None
 
 
 def _parse_channel_record(
-    channel_elem: ET.Element, podcast_config: dict[str, Any]
+    channel_elem: Element, podcast_config: dict[str, Any]
 ) -> dict[str, Any]:
     """Extract channel-level fields from an RSS <channel> element."""
     rss_url = podcast_config["rss_url"]
@@ -139,7 +141,7 @@ def _parse_channel_record(
 
 
 def _parse_episode_record(
-    item_elem: ET.Element,
+    item_elem: Element,
     channel_readable_id: str,
     channel_rss_url: str,
     channel_image_url: str | None,
@@ -202,14 +204,15 @@ def podcast_rss_source(  # noqa: C901
         github_branch: Git branch to read configs from.
     """
 
-    @dlt.resource(
-        name="raw__podcast__rss__channels",
-        write_disposition="merge",
-        primary_key="readable_id",
-        table_format=config.active_table_format(),
-    )
-    def podcast_channels() -> Generator[dict[str, Any]]:
-        """Yield one record per configured podcast channel."""
+    @dlt.resource(name="_podcast_feeds", selected=False)
+    def podcast_feeds() -> Generator[dict[str, Any]]:
+        """Fetch each configured podcast's RSS feed exactly once.
+
+        Upstream-only (``selected=False``): not loaded to a table itself, just
+        piped into the ``podcast_channels``/``podcast_episodes`` transformers
+        below so the GitHub config listing and each feed's RSS XML are each
+        fetched and parsed a single time instead of once per output table.
+        """
         configs = _fetch_podcast_configs(
             repo=github_repo,
             folder=github_folder,
@@ -221,11 +224,15 @@ def podcast_rss_source(  # noqa: C901
             try:
                 resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)
                 resp.raise_for_status()
-                root = ET.fromstring(resp.content)  # noqa: S314
+                root = ET.fromstring(resp.content)
             except requests.RequestException:
                 logger.exception("Failed to fetch RSS feed: %s", rss_url)
                 continue
-            except ET.ParseError:
+            except (ET.ParseError, DefusedXmlException):
+                # DefusedXmlException (e.g. EntitiesForbidden) is raised instead
+                # of ParseError when defusedxml rejects a hostile/malformed
+                # payload (entity expansion, external references, etc.) -- treat
+                # it the same as a parse failure: skip this feed, keep going.
                 logger.exception("Failed to parse RSS XML for: %s", rss_url)
                 continue
 
@@ -234,49 +241,42 @@ def podcast_rss_source(  # noqa: C901
                 logger.warning("No <channel> element in RSS for: %s", rss_url)
                 continue
 
-            yield _parse_channel_record(channel_elem, podcast_config)
+            yield {
+                "rss_url": rss_url,
+                "channel_elem": channel_elem,
+                "channel_record": _parse_channel_record(channel_elem, podcast_config),
+            }
 
-    @dlt.resource(
+    @dlt.transformer(
+        data_from=podcast_feeds,
+        name="raw__podcast__rss__channels",
+        write_disposition="merge",
+        primary_key="readable_id",
+        table_format=config.active_table_format(),
+    )
+    def podcast_channels(feed: dict[str, Any]) -> Generator[dict[str, Any]]:
+        """Yield one record per configured podcast channel."""
+        yield feed["channel_record"]
+
+    @dlt.transformer(
+        data_from=podcast_feeds,
         name="raw__podcast__rss__episodes",
         write_disposition="merge",
         primary_key="readable_id",
         table_format=config.active_table_format(),
     )
-    def podcast_episodes() -> Generator[dict[str, Any]]:
+    def podcast_episodes(feed: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per episode across all configured podcasts."""
-        configs = _fetch_podcast_configs(
-            repo=github_repo,
-            folder=github_folder,
-            branch=github_branch,
-            token=github_access_token,
-        )
-        for podcast_config in configs:
-            rss_url = podcast_config["rss_url"]
-            try:
-                resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)
-                resp.raise_for_status()
-                root = ET.fromstring(resp.content)  # noqa: S314
-            except requests.RequestException:
-                logger.exception("Failed to fetch RSS feed: %s", rss_url)
-                continue
-            except ET.ParseError:
-                logger.exception("Failed to parse RSS XML for: %s", rss_url)
-                continue
-
-            channel_elem = root.find("channel")
-            if channel_elem is None:
-                continue
-
-            channel_record = _parse_channel_record(channel_elem, podcast_config)
-            for item_elem in channel_elem.findall("item"):
-                episode = _parse_episode_record(
-                    item_elem,
-                    channel_readable_id=channel_record["readable_id"],
-                    channel_rss_url=rss_url,
-                    channel_image_url=channel_record["image_url"],
-                )
-                if episode is not None:
-                    yield episode
+        channel_record = feed["channel_record"]
+        for item_elem in feed["channel_elem"].findall("item"):
+            episode = _parse_episode_record(
+                item_elem,
+                channel_readable_id=channel_record["readable_id"],
+                channel_rss_url=feed["rss_url"],
+                channel_image_url=channel_record["image_url"],
+            )
+            if episode is not None:
+                yield episode
 
     yield podcast_channels
     yield podcast_episodes

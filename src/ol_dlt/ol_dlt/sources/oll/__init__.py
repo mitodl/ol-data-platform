@@ -18,7 +18,7 @@ from io import StringIO
 from typing import Any
 
 import dlt
-import requests
+from dlt.sources.helpers import requests
 
 from ol_dlt import config
 
@@ -51,7 +51,11 @@ def oll_source(
         logger.info("Fetching OLL course CSV from %s", csv_url)
         resp = requests.get(csv_url, timeout=30)
         resp.raise_for_status()
-        yield from csv.DictReader(StringIO(resp.content.decode("utf-8")))
+        records = list(csv.DictReader(StringIO(resp.content.decode("utf-8"))))
+        config.guard_against_replace_truncation(
+            "raw__oll__google_sheets__courses", len(records)
+        )
+        yield from records
 
     yield courses
 

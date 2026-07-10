@@ -38,11 +38,22 @@ mit_edx_programs_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+podcast_rss_ingest_schedule = dg.ScheduleDefinition(
+    name="podcast_rss_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__podcast__rss__channels"],
+        ["ol_warehouse_raw_data", "raw__podcast__rss__episodes"],
+    ),
+    cron_schedule="0 4 * * *",
+    execution_timezone="Etc/UTC",
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
         mitpe_ingest_schedule,
         mit_climate_ingest_schedule,
         mit_edx_programs_ingest_schedule,
+        podcast_rss_ingest_schedule,
     ],
 )

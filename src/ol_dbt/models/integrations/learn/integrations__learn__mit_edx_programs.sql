@@ -7,6 +7,15 @@
   dlt pipeline to active, MIT-authored, non-MicroMasters programs. MicroMasters
   are covered by integrations__learn__micromasters_programs instead.
 
+  raw__edxorg__discovery__api__programs is loaded with write_disposition=
+  "merge" (primary_key=uuid): a program that becomes inactive/withdrawn simply
+  stops being yielded by the dlt pipeline, so merge leaves its existing row in
+  place rather than deleting it. `published` is therefore NOT a constant --
+  it's true only for programs whose _dlt_load_id matches the table's most
+  recent load, i.e. programs the pipeline actually reconfirmed as active in
+  the latest successful run. A program merge left behind from an older run
+  gets published = false here instead of appearing live forever.
+
   The subjects and courses columns retain their JSON array format from the API
   because no cross-db macro is available to flatten JSON arrays to a
   comma-separated string. Consuming applications must parse the JSON.
@@ -30,7 +39,9 @@ select
     -- course keys as JSON string: [{"key": "MITx/6.00.1x"}, ...]
     -- consumers should parse this JSON array to extract readable_ids
     , program_courses_json                                  as courses_json
-    , true                                                  as published
+    , (
+        program_dlt_load_id = max(program_dlt_load_id) over ()
+    )                                                        as published
     , 'edxorg'                                              as platform
     , 'program'                                             as resource_type
 from programs

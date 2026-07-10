@@ -102,6 +102,8 @@ models:
     timestamp; current_timestamp is used as a conservative fallback.
     NOTE: topics_json and courses_json are JSON array strings that consumers
     must parse to extract individual values.
+    NOTE: the raw table is merged (not replaced), so a program that goes
+    inactive is not deleted -- see the `published` column.
   columns:
   - name: readable_id
     description: edX.org program UUID. Used for upsert matching.
@@ -125,5 +127,13 @@ models:
     description: >
       JSON array string of course objects: [{"key": "MITx/6.00.1x"}, ...].
       Consumers must parse this JSON to extract course readable_ids.
+  - name: published
+    description: >
+      True only for programs reconfirmed active in the raw table's most
+      recent dlt load (raw__edxorg__discovery__api__programs uses
+      write_disposition="merge", which never deletes a program that stops
+      being yielded -- this compares each row's _dlt_load_id against the
+      table-wide max to distinguish still-active from merge-left-behind rows).
+    tests: [not_null]
   - name: resource_type
     description: Always 'program'.
