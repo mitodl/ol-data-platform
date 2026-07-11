@@ -27,8 +27,8 @@ from collections.abc import Generator, Iterable
 from typing import Any
 
 import dlt
-import requests
 import yaml
+from dlt.sources.helpers import requests
 
 from ol_dlt import config
 
@@ -250,6 +250,7 @@ def youtube_source(  # noqa: C901
         write_disposition="merge",
         primary_key="channel_id",
         table_format=table_format,
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def youtube_channels() -> Generator[dict[str, Any]]:
         """Yield one record per configured YouTube channel."""
@@ -278,6 +279,7 @@ def youtube_source(  # noqa: C901
         write_disposition="merge",
         primary_key="playlist_id",
         table_format=table_format,
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def youtube_playlists() -> Generator[dict[str, Any]]:
         """Yield one record per ingested playlist across all channels."""
@@ -307,6 +309,7 @@ def youtube_source(  # noqa: C901
         write_disposition="merge",
         primary_key="video_id",
         table_format=table_format,
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def youtube_videos() -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
@@ -328,6 +331,7 @@ def youtube_source(  # noqa: C901
         write_disposition="merge",
         primary_key="video_id",
         table_format=table_format,
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
     def youtube_transcripts() -> Generator[dict[str, Any]]:
         """Yield one record per video that has a transcript.
