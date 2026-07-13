@@ -59,6 +59,13 @@ jobs:
         uv run --with dbt-duckdb dbt deps
         uv run --with dbt-duckdb dbt parse -t dev
 
+    # Regression guard for override_source.sql: on DuckDB targets, source() must
+    # still register a source.* dependency edge (not just render the Glue view
+    # name), or manifest-based lineage/state:modified+ selection goes blind.
+    - name: Assert manifest has source lineage
+      working-directory: src/ol_dbt
+      run: python3 "${{ github.workspace }}/.github/scripts/assert_manifest_has_source_lineage.py"
+
     # Dimensional-layering gate (#2072 DoD): global, baselined — fails only on
     # NEW marts/reporting → staging/intermediate references.
     - name: Dimensional-layering lint
