@@ -64,19 +64,7 @@ jobs:
     # name), or manifest-based lineage/state:modified+ selection goes blind.
     - name: Assert manifest has source lineage
       working-directory: src/ol_dbt
-      run: |
-        python3 -c "
-        import json, sys
-        manifest = json.load(open('target/manifest.json'))
-        models = [n for n in manifest['nodes'].values() if n['resource_type'] == 'model']
-        with_source = [
-            m for m in models
-            if any(d.startswith('source.') for d in m.get('depends_on', {}).get('nodes', []))
-        ]
-        print(f'{len(with_source)}/{len(models)} models have a source.* dependency edge')
-        if len(with_source) == 0:
-            sys.exit('No model has a source.* dependency edge — override_source.sql regression?')
-        "
+      run: python3 "${{ github.workspace }}/.github/scripts/assert_manifest_has_source_lineage.py"
 
     # Dimensional-layering gate (#2072 DoD): global, baselined — fails only on
     # NEW marts/reporting → staging/intermediate references.
