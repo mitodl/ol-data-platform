@@ -20,6 +20,7 @@ from rich.console import Console
 
 from ol_dbt_cli.lib.git_utils import (
     get_changed_sql_models,
+    get_deleted_sql_models,
     get_file_at_ref,
     get_repo_root,
     resolve_merge_base,
@@ -366,6 +367,59 @@ def _analyse_model(
     )
 
 
+def _analyse_deleted_model(
+    model_name: str,
+    path_at_base: Path,
+    merge_base: str,
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+    repo_root: Path,
+) -> ImpactAlert:
+    """Return an :class:`ImpactAlert` for *model_name*, deleted since *merge_base*.
+
+    The relation no longer exists, so any surviving ``ref()`` to it is broken
+    outright — not just for specific columns. Consumers are found via textual
+    ``ref()`` scanning of every currently-parsed model (works even without a
+    manifest, and even though a *fresh* manifest can never itself contain a
+    dangling ref to a deleted model — dbt parse would already have failed on
+    it) plus, if a stale manifest still has the deleted node registered, its
+    recorded children.
+    """
+    base_content = get_file_at_ref(path_at_base, merge_base, repo_root=repo_root)
+    base_cols: set[str] = set()
+    if base_content is not None:
+        base_cols = parse_model_sql_at_content(model_name, base_content).output_columns
+
+    consumers = {name for name, parsed in sql_models_by_name.items() if model_name in parsed.refs}
+
+    manifest_available = False
+    if manifest is not None:
+        manifest_model = manifest.get_model(model_name)
+        if manifest_model is not None:
+            manifest_available = True
+            consumers |= {c.name for c in manifest.get_children(manifest_model.unique_id)}
+
+    downstream = [
+        DownstreamImpact(model_name=c, affected_columns=sorted(base_cols), depth=1) for c in sorted(consumers)
+    ]
+
+    if downstream:
+        level = AlertLevel.BREAKING
+        msg = f"Model '{model_name}' was deleted but is still ref()'d by {len(downstream)} downstream model(s)."
+    else:
+        level = AlertLevel.INFO
+        msg = f"Model '{model_name}' was deleted — no remaining ref() to it detected."
+
+    return ImpactAlert(
+        level=level,
+        changed_model=model_name,
+        column_changes=[ColumnChange(column=c, change_type="removed") for c in sorted(base_cols)],
+        downstream=downstream,
+        message=msg,
+        manifest_available=manifest_available,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Output rendering
 # ---------------------------------------------------------------------------
@@ -618,8 +672,17 @@ def impact(
         except Exception as exc:  # noqa: BLE001
             parse_errors[name] = str(exc)
 
+    try:
+        deleted_models = get_deleted_sql_models(dbt_dir, base_ref=base_ref, repo_root=repo_root)
+    except RuntimeError as exc:
+        err_console.print(f"[red]Error resolving git diff:[/] {exc}")
+        sys.exit(1)
+
     # Determine which models to analyse
     if model:
+        if model not in sql_file_map and model not in deleted_models:
+            err_console.print(f"[red]Error:[/] --model value '{model}' did not match any model file.")
+            sys.exit(1)
         target_names = [model]
     else:
         try:
@@ -680,6 +743,11 @@ def impact(
     for name in target_names:
         sql_file = sql_file_map.get(name)
         if sql_file is None:
+            path_at_base = deleted_models.get(name)
+            if path_at_base is not None:
+                alerts.append(
+                    _analyse_deleted_model(name, path_at_base, merge_base, manifest, sql_models_by_name, repo_root)
+                )
             continue
         alert = _analyse_model(
             name,
