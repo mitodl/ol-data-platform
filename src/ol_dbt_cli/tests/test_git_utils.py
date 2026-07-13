@@ -115,6 +115,17 @@ class TestGetChangedFiles:
         changed = get_changed_files(base_ref="main", repo_root=scripted_repo, include_untracked=False)
         assert "baz.sql" not in {p.name for p in changed}
 
+    def test_includes_untracked_files_with_special_characters_in_name(self, scripted_repo: Path) -> None:
+        # git's default porcelain quoting C-escapes paths containing whitespace or
+        # non-ASCII bytes (e.g. `?? "my model.sql"`); without -z that garbles the
+        # path into one that doesn't exist on disk and silently drops the file.
+        (scripted_repo / "models" / "my model.sql").write_text("select 1\n")
+        (scripted_repo / "models" / "café.sql").write_text("select 2\n")
+        changed = get_changed_files(base_ref="main", repo_root=scripted_repo)
+        names = {p.name for p in changed}
+        assert "my model.sql" in names
+        assert "café.sql" in names
+
 
 class TestGetChangedSqlModels:
     def test_changed_set_matches_three_dot_semantics(self, scripted_repo: Path) -> None:

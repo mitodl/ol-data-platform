@@ -51,40 +51,34 @@ def get_changed_files(
     *,
     include_untracked: bool = True,
 ) -> list[Path]:
-    """Return absolute paths of tracked files changed since diverging from *base_ref*.
+    """Return absolute paths of files changed since diverging from *base_ref*.
 
     Diffs against ``merge-base(base_ref, HEAD)`` rather than *base_ref* directly
     (three-dot semantics; see :func:`resolve_merge_base`), so commits landed on
-    *base_ref* after the branch point are excluded. Includes files changed since
-    the branch point (committed), files staged for commit, and unstaged
-    modifications to tracked files. New files that have not yet been
-    ``git add``-ed are included by default (*include_untracked*) so local runs
-    see in-progress new models; set ``include_untracked=False`` to match a
-    strict porcelain diff (e.g. CI, where checkouts have no untracked files).
+    *base_ref* after the branch point are excluded. Includes tracked files
+    changed since the branch point (committed), staged for commit, or with
+    unstaged modifications. New files that have not yet been ``git add``-ed are
+    also included by default (*include_untracked*) so local runs see
+    in-progress new models; set ``include_untracked=False`` to match a strict
+    porcelain diff (e.g. CI, where checkouts have no untracked files).
     """
     root = repo_root or get_repo_root()
     merge_base = resolve_merge_base(base_ref, repo_root=root)
-    # Files changed since the branch point (committed + staged)
-    committed = _run_git(
-        ["diff", "--name-only", merge_base, "HEAD"],
-        cwd=root,
-    ).splitlines()
-    # Staged but not yet committed
-    staged = _run_git(
-        ["diff", "--name-only", "--cached"],
-        cwd=root,
-    ).splitlines()
-    # Unstaged modifications (tracked files)
-    unstaged = _run_git(
-        ["diff", "--name-only"],
-        cwd=root,
-    ).splitlines()
 
-    all_relative = set(committed) | set(staged) | set(unstaged)
+    def _diff_names(*args: str) -> set[str]:
+        # -z: NUL-delimited, unquoted paths. Without it, git's default porcelain
+        # quoting (C-style escapes for whitespace/non-ASCII, e.g. "my model.sql"
+        # or "caf\303\251.sql") corrupts any such path into one that doesn't
+        # exist on disk, silently dropping it from the changed set.
+        raw = _run_git(["diff", "--name-only", "-z", *args], cwd=root)
+        return {p for p in raw.split("\0") if p}
+
+    # Files changed since the branch point (committed + staged + unstaged)
+    all_relative = _diff_names(merge_base, "HEAD") | _diff_names("--cached") | _diff_names()
 
     if include_untracked:
-        status = _run_git(["status", "--porcelain", "--untracked-files=all"], cwd=root).splitlines()
-        all_relative.update(line[3:].strip() for line in status if line.startswith("??"))
+        status = _run_git(["status", "--porcelain", "--untracked-files=all", "-z"], cwd=root)
+        all_relative.update(entry[3:] for entry in status.split("\0") if entry.startswith("??"))
 
     return [root / p for p in sorted(all_relative)]
 
