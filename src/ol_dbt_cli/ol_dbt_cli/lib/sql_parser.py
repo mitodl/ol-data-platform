@@ -197,15 +197,29 @@ _BLOCK_MACRO_RE = re.compile(r"(?m)^[^\S\r\n]*\{\{[^}]+\}\}[^\S\r\n]*$", re.DOTA
 #   , __jinja__) as array (varchar)), ', '   <- orphaned tail (array(varchar) is a cast)
 #   ) as course_level                        <- real alias, must be last token on its line
 #
-# The regex uses a tempered greedy token `(?:(?!<next_jinja_col>)[^\n]*\n)*?` to
-# avoid consuming past the next broken-column placeholder.
+# The regex uses a tempered greedy token `(?:(?!<next_jinja_col>)[^\n]*\n){0,6}?` to
+# avoid consuming past the next broken-column placeholder. The repeat count is
+# capped (rather than unbounded `*?`) because a *bare* placeholder that never
+# gets an alias at all — e.g. the same macro call repeated, unaliased, inside a
+# GROUP BY list — has no real terminal to find. Left unbounded, the lazy search
+# happily scans past the GROUP BY, the CTE's closing paren, and even a `select`
+# keyword to seize on some unrelated downstream `) as alias`, corrupting the
+# SQL by deleting everything in between. Real broken-macro tails (see the two
+# test cases below) resolve within 1-4 lines, so a small bound safely covers
+# genuine cases while making runaway cross-CTE matches structurally impossible:
+# past the bound the regex simply fails to match and the bare placeholder is
+# left as-is (a harmless unresolved identifier) instead of eating the file.
 # Matches both ``__jinja__`` (regex path) and ``__macro__`` (Jinja2 path) placeholders.
 _BROKEN_COL_PLACEHOLDER = r"(?:__jinja__|__macro__|__undefined__)"
 _BROKEN_COL_RE = re.compile(
     rf"([ \t]*,[ \t]*){_BROKEN_COL_PLACEHOLDER}(?![ \t]+as\b)"  # column-sep + placeholder, no direct alias
     r"[^\n]*\n"  # rest of the first (broken) line
-    rf"(?:(?![ \t]*,[ \t]*{_BROKEN_COL_PLACEHOLDER})[^\n]*\n)*?"  # optional continuation lines
-    r"[ \t]*\)[ \t]+as[ \t]+(\w+)[ \t]*(?:--[^\n]*)?(?:\n|$)",  # ) as alias — must be last token on line
+    rf"(?:(?![ \t]*,[ \t]*{_BROKEN_COL_PLACEHOLDER})[^\n]*\n){{0,6}}?"  # bounded continuation lines
+    r"[ \t]*\)?[ \t]*as[ \t]+(\w+)[ \t]*(?:--[^\n]*)?(?:\n|$)",  # [)] as alias — must be last token on line.
+    # The ')' is optional: a plain macro call (e.g. a UDF-style {{ macro(...) }})
+    # followed by `as alias` alone on the next line has no stray tokens to
+    # collapse, so the lazy loop must terminate there instead of overrunning
+    # into an unrelated later `) as ...` several columns/CTEs downstream.
 )
 
 

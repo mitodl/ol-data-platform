@@ -270,6 +270,40 @@ class TestJinjaStrippingFixes:
         assert "item_id" in result.output_columns
         assert "item_types" in result.output_columns
 
+    def test_broken_column_regex_stops_at_plain_multiline_alias(self) -> None:
+        """A plain macro call aliased on the next line must not swallow later columns.
+
+        Unlike the orphaned-tail cases above, ``{{ macro(...) }}`` here has no stray
+        tokens trailing it — the very next line is just ``as alias``. The collapse
+        regex must terminate there instead of lazily overrunning into unrelated
+        later columns (and even later CTEs) looking for the next ``) as ...``.
+        """
+        sql = (
+            "with combined as (\n"
+            "    select\n"
+            "        raw_source.platform_name\n"
+            "        , {{ generate_hash_id('cast(raw_source.user_id as varchar)') }}\n"
+            "            as user_hashed_id\n"
+            "        , raw_source.user_id\n"
+            "        , count(distinct raw_source.course_id) as unique_courses\n"
+            "    from raw_source\n"
+            "    group by\n"
+            "        raw_source.platform_name\n"
+            "        , {{ generate_hash_id('cast(raw_source.user_id as varchar)') }}\n"
+            "        , raw_source.user_id\n"
+            ")\n"
+            "select\n"
+            "    combined.platform_name\n"
+            "    , combined.user_hashed_id\n"
+            "    , combined.unique_courses\n"
+            "from combined"
+        )
+        result = parse_model_sql("my_model", sql)
+        assert result.parse_error is None
+        assert "platform_name" in result.output_columns
+        assert "user_hashed_id" in result.output_columns
+        assert "unique_courses" in result.output_columns
+
     def test_var_in_where_clause_parseable(self) -> None:
         """A model with '{{ var(...) }}' in WHERE must parse without error."""
         sql = (
