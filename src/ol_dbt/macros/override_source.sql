@@ -18,6 +18,10 @@
 
     {% set glue_database = source_to_database_map.get(source_name, 'ol_warehouse_production_raw') %}
 
+    {# Register the source dependency edge in the manifest (discarding the relation) so
+       lineage/state-based selection sees this model's source.* deps on DuckDB targets too #}
+    {% do builtins.source(source_name, table_name) %}
+
     {# Return the fully qualified view name #}
     glue__{{ glue_database }}__{{ table_name }}
   {% else %}
