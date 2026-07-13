@@ -31,20 +31,42 @@ def get_repo_root(start: Path | None = None) -> Path:
         raise RuntimeError(msg) from exc
 
 
+def resolve_merge_base(base_ref: str, repo_root: Path | None = None) -> str:
+    """Return the merge-base commit SHA of *base_ref* and HEAD.
+
+    This is the fork point where the current branch diverged from *base_ref* —
+    diffing/fetching against it (rather than *base_ref* directly) gives
+    three-dot diff semantics, matching what a GitHub PR diff shows. Once
+    *base_ref* advances past the branch point (e.g. other PRs merge to main
+    while this one is open), a plain two-dot diff against *base_ref* would
+    incorrectly include those unrelated changes in the changed set.
+    """
+    root = repo_root or get_repo_root()
+    return _run_git(["merge-base", base_ref, "HEAD"], cwd=root).strip()
+
+
 def get_changed_files(
     base_ref: str = "origin/main",
     repo_root: Path | None = None,
+    *,
+    include_untracked: bool = True,
 ) -> list[Path]:
-    """Return absolute paths of tracked files changed vs *base_ref*.
+    """Return absolute paths of tracked files changed since diverging from *base_ref*.
 
-    Includes files changed relative to *base_ref* (committed), files staged for
-    commit, and unstaged modifications to tracked files.  Untracked (new) files
-    that have not yet been ``git add``-ed are **not** included.
+    Diffs against ``merge-base(base_ref, HEAD)`` rather than *base_ref* directly
+    (three-dot semantics; see :func:`resolve_merge_base`), so commits landed on
+    *base_ref* after the branch point are excluded. Includes files changed since
+    the branch point (committed), files staged for commit, and unstaged
+    modifications to tracked files. New files that have not yet been
+    ``git add``-ed are included by default (*include_untracked*) so local runs
+    see in-progress new models; set ``include_untracked=False`` to match a
+    strict porcelain diff (e.g. CI, where checkouts have no untracked files).
     """
     root = repo_root or get_repo_root()
-    # Files changed relative to base ref (committed + staged)
+    merge_base = resolve_merge_base(base_ref, repo_root=root)
+    # Files changed since the branch point (committed + staged)
     committed = _run_git(
-        ["diff", "--name-only", base_ref, "HEAD"],
+        ["diff", "--name-only", merge_base, "HEAD"],
         cwd=root,
     ).splitlines()
     # Staged but not yet committed
@@ -59,6 +81,11 @@ def get_changed_files(
     ).splitlines()
 
     all_relative = set(committed) | set(staged) | set(unstaged)
+
+    if include_untracked:
+        status = _run_git(["status", "--porcelain", "--untracked-files=all"], cwd=root).splitlines()
+        all_relative.update(line[3:].strip() for line in status if line.startswith("??"))
+
     return [root / p for p in sorted(all_relative)]
 
 

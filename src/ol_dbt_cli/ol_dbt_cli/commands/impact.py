@@ -22,6 +22,7 @@ from ol_dbt_cli.lib.git_utils import (
     get_changed_sql_models,
     get_file_at_ref,
     get_repo_root,
+    resolve_merge_base,
 )
 from ol_dbt_cli.lib.manifest import (
     ManifestRegistry,
@@ -282,7 +283,7 @@ def _get_downstream_yaml(
 def _analyse_model(
     model_name: str,
     sql_file: Path,
-    base_ref: str,
+    merge_base: str,
     yaml_registry: YamlRegistry,
     manifest: ManifestRegistry | None,
     sql_models_by_name: dict[str, ParsedModel],
@@ -300,8 +301,10 @@ def _analyse_model(
 
     current_cols = current_parsed.output_columns
 
-    # Base (origin/main) column set
-    base_content = get_file_at_ref(sql_file, base_ref, repo_root=repo_root)
+    # Base column set, read at the merge-base commit (branch point) rather than
+    # base_ref's current tip, so commits landed on base_ref after the branch
+    # point don't leak into the "base" content (see resolve_merge_base).
+    base_content = get_file_at_ref(sql_file, merge_base, repo_root=repo_root)
     if base_content is None:
         # New model — no base to compare against
         return ImpactAlert(
@@ -565,6 +568,12 @@ def impact(
         err_console.print(f"[red]Error:[/] {exc}")
         sys.exit(1)
 
+    try:
+        merge_base = resolve_merge_base(base_ref, repo_root=repo_root)
+    except RuntimeError as exc:
+        err_console.print(f"[red]Error resolving merge-base vs {base_ref}:[/] {exc}")
+        sys.exit(1)
+
     models_dir = dbt_dir / "models"
 
     # Resolve compiled SQL directory (Jinja-free, most accurate)
@@ -675,7 +684,7 @@ def impact(
         alert = _analyse_model(
             name,
             sql_file,
-            base_ref,
+            merge_base,
             yaml_registry,
             manifest,
             sql_models_by_name,
