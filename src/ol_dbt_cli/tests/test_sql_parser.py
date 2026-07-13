@@ -369,6 +369,50 @@ class TestCompiledSqlPath:
         assert result.parse_error is None
         assert "id" in result.output_columns
 
+    def test_stale_compiled_is_ignored_in_favour_of_raw(self, tmp_path: Path) -> None:
+        """A compiled file older than the raw source is stale → raw parsing wins."""
+        import os
+
+        raw_dir = tmp_path / "models"
+        raw_dir.mkdir()
+        raw_file = raw_dir / "my_model.sql"
+        compiled_dir = tmp_path / "compiled"
+        compiled_dir.mkdir()
+        compiled_file = compiled_dir / "my_model.sql"
+
+        # Compiled reflects yesterday's shape (has column c); raw has since dropped it.
+        compiled_file.write_text("select a, b, c from raw_users")
+        raw_file.write_text("select a, b from raw_users")
+        # Make the compiled file strictly older than the raw source.
+        os.utime(compiled_file, (1_000, 1_000))
+        os.utime(raw_file, (2_000, 2_000))
+
+        result = parse_model_file(raw_file, compiled_dir=compiled_dir)
+        assert result.output_columns == {"a", "b"}  # raw, not stale compiled
+        assert result.compiled_stale is True
+        assert result.compiled_path is None  # compiled was not used
+
+    def test_fresh_compiled_is_used(self, tmp_path: Path) -> None:
+        """A compiled file at least as new as the raw source is used."""
+        import os
+
+        raw_dir = tmp_path / "models"
+        raw_dir.mkdir()
+        raw_file = raw_dir / "my_model.sql"
+        compiled_dir = tmp_path / "compiled"
+        compiled_dir.mkdir()
+        compiled_file = compiled_dir / "my_model.sql"
+
+        raw_file.write_text("select '{{ var(\"x\") }}' as a, b from raw_users")
+        compiled_file.write_text("select 'v' as a, b, c from raw_users")
+        os.utime(raw_file, (1_000, 1_000))
+        os.utime(compiled_file, (2_000, 2_000))
+
+        result = parse_model_file(raw_file, compiled_dir=compiled_dir)
+        assert result.output_columns == {"a", "b", "c"}  # compiled
+        assert result.compiled_stale is False
+        assert result.compiled_path is not None
+
     def test_find_compiled_dir_returns_none_when_absent(self, tmp_path: Path) -> None:
         """find_compiled_dir returns None when target/compiled doesn't exist."""
         (tmp_path / "dbt_project.yml").write_text("")

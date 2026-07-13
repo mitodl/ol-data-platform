@@ -391,6 +391,9 @@ class ParsedModel:
     """Path to the compiled SQL file used for parsing, if any."""
     source_path: Path | None = None
     """Path to the raw (Jinja) SQL source file."""
+    compiled_stale: bool = False
+    """True if a compiled counterpart existed but was older than the raw source,
+    so raw parsing was used instead (the compiled SQL would have been out of date)."""
 
 
 def _extract_select_columns(select: exp.Select) -> tuple[set[str], bool]:
@@ -688,13 +691,18 @@ def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedMode
     :func:`strip_jinja` so that lineage information is available even when using
     compiled SQL (compiled SQL uses physical relation names, not ``ref_*`` prefixes).
 
-    Falls back to raw SQL parsing with Jinja stripping otherwise.
+    Falls back to raw SQL parsing with Jinja stripping otherwise. A compiled
+    counterpart is used only when it is at least as new as the raw source; a
+    stale compiled file (raw edited after the last ``dbt compile``) is ignored
+    in favour of raw parsing, so a column removed after compiling is not masked
+    by yesterday's compiled SQL. The result's ``compiled_stale`` flag records
+    when this happened.
     """
     raw_sql = path.read_text()
 
     if compiled_dir is not None:
         compiled_sql, compiled_path = _find_compiled_sql(path.stem, compiled_dir)
-        if compiled_sql is not None:
+        if compiled_sql is not None and compiled_path is not None and _compiled_is_fresh(compiled_path, path):
             # Column extraction from compiled SQL (accurate, Jinja-free).
             result = _parse_clean_sql(path.stem, compiled_sql)
             result.compiled_path = compiled_path
@@ -709,9 +717,30 @@ def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedMode
             result.source_placeholder_map = jinja_result.source_placeholder_map
             return result
 
+        result = parse_model_sql(path.stem, raw_sql)
+        result.source_path = path
+        # A compiled file existed but was older than the raw source — record that
+        # we fell back to raw so callers can prompt for a recompile.
+        result.compiled_stale = compiled_sql is not None
+        return result
+
     result = parse_model_sql(path.stem, raw_sql)
     result.source_path = path
     return result
+
+
+def _compiled_is_fresh(compiled_path: Path, raw_path: Path) -> bool:
+    """Return True if *compiled_path* is at least as new as *raw_path*.
+
+    A compiled file older than its raw source is stale: it reflects a previous
+    ``dbt compile`` and can hide a column added/removed since. If either mtime
+    cannot be read, assume fresh (preserve the prior always-use-compiled
+    behaviour rather than silently degrading to raw).
+    """
+    try:
+        return compiled_path.stat().st_mtime >= raw_path.stat().st_mtime
+    except OSError:
+        return True
 
 
 def _find_compiled_sql(model_name: str, compiled_dir: Path) -> tuple[str | None, Path | None]:
