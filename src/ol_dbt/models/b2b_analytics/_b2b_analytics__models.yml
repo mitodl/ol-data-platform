@@ -1,0 +1,105 @@
+---
+version: 2
+models:
+- name: smoke_test
+  description: >
+    Connectivity smoke-test for the dbt-starrocks adapter. Creates a single-row table
+    in the StarRocks b2b_analytics database to confirm the adapter can authenticate
+    and create tables. Run via `ol-dbt starrocks run --select b2b_analytics` (fetches
+    Vault dynamic credentials automatically), or manually with
+    --target starrocks_qa_vault or --target starrocks_production.
+  columns:
+  - name: smoke_test_value
+    description: int, always 1
+  - name: run_at
+    description: datetime, timestamp when the model was materialized
+
+- name: mv_b2b_contract_utilization
+  description: >
+    Seat utilization and completion rate per org x contract. Manual-refresh
+    materialized view, refreshed by the Dagster b2b_organization MV-refresh asset.
+    Consumers: L&D manager dashboard header card, MIT admin overview.
+  columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: seat_limit
+    description: b2b_contract_max_learners.
+  - name: seats_consumed
+    description: Distinct learners enrolled in any course run under this contract.
+  - name: active_learners
+    description: Distinct learners with an active enrollment under this contract.
+  - name: learners_certified
+    description: Distinct learners holding a non-revoked certificate under this contract.
+  - name: seat_utilization_pct
+    description: seats_consumed / seat_limit * 100.
+  - name: completion_rate_pct
+    description: learners_certified / seats_consumed * 100.
+
+- name: mv_b2b_enrollment_completion_funnel
+  description: >
+    Enrollment, active, passing, and certified learner counts per org x contract x
+    course_run. Manual-refresh materialized view. Consumers: L&D manager course-level
+    drill-down.
+  columns:
+  - name: enrolled_learners
+    description: Distinct learners enrolled in this course run.
+  - name: active_learners
+    description: Distinct learners with an active enrollment.
+  - name: passing_learners
+    description: Distinct learners with a passing grade.
+  - name: certified_learners
+    description: Distinct learners with a non-revoked certificate.
+
+- name: mv_b2b_monthly_engagement_trend
+  description: >
+    Monthly engagement, enrollment, and content-interaction totals per org.
+    Manual-refresh materialized view. Source: organization_administration_report,
+    filtered to rows with a confirmed (non-fallback) organization_key.
+    Consumers: L&D manager engagement trend chart.
+  columns:
+  - name: monthly_active_learners
+    description: Distinct learners with any activity in the month.
+  - name: new_enrollments
+    description: Sum of the daily enrolled_count flag within the month.
+
+- name: mv_b2b_program_funnel
+  description: >
+    Program enrollment and completion approximation per org x contract x program.
+    Manual-refresh materialized view. program_course_completers is an approximation
+    (cert in any program course) until tfact_program_certificate ships.
+    Consumers: L&D manager program progression view.
+  columns:
+  - name: enrolled_in_contract_courses
+    description: Learners enrolled in any contract course belonging to this program.
+  - name: enrolled_via_program
+    description: Learners who explicitly enrolled via the program pathway (tfact_enrollment.program_fk).
+  - name: program_course_completers
+    description: Learners holding a non-revoked certificate in any course in this
+      program (approximation).
+
+- name: mv_b2b_content_engagement_depth
+  description: >
+    All-time content engagement depth per org x course_run. Manual-refresh
+    materialized view. Source: organization_administration_report, filtered to rows
+    with a confirmed (non-fallback) organization_key. Consumers: L&D manager course
+    detail panel.
+  columns:
+  - name: engagement_rate_pct
+    description: engaged_learners / total_enrolled_learners * 100.
+  - name: avg_videos_per_engaged_learner
+    description: total_videos_watched / count of learners with videos_watched > 0.
+
+- name: mv_b2b_mit_admin_contract_health
+  description: >
+    Contract health signal per org x contract, across all orgs (not scoped to the
+    requesting org) -- MIT admin view only. Manual-refresh materialized view.
+    Consumers: MIT contract admin dashboard.
+  columns:
+  - name: health_status
+    description: >
+      One of: inactive (contract not active), at_risk (utilization < 25% and
+      expiring within 90 days), high_utilization (utilization >= 90%), healthy
+      (utilization >= 50% and not at_risk), early_stage (everything else).

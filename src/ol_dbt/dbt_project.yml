@@ -142,6 +142,33 @@ models:
       +schema: integrations
       +grants:
         select: ["read_only_production", "ol_data_analyst", "reverse_etl", "mit_learn_etl"]
+    b2b_analytics:
+      +enabled: "{{ target.type == 'starrocks' }}"
+      +materialized: table
+      # The engine-scoping label: dbt_starrocks.py's dbt_assets selects
+      # `tag:starrocks`, and dbt.py's Trino-scoped set excludes it. Moving a
+      # model between engines is adding/removing this tag (plus a matching
+      # +enabled condition) -- no Python asset-definition change needed.
+      +tags: ["starrocks"]
+      # Explicit so DbtAutomationTranslator.get_group_name (which reads
+      # config.schema, not the profile-resolved default) groups these models
+      # under "b2b_analytics" instead of falling back to no group.
+      +schema: b2b_analytics
+      # dbt's grants merge behavior is dict_key_append: an empty dict merges
+      # no keys and leaves the root `open_learning` grants (Trino/Snowflake
+      # roles that don't exist in StarRocks) fully intact. Each root key must
+      # be explicitly re-declared empty to actually clobber it.
+      +grants:
+        select: []
+        insert: []
+        update: []
+        delete: []
+        all privileges: []
+      +properties: {}
+      +meta:
+        required_docs: true
+        iceberg_maintenance:
+          enabled: false
     external:
       +materialized: table
       +schema: external

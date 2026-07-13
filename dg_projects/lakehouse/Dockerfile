@@ -42,6 +42,19 @@ RUN /app/dg_projects/lakehouse/.venv/bin/dbt deps && \
     /app/dg_projects/lakehouse/.venv/bin/dbt compile --target production || \
     /app/dg_projects/lakehouse/.venv/bin/dbt compile --target dev
 
+# Generate a second manifest for the b2b_analytics models, which are only
+# `+enabled` (see dbt_project.yml) when target.type == 'starrocks' and are
+# therefore absent from the manifest above. `parse` (not `compile`) is used
+# because it never opens a database connection, so the dummy credentials
+# below only need to satisfy profiles.yml's env_var() calls, not authenticate
+# against a real StarRocks cluster -- see lakehouse/assets/lakehouse/dbt_starrocks.py
+# for where real Vault-issued credentials are injected at run time.
+RUN DBT_STARROCKS_HOST=localhost \
+    DBT_STARROCKS_USERNAME=build \
+    DBT_STARROCKS_PASSWORD=build \
+    /app/dg_projects/lakehouse/.venv/bin/dbt parse \
+        --target starrocks_qa_vault --target-path target/starrocks
+
 # Then, use a final image without uv
 # Using Python 3.13 to match builder image
 FROM python:3.13-slim-bookworm

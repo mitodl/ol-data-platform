@@ -41,9 +41,15 @@ from lakehouse.assets.lakehouse.dbt import (
     dbt_docs_artifacts_job,
     full_dbt_project,
 )
+from lakehouse.assets.lakehouse.dbt_starrocks import (
+    starrocks_dbt_assets,
+    starrocks_dbt_cli,
+)
+from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
+from lakehouse.resources.starrocks import StarRocksResource
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 from lakehouse.sensors import (
     iceberg_snapshot_pointer_lag_sensor,
@@ -62,6 +68,24 @@ trino_catalog_map = {
     "ci": "ol_data_lake_qa",
     "qa": "ol_data_lake_qa",
     "production": "ol_data_lake_production",
+}
+
+# Hosts match the starrocks_qa / starrocks_production target defaults in
+# src/ol_dbt/profiles.yml. dev/ci fall back to the QA FE for schema parity.
+starrocks_host_map = {
+    "dev": "lakehouse.qa.starrocks.ol.mit.edu",
+    "ci": "lakehouse.qa.starrocks.ol.mit.edu",
+    "qa": "lakehouse.qa.starrocks.ol.mit.edu",
+    "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
+}
+
+# Matches the database-starrocks-{env} mount convention used by
+# bin/starrocks-auth and ol_dbt_cli/commands/starrocks.py.
+starrocks_vault_mount_map = {
+    "dev": "database-starrocks-qa",
+    "ci": "database-starrocks-qa",
+    "qa": "database-starrocks-qa",
+    "production": "database-starrocks-production",
 }
 
 airbyte_host_map = {
@@ -339,6 +363,22 @@ dbt_docs_artifacts_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Builds the tag:starrocks dbt models against StarRocks, then refreshes their
+# downstream manual-refresh MVs. STOPPED by default -- enable in production via
+# the Dagster UI after verifying the first manual run succeeds.
+b2b_analytics_starrocks_schedule = ScheduleDefinition(
+    name="b2b_analytics_starrocks_nightly",
+    job=define_asset_job(
+        name="b2b_analytics_starrocks_job",
+        selection=AssetSelection.assets(starrocks_dbt_assets).downstream(
+            include_self=True
+        ),
+    ),
+    cron_schedule="0 6 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -374,6 +414,14 @@ resources_dict = {
     "vault": vault,
     "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
     "github_api": GithubApiClientFactory(vault=vault),
+    "starrocks": StarRocksResource(
+        vault=vault,
+        vault_mount_point=starrocks_vault_mount_map[DAGSTER_ENV],
+        host=starrocks_host_map[DAGSTER_ENV],
+        database="b2b_analytics",
+    ),
+    # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
+    "starrocks_dbt": starrocks_dbt_cli,
 }
 
 if not SKIP_AIRBYTE:
@@ -382,6 +430,7 @@ if not SKIP_AIRBYTE:
 defs = Definitions(
     assets=[
         *with_source_code_references([full_dbt_project]),
+        *with_source_code_references([starrocks_dbt_assets]),
         *airbyte_assets,
         *superset_assets,
         *superset_starrocks_assets,
@@ -389,6 +438,7 @@ defs = Definitions(
         update_access_forge_repo,
         iceberg_dbt_layer_maintenance,
         iceberg_raw_layer_maintenance,
+        refresh_starrocks_analytics_mvs,
     ],
     resources=resources_dict,
     sensors=[
@@ -416,5 +466,6 @@ defs = Definitions(
         iceberg_dbt_maintenance_schedule,
         iceberg_raw_maintenance_schedule,
         dbt_docs_artifacts_schedule,
+        b2b_analytics_starrocks_schedule,
     ],
 )
