@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from ol_dbt_cli.commands.impact import _diff_columns
 
@@ -481,3 +484,95 @@ class TestOutputColumnPassthrough:
         # SQL confirmed no consumption (output_columns doesn't include removed_col
         # and no SQL file for qualified-ref analysis) — child should NOT be flagged
         assert not any(r.model_name == "child" and r.affected_columns for r in results)
+
+
+def _git(args: list[str], cwd: Path) -> str:
+    result = subprocess.run(  # noqa: S603, S607
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+            "PATH": "/usr/bin:/bin:/usr/local/bin",
+        },
+    )
+    return result.stdout
+
+
+def _commit(repo: Path, message: str) -> None:
+    _git(["add", "-A"], cwd=repo)
+    _git(["commit", "-m", message], cwd=repo)
+
+
+@pytest.fixture()
+def dbt_repo(tmp_path: Path) -> Path:
+    """Build a scripted git repo containing a two-model dbt project, ready to have one deleted."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-b", "main"], cwd=repo)
+
+    dbt_dir = repo / "src" / "ol_dbt"
+    models = dbt_dir / "models"
+    models.mkdir(parents=True)
+    (dbt_dir / "dbt_project.yml").write_text("name: open_learning\n")
+    (models / "int__combined__users.sql").write_text("select 1 as user_id, 'x' as email\n")
+    (models / "marts__reporting__thing.sql").write_text("select user_id from {{ ref('int__combined__users') }}\n")
+    _commit(repo, "initial models")
+    _git(["checkout", "-b", "feature"], cwd=repo)
+    return repo
+
+
+class TestImpactCommandDeletedModels:
+    """End-to-end tests for the `impact` command's handling of deleted models."""
+
+    def test_deleted_model_still_ref_d_is_breaking(self, dbt_repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Deleting a model still ref()'d elsewhere must alert BREAKING and exit 1."""
+        from ol_dbt_cli.commands.impact import impact
+
+        dbt_dir = dbt_repo / "src" / "ol_dbt"
+        _git(["rm", "models/int__combined__users.sql"], cwd=dbt_dir)
+        _commit(dbt_repo, "delete int__combined__users")
+
+        with pytest.raises(SystemExit) as exc_info:
+            impact(dbt_dir_path=str(dbt_dir), base_ref="main", output_format="json")
+        assert exc_info.value.code == 1
+
+        import json
+
+        alerts = json.loads(capsys.readouterr().out)
+        deleted_alert = next(a for a in alerts if a["changed_model"] == "int__combined__users")
+        assert deleted_alert["level"] == "BREAKING"
+        assert any(d["model"] == "marts__reporting__thing" for d in deleted_alert["downstream"])
+
+    def test_deleted_model_with_no_remaining_refs_is_not_breaking(
+        self, dbt_repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Deleting a model with no surviving ref() must not alert BREAKING."""
+        from ol_dbt_cli.commands.impact import impact
+
+        dbt_dir = dbt_repo / "src" / "ol_dbt"
+        # Remove the consumer too, so nothing references the deleted model anymore.
+        _git(["rm", "models/int__combined__users.sql", "models/marts__reporting__thing.sql"], cwd=dbt_dir)
+        _commit(dbt_repo, "delete both models")
+
+        impact(dbt_dir_path=str(dbt_dir), base_ref="main", output_format="json")
+
+        import json
+
+        alerts = json.loads(capsys.readouterr().out)
+        deleted_alert = next(a for a in alerts if a["changed_model"] == "int__combined__users")
+        assert deleted_alert["level"] != "BREAKING"
+
+    def test_unknown_model_flag_errors_loudly(self, dbt_repo: Path) -> None:
+        """`--model <typo>` must error and exit non-zero, not silently report success."""
+        from ol_dbt_cli.commands.impact import impact
+
+        dbt_dir = dbt_repo / "src" / "ol_dbt"
+        with pytest.raises(SystemExit) as exc_info:
+            impact(dbt_dir_path=str(dbt_dir), model="does_not_exist_typo", base_ref="main", output_format="json")
+        assert exc_info.value.code == 1

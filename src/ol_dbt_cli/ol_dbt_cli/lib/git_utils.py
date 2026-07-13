@@ -99,6 +99,33 @@ def get_changed_sql_models(
     return names
 
 
+def get_deleted_sql_models(
+    dbt_dir: Path,
+    base_ref: str = "origin/main",
+    repo_root: Path | None = None,
+) -> dict[str, Path]:
+    """Return ``{model_name: path_at_merge_base}`` for .sql files deleted since *base_ref*.
+
+    Scoped to *dbt_dir*/models/. The returned paths no longer exist on disk —
+    pass them to :func:`get_file_at_ref` with the merge-base ref (see
+    :func:`resolve_merge_base`) to read their last content.
+    """
+    root = repo_root or get_repo_root(dbt_dir)
+    models_dir = dbt_dir / "models"
+    merge_base = resolve_merge_base(base_ref, repo_root=root)
+    output = _run_git(["diff", "--name-status", "--diff-filter=D", merge_base, "HEAD"], cwd=root)
+    deleted: dict[str, Path] = {}
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 2:  # noqa: PLR2004
+            continue
+        _status, rel_path = parts
+        path = root / rel_path
+        if path.suffix == ".sql" and _is_under(path, models_dir):
+            deleted[path.stem] = path
+    return deleted
+
+
 def get_changed_yaml_models(
     dbt_dir: Path,
     base_ref: str = "origin/main",
