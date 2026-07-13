@@ -983,7 +983,16 @@ def validate(
                 target_names.append(name)
 
         if not target_names:
-            console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
+            if macro_files or yaml_files:
+                # Changes WERE detected, they just didn't resolve to any model to
+                # validate (no manifest for macro mapping, or a YAML file that
+                # declares no models). Say so rather than claiming nothing changed.
+                console.print(
+                    f"[dim]Changed macro/YAML file(s) detected vs {base_ref}, but none mapped to "
+                    "models to validate (see warnings above).[/]"
+                )
+            else:
+                console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
             return
     else:
         target_names = [f.stem for f in all_sql_files]
