@@ -249,22 +249,30 @@ with mitxonline_users as (
     from residential_users
 )
 
+, users_with_identity_key as (
+    --- identity_key is the best available non-username identifier for a platform.
+    --  global_alumni's user_id (their student_id) is not reliably unique per person, so
+    --  user_email is preferred there; emeritus is the opposite (bulk/corporate enrollments
+    --  can share one contact email), so it uses the default user_id-first order.
+    select
+        *
+        , case
+            when platform = '{{ var("global_alumni") }}'
+                then coalesce(user_email, user_id, user_full_name)
+            else coalesce(user_id, user_email, user_full_name)
+        end as identity_key
+    from combined_users
+)
+
 , hashed_users as (
     select
-        case
-            when user_id is not null
-                then {{ generate_hash_id('user_id || platform') }}
-            when user_email is not null
-                then {{ generate_hash_id('user_email || platform') }}
-            else
-                {{ generate_hash_id('user_full_name || platform') }}
-        end as user_hashed_id
+        {{ generate_hash_id('identity_key || platform') }} as user_hashed_id
         , *
         , row_number() over (
-            partition by coalesce(user_username, user_id, user_email, user_full_name), platform
+            partition by coalesce(user_username, identity_key), platform
             order by openedx_user_id asc nulls last
         ) as row_num
-    from combined_users
+    from users_with_identity_key
 )
 
 select
