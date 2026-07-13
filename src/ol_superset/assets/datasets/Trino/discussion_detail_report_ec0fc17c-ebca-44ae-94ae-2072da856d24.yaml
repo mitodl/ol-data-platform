@@ -4,6 +4,7 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: event_timestamp
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -17,6 +18,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_readable_id
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -30,6 +32,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: discussion_component_name
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -43,6 +46,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: page_url
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -56,6 +60,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: course_title
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -69,6 +74,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: post_content
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -82,6 +88,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: event_type
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -95,6 +102,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: post_title
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -108,6 +116,7 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: platform
+  datetime_format: null
   description: null
   expression: ''
   extra:
@@ -119,6 +128,7 @@ columns:
   python_date_format: null
   type: VARCHAR
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
 description: Auto refreshed at 2026-03-16T07:03:07.571199+00:00
@@ -142,7 +152,21 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_reporting
-sql: ''
+sql: |
+  select
+      de.platform,
+      cr.course_title,
+      de.courserun_readable_id,
+      de.event_type,
+      de.post_title,
+      de.post_content,
+      de.discussion_component_name,
+      de.page_url,
+      de.event_timestamp
+  from ol_warehouse_production_dimensional.tfact_discussion_events as de
+  inner join ol_warehouse_production_intermediate.int__combined__course_runs as cr
+      on de.courserun_readable_id = cr.courserun_readable_id
+      and de.platform = cr.platform
 table_name: discussion_detail_report
 template_params: null
 uuid: ec0fc17c-ebca-44ae-94ae-2072da856d24
