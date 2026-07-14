@@ -107,6 +107,18 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
+  column_name: year_of_courserunenrollment_created_on
+  description: null
+  expression: substring(courserunenrollment_created_on, 1, 4)
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: null
+  verbose_name: null
+- advanced_data_type: null
   column_name: receipt_payment_method
   datetime_format: null
   description: null

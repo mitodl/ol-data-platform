@@ -285,6 +285,41 @@ metadata:
         name: organization_name
       datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
     type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 64
+    - 67
+    - 70
+    - 108
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+      sortAscending: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-9xQ2vLmZpK4RtY7Wc3Jsd
+    name: Year Of Enrollment Created On
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
+    targets:
+    - column:
+        name: year_of_courserunenrollment_created_on
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+    type: NATIVE_FILTER
   refresh_frequency: 86400
   shared_label_colors: []
   timed_refresh_immune_slices: []
