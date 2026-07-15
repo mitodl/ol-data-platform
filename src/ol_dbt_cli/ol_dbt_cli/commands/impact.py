@@ -149,8 +149,15 @@ def _get_downstream_manifest(
 
     while queue:
         current_id, depth = queue.popleft()
-        upstream_name = current_id.rsplit(".", 1)[-1] if "." in current_id else current_id
-        for child in registry.get_children(current_id):
+        # Prefer the node's real name over rsplit on the unique_id: a versioned
+        # model's unique_id ends in ".v2" (model.pkg.name.v2), so rsplit would
+        # yield "v2" instead of the model name.
+        current_node = registry.get_node(current_id)
+        if current_node is not None:
+            upstream_name = current_node.name
+        else:
+            upstream_name = current_id.rsplit(".", 1)[-1] if "." in current_id else current_id
+        for child in registry.get_model_children(current_id):
             if child.unique_id in seen:
                 continue
             seen.add(child.unique_id)
@@ -403,7 +410,7 @@ def _analyse_deleted_model(
         manifest_model = manifest.get_model(model_name)
         if manifest_model is not None:
             manifest_available = True
-            consumers |= {c.name for c in manifest.get_children(manifest_model.unique_id)}
+            consumers |= {c.name for c in manifest.get_model_children(manifest_model.unique_id)}
 
     downstream = [
         DownstreamImpact(model_name=c, affected_columns=sorted(base_cols), depth=1) for c in sorted(consumers)

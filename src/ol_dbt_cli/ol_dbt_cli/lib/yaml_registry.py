@@ -88,14 +88,20 @@ class YamlRegistry:
         return table.column_names
 
 
-def _parse_column_tests(tests_list: list[Any]) -> list[str]:
-    """Flatten dbt test specs (strings or {name: ...} dicts) to test name strings."""
+def _parse_column_tests(col_raw: dict[str, Any]) -> list[str]:
+    """Flatten a column's dbt test specs to test name strings.
+
+    Reads both the legacy ``tests:`` key and the dbt>=1.8 ``data_tests:``
+    spelling (this project uses ``data_tests:`` almost exclusively). Each entry
+    is either a bare string (``unique``) or a ``{name: {...}}`` config dict.
+    """
     result: list[str] = []
-    for entry in tests_list:
-        if isinstance(entry, str):
-            result.append(entry)
-        elif isinstance(entry, dict):
-            result.extend(entry.keys())
+    for key in ("tests", "data_tests"):
+        for entry in col_raw.get(key, []) or []:
+            if isinstance(entry, str):
+                result.append(entry)
+            elif isinstance(entry, dict):
+                result.extend(entry.keys())
     return result
 
 
@@ -115,13 +121,17 @@ def _parse_columns(raw_columns: list[Any]) -> dict[str, YamlColumn]:
         # model definition, not a column.  Skip it to avoid polluting the column list.
         if "columns" in col_raw:
             continue
-        col_name = col_raw.get("name", "")
-        if not col_name:
+        raw_name = col_raw.get("name", "")
+        if not raw_name:
             continue
+        # Normalize case at this single boundary: the manifest and sql_parser both
+        # lowercase column names, so a verbatim YAML name like `CEUs` would otherwise
+        # read as both a phantom (not in the lowercased SQL set) and undocumented.
+        col_name = raw_name.lower()
         columns[col_name] = YamlColumn(
             name=col_name,
             description=col_raw.get("description", ""),
-            tests=_parse_column_tests(col_raw.get("tests", [])),
+            tests=_parse_column_tests(col_raw),
         )
     return columns
 
