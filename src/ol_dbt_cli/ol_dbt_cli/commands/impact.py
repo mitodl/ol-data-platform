@@ -736,9 +736,12 @@ def impact(
             for mf in macro_files:
                 if not mf.is_relative_to(dbt_dir):
                     continue
-                affected = manifest.models_for_changed_macros({str(mf.relative_to(dbt_dir))})
+                # as_posix() (not str()) so the path uses forward slashes on every
+                # platform, matching the dbt manifest's original_file_path form.
+                macro_rel_path = mf.relative_to(dbt_dir).as_posix()
+                affected = manifest.models_for_changed_macros({macro_rel_path})
                 macro_affected |= affected
-                macro_alerts.append(_analyse_macro_change(str(mf.relative_to(dbt_dir)), affected, manifest))
+                macro_alerts.append(_analyse_macro_change(macro_rel_path, affected, manifest))
         elif macro_files:
             err_console.print(
                 f"[yellow]Warning:[/] {len(macro_files)} macro file(s) changed but no manifest is "

@@ -960,7 +960,9 @@ def validate(
         # macro files to affected models via the manifest so their checks run.
         if macro_files:
             if manifest is not None:
-                macro_rel = {str(p.relative_to(dbt_dir)) for p in macro_files if p.is_relative_to(dbt_dir)}
+                # as_posix() (not str()) so paths use forward slashes on every
+                # platform, matching the dbt manifest's original_file_path form.
+                macro_rel = {p.relative_to(dbt_dir).as_posix() for p in macro_files if p.is_relative_to(dbt_dir)}
                 extra.extend(sorted(manifest.models_for_changed_macros(macro_rel)))
             else:
                 err_console.print(
