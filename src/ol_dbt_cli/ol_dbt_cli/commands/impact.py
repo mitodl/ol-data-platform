@@ -296,8 +296,11 @@ def _analyse_model(
     # symmetric with the base side below. Parsing the current side from compiled
     # SQL while the base comes from raw git content produces spurious added/
     # removed alerts for macro-generated columns (compiled sees real columns, raw
-    # sees __macro__ placeholders). Raw-parse column extraction is ~99.8% exact vs
-    # compiled ground truth, so raw-vs-raw is accurate for change detection.
+    # sees __macro__ placeholders). Raw-parse column extraction matches compiled
+    # output for the overwhelming majority of models (the rare miss is a macro
+    # call collapsing inside a coalesce), so raw-vs-raw is accurate enough for
+    # change detection while staying symmetric — which is what avoids the false
+    # positives.
     try:
         current_parsed = parse_model_sql_at_content(model_name, sql_file.read_text())
     except Exception:  # noqa: BLE001
