@@ -514,8 +514,17 @@ class TestOutputColumnPassthrough:
         assert results[0].model_name == "child"
         assert "removed_col" in results[0].affected_columns
 
-    def test_downstream_manifest_skips_child_when_sql_confirms_no_consumption(self) -> None:
-        """When SQL is conclusive and shows no consumption, child is not flagged."""
+    def test_downstream_manifest_skips_child_when_sql_confirms_no_consumption(self, tmp_path: Path) -> None:
+        """When SQL is conclusive and shows no consumption, child is not flagged at all.
+
+        Regression guard against the previous vacuous form of this test: with an
+        empty ``ref_placeholder_map`` the child fell through to the metadata-
+        unavailable fallback and WAS appended (with empty ``affected_columns``),
+        yet the assertion — ``... and r.affected_columns`` — only checked emptiness
+        and so passed for the wrong reason. Here we give the child a real SQL file
+        so ``get_columns_read_from_ref`` returns a conclusive set that excludes the
+        removed column, exercising the genuine skip path.
+        """
         from ol_dbt_cli.commands.impact import _get_downstream_manifest
         from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
         from ol_dbt_cli.lib.sql_parser import ParsedModel
@@ -541,13 +550,18 @@ class TestOutputColumnPassthrough:
         registry.by_name = {"upstream": upstream, "child": child}
         registry.children = {upstream.unique_id: [child.unique_id]}
 
-        # Child outputs different columns — does not pass through the removed column
+        # Child selects a different column from upstream — SQL analysis is conclusive
+        # and shows the removed column is not consumed.
+        sql = "select other_col from ref_upstream"
+        sql_file = tmp_path / "child.sql"
+        sql_file.write_text(sql)
         child_parsed = ParsedModel(
             name="child",
-            output_columns={"other_col", "yet_another"},
+            output_columns={"other_col"},
             refs=["upstream"],
-            ref_placeholder_map={},
+            ref_placeholder_map={"ref_upstream": "upstream"},
         )
+        child_parsed.source_path = sql_file
 
         results = _get_downstream_manifest(
             "model.pkg.upstream",
@@ -556,9 +570,49 @@ class TestOutputColumnPassthrough:
             {"child": child_parsed},
         )
 
-        # SQL confirmed no consumption (output_columns doesn't include removed_col
-        # and no SQL file for qualified-ref analysis) — child should NOT be flagged
-        assert not any(r.model_name == "child" and r.affected_columns for r in results)
+        # SQL was conclusive and showed no consumption — the child is omitted entirely.
+        assert [r.model_name for r in results] == []
+
+    def test_downstream_manifest_excludes_schema_test_children(self, tmp_path: Path) -> None:
+        """A schema `test.*` node child is never reported as a downstream impact.
+
+        Test nodes are children of the model they test but carry no column
+        metadata; before model-only filtering they landed in the metadata-
+        unavailable fallback and turned every additive change into a spurious
+        WARNING with an empty column set.
+        """
+        from ol_dbt_cli.commands.impact import _get_downstream_manifest
+        from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
+
+        registry = ManifestRegistry()
+        upstream = ManifestModel(
+            unique_id="model.pkg.upstream",
+            name="upstream",
+            resource_type="model",
+            original_file_path="",
+            schema="",
+            database="",
+        )
+        schema_test = ManifestModel(
+            unique_id="test.pkg.not_null_upstream_x.deadbeef",
+            name="not_null_upstream_x",
+            resource_type="test",
+            original_file_path="",
+            schema="",
+            database="",
+        )
+        registry.nodes = {upstream.unique_id: upstream, schema_test.unique_id: schema_test}
+        registry.by_name = {"upstream": upstream}
+        registry.children = {upstream.unique_id: [schema_test.unique_id]}
+
+        results = _get_downstream_manifest(
+            "model.pkg.upstream",
+            registry,
+            {"removed_col"},
+            {},
+        )
+
+        assert results == []
 
 
 def _git(args: list[str], cwd: Path) -> str:

@@ -91,6 +91,17 @@ class ManifestRegistry:
         child_ids = self.children.get(unique_id, [])
         return [self.nodes[cid] for cid in child_ids if cid in self.nodes]
 
+    def get_model_children(self, unique_id: str) -> list[ManifestModel]:
+        """Return the direct children of *unique_id* that are models.
+
+        Downstream column-impact tracing only flows through models. Schema
+        ``test.*`` nodes are children of the model they test, but they neither
+        carry column metadata nor propagate lineage — including them makes every
+        tested model appear to gain an unknown-impact "downstream model", turning
+        additive-only changes into spurious WARNINGs.
+        """
+        return [child for child in self.get_children(unique_id) if child.is_model]
+
     def get_all_descendants(self, unique_id: str) -> list[ManifestModel]:
         """BFS walk returning all descendant nodes of *unique_id*."""
         seen: set[str] = set()
@@ -209,10 +220,11 @@ def load_manifest(manifest_path: Path) -> ManifestRegistry:
     registry = ManifestRegistry()
 
     all_nodes: dict[str, Any] = {}
+    # dbt keeps models, seeds, snapshots, and schema tests all under "nodes"
+    # (discriminated by resource_type); only sources live in a separate top-level
+    # key. There are no top-level "seeds"/"snapshots" keys to read.
     all_nodes.update(raw.get("nodes", {}))
     all_nodes.update(raw.get("sources", {}))
-    all_nodes.update(raw.get("seeds", {}))
-    all_nodes.update(raw.get("snapshots", {}))
 
     for uid, node_data in all_nodes.items():
         model = _parse_node(node_data)

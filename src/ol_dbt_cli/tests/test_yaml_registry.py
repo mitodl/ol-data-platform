@@ -119,6 +119,114 @@ class TestYamlRegistry:
         assert registry.get_model("yaml_ext_model") is not None
 
 
+class TestColumnTestParsing:
+    """Both the legacy `tests:` and dbt>=1.8 `data_tests:` spellings are parsed."""
+
+    def test_data_tests_key_is_parsed(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_models.yml").write_text(
+            textwrap.dedent("""
+            version: 2
+            models:
+            - name: dim_thing
+              columns:
+              - name: thing_pk
+                data_tests:
+                - unique
+                - not_null
+            """).strip()
+        )
+        registry = build_yaml_registry(tmp_path)
+        m = registry.get_model("dim_thing")
+        assert m is not None
+        assert set(m.columns["thing_pk"].tests) == {"unique", "not_null"}
+
+    def test_both_spellings_merge(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_models.yml").write_text(
+            textwrap.dedent("""
+            version: 2
+            models:
+            - name: dim_thing
+              columns:
+              - name: thing_pk
+                tests:
+                - unique
+                data_tests:
+                - not_null
+                - relationships
+            """).strip()
+        )
+        registry = build_yaml_registry(tmp_path)
+        m = registry.get_model("dim_thing")
+        assert m is not None
+        assert set(m.columns["thing_pk"].tests) == {"unique", "not_null", "relationships"}
+
+    def test_data_tests_config_dict_flattens_to_name(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_models.yml").write_text(
+            textwrap.dedent("""
+            version: 2
+            models:
+            - name: dim_thing
+              columns:
+              - name: thing_pk
+                data_tests:
+                - unique
+                - relationships:
+                    to: ref('other')
+                    field: id
+            """).strip()
+        )
+        registry = build_yaml_registry(tmp_path)
+        m = registry.get_model("dim_thing")
+        assert m is not None
+        assert set(m.columns["thing_pk"].tests) == {"unique", "relationships"}
+
+
+class TestColumnCaseNormalization:
+    """YAML column names are lowercased to match manifest/sql_parser output."""
+
+    def test_column_names_lowercased(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_models.yml").write_text(
+            textwrap.dedent("""
+            version: 2
+            models:
+            - name: stg__thing
+              columns:
+              - name: CEUs
+              - name: User_ID
+            """).strip()
+        )
+        registry = build_yaml_registry(tmp_path)
+        m = registry.get_model("stg__thing")
+        assert m is not None
+        assert m.column_names == {"ceus", "user_id"}
+        assert m.columns["ceus"].name == "ceus"
+
+    def test_source_column_names_lowercased(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_sources.yml").write_text(
+            textwrap.dedent("""
+            version: 2
+            sources:
+            - name: raw
+              tables:
+              - name: thing
+                columns:
+                - name: CEUs
+            """).strip()
+        )
+        registry = build_yaml_registry(tmp_path)
+        assert registry.get_source_columns("raw", "thing") == {"ceus"}
+
+
 class TestYamlRegistrySources:
     def test_loads_source(self, models_dir: Path) -> None:
         registry = build_yaml_registry(models_dir)
