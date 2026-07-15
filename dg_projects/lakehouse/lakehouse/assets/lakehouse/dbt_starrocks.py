@@ -28,11 +28,15 @@ from lakehouse.resources.starrocks import StarRocksResource
 # (dbt_project.yml or model-level config) and giving it a matching +enabled
 # condition -- this asset set and full_dbt_project's exclude="tag:starrocks"
 # then pick it up automatically, no Python change needed.
+# "dev" and "ci" use the schema_suffix-namespaced targets (mirroring Trino's
+# dev_qa/dev_production pattern) since those are dev/CI builds against a shared
+# cluster that must not collide with each other or with the real qa-tier schema;
+# "qa" and "production" use the bare, unsuffixed targets.
 STARROCKS_DBT_TARGET_MAP = {
-    "dev": "starrocks_qa_vault",
+    "dev": "starrocks_dev_qa_vault",
     # ci connects directly to its own FE service (no port-forward), same
     # connection shape as production -- matches _ENVS["ci"]["dbt_target"].
-    "ci": "starrocks_production",
+    "ci": "starrocks_ci",
     "qa": "starrocks_qa_vault",
     "production": "starrocks_production",
 }

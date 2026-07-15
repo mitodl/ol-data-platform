@@ -65,7 +65,10 @@ _ENVS: dict[str, dict[str, Any]] = {
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-qa",
-        "dbt_target": "starrocks_qa_vault",
+        # Namespaced target: this is an interactive dev command, so it must
+        # not write into the same schema as the scheduled qa-tier build
+        # (STARROCKS_DBT_TARGET_MAP["qa"] in dbt_starrocks.py, unsuffixed).
+        "dbt_target": "starrocks_dev_qa_vault",
     },
     "production": {
         "host": "lakehouse.starrocks.ol.mit.edu",
@@ -83,7 +86,10 @@ _ENVS: dict[str, dict[str, Any]] = {
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": "database-starrocks-ci",
-        "dbt_target": "starrocks_production",
+        # Namespaced target: the ci cluster is shared across concurrent PR
+        # builds, so each run must pass --vars '{"schema_suffix": "pr_<n>"}'
+        # to get its own schema instead of colliding on a bare "b2b_analytics".
+        "dbt_target": "starrocks_ci",
         "port_forward": False,
     },
 }

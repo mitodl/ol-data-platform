@@ -97,6 +97,33 @@ open_learning:
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
       threads: 4
+    # Namespaced counterparts of starrocks_qa_vault / starrocks_production,
+    # mirroring the Trino dev_qa / dev_production pattern: the bare targets
+    # above are the shared, unsuffixed schemas used by scheduled/production
+    # builds, while these append schema_suffix so interactive dev runs and
+    # concurrent CI runs against the same shared cluster don't collide with
+    # each other or with the real qa-tier data.
+    starrocks_dev_qa_vault:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      database: default_catalog
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}_{{ var("schema_suffix")
+        }}'
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
+    starrocks_ci:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse.ci.starrocks.ol.mit.edu")
+        }}'
+      port: 9030
+      database: default_catalog
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}_{{ var("schema_suffix")
+        }}'
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
     starrocks_production:
       type: starrocks
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")

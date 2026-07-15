@@ -7,7 +7,7 @@ models:
     in the StarRocks b2b_analytics database to confirm the adapter can authenticate
     and create tables. Run via `ol-dbt starrocks run --select b2b_analytics` (fetches
     Vault dynamic credentials automatically), or manually with
-    --target starrocks_qa_vault or --target starrocks_production.
+    --target starrocks_dev_qa_vault or --target starrocks_production.
   columns:
   - name: smoke_test_value
     description: int, always 1
