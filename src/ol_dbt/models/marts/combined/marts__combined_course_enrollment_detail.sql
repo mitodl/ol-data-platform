@@ -482,14 +482,15 @@ select
     , user_full_name
     , user_highest_education
     , user_gender
-    , case
-        when user_id is not null
-        then {{ generate_hash_id('user_id || platform') }}
-        when user_email is not null
-        then {{ generate_hash_id('user_email || platform') }}
-        else
-            {{ generate_hash_id('user_full_name || platform') }}
-    end as user_hashed_id
+    -- identity ordering must match int__combined__users: global_alumni's user_id
+    --  (their student_id) is not reliably unique per person, so user_email is
+    --  preferred there; every other platform uses the default user_id-first order.
+    , {{ generate_hash_id('
+        case
+            when platform = \'' ~ var("global_alumni") ~ '\'
+                then coalesce(user_email, user_id, user_full_name)
+            else coalesce(user_id, user_email, user_full_name)
+        end || platform') }} as user_hashed_id
     , user_id
     , user_username
 from combined_enrollment_detail

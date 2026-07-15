@@ -1,5 +1,8 @@
---- This model combines intermediate users from different platforms, it contains duplicates for
---  MITx Online and edX.org users, deduplication is handled in int__mitx__users
+--- This model combines intermediate users from different platforms, deduped one row per
+--  (dedup_key, platform), where dedup_key is coalesce(user_username, user_id, user_email,
+--  user_full_name) -- platforms with no user_username (emeritus, global_alumni) would
+--  otherwise collapse every user in that platform into one row, since PARTITION BY
+--  treats all NULLs as one group.
 {{ config(materialized='view') }}
 
 with mitxonline_users as (
@@ -246,14 +249,53 @@ with mitxonline_users as (
     from residential_users
 )
 
+, users_with_identity_key as (
+    --- identity_key is the best available non-username identifier for a platform.
+    --  global_alumni's user_id (their student_id) is not reliably unique per person, so
+    --  user_email is preferred there; emeritus is the opposite (bulk/corporate enrollments
+    --  can share one contact email), so it uses the default user_id-first order.
+    select
+        *
+        , case
+            when platform = '{{ var("global_alumni") }}'
+                then coalesce(user_email, user_id, user_full_name)
+            else coalesce(user_id, user_email, user_full_name)
+        end as identity_key
+    from combined_users
+)
+
+, hashed_users as (
+    select
+        {{ generate_hash_id('identity_key || platform') }} as user_hashed_id
+        , *
+        , row_number() over (
+            partition by coalesce(user_username, identity_key), platform
+            order by openedx_user_id asc nulls last
+        ) as row_num
+    from users_with_identity_key
+)
+
 select
-    case
-        when user_id is not null
-            then {{ generate_hash_id('user_id || platform') }}
-        when user_email is not null
-            then {{ generate_hash_id('user_email || platform') }}
-        else
-            {{ generate_hash_id('user_full_name || platform') }}
-    end as user_hashed_id
-    , *
-from combined_users
+    user_hashed_id
+    , platform
+    , user_id
+    , openedx_user_id
+    , user_username
+    , user_email
+    , user_full_name
+    , user_address_country
+    , user_highest_education
+    , user_gender
+    , user_birth_year
+    , user_company
+    , user_job_title
+    , user_industry
+    , user_joined_on
+    , user_last_login
+    , user_is_active
+    , user_street_address
+    , user_address_city
+    , user_address_state_or_territory
+    , user_address_postal_code
+from hashed_users
+where row_num = 1
