@@ -287,6 +287,14 @@ def _collapse_broken_column_expressions(sql: str) -> str:
     would delete that ``)`` and swallow the alias into the function, dropping the
     output column. So we skip the collapse entirely when the input already parses.
     """
+    # Fast path: the parse gate below is a full sqlglot parse, so only pay for it
+    # when the broken-column shape (`, __placeholder__ … ) as alias`) is actually
+    # present. The overwhelming majority of models never match, so they skip both
+    # the parse and the collapse on a single cheap regex search.
+    if not _BROKEN_COL_RE.search(sql):
+        return sql
+    # The shape is present but may be a well-formed multi-line function call that
+    # merely looks like it — only repair when the SQL genuinely does not parse.
     if _parses_cleanly(sql):
         return sql
 
