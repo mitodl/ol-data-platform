@@ -36,6 +36,8 @@ class ManifestModel:
     columns: dict[str, ManifestColumn] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
     """unique_ids of parent nodes."""
+    depends_on_macros: list[str] = field(default_factory=list)
+    """unique_ids of macros this node references (``depends_on.macros``)."""
 
     @property
     def column_names(self) -> set[str]:
@@ -44,6 +46,18 @@ class ManifestModel:
     @property
     def is_model(self) -> bool:
         return self.resource_type == "model"
+
+
+@dataclass
+class ManifestMacro:
+    """A macro node as extracted from the manifest ``macros`` section."""
+
+    unique_id: str
+    name: str
+    package_name: str
+    original_file_path: str
+    depends_on_macros: list[str] = field(default_factory=list)
+    """unique_ids of other macros this macro references."""
 
 
 @dataclass
@@ -59,6 +73,8 @@ class ManifestRegistry:
     Key is ``source_name.table_name`` (e.g. ``ol_warehouse.users``)."""
     children: dict[str, list[str]] = field(default_factory=dict)
     """unique_id -> list of child unique_ids (reverse of depends_on)."""
+    macros: dict[str, ManifestMacro] = field(default_factory=dict)
+    """macro unique_id -> ManifestMacro for every macro in the project graph."""
 
     def get_model(self, name: str) -> ManifestModel | None:
         return self.by_name.get(name)
@@ -102,6 +118,53 @@ class ManifestRegistry:
                 matches.append((child, column_name))
         return matches
 
+    def models_for_changed_macros(self, changed_macro_files: set[str]) -> set[str]:
+        """Return the names of models whose output can change when the given macros change.
+
+        *changed_macro_files* is a set of macro file paths in the manifest's
+        ``original_file_path`` form (relative to the dbt project root, e.g.
+        ``macros/extract_course_id.sql``). A single ``.sql`` file may define
+        several macros.
+
+        Node ``depends_on.macros`` records only the macros a node references
+        *directly*, not those reached transitively through other macros. So a
+        change to a low-level helper macro (called only by other macros) would
+        be invisible via a direct lookup. We therefore expand the changed
+        macros to their transitive callers over the macro→macro dependency
+        graph first, then flag every model whose direct macro dependencies
+        intersect that closure.
+        """
+        if not changed_macro_files:
+            return set()
+
+        changed_macro_ids = {
+            uid for uid, macro in self.macros.items() if macro.original_file_path in changed_macro_files
+        }
+        if not changed_macro_ids:
+            return set()
+
+        # Reverse edges: macro unique_id -> macros that reference it.
+        callers: dict[str, set[str]] = {}
+        for uid, macro in self.macros.items():
+            for dep in macro.depends_on_macros:
+                callers.setdefault(dep, set()).add(uid)
+
+        # Transitive closure: changed macros plus every macro that (transitively) calls them.
+        affected_macro_ids: set[str] = set(changed_macro_ids)
+        stack = list(changed_macro_ids)
+        while stack:
+            current = stack.pop()
+            for caller in callers.get(current, ()):
+                if caller not in affected_macro_ids:
+                    affected_macro_ids.add(caller)
+                    stack.append(caller)
+
+        return {
+            node.name
+            for node in self.nodes.values()
+            if node.is_model and affected_macro_ids.intersection(node.depends_on_macros)
+        }
+
 
 def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
     """Convert a raw manifest node dict into a :class:`ManifestModel`."""
@@ -113,7 +176,7 @@ def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
             data_type=col_data.get("data_type", ""),
         )
 
-    depends_on = node_data.get("depends_on", {}).get("nodes", [])
+    depends_on = node_data.get("depends_on", {})
 
     return ManifestModel(
         unique_id=node_data["unique_id"],
@@ -123,7 +186,19 @@ def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
         schema=node_data.get("schema", ""),
         database=node_data.get("database", ""),
         columns=columns,
-        depends_on=depends_on,
+        depends_on=depends_on.get("nodes", []),
+        depends_on_macros=depends_on.get("macros", []),
+    )
+
+
+def _parse_macro(macro_data: dict[str, Any]) -> ManifestMacro:
+    """Convert a raw manifest macro dict into a :class:`ManifestMacro`."""
+    return ManifestMacro(
+        unique_id=macro_data["unique_id"],
+        name=macro_data.get("name", ""),
+        package_name=macro_data.get("package_name", ""),
+        original_file_path=macro_data.get("original_file_path", ""),
+        depends_on_macros=macro_data.get("depends_on", {}).get("macros", []),
     )
 
 
@@ -152,6 +227,9 @@ def load_manifest(manifest_path: Path) -> ManifestRegistry:
             table_name = node_data.get("name", "")
             if source_name and table_name:
                 registry.sources[f"{source_name}.{table_name}"] = model
+
+    for uid, macro_data in raw.get("macros", {}).items():
+        registry.macros[uid] = _parse_macro(macro_data)
 
     # Build child map (reverse of depends_on)
     for uid, model in registry.nodes.items():

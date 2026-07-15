@@ -19,6 +19,7 @@ from cyclopts import Parameter
 from rich.console import Console
 
 from ol_dbt_cli.lib.git_utils import (
+    get_changed_macro_files,
     get_changed_sql_models,
     get_deleted_sql_models,
     get_file_at_ref,
@@ -420,6 +421,40 @@ def _analyse_deleted_model(
     )
 
 
+def _analyse_macro_change(
+    macro_rel_path: str,
+    affected_models: set[str],
+    manifest: ManifestRegistry | None,
+) -> ImpactAlert:
+    """Return an :class:`ImpactAlert` describing a changed macro's blast radius.
+
+    A macro edit touches no model ``.sql`` file, so raw column-diffing sees no
+    change. It can nonetheless alter the compiled output of every model that
+    (transitively) references it. We surface the set of dependent models so the
+    change is visible in CI rather than silently green; genuine column
+    additions/removals still require ``--auto-compile`` to detect.
+    """
+    macro_name = Path(macro_rel_path).name
+    downstream = [DownstreamImpact(model_name=name, depth=1) for name in sorted(affected_models)]
+    if downstream:
+        level = AlertLevel.WARNING
+        msg = (
+            f"Macro '{macro_name}' changed — {len(downstream)} model(s) compile with it and may "
+            "produce different output. Re-run with --auto-compile for column-level detail."
+        )
+    else:
+        level = AlertLevel.INFO
+        msg = f"Macro '{macro_name}' changed — no dependent models found in the manifest."
+    return ImpactAlert(
+        level=level,
+        changed_model=f"macro: {macro_name}",
+        column_changes=[],
+        downstream=downstream,
+        message=msg,
+        manifest_available=manifest is not None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Output rendering
 # ---------------------------------------------------------------------------
@@ -679,6 +714,7 @@ def impact(
         sys.exit(1)
 
     # Determine which models to analyse
+    macro_alerts: list[ImpactAlert] = []
     if model:
         if model not in sql_file_map and model not in deleted_models:
             err_console.print(f"[red]Error:[/] --model value '{model}' did not match any model file.")
@@ -687,10 +723,41 @@ def impact(
     else:
         try:
             target_names = get_changed_sql_models(dbt_dir, base_ref=base_ref, repo_root=repo_root)
+            macro_files = get_changed_macro_files(dbt_dir, base_ref=base_ref, repo_root=repo_root)
         except RuntimeError as exc:
             err_console.print(f"[red]Error resolving git diff:[/] {exc}")
             sys.exit(1)
-        if not target_names:
+
+        # A changed macro is invisible to SQL-file diffing but can change the
+        # output of every model that references it. Map each changed macro file
+        # to its dependent models via the manifest and surface it as an alert.
+        macro_affected: set[str] = set()
+        if macro_files and manifest is not None:
+            for mf in macro_files:
+                if not mf.is_relative_to(dbt_dir):
+                    continue
+                # as_posix() (not str()) so the path uses forward slashes on every
+                # platform, matching the dbt manifest's original_file_path form.
+                macro_rel_path = mf.relative_to(dbt_dir).as_posix()
+                affected = manifest.models_for_changed_macros({macro_rel_path})
+                macro_affected |= affected
+                macro_alerts.append(_analyse_macro_change(macro_rel_path, affected, manifest))
+        elif macro_files:
+            err_console.print(
+                f"[yellow]Warning:[/] {len(macro_files)} macro file(s) changed but no manifest is "
+                "available to map them to affected models. Run with --auto-compile (or `dbt parse`) "
+                "so macro-only changes are analysed."
+            )
+
+        # With --auto-compile the compiled SQL reflects the macro edit, so run the
+        # standard column diff on affected models too — genuine added/removed
+        # columns then surface as their own (possibly BREAKING) alerts.
+        if auto_compile and macro_affected:
+            for name in sorted(macro_affected):
+                if name not in target_names:
+                    target_names.append(name)
+
+        if not target_names and not macro_alerts:
             console.print(f"[dim]No SQL model changes detected vs {base_ref}.[/]")
             return
 
@@ -767,6 +834,8 @@ def impact(
                 d_parsed = sql_models_by_name.get(d.model_name)
                 if d_parsed is not None and d_parsed.compiled_path is None:
                     models_without_compiled.append(d.model_name)
+
+    alerts.extend(macro_alerts)
 
     # Sort: BREAKING first, then WARNING, then INFO
     order = {AlertLevel.BREAKING: 0, AlertLevel.WARNING: 1, AlertLevel.INFO: 2}

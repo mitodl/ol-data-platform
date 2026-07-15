@@ -126,6 +126,25 @@ def get_deleted_sql_models(
     return deleted
 
 
+def get_changed_macro_files(
+    dbt_dir: Path,
+    base_ref: str = "origin/main",
+    repo_root: Path | None = None,
+) -> list[Path]:
+    """Return paths of ``.sql`` macro files under *dbt_dir*/macros/ that changed.
+
+    A macro edit changes no model ``.sql`` file, so it is invisible to
+    :func:`get_changed_sql_models` — yet it can alter the compiled output of
+    every model that (transitively) calls it. Callers map these files to the
+    affected models via
+    :meth:`~ol_dbt_cli.lib.manifest.ManifestRegistry.models_for_changed_macros`.
+    """
+    root = repo_root or get_repo_root(dbt_dir)
+    macros_dir = dbt_dir / "macros"
+    changed = get_changed_files(base_ref=base_ref, repo_root=root)
+    return [path for path in changed if path.suffix == ".sql" and _is_under(path, macros_dir)]
+
+
 def get_changed_yaml_models(
     dbt_dir: Path,
     base_ref: str = "origin/main",

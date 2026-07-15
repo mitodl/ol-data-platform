@@ -196,9 +196,19 @@ def _parse_yaml_file(path: Path) -> tuple[list[YamlModel], list[YamlSource]]:
 
 
 def build_yaml_registry(models_dir: Path) -> YamlRegistry:
-    """Walk *models_dir* recursively and build a registry from all _*.yml files."""
+    """Walk *models_dir* recursively and build a registry from every YAML schema file.
+
+    Indexes all ``.yml``/``.yaml`` files (matching how dbt itself discovers
+    schema/property files, and how :func:`git_utils.get_changed_yaml_models`
+    detects changed ones). Restricting to the ``_*.yml`` convention here would
+    silently drop any differently-named schema file: it would be detected as
+    changed but never resolve to a model, so ``validate --changed-only`` would
+    skip it. Non-schema YAML is harmless — :func:`_parse_yaml_file` only reads
+    ``models:``/``sources:`` keys and yields nothing for anything else.
+    """
     registry = YamlRegistry()
-    for yaml_path in sorted(models_dir.rglob("_*.yml")):
+    yaml_paths = sorted({*models_dir.rglob("*.yml"), *models_dir.rglob("*.yaml")})
+    for yaml_path in yaml_paths:
         models, sources = _parse_yaml_file(yaml_path)
         file_names: list[str] = []
         for model in models:

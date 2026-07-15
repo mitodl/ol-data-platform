@@ -105,6 +105,19 @@ class TestYamlRegistry:
         registry = build_yaml_registry(tmp_path)
         assert len(registry.models) == 0
 
+    def test_indexes_schema_files_regardless_of_name_or_extension(self, tmp_path: Path) -> None:
+        # A schema file that does not follow the _*.yml convention (no leading
+        # underscore, or a .yaml extension) must still be indexed — otherwise
+        # get_changed_yaml_models would detect it but validate --changed-only
+        # could never map it to a model.
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "schema.yml").write_text("version: 2\nmodels:\n- name: no_underscore_model\n")
+        (staging / "props.yaml").write_text("version: 2\nmodels:\n- name: yaml_ext_model\n")
+        registry = build_yaml_registry(tmp_path)
+        assert registry.get_model("no_underscore_model") is not None
+        assert registry.get_model("yaml_ext_model") is not None
+
 
 class TestYamlRegistrySources:
     def test_loads_source(self, models_dir: Path) -> None:

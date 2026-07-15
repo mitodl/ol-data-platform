@@ -9,7 +9,9 @@ import pytest
 
 from ol_dbt_cli.lib.git_utils import (
     get_changed_files,
+    get_changed_macro_files,
     get_changed_sql_models,
+    get_changed_yaml_models,
     get_file_at_ref,
     resolve_merge_base,
 )
@@ -131,6 +133,50 @@ class TestGetChangedSqlModels:
     def test_changed_set_matches_three_dot_semantics(self, scripted_repo: Path) -> None:
         names = get_changed_sql_models(scripted_repo, base_ref="main", repo_root=scripted_repo)
         assert set(names) == {"foo", "bar"}
+
+
+@pytest.fixture()
+def repo_with_macro_and_yaml_change(tmp_path: Path) -> Path:
+    """Build a repo whose feature branch edits a macro and a YAML file, but no model .sql."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-b", "main"], cwd=repo)
+
+    (repo / "models").mkdir()
+    (repo / "models" / "foo.sql").write_text("select a\n")
+    (repo / "models" / "_schema.yml").write_text("version: 2\n")
+    (repo / "macros").mkdir()
+    (repo / "macros" / "helper.sql").write_text("{% macro helper() %}1{% endmacro %}\n")
+    _commit(repo, "C0: initial")
+
+    _git(["checkout", "-b", "feature"], cwd=repo)
+    (repo / "macros" / "helper.sql").write_text("{% macro helper() %}2{% endmacro %}\n")
+    (repo / "models" / "_schema.yml").write_text("version: 2\nmodels: []\n")
+    _commit(repo, "C0a: change macro and yaml only")
+    return repo
+
+
+class TestGetChangedMacroFiles:
+    def test_detects_changed_macro(self, repo_with_macro_and_yaml_change: Path) -> None:
+        repo = repo_with_macro_and_yaml_change
+        changed = get_changed_macro_files(repo, base_ref="main", repo_root=repo)
+        assert {p.name for p in changed} == {"helper.sql"}
+
+    def test_excludes_model_sql(self, repo_with_macro_and_yaml_change: Path) -> None:
+        repo = repo_with_macro_and_yaml_change
+        changed = get_changed_macro_files(repo, base_ref="main", repo_root=repo)
+        assert all("models" not in p.parts for p in changed)
+
+
+class TestGetChangedYamlModels:
+    def test_detects_changed_yaml(self, repo_with_macro_and_yaml_change: Path) -> None:
+        repo = repo_with_macro_and_yaml_change
+        changed = get_changed_yaml_models(repo, base_ref="main", repo_root=repo)
+        assert {p.name for p in changed} == {"_schema.yml"}
+
+    def test_no_sql_models_changed(self, repo_with_macro_and_yaml_change: Path) -> None:
+        repo = repo_with_macro_and_yaml_change
+        assert get_changed_sql_models(repo, base_ref="main", repo_root=repo) == []
 
 
 class TestGetFileAtRef:

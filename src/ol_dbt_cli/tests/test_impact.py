@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ol_dbt_cli.commands.impact import _diff_columns
+from ol_dbt_cli.commands.impact import AlertLevel, _analyse_macro_change, _diff_columns
 
 
 class TestDiffColumns:
@@ -34,6 +34,20 @@ class TestDiffColumns:
         changes = _diff_columns({"a", "b", "c"}, {"a"})
         removed = {c.column for c in changes if c.change_type == "removed"}
         assert removed == {"b", "c"}
+
+
+class TestAnalyseMacroChange:
+    def test_flags_affected_models_as_warning(self) -> None:
+        alert = _analyse_macro_change("macros/helper.sql", {"stg_a", "stg_b"}, manifest=None)
+        assert alert.level == AlertLevel.WARNING
+        assert alert.changed_model == "macro: helper.sql"
+        assert {d.model_name for d in alert.downstream} == {"stg_a", "stg_b"}
+        assert "helper.sql" in alert.message
+
+    def test_no_dependents_is_info(self) -> None:
+        alert = _analyse_macro_change("macros/orphan.sql", set(), manifest=None)
+        assert alert.level == AlertLevel.INFO
+        assert alert.downstream == []
 
 
 class TestGetColumnsReadFromRef:

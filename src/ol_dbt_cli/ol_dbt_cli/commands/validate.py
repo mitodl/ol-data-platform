@@ -32,7 +32,12 @@ from ol_dbt_cli.lib.dimensional_layering import (
     load_baseline,
     write_baseline,
 )
-from ol_dbt_cli.lib.git_utils import get_changed_sql_models, get_repo_root
+from ol_dbt_cli.lib.git_utils import (
+    get_changed_macro_files,
+    get_changed_sql_models,
+    get_changed_yaml_models,
+    get_repo_root,
+)
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
 from ol_dbt_cli.lib.sql_parser import ParsedModel, find_compiled_dir, get_columns_read_from_ref, parse_model_file
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
@@ -942,11 +947,54 @@ def validate(
     elif changed_only:
         try:
             target_names = get_changed_sql_models(dbt_dir, base_ref=base_ref)
+            macro_files = get_changed_macro_files(dbt_dir, base_ref=base_ref)
+            yaml_files = get_changed_yaml_models(dbt_dir, base_ref=base_ref)
         except RuntimeError as exc:
             err_console.print(f"[red]Error resolving git diff:[/] {exc}")
             sys.exit(1)
+
+        extra: list[str] = []
+
+        # A macro edit changes no model .sql file, but can alter the compiled
+        # output of every model that (transitively) calls it. Map the changed
+        # macro files to affected models via the manifest so their checks run.
+        if macro_files:
+            if manifest is not None:
+                # as_posix() (not str()) so paths use forward slashes on every
+                # platform, matching the dbt manifest's original_file_path form.
+                macro_rel = {p.relative_to(dbt_dir).as_posix() for p in macro_files if p.is_relative_to(dbt_dir)}
+                extra.extend(sorted(manifest.models_for_changed_macros(macro_rel)))
+            else:
+                err_console.print(
+                    f"[yellow]Warning:[/] {len(macro_files)} macro file(s) changed but no manifest is "
+                    "available to map them to affected models. Run with --auto-compile (or `dbt parse`) "
+                    "so macro-only changes are validated."
+                )
+
+        # A YAML-only change (phantom column, dropped docs) touches no .sql file
+        # either. Add models whose schema YAML changed so yaml_sql_sync runs.
+        if yaml_files:
+            resolved_file_to_models = {p.resolve(): names for p, names in yaml_registry.file_to_models.items()}
+            for yf in yaml_files:
+                extra.extend(resolved_file_to_models.get(yf.resolve(), []))
+
+        seen_targets = set(target_names)
+        for name in extra:
+            if name not in seen_targets:
+                seen_targets.add(name)
+                target_names.append(name)
+
         if not target_names:
-            console.print(f"[dim]No SQL model changes detected vs {base_ref}.[/]")
+            if macro_files or yaml_files:
+                # Changes WERE detected, they just didn't resolve to any model to
+                # validate (no manifest for macro mapping, or a YAML file that
+                # declares no models). Say so rather than claiming nothing changed.
+                console.print(
+                    f"[dim]Changed macro/YAML file(s) detected vs {base_ref}, but none mapped to "
+                    "models to validate (see warnings above).[/]"
+                )
+            else:
+                console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
             return
     else:
         target_names = [f.stem for f in all_sql_files]
