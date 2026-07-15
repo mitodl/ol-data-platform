@@ -157,7 +157,8 @@ select
     , enrollment_id as courserunenrollment_id
     , course_readable_id
     , course_title
-    , course_run.is_current as courserun_is_current
+    , {{ is_courserun_current('course_run.courserun_start_on', 'course_run.courserun_end_on') }}
+        as courserun_is_current
     , course_run.courserun_readable_id
     , courserun_start_on
     , courserun_end_on
