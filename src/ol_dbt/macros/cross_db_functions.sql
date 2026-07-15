@@ -33,8 +33,8 @@
 {%- endmacro %}
 
 {% macro starrocks__json_extract_value(json_col, json_path) -%}
-    {# StarRocks: json_extract returns a JSON value #}
-    json_extract({{ json_col }}, {{ json_path }})
+    {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
+    json_query(parse_json({{ json_col }}), {{ json_path }})
 {%- endmacro %}
 
 
@@ -73,8 +73,20 @@
 {%- endmacro %}
 
 {% macro starrocks__from_iso8601_timestamp(timestamp_str) -%}
-    {# StarRocks: use str_to_date or cast #}
-    cast({{ timestamp_str }} as datetime)
+    {#
+        StarRocks: DATETIME is zone-less, and a bare cast() returns NULL for strings with
+        a trailing 'Z' or '+HH:MM'/'-HH:MM' offset. Strip any such suffix and the 'T'
+        separator before casting. Truncate to 26 chars to keep at most microsecond
+        precision (and avoid cast() failures on nanosecond-precision inputs). Non-UTC
+        offsets are dropped rather than applied, which is acceptable since this project's
+        source data is UTC/naive.
+    #}
+    cast(
+        substr(
+            replace(regexp_replace({{ timestamp_str }}, '([Zz]|[+-][0-9]{2}:?[0-9]{2})$', ''), 'T', ' ')
+            , 1, 26
+        ) as datetime
+    )
 {%- endmacro %}
 
 
@@ -112,8 +124,12 @@
 {%- endmacro %}
 
 {% macro starrocks__array_join(array_expr, delimiter, null_replacement='') -%}
-    {# StarRocks: array_join with different signature #}
-    array_join({{ array_expr }}, '{{ delimiter }}')
+    {# StarRocks: native support, including the 3rd null_replace_str arg #}
+    {% if null_replacement %}
+        array_join({{ array_expr }}, '{{ delimiter }}', '{{ null_replacement }}')
+    {% else %}
+        array_join({{ array_expr }}, '{{ delimiter }}')
+    {% endif %}
 {%- endmacro %}
 
 
