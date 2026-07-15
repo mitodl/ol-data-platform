@@ -618,24 +618,26 @@ class TestUpstreamRefsSeedResolution:
             YamlRegistry(),
             manifest=registry,
             sql_models_by_name={},
+            known_refable_names=set(),
             report=report_obj,
         )
         # Seed columns are known → no warning
         assert not report_obj.issues
 
-    def test_seed_not_in_manifest_by_name_produces_warning(self, tmp_path: Path) -> None:
-        """When a seed is missing from manifest.by_name (old behaviour), warn about it.
+    def test_known_seed_without_columns_produces_warning(self, tmp_path: Path) -> None:
+        """A ref target that exists but has no resolvable column list still warns.
 
-        This test documents the *fixed* behaviour: seeds ARE indexed in by_name, so
-        the warning should NOT fire when columns are present.  Compare with a manifest
-        that genuinely has no entry for the seed — that should still warn.
+        The seed is in ``known_refable_names`` (so it is NOT dangling) but no
+        column metadata is available anywhere, so upstream_refs warns that the
+        column list can't be resolved. (A seed absent from every registry is now
+        the dangling_refs check's job — see TestDanglingRefs.)
         """
         from ol_dbt_cli.commands.validate import _check_upstream_refs
         from ol_dbt_cli.lib.manifest import ManifestRegistry
         from ol_dbt_cli.lib.sql_parser import ParsedModel
         from ol_dbt_cli.lib.yaml_registry import YamlRegistry
 
-        # Empty manifest — seed is not resolvable anywhere.
+        # Empty manifest — seed exists (known_refable_names) but has no columns.
         empty_registry = ManifestRegistry()
 
         downstream = ParsedModel(
@@ -650,9 +652,10 @@ class TestUpstreamRefsSeedResolution:
             YamlRegistry(),
             manifest=empty_registry,
             sql_models_by_name={},
+            known_refable_names={"platforms"},
             report=report_obj,
         )
-        # No columns anywhere → should produce a warning
+        # Target exists but no columns anywhere → should produce a warning
         assert any("platforms" in issue.message for issue in report_obj.issues)
 
     def test_resolve_upstream_columns_finds_seed_in_manifest(self) -> None:
@@ -709,3 +712,143 @@ class TestOnlySkipValidation:
         with pytest.raises(SystemExit):
             validate(only_checks="dimensional_layering", dbt_dir_path=str(tmp_path))
         assert "Unknown check(s)" not in capsys.readouterr().out
+
+
+class TestDanglingRefs:
+    """`ref()` to a model/seed that does not exist is an ERROR (not a mere warning)."""
+
+    def _report_for(self, refs: list[str], known: set[str]) -> ValidationReport:
+        from ol_dbt_cli.commands.validate import _check_dangling_refs
+
+        parsed = ParsedModel(name="downstream", refs=refs)
+        report = ValidationReport()
+        _check_dangling_refs("downstream", parsed, known, manifest=None, report=report)
+        return report
+
+    def test_ref_to_nonexistent_model_errors(self) -> None:
+        report = self._report_for(["was_deleted"], known={"other_model"})
+        assert len(report.errors) == 1
+        assert "was_deleted" in report.errors[0].message
+        assert report.errors[0].check == "dangling_refs"
+
+    def test_ref_to_existing_model_is_clean(self) -> None:
+        report = self._report_for(["real_model"], known={"real_model"})
+        assert not report.issues
+
+    def test_ref_to_seed_is_clean(self) -> None:
+        # Seeds are included in known_refable_names, so a ref to one is not dangling.
+        report = self._report_for(["platforms"], known={"platforms"})
+        assert not report.issues
+
+    def test_resolves_via_manifest_when_not_in_known_set(self) -> None:
+        from ol_dbt_cli.commands.validate import _check_dangling_refs
+        from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
+
+        registry = ManifestRegistry()
+        seed = ManifestModel(
+            unique_id="seed.pkg.platforms",
+            name="platforms",
+            resource_type="seed",
+            original_file_path="seeds/platforms.csv",
+            schema="",
+            database="",
+        )
+        registry.by_name[seed.name] = seed
+        parsed = ParsedModel(name="downstream", refs=["platforms"])
+        report = ValidationReport()
+        _check_dangling_refs("downstream", parsed, set(), manifest=registry, report=report)
+        assert not report.issues
+
+    def test_upstream_refs_does_not_double_report_dangling(self) -> None:
+        """A dangling ref is owned by dangling_refs; upstream_refs must stay silent."""
+        from ol_dbt_cli.commands.validate import _check_upstream_refs
+
+        parsed = ParsedModel(name="downstream", refs=["was_deleted"])
+        report = ValidationReport()
+        _check_upstream_refs(
+            "downstream",
+            parsed,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={},
+            known_refable_names={"other_model"},
+            report=report,
+        )
+        assert not report.issues
+
+
+class TestPkTestCoverage:
+    """Dimensional/fact models must enforce a primary key (column-level or composite)."""
+
+    def _registry(self, model: YamlModel) -> YamlRegistry:
+        reg = YamlRegistry()
+        reg.models[model.name] = model
+        return reg
+
+    def _check(self, model: YamlModel) -> ValidationReport:
+        from ol_dbt_cli.commands.validate import _check_pk_test_coverage
+
+        report = ValidationReport()
+        _check_pk_test_coverage(model.name, self._registry(model), report)
+        return report
+
+    def test_dim_with_pk_unique_and_not_null_is_clean(self) -> None:
+        model = YamlModel(
+            name="dim_course",
+            source_file=Path("_dim_course.yml"),
+            columns={"course_pk": YamlColumn(name="course_pk", tests=["unique", "not_null"])},
+        )
+        assert not self._check(model).issues
+
+    def test_fact_with_key_surrogate_is_clean(self) -> None:
+        model = YamlModel(
+            name="tfact_enrollment",
+            source_file=Path("_facts.yml"),
+            columns={"enrollment_key": YamlColumn(name="enrollment_key", tests=["unique", "not_null"])},
+        )
+        assert not self._check(model).issues
+
+    def test_model_level_composite_uniqueness_is_clean(self) -> None:
+        model = YamlModel(
+            name="afact_video_engagement",
+            source_file=Path("_facts.yml"),
+            columns={"platform": YamlColumn(name="platform")},
+            tests=["dbt_expectations.expect_compound_columns_to_be_unique"],
+        )
+        assert not self._check(model).issues
+
+    def test_pk_missing_not_null_warns(self) -> None:
+        model = YamlModel(
+            name="dim_thing",
+            source_file=Path("_dim.yml"),
+            columns={"thing_pk": YamlColumn(name="thing_pk", tests=["unique"])},
+        )
+        report = self._check(model)
+        assert len(report.warnings) == 1
+        assert report.warnings[0].check == "pk_test_coverage"
+        assert "thing_pk" in report.warnings[0].detail
+
+    def test_no_pk_and_no_model_test_warns(self) -> None:
+        model = YamlModel(
+            name="dim_ocw_course",
+            source_file=Path("_dim.yml"),
+            columns={"title": YamlColumn(name="title", tests=["not_null"])},
+        )
+        report = self._check(model)
+        assert len(report.warnings) == 1
+        assert "no model-level composite-uniqueness test" in report.warnings[0].detail.lower()
+
+    def test_non_dimensional_model_is_ignored(self) -> None:
+        model = YamlModel(
+            name="stg__platform__users",
+            source_file=Path("_stg.yml"),
+            columns={"user_id": YamlColumn(name="user_id")},
+        )
+        assert not self._check(model).issues
+
+    def test_dimensional_model_without_yaml_is_skipped(self) -> None:
+        from ol_dbt_cli.commands.validate import _check_pk_test_coverage
+
+        report = ValidationReport()
+        _check_pk_test_coverage("dim_untracked", YamlRegistry(), report)
+        assert not report.issues

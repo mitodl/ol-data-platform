@@ -3,11 +3,13 @@
 Checks:
   1. SQL/YAML sync: columns declared in YAML vs columns produced by SQL
   2. Upstream reference resolution: warn when column list for a ref() cannot be resolved
-  3. Broken ref columns: columns consumed from a ref() that don't exist upstream
-  4. Docs coverage: .sql models with no YAML definition
-  5. YAML integrity: YAML entries for models that have no corresponding .sql file
-  6. SELECT *: models using SELECT * that hides column-level lineage
-  7. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
+  3. Dangling refs: ref() to a model/seed that does not exist at all (ERROR)
+  4. Broken ref columns: columns consumed from a ref() that don't exist upstream
+  5. Docs coverage: .sql models with no YAML definition
+  6. PK test coverage: dimensional/fact models must enforce a primary key (#2072 DoD)
+  7. YAML integrity: YAML entries for models that have no corresponding .sql file
+  8. SELECT *: models using SELECT * that hides column-level lineage
+  9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
 """
 
 from __future__ import annotations
@@ -175,6 +177,7 @@ def _check_upstream_refs(
     yaml_registry: YamlRegistry,
     manifest: ManifestRegistry | None,
     sql_models_by_name: dict[str, ParsedModel],
+    known_refable_names: set[str],
     report: ValidationReport,
 ) -> None:
     """Check that every ref() / source() used by the model can be resolved.
@@ -185,8 +188,14 @@ def _check_upstream_refs(
     correctly attribute a YAML column to a *specific* upstream ref without
     SQL-AST-level table alias analysis — any such check produces too many false
     positives when a model joins several refs and adds computed columns.
+
+    A ref to a model that does not exist at all is left to ``dangling_refs``
+    (an ERROR); this check would otherwise also warn about it — the unknown
+    column list — double-reporting the same broken ref under two checks.
     """
     for ref_name in parsed.refs:
+        if not _ref_target_exists(ref_name, known_refable_names, manifest):
+            continue  # dangling ref — reported by _check_dangling_refs as an ERROR
         upstream_cols = _resolve_upstream_columns(ref_name, yaml_registry, manifest, sql_models_by_name)
         if upstream_cols is None:
             report.add(
@@ -208,6 +217,55 @@ def _check_upstream_refs(
                 f"Cannot resolve column list for source('{source_ref}')",
                 "Run `dbt parse` to generate manifest.json and ensure sources are "
                 "properly declared for accurate upstream column resolution.",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Check 2b: Dangling ref() — target model does not exist at all
+# ---------------------------------------------------------------------------
+
+
+def _ref_target_exists(
+    ref_name: str,
+    known_refable_names: set[str],
+    manifest: ManifestRegistry | None,
+) -> bool:
+    """Return True if ``ref('ref_name')`` resolves to a real model/seed.
+
+    *known_refable_names* is the union of every ``.sql`` model stem, YAML model
+    name, and seed name in the project — the authoritative existence set even
+    when no manifest is present. The manifest (which also indexes seeds) is
+    consulted as a fallback when available.
+    """
+    if ref_name in known_refable_names:
+        return True
+    return manifest is not None and manifest.get_model(ref_name) is not None
+
+
+def _check_dangling_refs(
+    model_name: str,
+    parsed: ParsedModel,
+    known_refable_names: set[str],
+    manifest: ManifestRegistry | None,
+    report: ValidationReport,
+) -> None:
+    """Flag ``ref()`` calls whose target model/seed does not exist anywhere.
+
+    Distinct from the ``upstream_refs`` WARNING (which fires when a *known*
+    model's column list merely can't be resolved): a ref to a model that was
+    renamed or deleted is a hard breakage that ``dbt`` itself would reject at
+    parse time, so it is an ERROR. Without this, a PR that deletes a model still
+    referenced elsewhere passes ``ol-dbt validate`` with exit 0.
+    """
+    for ref_name in parsed.refs:
+        if not _ref_target_exists(ref_name, known_refable_names, manifest):
+            report.add(
+                "dangling_refs",
+                Severity.ERROR,
+                model_name,
+                f"References a model that does not exist: ref('{ref_name}')",
+                "The target has no .sql file, YAML entry, or seed in the project — it was likely "
+                "renamed or deleted. Update the ref() or restore the model.",
             )
 
 
@@ -312,6 +370,74 @@ def _check_docs_coverage(
             f"Model '{model_name}' has no YAML documentation",
             "Create or update a _*.yml schema file in the model's directory.",
         )
+
+
+# ---------------------------------------------------------------------------
+# Check 4b: Primary-key test coverage on dimensional models (#2072 DoD)
+# ---------------------------------------------------------------------------
+
+# Dimensional models that are expected to declare a primary-key uniqueness
+# guarantee. dims use a `*_pk` surrogate, facts a `*_key` surrogate; either may
+# instead enforce a composite grain via a model-level uniqueness test.
+_DIMENSIONAL_PK_PREFIXES = ("dim_", "tfact_", "afact_")
+_PK_COLUMN_SUFFIXES = ("_pk", "_key")
+# Substrings identifying a model-level composite-uniqueness test. Matched against
+# the test name so package prefixes (dbt_utils., dbt_expectations.) don't matter.
+_COMPOSITE_UNIQUENESS_TESTS = (
+    "unique_combination_of_columns",
+    "expect_compound_columns_to_be_unique",
+)
+
+
+def _check_pk_test_coverage(
+    model_name: str,
+    yaml_registry: YamlRegistry,
+    report: ValidationReport,
+) -> None:
+    """Ensure every dimensional/fact model guarantees primary-key uniqueness.
+
+    A model is covered when EITHER a surrogate-key column (``*_pk``/``*_key``)
+    carries both ``unique`` and ``not_null``, OR the model declares a
+    model-level composite-uniqueness test (``unique_combination_of_columns`` /
+    ``expect_compound_columns_to_be_unique``) for a natural composite grain.
+
+    Emitted at WARNING (not ERROR) so it surfaces the current coverage gaps
+    without breaking CI on pre-existing debt; promote to ERROR once the
+    outstanding models are covered (mirrors the dimensional_layering baseline
+    approach). High-value for the #2072 dimensional-migration DoD.
+    """
+    if not model_name.startswith(_DIMENSIONAL_PK_PREFIXES):
+        return
+    yaml_model = yaml_registry.get_model(model_name)
+    if yaml_model is None:
+        return  # no YAML to inspect — docs_coverage owns the missing-schema case
+
+    pk_columns = [c for c in yaml_model.columns.values() if c.name.endswith(_PK_COLUMN_SUFFIXES)]
+    column_covered = any({"unique", "not_null"} <= set(col.tests) for col in pk_columns)
+    model_covered = any(marker in test for test in yaml_model.tests for marker in _COMPOSITE_UNIQUENESS_TESTS)
+
+    if column_covered or model_covered:
+        return
+
+    if pk_columns:
+        detail = (
+            f"Surrogate-key column(s) {sorted(c.name for c in pk_columns)} lack both `unique` and "
+            "`not_null`, and no model-level composite-uniqueness test is declared. Add the missing "
+            "column tests, or a model-level unique_combination_of_columns test for a composite grain."
+        )
+    else:
+        detail = (
+            "No `*_pk`/`*_key` surrogate-key column and no model-level composite-uniqueness test "
+            "(unique_combination_of_columns / expect_compound_columns_to_be_unique). Add one so the "
+            "primary key is enforced."
+        )
+    report.add(
+        "pk_test_coverage",
+        Severity.WARNING,
+        model_name,
+        "Dimensional/fact model has no enforced primary-key uniqueness",
+        detail,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -678,8 +804,9 @@ def validate(
         Parameter(
             name=["--skip"],
             help=(
-                "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, "
-                "broken_ref_columns, docs_coverage, yaml_integrity, select_star, dimensional_layering."
+                "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
+                "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
+                "dimensional_layering."
             ),
         ),
     ] = None,
@@ -689,8 +816,9 @@ def validate(
             name=["--only"],
             help=(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
-                "yaml_sql_sync, upstream_refs, broken_ref_columns, docs_coverage, yaml_integrity, "
-                "select_star, dimensional_layering. Mutually exclusive with --skip."
+                "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
+                "pk_test_coverage, yaml_integrity, select_star, dimensional_layering. "
+                "Mutually exclusive with --skip."
             ),
         ),
     ] = None,
@@ -760,15 +888,17 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs seven checks:
+    Runs nine checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
-    3. broken_ref_columns    — columns read from a ref() that don't exist in the upstream output
-    4. docs_coverage         — every .sql model has a YAML definition
-    5. yaml_integrity        — every YAML model entry has a corresponding .sql file
-    6. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
-    7. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
+    3. dangling_refs         — ref() to a model/seed that does not exist (ERROR)
+    4. broken_ref_columns    — columns read from a ref() that don't exist in the upstream output
+    5. docs_coverage         — every .sql model has a YAML definition
+    6. pk_test_coverage      — dimensional/fact models declare an enforced primary key (WARNING; #2072 DoD)
+    7. yaml_integrity        — every YAML model entry has a corresponding .sql file
+    8. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
+    9. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
                                (#2072 DoD); new violations error, known ones are baselined
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
@@ -828,8 +958,10 @@ def validate(
     all_checks = {
         "yaml_sql_sync",
         "upstream_refs",
+        "dangling_refs",
         "broken_ref_columns",
         "docs_coverage",
+        "pk_test_coverage",
         "yaml_integrity",
         "select_star",
         "dimensional_layering",
@@ -1045,6 +1177,13 @@ def validate(
         )
         return
 
+    # Authoritative set of ref()-able names for dangling-ref detection: every
+    # .sql model stem, YAML-declared model, and seed. Built from the filesystem
+    # so it is complete even without a manifest (a ref to a seed would otherwise
+    # look dangling when running before `dbt parse`).
+    seed_names = {f.stem for seed_dir in (dbt_dir / "seeds",) if seed_dir.is_dir() for f in seed_dir.rglob("*.csv")}
+    known_refable_names = sql_model_names | set(yaml_registry.models) | seed_names
+
     report = ValidationReport()
 
     # Emit parse errors as validation issues for targeted models so users know
@@ -1057,8 +1196,8 @@ def validate(
                 Severity.WARNING,
                 name,
                 f"SQL parse failed: {pm.parse_error[:200]}",
-                "SQL-dependent checks (yaml_sql_sync, upstream_refs, broken_ref_columns, "
-                "select_star) are skipped for this model.",
+                "SQL-dependent checks (yaml_sql_sync, upstream_refs, dangling_refs, "
+                "broken_ref_columns, select_star) are skipped for this model.",
             )
 
     # Run checks per model
@@ -1072,7 +1211,18 @@ def validate(
             _check_yaml_sql_sync(name, yaml_registry, cast("ParsedModel", parsed), report)
 
         if "upstream_refs" not in skipped and sql_ok:
-            _check_upstream_refs(name, cast("ParsedModel", parsed), yaml_registry, manifest, sql_models_by_name, report)
+            _check_upstream_refs(
+                name,
+                cast("ParsedModel", parsed),
+                yaml_registry,
+                manifest,
+                sql_models_by_name,
+                known_refable_names,
+                report,
+            )
+
+        if "dangling_refs" not in skipped and sql_ok:
+            _check_dangling_refs(name, cast("ParsedModel", parsed), known_refable_names, manifest, report)
 
         if "broken_ref_columns" not in skipped and sql_ok:
             _check_broken_ref_columns(
@@ -1081,6 +1231,9 @@ def validate(
 
         if "docs_coverage" not in skipped:
             _check_docs_coverage(name, yaml_registry, report)
+
+        if "pk_test_coverage" not in skipped:
+            _check_pk_test_coverage(name, yaml_registry, report)
 
         if "select_star" not in skipped and sql_ok:
             _check_select_star(name, cast("ParsedModel", parsed), report)
