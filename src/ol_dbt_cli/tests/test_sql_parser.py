@@ -304,6 +304,55 @@ class TestJinjaStrippingFixes:
         assert "user_hashed_id" in result.output_columns
         assert "unique_courses" in result.output_columns
 
+    def test_block_macro_with_trailing_comma_becomes_cte(self) -> None:
+        """A CTE-injecting macro followed by a comma (`{{ macro(...) }},`) must parse.
+
+        The macro renders to `__macro__,` alone on its line inside a WITH list; the
+        bare-line rule only matches a placeholder alone on its line, so without special
+        handling the trailing comma leaves an invalid bare identifier and sqlglot fails
+        with "Could not find outermost SELECT". It is replaced with a placeholder CTE
+        (leading comma reconnects to the preceding base CTE, which carries no comma).
+        """
+        sql = (
+            "with\n"
+            "    source as (\n"
+            "        select 1 as id, 2 as user_id\n"
+            "    )\n"
+            "    {{ deduplicate_raw_table(order_by='id', partition_columns='user_id') }},\n"
+            "    cleaned as (\n"
+            "        select id as courserunenrollment_id, user_id\n"
+            "        from most_recent_source\n"
+            "    )\n"
+            "select * from cleaned"
+        )
+        result = parse_model_sql("my_model", sql)
+        assert result.parse_error is None
+        assert "courserunenrollment_id" in result.output_columns
+        assert "user_id" in result.output_columns
+
+    def test_multiline_function_over_macro_keeps_alias(self) -> None:
+        """`if(cond, a, {{ macro(...) }}) as alias` spanning lines must keep the alias.
+
+        Here `, __macro__` is the function's last argument, not a split column, and
+        `) as alias` closes the `if(` while carrying the real alias. The broken-column
+        collapse must NOT fire (it would delete the `)` and swallow the alias into the
+        function), so the output column survives.
+        """
+        sql = (
+            "with report as (select 1 as program_id, 'x' as program_title)\n"
+            "select\n"
+            "    report.program_id\n"
+            "    , if(\n"
+            "        report.program_id is not null\n"
+            "        , report.program_title\n"
+            "        , {{ generate_micromasters_program_readable_id('report.program_id', 'report.program_title') }}\n"
+            "    ) as program_readable_id\n"
+            "from report"
+        )
+        result = parse_model_sql("my_model", sql)
+        assert result.parse_error is None
+        assert "program_readable_id" in result.output_columns
+
     def test_var_in_where_clause_parseable(self) -> None:
         """A model with '{{ var(...) }}' in WHERE must parse without error."""
         sql = (
