@@ -290,16 +290,21 @@ def _analyse_model(
     manifest: ManifestRegistry | None,
     sql_models_by_name: dict[str, ParsedModel],
     repo_root: Path,
-    compiled_dir: Path | None = None,
 ) -> ImpactAlert | None:
     """Return an :class:`ImpactAlert` for *model_name* if there are column changes."""
-    # Current column set
-    current_parsed = sql_models_by_name.get(model_name)
-    if current_parsed is None:
-        try:
-            current_parsed = parse_model_file(sql_file, compiled_dir=compiled_dir)
-        except Exception:  # noqa: BLE001
-            return None
+    # Current column set — parsed from the raw working-tree SQL so it is
+    # symmetric with the base side below. Parsing the current side from compiled
+    # SQL while the base comes from raw git content produces spurious added/
+    # removed alerts for macro-generated columns (compiled sees real columns, raw
+    # sees __macro__ placeholders). Raw-parse column extraction matches compiled
+    # output for the overwhelming majority of models (the rare miss is a macro
+    # call collapsing inside a coalesce), so raw-vs-raw is accurate enough for
+    # change detection while staying symmetric — which is what avoids the false
+    # positives.
+    try:
+        current_parsed = parse_model_sql_at_content(model_name, sql_file.read_text())
+    except Exception:  # noqa: BLE001
+        return None
 
     current_cols = current_parsed.output_columns
 
@@ -824,7 +829,6 @@ def impact(
             manifest,
             sql_models_by_name,
             repo_root,
-            compiled_dir=compiled_dir,
         )
         if alert is not None:
             alerts.append(alert)

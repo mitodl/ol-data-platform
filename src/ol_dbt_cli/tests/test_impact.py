@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from ol_dbt_cli.commands.impact import AlertLevel, _analyse_macro_change, _diff_columns
+from ol_dbt_cli.commands.impact import AlertLevel, _analyse_macro_change, _analyse_model, _diff_columns
+from ol_dbt_cli.lib.git_utils import resolve_merge_base
+from ol_dbt_cli.lib.sql_parser import ParsedModel
+from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+# _git / _commit git helpers are defined at the bottom of this module.
 
 
 class TestDiffColumns:
@@ -48,6 +53,62 @@ class TestAnalyseMacroChange:
         alert = _analyse_macro_change("macros/orphan.sql", set(), manifest=None)
         assert alert.level == AlertLevel.INFO
         assert alert.downstream == []
+
+
+class TestAnalyseModelSymmetricParsing:
+    def test_no_false_positive_when_raw_unchanged_but_registry_has_compiled_cols(self, tmp_path: Path) -> None:
+        """Identical base/current raw SQL yields no alert despite compiled cols in the registry.
+
+        Regression guard for asymmetric parsing: parsing the current side from
+        compiled SQL while the base came from raw git content produced a spurious
+        'added column' alert for macro-generated columns.
+        """
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(["init", "-b", "main"], cwd=repo)
+        models = repo / "models"
+        models.mkdir()
+        sql_file = models / "m.sql"
+        sql_file.write_text("select a, b from raw\n")
+        _git(["add", "-A"], cwd=repo)
+        _git(["commit", "-m", "c0"], cwd=repo)
+
+        merge_base = resolve_merge_base("main", repo_root=repo)
+
+        # Registry entry mimics a compiled parse that expanded a macro into an
+        # extra column `c` not visible in the raw SQL.
+        registry_entry = ParsedModel(name="m", output_columns={"a", "b", "c"})
+
+        alert = _analyse_model(
+            "m",
+            sql_file,
+            merge_base,
+            YamlRegistry(),
+            None,
+            {"m": registry_entry},
+            repo,
+        )
+        assert alert is None
+
+    def test_detects_genuine_raw_column_removal(self, tmp_path: Path) -> None:
+        """A real column removal in the raw SQL is still reported."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(["init", "-b", "main"], cwd=repo)
+        models = repo / "models"
+        models.mkdir()
+        sql_file = models / "m.sql"
+        sql_file.write_text("select a, b from raw\n")
+        _git(["add", "-A"], cwd=repo)
+        _git(["commit", "-m", "c0"], cwd=repo)
+        merge_base = resolve_merge_base("main", repo_root=repo)
+
+        # Working-tree edit drops column b.
+        sql_file.write_text("select a from raw\n")
+
+        alert = _analyse_model("m", sql_file, merge_base, YamlRegistry(), None, {}, repo)
+        assert alert is not None
+        assert any(c.column == "b" and c.change_type == "removed" for c in alert.column_changes)
 
 
 class TestGetColumnsReadFromRef:
