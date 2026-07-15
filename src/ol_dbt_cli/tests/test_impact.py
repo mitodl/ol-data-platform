@@ -258,6 +258,43 @@ class TestGetColumnsReadFromRef:
         result = get_columns_read_from_ref(parsed, "stg_users")
         assert result is None
 
+    def test_subquery_column_not_attributed_to_outer_ref(self, tmp_path: Path) -> None:
+        """A column inside a WHERE subquery over a different ref is not attributed to the outer ref.
+
+        `where x in (select y from other_ref where other_col = ...)`: `other_col`
+        belongs to the inner subquery's ref, not the outer passthrough source, so it
+        must not be reported as a column read from the outer upstream. Regression for
+        the sole ERROR-level false positive in a full `ol-dbt validate` run.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = (
+            "with base as (select * from ref_reversion_version)\n"
+            "select base.version_id\n"
+            "from base\n"
+            "where base.contenttype_id in (\n"
+            "    select ct.id from ref_django_contenttype ct\n"
+            "    where ct.contenttype_full_name = 'x'\n"
+            ")"
+        )
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["reversion_version", "django_contenttype"]
+        parsed.ref_placeholder_map = {
+            "ref_reversion_version": "reversion_version",
+            "ref_django_contenttype": "django_contenttype",
+        }
+        parsed.source_path = sql_file
+
+        result = get_columns_read_from_ref(parsed, "reversion_version")
+        # version_id and contenttype_id are genuine reads from the outer ref…
+        assert result is not None
+        assert "version_id" in result
+        assert "contenttype_id" in result
+        # …but contenttype_full_name belongs to the inner subquery's ref, not this one.
+        assert "contenttype_full_name" not in result
+
     def test_detects_aliased_column_read(self, tmp_path: Path) -> None:
         """Column read from upstream but aliased to different name in output is detected."""
         from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql

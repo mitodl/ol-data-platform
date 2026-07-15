@@ -148,6 +148,21 @@ def _render_jinja(sql: str) -> tuple[str, list[str], list[str], dict[str, str], 
     template = env.from_string(sql)
     rendered = template.render()
 
+    # A block macro that injects a *CTE definition* renders as "__macro__," alone on
+    # its line inside a WITH list (e.g. `{{ deduplicate_raw_table(...) }},` between two
+    # named CTEs). The bare standalone-line rule below only matches a placeholder alone
+    # on its line, so the trailing comma would leave `__macro__,` as an invalid bare
+    # identifier in the CTE list and sqlglot fails with "Could not find outermost
+    # SELECT". Replace it with a syntactically valid placeholder CTE first so the
+    # surrounding CTE list still parses (the placeholder CTE is never referenced).
+    # The leading comma reconnects to the preceding CTE: these injector macros
+    # (e.g. deduplicate_raw_table) emit leading-comma CTEs and always follow a
+    # `source`/base CTE, which itself carries no trailing comma.
+    rendered = re.sub(
+        r"(?m)^[^\S\r\n]*(?:__macro__|__undefined__)[^\S\r\n]*,[^\S\r\n]*$",
+        ", __jinja_cte__ as (select 1),",
+        rendered,
+    )
     # Block-level macro injections (macros that inject CTE SQL fragments) render as
     # "__macro__" which occupies a statement-level position where a string literal
     # is invalid SQL.  Replace standalone __macro__ / __undefined__ lines with SQL comments.
@@ -263,7 +278,17 @@ def _collapse_broken_column_expressions(sql: str) -> str:
     Example (after)::
 
         , __jinja__ as course_level
+
+    The repair only runs when the SQL is *actually* broken. A well-formed
+    multi-line function call whose last argument is a macro placeholder —
+    ``if(cond, a, __macro__) as alias`` spanning several lines — parses cleanly,
+    and the ``, __macro__`` there is a function argument, not a split column. The
+    ``) as alias`` tokens close the ``if(`` and carry the real alias; collapsing
+    would delete that ``)`` and swallow the alias into the function, dropping the
+    output column. So we skip the collapse entirely when the input already parses.
     """
+    if _parses_cleanly(sql):
+        return sql
 
     def _replace(m: re.Match[str]) -> str:
         return f"{m.group(1)}__jinja__ as {m.group(2)}\n"
@@ -274,6 +299,15 @@ def _collapse_broken_column_expressions(sql: str) -> str:
         prev = sql
         sql = _BROKEN_COL_RE.sub(_replace, sql)
     return sql
+
+
+def _parses_cleanly(sql: str) -> bool:
+    """Return True if *sql* parses under Trino without raising a syntax error."""
+    try:
+        sqlglot.parse(sql, dialect="trino", error_level=sqlglot.ErrorLevel.RAISE)
+    except Exception:  # noqa: BLE001 — any parse error means "not clean"
+        return False
+    return True
 
 
 def strip_jinja(sql: str) -> JinjaStripResult:
@@ -579,6 +613,21 @@ def _first_non_cte_select(root: exp.Expression) -> exp.Select | None:
     for node in root.walk():
         if isinstance(node, exp.Select) and not isinstance(node.parent, exp.CTE):
             return node
+    return None
+
+
+def _nearest_enclosing_select(node: exp.Expression) -> exp.Select | None:
+    """Return the closest ``Select`` ancestor of *node*, or None if it has none.
+
+    Used to tell whether a column lives directly in a given SELECT or inside one
+    of its nested subqueries — a column in ``where x in (select y from ...)`` has
+    the inner query as its nearest enclosing Select, not the outer one.
+    """
+    parent = node.parent
+    while parent is not None:
+        if isinstance(parent, exp.Select):
+            return parent
+        parent = parent.parent
     return None
 
 
@@ -1001,14 +1050,21 @@ def get_columns_read_from_ref(
             clauses.append(where)
         for clause in clauses:
             for col_node in clause.find_all(exp.Column):
-                if col_node.args.get("table") is None:
-                    col_name = col_node.name.lower()
-                    if (
-                        col_name
-                        and col_name != "*"
-                        and col_name not in jinja_placeholders
-                        and col_name not in passthrough_computed
-                    ):
-                        cols_read.add(col_name)
+                if col_node.args.get("table") is not None:
+                    continue
+                # Prune columns that live inside a nested subquery of this clause
+                # (e.g. `where x in (select y from other_ref where z = ...)`): their
+                # nearest enclosing SELECT is the inner query, so they belong to a
+                # different ref and must not be attributed to this passthrough source.
+                if _nearest_enclosing_select(col_node) is not select_node:
+                    continue
+                col_name = col_node.name.lower()
+                if (
+                    col_name
+                    and col_name != "*"
+                    and col_name not in jinja_placeholders
+                    and col_name not in passthrough_computed
+                ):
+                    cols_read.add(col_name)
 
     return cols_read if cols_read else None
