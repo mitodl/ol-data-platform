@@ -76,8 +76,10 @@
     {#
         StarRocks: DATETIME is zone-less, and a bare cast() returns NULL for strings with
         a trailing 'Z' or '+HH:MM'/'-HH:MM' offset. Strip any such suffix and the 'T'
-        separator before casting. Non-UTC offsets are dropped rather than applied, which
-        is acceptable since this project's source data is UTC/naive.
+        separator before casting. Truncate to 26 chars to keep at most microsecond
+        precision (and avoid cast() failures on nanosecond-precision inputs). Non-UTC
+        offsets are dropped rather than applied, which is acceptable since this project's
+        source data is UTC/naive.
     #}
     cast(
         substr(
