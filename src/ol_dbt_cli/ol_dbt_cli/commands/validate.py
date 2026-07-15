@@ -179,6 +179,8 @@ def _check_upstream_refs(
     sql_models_by_name: dict[str, ParsedModel],
     known_refable_names: set[str],
     report: ValidationReport,
+    *,
+    dangling_refs_active: bool = True,
 ) -> None:
     """Check that every ref() / source() used by the model can be resolved.
 
@@ -189,12 +191,16 @@ def _check_upstream_refs(
     SQL-AST-level table alias analysis — any such check produces too many false
     positives when a model joins several refs and adds computed columns.
 
-    A ref to a model that does not exist at all is left to ``dangling_refs``
-    (an ERROR); this check would otherwise also warn about it — the unknown
-    column list — double-reporting the same broken ref under two checks.
+    A ref to a model that does not exist at all is normally left to
+    ``dangling_refs`` (an ERROR), so this check skips it to avoid double-reporting
+    the same broken ref under two checks. But when ``dangling_refs`` is NOT running
+    (``--only upstream_refs`` / ``--skip dangling_refs``), *dangling_refs_active*
+    is False and we must not skip — otherwise the dangling ref would be reported by
+    neither check. In that case it falls through and surfaces here as the
+    unresolvable-column-list WARNING.
     """
     for ref_name in parsed.refs:
-        if not _ref_target_exists(ref_name, known_refable_names, manifest):
+        if dangling_refs_active and not _ref_target_exists(ref_name, known_refable_names, manifest):
             continue  # dangling ref — reported by _check_dangling_refs as an ERROR
         upstream_cols = _resolve_upstream_columns(ref_name, yaml_registry, manifest, sql_models_by_name)
         if upstream_cols is None:
@@ -1231,6 +1237,7 @@ def validate(
                 sql_models_by_name,
                 known_refable_names,
                 report,
+                dangling_refs_active="dangling_refs" not in skipped,
             )
 
         if "dangling_refs" not in skipped and sql_ok:

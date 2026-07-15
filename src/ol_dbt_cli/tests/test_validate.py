@@ -776,6 +776,31 @@ class TestDanglingRefs:
         )
         assert not report.issues
 
+    def test_upstream_refs_reports_dangling_when_dangling_check_disabled(self) -> None:
+        """With dangling_refs disabled, a dangling ref must surface via upstream_refs.
+
+        Under `--only upstream_refs` (or `--skip dangling_refs`) the dedicated
+        dangling check does not run, so upstream_refs must not silently drop the
+        broken ref — it falls through to the unresolvable-column-list warning.
+        """
+        from ol_dbt_cli.commands.validate import _check_upstream_refs
+
+        parsed = ParsedModel(name="downstream", refs=["was_deleted"])
+        report = ValidationReport()
+        _check_upstream_refs(
+            "downstream",
+            parsed,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={},
+            known_refable_names={"other_model"},
+            report=report,
+            dangling_refs_active=False,
+        )
+        assert len(report.warnings) == 1
+        assert "was_deleted" in report.warnings[0].message
+        assert report.warnings[0].check == "upstream_refs"
+
 
 class TestPkTestCoverage:
     """Dimensional/fact models must enforce a primary key (column-level or composite)."""
