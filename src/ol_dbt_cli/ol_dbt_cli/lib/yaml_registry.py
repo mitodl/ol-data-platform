@@ -50,6 +50,8 @@ class YamlModel:
     source_file: Path
     description: str = ""
     columns: dict[str, YamlColumn] = field(default_factory=dict)
+    tests: list[str] = field(default_factory=list)
+    """Model-level test names (e.g. dbt_utils.unique_combination_of_columns)."""
 
     @property
     def column_names(self) -> set[str]:
@@ -88,16 +90,17 @@ class YamlRegistry:
         return table.column_names
 
 
-def _parse_column_tests(col_raw: dict[str, Any]) -> list[str]:
-    """Flatten a column's dbt test specs to test name strings.
+def _parse_tests(node_raw: dict[str, Any]) -> list[str]:
+    """Flatten a column's or model's dbt test specs to test name strings.
 
     Reads both the legacy ``tests:`` key and the dbt>=1.8 ``data_tests:``
     spelling (this project uses ``data_tests:`` almost exclusively). Each entry
-    is either a bare string (``unique``) or a ``{name: {...}}`` config dict.
+    is either a bare string (``unique``) or a ``{name: {...}}`` config dict — for
+    a config dict only the test name (the single key) is kept.
     """
     result: list[str] = []
     for key in ("tests", "data_tests"):
-        for entry in col_raw.get(key, []) or []:
+        for entry in node_raw.get(key, []) or []:
             if isinstance(entry, str):
                 result.append(entry)
             elif isinstance(entry, dict):
@@ -131,7 +134,7 @@ def _parse_columns(raw_columns: list[Any]) -> dict[str, YamlColumn]:
         columns[col_name] = YamlColumn(
             name=col_name,
             description=col_raw.get("description", ""),
-            tests=_parse_column_tests(col_raw),
+            tests=_parse_tests(col_raw),
         )
     return columns
 
@@ -158,6 +161,7 @@ def _parse_yaml_file(path: Path) -> tuple[list[YamlModel], list[YamlSource]]:
                     source_file=path,
                     description=model_raw.get("description", ""),
                     columns=_parse_columns(model_raw.get("columns", [])),
+                    tests=_parse_tests(model_raw),
                 )
             )
             # Also rescue nested model definitions that were accidentally placed

@@ -187,6 +187,39 @@ class TestColumnTestParsing:
         assert set(m.columns["thing_pk"].tests) == {"unique", "relationships"}
 
 
+class TestModelLevelTests:
+    """Model-level `tests:`/`data_tests:` are captured on YamlModel.tests."""
+
+    def test_model_level_composite_test_parsed(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_models.yml").write_text(
+            textwrap.dedent("""
+            version: 2
+            models:
+            - name: tfact_enrollment
+              tests:
+              - dbt_utils.unique_combination_of_columns:
+                  combination_of_columns: [a, b]
+              columns:
+              - name: enrollment_key
+            """).strip()
+        )
+        registry = build_yaml_registry(tmp_path)
+        m = registry.get_model("tfact_enrollment")
+        assert m is not None
+        assert m.tests == ["dbt_utils.unique_combination_of_columns"]
+
+    def test_no_model_tests_is_empty_list(self, tmp_path: Path) -> None:
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        (staging / "_models.yml").write_text("version: 2\nmodels:\n- name: dim_thing\n")
+        registry = build_yaml_registry(tmp_path)
+        m = registry.get_model("dim_thing")
+        assert m is not None
+        assert m.tests == []
+
+
 class TestColumnCaseNormalization:
     """YAML column names are lowercased to match manifest/sql_parser output."""
 
