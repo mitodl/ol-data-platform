@@ -817,6 +817,34 @@ class TestPkTestCoverage:
         )
         assert not self._check(model).issues
 
+    def test_smart_date_key_pk_is_clean(self) -> None:
+        # Date/time dims use a smart `date_key`/`time_key` surrogate (no entity
+        # prefix before `_key`), which must be recognized as the PK.
+        model = YamlModel(
+            name="dim_date",
+            source_file=Path("_dim_date.yml"),
+            columns={"date_key": YamlColumn(name="date_key", tests=["unique", "not_null"])},
+        )
+        assert not self._check(model).issues
+
+    def test_fk_date_key_not_treated_as_pk(self) -> None:
+        # A dim whose only unique+not_null column is a foreign key to dim_date
+        # (`*_date_key`) has no real PK guarantee and must still be flagged — the
+        # FK must not satisfy coverage nor appear as a surrogate-key candidate.
+        model = YamlModel(
+            name="dim_thing",
+            source_file=Path("_dim.yml"),
+            columns={
+                "some_attr": YamlColumn(name="some_attr"),
+                "created_date_key": YamlColumn(name="created_date_key", tests=["unique", "not_null"]),
+            },
+        )
+        report = self._check(model)
+        assert len(report.warnings) == 1
+        # The FK column must not be listed as a surrogate-key candidate.
+        assert "created_date_key" not in report.warnings[0].detail
+        assert "no model-level composite-uniqueness test" in report.warnings[0].detail.lower()
+
     def test_pk_missing_not_null_warns(self) -> None:
         model = YamlModel(
             name="dim_thing",

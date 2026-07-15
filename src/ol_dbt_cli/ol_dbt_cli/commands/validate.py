@@ -377,10 +377,17 @@ def _check_docs_coverage(
 # ---------------------------------------------------------------------------
 
 # Dimensional models that are expected to declare a primary-key uniqueness
-# guarantee. dims use a `*_pk` surrogate, facts a `*_key` surrogate; either may
-# instead enforce a composite grain via a model-level uniqueness test.
+# guarantee. dims use a `*_pk` surrogate, facts a `*_key` surrogate; the date and
+# time dims use a smart `date_key`/`time_key`. Either kind may instead enforce a
+# composite grain via a model-level uniqueness test.
 _DIMENSIONAL_PK_PREFIXES = ("dim_", "tfact_", "afact_")
 _PK_COLUMN_SUFFIXES = ("_pk", "_key")
+# Foreign keys to the date/time dimensions also end in `_key` (e.g.
+# `enrollment_date_key`, `courserun_start_time_key`) but are NOT the model's own
+# primary key. Exclude them so a dim's/fact's PK coverage is neither judged by nor
+# its warning cluttered with unrelated FK columns. The date/time dims' own PKs
+# (`date_key`, `time_key`) carry no entity prefix before `_key`, so they are kept.
+_FK_KEY_SUFFIXES = ("_date_key", "_time_key", "_datetime_key")
 # Substrings identifying a model-level composite-uniqueness test. Matched against
 # the test name so package prefixes (dbt_utils., dbt_expectations.) don't matter.
 _COMPOSITE_UNIQUENESS_TESTS = (
@@ -396,9 +403,10 @@ def _check_pk_test_coverage(
 ) -> None:
     """Ensure every dimensional/fact model guarantees primary-key uniqueness.
 
-    A model is covered when EITHER a surrogate-key column (``*_pk``/``*_key``)
-    carries both ``unique`` and ``not_null``, OR the model declares a
-    model-level composite-uniqueness test (``unique_combination_of_columns`` /
+    A model is covered when EITHER a surrogate-key column (``*_pk``/``*_key``,
+    excluding foreign keys to the date/time dims like ``*_date_key``) carries
+    both ``unique`` and ``not_null``, OR the model declares a model-level
+    composite-uniqueness test (``unique_combination_of_columns`` /
     ``expect_compound_columns_to_be_unique``) for a natural composite grain.
 
     Emitted at WARNING (not ERROR) so it surfaces the current coverage gaps
@@ -412,7 +420,11 @@ def _check_pk_test_coverage(
     if yaml_model is None:
         return  # no YAML to inspect — docs_coverage owns the missing-schema case
 
-    pk_columns = [c for c in yaml_model.columns.values() if c.name.endswith(_PK_COLUMN_SUFFIXES)]
+    pk_columns = [
+        c
+        for c in yaml_model.columns.values()
+        if c.name.endswith(_PK_COLUMN_SUFFIXES) and not c.name.endswith(_FK_KEY_SUFFIXES)
+    ]
     column_covered = any({"unique", "not_null"} <= set(col.tests) for col in pk_columns)
     model_covered = any(marker in test for test in yaml_model.tests for marker in _COMPOSITE_UNIQUENESS_TESTS)
 
