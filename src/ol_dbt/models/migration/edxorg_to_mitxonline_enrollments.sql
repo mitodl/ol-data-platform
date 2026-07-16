@@ -177,6 +177,23 @@ with combined_enrollments as (
         and courserun_platform = '{{ var("mitxonline") }}'
 )
 
+, edxorg_future_enrollment as (
+    -- For future (not-yet-run) edX.org course runs, enrollment_mode/created_on are sourced
+    -- from mitx_user_info_combo instead of mitx_person_course (via edxorg_enrollment/
+    -- combined_enrollments)
+    -- Certificate data continues to source from both tables as before.
+    select
+        cast(user_id as varchar) as user_id
+        , courserunenrollment_courserun_readable_id as courserun_readable_id
+        , courserunenrollment_created_on
+        , courserunenrollment_mode as courserunenrollment_enrollment_mode
+        , user_email
+    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and courserunenrollment_courserun_readable_id is not null
+)
+
 , product_versions as (
     select version_id, version_object_id
     from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
@@ -215,7 +232,28 @@ with combined_enrollments as (
     from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
 )
 
+, future_run_user_info_combo_enrollments as (
+    -- mitx_user_info_combo rows for the same future-run course list. mitx_person_course
+    -- (combined_enrollments' upstream source) may not have activity data yet for a learner who
+    -- has enrolled but not yet interacted with a not-yet-started course, so this is the only
+    -- place those enrollments exist.
+    select
+        edxorg_future_enrollment.user_id
+        , edxorg_future_enrollment.courserun_readable_id
+        , edxorg_future_enrollment.courserunenrollment_created_on
+        , edxorg_future_enrollment.courserunenrollment_enrollment_mode
+        , edxorg_future_enrollment.user_email
+    from edxorg_future_enrollment
+    inner join future_run_id_mapping
+        on {{ format_course_id('edxorg_future_enrollment.courserun_readable_id', false) }}
+            = future_run_id_mapping.edxorg_courserun_readable_id
+    -- Exclude retired users
+    where edxorg_future_enrollment.user_email not like 'retired__user%'
+)
+
 , edxorg_enrollment as (
+    -- Certificate-bearing enrollments: the course already ran, so future-run overrides never
+    -- apply here (courseruncertificate_created_on is not null below).
     select
         combined_enrollments.courserunenrollment_created_on
         , combined_enrollments.courserunenrollment_enrollment_mode
@@ -230,6 +268,7 @@ with combined_enrollments as (
     left join edxorg_runs
        on combined_enrollments.courserun_readable_id = edxorg_runs.courserun_readable_id
     where combined_enrollments.platform = '{{ var("edxorg") }}'
+    and combined_enrollments.courseruncertificate_created_on is not null
     --- exclude DEDP Micromasters program courses as those are already migrated
     and (edxorg_runs.micromasters_program_id != {{ var("dedp_micromasters_program_id") }}
     or edxorg_runs.micromasters_program_id is null)
@@ -246,6 +285,30 @@ with combined_enrollments as (
     -- Exclude retired users
     and combined_enrollments.user_email not like 'retired__user%'
     and combined_enrollments.user_username not like 'retired__user%'
+
+    union all
+
+    -- Future (not-yet-run) enrollments: sourced entirely from mitx_user_info_combo
+    -- (edxorg_future_enrollment/future_run_user_info_combo_enrollments) -- mitx_person_course
+    -- (combined_enrollments' upstream source) may lack activity data for a learner who enrolled
+    -- but hasn't interacted with a not-yet-started course yet, so this doesn't require the row to
+    -- already exist in combined_enrollments. This is independent of the certificate branch above:
+    -- a user can have both a certificate row (from combined_enrollments) and a future-enrollment
+    -- row (from mitx_user_info_combo) for the same course, e.g. once a course starts issuing
+    -- certificates while briefly still on the hardcoded future-run list -- see the
+    -- courseruncertificate_created_on-inclusive uniqueness test on this model.
+    select
+        future_run_user_info_combo_enrollments.courserunenrollment_created_on
+        , future_run_user_info_combo_enrollments.courserunenrollment_enrollment_mode
+        , future_run_user_info_combo_enrollments.user_id
+        , {{ format_course_id('future_run_user_info_combo_enrollments.courserun_readable_id', false) }}
+            as courserun_readable_id
+        , null as course_readable_id
+        , future_run_user_info_combo_enrollments.user_email
+        , null as courseruncertificate_created_on
+        , null as courserungrade_grade
+        , null as courserungrade_is_passing
+    from future_run_user_info_combo_enrollments
 )
 
 select
@@ -273,11 +336,13 @@ select
     , case
         when future_run_id_mapping.edxorg_courserun_readable_id is not null
             and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
+            and edxorg_enrollment.courseruncertificate_created_on is null
             then courserun_product_version.product_version_id
     end as product_version_id
     , case
         when future_run_id_mapping.edxorg_courserun_readable_id is not null
             and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
+            and edxorg_enrollment.courseruncertificate_created_on is null
             then purchased_on_edx_discount.discount_id
     end as discount_id
     , openedx_users.openedxuser_has_been_synced
