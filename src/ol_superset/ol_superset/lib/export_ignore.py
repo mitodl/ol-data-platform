@@ -83,9 +83,12 @@ def plan_prune(assets_dir: Path, patterns: list[str]) -> PruneReport:
     A dashboard is removed when a pattern matches its title, UUID, or filename.
     A chart is removed when a pattern matches its name, UUID, or filename
     directly, OR when it is orphaned — every dashboard that references it is
-    itself removed and at least one such dashboard exists. Charts referenced by
-    a surviving dashboard are always kept, even if orphaned charts of the same
-    name would otherwise match.
+    itself removed and at least one such dashboard exists.
+
+    A chart still referenced by a surviving (non-removed) dashboard is always
+    kept, even when it directly matches a pattern: pruning it would leave a
+    dangling Dashboard -> Chart reference that fails ``ol-superset validate``.
+    Remove the referencing dashboard too if such a chart must go.
     """
     report = PruneReport()
     if not patterns:
@@ -112,13 +115,18 @@ def plan_prune(assets_dir: Path, patterns: list[str]) -> PruneReport:
         charts_on_removed.update(index.dashboards[uuid].chart_uuids)
 
     for uuid, chart in index.charts.items():
+        # A chart still referenced by a surviving dashboard is always kept —
+        # removing it would leave a dangling Dashboard -> Chart reference that
+        # fails `ol-superset validate` and breaks bundle imports. This override
+        # wins even over a direct pattern match.
+        if surviving_refs.get(uuid, 0) > 0:
+            continue
         direct = _matches(patterns, chart.name, uuid, chart.path.name)
-        orphaned = uuid in charts_on_removed and surviving_refs.get(uuid, 0) == 0
-        if direct:
+        orphaned = uuid in charts_on_removed
+        if direct or orphaned:
             report.removed_charts.append(chart.path)
-        elif orphaned:
-            report.removed_charts.append(chart.path)
-            report.orphaned_charts.append(chart.path)
+            if orphaned and not direct:
+                report.orphaned_charts.append(chart.path)
 
     return report
 

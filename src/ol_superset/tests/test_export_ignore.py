@@ -107,6 +107,30 @@ def test_orphan_only_when_all_parents_removed(tmp_path: Path) -> None:
     assert report.orphaned_charts[0].name == "Benign_benign.yaml"
 
 
+def test_surviving_reference_keeps_directly_matched_chart(tmp_path: Path) -> None:
+    # A chart whose own name matches the pattern but which is still referenced
+    # by a surviving dashboard must be KEPT — pruning it would leave a dangling
+    # Dashboard -> Chart reference and fail `ol-superset validate`.
+    base = tmp_path / "assets"
+    _write_yaml(
+        base / "dashboards" / "MM_Fin_ignored_d.yaml",
+        _dashboard("d_ignored", "MM_Fin_Board", ["c_match"]),
+    )
+    _write_yaml(
+        base / "dashboards" / "Keep_d.yaml",
+        _dashboard("d_keep", "Keep Me", ["c_match"]),
+    )
+    _write_yaml(
+        base / "charts" / "MM_Fin_Shared_c_match.yaml",
+        _chart("c_match", "MM_Fin_Shared_Chart"),
+    )
+    report = plan_prune(base, ["MM_Fin_*"])
+    removed = {p.name for p in report.removed_charts}
+    # Ignored dashboard removed, but the shared chart survives with its keeper.
+    assert {p.name for p in report.removed_dashboards} == {"MM_Fin_ignored_d.yaml"}
+    assert "MM_Fin_Shared_c_match.yaml" not in removed
+
+
 def test_match_by_uuid(tmp_path: Path) -> None:
     base = tmp_path / "assets"
     _write_yaml(
