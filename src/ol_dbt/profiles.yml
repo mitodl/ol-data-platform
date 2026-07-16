@@ -108,8 +108,8 @@ open_learning:
       host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
       port: 9030
       database: default_catalog
-      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}_{{ var("schema_suffix")
-        }}'
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}_{{ var("schema_suffix",
+        "dev") }}'
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
       threads: 4
@@ -119,8 +119,8 @@ open_learning:
         }}'
       port: 9030
       database: default_catalog
-      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}_{{ var("schema_suffix")
-        }}'
+      schema: '{{ env_var("DBT_STARROCKS_SCHEMA", "b2b_analytics") }}_{{ var("schema_suffix",
+        "dev") }}'
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
       threads: 4
