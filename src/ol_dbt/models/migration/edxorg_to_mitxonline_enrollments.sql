@@ -301,16 +301,14 @@ with combined_enrollments as (
         future_run_user_info_combo_enrollments.courserunenrollment_created_on
         , future_run_user_info_combo_enrollments.courserunenrollment_enrollment_mode
         , future_run_user_info_combo_enrollments.user_id
-        , future_run_id_mapping.edxorg_courserun_readable_id as courserun_readable_id
+        , {{ format_course_id('future_run_user_info_combo_enrollments.courserun_readable_id', false) }}
+            as courserun_readable_id
         , null as course_readable_id
         , future_run_user_info_combo_enrollments.user_email
         , null as courseruncertificate_created_on
         , null as courserungrade_grade
         , null as courserungrade_is_passing
     from future_run_user_info_combo_enrollments
-    inner join future_run_id_mapping
-        on {{ format_course_id('future_run_user_info_combo_enrollments.courserun_readable_id', false) }}
-            = future_run_id_mapping.edxorg_courserun_readable_id
 )
 
 select
