@@ -111,6 +111,18 @@ with combined_enrollments as (
     from mitxonline_certificate_revision
 )
 
+, migrated_certificate_revision as (
+    -- Fallback source for certificate_page_revision_id when signatory names don't match
+    -- exactly between edX and MITx Online: use the highest wagtailcore_revision_id recorded
+    -- for any certificate on the same course run in MITx Online, one row per courserun_id.
+    select
+        courserun_id
+        , max(wagtailcore_revision_id) as wagtailcore_revision_id
+    from {{ ref('stg__mitxonline__app__postgres__courses_courseruncertificate') }}
+    where wagtailcore_revision_id is not null
+    group by courserun_id
+)
+
 , edx_to_mitxonline_certificate_revision as (
     select distinct
         edx_signatories.courserun_readable_id
@@ -331,7 +343,10 @@ select
     , edxorg_enrollment.courserungrade_is_passing
     , edxorg_enrollment.courserunenrollment_created_on
     , edxorg_enrollment.courseruncertificate_created_on
-    , edx_to_mitxonline_certificate_revision.wagtailcore_revision_id as certificate_page_revision_id
+    , coalesce(
+        edx_to_mitxonline_certificate_revision.wagtailcore_revision_id
+        , migrated_certificate_revision.wagtailcore_revision_id
+     ) as certificate_page_revision_id
     , edx_signatories.signatory_names
     , case
         when future_run_id_mapping.edxorg_courserun_readable_id is not null
@@ -376,6 +391,8 @@ left join mitxonline_enrollment as mitxonline_enrollment_by_userid
     ) = mitxonline_enrollment_by_userid.courserun_readable_id
 left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
+left join migrated_certificate_revision
+    on mitxonline__course_runs.courserun_id = migrated_certificate_revision.courserun_id
 left join edx_signatories
     on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
 left join retired_users
