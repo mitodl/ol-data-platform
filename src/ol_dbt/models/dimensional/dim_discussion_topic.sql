@@ -20,7 +20,7 @@ with discussion_component_topics as (
             order by {{ json_query_string('cast(t.value as varchar)', "'$.sort_key'") }} asc -- noqa
         ) as row_num
     from {{ ref('dim_course_content') }} as course
-    cross join {{ unnest_json_map("json_extract(course.block_metadata, '$.discussion_topics')", 't', 'key', 'value') }} -- noqa
+    cross join {{ unnest_json_map(json_extract_value('course.block_metadata', "'$.discussion_topics'"), 't', 'key', 'value') }} -- noqa
     where course.block_category = 'course'
     and course.is_latest = true
 
