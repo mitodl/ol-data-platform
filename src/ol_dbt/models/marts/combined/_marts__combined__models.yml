@@ -558,8 +558,9 @@ models:
     description: str, if the learner has taken a course with the word capstone in
       the title then it will be Y otherwise the value will be N
   - name: program_completion_days
-    description: int, number of days between the first course start date and the program
-      completion certificate date
+    description: int, number of days between the first verified course enrollment's
+      start date and the program completion certificate date. Ignores unverified/audit
+      enrollments when determining the start date.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

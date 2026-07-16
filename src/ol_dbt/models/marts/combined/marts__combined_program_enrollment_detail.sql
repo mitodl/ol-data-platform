@@ -295,8 +295,12 @@ with mitxpro__programenrollments as (
             as programcertificate_created_on_date
         , sum(case when upper(combined_enrollments.course_title) like '%CAPSTONE%' then 1 else 0 end)
             as capstone_sum
-        , min(cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date))
-            as first_courserun_start_on_date
+        , min(
+            case
+                when combined_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                then cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date)
+            end
+        ) as first_courserun_start_on_date
         , count(distinct combined_enrollments.course_readable_id) as unique_courses_taken_in_program
     from combined_programs
     left join courses_in_programs
