@@ -107,7 +107,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["user_email", "courserun_readable_id"]
+        column_list: ["user_email", "courserun_readable_id", "courseruncertificate_created_on"]
 
 
 - name: edxorg_to_mitxonline_users
