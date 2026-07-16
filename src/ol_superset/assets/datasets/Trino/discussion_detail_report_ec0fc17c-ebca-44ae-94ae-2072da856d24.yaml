@@ -152,12 +152,21 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_reporting
-sql: "select\n    de.platform,\n    cr.course_title,\n    de.courserun_readable_id,\n\
-  \    de.event_type,\n    de.post_title,\n    de.post_content,\n    de.discussion_component_name,\n\
-  \    de.page_url,\n    de.event_timestamp\nfrom ol_warehouse_production_dimensional.tfact_discussion_events\
-  \ as de\ninner join ol_warehouse_production_intermediate.int__combined__course_runs\
-  \ as cr\n    on de.courserun_readable_id = cr.courserun_readable_id\n    and de.platform\
-  \ = cr.platform\n"
+sql: |
+  select
+      de.platform,
+      cr.course_title,
+      de.courserun_readable_id,
+      de.event_type,
+      de.post_title,
+      de.post_content,
+      de.discussion_component_name,
+      de.page_url,
+      de.event_timestamp
+  from ol_warehouse_production_dimensional.tfact_discussion_events as de
+  inner join ol_warehouse_production_intermediate.int__combined__course_runs as cr
+      on de.courserun_readable_id = cr.courserun_readable_id
+      and de.platform = cr.platform
 table_name: discussion_detail_report
 template_params: null
 uuid: ec0fc17c-ebca-44ae-94ae-2072da856d24
