@@ -35,10 +35,10 @@ def test_ci_connects_directly_like_production() -> None:
     assert _ENVS["ci"]["port_forward"] is False
 
 
-def test_dev_and_ci_targets_are_schema_suffix_namespaced() -> None:
-    """dev/ci write to namespaced schemas so concurrent runs don't collide.
+def test_qa_and_ci_targets_are_schema_suffix_namespaced() -> None:
+    """qa/ci write to namespaced schemas so concurrent runs don't collide.
 
-    Unlike qa/production, which are the bare shared-schema targets used by
+    Unlike production, which is the bare shared-schema target used by
     scheduled/production builds.
     """
     assert _ENVS["qa"]["dbt_target"] != _ENVS["production"]["dbt_target"]
