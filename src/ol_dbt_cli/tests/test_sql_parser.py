@@ -353,6 +353,36 @@ class TestJinjaStrippingFixes:
         assert result.parse_error is None
         assert "program_readable_id" in result.output_columns
 
+    def test_macro_as_first_function_argument_not_treated_as_cte(self) -> None:
+        r"""A macro call as a function argument must not be treated as a CTE placeholder.
+
+        `coalesce(\n    {{ macro(...) }},\n    regexp_extract(...)\n)` renders the
+        macro call to `__macro__,` alone on its line — the exact same shape the
+        trailing-comma-CTE rule (for `{{ deduplicate_raw_table(...) }},` between two
+        named CTEs) matches on. But here the placeholder is nested inside `coalesce(`'s
+        parens, not sitting between two top-level CTEs. Rewriting it as
+        `, __jinja_cte__ as (select 1),` corrupts the argument list; sqlglot's
+        error_level=IGNORE then silently degrades to a stray `select 1`, so the model
+        "parses" but yields zero output columns — a false-positive "columns missing
+        from SQL" error (tfact_chatbot_events regression). The two shapes are told
+        apart by the character preceding the placeholder line: a genuine CTE-position
+        macro always follows the closing `)` of the previous CTE, while a
+        function-argument macro follows the call's opening `(`.
+        """
+        sql = (
+            "with report as (select 1 as event_id, 'x' as event_value)\n"
+            "select\n"
+            "    report.event_id\n"
+            "    , coalesce(\n"
+            "        {{ json_query_string('event_value', \"'$.thread_id'\") }},\n"
+            "        regexp_extract(report.event_value, 'x', 1)\n"
+            "    ) as thread_id\n"
+            "from report"
+        )
+        result = parse_model_sql("my_model", sql)
+        assert result.parse_error is None
+        assert result.output_columns == {"event_id", "thread_id"}
+
     def test_var_in_where_clause_parseable(self) -> None:
         """A model with '{{ var(...) }}' in WHERE must parse without error."""
         sql = (

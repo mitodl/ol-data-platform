@@ -158,9 +158,27 @@ def _render_jinja(sql: str) -> tuple[str, list[str], list[str], dict[str, str], 
     # The leading comma reconnects to the preceding CTE: these injector macros
     # (e.g. deduplicate_raw_table) emit leading-comma CTEs and always follow a
     # `source`/base CTE, which itself carries no trailing comma.
+    #
+    # The same "placeholder alone on its line, trailing comma" shape also occurs when
+    # a macro call is simply the *first argument* of a multi-line function call, e.g.
+    # ``coalesce(\n    {{ macro(...) }},\n    regexp_extract(...)\n)``. There the
+    # placeholder is not a CTE at all — it is nested inside the call's parens — and
+    # rewriting it as a CTE definition corrupts the argument list. sqlglot's
+    # error_level=IGNORE then degrades gracefully to a stray ``select 1``, so the
+    # model appears to parse cleanly but yields zero output columns (a false-positive
+    # "columns missing from SQL" error). Distinguish the two shapes by inspecting the
+    # nearest preceding non-whitespace character: a genuine CTE-position macro always
+    # immediately follows the closing ``)`` of the previous CTE's body, whereas a macro
+    # used as a function argument follows an opening ``(`` or a sibling-argument ``,``.
+    def _replace_trailing_comma_macro(m: re.Match[str]) -> str:
+        prefix = rendered[: m.start()].rstrip()
+        if prefix.endswith(")"):
+            return ", __jinja_cte__ as (select 1),"
+        return m.group(0)  # function-argument position — leave the bare placeholder as-is
+
     rendered = re.sub(
         r"(?m)^[^\S\r\n]*(?:__macro__|__undefined__)[^\S\r\n]*,[^\S\r\n]*$",
-        ", __jinja_cte__ as (select 1),",
+        _replace_trailing_comma_macro,
         rendered,
     )
     # Block-level macro injections (macros that inject CTE SQL fragments) render as
