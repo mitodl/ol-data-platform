@@ -43,6 +43,7 @@ from ol_dbt_cli.lib.git_utils import (
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
+    consumed_columns_via_scope,
     find_compiled_dir,
     get_columns_read_from_ref,
     parse_model_file,
@@ -325,6 +326,39 @@ def _resolve_upstream_sql_columns(
     return combined if combined else None
 
 
+def _build_upstream_columns(
+    parsed: ParsedModel,
+    yaml_registry: YamlRegistry,
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+) -> dict[str, set[str]]:
+    """Map every ref/source *parsed* reads to its known column set.
+
+    Uses the same SQL-first resolution as :func:`_resolve_upstream_sql_columns`
+    for refs (most accurate for broken-column comparison) and manifest→YAML for
+    sources. Keyed by ref model name and ``source.table`` key so the result can
+    seed :func:`consumed_columns_via_scope`'s qualify schema. Refs/sources whose
+    columns are unknown are simply omitted.
+    """
+    upstream: dict[str, set[str]] = {}
+    for ref_name in parsed.refs:
+        cols = _resolve_upstream_sql_columns(ref_name, sql_models_by_name, manifest, yaml_registry)
+        if cols:
+            upstream[ref_name] = cols
+    for source_key in parsed.source_refs:
+        source_cols: set[str] | None = None
+        if manifest is not None:
+            source_model = manifest.get_source(source_key)
+            if source_model is not None and source_model.columns:
+                source_cols = source_model.column_names
+        if not source_cols and "." in source_key:
+            source_name, table_name = source_key.split(".", 1)
+            source_cols = yaml_registry.get_source_columns(source_name, table_name) or None
+        if source_cols:
+            upstream[source_key] = source_cols
+    return upstream
+
+
 def _check_broken_ref_columns(
     model_name: str,
     parsed: ParsedModel,
@@ -339,19 +373,34 @@ def _check_broken_ref_columns(
     upstream ref, then compares against that upstream's SQL output columns.
     Reports an ERROR for each column referenced that is absent from the upstream.
 
+    Column attribution uses the hand-rolled passthrough-alias heuristic first
+    (:func:`get_columns_read_from_ref`); when that bails — the downstream reads the
+    ref through a JOIN or a subquery ``FROM``, where bare-column attribution is
+    ambiguous — it falls back to sqlglot scope resolution
+    (:func:`consumed_columns_via_scope`), which anchors every column to its source
+    relation across the full JOIN/CTE graph. The fallback recovers coverage on the
+    ~7% of ref edges the heuristic skips and can still surface a broken column read
+    through a JOIN. It never mis-attributes a foreign column to this ref, so it
+    introduces no false positives (see that function's contract).
+
     Skips silently when:
     - The downstream SQL cannot be parsed (no compiled/raw SQL path available).
     - The upstream column set is unknown (unresolved SELECT *, no manifest/YAML).
-    - No columns can be attributed to a specific upstream ref.
+    - No columns can be attributed to a specific upstream ref by either method.
     """
+    upstream_columns_by_name = _build_upstream_columns(parsed, yaml_registry, manifest, sql_models_by_name)
     for ref_name in parsed.refs:
-        upstream_cols = _resolve_upstream_sql_columns(ref_name, sql_models_by_name, manifest, yaml_registry)
+        upstream_cols = upstream_columns_by_name.get(ref_name)
         if upstream_cols is None:
             continue  # can't determine upstream schema — skip
 
         consumed = get_columns_read_from_ref(parsed, ref_name)
         if consumed is None:
-            continue  # can't determine what downstream reads — skip
+            # Heuristic bailed (JOIN / subquery FROM). Try sqlglot scope resolution,
+            # which needs every upstream's schema to anchor columns across the JOIN.
+            consumed = consumed_columns_via_scope(parsed, ref_name, upstream_columns_by_name)
+        if consumed is None:
+            continue  # neither method could determine what downstream reads — skip
 
         broken = consumed - upstream_cols
         if broken:

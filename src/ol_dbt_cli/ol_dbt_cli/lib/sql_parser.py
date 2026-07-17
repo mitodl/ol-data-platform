@@ -16,6 +16,7 @@ import markupsafe
 import sqlglot
 import sqlglot.expressions as exp
 from sqlglot.optimizer.qualify import qualify
+from sqlglot.optimizer.scope import traverse_scope
 
 # ---------------------------------------------------------------------------
 # Jinja2 rendering (primary path)
@@ -1185,3 +1186,105 @@ def get_columns_read_from_ref(
                     cols_read.add(col_name)
 
     return cols_read if cols_read else None
+
+
+def consumed_columns_via_scope(
+    downstream_parsed: ParsedModel,
+    upstream_name: str,
+    upstream_columns: dict[str, set[str]],
+) -> set[str] | None:
+    """Attribute the columns read from ``ref(upstream_name)`` via sqlglot scopes.
+
+    A precise, join-aware complement to :func:`get_columns_read_from_ref`. The
+    hand-rolled heuristic bails (returns ``None``) when the downstream reads the
+    ref through a JOIN to another table or through a subquery ``FROM`` — the two
+    shapes where bare-column attribution is ambiguous without full alias
+    resolution. sqlglot's ``qualify()`` (with ``allow_partial_qualification`` so
+    that a genuinely-broken column does not abort the whole pass) resolves every
+    column reference to its source relation across the CTE/subquery/JOIN graph;
+    :func:`traverse_scope` then lets us collect exactly the columns whose resolved
+    source is *upstream_name*'s ``ref_`` placeholder — including columns used only
+    in ``WHERE``/``JOIN``/``GROUP BY`` and columns that don't exist upstream (so a
+    broken reference through a JOIN is still catchable).
+
+    *upstream_columns* maps a ref model name / ``source.table`` key to its known
+    columns (same shape as :func:`expand_star_with_schema`). The target ref's own
+    schema must be known — without it qualify() cannot anchor the placeholder as a
+    base relation, so ``None`` is returned.
+
+    Only columns whose resolved source is *exactly* the target placeholder's base
+    table are collected: an ambiguous bare column that qualify() cannot pin to the
+    ref is dropped rather than guessed. The result is therefore safe to diff
+    against the upstream schema — it may under-report, but it never mis-attributes
+    a foreign column to this ref (no false ``broken_ref_columns``).
+
+    Returns the consumed-column set, or ``None`` when the ref is not read, the raw
+    SQL is unavailable, the target schema is unknown, or ``qualify()`` fails.
+    """
+    if upstream_name not in downstream_parsed.refs:
+        return None
+
+    ref_placeholder = next(
+        (k for k, v in downstream_parsed.ref_placeholder_map.items() if v == upstream_name),
+        None,
+    )
+    if ref_placeholder is None:
+        return None
+
+    # Placeholder identifiers only appear in the raw (Jinja) SQL; compiled SQL uses
+    # physical relation names with no reliable ref_/source_ prefix (see
+    # get_columns_read_from_ref / resolve_star_columns for the same constraint).
+    # Use the placeholder maps already on the model (they align with the tokens
+    # strip_jinja emits into clean_sql) rather than re-deriving them, so a model
+    # whose SQL is already placeholder-substituted still resolves.
+    sql_path = downstream_parsed.source_path
+    if sql_path is None or not sql_path.exists():
+        return None
+
+    try:
+        clean_sql = strip_jinja(sql_path.read_text()).clean_sql
+    except Exception:  # noqa: BLE001
+        return None
+
+    schema: dict[str, object] = {}
+    for placeholder, model_name in downstream_parsed.ref_placeholder_map.items():
+        cols = upstream_columns.get(model_name)
+        if cols:
+            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+    for placeholder, source_key in downstream_parsed.source_placeholder_map.items():
+        cols = upstream_columns.get(source_key)
+        if cols:
+            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+    # The target ref must be anchorable: without its schema, qualify() leaves its
+    # columns unqualified and nothing can be attributed to it.
+    if ref_placeholder not in schema:
+        return None
+
+    try:
+        statements = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
+        ast = next((s for s in reversed(statements) if s is not None), None)
+        if ast is None:
+            return None
+        qualified = qualify(
+            ast,
+            schema=schema,
+            dialect="trino",
+            validate_qualify_columns=False,
+            allow_partial_qualification=True,
+        )
+    except Exception:  # noqa: BLE001 — any parse/optimizer failure means "can't attribute"
+        return None
+
+    cols_read: set[str] = set()
+    for scope in traverse_scope(qualified):
+        for column in scope.columns:
+            qualifier = column.table
+            if not qualifier:
+                continue
+            source = scope.sources.get(qualifier)
+            if isinstance(source, exp.Table) and source.name == ref_placeholder:
+                col_name = column.name.lower()
+                if col_name and col_name != "*":
+                    cols_read.add(col_name)
+
+    return cols_read or None
