@@ -595,7 +595,8 @@ models:
   - name: product_id
     description: int, primary key from ecommerce_product on MITx Online or xPro
   - name: product_type
-    description: str, either 'course run' or 'program run'
+    description: str, either 'course run', 'program' (MITx Online programs), or 'program
+      run' (xPro programs)
   - name: product_description
     description: str, product description
   - name: list_price
