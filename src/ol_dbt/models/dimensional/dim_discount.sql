@@ -36,7 +36,11 @@ with mitxonline_discounts as (
 
     select
         'mitxpro' as platform_code
-        , coupon_id as source_discount_id
+        -- b2b bulk-purchase coupons have no coupon_id (see int__mitxpro__ecommerce_allcoupons,
+        -- where it's explicitly nulled for b2b rows); their real identifier is b2bcoupon_id.
+        -- Negate it so it can't collide with a coupon_id from the unrelated ecommerce_coupon
+        -- table sharing the same numeric range, while keeping source_discount_id an integer.
+        , coalesce(coupon_id, -b2bcoupon_id) as source_discount_id
         , coupon_code as discount_code
         , discount_type
         , case
@@ -71,8 +75,28 @@ with mitxonline_discounts as (
     from micromasters_discounts
 )
 
+-- A discount can be re-saved under a new discount_code over its lifetime, so
+-- dedupe to one row per (source_discount_id, platform_code), keeping the most
+-- recently updated code, to match the documented grain and prevent downstream
+-- fact joins keyed on (source_discount_id, platform_code) from fanning out.
+, deduped_discounts as (
+    select
+        *
+        , row_number() over (
+            partition by platform_code, source_discount_id
+            -- discount_code as a final tie-breaker keeps the pick deterministic when
+            -- updated_on/created_on are identical (or both null) across duplicate rows
+            order by updated_on desc nulls last, created_on desc nulls last, discount_code desc nulls last
+        ) as _row_num
+    from combined_discounts
+)
+
+-- This table is full-refresh (materialized='table' above), so every run regenerates
+-- discount_pk for all rows. Changing this hash's inputs requires a full-refresh of
+-- incremental consumers (e.g. tfact_order.discount_fk) in the same deploy, or their
+-- historical rows are left pointing at pks that no longer exist.
 select
-    {{ dbt_utils.generate_surrogate_key(['cast(source_discount_id as varchar)', 'discount_code', 'platform_code']) }} as discount_pk
+    {{ dbt_utils.generate_surrogate_key(['cast(source_discount_id as varchar)', 'platform_code']) }} as discount_pk
     , platform_code
     , source_discount_id
     , discount_code
@@ -85,4 +109,5 @@ select
     , expires_on
     , created_on
     , updated_on
-from combined_discounts
+from deduped_discounts
+where _row_num = 1

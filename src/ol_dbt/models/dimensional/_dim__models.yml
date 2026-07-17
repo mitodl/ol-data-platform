@@ -1043,6 +1043,11 @@ models:
   description: Dimension table combining discount/coupon records across MITxOnline
     and MITxPro platforms. Each row represents a unique discount or coupon identified
     by a surrogate key derived from the source platform and source discount ID.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - source_discount_id
+      - platform_code
   columns:
   - name: discount_pk
     description: string, surrogate primary key for this table, generated from source_discount_id
@@ -1055,9 +1060,13 @@ models:
     tests:
     - not_null
   - name: source_discount_id
-    description: integer, original discount or coupon ID from the source platform
+    description: integer, original discount or coupon ID from the source platform.
+      For mitxpro b2b bulk-purchase coupons (which have no coupon_id), this is the
+      negated b2bcoupon_id instead, to keep it distinct from regular coupon IDs.
   - name: discount_code
-    description: string, the discount or coupon code used at checkout
+    description: string, the discount or coupon code used at checkout. If a discount's
+      code was changed over its lifetime, this reflects the most recently updated
+      code on file, not necessarily the code used on every order that redeemed it
   - name: discount_type
     description: string, type of discount. e.g. percent-off, dollars-off, fixed-price
   - name: discount_amount
