@@ -39,6 +39,8 @@ from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
     dbt_docs_artifacts_job,
+    dbt_source_freshness_job,
+    dimensional_schema_change_checks,
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
@@ -379,6 +381,19 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Run dbt source freshness daily at 06:00 UTC, chosen to fall after the nightly
+# ingest and dbt build window (the dbt layer materializes around 02:00 UTC),
+# publishing sources.json to S3 for OpenMetadata. Default STOPPED; enable in
+# production after the first manual run confirms the configured loaded_at_field
+# expressions resolve against the warehouse.
+dbt_source_freshness_schedule = ScheduleDefinition(
+    name="dbt_source_freshness_daily",
+    job=dbt_source_freshness_job,
+    cron_schedule="0 6 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -440,6 +455,7 @@ defs = Definitions(
         iceberg_raw_layer_maintenance,
         refresh_starrocks_analytics_mvs,
     ],
+    asset_checks=[*dimensional_schema_change_checks],
     resources=resources_dict,
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
@@ -459,6 +475,7 @@ defs = Definitions(
         *airbyte_asset_jobs,
         iceberg_snapshot_pointer_repair_job,
         dbt_docs_artifacts_job,
+        dbt_source_freshness_job,
     ],
     schedules=[
         *airbyte_update_schedules,
@@ -467,5 +484,6 @@ defs = Definitions(
         iceberg_raw_maintenance_schedule,
         dbt_docs_artifacts_schedule,
         b2b_analytics_starrocks_schedule,
+        dbt_source_freshness_schedule,
     ],
 )
