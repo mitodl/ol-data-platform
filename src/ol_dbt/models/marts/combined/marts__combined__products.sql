@@ -14,6 +14,23 @@ with mitxonline_product as (
     select * from {{ ref('int__mitxonline__programs') }}
 )
 
+, mitxonline_program_product as (
+    -- A program can have multiple ecommerce product rows (e.g. superseded price
+    -- changes). Keep one per program, preferring the active product.
+    select
+        product_id
+        , product_price
+        , product_is_active
+        , product_created_on
+        , program_readable_id
+        , row_number() over (
+            partition by program_readable_id
+            order by product_is_active desc, product_created_on desc
+        ) as _row_num
+    from mitxonline_product
+    where program_readable_id is not null
+)
+
 , mitxpro_product as (
     select * from {{ ref('int__mitxpro__ecommerce_product') }}
 )
@@ -80,13 +97,13 @@ with mitxonline_product as (
     union all
 
     select
-        null as product_id
+        mitxonline_program_product.product_id
         , 'program' as product_type
         , mitxonline_programs.program_readable_id as product_readable_id
-        , null as list_price
+        , mitxonline_program_product.product_price as list_price
         , mitxonline_programs.program_description as product_description
-        , mitxonline_product.product_is_active
-        , null as product_created_on
+        , mitxonline_program_product.product_is_active
+        , mitxonline_program_product.product_created_on
         , mitxonline_programs.program_title as product_name
         , null as start_on
         , null as end_on
@@ -105,9 +122,9 @@ with mitxonline_product as (
             , false
         ) as is_live
     from mitxonline_programs
-    left join mitxonline_product
-        on mitxonline_programs.program_readable_id = mitxonline_product.program_readable_id
-    where mitxonline_product.program_readable_id is null
+    left join mitxonline_program_product
+        on mitxonline_programs.program_readable_id = mitxonline_program_product.program_readable_id
+        and mitxonline_program_product._row_num = 1
 )
 
 , mitxpro_product_view as (
