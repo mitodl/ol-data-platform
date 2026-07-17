@@ -393,7 +393,10 @@ def _check_broken_ref_columns(
     # and once per model (only when some ref actually needs it) rather than re-parsing
     # and re-qualifying the same SQL per ref.
     scope_consumed: dict[str, set[str]] | None = None
-    for ref_name in parsed.refs:
+    # parsed.refs preserves one entry per ref() call, so a self-join or a model that
+    # ref()s the same upstream in two CTEs lists it more than once (11 such models in
+    # the corpus). Deduplicate (order-preserving) so a broken column isn't reported twice.
+    for ref_name in dict.fromkeys(parsed.refs):
         upstream_cols = upstream_columns_by_name.get(ref_name)
         if upstream_cols is None:
             continue  # can't determine upstream schema — skip

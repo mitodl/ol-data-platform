@@ -14,7 +14,8 @@ dependencies = [
     "markupsafe>=2.1",
     "pyyaml>=6.0",
     "rich>=13.0",
-    "sqlglot>=25.0",
+    # >=25.26 for qualify(allow_partial_qualification=...) used by consumed_columns_by_ref_via_scope
+    "sqlglot>=25.26",
     "trino>=0.329",
 ]
 

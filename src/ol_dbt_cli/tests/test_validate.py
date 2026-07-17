@@ -566,6 +566,34 @@ class TestBrokenRefColumns:
         )
         assert not report_obj.errors
 
+    def test_duplicate_refs_report_broken_column_once(self, tmp_path: Path) -> None:
+        """A model that ref()s the same upstream twice (self-join) reports a broken column once."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = "select a.user_id, a.deleted_col from ref_stg_users a join ref_stg_users b on a.user_id = b.parent_id"
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users", "stg_users"],  # duplicate — mirrors strip_jinja's per-call list
+            placeholder_map={"ref_stg_users": "stg_users"},
+            sql=sql,
+        )
+        upstream = ParsedModel(name="stg_users", output_columns={"user_id", "parent_id"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": upstream},
+            report=report_obj,
+        )
+        broken = [e for e in report_obj.errors if e.check == "broken_ref_columns"]
+        assert len(broken) == 1
+        assert "deleted_col" in broken[0].message
+
     def test_skips_when_upstream_unknown(self, tmp_path: Path) -> None:
         """Silently skips when the upstream model has no resolvable output columns."""
         from ol_dbt_cli.commands.validate import _check_broken_ref_columns
