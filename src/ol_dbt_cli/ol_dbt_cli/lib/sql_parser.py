@@ -15,6 +15,7 @@ import jinja2
 import markupsafe
 import sqlglot
 import sqlglot.expressions as exp
+from sqlglot.optimizer.qualify import qualify
 
 # ---------------------------------------------------------------------------
 # Jinja2 rendering (primary path)
@@ -700,6 +701,87 @@ def _resolve_star_source_through_ctes(
         # Passthrough: this CTE's own star draws from inner_src → follow it
         current = inner_src
     return current
+
+
+def expand_star_with_schema(
+    clean_sql: str,
+    ref_placeholder_map: dict[str, str],
+    source_placeholder_map: dict[str, str],
+    upstream_columns: dict[str, set[str]],
+) -> set[str] | None:
+    """Expand an unresolved ``SELECT *`` using sqlglot's ``qualify()`` optimizer.
+
+    The hand-rolled CTE heuristics (:func:`_try_resolve_star`) resolve a star only
+    when it draws from a single known CTE/ref. Stars that chain through a UNION or
+    a multi-source CTE — e.g. ``select * from combined`` where ``combined`` unions
+    two ``select * from {{ ref(...) }}`` CTEs — are left unresolved. ``qualify()``
+    expands ``*`` through arbitrary CTE chains given an external schema, closing
+    that gap.
+
+    *upstream_columns* maps a ref model name (``"int__mitxpro__programs"``) or a
+    source key (``"source_name.table_name"``) to its known columns. A sqlglot
+    schema is built by translating those to the ``ref_``/``source_`` placeholder
+    identifiers that :func:`strip_jinja` emits into *clean_sql*.
+
+    Returns the expanded outermost-SELECT column set, or ``None`` when no upstream
+    schema is known, ``qualify()`` raises, or a star survives expansion (an
+    incomplete schema — reporting the partial set would be a silent under-count).
+    """
+    schema: dict[str, object] = {}
+    for placeholder, model_name in ref_placeholder_map.items():
+        cols = upstream_columns.get(model_name)
+        if cols:
+            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+    for placeholder, source_key in source_placeholder_map.items():
+        cols = upstream_columns.get(source_key)
+        if cols:
+            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+    if not schema:
+        return None
+
+    try:
+        statements = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
+        ast = next((s for s in reversed(statements) if s is not None), None)
+        if ast is None:
+            return None
+        qualified = qualify(ast, schema=schema, dialect="trino", validate_qualify_columns=False)
+    except Exception:  # noqa: BLE001 — any parse/optimizer failure means "can't resolve"
+        return None
+
+    select = _outermost_select(qualified)
+    if select is None:
+        return None
+
+    cols_out: set[str] = set()
+    for expr in select.expressions:
+        if isinstance(expr, exp.Star) or (isinstance(expr, exp.Column) and isinstance(expr.this, exp.Star)):
+            return None  # a star survived — schema was incomplete; do not report a partial set
+        name = expr.alias_or_name
+        if name and name != "*":
+            cols_out.add(name.lower())
+    return cols_out or None
+
+
+def resolve_star_columns(parsed: ParsedModel, upstream_columns: dict[str, set[str]]) -> set[str] | None:
+    """Best-effort ``SELECT *`` expansion for *parsed* via :func:`expand_star_with_schema`.
+
+    Re-derives placeholder-form SQL from the raw source (compiled SQL uses physical
+    relation names that don't match the ``ref_``/``source_`` placeholder schema),
+    then delegates to :func:`expand_star_with_schema`. Returns ``None`` when the
+    model has no unresolved star or its raw SQL is unavailable.
+    """
+    if not parsed.has_star:
+        return None
+    sql_path = parsed.source_path
+    if sql_path is None or not sql_path.exists():
+        return None
+    stripped = strip_jinja(sql_path.read_text())
+    return expand_star_with_schema(
+        stripped.clean_sql,
+        stripped.ref_placeholder_map,
+        stripped.source_placeholder_map,
+        upstream_columns,
+    )
 
 
 def parse_model_sql(name: str, sql: str) -> ParsedModel:
