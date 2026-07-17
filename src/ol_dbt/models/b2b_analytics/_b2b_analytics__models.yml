@@ -4,10 +4,13 @@ models:
 - name: smoke_test
   description: >
     Connectivity smoke-test for the dbt-starrocks adapter. Creates a single-row table
-    in the StarRocks b2b_analytics database to confirm the adapter can authenticate
-    and create tables. Run via `ol-dbt starrocks run --select b2b_analytics` (fetches
-    Vault dynamic credentials automatically), or manually with
-    --target starrocks_qa_vault or --target starrocks_production.
+    to confirm the adapter can authenticate and create tables. Run via `ol-dbt
+    starrocks run --select b2b_analytics` (fetches Vault dynamic credentials
+    automatically), or manually with --target starrocks_dev_qa_vault or --target
+    starrocks_production. starrocks_dev_qa_vault/starrocks_ci write to a namespaced
+    b2b_analytics_<schema_suffix> schema (defaults to "dev"; CI overrides it per-PR)
+    so interactive and concurrent CI runs don't collide; starrocks_production writes
+    to the unsuffixed b2b_analytics schema.
   columns:
   - name: smoke_test_value
     description: int, always 1

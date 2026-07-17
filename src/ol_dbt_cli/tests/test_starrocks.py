@@ -31,13 +31,18 @@ def test_env_config_has_required_keys(env_name: str) -> None:
 
 
 def test_ci_connects_directly_like_production() -> None:
-    """Ci has no port-forward and connects directly, like production.
-
-    Both connect directly to their FE service, unlike qa's port-forwarded
-    dev workflow.
-    """
+    """Ci has no port-forward and connects directly, like production."""
     assert _ENVS["ci"]["port_forward"] is False
-    assert _ENVS["ci"]["dbt_target"] == _ENVS["production"]["dbt_target"]
+
+
+def test_qa_and_ci_targets_are_schema_suffix_namespaced() -> None:
+    """qa/ci write to namespaced schemas so concurrent runs don't collide.
+
+    Unlike production, which is the bare shared-schema target used by
+    scheduled/production builds.
+    """
+    assert _ENVS["qa"]["dbt_target"] != _ENVS["production"]["dbt_target"]
+    assert _ENVS["ci"]["dbt_target"] != _ENVS["production"]["dbt_target"]
 
 
 # ---------------------------------------------------------------------------
