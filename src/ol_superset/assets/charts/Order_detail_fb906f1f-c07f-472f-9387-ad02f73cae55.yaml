@@ -5,6 +5,7 @@ dataset_uuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555  # marts__combined__orders
 description: null
 params:
   adhoc_filters: []
+  align_pn: false
   all_columns:
   - platform
   - user_email
@@ -21,8 +22,10 @@ params:
   - order_tax_amount
   - order_total_price_paid_plus_tax
   - receipt_payment_amount
-  - coupon_type
+  - coupon_code
   - coupon_name
+  - coupon_type
+  - coupon_redeemed_on
   - receipt_payer_name
   - receipt_payer_email
   - receipt_payment_card_type
@@ -32,7 +35,6 @@ params:
   - order_tax_rate_name
   - receipt_authorization_code
   - receipt_payment_card_number
-  - coupon_redeemed_on
   - receipt_payment_currency
   - product_id
   - line_id
@@ -81,19 +83,49 @@ params:
       d3SmallNumberFormat: ',.2f'
       horizontalAlign: right
       showCellBars: false
+  comparison_color_enabled: false
+  comparison_color_scheme: Green
+  comparison_type: values
   conditional_formatting: []
   extra_form_data: {}
   groupby: []
   include_search: true
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
   order_by_cols:
   - '["order_state", true]'
   - '["order_created_on", false]'
   - '["order_tax_amount", false]'
+  order_desc: true
+  percent_metric_calculation: row_limit
   percent_metrics: []
   query_mode: raw
   row_limit: 100000
+  server_page_length: 10
   server_pagination: false
   show_cell_bars: false
+  show_totals: false
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
