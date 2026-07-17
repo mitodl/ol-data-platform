@@ -595,12 +595,14 @@ models:
   - name: product_id
     description: int, primary key from ecommerce_product on MITx Online or xPro
   - name: product_type
-    description: str, either 'course run' or 'program run'
+    description: str, either 'course run', 'program' (MITx Online programs), or 'program
+      run' (xPro programs)
   - name: product_description
     description: str, product description
   - name: list_price
     description: numeric, the latest list price for the product. Null for MITx Online
-      programs and some MITx Online courses that have no normalized price.
+      programs and courses that have no ecommerce product record with a normalized
+      price.
   - name: product_is_active
     description: boolean, indicating whether the product is visible at the checkout
       page on MITx Online or xPro
