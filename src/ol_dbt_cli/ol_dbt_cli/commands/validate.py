@@ -43,7 +43,7 @@ from ol_dbt_cli.lib.git_utils import (
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
-    consumed_columns_via_scope,
+    consumed_columns_by_ref_via_scope,
     find_compiled_dir,
     get_columns_read_from_ref,
     parse_model_file,
@@ -389,6 +389,10 @@ def _check_broken_ref_columns(
     - No columns can be attributed to a specific upstream ref by either method.
     """
     upstream_columns_by_name = _build_upstream_columns(parsed, yaml_registry, manifest, sql_models_by_name)
+    # The scope fallback attributes every ref in one qualify() pass; compute it lazily
+    # and once per model (only when some ref actually needs it) rather than re-parsing
+    # and re-qualifying the same SQL per ref.
+    scope_consumed: dict[str, set[str]] | None = None
     for ref_name in parsed.refs:
         upstream_cols = upstream_columns_by_name.get(ref_name)
         if upstream_cols is None:
@@ -396,9 +400,11 @@ def _check_broken_ref_columns(
 
         consumed = get_columns_read_from_ref(parsed, ref_name)
         if consumed is None:
-            # Heuristic bailed (JOIN / subquery FROM). Try sqlglot scope resolution,
-            # which needs every upstream's schema to anchor columns across the JOIN.
-            consumed = consumed_columns_via_scope(parsed, ref_name, upstream_columns_by_name)
+            # Heuristic bailed (JOIN / subquery FROM). Fall back to sqlglot scope
+            # resolution, which needs every upstream's schema to anchor columns.
+            if scope_consumed is None:
+                scope_consumed = consumed_columns_by_ref_via_scope(parsed, upstream_columns_by_name)
+            consumed = scope_consumed.get(ref_name)
         if consumed is None:
             continue  # neither method could determine what downstream reads — skip
 

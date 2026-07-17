@@ -1188,49 +1188,40 @@ def get_columns_read_from_ref(
     return cols_read if cols_read else None
 
 
-def consumed_columns_via_scope(
+def consumed_columns_by_ref_via_scope(
     downstream_parsed: ParsedModel,
-    upstream_name: str,
     upstream_columns: dict[str, set[str]],
-) -> set[str] | None:
-    """Attribute the columns read from ``ref(upstream_name)`` via sqlglot scopes.
+) -> dict[str, set[str]]:
+    """Attribute consumed columns to *every* upstream ref/source in one qualify pass.
 
-    A precise, join-aware complement to :func:`get_columns_read_from_ref`. The
-    hand-rolled heuristic bails (returns ``None``) when the downstream reads the
-    ref through a JOIN to another table or through a subquery ``FROM`` — the two
-    shapes where bare-column attribution is ambiguous without full alias
-    resolution. sqlglot's ``qualify()`` (with ``allow_partial_qualification`` so
-    that a genuinely-broken column does not abort the whole pass) resolves every
-    column reference to its source relation across the CTE/subquery/JOIN graph;
-    :func:`traverse_scope` then lets us collect exactly the columns whose resolved
-    source is *upstream_name*'s ``ref_`` placeholder — including columns used only
-    in ``WHERE``/``JOIN``/``GROUP BY`` and columns that don't exist upstream (so a
-    broken reference through a JOIN is still catchable).
+    A precise, join-aware complement to :func:`get_columns_read_from_ref`, which
+    bails (returns ``None``) when a downstream reads a ref through a JOIN to another
+    table or through a subquery ``FROM`` — the shapes where bare-column attribution
+    is ambiguous without full alias resolution. sqlglot's ``qualify()`` (with
+    ``allow_partial_qualification`` so a genuinely-broken column does not abort the
+    pass) resolves every column reference to its source relation across the
+    CTE/subquery/JOIN graph; :func:`traverse_scope` then attributes each column to
+    the ``ref_``/``source_`` placeholder it ultimately reads from — including
+    columns used only in ``WHERE``/``JOIN``/``GROUP BY`` and columns that don't
+    exist upstream (so a broken reference through a JOIN is still catchable).
 
     *upstream_columns* maps a ref model name / ``source.table`` key to its known
-    columns (same shape as :func:`expand_star_with_schema`). The target ref's own
-    schema must be known — without it qualify() cannot anchor the placeholder as a
-    base relation, so ``None`` is returned.
+    columns (same shape as :func:`expand_star_with_schema`). Only placeholders whose
+    schema is known are anchored; a placeholder with no schema cannot be resolved to
+    a base relation and is omitted from the result.
 
-    Only columns whose resolved source is *exactly* the target placeholder's base
-    table are collected: an ambiguous bare column that qualify() cannot pin to the
-    ref is dropped rather than guessed. The result is therefore safe to diff
-    against the upstream schema — it may under-report, but it never mis-attributes
-    a foreign column to this ref (no false ``broken_ref_columns``).
+    Only columns whose resolved source is *exactly* a known placeholder's base table
+    are collected: an ambiguous bare column that qualify() cannot pin to a ref is
+    dropped rather than guessed. The result is therefore safe to diff against each
+    upstream's schema — it may under-report, but never mis-attributes a foreign
+    column to a ref (no false ``broken_ref_columns``).
 
-    Returns the consumed-column set, or ``None`` when the ref is not read, the raw
-    SQL is unavailable, the target schema is unknown, or ``qualify()`` fails.
+    The whole model is parsed and qualified once, so callers needing several refs'
+    consumed sets (the common JOIN-heavy case) pay a single qualify cost rather than
+    one per ref. Returns ``{upstream_name: consumed_columns}`` for every ref/source
+    that resolved to at least one column; empty when the SQL is unavailable, no
+    upstream schema is known, or ``qualify()`` fails.
     """
-    if upstream_name not in downstream_parsed.refs:
-        return None
-
-    ref_placeholder = next(
-        (k for k, v in downstream_parsed.ref_placeholder_map.items() if v == upstream_name),
-        None,
-    )
-    if ref_placeholder is None:
-        return None
-
     # Placeholder identifiers only appear in the raw (Jinja) SQL; compiled SQL uses
     # physical relation names with no reliable ref_/source_ prefix (see
     # get_columns_read_from_ref / resolve_star_columns for the same constraint).
@@ -1239,32 +1230,33 @@ def consumed_columns_via_scope(
     # whose SQL is already placeholder-substituted still resolves.
     sql_path = downstream_parsed.source_path
     if sql_path is None or not sql_path.exists():
-        return None
+        return {}
 
     try:
         clean_sql = strip_jinja(sql_path.read_text()).clean_sql
     except Exception:  # noqa: BLE001
-        return None
+        return {}
 
     schema: dict[str, object] = {}
+    placeholder_to_name: dict[str, str] = {}
     for placeholder, model_name in downstream_parsed.ref_placeholder_map.items():
         cols = upstream_columns.get(model_name)
         if cols:
             schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+            placeholder_to_name[placeholder] = model_name
     for placeholder, source_key in downstream_parsed.source_placeholder_map.items():
         cols = upstream_columns.get(source_key)
         if cols:
             schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
-    # The target ref must be anchorable: without its schema, qualify() leaves its
-    # columns unqualified and nothing can be attributed to it.
-    if ref_placeholder not in schema:
-        return None
+            placeholder_to_name[placeholder] = source_key
+    if not schema:
+        return {}
 
     try:
         statements = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
         ast = next((s for s in reversed(statements) if s is not None), None)
         if ast is None:
-            return None
+            return {}
         qualified = qualify(
             ast,
             schema=schema,
@@ -1273,18 +1265,37 @@ def consumed_columns_via_scope(
             allow_partial_qualification=True,
         )
     except Exception:  # noqa: BLE001 — any parse/optimizer failure means "can't attribute"
-        return None
+        return {}
 
-    cols_read: set[str] = set()
+    consumed: dict[str, set[str]] = {}
     for scope in traverse_scope(qualified):
         for column in scope.columns:
             qualifier = column.table
             if not qualifier:
                 continue
             source = scope.sources.get(qualifier)
-            if isinstance(source, exp.Table) and source.name == ref_placeholder:
-                col_name = column.name.lower()
-                if col_name and col_name != "*":
-                    cols_read.add(col_name)
+            if not (isinstance(source, exp.Table) and source.name in placeholder_to_name):
+                continue
+            col_name = column.name.lower()
+            if col_name and col_name != "*":
+                consumed.setdefault(placeholder_to_name[source.name], set()).add(col_name)
 
-    return cols_read or None
+    return consumed
+
+
+def consumed_columns_via_scope(
+    downstream_parsed: ParsedModel,
+    upstream_name: str,
+    upstream_columns: dict[str, set[str]],
+) -> set[str] | None:
+    """Columns read from ``ref(upstream_name)``, resolved via sqlglot scopes.
+
+    Single-ref convenience wrapper over :func:`consumed_columns_by_ref_via_scope`
+    (which qualifies the whole model once and attributes every upstream). See that
+    function for the resolution contract and safety guarantees. Returns the
+    consumed-column set, or ``None`` when *upstream_name* is not a ref of the model,
+    its schema is unknown, the SQL is unavailable, or ``qualify()`` fails.
+    """
+    if upstream_name not in downstream_parsed.refs:
+        return None
+    return consumed_columns_by_ref_via_scope(downstream_parsed, upstream_columns).get(upstream_name)

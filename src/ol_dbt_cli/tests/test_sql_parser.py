@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ol_dbt_cli.lib.sql_parser import (
+    consumed_columns_by_ref_via_scope,
     consumed_columns_via_scope,
     expand_star_with_schema,
     find_compiled_dir,
@@ -943,6 +944,24 @@ class TestConsumedColumnsViaScope:
         assert "d" not in outer
         assert {"c", "d"} <= inner
 
+    def test_attributes_columns_through_a_subquery_from(self, tmp_path: Path) -> None:
+        """A derived-table (subquery) FROM joined to a ref resolves per-ref, incl. inner-only cols."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select sub.user_id, sub.email, e.grade "
+            "from (select user_id, email from {{ ref('stg_users') }} where status = 'active') sub "
+            "join {{ ref('stg_enroll') }} as e on sub.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email", "status"}, "stg_enroll": {"user_id", "grade"}}
+        users = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert users is not None
+        # `status` is consumed only inside the derived table's WHERE — scope still sees it.
+        assert {"user_id", "email", "status"} <= users
+        enroll = consumed_columns_via_scope(parsed, "stg_enroll", schema)
+        assert enroll is not None
+        assert {"user_id", "grade"} <= enroll
+
     def test_returns_none_when_target_schema_unknown(self, tmp_path: Path) -> None:
         model = tmp_path / "m.sql"
         model.write_text(
@@ -958,3 +977,22 @@ class TestConsumedColumnsViaScope:
         model.write_text("select a from {{ ref('stg_users') }}")
         parsed = parse_model_file(model)
         assert consumed_columns_via_scope(parsed, "some_other_model", {"some_other_model": {"a"}}) is None
+
+    def test_batch_attributes_every_ref_in_one_pass(self, tmp_path: Path) -> None:
+        """The batch entrypoint returns per-ref consumed sets for the whole model at once."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.email, e.grade "
+            "from {{ ref('stg_users') }} as u join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email"}, "stg_enroll": {"user_id", "grade"}}
+        result = consumed_columns_by_ref_via_scope(parsed, schema)
+        assert {"user_id", "email"} <= result["stg_users"]
+        assert {"user_id", "grade"} <= result["stg_enroll"]
+
+    def test_batch_returns_empty_when_no_schema_known(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select user_id from {{ ref('stg_users') }}")
+        parsed = parse_model_file(model)
+        assert consumed_columns_by_ref_via_scope(parsed, {}) == {}
