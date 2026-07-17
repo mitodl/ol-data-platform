@@ -41,7 +41,13 @@ from ol_dbt_cli.lib.git_utils import (
     get_repo_root,
 )
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
-from ol_dbt_cli.lib.sql_parser import ParsedModel, find_compiled_dir, get_columns_read_from_ref, parse_model_file
+from ol_dbt_cli.lib.sql_parser import (
+    ParsedModel,
+    find_compiled_dir,
+    get_columns_read_from_ref,
+    parse_model_file,
+    resolve_star_columns,
+)
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
 console = Console()
@@ -613,6 +619,44 @@ def _resolve_star_with_registry(
     return None
 
 
+def _resolve_star_with_qualify(
+    parsed: ParsedModel,
+    yaml_registry: YamlRegistry,
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+) -> set[str] | None:
+    """Resolve a ``SELECT *`` via sqlglot ``qualify()`` when the single-source lookup fails.
+
+    :func:`_resolve_star_with_registry` only expands a star that draws from one directly-named
+    ref/source. A star that chains through a UNION or multi-source CTE
+    (``select * from combined`` unioning two ``select * from ref`` CTEs) needs
+    full column-level qualification against every upstream's schema. This gathers
+    columns for *all* refs/sources the model reads — manifest first, then YAML,
+    then already-parsed SQL output — and lets ``qualify()`` expand the star
+    through the CTE graph. Returns ``None`` when no upstream schema is known.
+    """
+    upstream_columns: dict[str, set[str]] = {}
+    for ref_name in parsed.refs:
+        cols = _resolve_upstream_columns(ref_name, yaml_registry, manifest, sql_models_by_name)
+        if cols:
+            upstream_columns[ref_name] = cols
+    for source_key in parsed.source_refs:
+        source_cols: set[str] | None = None
+        if manifest is not None:
+            source_model = manifest.get_source(source_key)
+            if source_model is not None and source_model.columns:
+                source_cols = source_model.column_names
+        if not source_cols and "." in source_key:
+            source_name, table_name = source_key.split(".", 1)
+            source_cols = yaml_registry.get_source_columns(source_name, table_name) or None
+        if source_cols:
+            upstream_columns[source_key] = source_cols
+
+    if not upstream_columns:
+        return None
+    return resolve_star_columns(parsed, upstream_columns)
+
+
 # ---------------------------------------------------------------------------
 # Check 6: SELECT * usage
 # ---------------------------------------------------------------------------
@@ -1177,6 +1221,10 @@ def validate(
     for parsed_model in sql_models_by_name.values():
         if parsed_model.has_star:
             resolved_cols = _resolve_star_with_registry(parsed_model, yaml_registry, manifest, sql_models_by_name)
+            if resolved_cols is None:
+                # Single-source registry lookup failed; fall back to full-schema
+                # qualify() for stars that chain through UNION/multi-source CTEs.
+                resolved_cols = _resolve_star_with_qualify(parsed_model, yaml_registry, manifest, sql_models_by_name)
             if resolved_cols is not None:
                 parsed_model.output_columns = resolved_cols
                 parsed_model.has_star = False

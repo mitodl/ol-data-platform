@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ol_dbt_cli.lib.sql_parser import find_compiled_dir, parse_model_file, parse_model_sql, strip_jinja
+from ol_dbt_cli.lib.sql_parser import (
+    expand_star_with_schema,
+    find_compiled_dir,
+    parse_model_file,
+    parse_model_sql,
+    resolve_star_columns,
+    strip_jinja,
+)
 
 
 class TestStripJinja:
@@ -748,3 +755,122 @@ class TestJinja2Engine:
         # Both paths should produce the same placeholder
         regex_result = _strip_jinja_regex(sql)
         assert result.ref_names == regex_result.ref_names
+
+
+class TestExpandStarWithSchema:
+    """qualify()-based SELECT * expansion through UNION / multi-source CTE chains."""
+
+    def test_expands_star_through_union_cte_chain(self) -> None:
+        # The shape the hand-rolled heuristics cannot resolve: a star from a CTE
+        # that UNIONs two `select * from ref` CTEs (cf. int__combined__course_xml_blocks).
+        sql = """
+        with
+            a as (select * from {{ ref('up_a') }}),
+            b as (select * from {{ ref('up_b') }}),
+            combined as (select * from a union all select * from b)
+        select * from combined
+        """
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"up_a": {"id", "name"}, "up_b": {"id", "name"}},
+        )
+        assert cols == {"id", "name"}
+
+    def test_expands_star_from_source(self) -> None:
+        sql = "select * from {{ source('raw', 'users') }}"
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"raw.users": {"id", "email"}},
+        )
+        assert cols == {"id", "email"}
+
+    def test_returns_none_without_upstream_schema(self) -> None:
+        sql = "select * from {{ ref('up') }}"
+        stripped = strip_jinja(sql)
+        assert (
+            expand_star_with_schema(
+                stripped.clean_sql,
+                stripped.ref_placeholder_map,
+                stripped.source_placeholder_map,
+                {},
+            )
+            is None
+        )
+
+    def test_explicit_outer_projection_authoritative_despite_inner_star(self) -> None:
+        # An unexpandable star inside an inner CTE must NOT suppress a fully-known
+        # explicit outer projection — the outer column names are authoritative.
+        sql = (
+            "with u as (select * from {{ ref('other') }}),"
+            " x as (select * from {{ ref('unknown') }})"
+            " select id, name from x"
+        )
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"other": {"z"}},  # 'unknown' deliberately absent — its star cannot expand
+        )
+        assert cols == {"id", "name"}
+
+    def test_union_output_named_by_leftmost_schema_matched_branch(self) -> None:
+        # Outer `select *` over a UNION where only the leftmost branch has a schema:
+        # SQL set-operation semantics name the output from the leftmost branch, so the
+        # names are complete even though the right branch's star is not expanded.
+        sql = (
+            "with combined as ("
+            " select * from {{ ref('a') }} union all select * from {{ ref('b') }}"
+            " ) select * from combined"
+        )
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"a": {"id", "name"}},  # 'b' absent
+        )
+        assert cols == {"id", "name"}
+
+    def test_returns_none_when_star_stays_unresolved(self) -> None:
+        # A star drawing from a physical table we have no schema for cannot be
+        # expanded even though an unrelated ref schema is supplied.
+        sql = "select * from some_physical_table where id in (select id from {{ ref('up') }})"
+        stripped = strip_jinja(sql)
+        assert (
+            expand_star_with_schema(
+                stripped.clean_sql,
+                stripped.ref_placeholder_map,
+                stripped.source_placeholder_map,
+                {"up": {"id"}},
+            )
+            is None
+        )
+
+
+class TestResolveStarColumns:
+    def test_reads_raw_source_and_expands(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("with c as (select * from {{ ref('up') }}) select * from c")
+        parsed = parse_model_file(model)
+        assert parsed.has_star
+        assert resolve_star_columns(parsed, {"up": {"a", "b"}}) == {"a", "b"}
+
+    def test_returns_none_when_no_star(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select a, b from {{ ref('up') }}")
+        parsed = parse_model_file(model)
+        assert not parsed.has_star
+        assert resolve_star_columns(parsed, {"up": {"a", "b"}}) is None
+
+    def test_returns_none_without_source_path(self) -> None:
+        parsed = parse_model_sql("m", "with c as (select * from {{ ref('up') }}) select * from c")
+        assert parsed.has_star
+        assert parsed.source_path is None
+        assert resolve_star_columns(parsed, {"up": {"a", "b"}}) is None

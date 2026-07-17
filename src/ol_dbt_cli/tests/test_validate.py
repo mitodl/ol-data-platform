@@ -17,9 +17,10 @@ from ol_dbt_cli.commands.validate import (
     _print_json_report,
     _print_text_report,
     _resolve_model_targets,
+    _resolve_star_with_qualify,
     _resolve_star_with_registry,
 )
-from ol_dbt_cli.lib.sql_parser import ParsedModel
+from ol_dbt_cli.lib.sql_parser import ParsedModel, parse_model_file
 from ol_dbt_cli.lib.yaml_registry import (
     YamlColumn,
     YamlModel,
@@ -417,6 +418,43 @@ class TestResolveStarWithRegistry:
         )
         result = _resolve_star_with_registry(parsed, YamlRegistry(), manifest=None, sql_models_by_name={})
         assert result is None
+
+
+class TestResolveStarWithQualify:
+    """Full-schema qualify() fallback for stars the single-source heuristics miss."""
+
+    def test_resolves_union_chain_via_parsed_upstreams(self, tmp_path: Path) -> None:
+        # A star from a CTE that UNIONs two `select * from ref` CTEs — the exact
+        # shape (int__combined__course_xml_blocks) the registry lookup cannot expand.
+        model = tmp_path / "combined_model.sql"
+        model.write_text(
+            textwrap.dedent(
+                """
+                with
+                    a as (select * from {{ ref('up_a') }}),
+                    b as (select * from {{ ref('up_b') }}),
+                    combined as (select * from a union all select * from b)
+                select * from combined
+                """
+            )
+        )
+        parsed = parse_model_file(model)
+        assert parsed.has_star  # single-source heuristics leave it unresolved
+        assert _resolve_star_with_registry(parsed, YamlRegistry(), None, {}) is None
+
+        sql_models = {
+            "up_a": ParsedModel(name="up_a", output_columns={"id", "name"}),
+            "up_b": ParsedModel(name="up_b", output_columns={"id", "name"}),
+        }
+        result = _resolve_star_with_qualify(parsed, YamlRegistry(), None, sql_models)
+        assert result == {"id", "name"}
+
+    def test_returns_none_when_no_upstream_columns_known(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("with c as (select * from {{ ref('up') }}) select * from c")
+        parsed = parse_model_file(model)
+        assert parsed.has_star
+        assert _resolve_star_with_qualify(parsed, YamlRegistry(), None, {}) is None
 
 
 class TestBrokenRefColumns:
