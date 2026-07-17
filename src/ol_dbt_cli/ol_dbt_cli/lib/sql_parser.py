@@ -724,8 +724,17 @@ def expand_star_with_schema(
     identifiers that :func:`strip_jinja` emits into *clean_sql*.
 
     Returns the expanded outermost-SELECT column set, or ``None`` when no upstream
-    schema is known, ``qualify()`` raises, or a star survives expansion (an
-    incomplete schema — reporting the partial set would be a silent under-count).
+    schema is known, ``qualify()`` raises, or a star survives in the *outermost
+    projection* after expansion (an incomplete schema — reporting the partial set
+    would be a silent under-count).
+
+    The guard is deliberately scoped to the outermost projection, not the whole
+    tree. The result column *names* are exactly that projection: an explicit outer
+    ``select a, b`` is authoritative regardless of any unexpanded ``*`` in an inner
+    subquery, and an outer ``select *`` over a UNION takes its names from the
+    leftmost (schema-matched) branch by SQL set-operation semantics. So a ``*`` that
+    survives only inside an inner CTE/UNION branch cannot change the returned names,
+    and rejecting on it would wrongly drop a fully-known outer column set.
     """
     schema: dict[str, object] = {}
     for placeholder, model_name in ref_placeholder_map.items():

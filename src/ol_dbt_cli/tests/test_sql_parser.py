@@ -803,6 +803,41 @@ class TestExpandStarWithSchema:
             is None
         )
 
+    def test_explicit_outer_projection_authoritative_despite_inner_star(self) -> None:
+        # An unexpandable star inside an inner CTE must NOT suppress a fully-known
+        # explicit outer projection — the outer column names are authoritative.
+        sql = (
+            "with u as (select * from {{ ref('other') }}),"
+            " x as (select * from {{ ref('unknown') }})"
+            " select id, name from x"
+        )
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"other": {"z"}},  # 'unknown' deliberately absent — its star cannot expand
+        )
+        assert cols == {"id", "name"}
+
+    def test_union_output_named_by_leftmost_schema_matched_branch(self) -> None:
+        # Outer `select *` over a UNION where only the leftmost branch has a schema:
+        # SQL set-operation semantics name the output from the leftmost branch, so the
+        # names are complete even though the right branch's star is not expanded.
+        sql = (
+            "with combined as ("
+            " select * from {{ ref('a') }} union all select * from {{ ref('b') }}"
+            " ) select * from combined"
+        )
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"a": {"id", "name"}},  # 'b' absent
+        )
+        assert cols == {"id", "name"}
+
     def test_returns_none_when_star_stays_unresolved(self) -> None:
         # A star drawing from a physical table we have no schema for cannot be
         # expanded even though an unrelated ref schema is supplied.
