@@ -198,16 +198,36 @@ with mitxonline_enrollments as (
     from {{ ref('dim_program') }}
 )
 
--- MicroMasters program lookup: maps courserun_readable_id to micromasters program_pk.
--- Used to enrich edxorg/mitxonline enrollment rows that belong to MM programs.
+-- MicroMasters program lookup: maps (courserun_readable_id, platform) to micromasters
+-- program_pk. Used to enrich edxorg/mitxonline enrollment rows that belong to MM
+-- programs. Platform-scoped (not just courserun_readable_id) so a mitxpro/residential/
+-- bootcamps enrollment can never inherit an MM program_fk, and deduped one row per
+-- (courserun_readable_id, platform) so a course run reused across two MM programs
+-- can't fan out the enrollment it's joined against.
 , micromasters_program_lookup as (
-    select distinct
+    select
         courserun_readable_id
-        , dim_program.program_pk as micromasters_program_pk
-    from {{ ref('int__micromasters__course_enrollments') }} as mm_enroll
-    inner join dim_program
-        on cast(mm_enroll.micromasters_program_id as varchar) = cast(dim_program.source_id as varchar)
-        and dim_program.platform_code = 'micromasters'
+        , platform
+        , micromasters_program_pk
+    from (
+        select
+            mm_enroll.courserun_readable_id
+            , case
+                when mm_enroll.platform = '{{ var("edxorg") }}' then 'edxorg'
+                when mm_enroll.platform = '{{ var("mitxonline") }}' then 'mitxonline'
+            end as platform
+            , dim_program.program_pk as micromasters_program_pk
+            , row_number() over (
+                partition by mm_enroll.courserun_readable_id, mm_enroll.platform
+                order by dim_program.program_pk
+            ) as _row_num
+        from {{ ref('int__micromasters__course_enrollments') }} as mm_enroll
+        inner join dim_program
+            on cast(mm_enroll.micromasters_program_id as varchar) = cast(dim_program.source_id as varchar)
+            and dim_program.platform_code = 'micromasters'
+    ) as deduped
+    where _row_num = 1
+        and platform is not null
 )
 
 -- dim_platform not in Phase 1-2
@@ -265,6 +285,7 @@ with mitxonline_enrollments as (
         and combined_enrollments.platform_code = dim_program.platform_code
     left join micromasters_program_lookup
         on combined_enrollments.courserun_readable_id = micromasters_program_lookup.courserun_readable_id
+        and combined_enrollments.platform = micromasters_program_lookup.platform
     left join dim_platform_lookup
         on combined_enrollments.platform = dim_platform_lookup.platform_readable_id
 )
