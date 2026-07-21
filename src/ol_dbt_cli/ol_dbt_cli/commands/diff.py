@@ -16,6 +16,16 @@ Design notes (the non-obvious bits):
   ``--exclude-columns``.
 * The comparison itself is run via ``dbt show --inline`` invoking audit_helper
   macros with ``--output json``; results are parsed tolerantly from stdout.
+* ``--old``/``--new`` normally resolve through ``ref()``, which requires a real
+  dbt model in the manifest. ``--old-raw``/``--new-raw`` bypass that, building a
+  literal ``api.Relation.create(...)`` instead — for relations dbt doesn't know
+  about: an already-materialized table sitting in a different schema/database
+  than the current --target.
+* ``--old-glue``/``--new-glue`` are a variant of ``--old-raw``/``--new-raw``
+  specifically for the ``glue__{glue_database}__{table}`` DuckDB views created by
+  ``ol-dbt local register`` — live views onto the real production Iceberg table,
+  not a copy. Pass just the Glue database name; ``--old``/``--new`` stay the bare
+  table name on both sides instead of the full ``glue__...`` identifier.
 
 Driveable both by hand and by CI (Phase 2 auto-diff vs a base ref). See
 docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md §3.
@@ -113,6 +123,14 @@ class DiffResult:
     column_mismatches: list[ColumnMismatch]
     sample_mismatches: list[dict[str, Any]]
     verdict: Verdict
+    # Text-output-only labels annotating each side's source (e.g. "name (glue:
+    # db)") when --old/new-raw or --old/new-glue make `old`/`new` ambiguous —
+    # identical to `old`/`new` for a plain ref()-vs-ref() diff. Kept separate
+    # from `old`/`new` so JSON output stays a stable, bare identifier. Uses
+    # parens, not brackets — rich.console.print() parses `[...]` as markup and
+    # silently swallows anything that isn't a recognized style tag.
+    old_label: str
+    new_label: str
     notes: list[str] = field(default_factory=list)
 
 
@@ -144,6 +162,65 @@ def _resolve_columns(
     if yaml_model is not None and yaml_model.column_names:
         return {c.lower() for c in yaml_model.column_names}
     return set()
+
+
+def _resolve_raw_columns(
+    name: str,
+    dbt_dir: Path,
+    target: str,
+    *,
+    database: str | None = None,
+    schema: str | None = None,
+    glue_database: str | None = None,
+) -> tuple[set[str], str | None]:
+    """Resolve a raw (non-``ref()``) relation's columns by sampling one row.
+
+    Raw relations (Glue-registered views, an already-materialized table in
+    another schema) have no manifest/YAML metadata to resolve columns from
+    statically, so this samples a live row and reads its keys instead.
+
+    Returns ``(columns, error)``. *error* carries the dbt failure message when
+    the sampling query itself fails (e.g. the relation doesn't exist) — the
+    caller must surface it rather than let an empty column set masquerade as
+    "unparsed / not in manifest", which is misleading for a raw relation.
+    """
+    expr = _relation_jinja(name, raw=True, database=database, schema=schema, glue_database=glue_database)
+    # Rendered into a Jinja template compiled by dbt (not executed as a raw query
+    # here), so the S608 heuristic is a false positive — same as _compare_column_sql.
+    # No literal LIMIT here: `dbt show` already wraps the compiled query in its own
+    # limiting logic via --limit below; a second, literal `limit 1` in the SQL text
+    # collides with that wrapper and breaks the DuckDB parser.
+    inline_sql = f"select * from {{{{ {expr} }}}}"  # noqa: S608
+    try:
+        rows = _run_dbt_show(inline_sql, dbt_dir, target, limit=1)
+    except RuntimeError as exc:
+        return set(), str(exc)
+    return ({c.lower() for c in rows[0]} if rows else set()), None
+
+
+def _materialize_glue_relation(name: str, glue_database: str, dbt_dir: Path, target: str) -> str:
+    """Copy a Glue-registered ``iceberg_scan()`` view into a real local DuckDB table.
+
+    DuckDB's Iceberg extension can run a plain ``SELECT``/``COUNT(*)`` against a
+    live ``glue__...`` view (that's why column resolution works) but not the
+    ``UNION ALL``/``EXCEPT`` set operations audit_helper's compare macros
+    generate — that fails with ``Not implemented Error: IcebergScan
+    serialization not implemented``. Copying the view into a real table first
+    sidesteps the limitation entirely.
+
+    Uses ``create or replace table`` with a name deterministic in
+    (*glue_database*, *name*), so repeated diffs reuse/refresh the same scratch
+    table instead of accumulating new ones. Returns the scratch table's bare
+    identifier (materialized in the target's own database/schema).
+    """
+    scratch_name = f"_ol_dbt_diff_scratch__{glue_database}__{name}"
+    src_expr = _relation_jinja(name, glue_database=glue_database)
+    dst_expr = _relation_jinja(scratch_name, raw=True)
+    ctas_sql = f"create or replace table {{{{ {dst_expr} }}}} as select * from {{{{ {src_expr} }}}}"  # noqa: S608
+    # limit=-1: dbt show's own --limit wrapping would otherwise truncate the
+    # CTAS to N rows -- the whole point here is a full, unwrapped copy.
+    _run_dbt_show(ctas_sql, dbt_dir, target, limit=-1)
+    return scratch_name
 
 
 def reconcile_columns(
@@ -276,6 +353,38 @@ def _jinja_list(values: list[str]) -> str:
     return f"[{inner}]"
 
 
+def _relation_jinja(
+    name: str,
+    *,
+    raw: bool = False,
+    database: str | None = None,
+    schema: str | None = None,
+    glue_database: str | None = None,
+) -> str:
+    """Render a relation reference for inline Jinja SQL.
+
+    Normally a plain ``ref('name')`` — requires *name* to be a real dbt model in
+    the manifest. When ``raw=True``, builds a literal ``api.Relation.create(...)``
+    instead, addressed by *database*/*schema* (defaulting to the current
+    ``--target``'s own database/schema) — for relations dbt doesn't know about,
+    e.g. an already-materialized table elsewhere.
+
+    *glue_database*, when given, forces raw mode and rewrites the identifier to
+    the ``glue__{glue_database}__{name}`` naming convention that ``ol-dbt local
+    register`` uses for its DuckDB views (see ``local_dev.py``) — so callers can
+    pass the same bare table *name* for both a Glue-registered view and a real
+    dbt model instead of spelling out the full ``glue__...`` identifier.
+    """
+    if glue_database:
+        raw = True
+        name = f"glue__{glue_database}__{name}"
+    if not raw:
+        return f"ref('{name}')"
+    db = f"'{database}'" if database else "target.database"
+    sch = f"'{schema}'" if schema else "target.schema"
+    return f"api.Relation.create(database={db}, schema={sch}, identifier='{name}')"
+
+
 def _compare_relations_sql(
     old: str,
     new: str,
@@ -283,6 +392,14 @@ def _compare_relations_sql(
     exclude_columns: list[str],
     *,
     summarize: bool,
+    old_raw: bool = False,
+    new_raw: bool = False,
+    old_schema: str | None = None,
+    new_schema: str | None = None,
+    old_database: str | None = None,
+    new_database: str | None = None,
+    old_glue: str | None = None,
+    new_glue: str | None = None,
 ) -> str:
     """Build inline SQL calling ``audit_helper.compare_relations``.
 
@@ -295,23 +412,58 @@ def _compare_relations_sql(
         pk_repr = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
         pk_arg = f", primary_key={pk_repr}"
     exclude_arg = f", exclude_columns={_jinja_list(exclude_columns)}" if exclude_columns else ""
+    a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema, glue_database=old_glue)
+    b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema, glue_database=new_glue)
+    # `}}` in an f-string is an escape for a single literal `}` (same as `{{` for
+    # `{`) — closing the Jinja `{{ ... }}` block from an f-string needs `}}}}`.
     return (
         "{{ audit_helper.compare_relations("
-        f"a_relation=ref('{old}'), b_relation=ref('{new}')"
-        f"{exclude_arg}{pk_arg}, summarize={'true' if summarize else 'false'}) }}"
+        f"a_relation={a_expr}, b_relation={b_expr}"
+        f"{exclude_arg}{pk_arg}, summarize={'true' if summarize else 'false'}) }}}}"
     )
 
 
-def _compare_column_sql(old: str, new: str, primary_key: list[str], column: str) -> str:
+def _compare_column_sql(
+    old: str,
+    new: str,
+    primary_key: list[str],
+    column: str,
+    *,
+    old_raw: bool = False,
+    new_raw: bool = False,
+    old_schema: str | None = None,
+    new_schema: str | None = None,
+    old_database: str | None = None,
+    new_database: str | None = None,
+    old_glue: str | None = None,
+    new_glue: str | None = None,
+) -> str:
     """Build inline SQL calling ``audit_helper.compare_column_values`` for one column."""
     pk = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
-    # Model names are dbt identifiers rendered into a Jinja template compiled by
-    # dbt (not executed as a raw query here), so the S608 heuristic is a false positive.
+    a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema, glue_database=old_glue)
+    b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema, glue_database=new_glue)
+    # Only the primary key(s) + the one column being compared are needed here --
+    # `compare_column_values` does a full outer join on a_query/b_query, and
+    # selecting every column (as this used to) forces that join to carry the
+    # whole row width for a single-column comparison, which is needless I/O on
+    # wide tables.
+    select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
+    # a_query/b_query are built with {% set %}/{% endset %} so `a_expr`/`b_expr`
+    # (a ref()/api.Relation.create() call) are rendered by Jinja BEFORE
+    # compare_column_values ever sees the string. Embedding `{{ ... }}` directly
+    # inside a quoted string argument (the previous approach) is inert: Jinja
+    # treats string literals atomically and never re-parses braces inside them,
+    # so the literal text `{{ ref(...) }}` reached the database unrendered --
+    # a real, pre-existing bug (every diff with a primary key hit this).
     return (
-        "{{ audit_helper.compare_column_values("  # noqa: S608
-        f"a_query=\"select * from {{{{ ref('{old}') }}}}\", "
-        f"b_query=\"select * from {{{{ ref('{new}') }}}}\", "
-        f"primary_key={pk}, column_to_compare='{column}') }}"
+        "{% set a_query %}"  # noqa: S608
+        f"select {select_cols} from {{{{ {a_expr} }}}}"
+        "{% endset %}"
+        "{% set b_query %}"
+        f"select {select_cols} from {{{{ {b_expr} }}}}"
+        "{% endset %}"
+        "{{ audit_helper.compare_column_values("
+        f"a_query=a_query, b_query=b_query, primary_key={pk}, column_to_compare='{column}') }}}}"
     )
 
 
@@ -369,7 +521,51 @@ def _result_to_dict(result: DiffResult) -> dict[str, Any]:
         "sample_mismatches": result.sample_mismatches,
         "verdict": result.verdict.value,
         "notes": result.notes,
+        "old_label": result.old_label,
+        "new_label": result.new_label,
     }
+
+
+def _format_sample_mismatches(
+    rows: list[dict[str, Any]], primary_key: list[str], old_label: str, new_label: str
+) -> list[str]:
+    """Turn raw ``compare_relations(summarize=false)`` rows into readable per-key diffs.
+
+    audit_helper tags each mismatching row with the full row content from
+    whichever side(s) it appears on (``in_a``/``in_b``) -- printed as raw JSON,
+    the 1-3 fields that actually differ are buried under the ~40 that don't.
+    This groups by primary key and reports only the differing fields, or
+    "only in <side>" when a row exists on just one side.
+    """
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = tuple(row.get(k) for k in primary_key)
+        groups.setdefault(key, []).append(row)
+
+    pk_desc = ", ".join(primary_key)
+    lines: list[str] = []
+    for key, group_rows in groups.items():
+        key_str = f"{pk_desc}={key[0]}" if len(key) == 1 else f"({pk_desc})={key}"
+        a_row = next((r for r in group_rows if r.get("in_a") and not r.get("in_b")), None)
+        b_row = next((r for r in group_rows if r.get("in_b") and not r.get("in_a")), None)
+        # A non-unique primary key can put more than 2 rows in one group -- flag
+        # it rather than silently comparing only the first pair and dropping the
+        # rest, which would understate how many rows actually differ.
+        extra = f" (+{len(group_rows) - 2} more rows in this key group, not shown)" if len(group_rows) > 2 else ""
+        if a_row and not b_row:
+            lines.append(f"{key_str}: only in {old_label}{extra}")
+        elif b_row and not a_row:
+            lines.append(f"{key_str}: only in {new_label}{extra}")
+        elif a_row and b_row:
+            diffs = [
+                f"{field}: {a_row.get(field)!r} → {b_row.get(field)!r}"
+                for field in a_row
+                if field not in ("in_a", "in_b") and a_row.get(field) != b_row.get(field)
+            ]
+            lines.append(
+                f"{key_str}: " + ("; ".join(diffs) if diffs else "(no field differences in this sample)") + extra
+            )
+    return lines
 
 
 def _print_json(result: DiffResult) -> None:
@@ -384,22 +580,23 @@ def _print_text(result: DiffResult) -> None:
     }[result.verdict]
     console.print(
         f"\n[{color}]{result.verdict.value.upper()}[/]  "
-        f"[bold]{result.old}[/] → [bold]{result.new}[/]  ([dim]{result.target}[/])"
+        f"[bold]{result.old_label}[/] → [bold]{result.new_label}[/]  ([dim]{result.target}[/])"
     )
 
     recon = result.column_reconciliation
     if recon.diverged:
         if recon.only_in_old:
-            console.print(f"   [yellow]Only in {result.old}:[/] {', '.join(recon.only_in_old)}")
+            console.print(f"   [yellow]Only in {result.old_label}:[/] {', '.join(recon.only_in_old)}")
         if recon.only_in_new:
-            console.print(f"   [yellow]Only in {result.new}:[/] {', '.join(recon.only_in_new)}")
+            console.print(f"   [yellow]Only in {result.new_label}:[/] {', '.join(recon.only_in_new)}")
     console.print(f"   [bold]Compared columns:[/] {len(recon.compared)}")
 
     rc = result.row_counts
     delta = rc.get("delta", 0)
     delta_str = f"[green]{delta}[/]" if delta == 0 else f"[red]{delta:+d}[/]"
     console.print(
-        f"   [bold]Row counts:[/] {result.old}={rc.get('old', 0)}  {result.new}={rc.get('new', 0)}  Δ={delta_str}"
+        f"   [bold]Row counts:[/] {result.old_label}={rc.get('old', 0)}  "
+        f"{result.new_label}={rc.get('new', 0)}  Δ={delta_str}"
     )
 
     if result.column_mismatches:
@@ -408,9 +605,20 @@ def _print_text(result: DiffResult) -> None:
             console.print(f"     • {c.column}: {c.mismatch_rate:.2%} ({c.mismatched_rows} rows)")
 
     if result.sample_mismatches:
-        console.print(f"   [bold]Sample mismatched rows[/] (first {len(result.sample_mismatches)}):")
-        for row in result.sample_mismatches:
-            console.print(f"     {json.dumps(row, default=str)}")
+        if result.primary_key:
+            formatted = _format_sample_mismatches(
+                result.sample_mismatches, result.primary_key, result.old_label, result.new_label
+            )
+            console.print(f"   [bold]Sample mismatches[/] (first {len(formatted)} keys):")
+            for line in formatted:
+                console.print(f"     • {line}")
+        else:
+            # No --primary-key means rows can't be reliably paired across sides,
+            # so fall back to the raw full-row dump rather than risk grouping
+            # unrelated rows together.
+            console.print(f"   [bold]Sample mismatched rows[/] (first {len(result.sample_mismatches)}):")
+            for row in result.sample_mismatches:
+                console.print(f"     {json.dumps(row, default=str)}")
 
     for note in result.notes:
         console.print(f"   [dim]{note}[/]")
@@ -432,9 +640,14 @@ def diff(
         Parameter(name=["--old"], help="Baseline model name (the 'before' relation)."),
     ],
     new: Annotated[
-        str,
-        Parameter(name=["--new"], help="Candidate model name (the 'after' relation)."),
-    ],
+        str | None,
+        Parameter(
+            name=["--new"],
+            help="Candidate model name (the 'after' relation). Defaults to --old's value if omitted — "
+            "the common case is comparing the same table name via --old-raw/--old-glue against its "
+            "ref()-resolved build.",
+        ),
+    ] = None,
     dbt_dir_path: Annotated[
         str | None,
         Parameter(
@@ -483,11 +696,78 @@ def diff(
         bool,
         Parameter(
             name=["--auto-build"],
-            help="Run 'dbt build' on both models (on --target) before comparing, so both relations exist.",
+            help="Run 'dbt build' on both models (on --target) before comparing, so both relations exist. "
+            "Skipped for any side marked --old-raw/--new-raw, since raw relations aren't dbt models.",
+        ),
+    ] = False,
+    old_raw: Annotated[
+        bool,
+        Parameter(
+            name=["--old-raw"],
+            help="Treat --old as a literal existing relation, not a dbt model — bypasses ref()/manifest "
+            "lookup. Use for a Glue-registered view (`ol-dbt local register`, a live view onto the real "
+            "production Iceberg table) or an already-materialized table dbt doesn't know about. Defaults "
+            "to the current --target's own database/schema; override with --old-database/--old-schema.",
+        ),
+    ] = False,
+    new_raw: Annotated[
+        bool,
+        Parameter(name=["--new-raw"], help="Same as --old-raw, but for --new."),
+    ] = False,
+    old_schema: Annotated[
+        str | None,
+        Parameter(
+            name=["--old-schema"],
+            help="Schema override for --old. Requires --old-raw (default: the current --target's schema).",
+        ),
+    ] = None,
+    new_schema: Annotated[
+        str | None,
+        Parameter(
+            name=["--new-schema"],
+            help="Schema override for --new. Requires --new-raw (default: the current --target's schema).",
+        ),
+    ] = None,
+    old_database: Annotated[
+        str | None,
+        Parameter(
+            name=["--old-database"],
+            help="Database/catalog override for --old. Requires --old-raw (default: the current --target's database).",
+        ),
+    ] = None,
+    new_database: Annotated[
+        str | None,
+        Parameter(
+            name=["--new-database"],
+            help="Database/catalog override for --new. Requires --new-raw (default: the current --target's database).",
+        ),
+    ] = None,
+    old_glue: Annotated[
+        str | None,
+        Parameter(
+            name=["--old-glue"],
+            help="Treat --old as a Glue-registered DuckDB view (`ol-dbt local register`) named "
+            "glue__{OLD_GLUE}__{old} — pass just the Glue database name and keep --old as the bare "
+            "table name. A live view onto the real production Iceberg table, not a copy. Implies "
+            "--old-raw; mutually exclusive with it.",
+        ),
+    ] = None,
+    new_glue: Annotated[
+        str | None,
+        Parameter(name=["--new-glue"], help="Same as --old-glue, but for --new."),
+    ] = None,
+    refresh_glue: Annotated[
+        bool,
+        Parameter(
+            name=["--refresh-glue"],
+            help="Run 'ol-dbt local register --all-layers' before comparing. Glue-registered views go "
+            "stale (HTTP 404 on their pinned S3 metadata) once production rebuilds the underlying table "
+            "-- this refreshes them first. Covers not just --old-glue/--new-glue but any upstream "
+            "Glue-registered dependency --auto-build's dbt build might hit via override_ref.sql.",
         ),
     ] = False,
 ) -> None:
-    """Diff two dbt model relations (same-engine row/column comparison).
+    r"""Diff two dbt model relations (same-engine row/column comparison).
 
     Reconciles column sets first (so a schema mismatch is reported clearly rather
     than as a raw SQL error), then runs a dbt_audit_helper comparison on the
@@ -504,19 +784,92 @@ def diff(
         Build both sides first, then compare:
             ol-dbt diff --old m_old --new m_new --auto-build
 
+        Compare a migrated model's local build against the real, already-materialized
+        production table via its Glue-registered view. --new defaults to --old's value,
+        so only one bare table name is needed. --refresh-glue re-registers Glue views
+        first (`ol-dbt local register --all-layers`) instead of requiring it to have
+        been run separately -- worthwhile whenever the production table might have
+        rebuilt (and its old __dbt_tmp snapshot been cleaned up) since you last
+        registered it, which surfaces as an HTTP 404 on stale S3 metadata:
+            ol-dbt diff \\
+                --old enrollment_detail_report --old-glue ol_warehouse_production_reporting \\
+                --primary-key courserunenrollment_id --refresh-glue
+
+        Compare two already-materialized copies of the same model across schemas
+        (e.g. your personal dev schema vs. real production) on one Trino target:
+            ol-dbt diff --target dev_production \\
+                --old enrollment_detail_report --old-raw --old-schema ol_warehouse_production_reporting \\
+                --new enrollment_detail_report --new-raw --new-schema ol_warehouse_production_rlougee_reporting \\
+                --primary-key courserunenrollment_id
+
     """
+    new = new or old
     primary_key_list = list(primary_key)
     exclude_list = list(exclude_columns)
     notes: list[str] = []
+
+    if old_raw and old_glue:
+        err_console.print("[red]Error:[/] --old-raw and --old-glue are mutually exclusive.")
+        sys.exit(1)
+    if new_raw and new_glue:
+        err_console.print("[red]Error:[/] --new-raw and --new-glue are mutually exclusive.")
+        sys.exit(1)
+
+    # --old-glue/--new-glue are a --*-raw variant (see _relation_jinja), so schema/
+    # database overrides are valid alongside either.
+    old_is_raw = old_raw or bool(old_glue)
+    new_is_raw = new_raw or bool(new_glue)
+
+    if (old_schema or old_database) and not old_is_raw:
+        err_console.print("[red]Error:[/] --old-schema/--old-database require --old-raw or --old-glue.")
+        sys.exit(1)
+    if (new_schema or new_database) and not new_is_raw:
+        err_console.print("[red]Error:[/] --new-schema/--new-database require --new-raw or --new-glue.")
+        sys.exit(1)
 
     # Validate every value interpolated into inline Jinja SQL before use.
     try:
         _validate_identifiers("model name", [old, new])
         _validate_identifiers("primary key", primary_key_list)
         _validate_identifiers("excluded column", exclude_list)
+        _validate_identifiers(
+            "schema/database override",
+            [v for v in (old_schema, new_schema, old_database, new_database) if v],
+        )
+        _validate_identifiers("glue database", [v for v in (old_glue, new_glue) if v])
     except InvalidIdentifierError as exc:
         err_console.print(f"[red]Error:[/] {exc}")
         sys.exit(1)
+
+    if old_glue:
+        notes.append(
+            f"--old-glue: '{old}' resolved as Glue-registered view "
+            f"'glue__{old_glue}__{old}' (database={old_database or 'target.database'}, "
+            f"schema={old_schema or 'target.schema'})."
+        )
+    elif old_raw:
+        notes.append(
+            f"--old-raw: '{old}' resolved as a literal relation "
+            f"(database={old_database or 'target.database'}, schema={old_schema or 'target.schema'})."
+        )
+    if new_glue:
+        notes.append(
+            f"--new-glue: '{new}' resolved as Glue-registered view "
+            f"'glue__{new_glue}__{new}' (database={new_database or 'target.database'}, "
+            f"schema={new_schema or 'target.schema'})."
+        )
+    elif new_raw:
+        notes.append(
+            f"--new-raw: '{new}' resolved as a literal relation "
+            f"(database={new_database or 'target.database'}, schema={new_schema or 'target.schema'})."
+        )
+
+    # Text-output labels disambiguating which side is which when --old/new-raw or
+    # --old/new-glue make the bare `old`/`new` names identical or otherwise
+    # ambiguous (e.g. both "enrollment_detail_report"). Unannotated for a plain
+    # ref()-vs-ref() diff, where `old`/`new` are already unambiguous.
+    old_label = f"{old} (glue:{old_glue})" if old_glue else (f"{old} (raw)" if old_raw else old)
+    new_label = f"{new} (glue:{new_glue})" if new_glue else (f"{new} (raw)" if new_raw else new)
 
     # Resolve dbt project directory (shared preamble with impact/validate).
     if dbt_dir_path:
@@ -531,6 +884,61 @@ def diff(
         err_console.print(f"[red]Error:[/] dbt project not found at {dbt_dir}")
         err_console.print("  Use --dbt-dir to specify the path.")
         sys.exit(1)
+
+    # Fail fast with an actionable message rather than letting dbt's raw
+    # "N package(s) specified... only M installed" Compilation Error (surfaced
+    # through 500 chars of dbt log noise) reach the user.
+    if not (dbt_dir / "dbt_packages" / "audit_helper").exists():
+        err_console.print(f"[red]Error:[/] the 'audit_helper' dbt package is not installed in {dbt_dir}.")
+        err_console.print(f"  Run: cd {dbt_dir} && dbt deps")
+        sys.exit(1)
+
+    # Refresh Glue-registered views BEFORE anything below reads one -- both the
+    # materialization just below and --auto-build's `dbt build` (whose compiled
+    # SQL can hit other Glue-registered views transitively, via override_ref.sql)
+    # can fail with a stale-metadata 404 once production rebuilds the underlying
+    # table out from under a previously-registered view.
+    if refresh_glue:
+        if output_format == "text":
+            console.print("[dim]Running: ol-dbt local register --all-layers ...[/]")
+        try:
+            subprocess.run(  # noqa: S603, S607
+                ["ol-dbt", "local", "register", "--all-layers"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or str(exc)).strip()
+            err_console.print(f"[red]Error:[/] ol-dbt local register --all-layers failed: {detail[-500:]}")
+            sys.exit(1)
+        except FileNotFoundError:
+            err_console.print("[red]Error:[/] 'ol-dbt' command not found; ensure it is on PATH.")
+            sys.exit(1)
+
+    # --old-glue/--new-glue relations are backed by iceberg_scan() views, which
+    # DuckDB's Iceberg extension can't serialize into audit_helper's UNION
+    # ALL/EXCEPT comparison SQL (see _materialize_glue_relation). Swap them for a
+    # materialized copy before any column resolution or comparison runs. These
+    # `*_query` variables are the ones actually used to build SQL below;
+    # `old`/`new`/`old_label`/`new_label` are left untouched so notes/output keep
+    # showing the original Glue identifier the user asked to compare.
+    old_query, old_query_glue, old_query_database, old_query_schema = old, old_glue, old_database, old_schema
+    new_query, new_query_glue, new_query_database, new_query_schema = new, new_glue, new_database, new_schema
+    if old_glue:
+        try:
+            old_query = _materialize_glue_relation(old, old_glue, dbt_dir, target)
+        except RuntimeError as exc:
+            err_console.print(f"[red]Error:[/] failed to materialize --old-glue relation: {exc}")
+            sys.exit(1)
+        old_query_glue, old_query_database, old_query_schema = None, None, None
+    if new_glue:
+        try:
+            new_query = _materialize_glue_relation(new, new_glue, dbt_dir, target)
+        except RuntimeError as exc:
+            err_console.print(f"[red]Error:[/] failed to materialize --new-glue relation: {exc}")
+            sys.exit(1)
+        new_query_glue, new_query_database, new_query_schema = None, None, None
 
     models_dir = dbt_dir / "models"
 
@@ -553,13 +961,44 @@ def diff(
             continue
 
     # --- Column reconciliation (before any comparison) ---
-    old_cols = _resolve_columns(old, sql_models_by_name, manifest, yaml_registry)
-    new_cols = _resolve_columns(new, sql_models_by_name, manifest, yaml_registry)
+    old_raw_error: str | None = None
+    new_raw_error: str | None = None
+    if old_is_raw:
+        old_cols, old_raw_error = _resolve_raw_columns(
+            old_query,
+            dbt_dir,
+            target,
+            database=old_query_database,
+            schema=old_query_schema,
+            glue_database=old_query_glue,
+        )
+    else:
+        old_cols = _resolve_columns(old, sql_models_by_name, manifest, yaml_registry)
+    if new_is_raw:
+        new_cols, new_raw_error = _resolve_raw_columns(
+            new_query,
+            dbt_dir,
+            target,
+            database=new_query_database,
+            schema=new_query_schema,
+            glue_database=new_query_glue,
+        )
+    else:
+        new_cols = _resolve_columns(new, sql_models_by_name, manifest, yaml_registry)
+
     unresolved_note = "Column set for '{}' could not be resolved (unparsed / not in manifest); reconciliation skipped."
     if not old_cols:
-        notes.append(unresolved_note.format(old))
+        notes.append(
+            f"Column set for '{old}' could not be resolved: {old_raw_error}"
+            if old_raw_error
+            else unresolved_note.format(old)
+        )
     if not new_cols:
-        notes.append(unresolved_note.format(new))
+        notes.append(
+            f"Column set for '{new}' could not be resolved: {new_raw_error}"
+            if new_raw_error
+            else unresolved_note.format(new)
+        )
     recon = reconcile_columns(old_cols, new_cols, set(exclude_list))
 
     # When a column set can't be resolved statically, the schema-divergence gate
@@ -580,22 +1019,28 @@ def diff(
             "(or point --dbt-dir at a compiled project) for full schema validation."
         )
 
-    # Optionally build both relations first.
+    # Optionally build both relations first. Raw relations aren't dbt models —
+    # they're assumed to already exist (a Glue view, an already-materialized
+    # table) — so they're excluded from --select rather than passed to dbt build.
     if auto_build:
-        # Single space-joined --select value, consistent with ol-dbt run/impact.
-        build_cmd = ["dbt", "build", "--target", target, "--select", f"{old} {new}"]
-        if output_format == "text":
-            console.print(f"[dim]Running: {' '.join(build_cmd)} ...[/]")
-        try:
-            subprocess.run(build_cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603, S607
-        except subprocess.CalledProcessError as exc:
-            # dbt often logs useful detail to stdout, not stderr — prefer either.
-            detail = (exc.stderr or exc.stdout or str(exc)).strip()
-            err_console.print(f"[red]Error:[/] dbt build failed: {detail[-500:]}")
-            sys.exit(1)
-        except FileNotFoundError:
-            err_console.print("[red]Error:[/] 'dbt' command not found; install dbt and ensure it is on PATH.")
-            sys.exit(1)
+        build_targets = [name for name, raw in ((old, old_is_raw), (new, new_is_raw)) if not raw]
+        if not build_targets:
+            notes.append("--auto-build skipped: both --old and --new are raw relations (nothing to build).")
+        else:
+            # Single space-joined --select value, consistent with ol-dbt run/impact.
+            build_cmd = ["dbt", "build", "--target", target, "--select", " ".join(build_targets)]
+            if output_format == "text":
+                console.print(f"[dim]Running: {' '.join(build_cmd)} ...[/]")
+            try:
+                subprocess.run(build_cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603, S607
+            except subprocess.CalledProcessError as exc:
+                # dbt often logs useful detail to stdout, not stderr — prefer either.
+                detail = (exc.stderr or exc.stdout or str(exc)).strip()
+                err_console.print(f"[red]Error:[/] dbt build failed: {detail[-500:]}")
+                sys.exit(1)
+            except FileNotFoundError:
+                err_console.print("[red]Error:[/] 'dbt' command not found; install dbt and ensure it is on PATH.")
+                sys.exit(1)
 
     # --- Comparison ---
     row_counts: dict[str, int] = {"old": 0, "new": 0, "delta": 0}
@@ -619,6 +1064,8 @@ def diff(
                 column_mismatches=column_mismatches,
                 sample_mismatches=sample_mismatches,
                 verdict=Verdict.SCHEMA_DIVERGENCE,
+                old_label=old_label,
+                new_label=new_label,
                 notes=notes,
             ),
             output_format,
@@ -626,7 +1073,21 @@ def diff(
 
     try:
         summary_rows = _run_dbt_show(
-            _compare_relations_sql(old, new, primary_key_list, exclude_list, summarize=True),
+            _compare_relations_sql(
+                old_query,
+                new_query,
+                primary_key_list,
+                exclude_list,
+                summarize=True,
+                old_raw=old_is_raw,
+                new_raw=new_is_raw,
+                old_schema=old_query_schema,
+                new_schema=new_query_schema,
+                old_database=old_query_database,
+                new_database=new_query_database,
+                old_glue=old_query_glue,
+                new_glue=new_query_glue,
+            ),
             dbt_dir,
             target,
             limit=1000,
@@ -635,7 +1096,21 @@ def diff(
 
         if mismatched_rows:
             sample_mismatches = _run_dbt_show(
-                _compare_relations_sql(old, new, primary_key_list, exclude_list, summarize=False),
+                _compare_relations_sql(
+                    old_query,
+                    new_query,
+                    primary_key_list,
+                    exclude_list,
+                    summarize=False,
+                    old_raw=old_is_raw,
+                    new_raw=new_is_raw,
+                    old_schema=old_query_schema,
+                    new_schema=new_query_schema,
+                    old_database=old_query_database,
+                    new_database=new_query_database,
+                    old_glue=old_query_glue,
+                    new_glue=new_query_glue,
+                ),
                 dbt_dir,
                 target,
                 limit=limit,
@@ -648,7 +1123,22 @@ def diff(
                 notes.append(f"Per-column comparison capped at {_MAX_PER_COLUMN_COMPARISONS} of {len(cols)} columns.")
                 cols = cols[:_MAX_PER_COLUMN_COMPARISONS]
             for col in cols:
-                mismatch = _compare_single_column(old, new, primary_key_list, col, dbt_dir, target)
+                mismatch = _compare_single_column(
+                    old_query,
+                    new_query,
+                    primary_key_list,
+                    col,
+                    dbt_dir,
+                    target,
+                    old_raw=old_is_raw,
+                    new_raw=new_is_raw,
+                    old_schema=old_query_schema,
+                    new_schema=new_query_schema,
+                    old_database=old_query_database,
+                    new_database=new_query_database,
+                    old_glue=old_query_glue,
+                    new_glue=new_query_glue,
+                )
                 if mismatch is not None and mismatch.mismatched_rows > 0:
                     column_mismatches.append(mismatch)
         elif not primary_key_list:
@@ -675,6 +1165,8 @@ def diff(
             column_mismatches=column_mismatches,
             sample_mismatches=sample_mismatches,
             verdict=verdict,
+            old_label=old_label,
+            new_label=new_label,
             notes=notes,
         ),
         output_format,
@@ -698,6 +1190,15 @@ def _compare_single_column(
     column: str,
     dbt_dir: Path,
     target: str,
+    *,
+    old_raw: bool = False,
+    new_raw: bool = False,
+    old_schema: str | None = None,
+    new_schema: str | None = None,
+    old_database: str | None = None,
+    new_database: str | None = None,
+    old_glue: str | None = None,
+    new_glue: str | None = None,
 ) -> ColumnMismatch | None:
     """Run a per-column value comparison, returning its mismatch rate.
 
@@ -705,7 +1206,20 @@ def _compare_single_column(
     the mismatch rate is the share of rows not in a "✅" perfect-match bucket.
     """
     rows = _run_dbt_show(
-        _compare_column_sql(old, new, primary_key, column),
+        _compare_column_sql(
+            old,
+            new,
+            primary_key,
+            column,
+            old_raw=old_raw,
+            new_raw=new_raw,
+            old_schema=old_schema,
+            new_schema=new_schema,
+            old_database=old_database,
+            new_database=new_database,
+            old_glue=old_glue,
+            new_glue=new_glue,
+        ),
         dbt_dir,
         target,
         limit=1000,
