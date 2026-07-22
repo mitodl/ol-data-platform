@@ -19,6 +19,7 @@ class TestSnapshot:
     def test_runs_ctas_with_validated_identifiers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import subprocess
 
+        (tmp_path / "dbt_project.yml").write_text("name: test\nprofile: test\n")
         calls: list[list[str]] = []
 
         def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:

@@ -720,6 +720,16 @@ def snapshot(
         print(f"Error: {exc}")
         sys.exit(1)
 
+    # _find_dbt_dir returns an explicit --dbt-dir as-is, without checking it's a
+    # real dbt project -- a typo'd path would otherwise only surface later as a
+    # confusing dbt-level error instead of a clear, early failure here.
+    if not (dbt_dir / "dbt_project.yml").exists():
+        print(
+            f"Error: dbt project not found at {dbt_dir}. "
+            "Pass --dbt-dir pointing at a directory containing dbt_project.yml."
+        )
+        sys.exit(1)
+
     # Rendered into a Jinja template compiled by dbt (not executed as a raw query
     # here), so the S608 heuristic is a false positive -- model/as_name were
     # already validated as plain identifiers above.
