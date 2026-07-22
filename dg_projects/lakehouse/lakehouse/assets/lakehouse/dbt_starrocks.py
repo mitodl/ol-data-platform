@@ -1,5 +1,4 @@
 import os
-import re
 import threading
 import time
 
@@ -16,6 +15,11 @@ from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DbtAutomationTranslator,
     resolve_dbt_target,
+)
+from lakehouse.lib.starrocks_dbt import (
+    MAX_BUILD_ATTEMPTS,
+    looks_retriable,
+    retry_delay,
 )
 from lakehouse.resources.starrocks import StarRocksResource
 
@@ -76,27 +80,9 @@ starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
 # os.environ at that point; nothing after that call can still race).
 _ENV_LOCK = threading.Lock()
 
-_MAX_BUILD_ATTEMPTS = 3
-_RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
-# Same MySQL-wire-protocol error signatures StarRocksResource.execute() retries
-# on: a freshly-generated Vault user may not yet be visible on the FE node dbt
-# connects to. dbt build has no adapter-level retry of its own, so without this
-# a replication-lag race fails the whole build instead of a single statement.
-#
-# dbt-starrocks connects via mysql-connector-python, whose Error.__str__
-# formats as "<errno> (<sqlstate>): <msg>" when the server returns a real
-# error code (verified by reading dbt/adapters/starrocks/connections.py and
-# mysql/connector/errors.py); dbt-core's exception handling preserves str(e)
-# unmodified through to the node's logged error message, so the code does
-# reach here -- but as plain text in a multi-line message, not a structured
-# field, so match on a word boundary rather than a bare substring to avoid
-# an unrelated number (a row count, a line number, part of a timestamp)
-# coincidentally tripping a retry.
-_RETRIABLE_ERROR_PATTERN = re.compile(r"\b(1044|1045|2006|2013)\b")
-
-
-def _looks_retriable(exc: Exception) -> bool:
-    return bool(_RETRIABLE_ERROR_PATTERN.search(str(exc)))
+# Retry knobs and the retriable-error classifier live in lakehouse.lib so they
+# can be unit-tested without a parsed dbt manifest on disk (importing this
+# module evaluates the @dbt_assets decorator below, which needs one).
 
 
 @dbt_assets(
@@ -123,14 +109,14 @@ def starrocks_dbt_assets(
     which depends on this asset.
     """
     last_exc: DagsterDbtCliRuntimeError | None = None
-    for attempt in range(_MAX_BUILD_ATTEMPTS):
+    for attempt in range(MAX_BUILD_ATTEMPTS):
         if attempt:
-            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            delay = retry_delay(attempt)
             context.log.warning(
                 "dbt build failed (attempt %d/%d) -- retrying in %ds with fresh "
                 "Vault credentials: %s",
                 attempt,
-                _MAX_BUILD_ATTEMPTS,
+                MAX_BUILD_ATTEMPTS,
                 delay,
                 last_exc,
             )
@@ -151,7 +137,7 @@ def starrocks_dbt_assets(
         try:
             events = list(invocation.stream())
         except DagsterDbtCliRuntimeError as exc:
-            if attempt == _MAX_BUILD_ATTEMPTS - 1 or not _looks_retriable(exc):
+            if attempt == MAX_BUILD_ATTEMPTS - 1 or not looks_retriable(exc):
                 raise
             last_exc = exc
             continue
