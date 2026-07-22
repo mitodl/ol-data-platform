@@ -103,6 +103,19 @@ class TestRetryDelay:
         total = sum(retry_delay(a) for a in range(1, MAX_BUILD_ATTEMPTS))
         assert total > observed_rollout_seconds
 
+    def test_initial_attempt_never_waits(self):
+        """Attempt 0 is the initial build, not a retry. `2 ** -1` would make
+        this 15.0 -- a float, and a nonsensical wait before the first try.
+        """
+        assert retry_delay(0) == 0
+        assert isinstance(retry_delay(0), int)
+
+    def test_every_delay_is_an_int(self):
+        """time.sleep tolerates a float, but the annotation says int and a
+        fractional delay would mean the schedule isn't what the comment claims.
+        """
+        assert all(isinstance(retry_delay(a), int) for a in range(MAX_BUILD_ATTEMPTS))
+
     def test_first_retry_is_not_instant(self):
         """A follower FE that just lost the leader needs the election to settle;
         retrying a second later just burns an attempt.

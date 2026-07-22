@@ -63,7 +63,16 @@ def looks_retriable(exc: Exception) -> bool:
 
 
 def retry_delay(attempt: int) -> int:
-    """Seconds to wait before `attempt` (1-based; attempt 0 never waits)."""
+    """Seconds to wait before `attempt`, indexed the same way the build loop
+    counts: attempt 0 is the initial build and never waits, attempt 1 is the
+    first retry.
+
+    Attempt 0 is spelled out rather than left to `2 ** -1` -- that returns
+    15.0, which is both a float (breaking the annotation) and a nonsensical
+    "wait half the base delay before doing anything".
+    """
+    if attempt < 1:
+        return 0
     return RETRY_BASE_DELAY * (2 ** (attempt - 1))
 
 
