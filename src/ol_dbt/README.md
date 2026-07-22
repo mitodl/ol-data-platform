@@ -103,6 +103,59 @@ ol-dbt run test
 
 The `.dbt-state/` directory is gitignored and local to your machine.
 
+### Verifying a Change with `ol-dbt diff` and `ol-dbt local snapshot`
+
+When you change a model's SQL, `ol-dbt diff` compares two relations row-by-row and
+column-by-column so you can confirm exactly what changed — instead of eyeballing
+`select *` output.
+
+To isolate your code change from any upstream data drift, snapshot the model's
+current build as a frozen baseline *before* making your change, then diff that
+baseline against the rebuild:
+
+```bash
+# 1. Freeze the current (pre-change) build as a baseline table
+ol-dbt local snapshot my_model --as my_model_baseline
+
+# 2. Make your code change, then rebuild
+ol-dbt run --select my_model --target dev_local
+
+# 3. Diff the frozen baseline against the rebuild
+ol-dbt diff --target dev_local \
+    --old my_model_baseline --old-raw \
+    --new my_model \
+    --primary-key my_model_pk
+```
+
+Because both sides are built from the same underlying data (the baseline is frozen,
+the rebuild only reflects your code change), any reported mismatch can only come
+from your change — never from production data changing in the background.
+
+```bash
+# Per-column mismatch rates require --primary-key (repeatable for a composite key)
+ol-dbt diff --old m_old --new m_new --primary-key id
+
+# Exclude a known non-deterministic column (e.g. a load timestamp)
+ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at
+
+# Build both sides first, then compare
+ol-dbt diff --old m_old --new m_new --auto-build
+
+# Compare two already-materialized copies of the same model across schemas
+# (e.g. your personal dev schema vs. production) on one Trino target
+ol-dbt diff --target dev_production \
+    --old my_model --old-raw --old-schema ol_warehouse_production_reporting \
+    --new my_model --new-raw --new-schema ol_warehouse_production_rlougee_reporting \
+    --primary-key id
+
+# Emit JSON (e.g. for CI); exits non-zero on any divergence
+ol-dbt diff --old m_old --new m_new -k id --format json
+```
+
+`--old-raw`/`--new-raw` treat that side as a literal existing table rather than a
+dbt model — required for a snapshot table (`ol-dbt local snapshot` output) or any
+other already-materialized relation dbt doesn't know about via `ref()`.
+
 ### Running dbt Directly
 
 You can still invoke dbt commands directly from `src/ol_dbt/`:
