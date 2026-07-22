@@ -125,6 +125,18 @@ models:
     A detailed view of enrollments, course runs, course certificates, orders, and
     user information for each enrollment.
   columns:
+  - name: enrollment_key
+    description: string, surrogate key from tfact_enrollment identifying a specific
+      enrollment. Unlike courserunenrollment_id (each platform's own local ID, which
+      can collide across platforms), this column is intended to be unique per row
+      -- warn-only for now due to a known, separate issue where tfact_certificate's
+      user_fk can go stale relative to dim_user after a dim_user full-refresh (see
+      certificate_id 406875 investigation).
+    tests:
+    - not_null
+    - unique:
+        config:
+          severity: warn
   - name: platform
     description: string, application where the data is from
     tests:
