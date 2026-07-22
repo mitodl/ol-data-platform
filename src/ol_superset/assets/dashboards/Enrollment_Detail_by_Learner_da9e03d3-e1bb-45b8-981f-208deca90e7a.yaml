@@ -141,6 +141,11 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-zp-lAphrX
+    chartsInScope:
+    - 64
+    - 67
+    - 70
+    - 108
     controlValues:
       creatable: true
       defaultToFirstItem: false
