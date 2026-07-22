@@ -275,7 +275,11 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
-    sortMetric: null
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
     targets:
     - column:
         name: organization_name
