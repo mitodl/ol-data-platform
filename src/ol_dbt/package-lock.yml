@@ -2,7 +2,7 @@
 packages:
 - name: codegen
   package: dbt-labs/codegen
-  version: 0.14.0
+  version: 0.14.1
 - name: dbt_expectations
   package: metaplane/dbt_expectations
   version: 0.10.10
@@ -12,7 +12,10 @@ packages:
 - name: trino_utils
   package: starburstdata/trino_utils
   version: 0.6.0
+- name: audit_helper
+  package: dbt-labs/audit_helper
+  version: 0.12.2
 - name: dbt_date
   package: godatadriven/dbt_date
-  version: 0.17.2
-sha1_hash: 0921cf79bf01b8c61b05bc8fbb3b8c7dca237a33
+  version: 0.19.0
+sha1_hash: c66302731abe41b3ae0df0d735f2a661ad303b15
