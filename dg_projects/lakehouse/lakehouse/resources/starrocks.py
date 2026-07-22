@@ -51,7 +51,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         )
     )
     vault_role: str = PydanticField(
-        default="dagster",
+        default="admin",
         description="Vault database role to generate credentials for.",
     )
     host: str = PydanticField(description="StarRocks FE host name.")
