@@ -5,13 +5,6 @@ dashboard_title: Enrollment Detail by Learner
 description: null
 metadata:
   chart_configuration:
-    '108':
-      crossFilters:
-        chartsInScope:
-        - 64
-        - 111
-        scope: global
-      id: 108
     '111':
       crossFilters:
         chartsInScope:
@@ -26,6 +19,13 @@ metadata:
         - 111
         scope: global
       id: 64
+    '108':
+      crossFilters:
+        chartsInScope:
+        - 64
+        - 111
+        scope: global
+      id: 108
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -147,6 +147,7 @@ metadata:
     - 70
     - 108
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
@@ -159,7 +160,7 @@ metadata:
     description: ''
     filterType: filter_select
     id: NATIVE_FILTER-8eiua81W1
-    name: Course
+    name: Course Readable ID
     scope:
       excluded: []
       rootPath:
@@ -279,7 +280,11 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
-    sortMetric: null
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
     targets:
     - column:
         name: organization_name
