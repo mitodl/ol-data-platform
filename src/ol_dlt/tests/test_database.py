@@ -105,6 +105,37 @@ def test_vault_credentials_are_injected_at_connection_time(
     }
 
 
+def test_table_format_follows_the_explicit_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit profile must drive the table format, not ``DLT_PROFILE``.
+
+    Everything else in ``build_table_resource`` keys off the resolved profile,
+    so letting the table-format hint fall back to the ambient env var would
+    write plain parquet hints onto a run that is otherwise configured for a
+    deployed (Iceberg) destination, and vice versa.
+    """
+    monkeypatch.setenv("DLT_PROFILE", "test")
+    monkeypatch.setenv("EXAMPLE_DB_HOST", "example.rds.amazonaws.com")
+    monkeypatch.setattr(
+        database.vault, "read_database_credentials", lambda *_a: ("u", "p")
+    )
+    deployed = database.build_database_source(_SPEC, profile="production")
+    local = database.build_database_source(_SPEC, profile="dev")
+    assert (
+        deployed.resources["raw__example__app__postgres__widget"]
+        .compute_table_schema()
+        .get("table_format")
+        == "iceberg"
+    )
+    assert (
+        local.resources["raw__example__app__postgres__widget"]
+        .compute_table_schema()
+        .get("table_format")
+        == "native"
+    )
+
+
 def test_build_database_source_selects_a_subset() -> None:
     source = database.build_database_source(_SPEC, tables=["widget"], profile="dev")
     assert set(source.resources) == {"raw__example__app__postgres__widget"}
