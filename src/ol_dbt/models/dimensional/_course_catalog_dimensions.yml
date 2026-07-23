@@ -4,14 +4,24 @@ version: 2
 models:
 - name: dim_instructor
   description: Instructor dimension containing faculty and course instructors from
-    all platforms. Grain is (instructor_name, primary_platform) — same name on different
-    platforms are kept as separate rows.
+    all platforms. Grain is (instructor_source_id, or instructor_name when no source
+    id exists, primary_platform). mitxonline (wagtail_page_id) and ocw (course_instructor_uuid)
+    have a stable per-instructor natural key and dedupe on it, so two distinct instructors
+    sharing a name on the same platform are kept as separate rows. mitxpro's source
+    data has no such key; its instructors still dedupe on name alone, so two distinct
+    mitxpro faculty sharing an exact name will collapse into a single row — an accepted,
+    documented limitation rather than a fix.
   columns:
   - name: instructor_pk
-    description: Primary key - surrogate key generated from (instructor_name, primary_platform)
+    description: Primary key - surrogate key generated from (instructor_source_id,
+      or instructor_name when no source id exists, primary_platform)
     tests:
     - unique
     - not_null
+  - name: instructor_source_id
+    description: Platform-native stable identifier for the instructor (wagtail_page_id
+      for mitxonline, course_instructor_uuid for ocw). Null for mitxpro, which has
+      no such identifier in its source data.
   - name: instructor_name
     description: Full name of the instructor
     tests:
