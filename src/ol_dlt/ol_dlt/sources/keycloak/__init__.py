@@ -12,10 +12,12 @@ Keycloak database, production reads production, and local development reads the
 ``keycloak`` database in the local-dev CloudNativePG cluster (see
 ``ol_dlt.database``).
 
-Scope is a curated identity subset rather than the whole Keycloak schema. The
-~80 remaining tables are Keycloak's own internal machinery (session, event,
-migration and policy bookkeeping) with no downstream modelling value, and
-several of them hold credential material. Notably absent, deliberately:
+Scope is a curated identity subset rather than the whole Keycloak schema:
+users, group membership, role assignment, organizations, and the realm/client
+context needed to interpret them. The ~80 remaining tables are Keycloak's own
+internal machinery (session, event, migration and policy bookkeeping) with no
+downstream modelling value, and several of them hold credential material.
+Notably absent, deliberately:
 
     credential            password hashes and OTP secrets
     component_config      identity-provider and LDAP bind secrets
@@ -65,6 +67,15 @@ KEYCLOAK_SPEC = DatabaseSourceSpec(
         # --- role assignment -------------------------------------------------
         DatabaseTable(name="keycloak_role", primary_key="id"),
         DatabaseTable(name="user_role_mapping", primary_key=("role_id", "user_id")),
+        # --- organizations ---------------------------------------------------
+        # Keycloak models organization membership as membership of the org's
+        # backing group (org.group_id -> keycloak_group.id), distinguished by
+        # user_group_membership.membership_type (MANAGED/UNMANAGED). Both of
+        # those tables are already ingested above, so no join table is needed
+        # here; org and org_domain supply the organization itself and the email
+        # domains that route users to it.
+        DatabaseTable(name="org", primary_key="id"),
+        DatabaseTable(name="org_domain", primary_key=("id", "name")),
         # --- realm / client context -----------------------------------------
         DatabaseTable(name="realm", primary_key="id"),
         DatabaseTable(
