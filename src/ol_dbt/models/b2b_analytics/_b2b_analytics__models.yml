@@ -1,19 +1,6 @@
 ---
 version: 2
 models:
-- name: smoke_test
-  description: >
-    Connectivity smoke-test for the dbt-starrocks adapter. Creates a single-row table
-    in the StarRocks b2b_analytics database to confirm the adapter can authenticate
-    and create tables. Run via `ol-dbt starrocks run --select b2b_analytics` (fetches
-    Vault dynamic credentials automatically), or manually with
-    --target starrocks_qa_vault or --target starrocks_production.
-  columns:
-  - name: smoke_test_value
-    description: int, always 1
-  - name: run_at
-    description: datetime, timestamp when the model was materialized
-
 - name: mv_b2b_contract_utilization
   description: >
     Seat utilization and completion rate per org x contract. Manual-refresh

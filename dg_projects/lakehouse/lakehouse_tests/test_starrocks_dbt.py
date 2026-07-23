@@ -173,8 +173,8 @@ class TestMaterializedViewRelations:
         ]
 
     def test_excludes_non_materialized_view_models(self):
-        """smoke_test is tagged starrocks but materializes as a table; REFRESH
-        MATERIALIZED VIEW against it is an error.
+        """A starrocks-tagged model that materializes as a table must be left
+        out: REFRESH MATERIALIZED VIEW against a plain table is an error.
         """
         manifest = _manifest(
             [
@@ -184,9 +184,9 @@ class TestMaterializedViewRelations:
                     tags=["starrocks"],
                 ),
                 _model_node(
-                    "smoke_test",
+                    "b2b_seed_table",
                     materialized="table",
-                    tags=["starrocks", "b2b_analytics", "smoke_test"],
+                    tags=["starrocks", "b2b_analytics"],
                 ),
             ]
         )
