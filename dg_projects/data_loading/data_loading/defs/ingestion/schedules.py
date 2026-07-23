@@ -48,6 +48,15 @@ podcast_rss_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+keycloak_ingest_schedule = dg.ScheduleDefinition(
+    name="keycloak_ingest_daily_schedule",
+    # Selected by group rather than by key so adding a table to KEYCLOAK_SPEC
+    # does not also require editing this schedule.
+    target=dg.AssetSelection.groups("keycloak"),
+    cron_schedule="30 4 * * *",
+    execution_timezone="Etc/UTC",
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -55,5 +64,6 @@ defs = dg.Definitions(
         mit_climate_ingest_schedule,
         mit_edx_programs_ingest_schedule,
         podcast_rss_ingest_schedule,
+        keycloak_ingest_schedule,
     ],
 )
