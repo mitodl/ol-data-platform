@@ -1388,14 +1388,30 @@ models:
     connected via each account's link to MITx Online. Only includes users
     linked on at least one side. Grain: one row per MITx Online account
     (merged-away accounts are redirected to their canonical replacement via
-    bridge_user_account_merge).
+    bridge_user_account_link).
+  tests:
+  - dbt_utils.expression_is_true:
+      expression: "edxorg_user_id is not null or mitlearn_application_user_id is not\
+        \ null"
   columns:
   - name: mitxonline_openedx_user_id
     description: MITx Online Open edX user ID, nullable. The connecting hop between
       edX.org and MIT Learn -- not itself part of the crosswalk.
+    tests:
+    - unique:
+        config:
+          severity: warn
   - name: edxorg_user_id
     description: edX.org user ID, nullable. Not populated if dim_user shows a link
-      that int__mitx__users can't independently confirm for that MITx Online account
-      (see model for the identity-collapsing collision this guards against).
+      that bridge_user_account_link can't independently confirm for that MITx Online
+      account (see model for the identity-collapsing collision this guards against).
+    tests:
+    - unique:
+        config:
+          severity: warn
   - name: mitlearn_application_user_id
     description: MIT Learn user ID, nullable.
+    tests:
+    - unique:
+        config:
+          severity: warn
