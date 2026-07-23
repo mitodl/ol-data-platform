@@ -240,7 +240,11 @@ with mitxonline_certificates as (
         and combined_certificates.user_id = ul_edxorg.edxorg_openedx_user_id
     left join user_lookup as ul_micromasters
         on combined_certificates.platform = 'micromasters'
-        and combined_certificates.user_email = ul_micromasters.email
+        -- dim_user.email is always lower()-ed; micromasters emails are not,
+        -- so a mixed-case email would otherwise silently fail to resolve user_fk.
+        -- lower() both sides defensively since it's unclear from this query alone
+        -- that dim_user.email is guaranteed lowercase.
+        and lower(combined_certificates.user_email) = lower(ul_micromasters.email)
     left join user_lookup as ul_bootcamps
         on combined_certificates.platform = 'bootcamps'
         and combined_certificates.user_id = ul_bootcamps.bootcamps_application_user_id
@@ -257,6 +261,33 @@ with mitxonline_certificates as (
     left join dim_program
         on combined_certificates.program_id = dim_program.source_id
         and combined_certificates.platform = dim_program.platform_code
+)
+
+-- MicroMasters course certificates are earned on and issued by edX.org, and both
+-- the edxorg and micromasters sources resolve courserun_fk to the same edxorg
+-- course run (see the dim_course_run join above). Their surrogate certificate_ids
+-- differ (user_id-based vs email-based), so the same physical certificate enters
+-- as two rows and the certificate_key-based defensive dedup further below can't
+-- catch it. Collapse to one row per (user_fk, courserun_fk, certificate_scope)
+-- when both FKs resolved, preferring the canonical edxorg record.
+, cross_source_deduped as (
+    select
+        *
+        , row_number() over (
+            partition by
+                case
+                    when user_fk is not null and courserun_fk is not null
+                        then concat(cast(user_fk as varchar), '|', cast(courserun_fk as varchar), '|', certificate_scope)
+                    else concat(certificate_id, '|', platform, '|', certificate_scope)
+                end
+            order by
+                case platform
+                    when 'edxorg' then 0
+                    when 'micromasters' then 1
+                    else 0
+                end
+        ) as _cross_source_row_num
+    from certificates_with_fks
 )
 
 {% if is_incremental() %}
@@ -295,18 +326,21 @@ with mitxonline_certificates as (
         , certificate_created_on
         , certificate_updated_on
         , certificate_issued_on
-    from certificates_with_fks as cwf
+    from cross_source_deduped as cwf
 
     {% if is_incremental() %}
     -- left join preserves certificates from platforms not yet in the target table
     left join incremental_watermarks w
         on w.watermark_platform = cwf.platform
         and w.watermark_certificate_type = cwf.certificate_scope
-    where (
+    where cwf._cross_source_row_num = 1
+    and (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
     )
+    {% else %}
+    where cwf._cross_source_row_num = 1
     {% endif %}
 )
 
