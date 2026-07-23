@@ -796,6 +796,9 @@ pyiceberg = [
     { name = "pyiceberg-core" },
     { name = "sqlalchemy" },
 ]
+sql-database = [
+    { name = "sqlalchemy" },
+]
 
 [[package]]
 name = "docstring-parser"
@@ -1889,8 +1892,10 @@ version = "0.1.0"
 source = { editable = "../../src/ol_dlt" }
 dependencies = [
     { name = "defusedxml" },
-    { name = "dlt", extra = ["filesystem", "parquet", "pyiceberg"] },
+    { name = "dlt", extra = ["filesystem", "parquet", "pyiceberg", "sql-database"] },
     { name = "duckdb" },
+    { name = "hvac" },
+    { name = "psycopg2-binary" },
     { name = "pyiceberg", extra = ["glue"] },
     { name = "requests" },
 ]
@@ -1898,8 +1903,10 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "defusedxml", specifier = ">=0.7" },
-    { name = "dlt", extras = ["filesystem", "parquet", "pyiceberg"], specifier = ">=1.28,<2" },
+    { name = "dlt", extras = ["filesystem", "parquet", "pyiceberg", "sql-database"], specifier = ">=1.28,<2" },
     { name = "duckdb", specifier = ">=1.0,!=1.5.0,!=1.5.1" },
+    { name = "hvac", specifier = ">=2.3" },
+    { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pyiceberg", extras = ["glue"], specifier = ">=0.9" },
     { name = "requests", specifier = ">=2.32" },
 ]

@@ -21,6 +21,8 @@ src/ol_dlt/
 │   └── secrets.toml.template
 ├── ol_dlt/
 │   ├── config.py         # profile -> destination/dataset/table_format factory
+│   ├── database.py       # reusable relational-database source (spec -> @dlt.source)
+│   ├── vault.py          # Vault-issued database credentials (pure hvac)
 │   └── sources/<name>/   # @dlt.source / @dlt.resource bodies only
 └── tests/                # unit + materialization tests (ephemeral DuckDB/filesystem)
 ```
@@ -96,6 +98,8 @@ DLT_PROFILE=dev uv run python -m ol_dlt.sources.podcast_rss
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.mit_edx_programs
 #    Needs AWS creds (reads the prod S3 landing zone):
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.edxorg_s3
+#    Needs the local-dev Postgres cluster port-forwarded (see Database sources):
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.keycloak
 
 # 5. Inspect a pipeline's state / last load after a run.
 DLT_PROFILE=dev uv run dlt pipeline oll info
@@ -104,10 +108,53 @@ DLT_PROFILE=dev uv run dlt pipeline oll info
 The hermetic suite (step 1) is what CI runs and what should gate merges; the
 live runs (step 4) depend on the upstream services being reachable.
 
+## Database sources
+
+Relational sources do **not** get hand-written resources. Declare a
+`DatabaseSourceSpec` in `ol_dlt/sources/<name>/__init__.py` and
+`ol_dlt.database` builds the `@dlt.source` from it — see
+`ol_dlt/sources/keycloak/` for the reference instance.
+
+```python
+KEYCLOAK_SPEC = DatabaseSourceSpec(
+    name="keycloak",
+    raw_table_prefix="raw__keycloak__app__postgres__",
+    database="keycloak",
+    vault_mount="postgres-keycloak",
+    tables=(DatabaseTable(name="user_entity", primary_key="id"), ...),
+)
+```
+
+**Which database gets read is the profile's job, not the spec's.** `qa` reads
+the QA database, `production` reads production, and `dev`/`ci`/`test` read the
+local-dev CloudNativePG cluster from `ol-infrastructure/local-dev`, so no
+developer needs access to a deployed environment to exercise a pipeline:
+
+```bash
+kubectl port-forward -n local-infra svc/local-pg-rw 5432:5432
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.keycloak
+```
+
+Per-source overrides come from `<NAME>_DB_HOST` / `_PORT` / `_USERNAME` /
+`_PASSWORD`. Deployed profiles **require** `<NAME>_DB_HOST` (the Dagster Pulumi
+stack passes it through from the application's stack reference) and take their
+username/password from Vault at connection time — never from the environment,
+and never at code-location import, where a lease would go stale long before a
+scheduled run fires.
+
+Two things that need doing outside this repo before a new database source can
+run in a deployed environment, both in `ol-infrastructure`:
+
+1. Grant `<mount>/creds/readonly` in
+   `src/ol_infrastructure/applications/dagster/dagster_server_policy.hcl`.
+2. Add `<NAME>_DB_HOST` to the `data_loading` deployment env in the dagster
+   `__main__.py`, sourced from the application stack's exported RDS host.
+
 ## Adding a new source
 
 1. Author the `@dlt.source` in `ol_dlt/sources/<name>/__init__.py` — no env
    branching, no Dagster imports. Resolve destination/dataset/table_format via
-   `ol_dlt.config`.
+   `ol_dlt.config`. For a relational source, declare a `DatabaseSourceSpec`
+   instead (see **Database sources** above).
 2. Add a `@dlt_assets` wrapper in the `data_loading` code location
    (`defs/ingestion/assets.py`) using the shared `RawDataDltTranslator`.
