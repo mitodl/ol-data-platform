@@ -35,7 +35,7 @@ jobs:
       matrix: ${{ steps.find.outputs.matrix }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Discover pytest suites
       id: find
@@ -55,7 +55,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Install uv
       uses: astral-sh/setup-uv@v8.3.2
