@@ -5,8 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from ol_dbt_cli.lib.sql_parser import (
+    consumed_columns_by_ref_via_scope,
+    consumed_columns_via_scope,
     expand_star_with_schema,
     find_compiled_dir,
+    get_columns_read_from_ref,
     parse_model_file,
     parse_model_sql,
     resolve_star_columns,
@@ -874,3 +877,122 @@ class TestResolveStarColumns:
         assert parsed.has_star
         assert parsed.source_path is None
         assert resolve_star_columns(parsed, {"up": {"a", "b"}}) is None
+
+
+class TestConsumedColumnsViaScope:
+    """Scope-based consumed-column attribution — the JOIN/subquery fallback.
+
+    Covers the shapes ``get_columns_read_from_ref`` deliberately bails on (JOIN to
+    a second table, subquery ``FROM``), where sqlglot ``qualify()`` + scope
+    traversal can still anchor each column to its source ref.
+    """
+
+    def test_attributes_columns_across_a_join_the_heuristic_skips(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.email, e.grade "
+            "from {{ ref('stg_users') }} as u "
+            "join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id "
+            "where u.status = 'active'"
+        )
+        parsed = parse_model_file(model)
+        schema = {
+            "stg_users": {"user_id", "email", "status", "unused"},
+            "stg_enroll": {"user_id", "grade"},
+        }
+        # The heuristic bails on the JOIN.
+        assert get_columns_read_from_ref(parsed, "stg_users") is None
+        # The scope fallback attributes SELECT/JOIN/WHERE columns to the right ref.
+        users = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert users is not None
+        assert {"user_id", "email", "status"} <= users
+        enroll = consumed_columns_via_scope(parsed, "stg_enroll", schema)
+        assert enroll is not None
+        assert {"user_id", "grade"} <= enroll
+
+    def test_surfaces_a_broken_column_read_through_a_join(self, tmp_path: Path) -> None:
+        """A directly-qualified column absent upstream is still catchable via a JOIN."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.nonexistent_col, e.grade "
+            "from {{ ref('stg_users') }} as u "
+            "join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email"}, "stg_enroll": {"user_id", "grade"}}
+        consumed = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert consumed is not None
+        # The broken reference surfaces so broken_ref_columns (consumed - upstream) flags it.
+        assert "nonexistent_col" in consumed
+        assert consumed - schema["stg_users"] == {"nonexistent_col"}
+
+    def test_does_not_misattribute_inner_subquery_column_to_outer_ref(self, tmp_path: Path) -> None:
+        """The historical FP shape: a nested IN-subquery column belongs to the inner ref."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "with src as (select * from {{ ref('outer_ref') }}) "
+            "select src.a from src "
+            "where src.b in (select i.c from {{ ref('inner_ref') }} as i where i.d = src.a)"
+        )
+        parsed = parse_model_file(model)
+        schema = {"outer_ref": {"a", "b"}, "inner_ref": {"c", "d"}}
+        outer = consumed_columns_via_scope(parsed, "outer_ref", schema)
+        inner = consumed_columns_via_scope(parsed, "inner_ref", schema)
+        assert outer is not None and inner is not None
+        # inner_ref's columns are NOT attributed to outer_ref (no cross-ref bleed).
+        assert "c" not in outer
+        assert "d" not in outer
+        assert {"c", "d"} <= inner
+
+    def test_attributes_columns_through_a_subquery_from(self, tmp_path: Path) -> None:
+        """A derived-table (subquery) FROM joined to a ref resolves per-ref, incl. inner-only cols."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select sub.user_id, sub.email, e.grade "
+            "from (select user_id, email from {{ ref('stg_users') }} where status = 'active') sub "
+            "join {{ ref('stg_enroll') }} as e on sub.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email", "status"}, "stg_enroll": {"user_id", "grade"}}
+        users = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert users is not None
+        # `status` is consumed only inside the derived table's WHERE — scope still sees it.
+        assert {"user_id", "email", "status"} <= users
+        enroll = consumed_columns_via_scope(parsed, "stg_enroll", schema)
+        assert enroll is not None
+        assert {"user_id", "grade"} <= enroll
+
+    def test_returns_none_when_target_schema_unknown(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, e.grade "
+            "from {{ ref('stg_users') }} as u join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        # Only the other ref's schema is known — the target can't be anchored.
+        assert consumed_columns_via_scope(parsed, "stg_users", {"stg_enroll": {"user_id", "grade"}}) is None
+
+    def test_returns_none_when_ref_not_read(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select a from {{ ref('stg_users') }}")
+        parsed = parse_model_file(model)
+        assert consumed_columns_via_scope(parsed, "some_other_model", {"some_other_model": {"a"}}) is None
+
+    def test_batch_attributes_every_ref_in_one_pass(self, tmp_path: Path) -> None:
+        """The batch entrypoint returns per-ref consumed sets for the whole model at once."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.email, e.grade "
+            "from {{ ref('stg_users') }} as u join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email"}, "stg_enroll": {"user_id", "grade"}}
+        result = consumed_columns_by_ref_via_scope(parsed, schema)
+        assert {"user_id", "email"} <= result["stg_users"]
+        assert {"user_id", "grade"} <= result["stg_enroll"]
+
+    def test_batch_returns_empty_when_no_schema_known(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select user_id from {{ ref('stg_users') }}")
+        parsed = parse_model_file(model)
+        assert consumed_columns_by_ref_via_scope(parsed, {}) == {}
