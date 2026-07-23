@@ -175,3 +175,41 @@ models:
   - name: userorganization_is_manager
     description: If true, the user is a manager of this organization and can access
       organization dashboard features.
+
+- name: bridge_user_account_link
+  description: >
+    Edges between platform-specific user accounts, independent of dim_user's
+    own identity-collapsing. from_platform = to_platform is a
+    same-platform redirect from an old account to its canonical replacement
+    (derived from mitxonline audit history) -- a redirect to follow. Different
+    platforms is a cross-platform co-reference (e.g. a MITx Online account's
+    linked edX.org account) -- not a redirect. Grain: one row per
+    (from_platform, from_user_id, to_platform).
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - from_platform
+      - from_user_id
+      - to_platform
+  columns:
+  - name: from_platform
+    description: Platform identifier of the source account ('mitxonline' today).
+    tests:
+    - not_null
+  - name: from_user_id
+    description: Raw platform-specific user ID of the source account.
+    tests:
+    - not_null
+  - name: to_platform
+    description: Platform identifier of the target account. Same as from_platform
+      for a merge redirect; a different platform (e.g. 'edxorg') for a cross-platform
+      link.
+    tests:
+    - not_null
+  - name: to_user_id
+    description: Raw platform-specific user ID of the target account.
+    tests:
+    - not_null
+  - name: observed_on
+    description: Timestamp of the merge (most recent, if reversed). Null for cross-platform
+      link rows.
