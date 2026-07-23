@@ -14,9 +14,25 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
     dg.AssetKey(["edxorg", "raw_data", "db_table", t]) for t in EDXORG_DB_TABLES
 ]
 
+# Caps how many of the ~44 per-table edxorg_s3 ops run concurrently inside this
+# job's single run pod (8Gi limit). The pool="edxorg_s3" tag on each op (see
+# assets.py) only throttles concurrency *across* runs via the instance-wide
+# concurrency-slots API -- it does nothing to the *in-process* fan-out within
+# one run, which is governed entirely by the multiprocess executor's own
+# max_concurrent. Left unset, that defaults to multiprocessing.cpu_count()
+# (the node's logical CPU count, not the pod's cgroup CPU limit), so every
+# table -- including the multi-GB courseware_studentmodule table -- launched
+# as a subprocess within ~150ms of each other and OOMKilled the pod almost
+# immediately (confirmed in production logs 2026-07-23: repeated "Run has not
+# completed but K8s job has no active pods" within ~2 minutes of each start,
+# exhausting the daemon's 3 resume attempts twice in a row).
+# 4 is a conservative starting point given unknown per-table memory profiles;
+# override per-launch via run config (execution.config.multiprocess.config.
+# max_concurrent) to tune without a redeploy.
 edxorg_s3_ingest_job = dg.define_asset_job(
     name="edxorg_s3_ingest_job",
     selection=dg.AssetSelection.keys(*_EDXORG_S3_ASSET_KEYS),
+    executor_def=dg.multiprocess_executor.configured({"max_concurrent": 4}),
     description=(
         "Loads all edxorg database tables from S3 into the raw warehouse layer."
     ),
