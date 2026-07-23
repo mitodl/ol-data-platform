@@ -19,6 +19,7 @@ lease instead of opening a new one per table.
 
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,13 @@ _LEASE_USE_FRACTION = 0.5
 
 # (mount, role) -> (expires_at_monotonic, username, password)
 _CREDENTIAL_CACHE: dict[tuple[str, str], tuple[float, str, str]] = {}
+
+# Guards the check-then-fetch above. Extraction is single-threaded today
+# (``workers = 1`` in .dlt/config.toml), so nothing races for this lock — but
+# that setting lives in another file for an unrelated reason (a dlt injectable-
+# context bug), and raising it would otherwise silently turn "one lease per
+# run" into "one lease per worker".
+_CREDENTIAL_LOCK = threading.Lock()
 
 
 def vault_address() -> str:
@@ -88,6 +96,14 @@ def read_database_credentials(mount: str, role: str = "readonly") -> tuple[str, 
             ingestion pipeline should ever ask for.
     """
     cache_key = (mount, role)
+    with _CREDENTIAL_LOCK:
+        return _read_database_credentials_locked(cache_key, mount, role)
+
+
+def _read_database_credentials_locked(
+    cache_key: tuple[str, str], mount: str, role: str
+) -> tuple[str, str]:
+    """Return cached credentials, or issue and cache a fresh lease."""
     cached = _CREDENTIAL_CACHE.get(cache_key)
     if cached and time.monotonic() < cached[0]:
         return cached[1], cached[2]
@@ -108,8 +124,17 @@ def read_database_credentials(mount: str, role: str = "readonly") -> tuple[str, 
         raise RuntimeError(msg)
 
     lease_duration = int(response.get("lease_duration") or 0)
-    username = response["data"]["username"]
-    password = response["data"]["password"]
+    issued = response.get("data") or {}
+    username, password = issued.get("username"), issued.get("password")
+    if not (username and password):
+        # The realistic cause is a mount that exists but isn't a database
+        # secrets engine (a KV-v2 mount, say, nests its payload under
+        # data.data), which otherwise surfaces as a bare KeyError.
+        msg = (
+            f"Vault response from {vault_path!r} carries no username/password — "
+            f"is {mount!r} a database secrets-engine mount?"
+        )
+        raise RuntimeError(msg)
     logger.info(
         "Issued Vault database credentials from %s (lease %ss)",
         vault_path,
