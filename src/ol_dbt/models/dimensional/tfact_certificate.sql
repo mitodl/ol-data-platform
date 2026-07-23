@@ -241,8 +241,10 @@ with mitxonline_certificates as (
     left join user_lookup as ul_micromasters
         on combined_certificates.platform = 'micromasters'
         -- dim_user.email is always lower()-ed; micromasters emails are not,
-        -- so a mixed-case email would otherwise silently fail to resolve user_fk
-        and lower(combined_certificates.user_email) = ul_micromasters.email
+        -- so a mixed-case email would otherwise silently fail to resolve user_fk.
+        -- lower() both sides defensively since it's unclear from this query alone
+        -- that dim_user.email is guaranteed lowercase.
+        and lower(combined_certificates.user_email) = lower(ul_micromasters.email)
     left join user_lookup as ul_bootcamps
         on combined_certificates.platform = 'bootcamps'
         and combined_certificates.user_id = ul_bootcamps.bootcamps_application_user_id
