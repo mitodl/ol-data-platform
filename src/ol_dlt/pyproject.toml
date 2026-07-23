@@ -6,12 +6,15 @@ authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }
 requires-python = "~=3.13,<3.15"
 license = "BSD-3-Clause"
 dependencies = [
-    "dlt[filesystem,parquet,pyiceberg]>=1.28,<2",
+    "dlt[filesystem,parquet,pyiceberg,sql_database]>=1.28,<2",
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
     # >=1.2 for the CSV reader's `strict_mode` argument (edxorg_s3 source).
     "duckdb>=1.2,!=1.5.0,!=1.5.1",
     "defusedxml>=0.7",
+    # Relational sources (ol_dlt.database) and their Vault-issued credentials.
+    "psycopg2-binary>=2.9",
+    "hvac>=2.3",
 ]
 
 [dependency-groups]

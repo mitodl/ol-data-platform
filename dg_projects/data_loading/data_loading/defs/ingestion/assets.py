@@ -14,6 +14,7 @@ from dagster import AssetExecutionContext, AssetsDefinition, Definitions
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     edxorg_s3,
+    keycloak,
     mit_climate,
     mit_edx_programs,
     mitpe,
@@ -73,6 +74,11 @@ podcast_rss_assets = build_ingest_assets(
     source=podcast_rss.build_source(),
     pipeline=podcast_rss.podcast_rss_pipeline,
 )
+keycloak_assets = build_ingest_assets(
+    name="keycloak_ingest",
+    source=keycloak.build_source(),
+    pipeline=keycloak.keycloak_pipeline,
+)
 
 
 # --- edxorg_s3: custom upstream deps + one op per table ---------------------
@@ -131,6 +137,7 @@ defs = Definitions(
         mit_climate_assets,
         mit_edx_programs_assets,
         podcast_rss_assets,
+        keycloak_assets,
         *edxorg_s3_table_assets,
     ],
 )
