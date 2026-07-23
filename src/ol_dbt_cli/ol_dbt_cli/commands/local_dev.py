@@ -9,6 +9,7 @@ Provides commands for:
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -673,6 +674,84 @@ def list_sources(
 ) -> None:
     """List currently registered Glue sources in DuckDB."""
     _show_registry(duckdb_path)
+
+
+@local_app.command
+def snapshot(
+    model: Annotated[str, cyclopts.Parameter(help="Model name to snapshot (its current build, via ref()).")],
+    as_name: Annotated[
+        str,
+        cyclopts.Parameter(name=["--as"], help="Name for the snapshot table, created in the target's own schema."),
+    ],
+    target: Annotated[
+        str,
+        cyclopts.Parameter(name=["--target", "-t"], help="dbt target to read/write on (default: dev_local)."),
+    ] = "dev_local",
+    dbt_dir_path: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            name=["--dbt-dir", "-d"],
+            help="Path to dbt project root (contains dbt_project.yml). Defaults to src/ol_dbt relative to repo root.",
+        ),
+    ] = None,
+) -> None:
+    """Copy a model's current build into a plain table under a new name.
+
+    For before/after comparisons of the SAME model (a code change, not a
+    migration to a differently-named model): build it, snapshot the build with
+    this command, make your change and rebuild, then compare with
+    `ol-dbt diff --old <as-name> --old-raw --new <model> --primary-key ...`.
+    Neither this command nor that diff touches Glue/production, so any
+    difference it finds reflects the code change alone, not upstream data
+    drift from asynchronous production rebuilds.
+    """
+    from ol_dbt_cli.commands.diff import InvalidIdentifierError, _validate_identifiers  # noqa: PLC0415
+    from ol_dbt_cli.commands.run import _find_dbt_dir  # noqa: PLC0415
+
+    try:
+        _validate_identifiers("model/snapshot name", [model, as_name])
+    except InvalidIdentifierError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    try:
+        dbt_dir = _find_dbt_dir(dbt_dir_path)
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    # _find_dbt_dir returns an explicit --dbt-dir as-is, without checking it's a
+    # real dbt project -- a typo'd path would otherwise only surface later as a
+    # confusing dbt-level error instead of a clear, early failure here.
+    if not (dbt_dir / "dbt_project.yml").exists():
+        print(
+            f"Error: dbt project not found at {dbt_dir}. "
+            "Pass --dbt-dir pointing at a directory containing dbt_project.yml."
+        )
+        sys.exit(1)
+
+    # Rendered into a Jinja template compiled by dbt (not executed as a raw query
+    # here), so the S608 heuristic is a false positive -- model/as_name were
+    # already validated as plain identifiers above.
+    # `}}` in an f-string is an escape for a single literal `}` (same as `{{` for
+    # `{`) -- each Jinja `{{ ... }}` block needs `{{{{`/`}}}}` from an f-string.
+    dst_expr = f"api.Relation.create(database=target.database, schema=target.schema, identifier='{as_name}')"
+    src_expr = f"ref('{model}')"
+    ctas_sql = f"create or replace table {{{{ {dst_expr} }}}} as select * from {{{{ {src_expr} }}}}"  # noqa: S608
+    cmd = ["dbt", "show", "--inline", ctas_sql, "--target", target, "--output", "json", "--limit", "-1"]
+    print(f"Running: {' '.join(cmd)}")
+    try:
+        subprocess.run(cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        print(f"Error: dbt show failed: {detail[-500:]}")
+        sys.exit(1)
+    except FileNotFoundError:
+        print("Error: 'dbt' command not found; install dbt and ensure it is on PATH.")
+        sys.exit(1)
+
+    print(f"✅ Snapshotted '{model}' as '{as_name}' (target={target}).")
+    print(f"   Compare with: ol-dbt diff --target {target} --old {as_name} --old-raw --new {model} --primary-key <key>")
 
 
 @local_app.command

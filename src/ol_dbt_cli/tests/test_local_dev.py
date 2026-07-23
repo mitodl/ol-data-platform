@@ -11,7 +11,38 @@ from ol_dbt_cli.commands.local_dev import (
     PROTECTED_SCHEMAS,
     _register_single_table,
     _validate_schema_safety,
+    snapshot,
 )
+
+
+class TestSnapshot:
+    def test_runs_ctas_with_validated_identifiers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import subprocess
+
+        (tmp_path / "dbt_project.yml").write_text("name: test\nprofile: test\n")
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        snapshot(
+            "enrollment_detail_report",
+            as_name="enrollment_detail_report_baseline",
+            dbt_dir_path=str(tmp_path),
+        )
+        assert len(calls) == 1
+        inline_idx = calls[0].index("--inline") + 1
+        inline_sql = calls[0][inline_idx]
+        assert "identifier='enrollment_detail_report_baseline'" in inline_sql
+        assert "ref('enrollment_detail_report')" in inline_sql
+        assert "--limit" in calls[0]
+        assert calls[0][calls[0].index("--limit") + 1] == "-1"
+
+    def test_rejects_invalid_identifier(self, tmp_path: Path) -> None:
+        with pytest.raises(SystemExit):
+            snapshot("m; drop table x", as_name="baseline", dbt_dir_path=str(tmp_path))
 
 
 class TestValidateSchemaSafety:
