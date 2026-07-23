@@ -175,3 +175,30 @@ models:
   - name: userorganization_is_manager
     description: If true, the user is a manager of this organization and can access
       organization dashboard features.
+
+- name: bridge_user_account_merge
+  description: >
+    Verified account-merge redirects derived from mitxonline audit history.
+    Grain: one row per (platform, platform_user_id_before).
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - platform
+      - platform_user_id_before
+  columns:
+  - name: platform
+    description: Platform identifier string (only 'mitxonline' today).
+    tests:
+    - not_null
+  - name: platform_user_id_before
+    description: Raw platform-specific user ID that was merged away (redirected from).
+    tests:
+    - not_null
+  - name: platform_user_id_after
+    description: Raw platform-specific user ID that is now canonical (redirected to).
+    tests:
+    - not_null
+  - name: merged_on
+    description: Timestamp of the merge (most recent, if the merge was reversed).
+    tests:
+    - not_null

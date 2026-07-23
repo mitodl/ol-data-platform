@@ -411,6 +411,23 @@ sources:
         warn_after: {count: 1, period: day}
         error_after: {count: 2, period: day}
       loaded_at_field: "from_iso8601_timestamp(created_on || 'Z')"
+  - name: raw__mitxonline__app__postgres__courses_courserunenrollmentaudit
+    columns:
+    - name: id
+      description: int, sequential ID for this audit record
+    - name: enrollment_id
+      description: int, foreign key referencing courses_courserunenrollment
+    - name: acting_user_id
+      description: int, ID of the user (often an admin/support account) who made the
+        change
+    - name: data_before
+      description: JSON string, full enrollment record state before the change
+    - name: data_after
+      description: JSON string, full enrollment record state after the change
+    - name: created_on
+      description: timestamp, specifying when this audit record was created
+    - name: updated_on
+      description: timestamp, specifying when this audit record was last updated
   - name: raw__mitxonline__app__postgres__courses_programenrollment
     columns:
     - name: id
@@ -430,6 +447,24 @@ sources:
       description: int, unique ID for each user on the MITx Online platform
     - name: enrollment_mode
       description: str, enrollment mode for user
+
+  - name: raw__mitxonline__app__postgres__courses_programenrollmentaudit
+    columns:
+    - name: id
+      description: int, sequential ID for this audit record
+    - name: enrollment_id
+      description: int, foreign key referencing courses_programenrollment
+    - name: acting_user_id
+      description: int, ID of the user (often an admin/support account) who made the
+        change
+    - name: data_before
+      description: JSON string, full enrollment record state before the change
+    - name: data_after
+      description: JSON string, full enrollment record state after the change
+    - name: created_on
+      description: timestamp, specifying when this audit record was created
+    - name: updated_on
+      description: timestamp, specifying when this audit record was last updated
 
   - name: raw__mitxonline__app__postgres__courses_courserun
     columns:
