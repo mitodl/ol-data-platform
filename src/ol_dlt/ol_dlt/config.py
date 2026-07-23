@@ -65,14 +65,19 @@ def active_profile() -> str:
     return os.getenv("DLT_PROFILE", DEFAULT_PROFILE)
 
 
-def active_table_format() -> TableFormat:
-    """Return the table format for the active profile.
+def active_table_format(profile: str | None = None) -> TableFormat:
+    """Return the table format for the (active) profile.
 
     ``"iceberg"`` for qa/production, ``"native"`` (plain filesystem parquet) for
     dev/ci/test. Use this in ``@dlt.resource(..., table_format=...)`` so a source
     body never branches on the environment itself.
+
+    Takes an optional explicit ``profile`` for the same reason ``dataset_name``
+    and ``bucket_root`` do: a caller that has already resolved a profile (a test,
+    or a targeted run) must not have the table format silently resolved from a
+    different one via ``DLT_PROFILE``.
     """
-    return "iceberg" if active_profile() in ICEBERG_PROFILES else "native"
+    return "iceberg" if (profile or active_profile()) in ICEBERG_PROFILES else "native"
 
 
 def dataset_name(profile: str | None = None) -> str:

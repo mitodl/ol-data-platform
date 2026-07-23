@@ -225,7 +225,7 @@ def build_table_resource(
     )
     return resource.with_name(raw_name).apply_hints(
         table_name=raw_name,
-        table_format=config.active_table_format(),
+        table_format=config.active_table_format(resolved_profile),
     )
 
 
@@ -243,11 +243,11 @@ def build_database_source(
             targeted local runs.
         profile: Override the active profile (mainly for tests).
     """
-    selected = (
-        [table for table in spec.tables if table.name in set(tables)]
-        if tables is not None
-        else list(spec.tables)
-    )
+    if tables is None:
+        selected = list(spec.tables)
+    else:
+        wanted = set(tables)
+        selected = [table for table in spec.tables if table.name in wanted]
     if not selected:
         msg = f"{spec.name}: no tables selected from {tables!r}"
         raise ValueError(msg)
