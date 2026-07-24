@@ -39,9 +39,18 @@ select
         / nullif(count(distinct oar.user_email), 0), 1)                         as chatbot_adoption_pct,
     sum(oar.certificate_count)                                                  as certificates_earned
 from {{ source('reporting', 'organization_administration_report') }} oar
-left join {{ source('dimensional', 'dim_organization') }} org
-    on oar.organization_key = org.organization_key
-    and org.platform = 'mitxonline'
+-- Dedupe to one row per organization_key so this join can never fan out and
+-- inflate the aggregates. organization_key is unique per mitxonline org today
+-- (source-enforced), so the group by is a no-op now but keeps the model correct
+-- if that ever regresses.
+left join (
+    select
+        organization_key,
+        min(sso_organization_id) as sso_organization_id
+    from {{ source('dimensional', 'dim_organization') }}
+    where platform = 'mitxonline' and organization_key is not null
+    group by organization_key
+) org on oar.organization_key = org.organization_key
 where oar.organization_key is not null
 group by
     oar.organization_key,

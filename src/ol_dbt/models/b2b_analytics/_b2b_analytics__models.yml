@@ -54,7 +54,8 @@ models:
   description: >
     Monthly engagement, enrollment, and content-interaction totals per org.
     Manual-refresh materialized view. Source: organization_administration_report,
-    filtered to rows with a confirmed (non-fallback) organization_key.
+    filtered to rows with a non-null organization_key (which still includes
+    free-text fallback values; those resolve to a null sso_organization_id).
     Consumers: L&D manager engagement trend chart.
   columns:
   - name: sso_organization_id
@@ -91,8 +92,9 @@ models:
   description: >
     All-time content engagement depth per org x course_run. Manual-refresh
     materialized view. Source: organization_administration_report, filtered to rows
-    with a confirmed (non-fallback) organization_key. Consumers: L&D manager course
-    detail panel.
+    with a non-null organization_key (which still includes free-text fallback
+    values; those resolve to a null sso_organization_id). Consumers: L&D manager
+    course detail panel.
   columns:
   - name: sso_organization_id
     description: >
