@@ -79,14 +79,11 @@ starrocks_host_map = {
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
-# Matches the database-starrocks-{env} mount convention used by
-# bin/starrocks-auth and ol_dbt_cli/commands/starrocks.py.
-starrocks_vault_mount_map = {
-    "dev": "database-starrocks-qa",
-    "ci": "database-starrocks-qa",
-    "qa": "database-starrocks-qa",
-    "production": "database-starrocks-production",
-}
+# QA and Production each run their own, entirely separate Vault deployment, so
+# the mount name itself doesn't carry an env suffix -- the Vault server (not
+# the mount path) is what scopes the environment. Matches the "database-starrocks"
+# mount convention used by bin/starrocks-auth and ol_dbt_cli/commands/starrocks.py.
+STARROCKS_VAULT_MOUNT = "database-starrocks"
 
 airbyte_host_map = {
     "dev": "https://api-airbyte-qa.odl.mit.edu",
@@ -416,7 +413,7 @@ resources_dict = {
     "github_api": GithubApiClientFactory(vault=vault),
     "starrocks": StarRocksResource(
         vault=vault,
-        vault_mount_point=starrocks_vault_mount_map[DAGSTER_ENV],
+        vault_mount_point=STARROCKS_VAULT_MOUNT,
         host=starrocks_host_map[DAGSTER_ENV],
         database="b2b_analytics",
     ),

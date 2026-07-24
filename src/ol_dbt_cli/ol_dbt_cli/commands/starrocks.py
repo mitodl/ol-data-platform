@@ -57,6 +57,12 @@ _STARROCKS_PORT = 9030
 _PORT_FORWARD_TIMEOUT = 15
 
 # Mirrors ENVS in bin/starrocks-auth; keep in sync when adding environments.
+#
+# Vault's "database-starrocks" mount is not environment-specific -- each
+# environment runs its own, entirely separate Vault deployment, so the Vault
+# server (vault_addr below), not the mount path, is what scopes the environment.
+_VAULT_MOUNT = "database-starrocks"
+
 _ENVS: dict[str, dict[str, Any]] = {
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
@@ -64,7 +70,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": "database-starrocks-qa",
+        "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_qa_vault",
     },
     "production": {
@@ -73,7 +79,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-production.odl.mit.edu",
-        "vault_mount": "database-starrocks-production",
+        "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_production",
     },
     "ci": {
@@ -82,7 +88,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": "database-starrocks-ci",
+        "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_production",
         "port_forward": False,
     },

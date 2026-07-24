@@ -47,7 +47,8 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
     vault_mount_point: str = PydanticField(
         description=(
             "Vault database secrets engine mount point for StarRocks, "
-            "e.g. 'database-starrocks-production'."
+            "e.g. 'database-starrocks'. Not environment-specific -- each "
+            "environment runs its own separate Vault deployment."
         )
     )
     vault_role: str = PydanticField(

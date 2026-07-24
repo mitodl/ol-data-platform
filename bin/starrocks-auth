@@ -105,6 +105,11 @@ import hvac
 # Environment configuration
 # ---------------------------------------------------------------------------
 
+# Vault's "database-starrocks" mount is not environment-specific -- each
+# environment runs its own, entirely separate Vault deployment, so the Vault
+# server (vault_addr below), not the mount path, is what scopes the environment.
+_VAULT_MOUNT = "database-starrocks"
+
 ENVS: dict[str, dict[str, str]] = {
     "qa": {
         "issuer": "https://sso-qa.ol.mit.edu/realms/ol-data-platform",
@@ -113,7 +118,7 @@ ENVS: dict[str, dict[str, str]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": "database-starrocks-qa",
+        "vault_mount": _VAULT_MOUNT,
     },
     "production": {
         "issuer": "https://sso.ol.mit.edu/realms/ol-data-platform",
@@ -122,7 +127,7 @@ ENVS: dict[str, dict[str, str]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-production.odl.mit.edu",
-        "vault_mount": "database-starrocks-production",
+        "vault_mount": _VAULT_MOUNT,
     },
     "ci": {
         "issuer": "https://sso-ci.ol.mit.edu/realms/ol-data-platform",
@@ -131,7 +136,7 @@ ENVS: dict[str, dict[str, str]] = {
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": "database-starrocks-ci",
+        "vault_mount": _VAULT_MOUNT,
     },
 }
 
