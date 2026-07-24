@@ -9,20 +9,28 @@
 -- Note: organization_key is COALESCE(b2b_contract_to_courseruns.organization_key, user_course_roles.organization)
 -- in the source report. The fallback is free-text and unreliable, so rows without a
 -- confirmed organization_key are dropped -- acceptable for MVP.
+-- sso_organization_id (the Keycloak org UUID the ol-analytics-api filters on) is
+-- joined from dim_organization on organization_key; it is null for free-text
+-- organization_keys that don't resolve to a known mitxonline org.
 select
-    organization_key,
-    organization_name,
-    activity_year_and_month,
-    count(distinct case when active_count > 0 then user_email end)  as monthly_active_learners,
-    sum(enrolled_count)                                              as new_enrollments,
-    sum(certificate_count)                                           as certificates_earned,
-    sum(videos_watched)                                              as total_videos_watched,
-    sum(problems_count)                                              as total_problems_attempted,
-    sum(chatbot_used_count)                                          as total_chatbot_interactions
-from {{ source('reporting', 'organization_administration_report') }}
-where organization_key is not null
-  and activity_year_and_month is not null
+    oar.organization_key,
+    org.sso_organization_id,
+    oar.organization_name,
+    oar.activity_year_and_month,
+    count(distinct case when oar.active_count > 0 then oar.user_email end)  as monthly_active_learners,
+    sum(oar.enrolled_count)                                                 as new_enrollments,
+    sum(oar.certificate_count)                                              as certificates_earned,
+    sum(oar.videos_watched)                                                 as total_videos_watched,
+    sum(oar.problems_count)                                                 as total_problems_attempted,
+    sum(oar.chatbot_used_count)                                             as total_chatbot_interactions
+from {{ source('reporting', 'organization_administration_report') }} oar
+left join {{ source('dimensional', 'dim_organization') }} org
+    on oar.organization_key = org.organization_key
+    and org.platform = 'mitxonline'
+where oar.organization_key is not null
+  and oar.activity_year_and_month is not null
 group by
-    organization_key,
-    organization_name,
-    activity_year_and_month
+    oar.organization_key,
+    org.sso_organization_id,
+    oar.organization_name,
+    oar.activity_year_and_month

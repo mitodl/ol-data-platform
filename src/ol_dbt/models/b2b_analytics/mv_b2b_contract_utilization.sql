@@ -28,6 +28,7 @@ certificates as (
 
 select
     org.organization_key,
+    org.sso_organization_id,
     org.organization_name,
     c.contract_pk,
     c.b2b_contract_name,
@@ -50,7 +51,7 @@ left join enrollments e on c.contract_pk = e.contract_fk
 left join certificates cert on c.contract_pk = cert.contract_fk
 where org.platform = 'mitxonline'
 group by
-    org.organization_key, org.organization_name,
+    org.organization_key, org.sso_organization_id, org.organization_name,
     c.contract_pk, c.b2b_contract_name, c.b2b_contract_is_active,
     c.b2b_contract_start_date, c.b2b_contract_end_date,
     c.b2b_contract_max_learners, c.b2b_contract_membership_type
