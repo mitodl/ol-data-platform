@@ -15,8 +15,8 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
 ]
 
 # Caps how many of the ~44 per-table edxorg_s3 ops run concurrently inside this
-# job's single run pod (8Gi limit). The pool="edxorg_s3" tag on each op (see
-# assets.py) only throttles concurrency *across* runs via the instance-wide
+# job's single run pod. The pool="edxorg_s3" tag on each op (see assets.py)
+# only throttles concurrency *across* runs via the instance-wide
 # concurrency-slots API -- it does nothing to the *in-process* fan-out within
 # one run, which is governed entirely by the multiprocess executor's own
 # max_concurrent. Left unset, that defaults to multiprocessing.cpu_count()
@@ -29,10 +29,34 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
 # 4 is a conservative starting point given unknown per-table memory profiles;
 # override per-launch via run config (execution.config.multiprocess.config.
 # max_concurrent) to tune without a redeploy.
+#
+# The 4-way cap alone did NOT fix the OOMKill loop: production runs kept
+# hitting "K8s job has no active pods" every ~20-40 minutes for over a day
+# after that fix shipped (e.g. runs 9f452ffb, 762dc532, cc170add, and
+# a859e9fb between 2026-07-23 20:13 and 2026-07-24 21:57), each burning all 3
+# daemon resume attempts before failing outright -- confirming the pod's 8Gi
+# default limit (see the `data_loading` code location in ol_infrastructure's
+# dagster/__main__.py), not just fan-out, was the binding constraint. The
+# `dagster-k8s/config` tag below raises the memory *limit for this job's run
+# pod only*, matching the 32Gi already given to the `edxorg` and
+# `legacy_openedx` code locations for the exact same large-edX-table problem
+# (see __main__.py's "Give more memory for processing edxorg archives" /
+# "studentmodule loading to memory" comments) -- without inflating the
+# baseline for the other, much smaller ingest jobs sharing this code location.
 edxorg_s3_ingest_job = dg.define_asset_job(
     name="edxorg_s3_ingest_job",
     selection=dg.AssetSelection.keys(*_EDXORG_S3_ASSET_KEYS),
     executor_def=dg.multiprocess_executor.configured({"max_concurrent": 4}),
+    tags={
+        "dagster-k8s/config": {
+            "container_config": {
+                "resources": {
+                    "requests": {"memory": "2Gi"},
+                    "limits": {"memory": "32Gi"},
+                }
+            }
+        }
+    },
     description=(
         "Loads all edxorg database tables from S3 into the raw warehouse layer."
     ),

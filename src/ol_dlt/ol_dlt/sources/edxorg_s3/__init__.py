@@ -15,6 +15,7 @@ Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.edxorg_s3
 """
 
+import hashlib
 import logging
 from collections.abc import Generator
 from typing import Any
@@ -50,8 +51,16 @@ def _make_deduplicator():  # noqa: ANN202
     duplicate join-key rows, even if those rows are identical. This happens when
     multiple TSV files from overlapping archive runs are extracted in one dlt run
     and combined into a single normalised parquet file.
+
+    ``seen`` holds one entry per row for the entire table's extraction, so for
+    high-row-count/high-file-count tables (e.g. auth_user, courseware_studentmodule,
+    dumped per-course across thousands of files) it dominates the op's peak RSS.
+    Storing a fixed-size digest instead of the raw (row_hash, extracted_course_key)
+    string tuple cuts per-entry overhead well below the tuple-of-two-strings form
+    (each of which carries its own PyObject header) -- same dedup semantics, far
+    less memory held for the run's duration.
     """
-    seen: set[tuple[str | None, ...]] = set()
+    seen: set[bytes] = set()
 
     def _dedup(item: object) -> object:
         if not isinstance(item, (pa.Table, pa.RecordBatch)):
@@ -69,8 +78,14 @@ def _make_deduplicator():  # noqa: ANN202
 
         keep = []
         for key in zip(*key_cols, strict=True):
-            keep.append(key not in seen)
-            seen.add(key)
+            # Null byte separator: primary key values can't themselves contain
+            # NUL, so this can't produce a cross-component collision.
+            digest = hashlib.blake2b(
+                "\x00".join("" if part is None else part for part in key).encode(),
+                digest_size=16,
+            ).digest()
+            keep.append(digest not in seen)
+            seen.add(digest)
 
         if all(keep):
             return tbl
