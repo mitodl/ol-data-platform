@@ -42,6 +42,29 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
     return vault
 
 
+def unauthenticated_vault(vault_address: str) -> Vault:
+    """Build an unauthenticated Vault resource for resilient-loading fallbacks.
+
+    Code locations catch authentication failures at import and fall back to mock
+    configuration. The fallback resource must still carry the same role as
+    authenticate_vault() would pick, because the OIDC token cache is keyed by
+    role: a resource built without one looks for a 'default' cache entry that
+    bin/vault-login never writes, so any later access to .client fails on a
+    cache miss instead of reusing the token that is sitting right there.
+
+    Parameters:
+        vault_address (str): The address of the Vault server.
+
+    Returns:
+        Vault: An unauthenticated Vault client.
+    """
+    return Vault(
+        vault_addr=vault_address,
+        vault_auth_type="oidc",
+        vault_role=os.environ.get("DAGSTER_VAULT_ROLE", "developer"),
+    )
+
+
 def s3_uploads_bucket(
     dagster_env: Literal["dev", "ci", "qa", "production"],
 ) -> dict[str, Any]:

@@ -10,7 +10,7 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 
 b2b_bucket_map = {
     "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
@@ -26,13 +26,11 @@ try:
 except Exception as e:  # noqa: BLE001 (resilient loading)
     import warnings
 
-    from ol_orchestrate.resources.secrets.vault import Vault
-
     warnings.warn(
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="oidc")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 

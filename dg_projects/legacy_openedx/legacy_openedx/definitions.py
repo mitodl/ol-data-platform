@@ -15,11 +15,10 @@ from dagster import Definitions, RunRequest, ScheduleEvaluationContext, schedule
 from dagster_aws.s3 import S3Resource
 from dagster_aws.s3.resources import s3_resource
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.resources.secrets.vault import Vault
 
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
@@ -38,7 +37,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="oidc")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 # Initialize GCS connection with resilient loading

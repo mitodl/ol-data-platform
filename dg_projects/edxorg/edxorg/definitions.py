@@ -26,12 +26,11 @@ from ol_orchestrate.io_managers.filepath import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
-from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.sensors.object_storage import (
     gcs_multi_file_sensor,
     s3_multi_file_sensor,
@@ -78,7 +77,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="oidc")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 

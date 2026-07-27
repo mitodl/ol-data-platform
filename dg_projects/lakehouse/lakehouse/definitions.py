@@ -22,9 +22,8 @@ from dagster_dbt import (
     DbtCliResource,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
-from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.iceberg_maintenance import (
@@ -125,7 +124,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="oidc")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
     dagster_url = "http://localhost:3000"
 
