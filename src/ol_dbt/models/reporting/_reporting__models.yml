@@ -1381,3 +1381,32 @@ models:
   - name: user_latest_row_desc
     description: integer, row number indicating the latest row for each user based
       on application and course run dates
+
+- name: edxorg_mitlearn_user_mapping
+  description: Mapping of edX.org user IDs to MIT Learn user IDs for the same person,
+    joined through their shared MITx Online account.
+  tests:
+  - dbt_utils.expression_is_true:
+      expression: edxorg_user_id is not null or mitlearn_application_user_id is not
+        null
+  columns:
+  - name: mitxonline_openedx_user_id
+    description: string, Open edX user ID of the MITx Online account. May be null.
+    tests:
+    - unique:
+        config:
+          severity: warn
+  - name: edxorg_user_id
+    description: int, user id for edX.org. Null if the user has no edX.org account
+      or the link to it could not be confirmed.
+    tests:
+    - unique:
+        config:
+          severity: warn
+  - name: mitlearn_application_user_id
+    description: int, unique identifier for the user on MIT Learn. Null if the user
+      has no MIT Learn account.
+    tests:
+    - unique:
+        config:
+          severity: warn

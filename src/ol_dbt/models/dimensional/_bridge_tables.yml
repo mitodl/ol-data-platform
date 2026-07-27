@@ -175,3 +175,38 @@ models:
   - name: userorganization_is_manager
     description: If true, the user is a manager of this organization and can access
       organization dashboard features.
+
+- name: bridge_user_account_link
+  description: >
+    User account link bridge across platforms. Links accounts held by the same person,
+    either a merge into a replacement account or the same person on another platform.
+    Grain: one row per (from_platform, from_user_id, to_platform).
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - from_platform
+      - from_user_id
+      - to_platform
+  columns:
+  - name: from_platform
+    description: Platform identifier code for the source account (currently always
+      mitxonline).
+    tests:
+    - not_null
+  - name: from_user_id
+    description: User ID of the source account on its own platform.
+    tests:
+    - not_null
+  - name: to_platform
+    description: Platform identifier code for the target account. When this equals
+      from_platform, the row is a merge within that platform. When it differs (e.g.
+      edxorg), the row links the same person's accounts on two platforms.
+    tests:
+    - not_null
+  - name: to_user_id
+    description: User ID of the target account on its own platform.
+    tests:
+    - not_null
+  - name: observed_on
+    description: When the merge was recorded, most recent if merged more than once.
+      Null for cross-platform links.
