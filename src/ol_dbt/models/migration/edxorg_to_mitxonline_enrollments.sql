@@ -205,7 +205,7 @@ with combined_enrollments as (
         courserun_platform = '{{ var("edxorg") }}'
         and courserunenrollment_courserun_readable_id is not null
         and courserunenrollment_is_active = 1
-        and courserunenrollment_mode='verified'
+        and courserunenrollment_mode = 'verified'
 )
 
 , product_versions as (
