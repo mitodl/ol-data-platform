@@ -123,7 +123,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/canvas/canvas:/app/canvas
 
   # Code location: data_platform
@@ -144,7 +144,7 @@ services:
       DAGSTER_ENV: dev
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/data_platform/data_platform:/app/data_platform
 
   # Code location: edxorg
@@ -171,7 +171,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/edxorg/edxorg:/app/edxorg
 
   # Code location: lakehouse
@@ -204,7 +204,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
     - ./src/ol_dbt:/opt/dbt
 
@@ -234,7 +234,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/learning_resources/learning_resources:/app/learning_resources
 
   # Code location: legacy_openedx
@@ -257,7 +257,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/legacy_openedx/legacy_openedx:/app/legacy_openedx
 
   # Code location: openedx
@@ -284,7 +284,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/openedx/openedx:/app/openedx
 
   # Code location: b2b_organization
@@ -311,7 +311,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/b2b_organization/b2b_organization:/app/b2b_organization
 
     # Code location: student_risk_probability
@@ -339,7 +339,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${HOME}/.cache/vault:/vault/token-cache:ro
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/student_risk_probability/student_risk_probability:/app/student_risk_probability
 
   postgres:

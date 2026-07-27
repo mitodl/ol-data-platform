@@ -15,9 +15,9 @@ building data applications.
     `bin/dagster-up`
 - Navigate to localhost:3000 to access the Dagster UI
 
-`bin/dagster-up` authenticates to Vault for you and then runs `docker compose up
---build`. Vault uses the Keycloak OIDC browser flow, so there is no token to
-create or paste into `.env`.
+`bin/dagster-up` authenticates to Vault for you and then runs
+`docker compose up --build`. Vault uses the Keycloak OIDC browser flow, so there
+is no token to create or paste into `.env`.
 
 The containers cannot open a browser or receive the OIDC redirect on
 `localhost:8250`, so the login happens on the host: `bin/vault-login` caches a
@@ -33,8 +33,15 @@ bin/vault-login --env production
 bin/vault-login --force          # discard the cached token and re-authenticate
 ```
 
-If a code location fails to start with "No valid cached Vault token", the token
-expired — run `bin/vault-login` and restart.
+If the token expires, code locations warn `Failed to authenticate with Vault: No
+valid cached Vault token ... Using mock configuration` and load against mock
+config rather than real secrets. `edxorg` is the exception — it reads a Vault
+secret at import time, so it fails to start outright. Either way the fix is to
+run `bin/vault-login` and restart the stack.
+
+`bin/vault-login` and the containers agree on the cache location via
+`VAULT_TOKEN_CACHE_DIR`; set it on the host to move the cache, and compose
+mounts whatever it points at.
 
 # dbt Staging Model Generation
 
