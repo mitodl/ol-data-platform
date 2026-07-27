@@ -15,6 +15,7 @@ Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.edxorg_s3
 """
 
+import hashlib
 import logging
 from collections.abc import Generator
 from typing import Any
@@ -50,8 +51,36 @@ def _make_deduplicator():  # noqa: ANN202
     duplicate join-key rows, even if those rows are identical. This happens when
     multiple TSV files from overlapping archive runs are extracted in one dlt run
     and combined into a single normalised parquet file.
+
+    ``seen`` holds one entry per row for the entire table's extraction, so for
+    high-row-count/high-file-count tables (e.g. auth_user, courseware_studentmodule,
+    dumped per-course across thousands of files) it dominates the op's peak RSS.
+    Storing a fixed-size digest instead of the raw (row_hash, extracted_course_key)
+    string tuple cuts per-entry overhead well below the tuple-of-two-strings form
+    (each of which carries its own PyObject header), at the cost of dedup becoming
+    probabilistic rather than exact: two distinct keys could in principle hash to
+    the same 128-bit digest and get treated as duplicates. blake2b at this digest
+    size makes that collision probability cryptographically negligible (a random
+    128-bit hash needs on the order of 2**64 distinct keys before a collision
+    becomes likely -- far beyond any realistic table here), so this is not treated
+    as a real risk in practice, but it is not literally identical semantics to the
+    original exact-comparison set.
     """
-    seen: set[tuple[str | None, ...]] = set()
+    seen: set[bytes] = set()
+
+    def _encode_key_part(part: str | None) -> bytes:
+        """Encode one primary-key component unambiguously as bytes.
+
+        Length-prefixing (rather than joining with a separator) means no
+        separator choice can collide with separator-like bytes inside the
+        data, and tagging ``None`` with its own marker (rather than folding
+        it into ``""``) keeps a NULL primary-key value distinct from an
+        empty-string one, matching the original tuple-based set's semantics.
+        """
+        if part is None:
+            return b"\x00"
+        encoded = part.encode()
+        return b"\x01" + len(encoded).to_bytes(4, "big") + encoded
 
     def _dedup(item: object) -> object:
         if not isinstance(item, (pa.Table, pa.RecordBatch)):
@@ -69,8 +98,12 @@ def _make_deduplicator():  # noqa: ANN202
 
         keep = []
         for key in zip(*key_cols, strict=True):
-            keep.append(key not in seen)
-            seen.add(key)
+            digest = hashlib.blake2b(
+                b"".join(_encode_key_part(part) for part in key),
+                digest_size=16,
+            ).digest()
+            keep.append(digest not in seen)
+            seen.add(digest)
 
         if all(keep):
             return tbl
