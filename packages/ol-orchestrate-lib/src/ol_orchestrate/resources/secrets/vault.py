@@ -89,13 +89,26 @@ class Vault(ConfigurableResource):
                 return cached_token
 
             # Token is invalid, remove cache file
-            cache_path.unlink(missing_ok=True)
+            self._discard_cached_token(cache_path)
 
         except (json.JSONDecodeError, OSError):
             # Cache file is corrupted or unreadable, remove it
-            cache_path.unlink(missing_ok=True)
+            self._discard_cached_token(cache_path)
 
         return None
+
+    @staticmethod
+    def _discard_cached_token(cache_path: Path) -> None:
+        """Delete a stale cache entry, tolerating a read-only cache directory.
+
+        The compose stack mounts the cache read-only, so unlink raises
+        PermissionError there. Discarding is only an optimisation -- the caller
+        re-authenticates either way -- and letting it propagate would replace
+        the actionable message _auth_oidc raises next with a bare traceback.
+        Note missing_ok only covers FileNotFoundError, not PermissionError.
+        """
+        with contextlib.suppress(OSError):
+            cache_path.unlink(missing_ok=True)
 
     def _save_token_to_cache(self, token: str):
         """Save a token to the cache file."""
