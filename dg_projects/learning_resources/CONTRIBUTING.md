@@ -45,12 +45,12 @@ export VAULT_ADDR=http://localhost:8200   # not contacted unless authenticated
 export SKIP_VAULT=1                        # prevents blocking on Vault auth
 ```
 
-If you need to test actual API calls, ask the platform team for a Vault GitHub
-token and run:
+If you need to test actual API calls, authenticate to Vault with the OIDC
+browser flow — no token to request from the platform team:
 
 ```bash
-export VAULT_ADDR=https://vault.odl.mit.edu
-export VAULT_GITHUB_TOKEN=<your-token>
+export VAULT_ADDR=https://vault-qa.odl.mit.edu
+bin/vault-login
 ```
 
 ### Running tests

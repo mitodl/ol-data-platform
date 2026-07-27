@@ -18,9 +18,8 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
-from ol_orchestrate.resources.secrets.vault import Vault
 
 from openedx.components import OpenEdxDeploymentComponent
 from openedx.jobs.normalize_logs import (
@@ -39,7 +38,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 dagster_env: Literal["dev", "ci", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003

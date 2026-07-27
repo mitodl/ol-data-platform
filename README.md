@@ -9,17 +9,39 @@ building data applications.
     https://www.docker.com/products/docker-desktop/
 - Install docker compose. Check the documentation and requirements for your specific machine.
     https://docs.docker.com/compose/install/
-- Ensure you are able to authenticate into GitHub + Vault
-    https://github.com/mitodl/ol-data-platform/tree/main
-    https://vault-qa.odl.mit.edu/v1/auth/github/login
-    `vault login -address=https://vault-qa.odl.mit.edu -method=github`
-    https://vault-production.odl.mit.edu/v1/auth/github/login
-    `vault login -address=https://vault-production.odl.mit.edu -method=github`
 - Ensure you create your .env file and populate it with the environment variables.
     `cp .env.example .env`
-- Call docker compose up
-    `docker compose up --build`
+- Start the stack
+    `bin/dagster-up`
 - Navigate to localhost:3000 to access the Dagster UI
+
+`bin/dagster-up` authenticates to Vault for you and then runs
+`docker compose up --build`. Vault uses the Keycloak OIDC browser flow, so there
+is no token to create or paste into `.env`.
+
+The containers cannot open a browser or receive the OIDC redirect on
+`localhost:8250`, so the login happens on the host: `bin/vault-login` caches a
+short-lived token in `~/.cache/vault`, and the code-location containers mount
+that directory read-only. One login is shared by every container and is reused
+until it expires — re-running is a no-op while the token is still valid.
+
+To authenticate by hand, or against production:
+
+```bash
+bin/vault-login                  # qa, which is what local dev targets
+bin/vault-login --env production
+bin/vault-login --force          # discard the cached token and re-authenticate
+```
+
+If the token expires, code locations warn `Failed to authenticate with Vault: No
+valid cached Vault token ... Using mock configuration` and load against mock
+config rather than real secrets. `edxorg` is the exception — it reads a Vault
+secret at import time, so it fails to start outright. Either way the fix is to
+run `bin/vault-login` and restart the stack.
+
+`bin/vault-login` and the containers agree on the cache location via
+`VAULT_TOKEN_CACHE_DIR`; set it on the host to move the cache, and compose
+mounts whatever it points at.
 
 # dbt Staging Model Generation
 

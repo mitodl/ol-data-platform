@@ -19,7 +19,11 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
+from ol_orchestrate.lib.utils import (
+    authenticate_vault,
+    s3_uploads_bucket,
+    unauthenticated_vault,
+)
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 from canvas.assets.canvas import (
@@ -36,13 +40,11 @@ try:
 except Exception as e:  # noqa: BLE001 (resilient loading)
     import warnings
 
-    from ol_orchestrate.resources.secrets.vault import Vault
-
     warnings.warn(
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 # Get Google Sheets credentials
