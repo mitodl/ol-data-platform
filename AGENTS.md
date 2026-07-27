@@ -32,7 +32,8 @@ This guide provides essential information for coding agents working with the MIT
 ```bash
 # 1. Copy environment template
 cp .env.example .env
-# Edit .env with: GITHUB_TOKEN, DBT_TRINO_USERNAME, DBT_TRINO_PASSWORD, AWS keys, DBT_SCHEMA_SUFFIX
+# Edit .env with: DBT_TRINO_USERNAME, DBT_TRINO_PASSWORD, AWS keys, DBT_SCHEMA_SUFFIX
+# Vault needs no entry here -- `bin/vault-login` handles it via the browser flow
 
 # 2. Sync dependencies (10-30 seconds)
 uv sync
@@ -340,13 +341,17 @@ incremental until `--full-refresh` is used.
 ## Environment Variables
 
 **Required in `.env`** (from `.env.example`):
-- `GITHUB_TOKEN`: GitHub PAT for auth
 - `DBT_TRINO_USERNAME`, `DBT_TRINO_PASSWORD`: Starburst credentials
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: S3 access
 - `DBT_SCHEMA_SUFFIX`: Your dev schema suffix (e.g., username)
 
 **Runtime**:
 - `DAGSTER_ENV`: dev|qa|production (selects resource config)
+- `DAGSTER_VAULT_ROLE`: Vault OIDC role to request locally (default `developer`)
+- `VAULT_TOKEN_CACHE_DIR`: where the Vault token cache lives (default
+  `~/.cache/vault`); compose points the containers at the read-only mount
+- `VAULT_OIDC_NONINTERACTIVE`: set in the containers so a cache miss fails with
+  "run `bin/vault-login`" instead of hanging on a browser that cannot open
 
 ## Trust These Instructions
 

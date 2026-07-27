@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,7 @@ class Vault(ConfigurableResource):
     vault_addr: str
     vault_token: str | None = None
     vault_role: str | None = None
-    # can be one of ["github", "aws-iam", "token", "kubernetes", "oidc", "jwt"]
+    # can be one of ["aws-iam", "token", "kubernetes", "oidc", "jwt"]
     vault_auth_type: str = "kubernetes"
     auth_mount: str | None = None
     verify_tls: bool = True
@@ -32,15 +33,6 @@ class Vault(ConfigurableResource):
             mount_point=self.auth_mount or "aws",
         )
 
-    def _auth_github(self):
-        self._initialize_client()
-        gh_token = os.environ.get("GITHUB_TOKEN")
-        self._client.auth.github.login(
-            token=gh_token,
-            use_token=True,
-            mount_point=self.auth_mount or "github",
-        )
-
     def _auth_kubernetes(self):
         self._initialize_client()
         with Path("/var/run/secrets/kubernetes.io/serviceaccount/token").open() as f:
@@ -53,9 +45,22 @@ class Vault(ConfigurableResource):
         )
 
     def _get_token_cache_path(self) -> Path:
-        """Get the path to the token cache file."""
-        cache_dir = Path.home() / ".vault" / "token_cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        """Get the path to the token cache file.
+
+        Defaults to ``$XDG_CACHE_HOME/vault`` (``~/.cache/vault``). ``~/.vault``
+        is avoided because the Vault CLI writes a ``~/.vault`` *file* there.
+        ``VAULT_TOKEN_CACHE_DIR`` overrides the location, which is how the
+        containers in docker-compose reuse a token minted on the host.
+        """
+        cache_override = os.environ.get("VAULT_TOKEN_CACHE_DIR")
+        if cache_override:
+            cache_dir = Path(cache_override)
+        else:
+            xdg_cache = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+            cache_dir = Path(xdg_cache) / "vault"
+        # Read-only bind mount in the compose stack -- reads still work.
+        with contextlib.suppress(OSError):
+            cache_dir.mkdir(parents=True, exist_ok=True)
         # Use vault_addr and role to create unique cache file
         cache_key = f"{self.vault_addr}_{self.vault_role or 'default'}".replace(
             "/", "_"
@@ -142,8 +147,13 @@ class Vault(ConfigurableResource):
         This method requires an interactive environment with a web browser.
         It opens a browser window for authentication and handles the OAuth callback.
 
-        Tokens are cached in ~/.vault/token_cache/ to avoid repeated browser flows.
-        The cache is keyed by vault_addr and vault_role.
+        Tokens are cached in ~/.cache/vault to avoid repeated browser flows, keyed
+        by vault_addr and vault_role. See _get_token_cache_path().
+
+        Containers cannot open a browser or receive the localhost:8250 redirect,
+        so the compose stack mounts a token minted on the host by bin/vault-login
+        and sets VAULT_OIDC_NONINTERACTIVE, which turns a cache miss into a clear
+        error rather than a hang.
 
         Note: This method is not suitable for automated/non-interactive environments
         like Kubernetes pods or CI/CD pipelines. Use 'jwt' auth_type instead for
@@ -155,6 +165,14 @@ class Vault(ConfigurableResource):
         cached_token = self._load_cached_token()
         if cached_token:
             return
+
+        if os.environ.get("VAULT_OIDC_NONINTERACTIVE"):
+            err_msg = (
+                "No valid cached Vault token, and the OIDC browser flow is "
+                "disabled in this environment. Run `bin/vault-login` on the "
+                "host to mint a token, then restart the stack."
+            )
+            raise RuntimeError(err_msg)
 
         # Import here to avoid dependency issues if not using interactive OIDC
         import urllib.parse  # noqa: PLC0415
@@ -257,8 +275,6 @@ window.onload = function load() {
     def authenticate(self):
         if self.vault_auth_type == "aws-iam":
             self._auth_aws_iam()
-        elif self.vault_auth_type == "github":
-            self._auth_github()
         elif self.vault_auth_type == "kubernetes":
             self._auth_kubernetes()
         elif self.vault_auth_type == "jwt":

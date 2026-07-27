@@ -54,7 +54,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="oidc")
 
 
 # Daily schedules for REST API webhook delivery sources.

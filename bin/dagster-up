@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Start the local Dagster stack, minting a Vault token first if needed.
+
+Wraps ``bin/vault-login`` and ``docker compose up`` so the everyday command
+stays a single invocation. The login step is a no-op while the cached token is
+valid, so a browser only opens when the token has actually expired.
+
+    bin/dagster-up                     # vault-login (if needed) + compose up --build
+    bin/dagster-up --detach
+    bin/dagster-up --env production
+    bin/dagster-up -- dagster_canvas   # extra args go to `docker compose up`
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+import cyclopts
+
+BIN_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BIN_DIR.parent
+
+app = cyclopts.App(name="dagster-up", help=__doc__)
+
+
+@app.default
+def main(
+    compose_args: list[str] | None = None,
+    *,
+    env: str = "qa",
+    role: str = "developer",
+    detach: bool = False,
+    build: bool = True,
+) -> None:
+    """Authenticate to Vault if required, then bring the compose stack up.
+
+    Parameters
+    ----------
+    compose_args
+        Extra arguments forwarded to ``docker compose up`` (e.g. service names).
+    env
+        Which Vault to authenticate against. ``DAGSTER_ENV=dev`` targets ``qa``.
+    role
+        Vault OIDC role to request. Must match ``DAGSTER_VAULT_ROLE``.
+    detach
+        Run the stack in the background.
+    build
+        Rebuild images before starting. Pass ``--no-build`` to skip.
+
+    """
+    login = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(BIN_DIR / "vault-login"),
+            "--env",
+            env,
+            "--role",
+            role,
+            "--quiet",
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    if login.returncode != 0:
+        sys.exit(login.returncode)
+
+    command = ["docker", "compose", "up"]
+    if build:
+        command.append("--build")
+    if detach:
+        command.append("--detach")
+    command.extend(compose_args or [])
+
+    sys.exit(subprocess.run(command, cwd=REPO_ROOT, check=False).returncode)  # noqa: S603
+
+
+if __name__ == "__main__":
+    app()
