@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Mint a Vault token on the host via the Keycloak OIDC browser flow.
+
+The Dagster compose stack authenticates to Vault from inside its containers,
+which have no browser and cannot receive the OIDC redirect on
+``localhost:8250``. This command performs the interactive flow on the host and
+writes the resulting token to ``~/.cache/vault``. ``docker-compose.yaml`` mounts
+that directory into the code-location containers read-only, so every container
+reuses one token and never attempts a browser flow of its own.
+
+The cache path and filename match ``Vault._get_token_cache_path()`` in
+ol-orchestrate-lib, which is what the containers read.
+
+Typical use -- ``bin/dagster-up`` calls this for you, but it is safe to run
+directly and is a no-op while the cached token is still valid:
+
+    bin/vault-login                 # qa (what DAGSTER_ENV=dev targets)
+    bin/vault-login --env production
+    bin/vault-login --force         # discard the cached token and re-auth
+"""
+
+from __future__ import annotations
+
+import http.server
+import json
+import os
+import sys
+import threading
+import urllib.parse
+import webbrowser
+from pathlib import Path
+
+import cyclopts
+import hvac
+
+CALLBACK_PORT = 8250
+REDIRECT_URI = f"http://localhost:{CALLBACK_PORT}/oidc/callback"
+
+# DAGSTER_ENV=dev talks to the QA Vault -- see ol_orchestrate.lib.constants.
+VAULT_ADDRESSES = {
+    "qa": "https://vault-qa.odl.mit.edu",
+    "production": "https://vault-production.odl.mit.edu",
+}
+
+app = cyclopts.App(name="vault-login", help=__doc__)
+
+
+def cache_path(vault_addr: str, role: str) -> Path:
+    """Return the token cache path, matching Vault._get_token_cache_path().
+
+    Keep this in lockstep with
+    ``ol_orchestrate.resources.secrets.vault.Vault._get_token_cache_path`` --
+    the containers read exactly this filename.
+    """
+    cache_dir = Path(
+        os.environ.get("VAULT_TOKEN_CACHE_DIR")
+        or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "vault"
+    )
+    cache_key = f"{vault_addr}_{role}".replace("/", "_").replace(":", "_")
+    return cache_dir / f"{cache_key}.json"
+
+
+def cached_token_is_valid(vault_addr: str, path: Path) -> bool:
+    """Return True when *path* holds a token Vault still accepts."""
+    if not path.exists():
+        return False
+    try:
+        token = json.loads(path.read_text()).get("token", "")
+    except (json.JSONDecodeError, OSError):
+        return False
+    if not token:
+        return False
+    return hvac.Client(url=vault_addr, token=token).is_authenticated()
+
+
+def await_callback(expected_state: str) -> str:
+    """Serve one request on CALLBACK_PORT and return the authorization code.
+
+    The ``state`` check matters: without it the local listener cannot tell a
+    genuine redirect from Vault apart from an attacker pointing the browser at
+    localhost:8250/oidc/callback?code=... directly.
+    """
+    result: dict[str, str] = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_args: object) -> None:
+            """Silence the default stderr request logging."""
+
+        def do_GET(self) -> None:
+            params = dict(
+                urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query)
+            )
+            if error := params.get("error"):
+                result["error"] = error
+                body = f"Vault authentication failed: {error}."
+                self.send_response(400)
+            elif params.get("state") != expected_state:
+                result["error"] = "state mismatch"
+                body = "Vault authentication failed: state mismatch."
+                self.send_response(400)
+            else:
+                result["code"] = params.get("code", "")
+                body = "Vault authentication successful."
+                self.send_response(200)
+            self.end_headers()
+            self.wfile.write(f"<h2>{body} You can close this tab.</h2>".encode())
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+    server = http.server.HTTPServer(("localhost", CALLBACK_PORT), Handler)
+    server.serve_forever()
+
+    if "error" in result:
+        sys.exit(f"Vault OIDC authentication denied: {result['error']}")
+    if not result.get("code"):
+        sys.exit("Vault OIDC callback received no authorization code")
+    return result["code"]
+
+
+def login(vault_addr: str, role: str) -> str:
+    """Run the OIDC browser flow against *vault_addr* and return a token."""
+    client = hvac.Client(url=vault_addr)
+    auth_response = client.auth.oidc.oidc_authorization_url_request(
+        role=role,
+        redirect_uri=REDIRECT_URI,
+    )
+    auth_url = auth_response["data"]["auth_url"]
+    if not auth_url:
+        sys.exit(
+            f"Vault at {vault_addr} returned no auth URL -- is the '{role}' OIDC "
+            "role configured?"
+        )
+
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(auth_url).query)
+    nonce, state = query["nonce"][0], query["state"][0]
+
+    print(f"Opening browser for Vault login ({vault_addr})…", file=sys.stderr)  # noqa: T201
+    print(f"If it does not open, visit:\n{auth_url}\n", file=sys.stderr)  # noqa: T201
+    webbrowser.open(auth_url)
+
+    code = await_callback(state)
+    result = client.auth.oidc.oidc_callback(code=code, nonce=nonce, state=state)
+    return str(result["auth"]["client_token"])
+
+
+@app.default
+def main(
+    *,
+    env: str = "qa",
+    role: str = "developer",
+    vault_addr: str | None = None,
+    force: bool = False,
+    quiet: bool = False,
+) -> None:
+    """Ensure a valid cached Vault token exists for the compose stack.
+
+    Parameters
+    ----------
+    env
+        Which Vault to authenticate against. ``DAGSTER_ENV=dev`` targets ``qa``.
+    role
+        Vault OIDC role to request. Must match ``DAGSTER_VAULT_ROLE``.
+    vault_addr
+        Override the Vault address derived from ``--env``.
+    force
+        Re-authenticate even when the cached token is still valid.
+    quiet
+        Only emit output when a browser login is actually required.
+
+    """
+    if vault_addr is None:
+        if env not in VAULT_ADDRESSES:
+            sys.exit(f"Unknown --env {env!r}; choose from {sorted(VAULT_ADDRESSES)}")
+        vault_addr = os.environ.get("VAULT_ADDR") or VAULT_ADDRESSES[env]
+
+    path = cache_path(vault_addr, role)
+
+    if not force and cached_token_is_valid(vault_addr, path):
+        if not quiet:
+            print(  # noqa: T201
+                f"Cached Vault token for {vault_addr} ({role}) is still valid."
+            )
+        return
+
+    token = login(vault_addr, role)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"token": token}))
+    path.chmod(0o600)
+    print(f"Vault token cached at {path}")  # noqa: T201
+
+
+if __name__ == "__main__":
+    app()

@@ -43,6 +43,17 @@ def test_deduplicator_keeps_same_hash_different_course() -> None:
     assert dedup(tbl).num_rows == 2  # noqa: PLR2004
 
 
+def test_deduplicator_keeps_null_distinct_from_empty_string() -> None:
+    dedup = edxorg_s3._make_deduplicator()
+    tbl = _table(
+        [
+            {"row_hash": None, "extracted_course_key": "c1"},
+            {"row_hash": "", "extracted_course_key": "c1"},
+        ]
+    )
+    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
+
+
 def test_deduplicator_passes_through_without_key_columns() -> None:
     dedup = edxorg_s3._make_deduplicator()
     tbl = _table([{"some_col": "x"}, {"some_col": "x"}])

@@ -18,7 +18,6 @@ services:
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
       DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
@@ -55,7 +54,6 @@ services:
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
       DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
@@ -93,7 +91,6 @@ services:
       DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
       DAGSTER_PG_USERNAME: postgres
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
@@ -119,12 +116,14 @@ services:
     - "4000:4000"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-canvas:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/canvas/canvas:/app/canvas
 
   # Code location: data_platform
@@ -140,10 +139,12 @@ services:
     - "4001:4001"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-data_platform:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/data_platform/data_platform:/app/data_platform
 
   # Code location: edxorg
@@ -159,8 +160,9 @@ services:
     - "4002:4002"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-edxorg:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_PG_USERNAME: postgres
@@ -169,6 +171,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/edxorg/edxorg:/app/edxorg
 
   # Code location: lakehouse
@@ -187,11 +190,12 @@ services:
     - "4003:4003"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENVIRONMENT: qa
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
       DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_PG_USERNAME: postgres
@@ -200,6 +204,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
     - ./src/ol_dbt:/opt/dbt
 
@@ -216,8 +221,9 @@ services:
     - "4004:4004"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-learning_resources:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       MIT_LEARN_BASE_URL: ${MIT_LEARN_BASE_URL}
@@ -228,6 +234,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/learning_resources/learning_resources:/app/learning_resources
 
   # Code location: legacy_openedx
@@ -243,12 +250,14 @@ services:
     - "4005:4005"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-legacy_openedx:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/legacy_openedx/legacy_openedx:/app/legacy_openedx
 
   # Code location: openedx
@@ -264,8 +273,9 @@ services:
     - "4006:4006"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-openedx:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_PG_USERNAME: postgres
@@ -274,6 +284,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/openedx/openedx:/app/openedx
 
   # Code location: b2b_organization
@@ -289,8 +300,9 @@ services:
     - "4007:4007"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-b2b_organization:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_PG_USERNAME: postgres
@@ -299,6 +311,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/b2b_organization/b2b_organization:/app/b2b_organization
 
     # Code location: student_risk_probability
@@ -314,9 +327,10 @@ services:
     - "4008:4008"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-student_risk_probability:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_PG_USERNAME: postgres
@@ -325,6 +339,7 @@ services:
       DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/student_risk_probability/student_risk_probability:/app/student_risk_probability
 
   postgres:
