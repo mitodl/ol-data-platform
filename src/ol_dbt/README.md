@@ -145,7 +145,7 @@ ol-dbt diff --old m_old --new m_new --auto-build
 # (e.g. your personal dev schema vs. production) on one Trino target
 ol-dbt diff --target dev_production \
     --old my_model --old-raw --old-schema ol_warehouse_production_reporting \
-    --new my_model --new-raw --new-schema ol_warehouse_production_rlougee_reporting \
+    --new my_model --new-raw --new-schema ol_warehouse_production_<username>_reporting \
     --primary-key id
 
 # Emit JSON (e.g. for CI); exits non-zero on any divergence

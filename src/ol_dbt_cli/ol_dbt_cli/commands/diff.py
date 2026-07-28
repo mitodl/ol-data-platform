@@ -718,7 +718,7 @@ def diff(
         (e.g. your personal dev schema vs. real production) on one Trino target:
             ol-dbt diff --target dev_production \\
                 --old enrollment_detail_report --old-raw --old-schema ol_warehouse_production_reporting \\
-                --new enrollment_detail_report --new-raw --new-schema ol_warehouse_production_rlougee_reporting \\
+                --new enrollment_detail_report --new-raw --new-schema ol_warehouse_production_<username>_reporting \\
                 --primary-key courserunenrollment_id
 
         Compare a frozen baseline (`ol-dbt local snapshot`) against a rebuild after a

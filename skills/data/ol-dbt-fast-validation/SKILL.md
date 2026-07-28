@@ -62,6 +62,22 @@ ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at --format json
 ol-dbt diff --old m_old --new m_new --auto-build   # build both sides first
 ```
+
+To QA an *in-place* edit to one model, freeze a baseline first so upstream data
+drift can't masquerade as a code-change diff:
+
+```bash
+ol-dbt local snapshot my_model --as my_model_baseline   # before the change
+# ...edit the SQL...
+ol-dbt run --select my_model --target dev_local
+ol-dbt diff --target dev_local \
+    --old my_model_baseline --old-raw \
+    --new my_model --primary-key my_model_pk
+```
+- `--old-raw`/`--new-raw` mark that side as a literal existing table rather than a
+  dbt model — **required** for a snapshot table or any relation dbt doesn't know
+  via `ref()`. Pair with `--old-schema`/`--new-schema` to compare the same model
+  across schemas (e.g. your dev schema vs. production) on one Trino target.
 - **Always pass `--primary-key`** for a meaningful per-column comparison, and
   for models with known surrogate-key non-determinism (e.g. `dim_user.user_pk`
   is email-keyed and collapses NULL emails — a naive full-row compare shows
