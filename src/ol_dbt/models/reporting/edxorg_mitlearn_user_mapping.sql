@@ -1,7 +1,10 @@
--- Referencing bridge_user_account_link (not just dim_user) is intentional:
--- dim_user can fold unrelated accounts together when their computed emails
--- collide, and its own output is the thing being validated, so it can't be
--- used to catch its own collisions -- the bridge has the pre-collapse link.
+-- Referencing bridge_user_account_link (not just dim_user) is intentional: the bridge keeps
+-- one row per account edge, while dim_user groups by hashed email and max()-aggregates each
+-- id, so a person split across two dim_user rows keeps only one id per group.
+--
+-- It is NOT an independent check on email collisions: the bridge's mitxonline -> edxorg
+-- edges come from int__mitx__users, which now links on email, so they carry the same
+-- exposure as dim_user.
 with mitxonline_edxorg_link as (
     select from_user_id as mitxonline_application_user_id, to_user_id as user_edxorg_id
     from {{ ref('bridge_user_account_link') }}

@@ -122,6 +122,11 @@ models:
   description: MITx users combined from MITx Online, MicroMasters, and edX.org. For
     users who exist on both platforms, their profile fields are selected in the order
     of MITx Online, MicroMasters, and edX.org, whichever is not null.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["user_edxorg_username", "user_micromasters_id"]
+        row_condition: "user_edxorg_username is not null"
   columns:
   - name: user_hashed_id
     description: str, primary key for this table to identify the user
@@ -153,9 +158,11 @@ models:
     tests:
     - unique
   - name: user_edxorg_username
-    description: str, username on edX.org
-    tests:
-    - unique
+    description: str, username on edX.org. Not unique on its own, a person holding
+      two MicroMasters accounts (one linked from edX.org, one from MITx Online) has
+      only one of those ids kept on the collapsed row, and the other account is appended
+      with the same edX.org username. Uniqueness is asserted per MicroMasters account
+      instead.
   - name: user_mitxonline_email
     description: str, user email on MITx Online
     tests:
