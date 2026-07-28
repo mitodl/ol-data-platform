@@ -213,7 +213,7 @@ def _job_default_config(
         return {}
     try:
         return open_edx_export_irx_job_config(deployment, DAGSTER_ENV)
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.warning(
             "Failed to build default job config for '%s' at code-location load "
             "time; launchpad will not be pre-populated. "

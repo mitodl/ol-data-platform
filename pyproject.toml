@@ -142,7 +142,7 @@ lint.select = [
     "C4",  # flake8-comprehensions
     "C90",  # mccabe
     # "COM",  # flake8-commas
-    "CPY",  # flake8-copyright
+    # "CPY",  # flake8-copyright -- this repo does not use copyright headers
     "D",  # pydocstyle
     # "DJ",  # flake8-django
     "DTZ",  # flake8-datetimez
@@ -204,6 +204,7 @@ lint.ignore = [
     "N806",
     "N999",
     "PIE804",
+    "PLR0917",  # overlaps PLR0913, which is already handled per-site
     "RET505",
     "RET506",
     "RET507",
