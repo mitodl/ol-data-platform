@@ -77,9 +77,14 @@ repos:
   - id: sqlfluff-fix
       # Arbitrary arguments to show an example
       # args: [--rules, "L003,L014"]
-    additional_dependencies: ['dbt-trino']
+      # dbt-core is capped below 1.12 because 1.12.0 depends on
+      # dbt-core-experimental-parser, a 111MB binary that takes this env from 140MiB to
+      # 277MiB and over pre-commit.ci's 250MiB per-env cap. dbt-trino's own dbt-core range
+      # is wide, so it does not constrain this. Revisit when that binary becomes optional,
+      # or move sqlfluff to GitHub Actions where no cap applies.
+    additional_dependencies: ['dbt-trino==1.10.2', 'dbt-core<1.12']
   - id: sqlfluff-lint
       # For dbt projects, this installs the dbt "extras".
       # You will need to select the relevant dbt adapter for your dialect
       # (https://docs.getdbt.com/docs/available-adapters):
-    additional_dependencies: ['dbt-trino']
+    additional_dependencies: ['dbt-trino==1.10.2', 'dbt-core<1.12']
