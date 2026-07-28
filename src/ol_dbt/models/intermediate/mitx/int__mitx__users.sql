@@ -228,23 +228,6 @@ with users as (
     full outer join edxorg_users_view on account_links.user_edxorg_id = edxorg_users_view.user_edxorg_id
 )
 
--- Usernames already claimed above. Two MicroMasters accounts can share one platform
--- username, and only one id survives the user_micromasters_id coalesce, so the other is
--- appended below with a duplicate username. Blanking it there keeps the account and its
--- user_micromasters_id (which downstream MicroMasters models join on) while the username
--- stays unique. distinct so the lookup joins cannot fan out.
-, claimed_edxorg_usernames as (
-    select distinct user_edxorg_username
-    from mitxonline_edxorg_users
-    where user_edxorg_username is not null
-)
-
-, claimed_mitxonline_usernames as (
-    select distinct user_mitxonline_username
-    from mitxonline_edxorg_users
-    where user_mitxonline_username is not null
-)
-
 select
     is_mitxonline_user
     , is_edxorg_user
@@ -294,16 +277,8 @@ select
     , null as user_mitxonline_id
     , null as user_edxorg_id
     , micromasters_users.user_id as user_micromasters_id
-    -- the is_*_user flags above stay derived from the original values, so blanking a
-    -- claimed username does not change which platforms this account belongs to.
-    , case
-        when claimed_mitxonline_usernames.user_mitxonline_username is null
-            then micromasters_users.user_mitxonline_username
-    end as user_mitxonline_username
-    , case
-        when claimed_edxorg_usernames.user_edxorg_username is null
-            then micromasters_users.user_edxorg_username
-    end as user_edxorg_username
+    , micromasters_users.user_mitxonline_username
+    , micromasters_users.user_edxorg_username
     , null as user_mitxonline_email
     , null as user_edxorg_email
     , micromasters_users.user_email as user_micromasters_email
@@ -328,11 +303,12 @@ select
     , micromasters_users.user_company_industry as user_industry
     , micromasters_users.user_job_position as user_job_title
     , {{ generate_hash_id("cast(user_micromasters_id as varchar) || 'MicroMasters'") }} as user_hashed_id
+-- A person can hold two MicroMasters accounts, one reached from the edX.org side and one
+-- from MITx Online, but a collapsed row above keeps only one user_micromasters_id (MITx
+-- Online wins the coalesce). The other account is appended here and legitimately repeats
+-- the collapsed row's edX.org username, so user_edxorg_username is unique only per
+-- MicroMasters account -- see the compound test in _int_mitx__models.yml.
 from micromasters_users
 left join mitxonline_edxorg_users
     on micromasters_users.user_id = mitxonline_edxorg_users.user_micromasters_id
-left join claimed_edxorg_usernames
-    on micromasters_users.user_edxorg_username = claimed_edxorg_usernames.user_edxorg_username
-left join claimed_mitxonline_usernames
-    on micromasters_users.user_mitxonline_username = claimed_mitxonline_usernames.user_mitxonline_username
 where mitxonline_edxorg_users.user_micromasters_id is null

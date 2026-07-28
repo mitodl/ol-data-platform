@@ -6,11 +6,9 @@ with combined_users as (
     select * from {{ ref('marts__combined_course_enrollment_detail') }}
 )
 
--- Fallback for edX.org enrollments. Once int__mitx__users links an edX.org account to a
--- MITx Online one, combined_users carries only the MITx Online user_hashed_id, so
--- enrollment rows keeping the edX.org hash no longer match. Resolve those by edX.org id.
--- Aggregated to one row per id: combined_users has a duplicate user_edxorg_id that would
--- otherwise fan out and inflate the row count.
+-- Resolves edX.org enrollments by edX.org id, since a learner linked to a MITx Online
+-- account is keyed on that platform's user_hashed_id and the join below misses them,
+-- grouped by id so that a duplicate user_edxorg_id cannot fan out enrollments.
 , edxorg_user_profile as (
     select
         user_edxorg_id
