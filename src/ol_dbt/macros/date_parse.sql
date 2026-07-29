@@ -17,3 +17,8 @@
 {% macro default__date_parse(date_string, format_string) %}
   {{ return(trino__date_parse(date_string, format_string)) }}
 {% endmacro %}
+
+{% macro starrocks__date_parse(date_string, format_string) %}
+  {# StarRocks: str_to_date returns NULL on parse failure, where Trino date_parse raises #}
+  str_to_date({{ date_string }}, {{ format_string }})
+{% endmacro %}

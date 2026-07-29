@@ -26,3 +26,14 @@
   {# Default to Trino behavior for backward compatibility #}
   {{ return(trino__cast_timestamp_to_iso8601(column_name)) }}
 {% endmacro %}
+
+{% macro starrocks__cast_timestamp_to_iso8601(column_name) %}
+  {# StarRocks has no try_cast; a failed cast returns NULL, so cast doubles as the "is it already a timestamp" check.
+     %f emits 6-digit microseconds vs Trino's 3-digit milliseconds -- cosmetic unless the strings are joined
+     across engines. #}
+  case
+       when cast({{ column_name }} as datetime) is not null
+          then date_format(cast({{ column_name }} as datetime), '%Y-%m-%dT%H:%i:%s.%fZ')
+       else date_format(str_to_date(replace(cast({{ column_name }} as varchar), 'T', ' '), '%Y-%m-%d %H:%i:%s'), '%Y-%m-%dT%H:%i:%s.%fZ')
+   end
+{% endmacro %}

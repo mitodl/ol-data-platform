@@ -14,3 +14,8 @@
 {% macro default__date_diff(unit, date1, date2) %}
   {{ return(trino__date_diff(unit, date1, date2)) }}
 {% endmacro %}
+
+{% macro starrocks__date_diff(unit, date1, date2) %}
+  {# StarRocks date_diff has reversed argument order compared to Trino, like DuckDB. Never use the 2-arg datediff(). #}
+  date_diff({{ unit }}, {{ date2 }}, {{ date1 }})
+{% endmacro %}
