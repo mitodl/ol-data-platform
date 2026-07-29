@@ -7,6 +7,11 @@ models:
     materialized view, refreshed by the Dagster b2b_organization MV-refresh asset.
     Consumers: L&D manager dashboard header card, MIT admin overview.
   columns:
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on. Null for
+      organization_keys that don't resolve to a mitxonline org.
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
@@ -31,6 +36,11 @@ models:
     course_run. Manual-refresh materialized view. Consumers: L&D manager course-level
     drill-down.
   columns:
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on. Null for
+      organization_keys that don't resolve to a mitxonline org.
   - name: enrolled_learners
     description: Distinct learners enrolled in this course run.
   - name: active_learners
@@ -44,9 +54,15 @@ models:
   description: >
     Monthly engagement, enrollment, and content-interaction totals per org.
     Manual-refresh materialized view. Source: organization_administration_report,
-    filtered to rows with a confirmed (non-fallback) organization_key.
+    filtered to rows with a non-null organization_key (which still includes
+    free-text fallback values; those resolve to a null sso_organization_id).
     Consumers: L&D manager engagement trend chart.
   columns:
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on. Null for
+      organization_keys that don't resolve to a mitxonline org.
   - name: monthly_active_learners
     description: Distinct learners with any activity in the month.
   - name: new_enrollments
@@ -59,6 +75,11 @@ models:
     (cert in any program course) until tfact_program_certificate ships.
     Consumers: L&D manager program progression view.
   columns:
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on. Null for
+      organization_keys that don't resolve to a mitxonline org.
   - name: enrolled_in_contract_courses
     description: Learners enrolled in any contract course belonging to this program.
   - name: enrolled_via_program
@@ -71,9 +92,15 @@ models:
   description: >
     All-time content engagement depth per org x course_run. Manual-refresh
     materialized view. Source: organization_administration_report, filtered to rows
-    with a confirmed (non-fallback) organization_key. Consumers: L&D manager course
-    detail panel.
+    with a non-null organization_key (which still includes free-text fallback
+    values; those resolve to a null sso_organization_id). Consumers: L&D manager
+    course detail panel.
   columns:
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on. Null for
+      organization_keys that don't resolve to a mitxonline org.
   - name: engagement_rate_pct
     description: engaged_learners / total_enrolled_learners * 100.
   - name: avg_videos_per_engaged_learner
@@ -85,6 +112,11 @@ models:
     requesting org) -- MIT admin view only. Manual-refresh materialized view.
     Consumers: MIT contract admin dashboard.
   columns:
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on. Null for
+      organization_keys that don't resolve to a mitxonline org.
   - name: health_status
     description: >
       One of: inactive (contract not active), at_risk (utilization < 25% and
