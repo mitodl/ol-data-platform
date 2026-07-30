@@ -61,6 +61,7 @@ select
     , enrollment_detail.programenrollment_is_active
     , enrollment_detail.programenrollment_created_on
     , enrollment_detail.programenrollment_enrollment_status
+    , enrollment_detail.programenrollment_enrollment_mode
     , enrollment_detail.programcertificate_created_on
     , enrollment_detail.programcertificate_is_revoked
     , enrollment_detail.programcertificate_uuid

@@ -91,6 +91,7 @@ with mitxpro__programenrollments as (
         , mitxpro__programenrollments.programenrollment_is_active
         , mitxpro__programenrollments.programenrollment_created_on
         , mitxpro__programenrollments.programenrollment_enrollment_status
+        , null as programenrollment_enrollment_mode
         , mitxpro__program_certificates.programcertificate_created_on
         , mitxpro__program_certificates.programcertificate_created_on as programcertificate_issued_on
         , mitxpro__program_certificates.programcertificate_is_revoked
@@ -126,6 +127,7 @@ with mitxpro__programenrollments as (
         , mitxonline__programenrollments.programenrollment_is_active
         , mitxonline__programenrollments.programenrollment_created_on
         , mitxonline__programenrollments.programenrollment_enrollment_status
+        , mitxonline__programenrollments.programenrollment_enrollment_mode
         , mitxonline__program_certificates.programcertificate_created_on
         , mitxonline__program_certificates.programcertificate_issued_on
         , mitxonline__program_certificates.programcertificate_is_revoked
@@ -164,6 +166,7 @@ with mitxpro__programenrollments as (
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
+        , null as programenrollment_enrollment_mode
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_issued_on
         , null as programcertificate_is_revoked
@@ -196,6 +199,7 @@ with mitxpro__programenrollments as (
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
+        , null as programenrollment_enrollment_mode
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_issued_on
         , null as programcertificate_is_revoked
@@ -286,6 +290,7 @@ with mitxpro__programenrollments as (
         , combined_programs.programenrollment_is_active
         , combined_programs.programenrollment_created_on
         , combined_programs.programenrollment_enrollment_status
+        , combined_programs.programenrollment_enrollment_mode
         , combined_programs.programcertificate_created_on
         , combined_programs.programcertificate_issued_on
         , combined_programs.programcertificate_is_revoked
@@ -329,6 +334,7 @@ with mitxpro__programenrollments as (
         , combined_programs.programenrollment_is_active
         , combined_programs.programenrollment_created_on
         , combined_programs.programenrollment_enrollment_status
+        , combined_programs.programenrollment_enrollment_mode
         , combined_programs.programcertificate_created_on
         , combined_programs.programcertificate_issued_on
         , combined_programs.programcertificate_is_revoked
@@ -355,6 +361,7 @@ select
     , final_combined_programs.programenrollment_is_active
     , final_combined_programs.programenrollment_created_on
     , final_combined_programs.programenrollment_enrollment_status
+    , final_combined_programs.programenrollment_enrollment_mode
     , final_combined_programs.programcertificate_created_on
     , final_combined_programs.programcertificate_issued_on
     , final_combined_programs.programcertificate_is_revoked

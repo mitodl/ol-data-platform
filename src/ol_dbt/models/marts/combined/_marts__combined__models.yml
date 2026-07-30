@@ -536,6 +536,10 @@ models:
     description: timestamp, specifying when an enrollment was initially created
   - name: programenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment changed
+  - name: programenrollment_enrollment_mode
+    description: str, program enrollment mode, e.g. 'audit' or 'verified'. Only MITx
+      Online tracks a program-level enrollment mode, so this is null for edX.org,
+      MicroMasters and xPRO enrollments.
   - name: programcertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: programcertificate_issued_on
