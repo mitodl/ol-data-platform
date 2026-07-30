@@ -82,12 +82,20 @@ def test_deduplicator_passes_through_without_key_columns() -> None:
 
 
 def test_reader_options_parse_tsv_with_mixed_newlines() -> None:
-    """A stray CR in a free-text column must not abort the resource."""
+    """A stray CR in a free-text column must not abort the resource.
+
+    The bare CR splits row 1 into two ragged fragments, so ``ignore_errors``
+    drops it -- losing that row is the accepted cost. What matters is that the
+    loss stays confined to the offending row: row 2 must survive intact rather
+    than the sniffer taking the whole table down with it.
+    """
     relation = duckdb.from_csv_auto(
         io.BytesIO(_MIXED_NEWLINE_TSV), **edxorg_s3._CSV_READER_OPTIONS
     )
     assert relation.columns == ["id", "user_id", "bio", "goals"]
-    assert relation.fetchall()  # the well-formed rows still land
+    # Exact contents, not just "non-empty": the well-formed row lands whole and
+    # the malformed one is the only casualty.
+    assert relation.fetchall() == [("2", "20", "plain bio", "grow")]
 
 
 def test_reader_options_disable_strict_mode() -> None:
