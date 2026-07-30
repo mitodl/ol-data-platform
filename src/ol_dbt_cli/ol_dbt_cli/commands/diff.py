@@ -104,6 +104,11 @@ class ColumnMismatch:
     column: str
     mismatch_rate: float
     mismatched_rows: int
+    # Kept out of mismatch_rate: audit_helper charges rows present on only one
+    # side against every column, which reports the same missing rows once per
+    # column and gives the primary key an impossible nonzero rate.
+    missing_in_old: int = 0
+    missing_in_new: int = 0
 
 
 @dataclass
@@ -127,6 +132,11 @@ class DiffResult:
     old_label: str
     new_label: str
     notes: list[str] = field(default_factory=list)
+    # Rows with no exact full-row match on the other side, from compare_relations
+    # -- NOT a count of one-sided rows: a row whose values differ is counted once
+    # per side. Reported on its own line since it is not in the per-column rates
+    # and sample_mismatches is truncated by --limit.
+    unmatched_rows: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -469,8 +479,15 @@ def _result_to_dict(result: DiffResult) -> dict[str, Any]:
             "compared": result.column_reconciliation.compared,
         },
         "row_counts": result.row_counts,
+        "unmatched_rows": result.unmatched_rows,
         "column_mismatches": [
-            {"column": c.column, "mismatch_rate": c.mismatch_rate, "mismatched_rows": c.mismatched_rows}
+            {
+                "column": c.column,
+                "mismatch_rate": c.mismatch_rate,
+                "mismatched_rows": c.mismatched_rows,
+                "missing_in_old": c.missing_in_old,
+                "missing_in_new": c.missing_in_new,
+            }
             for c in result.column_mismatches
         ],
         "sample_mismatches": result.sample_mismatches,
@@ -553,9 +570,11 @@ def _print_text(result: DiffResult) -> None:
         f"   [bold]Row counts:[/] {result.old_label}={rc.get('old', 0)}  "
         f"{result.new_label}={rc.get('new', 0)}  Δ={delta_str}"
     )
+    if result.unmatched_rows:
+        console.print(f"   [bold]Rows without an exact match on the other side:[/] [red]{result.unmatched_rows}[/]")
 
     if result.column_mismatches:
-        console.print("   [bold]Column mismatches:[/]")
+        console.print("   [bold]Column value mismatches[/] (rows present on both sides):")
         for c in result.column_mismatches:
             console.print(f"     • {c.column}: {c.mismatch_rate:.2%} ({c.mismatched_rows} rows)")
 
@@ -580,7 +599,8 @@ def _print_text(result: DiffResult) -> None:
 
     console.print(
         f"\n[bold]Summary:[/] {result.verdict.value} — "
-        f"row Δ {delta}, {len(result.column_mismatches)} column mismatch(es)."
+        f"row Δ {delta}, {result.unmatched_rows} unmatched row-side(s), "
+        f"{len(result.column_mismatches)} column value mismatch(es)."
     )
 
 
@@ -954,7 +974,9 @@ def diff(
 
         # Per-column mismatch rates require a primary key.
         if primary_key_list and recon.compared:
-            cols = recon.compared
+            # The join key can never hold differing values.
+            pk_lower = {k.lower() for k in primary_key_list}
+            cols = [c for c in recon.compared if c.lower() not in pk_lower]
             if len(cols) > _MAX_PER_COLUMN_COMPARISONS:
                 notes.append(f"Per-column comparison capped at {_MAX_PER_COLUMN_COMPARISONS} of {len(cols)} columns.")
                 cols = cols[:_MAX_PER_COLUMN_COMPARISONS]
@@ -1002,6 +1024,7 @@ def diff(
             old_label=old_label,
             new_label=new_label,
             notes=notes,
+            unmatched_rows=mismatched_rows,
         ),
         output_format,
     )
@@ -1034,8 +1057,10 @@ def _compare_single_column(
 ) -> ColumnMismatch | None:
     """Run a per-column value comparison, returning its mismatch rate.
 
-    audit_helper.compare_column_values returns rows tagged by ``match_status``;
-    the mismatch rate is the share of rows not in a "✅" perfect-match bucket.
+    audit_helper.compare_column_values tags rows by ``match_status``: "✅"
+    perfect match, "❌" values differ, and two "🤷" buckets for rows missing from
+    one side. Only "❌" counts toward the mismatch rate (see
+    :class:`ColumnMismatch`); the denominator stays the full joined row count.
     """
     rows = _run_dbt_show(
         _compare_column_sql(
@@ -1056,13 +1081,27 @@ def _compare_single_column(
     )
     total = 0
     mismatched = 0
+    missing_in_old = 0
+    missing_in_new = 0
     for row in rows:
         count = _int(row.get("count_records") or row.get("count"))
         total += count
-        # audit_helper tags the perfect-match bucket with a leading "✅"; every
-        # other bucket (value mismatch, missing from a/b) counts as a mismatch.
-        if not str(row.get("match_status", "")).startswith("✅"):
+        status = str(row.get("match_status", ""))
+        if status.startswith("✅"):
+            continue
+        # audit_helper names the sides a/b; a is --old, b is --new.
+        if "missing from a" in status:
+            missing_in_old += count
+        elif "missing from b" in status:
+            missing_in_new += count
+        else:
             mismatched += count
     if total == 0:
         return None
-    return ColumnMismatch(column=column, mismatch_rate=mismatched / total, mismatched_rows=mismatched)
+    return ColumnMismatch(
+        column=column,
+        mismatch_rate=mismatched / total,
+        mismatched_rows=mismatched,
+        missing_in_old=missing_in_old,
+        missing_in_new=missing_in_new,
+    )

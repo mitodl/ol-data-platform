@@ -252,6 +252,45 @@ class TestRelationJinja:
         assert "select *" not in sql
 
 
+class TestCompareSingleColumn:
+    """Bucket accounting for audit_helper.compare_column_values."""
+
+    # Glyphs must match real audit_helper 0.12 output — the parser keys off them.
+    _ROWS = [
+        {"match_status": "✅: perfect match", "count_records": 2},
+        {"match_status": "🤷: missing from a", "count_records": 1},
+        {"match_status": "🤷: missing from b", "count_records": 3},
+        {"match_status": "❌: ‍values do not match", "count_records": 4},
+    ]
+
+    def _run(self, rows: list[dict[str, object]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", lambda *a, **k: rows)
+        return diff_mod._compare_single_column("old_m", "new_m", ["id"], "amt", tmp_path, "dev_local")
+
+    def test_only_value_differences_count_toward_mismatch_rate(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result = self._run(self._ROWS, tmp_path, monkeypatch)
+        assert result is not None
+        assert result.mismatched_rows == 4
+        assert result.mismatch_rate == 0.4  # 4 of 10 joined rows
+        assert result.missing_in_old == 1
+        assert result.missing_in_new == 3
+
+    def test_presence_only_differences_yield_no_value_mismatch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        rows = [r for r in self._ROWS if not str(r["match_status"]).startswith("❌")]
+        result = self._run(rows, tmp_path, monkeypatch)
+        assert result is not None
+        assert result.mismatched_rows == 0
+        assert result.mismatch_rate == 0.0
+        assert (result.missing_in_old, result.missing_in_new) == (1, 3)
+
+    def test_returns_none_when_no_rows(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert self._run([], tmp_path, monkeypatch) is None
+
+
 class TestResolveRawColumns:
     def test_returns_lowercased_keys_from_sampled_row(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(diff_mod, "_run_dbt_show", lambda *a, **k: [{"Id": 1, "NAME": "x"}])
@@ -352,6 +391,25 @@ class TestDiffCommand:
         err = capsys.readouterr().err
         assert "schema-divergence" in err
         assert "Warning" in err
+
+    def test_primary_key_not_compared_per_column(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as id, 'x' as name",
+            "select 1 as id, 'x' as name",
+        )
+        compared: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            if "compare_column_values" in inline_sql:
+                compared.append(inline_sql)
+                return [{"match_status": "✅: perfect match", "count_records": 10}]
+            return [{"in_a": True, "in_b": True, "count": 10}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(old="m_old", new="m_new", primary_key=("id",), dbt_dir_path=str(dbt_dir))
+        assert len(compared) == 1
+        assert "column_to_compare='name'" in compared[0]
 
     def test_row_mismatch_exits_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         dbt_dir = _make_project(

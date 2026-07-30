@@ -164,7 +164,11 @@ loudly instead of silently falling to text.
   "primary_key": ["user_pk"], "excluded_columns": ["_loaded_at"],
   "column_reconciliation": {"only_in_old": [], "only_in_new": ["new_col"], "compared": ["..."]},
   "row_counts": {"old": 12345, "new": 12345, "delta": 0},
-  "column_mismatches": [{"column": "email", "mismatch_rate": 0.001, "mismatched_rows": 12}],
+  "unmatched_rows": 0,
+  "column_mismatches": [
+    {"column": "email", "mismatch_rate": 0.001, "mismatched_rows": 12,
+     "missing_in_old": 0, "missing_in_new": 0}
+  ],
   "sample_mismatches": [{"...": "capped at --limit rows"}],
   "verdict": "match | mismatch | schema_divergence"
 }
