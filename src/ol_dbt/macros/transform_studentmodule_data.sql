@@ -40,11 +40,11 @@
       , {{ json_query_string('studentmodule_state_data', "'$.seed'") }} as seed
       -- correct_map is the per-part correctness for this submission only (~400 bytes).
       -- correct_map_history (the growing accumulation) is intentionally excluded.
-      , cast({{ json_extract_value('studentmodule_state_data', "'$.correct_map'") }} as varchar) as correct_map
+      , {{ json_query_string('studentmodule_state_data', "'$.correct_map'") }} as correct_map
       -- student_answers is the per-part answers for this submission. Keys are opaque
       -- problem-part IDs matching those in correct_map; values are strings or arrays
       -- (multiple-choice). Not collapsible to fixed columns due to sparse/variable keys.
-      , cast({{ json_extract_value('studentmodule_state_data', "'$.student_answers'") }} as varchar) as answers
+      , {{ json_query_string('studentmodule_state_data', "'$.student_answers'") }} as answers
     from {{ studentmodulehistory_table }}
     where
       -- Records without an attempt number are initial module-creation events, not

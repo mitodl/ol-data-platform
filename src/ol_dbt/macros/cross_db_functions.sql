@@ -23,8 +23,10 @@
 {%- endmacro %}
 
 {% macro default__json_extract_value(json_col, json_path) -%}
-    {# Trino: json_query with lax mode returns a JSON value #}
-    json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')
+    {# Trino: json_query defaults to a varchar return type; RETURNING json is required to get
+       a native JSON value back (needed by callers like unnest_json_map's map(varchar, json)
+       cast and json_is_object's json_format()). #}
+    json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}' returning json)
 {%- endmacro %}
 
 {% macro duckdb__json_extract_value(json_col, json_path) -%}
