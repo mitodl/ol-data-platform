@@ -343,6 +343,18 @@ carriage return aborts the whole resource instead of skipping one row.
 `_CSV_READER_OPTIONS` in `__init__.py`). If this resurfaces, check whether the
 options were changed rather than the data.
 
+The upstream `edxorg_archive` asset also writes with `quote_style="necessary"`,
+so fields containing a CR/LF/tab are quoted rather than emitted raw. That is the
+actual fix; `strict_mode=False` is the safety net for files written before it.
+
+### Doubled Quotes in `meta` (or Other JSON Columns)
+
+If a JSON-bearing column comes back as `{""key"": ""value""}` instead of
+`{"key": "value"}`, the reader lost its escape character. `_CSV_READER_OPTIONS`
+pins `quotechar='"'` and `escapechar='"'` precisely to undouble RFC-4180
+escaping — without them DuckDB's sniffer picks a pair that leaves the doubling
+in place, silently corrupting every quoted JSON value.
+
 ### Empty Results
 
 **Check**:

@@ -302,12 +302,26 @@ def process_edxorg_archive_bundle(
                         archive_file,
                         include_header=True,
                         separator="\t",
-                        # Use no quoting to match how the source TSVs are read
-                        # (quote_char=None in scan_csv). This prevents DuckDB from
-                        # seeing quoted vs. unquoted values for the same column across
-                        # files, which was a contributing factor to type inference
-                        # mismatches when loading into iceberg tables.
-                        quote_style="never",
+                        # Quote only the fields that need it. These tables carry
+                        # user-entered free text (auth_userprofile.bio, .goals,
+                        # .mailing_address), so a value occasionally contains a raw
+                        # CR/LF or tab. Writing those unquoted makes the row
+                        # unrecoverable -- the reader cannot tell a CR inside a bio
+                        # from a CR ending the record, so it drops the row, and a
+                        # bare CR additionally makes the file mixed-newline, which
+                        # aborts DuckDB's dialect sniffer for the whole file.
+                        #
+                        # This used to be quote_style="never" to keep DuckDB from
+                        # inferring different types for the same column across
+                        # quoted and unquoted files. That no longer applies: the
+                        # dlt reader passes all_varchar=True, so every column is
+                        # VARCHAR and quoted and unquoted input parse to identical
+                        # types and values.
+                        #
+                        # row_hash above is computed on the in-memory values, before
+                        # serialization, so quoting does not change any existing
+                        # row's hash or churn the downstream merge key.
+                        quote_style="necessary",
                         lazy=False,
                         check_extension=False,
                     )

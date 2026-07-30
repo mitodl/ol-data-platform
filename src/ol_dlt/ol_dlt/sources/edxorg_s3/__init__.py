@@ -58,6 +58,19 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
     # header it would materialise synthetic `columnN` columns, which vary per
     # file and would churn the destination schema.
     "strict_mode": False,
+    # Pin the quote/escape dialect instead of letting the sniffer guess it.
+    # The upstream edxorg_archive asset writes these files with polars'
+    # quote_style="necessary", which uses RFC-4180 doubling -- an embedded `"`
+    # is written as `""` inside a quoted field. Left to its own devices the
+    # sniffer picks a quote/escape pair that does NOT undouble it, so
+    # `he said "hi"` silently reads back as `he said ""hi""`. Setting escapechar
+    # to the quote character makes the undoubling explicit.
+    #
+    # This is also correct for the older, entirely unquoted files still sitting
+    # in the landing zone: with nothing quoted there is nothing to unescape, and
+    # they parse identically with or without these pinned.
+    "quotechar": '"',
+    "escapechar": '"',
     # Force all columns to VARCHAR to prevent pyarrow schema mismatches across
     # files (e.g. TIMESTAMP vs VARCHAR for a column that is empty in some
     # files). dbt casts downstream.

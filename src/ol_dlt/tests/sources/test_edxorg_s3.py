@@ -7,6 +7,7 @@ subtle correctness bugs lived.
 """
 
 import io
+import json
 from typing import Any
 
 import duckdb
@@ -117,6 +118,59 @@ def test_reader_options_leave_well_formed_tsv_unchanged() -> None:
     )
     assert relaxed.columns == strict.columns
     assert relaxed.fetchall() == strict.fetchall()
+
+
+def test_reader_options_undouble_rfc4180_quotes() -> None:
+    """An embedded `"` must survive, not come back doubled.
+
+    The upstream edxorg_archive asset writes with polars'
+    ``quote_style="necessary"``, which escapes a `"` inside a quoted field by
+    doubling it. Left to the sniffer, DuckDB picks a quote/escape pair that
+    does not undouble it -- so pinning ``escapechar`` is what keeps the value
+    intact rather than silently gaining a character.
+    """
+    quoted = b'id\tbio\n1\t"he said ""hi"" loudly"\n'
+    relation = duckdb.from_csv_auto(io.BytesIO(quoted), **edxorg_s3._CSV_READER_OPTIONS)
+    assert relation.fetchall() == [("1", 'he said "hi" loudly')]
+
+    unpinned = {
+        k: v
+        for k, v in edxorg_s3._CSV_READER_OPTIONS.items()
+        if k not in {"quotechar", "escapechar"}
+    }
+    assert duckdb.from_csv_auto(io.BytesIO(quoted), **unpinned).fetchall() == [
+        ("1", 'he said ""hi"" loudly')
+    ]
+
+
+def test_reader_options_still_read_legacy_unquoted_files() -> None:
+    """Bare values in the older files must parse exactly as they always did."""
+    legacy = b"id\tbio\tgoals\n1\tplain bio\tlearn\n2\tC:\\Users\\bob\tgrow\n"
+    expected = [("1", "plain bio", "learn"), ("2", "C:\\Users\\bob", "grow")]
+
+    assert (
+        duckdb.from_csv_auto(
+            io.BytesIO(legacy), **edxorg_s3._CSV_READER_OPTIONS
+        ).fetchall()
+        == expected
+    )
+
+
+def test_reader_options_repair_json_in_existing_files() -> None:
+    """Pinning escapechar also fixes files already sitting in the landing zone.
+
+    ``auth_userprofile.meta`` holds JSON, and edX's original dump quotes it.
+    The archive asset reads with ``quote_char=None``, so that quoting survives
+    into the landing-zone file as literal text. Without a pinned escapechar the
+    reader strips the outer quotes but leaves the inner doubling, yielding
+    invalid JSON -- measured at 4,646 unparseable ``meta`` values across a
+    77-file production sample, versus 182 with the pins in place.
+    """
+    meta = b'id\tmeta\n1\t"{""skills_builder"": """", ""rv"": """"}"\n'
+    (row,) = duckdb.from_csv_auto(
+        io.BytesIO(meta), **edxorg_s3._CSV_READER_OPTIONS
+    ).fetchall()
+    assert json.loads(row[1]) == {"skills_builder": "", "rv": ""}
 
 
 def test_reader_options_do_not_pad_ragged_rows() -> None:
