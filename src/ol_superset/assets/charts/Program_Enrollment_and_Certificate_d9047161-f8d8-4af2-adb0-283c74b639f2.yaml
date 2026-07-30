@@ -15,6 +15,7 @@ params:
   - user_full_name
   - user_email
   - programenrollment_enrollment_status
+  - programenrollment_enrollment_mode
   - programenrollment_is_active
   - programenrollment_created_on
   - expressionType: SQL

@@ -75,6 +75,19 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
+  column_name: programenrollment_enrollment_mode
+  description: Program enrollment mode (audit/verified). Only MITx Online tracks a
+    program-level enrollment mode; null for edX.org, MicroMasters and xPRO.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: user_address_city
   description: null
   expression: ''
