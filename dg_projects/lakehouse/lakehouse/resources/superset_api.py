@@ -195,7 +195,7 @@ class SupersetApiClient(OAuthApiClient):
             schema_base (str): The schema base prefix (without trailing underscore),
                 e.g. "ol_warehouse_production" or "ol_warehouse_qa".
         Returns:
-            int | None: The Superset table ID, or None if not found.
+            int | None: The Superset dataset ID, or None if not found.
         """
         schema = f"{schema_base}_{schema_suffix}"
         dataset_id = self.find_dataset(database_id, schema, table_name)

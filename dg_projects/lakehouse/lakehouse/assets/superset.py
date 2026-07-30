@@ -66,8 +66,8 @@ def create_superset_asset(
         table_name = (
             dbt_model_name if database_name == "trino" else dbt_model_name.lower()
         )
-        # A dataset that Superset can't resolve or create is reported as a
-        # failed Output rather than raised: these assets fan out one step per
+        # A dataset that Superset can't resolve or create is reported as an
+        # error Output rather than raised: these assets fan out one step per
         # dbt model, and a single unusable dataset used to take the whole
         # nightly run down with it.
         try:
