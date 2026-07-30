@@ -66,12 +66,32 @@ def create_superset_asset(
         table_name = (
             dbt_model_name if database_name == "trino" else dbt_model_name.lower()
         )
-        dataset_id = superset_api.client.get_or_create_dataset(
-            schema_suffix=dbt_asset_group_name,
-            table_name=table_name,
-            database_id=database_id,
-            schema_base=schema_base,
-        )
+        # A dataset that Superset can't resolve or create is reported as a
+        # failed Output rather than raised: these assets fan out one step per
+        # dbt model, and a single unusable dataset used to take the whole
+        # nightly run down with it.
+        try:
+            dataset_id = superset_api.client.get_or_create_dataset(
+                schema_suffix=dbt_asset_group_name,
+                table_name=table_name,
+                database_id=database_id,
+                schema_base=schema_base,
+            )
+        except (httpx.HTTPError, RuntimeError) as e:
+            context.log.exception(
+                "Failed to get or create dataset for %s.%s",
+                dbt_asset_group_name,
+                dbt_model_name,
+            )
+            return Output(
+                value=None,
+                metadata={
+                    "status": "error",
+                    "error": str(e),
+                    "dbt_asset_group_name": dbt_asset_group_name,
+                    "dbt_model_name": dbt_model_name,
+                },
+            )
 
         if dataset_id is None:
             context.log.warning(
@@ -114,9 +134,9 @@ def create_superset_asset(
                     "dbt_model_name": dbt_model_name,
                 },
             )
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPError as e:
             context.log.exception(
-                "HTTPStatusError while refreshing dataset for %s.%s",
+                "HTTP error while refreshing dataset for %s.%s",
                 dbt_asset_group_name,
                 dbt_model_name,
             )

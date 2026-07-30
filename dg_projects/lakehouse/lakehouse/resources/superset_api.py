@@ -8,6 +8,8 @@ from ol_orchestrate.resources.oauth import OAuthApiClient
 from ol_orchestrate.resources.secrets.vault import Vault
 from pydantic import Field, PrivateAttr
 
+UNPROCESSABLE_ENTITY = 422
+
 
 class SupersetApiClient(OAuthApiClient):
     token_type: str = Field(
@@ -91,6 +93,92 @@ class SupersetApiClient(OAuthApiClient):
 
             page += 1
 
+    def find_dataset(
+        self, database_id: int, schema: str, table_name: str
+    ) -> int | None:
+        """Look up a dataset by its full (database, schema, table_name) identity.
+
+        Superset's own ``/api/v1/dataset/get_or_create/`` matches on
+        ``(database_id, table_name)`` alone via ``DatasetDAO.get_table_by_name``,
+        so it raises ``MultipleResultsFound`` -> HTTP 500 as soon as one
+        table_name repeats across two schemas in the same database. Filtering on
+        the schema too is both correct and immune to that. (Fixed upstream in
+        apache/superset#40494, which is unreleased as of Superset 6.1.0.)
+
+        Args:
+            database_id (int): The Superset database ID to search within.
+            schema (str): The fully qualified schema name.
+            table_name (str): The name of the table.
+
+        Returns:
+            int | None: The Superset dataset ID, or None if no dataset matches.
+        """
+        query_string = (
+            "(filters:!("
+            f"(col:database,opr:rel_o_m,value:{database_id}),"
+            f"(col:schema,opr:eq,value:'{schema}'),"
+            f"(col:table_name,opr:eq,value:'{table_name}')"
+            "))"
+        )
+        response_data = cast(
+            dict[str, Any],
+            self.fetch_with_auth(
+                f"{self.base_url}/api/v1/dataset/",
+                extra_params={"q": query_string},
+            ),
+        )
+        # min() rather than [0] so a pre-existing duplicate pair resolves to the
+        # same dataset on every run regardless of the API's result ordering.
+        return min(response_data.get("ids") or [], default=None)
+
+    def create_dataset(
+        self, database_id: int, schema: str, table_name: str
+    ) -> int | None:
+        """Create a physical dataset.
+
+        Args:
+            database_id (int): The Superset database ID to create the dataset in.
+            schema (str): The fully qualified schema name.
+            table_name (str): The name of the table.
+
+        Returns:
+            int | None: The new dataset's ID, or None if Superset rejected the
+                dataset as invalid -- which is the expected answer for a model
+                that has no table in this particular database (e.g. a Trino-only
+                dbt model whose StarRocks twin was never built).
+        """
+        payload = {
+            "database": database_id,
+            "schema": schema,
+            "table_name": table_name,
+        }
+        response = self.http_client.post(
+            f"{self.base_url}/api/v1/dataset/",
+            json=payload,
+            headers={
+                "Authorization": f"{self.token_type} {self._fetch_access_token()}",
+                "X-CSRFToken": self._get_csrf_token(),
+                "Referer": self._csrf_token_url,
+                "Content-Type": "application/json",
+            },
+            timeout=300,
+        )
+
+        if response.is_success:
+            return response.json()["id"]
+
+        if response.status_code == UNPROCESSABLE_ENTITY:
+            # Either the table genuinely isn't in this database, or another
+            # process won a create race between find_dataset() and here. A
+            # re-read distinguishes the two without parsing error strings.
+            return self.find_dataset(database_id, schema, table_name)
+
+        msg = (
+            f"Failed to create dataset {payload!r}: "
+            f"HTTP {response.status_code} — {response.text}"
+        )
+        raise RuntimeError(msg)
+
     def get_or_create_dataset(
         self,
         schema_suffix: str,
@@ -109,32 +197,11 @@ class SupersetApiClient(OAuthApiClient):
         Returns:
             int | None: The Superset table ID, or None if not found.
         """
-        request_url = f"{self.base_url}/api/v1/dataset/get_or_create/"
-        payload = {
-            "database_id": database_id,
-            "schema": f"{schema_base}_{schema_suffix}",
-            "table_name": table_name,
-        }
-        response = self.http_client.post(
-            request_url,
-            json=payload,
-            headers={
-                "Authorization": f"{self.token_type} {self._fetch_access_token()}",
-                "X-CSRFToken": self._get_csrf_token(),
-                "Referer": self._csrf_token_url,
-            },
-            timeout=300,
-        )
-
-        if not response.is_success:
-            msg = (
-                f"Failed to get_or_create dataset {payload!r}: "
-                f"HTTP {response.status_code} — {response.text}"
-            )
-            raise RuntimeError(msg)
-        response_data = response.json()
-
-        return response_data.get("result", {}).get("table_id")
+        schema = f"{schema_base}_{schema_suffix}"
+        dataset_id = self.find_dataset(database_id, schema, table_name)
+        if dataset_id is not None:
+            return dataset_id
+        return self.create_dataset(database_id, schema, table_name)
 
     def refresh_dataset(self, dataset_id: int) -> dict[str, Any]:
         """Refresh and update columns for a dataset in Superset."""
