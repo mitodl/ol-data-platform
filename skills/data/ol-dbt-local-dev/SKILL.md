@@ -64,6 +64,18 @@ ol-dbt run --select dim_user_old dim_user   # build both relations on dev_local
 ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 ```
 
+## Typical use: freeze a baseline before an in-place edit
+When you change a model's SQL rather than adding a `_new` copy, snapshot the
+pre-change build so the diff reflects only your change, not upstream data drift:
+```bash
+ol-dbt local snapshot my_model --as my_model_baseline   # materialize a frozen copy
+# ...edit the SQL...
+ol-dbt run --select my_model
+ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_model_pk
+```
+`--old-raw` is required because the snapshot is a literal table, not a dbt
+`ref()`-able model.
+
 ## Rules
 
 - Default to the **`dev_local`** target — it needs no Trino/warehouse credentials
