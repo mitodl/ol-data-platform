@@ -9,7 +9,8 @@ dependencies = [
     "dlt[filesystem,parquet,pyiceberg]>=1.28,<2",
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
-    "duckdb>=1.0,!=1.5.0,!=1.5.1",
+    # >=1.2 for the CSV reader's `strict_mode` argument (edxorg_s3 source).
+    "duckdb>=1.2,!=1.5.0,!=1.5.1",
     "defusedxml>=0.7",
 ]
 
