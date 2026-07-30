@@ -6,8 +6,20 @@
 #}
 
 {#
-    json_extract_value: Cross-db extraction of a JSON value (returns JSON type, not plain string).
+    json_extract_value: Cross-db extraction of a JSON value. On Trino this returns varchar
+    (JSON-formatted text), NOT a native JSON value -- safe to select directly as a persisted
+    model column. On DuckDB/StarRocks it returns a native JSON value (those connectors don't
+    have this restriction).
+
     This replaces the Trino-specific: json_query(col, 'lax $.path')
+
+    IMPORTANT (confirmed against a live Trino cluster): do not "fix" the Trino body to return a
+    native JSON value. A live `json`-typed Trino value cannot be written to an Iceberg v2 table --
+    it fails at write time with "Invalid schema for v2: ... variant is not supported until v3".
+    Every current caller of this macro selects its result directly as an output column, so it
+    must stay varchar on Trino. If you need a native JSON value for intra-query composition
+    (e.g. feeding unnest_json_map/json_is_object) and never select the result as a persisted
+    column, use json_extract_json instead.
 
     For extracting plain strings use json_query_string instead.
 
@@ -23,13 +35,9 @@
 {%- endmacro %}
 
 {% macro default__json_extract_value(json_col, json_path) -%}
-    {# Trino: json_query defaults to a varchar return type (serialized JSON text). `RETURNING json`
-       is not a valid way to recover a native JSON value here -- confirmed against a live Trino
-       cluster, it errors with "Cannot output JSON value as json using formatting JSON" once the
-       result flows into callers like unnest_json_map's map(varchar, json) cast or json_is_object's
-       json_format(). json_parse() the varchar result back into JSON instead, matching the pattern
-       already used by json_extract_varchar_array. #}
-    json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}'))
+    {# Trino: json_query with lax mode returns varchar (JSON-formatted text), not a native JSON
+       value. See the macro docstring above -- do not change this to return native JSON. #}
+    json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')
 {%- endmacro %}
 
 {% macro duckdb__json_extract_value(json_col, json_path) -%}
@@ -38,6 +46,45 @@
 {%- endmacro %}
 
 {% macro starrocks__json_extract_value(json_col, json_path) -%}
+    {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
+    json_query(parse_json({{ json_col }}), {{ json_path }})
+{%- endmacro %}
+
+
+{#
+    json_extract_json: Cross-db extraction of a JSON value as a native JSON-typed expression, for
+    INTRA-QUERY composition only (e.g. feeding unnest_json_map/json_is_object). Do NOT select this
+    directly as a persisted model column -- on Trino a live JSON value cannot be written to an
+    Iceberg v2 table ("Invalid schema for v2: ... variant is not supported until v3"). For a
+    column you select as output, use json_extract_value instead.
+
+    Parameters:
+      json_col: The column or expression containing JSON
+      json_path: The JSON path (e.g., "'$.metadata'", "'$.value.name'")
+
+    Usage:
+      {{ unnest_json_map(json_extract_json('block_metadata', "'$.discussion_topics'"), 't', 'key', 'value') }}
+#}
+{% macro json_extract_json(json_col, json_path) -%}
+    {{ adapter.dispatch('json_extract_json', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_extract_json(json_col, json_path) -%}
+    {# Trino: json_parse the varchar json_query result back into a native JSON value. `RETURNING
+       json` is not a valid way to get there directly -- confirmed against a live Trino cluster,
+       it errors with "Cannot output JSON value as json using formatting JSON" once the result
+       flows into callers like unnest_json_map's map(varchar, json) cast or json_is_object's
+       json_format(). This json_parse(json_query(...)) pattern is the same one already used by
+       json_extract_varchar_array. #}
+    json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}'))
+{%- endmacro %}
+
+{% macro duckdb__json_extract_json(json_col, json_path) -%}
+    {# DuckDB: json_extract already returns a native JSON value #}
+    json_extract({{ json_col }}, {{ json_path }})
+{%- endmacro %}
+
+{% macro starrocks__json_extract_json(json_col, json_path) -%}
     {# StarRocks: json_extract does not exist; use json_query on a parsed JSON value #}
     json_query(parse_json({{ json_col }}), {{ json_path }})
 {%- endmacro %}
