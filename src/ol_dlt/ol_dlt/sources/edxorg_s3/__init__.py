@@ -39,6 +39,44 @@ _EDXORG_LANDING_BUCKET = (
 
 _EDXORG_PRIMARY_KEY = ["row_hash", "extracted_course_key"]
 
+# Options handed to DuckDB's CSV reader for every edxorg TSV.
+_CSV_READER_OPTIONS: dict[str, Any] = {
+    "delimiter": "\t",  # TSV files use tabs
+    "ignore_errors": True,
+    # These are dumps of user-entered free text (auth_userprofile.bio, .goals,
+    # .mailing_address and friends), so a field occasionally carries a bare CR
+    # or a CRLF while the rest of the file is LF-terminated. DuckDB's strict
+    # mode treats mixed newlines as a dialect violation, and the dialect sniffer
+    # runs BEFORE ignore_errors can suppress anything -- so one stray CR kills
+    # the entire resource with "It was not possible to automatically detect the
+    # CSV parsing dialect" instead of skipping the one bad row. Relaxing strict
+    # mode lets the sniffer settle on a dialect and routes the malformed rows to
+    # ignore_errors, where they belong. Clean LF and clean CRLF files parse
+    # identically either way.
+    #
+    # Deliberately NOT setting null_padding: on a row with more fields than the
+    # header it would materialise synthetic `columnN` columns, which vary per
+    # file and would churn the destination schema.
+    "strict_mode": False,
+    # Pin the quote/escape dialect instead of letting the sniffer guess it.
+    # The upstream edxorg_archive asset writes these files with polars'
+    # quote_style="necessary", which uses RFC-4180 doubling -- an embedded `"`
+    # is written as `""` inside a quoted field. Left to its own devices the
+    # sniffer picks a quote/escape pair that does NOT undouble it, so
+    # `he said "hi"` silently reads back as `he said ""hi""`. Setting escapechar
+    # to the quote character makes the undoubling explicit.
+    #
+    # This is also correct for the older, entirely unquoted files still sitting
+    # in the landing zone: with nothing quoted there is nothing to unescape, and
+    # they parse identically with or without these pinned.
+    "quotechar": '"',
+    "escapechar": '"',
+    # Force all columns to VARCHAR to prevent pyarrow schema mismatches across
+    # files (e.g. TIMESTAMP vs VARCHAR for a column that is empty in some
+    # files). dbt casts downstream.
+    "all_varchar": True,
+}
+
 
 def _make_deduplicator():  # noqa: ANN202
     """Return a stateful per-run deduplication function for use with add_map.
@@ -177,18 +215,7 @@ def edxorg_s3_source(
         # *returns* another DltResource would replace the outer resource and
         # discard its name/hints; applying hints on the pipe avoids that.
         yield (
-            (
-                files
-                | read_csv_duckdb(
-                    use_pyarrow=True,
-                    delimiter="\t",  # TSV files use tabs
-                    ignore_errors=True,
-                    # Force all columns to VARCHAR to prevent pyarrow schema
-                    # mismatches across files (e.g. TIMESTAMP vs VARCHAR for a
-                    # column that is empty in some files). dbt casts downstream.
-                    all_varchar=True,
-                )
-            )
+            (files | read_csv_duckdb(use_pyarrow=True, **_CSV_READER_OPTIONS))
             .with_name(resource_name)
             # Drop rows whose (row_hash, extracted_course_key) was already seen
             # earlier in this run (see _make_deduplicator docstring).
