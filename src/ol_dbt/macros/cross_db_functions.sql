@@ -23,10 +23,13 @@
 {%- endmacro %}
 
 {% macro default__json_extract_value(json_col, json_path) -%}
-    {# Trino: json_query defaults to a varchar return type; RETURNING json is required to get
-       a native JSON value back (needed by callers like unnest_json_map's map(varchar, json)
-       cast and json_is_object's json_format()). #}
-    json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}' returning json)
+    {# Trino: json_query defaults to a varchar return type (serialized JSON text). `RETURNING json`
+       is not a valid way to recover a native JSON value here -- confirmed against a live Trino
+       cluster, it errors with "Cannot output JSON value as json using formatting JSON" once the
+       result flows into callers like unnest_json_map's map(varchar, json) cast or json_is_object's
+       json_format(). json_parse() the varchar result back into JSON instead, matching the pattern
+       already used by json_extract_varchar_array. #}
+    json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}'))
 {%- endmacro %}
 
 {% macro duckdb__json_extract_value(json_col, json_path) -%}

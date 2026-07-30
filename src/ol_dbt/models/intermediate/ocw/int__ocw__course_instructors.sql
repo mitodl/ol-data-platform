@@ -20,7 +20,7 @@ with websitecontents as (
         , course_instructor_uuid  -- noqa
     from websitecontents
     cross join
-        unnest(cast(course_instructor_uuids as array (varchar))) as t(course_instructor_uuid) -- noqa
+        unnest({{ json_extract_varchar_array('course_instructor_uuids', "'$'") }}) as t(course_instructor_uuid) -- noqa
     where websitecontents.websitecontent_type = 'sitemetadata'
 )
 
