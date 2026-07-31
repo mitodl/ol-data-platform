@@ -227,7 +227,7 @@ with mitx_users as (
         on mitxonline_app_openedxuser_mapping.openedxuser_username = mitlearn_openedx_users.user_username
 )
 
-, learn_user as (
+, learn_user_deduped_by_email as (
     select * from (
         select
             *
@@ -238,6 +238,22 @@ with mitx_users as (
         from {{ ref('stg__mitlearn__app__postgres__users_user') }}
     )
     where row_num = 1
+)
+
+-- Learn can hold two accounts per user_global_id, and this model joins Learn to MITx on
+-- global_id alone, so email-only dedup fans one MITx row into two user_pks. coalesce keeps
+-- null global_ids in their own partitions; nulls last because Trino sorts nulls largest.
+, learn_user as (
+    select * from (
+        select
+            *
+            , row_number() over (
+                partition by coalesce(user_global_id, concat('user-', cast(user_id as varchar)))
+                order by user_last_login desc nulls last, user_created_on desc
+            ) as global_id_row_num
+        from learn_user_deduped_by_email
+    )
+    where global_id_row_num = 1
 )
 
 , learn_profile as (
