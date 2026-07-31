@@ -173,6 +173,17 @@ class TestCreateDataset:
         with pytest.raises(RuntimeError, match="Failed to create dataset"):
             client.create_dataset(1, "ol_warehouse_production_mart", "broken")
 
+    def test_success_response_missing_id_raises(self, client, monkeypatch):
+        """A 2xx response with no id is a malformed-API-response bug, not a
+        KeyError left to crash the Dagster step uncaught by the asset's
+        (httpx.HTTPError, RuntimeError) except clause.
+        """
+        http_client = FakeHttpClient([FakeResponse(201, {"result": {}})])
+        monkeypatch.setattr(SupersetApiClient, "http_client", http_client)
+
+        with pytest.raises(RuntimeError, match="no id"):
+            client.create_dataset(1, "ol_warehouse_production_mart", "malformed")
+
 
 class TestGetOrCreateDataset:
     def test_existing_dataset_short_circuits_before_creating(self, client, monkeypatch):

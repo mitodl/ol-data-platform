@@ -170,7 +170,14 @@ class SupersetApiClient(OAuthApiClient):
         )
 
         if response.is_success:
-            return response.json()["id"]
+            response_body = response.json()
+            if "id" not in response_body:
+                msg = (
+                    f"Superset reported success creating dataset {payload!r} but "
+                    f"the response had no id: {response_body!r}"
+                )
+                raise RuntimeError(msg)
+            return response_body["id"]
 
         if response.status_code == UNPROCESSABLE_ENTITY:
             # Either the table genuinely isn't in this database, or another
