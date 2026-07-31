@@ -287,7 +287,11 @@ models:
     where we are able to see they are the same person.
   columns:
   - name: user_pk
-    description: string, primary key for this user dim table
+    description: string, primary key for this user dim table. The grain is still one
+      row per shared email, but the key's value is derived from durable identifiers
+      - the user_global_id when the group has one, otherwise the highest-ranked platform
+      account id in the group - so it no longer changes when a user edits their email
+      address.
     tests:
     - not_null
     - unique
@@ -583,6 +587,15 @@ models:
   - name: user_fk
     description: string, foreign key to dim_user, referencing the user who triggered
       the event
+    tests:
+    # warn until the post-cutover full refresh clears the user_fk values this table
+    # persisted under the old email-derived key; raise to error afterwards.
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -657,6 +670,15 @@ models:
   columns:
   - name: user_fk
     description: string, foreign key to dim_user
+    tests:
+    # warn until the post-cutover full refresh clears the user_fk values this table
+    # persisted under the old email-derived key; raise to error afterwards.
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
   - name: platform
     description: string, platform name (mitxonline, mitxpro, residential)
   - name: openedx_user_id

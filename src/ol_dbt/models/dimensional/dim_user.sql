@@ -325,9 +325,24 @@ with mitx_users as (
              full outer join learn_user_view on mitx_users_view.user_global_id = learn_user_view.user_global_id
 )
 
-, combined_users as (
+-- One row per source account. MITx rows can carry several ids, so they take the
+-- highest-ranked one.
+, combined_accounts as (
     select
-        {{ dbt_utils.generate_surrogate_key(['lower(email)']) }} as user_pk
+        case
+            when mitlearn_user_id is not null then 'mitlearn'
+            when mitxonline_application_user_id is not null then 'mitxonline'
+            when edxorg_openedx_user_id is not null then 'edxorg'
+            when user_micromasters_id is not null then 'micromasters'
+            when mitxonline_openedx_user_id is not null then 'mitxonline_openedx'
+        end as platform
+        , coalesce(
+            cast(mitlearn_user_id as varchar)
+            , cast(mitxonline_application_user_id as varchar)
+            , cast(edxorg_openedx_user_id as varchar)
+            , cast(user_micromasters_id as varchar)
+            , cast(mitxonline_openedx_user_id as varchar)
+        ) as platform_user_id
         , user_global_id
         , mitlearn_user_id
         , mitlearn_openedx_user_id
@@ -373,7 +388,8 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['lower(mitxpro_user_view.user_email)']) }} as user_pk
+        'mitxpro' as platform
+        , cast(mitxpro_user_view.user_id as varchar) as platform_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -425,7 +441,9 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['lower(user_email)']) }} as user_pk
+        'emeritus' as platform
+        -- null where Emeritus has no user_id: these accounts get keyed off the email below
+        , cast(user_id as varchar) as platform_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -471,7 +489,8 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['lower(user_email)']) }} as user_pk
+        'global_alumni' as platform
+        , cast(user_id as varchar) as platform_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -517,7 +536,8 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['lower(mitxresidential_user_view.user_email)']) }} as user_pk
+        'residential' as platform
+        , cast(mitxresidential_user_view.user_id as varchar) as platform_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -563,7 +583,8 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['lower(bootcamps_user_view.user_email)']) }} as user_pk
+        'bootcamps' as platform
+        , cast(bootcamps_user_view.user_id as varchar) as platform_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -608,20 +629,85 @@ with mitx_users as (
 
 )
 
+-- Shared email still groups accounts into one person: for MITx Pro, Bootcamps, Residential,
+-- Emeritus and Global Alumni it is the only signal we have. But the key is named after one
+-- account in the group - global id first, else the highest-ranked platform - so a user
+-- editing their email no longer re-keys them.
+-- Ranked so the key lands on the same account whose id agg_view's max() surfaces below.
+, ranked_accounts as (
+    select
+        case when platform_user_id is null then 1 else 0 end as has_no_source_id
+        , case
+            when user_global_id is not null then 0
+            when platform = 'mitlearn' then 1
+            when platform = 'mitxonline' then 2
+            when platform = 'edxorg' then 3
+            when platform = 'micromasters' then 4
+            when platform = 'mitxonline_openedx' then 5
+            when platform = 'mitxpro' then 6
+            when platform = 'residential' then 7
+            when platform = 'bootcamps' then 8
+            when platform = 'emeritus' then 9
+            when platform = 'global_alumni' then 10
+        end as platform_rank
+        , case
+            when platform in ('emeritus', 'global_alumni') then null
+            else try_cast(platform_user_id as bigint)
+        end as sort_id
+        , combined_accounts.*
+    from combined_accounts
+)
+
+, account_identity as (
+    select
+        first_value(case
+            when user_global_id is not null then 'global'
+            when platform_user_id is not null then platform
+            else 'email'
+        end) over w as user_identity_platform
+        , first_value(coalesce(user_global_id, platform_user_id, lower(email)))
+            over w as user_identity_id
+        , ranked_accounts.*
+    from ranked_accounts
+    window w as (
+        partition by lower(email)
+        order by
+            has_no_source_id
+            , platform_rank
+            , user_global_id desc nulls last
+            , sort_id desc nulls last
+            , platform_user_id desc
+    )
+)
+
+, combined_users as (
+    select
+        {{ dbt_utils.generate_surrogate_key([
+            'user_identity_platform',
+            'user_identity_id'
+        ]) }} as user_pk
+        , account_identity.*
+    from account_identity
+)
+
+-- coalesce, not greatest: each row nulls the join dates of platforms it isn't from, and
+-- Trino's greatest() returns null if any argument is null, leaving no sort key at all.
 , ranked_users as (
     select
         *
         , row_number() over (
             partition by user_pk
             order by
-                greatest(
+                coalesce(
                     user_joined_on_mitlearn
                     , user_joined_on_mitxonline
                     , user_joined_on_edxorg
                     , user_joined_on_mitxpro
                     , user_joined_on_residential
                     , user_joined_on_bootcamps
-                ) desc
+                ) desc nulls last
+                , platform
+                , platform_user_id
         ) as row_num
     from combined_users
 )
