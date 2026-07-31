@@ -227,7 +227,7 @@ with mitx_users as (
         on mitxonline_app_openedxuser_mapping.openedxuser_username = mitlearn_openedx_users.user_username
 )
 
-, learn_user as (
+, learn_user_deduped_by_email as (
     select * from (
         select
             *
@@ -238,6 +238,21 @@ with mitx_users as (
         from {{ ref('stg__mitlearn__app__postgres__users_user') }}
     )
     where row_num = 1
+)
+
+-- Learn can hold two accounts per user_global_id, which fans out the join to MITx below.
+-- nulls last: Trino sorts nulls largest, ranking never-logged-in accounts first.
+, learn_user as (
+    select * from (
+        select
+            *
+            , row_number() over (
+                partition by user_global_id, case when user_global_id is null then user_id end
+                order by user_last_login desc nulls last, user_created_on desc nulls last, user_id desc
+            ) as global_id_row_num
+        from learn_user_deduped_by_email
+    )
+    where global_id_row_num = 1
 )
 
 , learn_profile as (
