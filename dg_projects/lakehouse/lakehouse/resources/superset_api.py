@@ -129,7 +129,12 @@ class SupersetApiClient(OAuthApiClient):
         )
         # min() rather than [0] so a pre-existing duplicate pair resolves to the
         # same dataset on every run regardless of the API's result ordering.
-        return min(response_data.get("ids") or [], default=None)
+        # int() first since Superset's list endpoint can return ids as strings,
+        # which would otherwise sort lexicographically.
+        return min(
+            (int(dataset_id) for dataset_id in response_data.get("ids") or []),
+            default=None,
+        )
 
     def create_dataset(
         self, database_id: int, schema: str, table_name: str

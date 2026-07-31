@@ -110,6 +110,17 @@ class TestFindDataset:
 
         assert client.find_dataset(1, "ol_warehouse_production_reporting", "dupe") == 42
 
+    def test_string_ids_still_resolve_to_the_numeric_minimum(self, client, monkeypatch):
+        """Superset's list endpoint can return ids as strings; a naive min()
+        over strings would pick "88" over "42" lexicographically.
+        """
+        stub_list_responses(monkeypatch, {"count": 2, "ids": ["88", "42"]})
+
+        dataset_id = client.find_dataset(1, "ol_warehouse_production_reporting", "dupe")
+
+        assert dataset_id == 42
+        assert isinstance(dataset_id, int)
+
 
 class TestCreateDataset:
     def test_posts_physical_dataset_and_returns_new_id(self, client, monkeypatch):
