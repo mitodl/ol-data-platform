@@ -240,16 +240,15 @@ with mitx_users as (
     where row_num = 1
 )
 
--- Learn can hold two accounts per user_global_id, and this model joins Learn to MITx on
--- global_id alone, so email-only dedup fans one MITx row into two user_pks. coalesce keeps
--- null global_ids in their own partitions; nulls last because Trino sorts nulls largest.
+-- Learn can hold two accounts per user_global_id, which fans out the join to MITx below.
+-- nulls last: Trino sorts nulls largest, ranking never-logged-in accounts first.
 , learn_user as (
     select * from (
         select
             *
             , row_number() over (
-                partition by coalesce(user_global_id, concat('user-', cast(user_id as varchar)))
-                order by user_last_login desc nulls last, user_created_on desc
+                partition by user_global_id, case when user_global_id is null then user_id end
+                order by user_last_login desc nulls last, user_created_on desc nulls last, user_id desc
             ) as global_id_row_num
         from learn_user_deduped_by_email
     )
