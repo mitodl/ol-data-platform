@@ -52,18 +52,15 @@ jobs:
     # dbdocs can derive column-level lineage from. `docs generate` preserves
     # compiled_code, so this order yields lineage for ~87% of dimensional
     # columns; skipping compile yields none.
-    #
-    # dbt-duckdb is pulled in ephemerally via `uv run --with` so it need not be
-    # a project dependency.
     - name: Build dbt artifacts
       working-directory: src/ol_dbt
       env:
         DBT_PROFILES_DIR: ${{ github.workspace }}/src/ol_dbt
       run: |
-        uv run --with dbt-duckdb dbt deps
-        uv run --with dbt-duckdb dbt debug -t dev
-        uv run --with dbt-duckdb dbt compile -t dev
-        uv run --with dbt-duckdb dbt docs generate -t dev
+        uv run dbt deps
+        uv run dbt debug -t dev
+        uv run dbt compile -t dev
+        uv run dbt docs generate -t dev
 
     # Run isolated via `uv tool run` (not `uv run --with`) so dbdocs' sqlglot
     # and dbterd pins cannot perturb the project environment. Version-pinned so
