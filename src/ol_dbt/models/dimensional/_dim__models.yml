@@ -305,18 +305,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values:
-        - global
-        - mitlearn
-        - mitxonline
-        - edxorg
-        - micromasters
-        - mitxpro
-        - residential
-        - bootcamps
-        - emeritus
-        - global_alumni
-        - email
+        values: ['global', 'mitlearn', 'mitxonline', 'edxorg', 'micromasters', 'mitxpro',
+          'residential', 'bootcamps', 'emeritus', 'global_alumni', 'email']
   - name: user_global_id
     description: string, a unique identifier for the user across all platforms
     tests:

@@ -695,22 +695,23 @@ with mitx_users as (
     from account_identity
 )
 
--- coalesce, not greatest: each row nulls the join dates of platforms it isn't from, and
--- Trino's greatest() returns null if any argument is null, leaving no sort key at all.
+-- The base row is the one whose latest join date is newest. Each row nulls the join dates
+-- of platforms it isn't from and Trino's greatest() is null-propagating, so every argument
+-- is coalesced to '' first - these are ISO8601 strings, so '' sorts below any real date.
 , ranked_users as (
     select
         *
         , row_number() over (
             partition by user_pk
             order by
-                coalesce(
-                    user_joined_on_mitlearn
-                    , user_joined_on_mitxonline
-                    , user_joined_on_edxorg
-                    , user_joined_on_mitxpro
-                    , user_joined_on_residential
-                    , user_joined_on_bootcamps
-                ) desc nulls last
+                greatest(
+                    coalesce(user_joined_on_mitlearn, '')
+                    , coalesce(user_joined_on_mitxonline, '')
+                    , coalesce(user_joined_on_edxorg, '')
+                    , coalesce(user_joined_on_mitxpro, '')
+                    , coalesce(user_joined_on_residential, '')
+                    , coalesce(user_joined_on_bootcamps, '')
+                ) desc
                 , id_source
                 , id_source_user_id
         ) as row_num
