@@ -1,0 +1,37 @@
+---
+# Configuration for `dbdocs generate`, which builds the published dbt
+# documentation site (see .github/workflows/publish_dbt_docs.yaml).
+#
+# dbdocs reads target/manifest.json + target/catalog.json and renders a static
+# site with the catalog, lineage DAG, column-level lineage, a health check, and
+# an entity-relationship diagram driven by the `relationships` tests declared in
+# models/dimensional/*.yml. The ERD's "Focus a table" box walks that FK graph, so
+# a fact table resolves to its conformed dimensions -- including dim_date, which
+# is a declared FK but never a ref() parent (date keys are computed, not joined).
+
+site_name: MIT Open Learning dbt docs
+site_description: Catalog, lineage, and dimensional model explorer for the OL data
+  warehouse
+site_author: MIT Open Learning Engineering
+site_url: https://mitodl.github.io/ol-data-platform/
+repo_name: mitodl/ol-data-platform
+repo_url: https://github.com/mitodl/ol-data-platform
+project_name: ol_dbt
+show_buy_me_a_coffee: false
+
+readme: README.md
+
+target_dir: target
+output_dir: target/site
+
+# Models are authored in Trino SQL; the dbt `dev` target only swaps the relation
+# names, so the compiled SQL that column lineage is parsed from stays Trino
+# dialect. Parsing as `duckdb` fails on 11 models (json_query, array_join, ...)
+# versus 1 as `trino`, which costs ~7 percentage points of coverage across the
+# dimensional layer.
+dialect: trino
+
+dbterd:
+  # Render bare model names (dim_course_run) instead of the default
+  # resource.package.model (model.open_learning.dim_course_run).
+  entity_name_format: model
