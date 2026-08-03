@@ -322,6 +322,15 @@ models:
       Foreign key to dim_user, resolved via the payment's order_id → tfact_order →
       dim_user chain. Null when no matching order exists for the payment or when the
       order cannot be mapped to a user in dim_user.
+    tests:
+    # warn until the post-cutover full refresh clears the user_fk values this table
+    # persisted under the old email-derived key; raise to error afterwards.
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
   - name: platform_fk
     description: Foreign key to dim_platform
     tests:

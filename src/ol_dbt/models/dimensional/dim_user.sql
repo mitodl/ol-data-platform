@@ -325,8 +325,8 @@ with mitx_users as (
              full outer join learn_user_view on mitx_users_view.user_global_id = learn_user_view.user_global_id
 )
 
--- One row per source account. MITx rows can carry several ids, so they take the
--- highest-ranked one.
+-- id_source is an id namespace, not a platform: the same integer means different people
+-- in mitxonline's application and open edX id spaces.
 , combined_accounts as (
     select
         case
@@ -335,14 +335,14 @@ with mitx_users as (
             when edxorg_openedx_user_id is not null then 'edxorg'
             when user_micromasters_id is not null then 'micromasters'
             when mitxonline_openedx_user_id is not null then 'mitxonline_openedx'
-        end as platform
+        end as id_source
         , coalesce(
             cast(mitlearn_user_id as varchar)
             , cast(mitxonline_application_user_id as varchar)
             , cast(edxorg_openedx_user_id as varchar)
             , cast(user_micromasters_id as varchar)
             , cast(mitxonline_openedx_user_id as varchar)
-        ) as platform_user_id
+        ) as id_source_user_id
         , user_global_id
         , mitlearn_user_id
         , mitlearn_openedx_user_id
@@ -388,8 +388,8 @@ with mitx_users as (
     union all
 
     select
-        'mitxpro' as platform
-        , cast(mitxpro_user_view.user_id as varchar) as platform_user_id
+        'mitxpro' as id_source
+        , cast(mitxpro_user_view.user_id as varchar) as id_source_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -441,9 +441,9 @@ with mitx_users as (
     union all
 
     select
-        'emeritus' as platform
+        'emeritus' as id_source
         -- null where Emeritus has no user_id: these accounts get keyed off the email below
-        , cast(user_id as varchar) as platform_user_id
+        , cast(user_id as varchar) as id_source_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -489,8 +489,8 @@ with mitx_users as (
     union all
 
     select
-        'global_alumni' as platform
-        , cast(user_id as varchar) as platform_user_id
+        'global_alumni' as id_source
+        , cast(user_id as varchar) as id_source_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -536,8 +536,8 @@ with mitx_users as (
     union all
 
     select
-        'residential' as platform
-        , cast(mitxresidential_user_view.user_id as varchar) as platform_user_id
+        'residential' as id_source
+        , cast(mitxresidential_user_view.user_id as varchar) as id_source_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -583,8 +583,8 @@ with mitx_users as (
     union all
 
     select
-        'bootcamps' as platform
-        , cast(bootcamps_user_view.user_id as varchar) as platform_user_id
+        'bootcamps' as id_source
+        , cast(bootcamps_user_view.user_id as varchar) as id_source_user_id
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -631,28 +631,33 @@ with mitx_users as (
 
 -- Shared email still groups accounts into one person: for MITx Pro, Bootcamps, Residential,
 -- Emeritus and Global Alumni it is the only signal we have. But the key is named after one
--- account in the group - global id first, else the highest-ranked platform - so a user
+-- account in the group - global id first, else the highest-ranked id source - so a user
 -- editing their email no longer re-keys them.
 -- Ranked so the key lands on the same account whose id agg_view's max() surfaces below.
 , ranked_accounts as (
     select
-        case when platform_user_id is null then 1 else 0 end as has_no_source_id
+        -- Outranks id_source_rank: an id-less emeritus row (9) must still lose to an
+        -- id-bearing global_alumni row (10).
+        case when id_source_user_id is null then 1 else 0 end as has_no_source_id
         , case
             when user_global_id is not null then 0
-            when platform = 'mitlearn' then 1
-            when platform = 'mitxonline' then 2
-            when platform = 'edxorg' then 3
-            when platform = 'micromasters' then 4
-            when platform = 'mitxonline_openedx' then 5
-            when platform = 'mitxpro' then 6
-            when platform = 'residential' then 7
-            when platform = 'bootcamps' then 8
-            when platform = 'emeritus' then 9
-            when platform = 'global_alumni' then 10
-        end as platform_rank
+            when id_source = 'mitlearn' then 1
+            when id_source = 'mitxonline' then 2
+            when id_source = 'edxorg' then 3
+            when id_source = 'micromasters' then 4
+            when id_source = 'mitxonline_openedx' then 5
+            when id_source = 'mitxpro' then 6
+            when id_source = 'residential' then 7
+            when id_source = 'bootcamps' then 8
+            when id_source = 'emeritus' then 9
+            when id_source = 'global_alumni' then 10
+        end as id_source_rank
+        -- Emeritus and Global Alumni ids are varchar, and agg_view surfaces them with a
+        -- lexicographic max(). Nulling sort_id falls the ordering through to the
+        -- lexicographic key below so the key names the account agg_view's ids come from.
         , case
-            when platform in ('emeritus', 'global_alumni') then null
-            else try_cast(platform_user_id as bigint)
+            when id_source in ('emeritus', 'global_alumni') then null
+            else try_cast(id_source_user_id as bigint)
         end as sort_id
         , combined_accounts.*
     from combined_accounts
@@ -662,28 +667,28 @@ with mitx_users as (
     select
         first_value(case
             when user_global_id is not null then 'global'
-            when platform_user_id is not null then platform
+            when id_source_user_id is not null then id_source
             else 'email'
-        end) over w as user_identity_platform
-        , first_value(coalesce(user_global_id, platform_user_id, lower(email)))
+        end) over w as user_identity_source
+        , first_value(coalesce(user_global_id, id_source_user_id, email))
             over w as user_identity_id
         , ranked_accounts.*
     from ranked_accounts
     window w as (
-        partition by lower(email)
+        partition by email
         order by
             has_no_source_id
-            , platform_rank
-            , user_global_id desc nulls last
+            , id_source_rank
+            , user_global_id desc
             , sort_id desc nulls last
-            , platform_user_id desc
+            , id_source_user_id desc
     )
 )
 
 , combined_users as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'user_identity_platform',
+            'user_identity_source',
             'user_identity_id'
         ]) }} as user_pk
         , account_identity.*
@@ -706,8 +711,8 @@ with mitx_users as (
                     , user_joined_on_residential
                     , user_joined_on_bootcamps
                 ) desc nulls last
-                , platform
-                , platform_user_id
+                , id_source
+                , id_source_user_id
         ) as row_num
     from combined_users
 )
@@ -786,6 +791,12 @@ with mitx_users as (
 
 select
     base.user_pk
+    -- Reported as the platform. The key still hashes the two mitxonline id namespaces
+    -- separately, or an application id and an open edX id of equal value would collide.
+    , case
+        when base.user_identity_source = 'mitxonline_openedx' then 'mitxonline'
+        else base.user_identity_source
+    end as user_pk_source
     , agg.user_global_id
     , agg.mitlearn_user_id
     , agg.mitlearn_openedx_user_id

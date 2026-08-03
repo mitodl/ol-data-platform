@@ -295,6 +295,28 @@ models:
     tests:
     - not_null
     - unique
+  - name: user_pk_source
+    description: string, which identifier user_pk was derived from - global when the
+      group has a user_global_id, the platform name when it was keyed off a source
+      account id, or email when no durable id was available anywhere in the group.
+      Rows with email are the only ones that still re-key when the user edits their
+      email address. mitxonline covers accounts keyed off either the application user
+      id or the open edX user id.
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - global
+        - mitlearn
+        - mitxonline
+        - edxorg
+        - micromasters
+        - mitxpro
+        - residential
+        - bootcamps
+        - emeritus
+        - global_alumni
+        - email
   - name: user_global_id
     description: string, a unique identifier for the user across all platforms
     tests:
