@@ -122,6 +122,10 @@ models:
     - unique
   - name: user_full_name
     description: string, user full name on edX.org platform
+    tests:
+    - not_null:
+        config:
+          severity: warn
   - name: user_gender
     description: string, user gender
   - name: user_birth_year

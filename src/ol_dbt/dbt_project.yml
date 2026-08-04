@@ -53,6 +53,8 @@ vars:
     dedp_mitxonline_public_policy_program_id: 2
     dedp_mitxonline_good_economics_for_hard_times_course_number: "14.009x"
     dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff: "2023-08-01"
+    # Entitlements expiring before this date are not migrated to MITx Online
+    edxorg_migration_entitlement_expiration_cutoff: "2026-01-01"
     ocw_production_url: "https://ocw.mit.edu/"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
