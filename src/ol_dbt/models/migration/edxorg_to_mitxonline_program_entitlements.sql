@@ -27,7 +27,11 @@ with mitxonline_programs as (
         , number_of_redeemed_entitlements
     from {{ ref('stg__edxorg__program_entitlement') }}
     where user_email is not null
-        and (expiration_date is null or expiration_date >= date '2026-01-01')
+        and (
+            expiration_date is null
+            or expiration_date
+            >= date '{{ var("edxorg_migration_entitlement_expiration_cutoff") }}'
+        )
 )
 
 , deduped_program_entitlements as (
