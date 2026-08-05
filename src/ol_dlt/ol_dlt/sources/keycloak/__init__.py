@@ -23,11 +23,30 @@ Notably absent, deliberately:
     component_config      identity-provider and LDAP bind secrets
     *_session, *_event    high-churn operational state, not identity facts
 
-Every table is loaded with ``write_disposition="replace"``: Keycloak has no
-reliable row-level modification timestamp to drive an incremental cursor
-(``user_entity.created_timestamp`` only records creation, while emails, names
-and enablement change in place), and the realm is small enough that a full
-re-read per run is cheaper than reconciling missed updates.
+Every table is loaded with ``write_disposition="replace"``, and none declares a
+``cursor_column``. Keycloak 26.6.0 did add ``LAST_MODIFIED_TIMESTAMP`` to
+``USER_ENTITY`` and ``KEYCLOAK_GROUP`` (changesets
+``26.6.0-add-last-modified-timestamp-user`` and ``26.6.0-add-timestamps-group``),
+so a cursor column now *exists* -- but it is not usable as one, for two
+independent reasons:
+
+    Not maintained.  ``JpaUserProvider.addUser`` stamps it once at creation and
+        nothing updates it afterwards; ``UserAdapter.setEmail``/``setEnabled``/
+        ``setFirstName``/... never touch it, and there is no ``@PreUpdate``
+        hook. ``GroupAdapter`` is the same -- getter and setter only. The
+        column is therefore a duplicate of ``created_timestamp``, not a
+        modification cursor.
+    Not backfilled.  Both changesets are a bare ``addColumn`` with no
+        ``defaultValue`` and no update statement, so every row predating the
+        26.6.0 upgrade is NULL.
+
+Keying an incremental load on it would capture new users and groups while
+silently never reflecting an edit -- strictly worse than the full re-read,
+because the drift is unbounded and invisible. Replace also propagates
+deletions, which a ``merge`` load would not: deprovisioned users and revoked
+role mappings disappear from the warehouse as they should. The realm is small
+enough that a full re-read per run is cheap. Revisit only if Keycloak starts
+maintaining the column on every mutation path.
 
 Run standalone against local-dev (port-forward the CNPG cluster first):
     kubectl port-forward -n local-infra svc/local-pg-rw 5432:5432
@@ -53,7 +72,13 @@ KEYCLOAK_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="user_entity", primary_key="id"),
         DatabaseTable(name="user_attribute", primary_key="id"),
         DatabaseTable(
-            name="federated_identity", primary_key=("identity_provider", "user_id")
+            name="federated_identity",
+            primary_key=("identity_provider", "user_id"),
+            # TOKEN holds the identity provider's issued token for the linked
+            # account -- credential material on the same footing as
+            # client.secret, and with no analytical use. The federation link
+            # itself (which IdP, which remote user) is what we model.
+            excluded_columns=("token",),
         ),
         DatabaseTable(
             name="user_required_action", primary_key=("required_action", "user_id")

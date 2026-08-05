@@ -62,7 +62,16 @@ class DatabaseTable:
             ``cursor_column`` is set, since incremental loads merge on it.
         cursor_column: Monotonic column driving incremental loads. When unset
             the table is fully re-read and replaced each run — the right
-            default for small tables with no reliable modification timestamp.
+            default for small tables with no reliable modification timestamp,
+            and the only disposition that propagates source deletions.
+
+            Two things to check before setting one. The column must be updated
+            on *every* mutation path, not just at insert: a write-once column
+            yields a load that captures new rows and silently never reflects an
+            edit. And ``merge`` only dedupes on the Iceberg profiles — the
+            filesystem destination falls back to append on the native parquet
+            used by ``dev``/``test``, so a local incremental run accumulates
+            duplicate rows even though the deployed run does not.
         excluded_columns: Columns never to select. Use this for secrets and
             credential material, which must not reach the warehouse at all.
     """

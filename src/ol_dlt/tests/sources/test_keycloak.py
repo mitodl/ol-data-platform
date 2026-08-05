@@ -30,6 +30,35 @@ def test_client_secret_columns_are_excluded() -> None:
     assert set(client.excluded_columns) == {"secret", "registration_token"}
 
 
+def test_federated_identity_token_is_excluded() -> None:
+    """``federated_identity.token`` is the IdP's issued token for the link.
+
+    It is credential material on the same footing as ``client.secret``. The
+    federation link itself is what we model, so the token has no analytical
+    use and must not reach the warehouse.
+    """
+    federated = next(
+        table
+        for table in keycloak.KEYCLOAK_SPEC.tables
+        if table.name == "federated_identity"
+    )
+    assert "token" in federated.excluded_columns
+
+
+def test_no_table_declares_an_unmaintained_cursor() -> None:
+    """Keycloak has no usable incremental cursor -- see the module docstring.
+
+    ``LAST_MODIFIED_TIMESTAMP`` exists on ``user_entity`` and
+    ``keycloak_group`` as of Keycloak 26.6.0, but it is stamped once at
+    creation and never updated, and is NULL for every pre-upgrade row. Keying
+    an incremental load on it would silently stop reflecting edits, so the
+    assertion exists to make adopting one a deliberate, reviewed act.
+    """
+    assert not [
+        table.name for table in keycloak.KEYCLOAK_SPEC.tables if table.cursor_column
+    ]
+
+
 def test_organization_membership_is_resolvable() -> None:
     """Orgs need their backing group tables, not a dedicated join table.
 

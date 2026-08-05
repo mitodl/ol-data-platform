@@ -28,6 +28,34 @@ def test_cursor_column_requires_primary_key() -> None:
         DatabaseTable(name="thing", cursor_column="updated_at")
 
 
+def test_cursor_column_selects_the_write_disposition() -> None:
+    """A cursor column must flip the table from replace to merge.
+
+    Replace and merge are the two halves of the same switch: a table without a
+    cursor is re-read whole (and so propagates deletes), while a cursor makes
+    the load incremental and therefore merge-on-primary-key.
+    """
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        tables=(
+            DatabaseTable(name="widget", primary_key="id"),
+            DatabaseTable(name="event", primary_key="id", cursor_column="updated_at"),
+        ),
+    )
+    source = database.build_database_source(spec, profile="dev")
+    dispositions = {
+        name: resource.compute_table_schema()["write_disposition"]
+        for name, resource in source.resources.items()
+    }
+    assert dispositions == {
+        "raw__example__app__postgres__widget": "replace",
+        "raw__example__app__postgres__event": "merge",
+    }
+
+
 def test_local_profile_url_uses_local_dev_defaults() -> None:
     url = database._connection_url(_SPEC, "dev")  # noqa: SLF001
     assert url.host == database.LOCAL_DEV_HOST
@@ -190,3 +218,67 @@ def test_materializes_a_database_to_the_test_profile(
     assert "name" in gadget_columns
     # excluded_columns must keep credential material out of the warehouse.
     assert "secret" not in gadget_columns
+
+
+@pytest.mark.integration
+def test_cursor_column_reads_only_rows_above_the_stored_cursor(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cursor column must narrow the second read to rows that moved.
+
+    No source declares a ``cursor_column`` yet, so without this the incremental
+    branch of ``build_table_resource`` would ship unexercised. Asserting the
+    behaviour end-to-end (rather than inspecting dlt's incremental wrapper,
+    which is unbound until extraction) is what actually proves the cursor
+    reaches the generated SQL and that dlt persists the high-water mark across
+    runs.
+
+    Deliberately asserts on rows *extracted*, not on the destination contents:
+    the filesystem destination only honours ``write_disposition="merge"`` when
+    the table format is ``iceberg`` (deployed profiles), and falls back to
+    append on the native parquet used by ``test``/``dev``. Counting extracted
+    rows tests our cursor wiring rather than the destination's merge support.
+    """
+    db_path = tmp_path / "incremental.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE event (id INTEGER PRIMARY KEY, name TEXT, updated_at INTEGER)"
+        )
+        connection.executemany(
+            "INSERT INTO event VALUES (?, ?, ?)",
+            [(1, "first", 100), (2, "second", 200)],
+        )
+
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=(
+            DatabaseTable(name="event", primary_key="id", cursor_column="updated_at"),
+        ),
+    )
+    table = "raw__example__app__postgres__event"
+    pipeline = config.pipeline_for("example")
+    assert not pipeline.run(
+        database.build_database_source(spec, profile="test")
+    ).has_failed_jobs
+    assert pipeline.last_trace.last_normalize_info.row_counts[table] == 2
+
+    # Move row 2 above the stored cursor (200) and add row 3 above that. Row 1
+    # stays at 100 and must not be re-read.
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE event SET name = 'changed', updated_at = 300 WHERE id = 2"
+        )  # noqa: E501
+        connection.execute("INSERT INTO event VALUES (3, 'third', 400)")
+    assert not pipeline.run(
+        database.build_database_source(spec, profile="test")
+    ).has_failed_jobs
+    assert pipeline.last_trace.last_normalize_info.row_counts[table] == 2
