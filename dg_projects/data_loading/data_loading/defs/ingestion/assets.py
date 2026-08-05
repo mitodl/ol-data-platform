@@ -19,6 +19,7 @@ from ol_dlt.sources import (
     mitpe,
     oll,
     podcast_rss,
+    youtube,
 )
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
@@ -72,6 +73,11 @@ podcast_rss_assets = build_ingest_assets(
     name="podcast_rss_ingest",
     source=podcast_rss.build_source(),
     pipeline=podcast_rss.podcast_rss_pipeline,
+)
+youtube_assets = build_ingest_assets(
+    name="youtube_ingest",
+    source=youtube.build_source(),
+    pipeline=youtube.youtube_pipeline,
 )
 
 
@@ -131,6 +137,7 @@ defs = Definitions(
         mit_climate_assets,
         mit_edx_programs_assets,
         podcast_rss_assets,
+        youtube_assets,
         *edxorg_s3_table_assets,
     ],
 )

@@ -48,6 +48,15 @@ podcast_rss_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# The four raw__youtube__api__* tables are materialized by a single @dlt_assets
+# run, so schedule the whole youtube source group rather than one table.
+youtube_ingest_schedule = dg.ScheduleDefinition(
+    name="youtube_ingest_daily_schedule",
+    target=dg.AssetSelection.groups("youtube"),
+    cron_schedule="15 4 * * *",
+    execution_timezone="Etc/UTC",
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -55,5 +64,6 @@ defs = dg.Definitions(
         mit_climate_ingest_schedule,
         mit_edx_programs_ingest_schedule,
         podcast_rss_ingest_schedule,
+        youtube_ingest_schedule,
     ],
 )
