@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import dlt
+from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import sql_table
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Engine
@@ -172,6 +173,27 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
     )
 
 
+def _credentials_for(
+    spec: DatabaseSourceSpec, profile: str
+) -> ConnectionStringCredentials:
+    """Return the connection credentials for ``spec`` under ``profile``.
+
+    Wrapped in ``ConnectionStringCredentials`` rather than passed to dlt as a
+    bare string: stringifying these anywhere -- a log line, an f-string, a repr
+    in a traceback -- yields ``...://user:***@host/db``, where a plain str would
+    yield the password. Only ``to_native_representation`` returns it, which is
+    what dlt hands to ``create_engine``.
+
+    Deployed profiles carry no password here at all; those are injected per
+    connection by ``_vault_credential_injector``. This matters for the local
+    and any future non-Vault profile, where ``<PREFIX>_DB_PASSWORD`` is a real
+    value rather than the public local-dev default.
+    """
+    return ConnectionStringCredentials(
+        _connection_url(spec, profile).render_as_string(hide_password=False)
+    )
+
+
 def _vault_credential_injector(spec: DatabaseSourceSpec) -> Any:  # noqa: ANN401
     """Return an engine adapter that supplies Vault credentials per connection.
 
@@ -212,9 +234,7 @@ def build_table_resource(
         dlt.sources.incremental(table.cursor_column) if table.cursor_column else None
     )
     resource = sql_table(
-        credentials=_connection_url(spec, resolved_profile).render_as_string(
-            hide_password=False
-        ),
+        credentials=_credentials_for(spec, resolved_profile),
         table=table.name,
         schema=spec.db_schema,
         incremental=incremental,

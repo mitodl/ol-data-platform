@@ -86,6 +86,37 @@ def test_deployed_profile_url_omits_credentials_and_requires_tls(
     assert url.query["sslmode"] == "require"
 
 
+def test_credentials_redact_the_password_when_stringified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stringified credential must not carry the password.
+
+    The local and any future non-Vault profile put ``<PREFIX>_DB_PASSWORD`` in
+    the connection URL. Handing dlt a bare string would make the password the
+    value of every incidental ``str()`` of it -- a log line, an f-string, a
+    repr inside a traceback. Only the native representation should expose it.
+    """
+    monkeypatch.setenv("EXAMPLE_DB_PASSWORD", "s3cret-not-in-logs")  # noqa: S105
+    credentials = database._credentials_for(_SPEC, "dev")  # noqa: SLF001
+    assert "s3cret-not-in-logs" not in str(credentials)
+    assert "***" in str(credentials)
+    assert "s3cret-not-in-logs" in credentials.to_native_representation()
+
+
+def test_deployed_profile_carries_no_password_in_its_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deployed profiles must not put a password in the URL at all.
+
+    Vault issues them per connection instead; a password here would be a
+    long-lived credential in a place that expects none.
+    """
+    monkeypatch.setenv("EXAMPLE_DB_HOST", "example.rds.amazonaws.com")
+    monkeypatch.setenv("EXAMPLE_DB_PASSWORD", "s3cret-not-in-logs")  # noqa: S105
+    credentials = database._credentials_for(_SPEC, "production")  # noqa: SLF001
+    assert "s3cret-not-in-logs" not in credentials.to_native_representation()
+
+
 def test_deployed_profile_requires_host(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EXAMPLE_DB_HOST", raising=False)
     with pytest.raises(ValueError, match="EXAMPLE_DB_HOST is not set"):
