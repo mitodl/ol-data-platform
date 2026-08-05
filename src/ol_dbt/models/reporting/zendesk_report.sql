@@ -2,7 +2,7 @@ with zendesk__ticket as (
     select * from {{ ref("int__zendesk__ticket") }}
 )
 
-select 
+select
     ticket_created_at
     , ticket_requester
     , ticket_subject
