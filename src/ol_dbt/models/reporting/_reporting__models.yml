@@ -1414,3 +1414,28 @@ models:
     - unique:
         config:
           severity: warn
+
+- name: zendesk_report
+  description: Report of Zendesk tickets with ticket details. This report captures
+    ticket information from the Zendesk platform, providing insights into user support
+    interactions and issues raised.
+  columns:
+  - name: ticket_created_at
+    description: timestamp, when the ticket was created
+  - name: ticket_requester
+    description: string, name of the user who created the ticket
+  - name: ticket_subject
+    description: string, subject of the ticket
+  - name: ticket_description
+    description: string, description of the ticket
+  - name: ticket_id
+    description: int, unique identifier for the ticket
+      tests:
+    - not_null
+    - unique:
+        config:
+          severity: warn
+  - name: brand_name
+    description: string, name of the brand associated with the ticket
+  - name: group_name
+    description: string, name of the group handling the ticket
