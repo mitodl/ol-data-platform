@@ -1,39 +1,16 @@
-slice_name: Zendesk Tickets
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 75791fe7-a03c-4cbe-a3f5-04dd48c58c2e
+description: null
 params:
-  datasource: 259__table
-  viz_type: table
-  slice_id: 257
-  matrixify_enable: false
-  matrixify_mode_columns: disabled
-  matrixify_dimension_selection_mode_columns: members
-  matrixify_dimension_columns:
-    dimension: ''
-    values: []
-  matrixify_topn_value_columns: 10
-  matrixify_all_sort_by_columns: a_to_z
-  matrixify_topn_order_columns: true
-  matrixify_show_column_headers: true
-  matrixify_fit_columns_dynamically: true
-  matrixify_mode_rows: disabled
-  matrixify_dimension_selection_mode_rows: members
-  matrixify_dimension_rows:
-    dimension: ''
-    values: []
-  matrixify_topn_value_rows: 10
-  matrixify_all_sort_by_rows: a_to_z
-  matrixify_topn_order_rows: true
-  matrixify_show_row_labels: true
-  matrixify_row_height: 300
-  matrixify_charts_per_row: 3
-  matrixify_cell_title_template: ''
-  query_mode: raw
-  groupby: []
-  temporal_columns_lookup:
-    ticket_due_at: true
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: ticket_due_at
+  align_pn: false
   all_columns:
   - ticket_id
   - ticket_created_at
@@ -41,35 +18,51 @@ params:
   - ticket_description
   - brand_name
   - group_name
-  percent_metrics: []
-  adhoc_filters:
-  - clause: WHERE
-    comparator: No filter
-    expressionType: SIMPLE
-    operator: TEMPORAL_RANGE
-    subject: ticket_due_at
-  order_by_cols:
-  - '["ticket_created_at", false]'
-  server_pagination: false
-  row_limit: 100000
-  table_timestamp_format: smart_date
-  include_search: true
   allow_rearrange_columns: false
   allow_render_html: true
-  show_cell_bars: true
-  align_pn: false
   color_pn: true
   comparison_color_enabled: false
   comparison_color_scheme: Green
-  conditional_formatting: []
   comparison_type: values
+  conditional_formatting: []
   extra_form_data: {}
-  dashboards: []
-query_context: '{"datasource":{"id":259,"type":"table"},"force":false,"queries":[{"filters":[{"col":"ticket_due_at","op":"TEMPORAL_RANGE","val":"No
-  filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["ticket_id","ticket_created_at","ticket_requester","ticket_description","brand_name","group_name"],"orderby":[["ticket_created_at",false]],"annotation_layers":[],"row_limit":100000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"259__table","viz_type":"table","slice_id":257,"matrixify_enable":false,"matrixify_mode_columns":"disabled","matrixify_dimension_selection_mode_columns":"members","matrixify_dimension_columns":{"dimension":"","values":[]},"matrixify_topn_value_columns":10,"matrixify_all_sort_by_columns":"a_to_z","matrixify_topn_order_columns":true,"matrixify_show_column_headers":true,"matrixify_fit_columns_dynamically":true,"matrixify_mode_rows":"disabled","matrixify_dimension_selection_mode_rows":"members","matrixify_dimension_rows":{"dimension":"","values":[]},"matrixify_topn_value_rows":10,"matrixify_all_sort_by_rows":"a_to_z","matrixify_topn_order_rows":true,"matrixify_show_row_labels":true,"matrixify_row_height":300,"matrixify_charts_per_row":3,"matrixify_cell_title_template":"","query_mode":"raw","groupby":[],"temporal_columns_lookup":{"ticket_due_at":true},"all_columns":["ticket_id","ticket_created_at","ticket_requester","ticket_description","brand_name","group_name"],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
-  filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"ticket_due_at"}],"order_by_cols":["[\"ticket_created_at\",
-  false]"],"server_pagination":false,"row_limit":100000,"table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":false,"allow_render_html":true,"show_cell_bars":true,"align_pn":false,"color_pn":true,"comparison_color_enabled":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout: null
+  groupby: []
+  include_search: true
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
+  order_by_cols:
+  - '["ticket_created_at", false]'
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 100000
+  server_pagination: false
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup:
+    ticket_due_at: true
+  viz_type: table
+slice_name: Zendesk Tickets
 uuid: a9455790-a0bc-4ab2-94fc-e656e0889a8f
 version: 1.0.0
-dataset_uuid: 75791fe7-a03c-4cbe-a3f5-04dd48c58c2e
+viz_type: table
