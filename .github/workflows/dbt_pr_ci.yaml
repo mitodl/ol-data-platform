@@ -27,16 +27,17 @@ jobs:
       pull-requests: write   # ol-dbt impact posts a sticky PR comment
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0   # ol-dbt validate/impact diff against the base ref
+        persist-credentials: false
 
     - name: Fetch base ref
       if: github.event_name == 'pull_request'
-      run: git fetch --no-tags origin "${{ github.base_ref }}"
+      run: git fetch --no-tags origin "${GITHUB_BASE_REF}"
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v9.0.0
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       with:
         version: "0.12.1"
         enable-cache: true
@@ -79,7 +80,7 @@ jobs:
       run: |
         uv run ol-dbt validate \
           --changed-only \
-          --base-ref "origin/${{ github.base_ref }}" \
+          --base-ref "origin/${GITHUB_BASE_REF}" \
           --skip dimensional_layering \
           --format json
 
@@ -91,13 +92,13 @@ jobs:
       run: |
         uv run ol-dbt impact \
           --format json \
-          --base-ref "origin/${{ github.base_ref }}" \
+          --base-ref "origin/${GITHUB_BASE_REF}" \
           > impact.json 2> impact.err || true
         echo "--- impact stderr ---"; cat impact.err || true
 
     - name: Post impact PR comment
       if: github.event_name == 'pull_request'
-      uses: actions/github-script@v9
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const fs = require('fs');

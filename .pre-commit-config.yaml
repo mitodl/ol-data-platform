@@ -88,3 +88,8 @@ repos:
       # You will need to select the relevant dbt adapter for your dialect
       # (https://docs.getdbt.com/docs/available-adapters):
     additional_dependencies: ['dbt-trino==1.10.2', 'dbt-core<1.12']
+- repo: https://github.com/zizmorcore/zizmor-pre-commit
+  rev: v1.29.0
+  hooks:
+    - id: zizmor
+      args: [--no-progress, --min-severity=high, --min-confidence=medium]
