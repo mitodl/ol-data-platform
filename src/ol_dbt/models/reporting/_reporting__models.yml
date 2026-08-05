@@ -1430,7 +1430,7 @@ models:
     description: string, description of the ticket
   - name: ticket_id
     description: int, unique identifier for the ticket
-      tests:
+    tests:
     - not_null
     - unique:
         config:
