@@ -1,6 +1,6 @@
 # QA/Production Data Topology — Spec Resolution
 
-**Status:** Spec (resolves the RFC's blocking open questions; RFC ready to move Draft → Accepted)
+**Status:** Spec (accepted — resolves the RFC's blocking open questions; RFC moved Draft → Accepted 2026-08-05)
 **Project:** `wp-qa-production-data-topology-per-layer-scoping-an-eaa435`
 **Epic:** `tk-epic-rfc-12711-qa-production-data-topology-imple-cab58f`
 **RFC:** [mitodl/hq#12711](https://github.com/mitodl/hq/discussions/12711) — QA/Production data
@@ -57,9 +57,13 @@ Three reasons, in priority order:
    to nobody.
 3. **Nothing is bought.** The `singleton` set is precisely the slow-changing sources —
    `edxorg` (frozen), `emeritus` and `global_alumni` (quarterly-ish BigQuery drops),
-   `salesforce`, `zendesk`. Production already ingests these on 24-hour schedules
-   (`dg_projects/lakehouse/lakehouse/definitions.py:218-224`). A QA mirror tracking them
-   hourly, or even daily, tracks noise.
+   `salesforce`, `zendesk`. Production ingests them daily at best: every Airbyte
+   connection group gets a schedule whose interval defaults to 24 hours
+   (`dg_projects/lakehouse/lakehouse/definitions.py:258`), and only app-database and
+   Open edX groups are given a faster override (`definitions.py:213-246` — `emeritus`
+   and `ol_salesforce` appear there at 24h; `zendesk` and `global_alumni` are not
+   listed at all and so take the default). A QA mirror tracking them hourly, or even
+   daily, tracks noise.
 
 ### Staleness is answered by declaration, not by a schedule
 
@@ -111,7 +115,7 @@ treatment:
 
 | Finding | Cause | Severity | Baselineable |
 |---|---|---|---|
-| Model declares a `qa_branch` absent from the inventory, or whose `qa_strategy` is `omit` | Declaration contradicts declaration | `ERROR` | **No** |
+| Model declares a `qa_branch` absent from the inventory, or whose `strategies.qa` is `omit` | Declaration contradicts declaration | `ERROR` | **No** |
 | Model declares a `qa_branch` whose strategy is `ingest`/`mirror`, but the unit is empty or the mirror is past `mirror_max_age_days` | Operational lapse upstream | `ERROR` if new, `INFO` if baselined | **Yes** |
 
 The first is a spec bug. It is always fixable by editing text, needs no ingestion work, and
