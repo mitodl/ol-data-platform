@@ -6,10 +6,13 @@ from dagster import (
     AssetKey,
     DagsterInstance,
     RunRequest,
+    RunsFilter,
     SensorEvaluationContext,
     SensorResult,
 )
 from dagster._core.event_api import AssetRecordsFilter
+from dagster._core.storage.dagster_run import NOT_FINISHED_STATUSES
+from dagster._core.storage.tags import PARTITION_NAME_TAG, SENSOR_NAME_TAG
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from pydantic import BaseModel
@@ -40,6 +43,26 @@ def last_exported_version(
     metadata = records[0].asset_materialization.metadata
     version = metadata.get(COURSEWARE_PUBLISHED_VERSION_METADATA)
     return version.value if version else None
+
+
+def in_flight_partitions(instance: DagsterInstance, sensor_name: str) -> set[str]:
+    """Return partition keys whose export run this sensor has already launched.
+
+    An export can outlive the tick interval, so without this the sensor would
+    re-request a partition whose run is still queued or running. NOT_FINISHED
+    rather than IN_PROGRESS: the latter omits QUEUED and NOT_STARTED, which is
+    exactly the case a full run queue produces.
+    """
+    return {
+        record.dagster_run.tags[PARTITION_NAME_TAG]
+        for record in instance.get_run_records(
+            RunsFilter(
+                tags={SENSOR_NAME_TAG: sensor_name},
+                statuses=list(NOT_FINISHED_STATUSES),
+            )
+        )
+        if PARTITION_NAME_TAG in record.dagster_run.tags
+    }
 
 
 class CourseCursor(BaseModel):
