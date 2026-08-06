@@ -34,6 +34,7 @@ class OAuthApiClient(ConfigurableResource):
     )
     _access_token: str | None = PrivateAttr(default=None)
     _access_token_expires: datetime | None = PrivateAttr(default=None)
+    _cached_username: str | None = PrivateAttr(default=None)
     _http_client: httpx.Client | None = PrivateAttr(default=None)
 
     @property
@@ -68,12 +69,17 @@ class OAuthApiClient(ConfigurableResource):
 
     @property
     def _username(self) -> str:
-        response = self.http_client.get(
-            f"{self.base_url}/api/user/v1/me",
-            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
-        )
-        response.raise_for_status()
-        return response.json()["username"]
+        # The username never changes for a service account, so this is fetched
+        # once per client instance. ceiling: a rotated service account needs a
+        # new resource instance, which every Dagster run gets anyway.
+        if self._cached_username is None:
+            response = self.http_client.get(
+                f"{self.base_url}/api/user/v1/me",
+                headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+            )
+            response.raise_for_status()
+            self._cached_username = response.json()["username"]
+        return self._cached_username
 
     def fetch_with_auth(
         self,
