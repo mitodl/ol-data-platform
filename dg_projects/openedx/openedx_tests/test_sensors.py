@@ -18,6 +18,7 @@ from dagster._core.storage.tags import PARTITION_NAME_TAG, SENSOR_NAME_TAG
 from dagster._core.test_utils import create_run_for_test
 from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from openedx.sensors.openedx import (
+    course_run_sensor,
     course_version_sensor,
     exported_versions,
     in_flight_partitions,
@@ -178,6 +179,12 @@ class _OutlineClient(Protocol):
     def get_course_outline(self, course_id: str) -> dict[str, str]: ...
 
 
+class _CatalogSource(Protocol):
+    """Structural type for a double that enumerates the LMS course catalog."""
+
+    def get_edx_course_ids(self) -> Iterator[list[dict[str, str]]]: ...
+
+
 class _FakeClient:
     """Stand-in for OpenEdxApiClient that serves canned outlines."""
 
@@ -199,7 +206,11 @@ class _FakeClient:
 class _FakeFactory:
     """Stand-in for OpenEdxApiClientFactory."""
 
-    def __init__(self, client: _OutlineClient, deployment: str = "mitxonline") -> None:
+    def __init__(
+        self,
+        client: _OutlineClient | _CatalogSource,
+        deployment: str = "mitxonline",
+    ) -> None:
         self.client = client
         self.deployment = deployment
 
@@ -444,3 +455,100 @@ def test_every_partition_failing_raises(instance: DagsterInstance) -> None:
         course_version_sensor(
             build_sensor_context(instance=instance, sensor_name=SENSOR_NAME), factory
         )
+
+
+class _CatalogClient:
+    """Stand-in for OpenEdxApiClient that serves a course catalog."""
+
+    def __init__(self, course_run_ids: list[str]) -> None:
+        self.course_run_ids = course_run_ids
+
+    def get_edx_course_ids(self) -> Iterator[list[dict[str, str]]]:
+        yield [{"id": course_run_id} for course_run_id in self.course_run_ids]
+
+
+COURSEWARE_SENSOR_NAME = "mitxonline_courseware_sensor"
+
+
+def _added_partitions(result) -> set[str]:
+    """Collect the partition keys a SensorResult asks to register."""
+    return {
+        key
+        for request in result.dynamic_partitions_requests
+        for key in request.partition_keys
+    }
+
+
+def test_course_run_sensor_registers_unseen_course_runs(
+    instance: DagsterInstance,
+) -> None:
+    """Course runs the LMS reports but Dagster has not seen become partitions."""
+    _seed_partitions(instance, ["course-v1:org+num+known"])
+    factory = _FakeFactory(
+        _CatalogClient(["course-v1:org+num+known", "course-v1:org+num+new"])
+    )
+
+    result = course_run_sensor(
+        build_sensor_context(instance=instance, sensor_name=COURSEWARE_SENSOR_NAME),
+        factory,
+    )
+
+    assert _added_partitions(result) == {"course-v1:org+num+new"}
+
+
+def test_course_run_sensor_requests_no_runs(instance: DagsterInstance) -> None:
+    """Discovery only: launching exports is course_version_sensor's job alone.
+
+    Requesting runs here as well double-exported every new course, because
+    in_flight_partitions filters run records by sensor name and so could not
+    see the run this sensor launched. It also bypassed
+    MAX_RUN_REQUESTS_PER_TICK, which made that cap meaningless for any burst
+    of new courses.
+    """
+    factory = _FakeFactory(_CatalogClient(["course-v1:org+num+new"]))
+
+    result = course_run_sensor(
+        build_sensor_context(instance=instance, sensor_name=COURSEWARE_SENSOR_NAME),
+        factory,
+    )
+
+    assert not result.run_requests
+
+
+def test_a_new_course_run_is_exported_exactly_once(instance: DagsterInstance) -> None:
+    """The two sensors together produce exactly one export for a new course.
+
+    course_run_sensor registers the partition and stops; course_version_sensor
+    finds no course_xml materialization for it and requests the only export.
+    """
+    new_key = "course-v1:org+num+new"
+    discovery = course_run_sensor(
+        build_sensor_context(instance=instance, sensor_name=COURSEWARE_SENSOR_NAME),
+        _FakeFactory(_CatalogClient([new_key])),
+    )
+    instance.add_dynamic_partitions(
+        OPENEDX_COURSE_RUN_PARTITIONS["mitxonline"].name,
+        sorted(_added_partitions(discovery)),
+    )
+
+    version_result = course_version_sensor(
+        build_sensor_context(instance=instance, sensor_name=SENSOR_NAME),
+        _FakeFactory(_FakeClient({new_key: "version-one"})),
+    )
+
+    assert not discovery.run_requests
+    assert _requested_partitions(version_result) == {new_key}
+
+
+def test_an_in_flight_export_is_not_duplicated(instance: DagsterInstance) -> None:
+    """Once this sensor's export is running, the next tick leaves it alone."""
+    new_key = "course-v1:org+num+new"
+    _seed_partitions(instance, [new_key])
+    _record_run(instance, new_key, DagsterRunStatus.STARTED)
+
+    result = course_version_sensor(
+        build_sensor_context(instance=instance, sensor_name=SENSOR_NAME),
+        _FakeFactory(_FakeClient({new_key: "version-one"})),
+    )
+
+    assert _requested_partitions(result) == set()

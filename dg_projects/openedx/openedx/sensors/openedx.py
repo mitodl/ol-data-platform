@@ -89,6 +89,22 @@ def course_run_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
 ):
+    """Register a dynamic partition for every course run the LMS reports.
+
+    Partition discovery only. Exports are left entirely to
+    course_version_sensor, which already treats a partition with no course_xml
+    materialization as needing one, so a new course is picked up on its next
+    tick without this sensor requesting anything.
+
+    Requesting runs here as well used to double-export every new course:
+    in_flight_partitions filters run records by sensor name, so the run this
+    sensor launched was invisible to course_version_sensor, which then launched
+    a second one for the same partition. It also bypassed
+    MAX_RUN_REQUESTS_PER_TICK entirely -- one unthrottled run per new course,
+    so a bulk course creation or a fresh deployment flooded the run queue no
+    matter how carefully the other sensor was capped. Keeping every export
+    behind a single throttled path is what makes that cap mean anything.
+    """
     # Enumerate the course-run IDs from edX via the API
     course_id_generator = openedx.client.get_edx_course_ids()
     course_run_ids = []
@@ -106,22 +122,16 @@ def course_run_sensor(
         )
     )
     new_course_run_ids = set(course_run_ids) - existing_keys
+    context.log.info(
+        "Registering %s new %s course run partitions.",
+        len(new_course_run_ids),
+        openedx.deployment,
+    )
     return SensorResult(
         dynamic_partitions_requests=[
             OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].build_add_request(
                 partition_keys=list(new_course_run_ids)
             )
-        ],
-        run_requests=[
-            RunRequest(
-                asset_selection=[
-                    AssetKey((openedx.deployment, "openedx", "courseware")),
-                    AssetKey((openedx.deployment, "openedx", "raw_data", "course_xml")),
-                    AssetKey((openedx.deployment, "openedx", "course_content_webhook")),
-                ],
-                partition_key=course_run_id,
-            )
-            for course_run_id in new_course_run_ids
         ],
     )
 
