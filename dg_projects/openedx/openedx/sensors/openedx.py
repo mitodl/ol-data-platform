@@ -18,10 +18,17 @@ from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
 
-# `get_course_outline` is one HTTP round trip per course run and the sensor tick has a
-# hard timeout, so only a slice of the partitions is checked per tick. Deployments with
-# a few thousand runs cycle through everything in well under a day at hourly ticks.
-COURSE_VERSION_BATCH_SIZE = 250
+# `get_course_outline` is one HTTP round trip per course run, and the tick runs inside
+# Dagster's sensor gRPC timeout -- 60s by default, and nothing in this deployment raises
+# it. The scan is bounded twice over, because a count alone does not bound wall clock:
+# whichever of these two limits is reached first ends the tick, and the cursor is saved
+# either way. Only actual fetches count against the limit; runs skipped by
+# `_skip_ended_course` cost nothing and so must not consume the budget, or a deployment
+# full of long-finished runs would spend every tick skipping and never reach a live one.
+COURSE_VERSION_MAX_FETCHES_PER_TICK = 100
+# Deliberately well under the 60s timeout: a single slow response must not push the tick
+# past it, since a tick that never returns is a tick whose cursor is never written.
+COURSE_VERSION_TICK_BUDGET = timedelta(seconds=30)
 # How long after its end date a course run stops being polled for new versions.
 ENDED_COURSE_GRACE_PERIOD = timedelta(days=90)
 # Ended runs are still re-checked this often. Without it, a run whose end date is later
@@ -120,11 +127,11 @@ def course_version_sensor(
 ):
     """Request a re-export of any course run whose published version has changed.
 
-    ``get_course_outline`` is called for one batch of partitions per tick, resuming from
-    where the previous tick stopped, so that every tick completes within the sensor
-    timeout and commits its progress. Scanning the whole deployment in a single tick
-    made the sensor time out before it emitted any runs or saved any cursor, which is
-    what stalled re-exports for months (mitodl/hq#12739).
+    ``get_course_outline`` is called for a bounded slice of the partitions per tick,
+    resuming from where the previous tick stopped, so that every tick completes within
+    the sensor timeout and commits its progress. Scanning the whole deployment in a
+    single tick made the sensor time out before it emitted any runs or saved any cursor,
+    which is what stalled re-exports for months (mitodl/hq#12739).
     """
     course_run_ids = sorted(
         OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].get_partition_keys(
@@ -142,20 +149,41 @@ def course_version_sensor(
     )
     if resume_from >= len(course_run_ids):
         resume_from = 0
-    batch = course_run_ids[resume_from : resume_from + COURSE_VERSION_BATCH_SIZE]
 
-    now = datetime.now(tz=UTC)
+    started = datetime.now(tz=UTC)
     run_requests = []
-    for course_run_id in batch:
+    last_scanned_course_run_id = None
+    fetched = 0
+    failed = 0
+    last_error: httpx.HTTPStatusError | None = None
+    for course_run_id in course_run_ids[resume_from:]:
+        now = datetime.now(tz=UTC)
+        if (
+            fetched >= COURSE_VERSION_MAX_FETCHES_PER_TICK
+            or now - started >= COURSE_VERSION_TICK_BUDGET
+        ):
+            break
+        last_scanned_course_run_id = course_run_id
         course_cursor = cursor.courses.get(course_run_id)
         if course_cursor and _skip_ended_course(course_cursor, now):
             continue
+        fetched += 1
         try:
             response = openedx.client.get_course_outline(course_run_id)
         except httpx.HTTPStatusError as e:
-            if e.response.status_code != HTTP_NOT_FOUND:
-                raise
-            context.log.warning("Course outline not found for key %s", course_run_id)
+            if e.response.status_code == HTTP_NOT_FOUND:
+                context.log.warning(
+                    "Course outline not found for key %s", course_run_id
+                )
+                continue
+            # Log and move on rather than aborting: re-raising here would discard the
+            # whole tick's progress, so one course run that reliably errors would pin
+            # the scan at its offset and nothing past it would ever be checked again.
+            context.log.warning(
+                "Failed to fetch course outline for key %s: %s", course_run_id, e
+            )
+            last_error = e
+            failed += 1
             continue
         published_version = response["published_version"]
         # Refresh the entry on every successful fetch, not only when the version
@@ -172,7 +200,6 @@ def course_version_sensor(
             continue
         run_requests.append(
             RunRequest(
-                run_key=f"{course_run_id}:{published_version}",
                 asset_selection=[
                     AssetKey((openedx.deployment, "openedx", "courseware")),
                     AssetKey((openedx.deployment, "openedx", "raw_data", "course_xml")),
@@ -183,15 +210,32 @@ def course_version_sensor(
             )
         )
 
-    # An empty batch means there are no partitions at all; otherwise the next tick picks
-    # up after the last key handled here, wrapping to the start once the list is spent.
-    cursor.last_scanned_course_run_id = batch[-1] if batch else None
+    if failed and failed == fetched and last_error is not None:
+        # Nothing this tick succeeded, so the LMS is down rather than one course run
+        # being broken. Fail the tick visibly and leave the cursor untouched instead of
+        # advancing past a slice that was never really checked.
+        raise last_error
+
+    # `last_scanned_course_run_id` is None only when there are no partitions at all;
+    # otherwise the next tick resumes after the last key handled here, wrapping to the
+    # start of the list once it is spent.
+    cursor.last_scanned_course_run_id = last_scanned_course_run_id
+    # Drop entries for partitions that no longer exist, so the cursor blob -- read and
+    # rewritten in full on every tick -- doesn't grow without bound as runs churn.
+    live_course_run_ids = set(course_run_ids)
+    cursor.courses = {
+        key: value
+        for key, value in cursor.courses.items()
+        if key in live_course_run_ids
+    }
     context.log.info(
-        "Checked %s of %s %s course runs (offset %s), requesting %s re-exports.",
-        len(batch),
+        "Fetched %s of %s %s course outlines (offset %s, %s failed), "
+        "requesting %s re-exports.",
+        fetched,
         len(course_run_ids),
         openedx.deployment,
         resume_from,
+        failed,
         len(run_requests),
     )
     return SensorResult(

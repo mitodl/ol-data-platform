@@ -96,7 +96,9 @@ def parse_cursor(result: dg.SensorResult) -> CourseVersionCursor:
 
 def test_batches_partitions_and_resumes_across_ticks(instance, monkeypatch):
     """Each tick checks one batch and the next picks up where it left off."""
-    monkeypatch.setattr("openedx.sensors.openedx.COURSE_VERSION_BATCH_SIZE", 2)
+    monkeypatch.setattr(
+        "openedx.sensors.openedx.COURSE_VERSION_MAX_FETCHES_PER_TICK", 2
+    )
     course_run_ids = [run_key(f"C{n}") for n in range(5)]
     add_partitions(instance, course_run_ids)
     client = FakeOpenEdxClient({key: outline("v1") for key in course_run_ids})
@@ -114,7 +116,9 @@ def test_batches_partitions_and_resumes_across_ticks(instance, monkeypatch):
 
 def test_wraps_to_the_start_once_every_partition_is_scanned(instance, monkeypatch):
     """After the last partition the scan restarts, so versions keep being re-checked."""
-    monkeypatch.setattr("openedx.sensors.openedx.COURSE_VERSION_BATCH_SIZE", 2)
+    monkeypatch.setattr(
+        "openedx.sensors.openedx.COURSE_VERSION_MAX_FETCHES_PER_TICK", 2
+    )
     course_run_ids = [run_key(f"C{n}") for n in range(3)]
     add_partitions(instance, course_run_ids)
     client = FakeOpenEdxClient({key: outline("v1") for key in course_run_ids})
@@ -132,7 +136,9 @@ def test_wraps_to_the_start_once_every_partition_is_scanned(instance, monkeypatc
 
 def test_resume_position_survives_partitions_being_removed(instance, monkeypatch):
     """Resuming by course run ID, not by index, so a shrinking list can't skip runs."""
-    monkeypatch.setattr("openedx.sensors.openedx.COURSE_VERSION_BATCH_SIZE", 2)
+    monkeypatch.setattr(
+        "openedx.sensors.openedx.COURSE_VERSION_MAX_FETCHES_PER_TICK", 2
+    )
     course_run_ids = [run_key(f"C{n}") for n in range(6)]
     add_partitions(instance, course_run_ids)
     client = FakeOpenEdxClient({key: outline("v1") for key in course_run_ids})
@@ -241,9 +247,37 @@ def test_missing_outline_is_skipped_without_failing_the_tick(instance):
     assert parse_cursor(result).last_scanned_course_run_id == missing
 
 
-def test_non_404_errors_are_not_swallowed(instance):
-    course_run_id = run_key("C0")
-    add_partitions(instance, [course_run_id])
+def test_one_broken_course_run_does_not_pin_the_scan(instance):
+    """A run that reliably 500s must not stop every run after it being checked.
+
+    Re-raising would discard the tick's progress, so the next tick would restart at the
+    same offset, raise at the same key, and never reach the rest of the deployment.
+    """
+    broken, healthy = run_key("C0"), run_key("C1")
+    add_partitions(instance, [broken, healthy])
+
+    class PartiallyBrokenClient(FakeOpenEdxClient):
+        def get_course_outline(self, course_id: str) -> dict[str, str | None]:
+            self.requested.append(course_id)
+            if course_id == broken:
+                raise http_error(500)
+            return self.outlines[course_id]
+
+    client = PartiallyBrokenClient({healthy: outline("v1")})
+    result = evaluate(instance, client)
+
+    assert client.requested == [broken, healthy]
+    assert [request.partition_key for request in result.run_requests] == [healthy]
+    assert parse_cursor(result).last_scanned_course_run_id == healthy
+
+
+def test_a_total_upstream_outage_fails_the_tick(instance):
+    """When nothing succeeds it's the LMS, not one course: fail loudly, keep the cursor.
+
+    Advancing past a slice that was never really checked would hide the outage and
+    delay those runs by a full cycle.
+    """
+    add_partitions(instance, [run_key("C0"), run_key("C1")])
 
     class ExplodingClient(FakeOpenEdxClient):
         def get_course_outline(self, course_id: str) -> dict[str, str | None]:
@@ -252,6 +286,50 @@ def test_non_404_errors_are_not_swallowed(instance):
 
     with pytest.raises(httpx.HTTPStatusError):
         evaluate(instance, ExplodingClient({}))
+
+
+def test_skipped_runs_do_not_consume_the_fetch_budget(instance, monkeypatch):
+    """Only real HTTP calls count, so long-finished runs can't starve the live ones."""
+    monkeypatch.setattr(
+        "openedx.sensors.openedx.COURSE_VERSION_MAX_FETCHES_PER_TICK", 1
+    )
+    ended_runs = [run_key(f"C{n}") for n in range(4)]
+    live_run = run_key("C9")
+    add_partitions(instance, [*ended_runs, live_run])
+    now = datetime.now(tz=UTC)
+    cursor = CourseVersionCursor(
+        courses={
+            key: CourseCursor(
+                published_version="v1",
+                course_end=now - ENDED_COURSE_GRACE_PERIOD - timedelta(days=1),
+                last_checked=now,
+            )
+            for key in ended_runs
+        }
+    )
+    client = FakeOpenEdxClient({live_run: outline("v1")})
+
+    result = evaluate(instance, client, cursor.model_dump_json())
+
+    assert client.requested == [live_run]
+    assert [request.partition_key for request in result.run_requests] == [live_run]
+
+
+def test_cursor_drops_entries_for_deleted_partitions(instance):
+    """The cursor is rewritten in full every tick, so it must not grow without bound."""
+    kept, removed = run_key("C0"), run_key("C1")
+    add_partitions(instance, [kept, removed])
+    client = FakeOpenEdxClient({kept: outline("v1"), removed: outline("v1")})
+
+    first = evaluate(instance, client)
+    assert set(parse_cursor(first).courses) == {kept, removed}
+
+    instance.delete_dynamic_partition(
+        OPENEDX_COURSE_RUN_PARTITIONS[DEPLOYMENT].name, removed
+    )
+    second = evaluate(instance, client, first.cursor)
+
+    assert set(parse_cursor(second).courses) == {kept}
 
 
 def test_legacy_flat_cursor_is_migrated_without_re_requesting_everything(instance):
