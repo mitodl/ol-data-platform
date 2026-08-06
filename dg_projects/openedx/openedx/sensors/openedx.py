@@ -1,10 +1,13 @@
+import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Collection
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import timedelta
 
 import httpx2 as httpx
 from dagster import (
     AssetKey,
+    DagsterEventType,
     DagsterInstance,
     RunRequest,
     RunsFilter,
@@ -25,26 +28,41 @@ from openedx.partitions.openedx import (
 COURSEWARE_PUBLISHED_VERSION_METADATA = "courseware_published_version"
 
 
-def last_exported_version(
-    instance: DagsterInstance, asset_key: AssetKey, partition_key: str
-) -> str | None:
-    """Return the course version recorded on the partition's latest export.
+def exported_versions(
+    instance: DagsterInstance, asset_key: AssetKey, partition_keys: Collection[str]
+) -> dict[str, str | None]:
+    """Map each partition to the course version recorded on its latest export.
 
-    Returns None when the partition has never been exported, or was exported
-    before course_xml started recording the version - both of which mean "we do
-    not know what is in S3", so the caller should re-export.
+    A partition is absent from the result when it has never been exported, and
+    maps to None when it was exported before course_xml started recording the
+    version - both of which mean "we do not know what is in S3", so the caller
+    should re-export.
+
+    Batched deliberately: two queries for the whole deployment rather than one
+    per partition. In steady state almost every partition matches, so the sweep
+    examines all of them, and a per-partition lookup would put a few thousand
+    round trips on the event log inside every tick.
     """
+    latest_storage_ids = instance.get_latest_storage_id_by_partition(
+        asset_key,
+        DagsterEventType.ASSET_MATERIALIZATION,
+        partitions=set(partition_keys),
+    )
+    if not latest_storage_ids:
+        return {}
+    storage_ids = list(latest_storage_ids.values())
     records = instance.fetch_materializations(
-        AssetRecordsFilter(asset_key=asset_key, asset_partitions=[partition_key]),
-        limit=1,
+        AssetRecordsFilter(asset_key=asset_key, storage_ids=storage_ids),
+        limit=len(storage_ids),
     ).records
-    if not records:
-        return None
-    materialization = records[0].asset_materialization
-    if materialization is None:
-        return None
-    version = materialization.metadata.get(COURSEWARE_PUBLISHED_VERSION_METADATA)
-    return str(version.value) if version else None
+    versions: dict[str, str | None] = {}
+    for record in records:
+        materialization = record.asset_materialization
+        if materialization is None or materialization.partition is None:
+            continue
+        version = materialization.metadata.get(COURSEWARE_PUBLISHED_VERSION_METADATA)
+        versions[materialization.partition] = str(version.value) if version else None
+    return versions
 
 
 def in_flight_partitions(instance: DagsterInstance, sensor_name: str) -> set[str]:
@@ -121,7 +139,36 @@ SWEEP_TIME_BUDGET = timedelta(seconds=200)
 MAX_RUN_REQUESTS_PER_TICK = 8
 
 
-def course_version_sensor(  # noqa: PLR0915
+class OutlineFetchError(Exception):
+    """An outline fetch failed in a way that counts against the sweep's tally.
+
+    A course that has vanished from the LMS (404) is deliberately not one of
+    these: there is nothing left to export, so it is not a symptom of trouble.
+    """
+
+
+def published_version_of(
+    future: "Future[dict[str, str]]", course_run_id: str, log: logging.Logger
+) -> str | None:
+    """Resolve one outline fetch into a published version.
+
+    Returns None when the course no longer exists in the LMS, and raises
+    OutlineFetchError when the fetch failed for any other reason.
+    """
+    try:
+        return future.result()["published_version"]
+    except httpx.HTTPStatusError as error:
+        if error.response.status_code == HTTP_NOT_FOUND:
+            log.info("Course outline not found for key %s", course_run_id)
+            return None
+        log.exception("Failed to fetch the course outline for %s", course_run_id)
+        raise OutlineFetchError from error
+    except Exception as error:
+        log.exception("Failed to fetch the course outline for %s", course_run_id)
+        raise OutlineFetchError from error
+
+
+def course_version_sensor(
     context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
 ) -> SensorResult:
     """Request an export for every course whose published version changed.
@@ -138,6 +185,7 @@ def course_version_sensor(  # noqa: PLR0915
     course_xml_key = AssetKey((deployment, "openedx", "raw_data", "course_xml"))
     skip_keys = in_flight_partitions(context.instance, context.sensor_name)
     pending_keys = [key for key in partition_keys if key not in skip_keys]
+    exported = exported_versions(context.instance, course_xml_key, pending_keys)
 
     sweep_start = time.monotonic()
     deadline = sweep_start + SWEEP_TIME_BUDGET.total_seconds()
@@ -156,7 +204,7 @@ def course_version_sensor(  # noqa: PLR0915
         # instead of hanging until the gRPC server kills it. The timeout is
         # caught only around advancing the iterator, so a TimeoutError raised
         # from within the loop body (e.g. a Postgres query timeout from
-        # last_exported_version) still propagates instead of being swallowed.
+        # exported_versions) still propagates instead of being swallowed.
         completed = as_completed(futures, timeout=SWEEP_TIME_BUDGET.total_seconds())
         while True:
             try:
@@ -176,28 +224,18 @@ def course_version_sensor(  # noqa: PLR0915
             course_run_id = futures[future]
             examined += 1
             try:
-                published_version = future.result()["published_version"]
-            except httpx.HTTPStatusError as error:
-                if error.response.status_code == HTTP_NOT_FOUND:
-                    context.log.info(
-                        "Course outline not found for key %s", course_run_id
-                    )
-                else:
-                    failures += 1
-                    context.log.exception(
-                        "Failed to fetch the course outline for %s",
-                        course_run_id,
-                    )
-                continue
-            except Exception:
-                failures += 1
-                context.log.exception(
-                    "Failed to fetch the course outline for %s", course_run_id
+                published_version = published_version_of(
+                    future, course_run_id, context.log
                 )
+            except OutlineFetchError:
+                failures += 1
                 continue
-            if published_version == last_exported_version(
-                context.instance, course_xml_key, course_run_id
-            ):
+            if published_version is None:
+                continue
+            # `.get` covers both "never exported" (absent) and "exported before
+            # the version was recorded" (None); a real version never equals
+            # either, so both re-export.
+            if published_version == exported.get(course_run_id):
                 continue
             run_requests.append(
                 RunRequest(

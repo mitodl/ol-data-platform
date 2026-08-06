@@ -19,8 +19,8 @@ from dagster._core.test_utils import create_run_for_test
 from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from openedx.sensors.openedx import (
     course_version_sensor,
+    exported_versions,
     in_flight_partitions,
-    last_exported_version,
 )
 
 COURSE_XML_KEY = AssetKey(("mitxonline", "openedx", "raw_data", "course_xml"))
@@ -46,36 +46,68 @@ def _record_export(
     )
 
 
-def test_last_exported_version_reads_the_latest_materialization(
+def test_exported_versions_reads_the_latest_materialization(
     instance: DagsterInstance,
 ) -> None:
     """The most recent materialization's recorded version wins."""
     _record_export(instance, "course-v1:org+num+run", "version-one")
     _record_export(instance, "course-v1:org+num+run", "version-two")
 
-    result = last_exported_version(instance, COURSE_XML_KEY, "course-v1:org+num+run")
+    result = exported_versions(instance, COURSE_XML_KEY, ["course-v1:org+num+run"])
 
-    assert result == "version-two"
+    assert result == {"course-v1:org+num+run": "version-two"}
 
 
-def test_last_exported_version_is_none_when_never_exported(
+def test_exported_versions_omits_partitions_never_exported(
     instance: DagsterInstance,
 ) -> None:
     """A partition with no materialization has no exported version."""
-    result = last_exported_version(instance, COURSE_XML_KEY, "course-v1:org+num+run")
+    result = exported_versions(instance, COURSE_XML_KEY, ["course-v1:org+num+run"])
 
-    assert result is None
+    assert result == {}
+    assert result.get("course-v1:org+num+run") is None
 
 
-def test_last_exported_version_is_none_for_pre_existing_archives(
+def test_exported_versions_is_none_for_pre_existing_archives(
     instance: DagsterInstance,
 ) -> None:
     """Archives materialized before the metadata key existed count as unknown."""
     _record_export(instance, "course-v1:org+num+run", None)
 
-    result = last_exported_version(instance, COURSE_XML_KEY, "course-v1:org+num+run")
+    result = exported_versions(instance, COURSE_XML_KEY, ["course-v1:org+num+run"])
 
-    assert result is None
+    assert result == {"course-v1:org+num+run": None}
+
+
+def test_exported_versions_resolves_each_partition_independently(
+    instance: DagsterInstance,
+) -> None:
+    """One batched lookup must not cross-contaminate partitions.
+
+    The batched form fetches every partition's latest record in a single query,
+    so this guards against the records being matched back to the wrong keys.
+    """
+    _record_export(instance, "course-v1:org+num+a", "a-one")
+    _record_export(instance, "course-v1:org+num+b", "b-one")
+    _record_export(instance, "course-v1:org+num+a", "a-two")
+    _record_export(instance, "course-v1:org+num+c", "c-one")
+
+    result = exported_versions(
+        instance,
+        COURSE_XML_KEY,
+        [
+            "course-v1:org+num+a",
+            "course-v1:org+num+b",
+            "course-v1:org+num+c",
+            "course-v1:org+num+never",
+        ],
+    )
+
+    assert result == {
+        "course-v1:org+num+a": "a-two",
+        "course-v1:org+num+b": "b-one",
+        "course-v1:org+num+c": "c-one",
+    }
 
 
 def _record_run(
@@ -366,27 +398,28 @@ def test_blocked_workers_do_not_hang_the_tick(
     assert elapsed < 2.0
 
 
-def test_body_timeout_is_not_swallowed_as_an_exhausted_budget(
+def test_event_log_timeout_is_not_swallowed_as_an_exhausted_budget(
     instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A TimeoutError raised from inside the loop body must propagate.
+    """A TimeoutError from the event-log lookup must propagate.
 
-    last_exported_version does a Postgres event-log query, so a genuine
-    socket or database timeout there is a TimeoutError (socket.timeout is an
-    alias of it since Python 3.10). The except TimeoutError around the
-    as_completed advance must not also catch this, or a real timeout gets
-    mislabeled in the logs as an exhausted sweep budget and silently
-    swallowed instead of surfacing as a failed tick.
+    exported_versions does a Postgres event-log query, so a genuine socket or
+    database timeout there is a TimeoutError (socket.timeout is an alias of it
+    since Python 3.10). The except TimeoutError around the as_completed advance
+    must not also catch this, or a real timeout gets mislabeled in the logs as
+    an exhausted sweep budget and silently swallowed instead of surfacing as a
+    failed tick. The lookup is hoisted out of the loop precisely so it cannot
+    land inside that handler's reach.
     """
     keys = ["course-v1:org+num+run"]
     _seed_partitions(instance, keys)
     factory = _FakeFactory(_FakeClient({"course-v1:org+num+run": "version-one"}))
 
-    def _raise_timeout(*_args: object, **_kwargs: object) -> str | None:
+    def _raise_timeout(*_args: object, **_kwargs: object) -> dict[str, str | None]:
         msg = "simulated database timeout"
         raise TimeoutError(msg)
 
-    monkeypatch.setattr("openedx.sensors.openedx.last_exported_version", _raise_timeout)
+    monkeypatch.setattr("openedx.sensors.openedx.exported_versions", _raise_timeout)
 
     with pytest.raises(TimeoutError):
         course_version_sensor(
