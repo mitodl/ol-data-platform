@@ -35,7 +35,6 @@ def client() -> OAuthApiClient:
     api_client = OAuthApiClient(
         client_id="id",
         client_secret="secret",  # pragma: allowlist secret
-        # pragma: allowlist secret
         token_url="https://lms.example.com/oauth2/access_token",
         base_url="https://lms.example.com",
     )

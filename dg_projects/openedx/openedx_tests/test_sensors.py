@@ -1,7 +1,9 @@
 """Tests for openedx.sensors.openedx."""
 
+import threading
 from collections.abc import Iterator
 from datetime import timedelta
+from typing import Protocol
 
 import pytest
 from dagster import (
@@ -137,6 +139,12 @@ def test_in_flight_partitions_ignores_other_sensors(
     assert in_flight_partitions(instance, SENSOR_NAME) == set()
 
 
+class _OutlineClient(Protocol):
+    """Structural type shared by every outline-client test double."""
+
+    def get_course_outline(self, course_id: str) -> dict[str, str]: ...
+
+
 class _FakeClient:
     """Stand-in for OpenEdxApiClient that serves canned outlines."""
 
@@ -158,7 +166,7 @@ class _FakeClient:
 class _FakeFactory:
     """Stand-in for OpenEdxApiClientFactory."""
 
-    def __init__(self, client: _FakeClient, deployment: str = "mitxonline") -> None:
+    def __init__(self, client: _OutlineClient, deployment: str = "mitxonline") -> None:
         self.client = client
         self.deployment = deployment
 
@@ -299,3 +307,67 @@ def test_exhausted_time_budget_returns_what_it_collected(
     )
 
     assert result.run_requests == []
+
+
+class _BlockingClient:
+    """Stand-in whose outline lookups never return within the test.
+
+    Simulates every worker stuck in fetch_with_auth's unbounded 429 backoff:
+    no future ever completes, so only a timeout on as_completed itself (not
+    the in-loop deadline check, which only runs between completions) can end
+    the tick.
+    """
+
+    def __init__(self) -> None:
+        self.release = threading.Event()
+
+    def get_course_outline(self, course_id: str) -> dict[str, str]:  # noqa: ARG002
+        self.release.wait(timeout=5)
+        return {"published_version": "unused"}
+
+
+def test_blocked_workers_do_not_hang_the_tick(
+    instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """as_completed's own timeout ends the tick when no future ever completes.
+
+    This is the exact failure mode this branch exists to fix: without a
+    timeout on as_completed, a rate-limit storm blocking every worker would
+    hang the sweep loop until the gRPC tick timeout killed it, producing and
+    saving nothing.
+    """
+    monkeypatch.setattr(
+        "openedx.sensors.openedx.SWEEP_TIME_BUDGET", timedelta(seconds=0.05)
+    )
+    keys = [f"course-v1:org+num+{index}" for index in range(4)]
+    _seed_partitions(instance, keys)
+    client = _BlockingClient()
+    factory = _FakeFactory(client)
+
+    try:
+        result = course_version_sensor(
+            build_sensor_context(instance=instance, sensor_name=SENSOR_NAME), factory
+        )
+    finally:
+        client.release.set()
+
+    assert result.run_requests == []
+
+
+def test_every_partition_failing_raises(instance: DagsterInstance) -> None:
+    """A sweep where every examined lookup failed must not report a green tick.
+
+    Swallowing every exception silently would reproduce the original bug: a
+    bad token or a 500-ing LMS producing a green tick with zero run requests,
+    hourly, forever.
+    """
+    keys = [f"course-v1:org+num+{index}" for index in range(3)]
+    _seed_partitions(instance, keys)
+    factory = _FakeFactory(
+        _FakeClient(dict.fromkeys(keys, "version-one"), raises=set(keys))
+    )
+
+    with pytest.raises(RuntimeError, match="failed for all 3"):
+        course_version_sensor(
+            build_sensor_context(instance=instance, sensor_name=SENSOR_NAME), factory
+        )
