@@ -22,12 +22,37 @@ _REQUIRED_ENV_KEYS = {
     "vault_addr",
     "vault_mount",
     "dbt_target",
+    # Which lake to READ, independent of the cluster dbt_target connects to.
+    # Required so adding an environment cannot leave it to be inferred from a
+    # target name, which is the RFC 12711 step 1 defect.
+    "data_lake_env",
 }
 
 
 @pytest.mark.parametrize("env_name", list(_ENVS))
 def test_env_config_has_required_keys(env_name: str) -> None:
     assert _REQUIRED_ENV_KEYS <= _ENVS[env_name].keys()
+
+
+@pytest.mark.parametrize("env_name", list(_ENVS))
+def test_data_lake_env_is_a_real_catalog(env_name: str) -> None:
+    """Interpolated into `ol_data_lake_<env>`, so a typo fails only at query time."""
+    assert _ENVS[env_name]["data_lake_env"] in {"qa", "production"}
+
+
+def test_dev_is_qa_cluster_reading_production() -> None:
+    """The combination local b2b development needs, and the one that was missing.
+
+    `'qa' in target.name` could not express it: dev's target is
+    starrocks_qa_vault, so the substring test forced the (empty) QA lake and
+    the b2b models could not be developed locally at all. Mirrors
+    STARROCKS_DBT_TARGET_MAP["dev"] / DATA_LAKE_ENV_MAP["dev"] in
+    lakehouse.lib.dbt_environment, which the Dagster side resolves from.
+    """
+    assert _ENVS["dev"]["dbt_target"] == _ENVS["qa"]["dbt_target"]
+    assert _ENVS["dev"]["host"] == _ENVS["qa"]["host"]
+    assert _ENVS["dev"]["data_lake_env"] == "production"
+    assert _ENVS["qa"]["data_lake_env"] == "qa"
 
 
 def test_ci_connects_directly_like_production() -> None:
@@ -69,7 +94,12 @@ def test_port_is_free_false_when_bound() -> None:
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in ("DBT_STARROCKS_USERNAME", "DBT_STARROCKS_PASSWORD", "DBT_STARROCKS_HOST"):
+    for key in (
+        "DBT_STARROCKS_USERNAME",
+        "DBT_STARROCKS_PASSWORD",
+        "DBT_STARROCKS_HOST",
+        "DBT_DATA_LAKE_ENV",
+    ):
         monkeypatch.delenv(key, raising=False)
 
 
@@ -99,6 +129,40 @@ def test_ci_env_skips_port_forward_by_default(mock_fetch, mock_port_forward, moc
     assert os.environ["DBT_STARROCKS_HOST"] == _ENVS["ci"]["host"]
     _, kwargs = mock_dbt_run.call_args
     assert kwargs["target"] == _ENVS["ci"]["dbt_target"]
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_dev_env_reads_production_lake_from_qa_cluster(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """`--env dev` must connect to QA but export the production lake."""
+    mock_fetch.return_value = ("user", "pass")
+    run(env="dev")
+
+    mock_port_forward.assert_called_once()
+    assert os.environ["DBT_DATA_LAKE_ENV"] == "production"
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["target"] == "starrocks_qa_vault"
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_explicit_target_keeps_the_env_s_data_lake(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """--target moves the cluster; it must not move the lake with it.
+
+    The whole point of the split is that "which cluster" and "which lake" are
+    answered separately, so overriding one must leave the other alone.
+    """
+    mock_fetch.return_value = ("user", "pass")
+    run(env="dev", target="starrocks_production")
+
+    assert os.environ["DBT_DATA_LAKE_ENV"] == "production"
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["target"] == "starrocks_production"
+
+    run(env="qa", target="starrocks_production")
+    assert os.environ["DBT_DATA_LAKE_ENV"] == "qa"
 
 
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
