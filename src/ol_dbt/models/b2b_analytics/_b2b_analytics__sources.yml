@@ -6,10 +6,20 @@ sources:
     Dimensional-layer Iceberg tables, accessed from StarRocks via the
     `ol_data_lake_{qa,production}` external catalog. Same physical tables the
     Trino-backed ol_dbt project materializes into `ol_warehouse_{env}_dimensional`.
-  database: "{{ 'ol_data_lake_qa' if 'qa' in target.name else 'ol_data_lake_production'\
-    \ }}"
-  schema: "{{ 'ol_warehouse_qa_dimensional' if 'qa' in target.name else 'ol_warehouse_production_dimensional'\
-    \ }}"
+
+    Which catalog is read comes from DBT_DATA_LAKE_ENV, NOT from the target
+    name. The target names a CLUSTER and its auth; this names the lake the
+    cluster reads through its external catalog, and the two axes diverge --
+    a developer's StarRocks target port-forwards to the QA cluster but should
+    read production data. Inferring the lake from `'qa' in target.name` got
+    that case wrong and made these models undevelopable locally (RFC 12711
+    step 1). Set from a per-environment map that raises on an unknown
+    environment by lakehouse/assets/lakehouse/dbt.py (Dagster) and
+    ol_dbt_cli/commands/starrocks.py (local, CI); the default below is reached
+    only by a bare `dbt` invocation outside both, where reading production is
+    the sanctioned practice and a wrong value fails as a missing relation.
+  database: "ol_data_lake_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}"
+  schema: "ol_warehouse_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}_dimensional"
   tables:
   - name: dim_organization
     description: One row per organization per platform. organization_key is null for
@@ -37,11 +47,11 @@ sources:
 - name: reporting
   description: >
     Reporting-layer Iceberg tables, accessed from StarRocks via the
-    `ol_data_lake_{qa,production}` external catalog.
-  database: "{{ 'ol_data_lake_qa' if 'qa' in target.name else 'ol_data_lake_production'\
-    \ }}"
-  schema: "{{ 'ol_warehouse_qa_reporting' if 'qa' in target.name else 'ol_warehouse_production_reporting'\
-    \ }}"
+    `ol_data_lake_{qa,production}` external catalog, selected by
+    DBT_DATA_LAKE_ENV rather than the target name (see the dimensional source
+    above for why).
+  database: "ol_data_lake_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}"
+  schema: "ol_warehouse_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}_reporting"
   tables:
   - name: organization_administration_report
     description: >

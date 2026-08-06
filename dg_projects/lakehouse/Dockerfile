@@ -49,9 +49,16 @@ RUN /app/dg_projects/lakehouse/.venv/bin/dbt deps && \
 # below only need to satisfy profiles.yml's env_var() calls, not authenticate
 # against a real StarRocks cluster -- see lakehouse/assets/lakehouse/dbt_starrocks.py
 # for where real Vault-issued credentials are injected at run time.
+# DBT_DATA_LAKE_ENV is stated here rather than left to dbt_project.yml's
+# fallback, but the value is arbitrary: one image serves every environment, so
+# the baked manifest cannot name the right catalog for all of them. dbt records
+# the env vars used at parse time and forces a full re-parse when they differ,
+# so the run-time value injected by dbt.py / the starrocks CLI is what the
+# build actually reads.
 RUN DBT_STARROCKS_HOST=localhost \
     DBT_STARROCKS_USERNAME=build \
     DBT_STARROCKS_PASSWORD=build \
+    DBT_DATA_LAKE_ENV=production \
     /app/dg_projects/lakehouse/.venv/bin/dbt parse \
         --target starrocks_qa_vault --target-path target/starrocks
 

@@ -63,6 +63,11 @@ _PORT_FORWARD_TIMEOUT = 15
 # server (vault_addr below), not the mount path, is what scopes the environment.
 _VAULT_MOUNT = "database-starrocks"
 
+# `dbt_target` names a CLUSTER and its auth; `data_lake_env` names the external
+# catalog the b2b models READ. They are separate axes -- ci connects to its own
+# FE service but reads the production lake -- and conflating them is what
+# RFC 12711 step 1 exists to undo. Both are stated per environment rather than
+# derived, so adding an environment forces both answers.
 _ENVS: dict[str, dict[str, Any]] = {
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
@@ -72,6 +77,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_qa_vault",
+        "data_lake_env": "qa",
     },
     "production": {
         "host": "lakehouse.starrocks.ol.mit.edu",
@@ -81,6 +87,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "vault_addr": "https://vault-production.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_production",
+        "data_lake_env": "production",
     },
     "ci": {
         "host": "lakehouse.ci.starrocks.ol.mit.edu",
@@ -90,6 +97,8 @@ _ENVS: dict[str, dict[str, Any]] = {
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_production",
+        # Matches trino_catalog_map["ci"] in the lakehouse definitions.
+        "data_lake_env": "qa",
         "port_forward": False,
     },
 }
@@ -263,6 +272,10 @@ def run(  # noqa: PLR0913
     os.environ["DBT_STARROCKS_USERNAME"] = username
     os.environ["DBT_STARROCKS_PASSWORD"] = password
     os.environ["DBT_STARROCKS_HOST"] = host
+    # Read by dbt_project.yml's `data_lake_env` var. Set from --env even when
+    # --target overrides the cluster, so "which lake" stays the environment's
+    # answer rather than something inferred from a target name.
+    os.environ["DBT_DATA_LAKE_ENV"] = env_cfg["data_lake_env"]
 
     # Default to the env-appropriate dbt target if the caller didn't specify one.
     effective_target = target or env_cfg["dbt_target"]
