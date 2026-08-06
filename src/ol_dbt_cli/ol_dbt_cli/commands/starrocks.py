@@ -75,13 +75,23 @@ _VAULT_MOUNT = "database-starrocks"
 # so adding an environment forces both answers.
 #
 # Mirrors STARROCKS_DBT_TARGET_MAP / DATA_LAKE_ENV_MAP in
-# lakehouse.lib.dbt_environment; keep the two in step.
+# lakehouse.lib.dbt_environment; keep the two in step. A fifth environment,
+# `local` (k3d, its own object store and catalog), is planned in RFC 12711's
+# Local-2/3/4 and will need an entry in both places. It is NOT a rename of
+# `dev` below -- `dev` reaches the remote QA cluster and the production lake,
+# `local` reaches neither.
 _ENVS: dict[str, dict[str, Any]] = {
-    # QA cluster connectivity, production data. The combination local b2b
-    # development actually wants: the QA cluster is safe to write to, and the
-    # QA lake has no dimensional/reporting tables to read (RFC 12711 step 8).
+    # QA cluster connectivity, production data. The combination b2b development
+    # against real data wants: the QA cluster is safe to write to, and the QA
+    # lake has no dimensional/reporting tables to read (RFC 12711 step 8).
     # Matches DATA_LAKE_ENV_MAP["dev"] so `ol-dbt starrocks --env dev` and a
     # bare `dagster dev` resolve identically.
+    #
+    # Worth being honest about what this is: "local" development against a
+    # remote cluster and production data. It is the right mode for model-shape
+    # iteration and `ol-dbt diff`, where identity does not matter, and the
+    # wrong one for anything keyed on environment-scoped identity -- which is
+    # why `local` is coming rather than this being the end state.
     "dev": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
         "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
@@ -278,8 +288,14 @@ def run(  # noqa: PLR0913
     env_cfg = _ENVS[env]
     if port_forward is None:
         port_forward = env_cfg.get("port_forward", True)
+    # Print the lake alongside the cluster. Which data you are reading is not
+    # inferable from the env name (`dev` is the QA cluster on production data),
+    # and "you cannot tell which mode you are in" is the specific failure this
+    # separation exists to fix -- so say it, every run.
     console.print(
         f"[bold]ol-dbt starrocks[/] — env: [cyan]{env}[/], "
+        f"cluster: [cyan]{env_cfg['host']}[/], "
+        f"reading: [cyan]ol_data_lake_{env_cfg['data_lake_env']}[/], "
         f"role: [cyan]{vault_role}[/], "
         f"port-forward: [cyan]{port_forward}[/]"
     )
