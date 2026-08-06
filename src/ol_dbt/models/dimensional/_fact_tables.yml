@@ -242,8 +242,12 @@ models:
         config:
           severity: warn
   - name: discount_fk
-    description: Foreign key to dim_discount (null when no discount applied on this
-      line)
+    description: >
+      Foreign key to dim_discount (null when no discount applied on this line).
+      dim_discount is full-refresh and this table is incremental — a
+      dim_discount.discount_pk hashing change requires a `dbt run --select
+      tfact_order --full-refresh` immediately after to avoid orphaning
+      discount_fk on historical order lines.
     tests:
     - relationships:
         to: ref('dim_discount')
