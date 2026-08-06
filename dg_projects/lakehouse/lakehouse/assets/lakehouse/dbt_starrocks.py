@@ -14,8 +14,8 @@ from dagster_dbt.errors import DagsterDbtCliRuntimeError
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DbtAutomationTranslator,
-    resolve_dbt_target,
 )
+from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
     looks_retriable,
@@ -25,21 +25,16 @@ from lakehouse.resources.starrocks import StarRocksResource
 
 # tag:starrocks models (see dbt_project.yml) are additionally gated
 # `+enabled: "{{ target.type == 'starrocks' }}"`, so they only exist in a
-# manifest parsed against one of these targets -- full_dbt_project's manifest
-# is always parsed against a Trino target and never sees them. Matches the
-# dbt_target choices in src/ol_dbt_cli/ol_dbt_cli/commands/starrocks.py's
-# _ENVS map. Migrating an existing model onto StarRocks means tagging it here
-# (dbt_project.yml or model-level config) and giving it a matching +enabled
-# condition -- this asset set and full_dbt_project's exclude="tag:starrocks"
-# then pick it up automatically, no Python change needed.
-STARROCKS_DBT_TARGET_MAP = {
-    "dev": "starrocks_qa_vault",
-    # ci connects directly to its own FE service (no port-forward), same
-    # connection shape as production -- matches _ENVS["ci"]["dbt_target"].
-    "ci": "starrocks_production",
-    "qa": "starrocks_qa_vault",
-    "production": "starrocks_production",
-}
+# manifest parsed against a StarRocks target -- full_dbt_project's manifest is
+# always parsed against a Trino target and never sees them. Migrating an
+# existing model onto StarRocks means tagging it here (dbt_project.yml or
+# model-level config) and giving it a matching +enabled condition -- this asset
+# set and full_dbt_project's exclude="tag:starrocks" then pick it up
+# automatically, no Python change needed.
+#
+# The per-environment target map lives in lakehouse.lib.dbt_environment
+# alongside the Trino one, so the two cannot drift apart the way they did
+# before RFC 12711 step 1.
 
 # `prepare_if_dev()` below only ever parses (never opens a DB connection), but
 # profiles.yml's env_var() calls for the starrocks targets have no defaults and
@@ -55,11 +50,7 @@ os.environ.setdefault("DBT_STARROCKS_PASSWORD", "dev")
 # manifest at the default "target/" (both dbt projects share the same project_dir).
 starrocks_dbt_project = DbtProject(
     project_dir=DBT_REPO_DIR,
-    target=resolve_dbt_target(
-        STARROCKS_DBT_TARGET_MAP,
-        override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
-        default="starrocks_production",
-    ),
+    target=STARROCKS_DBT_TARGET,
     target_path="target/starrocks",
 )
 starrocks_dbt_project.prepare_if_dev()
