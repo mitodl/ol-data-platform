@@ -35,6 +35,7 @@ class OAuthApiClient(ConfigurableResource):
     _access_token: str | None = PrivateAttr(default=None)
     _access_token_expires: datetime | None = PrivateAttr(default=None)
     _http_client: httpx.Client | None = PrivateAttr(default=None)
+    _cached_username: str | None = PrivateAttr(default=None)
 
     @property
     def http_client(self) -> httpx.Client:
@@ -68,12 +69,17 @@ class OAuthApiClient(ConfigurableResource):
 
     @property
     def _username(self) -> str:
-        response = self.http_client.get(
-            f"{self.base_url}/api/user/v1/me",
-            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
-        )
-        response.raise_for_status()
-        return response.json()["username"]
+        # Every fetch_with_auth call passes this as a query param, so resolving it per
+        # request doubles the number of HTTP round trips the client makes. It is fixed
+        # for the lifetime of the OAuth credentials, so cache it on the client.
+        if self._cached_username is None:
+            response = self.http_client.get(
+                f"{self.base_url}/api/user/v1/me",
+                headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+            )
+            response.raise_for_status()
+            self._cached_username = response.json()["username"]
+        return self._cached_username
 
     def fetch_with_auth(
         self,

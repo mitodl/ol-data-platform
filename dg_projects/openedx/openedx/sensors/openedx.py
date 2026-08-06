@@ -1,4 +1,5 @@
 import json
+from bisect import bisect_right
 from datetime import UTC, datetime, timedelta
 
 import httpx2 as httpx
@@ -17,12 +18,60 @@ from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
 
+# `get_course_outline` is one HTTP round trip per course run and the sensor tick has a
+# hard timeout, so only a slice of the partitions is checked per tick. Deployments with
+# a few thousand runs cycle through everything in well under a day at hourly ticks.
+COURSE_VERSION_BATCH_SIZE = 250
+# How long after its end date a course run stops being polled for new versions.
+ENDED_COURSE_GRACE_PERIOD = timedelta(days=90)
+# Ended runs are still re-checked this often. Without it, a run whose end date is later
+# pushed out would stay skipped forever on the strength of the stale cached value.
+ENDED_COURSE_RECHECK_INTERVAL = timedelta(days=30)
+
 
 class CourseCursor(BaseModel):
     published_version: str
     published_at: datetime | None = None
     course_start: datetime | None = None
     course_end: datetime | None = None
+    last_checked: datetime | None = None
+
+
+class CourseVersionCursor(BaseModel):
+    """Sensor state: per-run course metadata plus the position of the batch scan."""
+
+    courses: dict[str, CourseCursor] = {}
+    last_scanned_course_run_id: str | None = None
+
+
+def _load_course_version_cursor(raw_cursor: str | None) -> CourseVersionCursor:
+    payload = json.loads(raw_cursor or "{}")
+    if "courses" not in payload:
+        # Migrate the pre-batching cursor, a flat {course_run_id: CourseCursor-as-JSON-
+        # string} map. Dropping it instead would re-request every partition at once.
+        payload = {"courses": {k: json.loads(v) for k, v in payload.items()}}
+    return CourseVersionCursor(**payload)
+
+
+def _skip_ended_course(course_cursor: CourseCursor, now: datetime) -> bool:
+    """Report whether a course run has been over long enough to stop polling it.
+
+    Self-paced runs carry no ``course_end`` and so are never skipped, and any run is
+    re-checked once per ``ENDED_COURSE_RECHECK_INTERVAL`` regardless.
+    """
+    if (
+        course_cursor.course_end is None
+        or course_cursor.course_end > now - ENDED_COURSE_GRACE_PERIOD
+    ):
+        return False
+    return (
+        course_cursor.last_checked is not None
+        and course_cursor.last_checked > now - ENDED_COURSE_RECHECK_INTERVAL
+    )
+
+
+def _parse_timestamp(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
 
 
 def course_run_sensor(
@@ -69,75 +118,83 @@ def course_run_sensor(
 def course_version_sensor(
     context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
 ):
-    course_run_ids = OPENEDX_COURSE_RUN_PARTITIONS[
-        openedx.deployment
-    ].get_partition_keys(dynamic_partitions_store=context.instance)
-    # There is a dictionary consisting of course_run_ids as the keys, and the values are
-    # instances of the CourseCursor pydantic class. This sensor calls the
-    # openedx.client.get_course_outline method for a given course_run_id to detect the
-    # current published_version and other metadata to populate an instance of the
-    # CourseCursor object. For any course runs that have course_end datetime that is
-    # more than 3 months in the past, don't bother fetching their versions. For any
-    # course_run_ids that don't have keys in the context cursor, create an entry in the
-    # cursor dictionary with the results of the call to the get_course_outline method.
-    # Returning a SensorResult with a list of RunRequest objects for each course_run_id
-    # instead of AssetMaterialization objects should trigger pipeline runs for the
-    # updated course runs instead of recording asset events.
+    """Request a re-export of any course run whose published version has changed.
 
-    cursor: dict[str, str] = json.loads(context.cursor or "{}")
-    run_requests = []
-    for course_run_id in course_run_ids:
-        course_cursor = CourseCursor(
-            **json.loads(
-                cursor.get(
-                    course_run_id,
-                    CourseCursor(
-                        published_version="",
-                        course_end=datetime(9999, 12, 31, tzinfo=UTC),
-                    ).model_dump_json(),
-                )
-            )
+    ``get_course_outline`` is called for one batch of partitions per tick, resuming from
+    where the previous tick stopped, so that every tick completes within the sensor
+    timeout and commits its progress. Scanning the whole deployment in a single tick
+    made the sensor time out before it emitted any runs or saved any cursor, which is
+    what stalled re-exports for months (mitodl/hq#12739).
+    """
+    course_run_ids = sorted(
+        OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].get_partition_keys(
+            dynamic_partitions_store=context.instance
         )
-        if (
-            course_cursor
-            and course_cursor.course_end
-            and course_cursor.course_end <= datetime.now(tz=UTC) - timedelta(days=90)
-        ):
+    )
+    cursor = _load_course_version_cursor(context.cursor)
+
+    # Resume by course run ID rather than by index: the sorted key list shifts as
+    # partitions are added and removed, and an index would silently skip or repeat runs.
+    resume_from = (
+        bisect_right(course_run_ids, cursor.last_scanned_course_run_id)
+        if cursor.last_scanned_course_run_id is not None
+        else 0
+    )
+    if resume_from >= len(course_run_ids):
+        resume_from = 0
+    batch = course_run_ids[resume_from : resume_from + COURSE_VERSION_BATCH_SIZE]
+
+    now = datetime.now(tz=UTC)
+    run_requests = []
+    for course_run_id in batch:
+        course_cursor = cursor.courses.get(course_run_id)
+        if course_cursor and _skip_ended_course(course_cursor, now):
             continue
         try:
             response = openedx.client.get_course_outline(course_run_id)
         except httpx.HTTPStatusError as e:
             if e.response.status_code != HTTP_NOT_FOUND:
                 raise
-            context.log.exception("Course outline not found for key %s", course_run_id)
+            context.log.warning("Course outline not found for key %s", course_run_id)
             continue
-        if response["published_version"] != course_cursor.published_version:
-            course_update = CourseCursor(
-                published_version=response["published_version"],
-                published_at=datetime.fromisoformat(response["published_at"]),
-                course_start=datetime.fromisoformat(response["course_start"])
-                if response["course_start"]
-                else None,
-                course_end=datetime.fromisoformat(response["course_end"])
-                if response["course_end"]
-                else None,
+        published_version = response["published_version"]
+        # Refresh the entry on every successful fetch, not only when the version
+        # changes, so that course_end can never go stale enough to strand a run that
+        # ends up being extended.
+        cursor.courses[course_run_id] = CourseCursor(
+            published_version=published_version,
+            published_at=_parse_timestamp(response["published_at"]),
+            course_start=_parse_timestamp(response["course_start"]),
+            course_end=_parse_timestamp(response["course_end"]),
+            last_checked=now,
+        )
+        if course_cursor and published_version == course_cursor.published_version:
+            continue
+        run_requests.append(
+            RunRequest(
+                run_key=f"{course_run_id}:{published_version}",
+                asset_selection=[
+                    AssetKey((openedx.deployment, "openedx", "courseware")),
+                    AssetKey((openedx.deployment, "openedx", "raw_data", "course_xml")),
+                    AssetKey((openedx.deployment, "openedx", "course_content_webhook")),
+                ],
+                partition_key=course_run_id,
+                tags={"published_version": published_version},
             )
-            run_requests.append(
-                RunRequest(
-                    asset_selection=[
-                        AssetKey((openedx.deployment, "openedx", "courseware")),
-                        AssetKey(
-                            (openedx.deployment, "openedx", "raw_data", "course_xml")
-                        ),
-                        AssetKey(
-                            (openedx.deployment, "openedx", "course_content_webhook")
-                        ),
-                    ],
-                    partition_key=course_run_id,
-                    tags={"published_version": response["published_version"]},
-                )
-            )
-            cursor[course_run_id] = course_update.model_dump_json()
+        )
 
-    context.update_cursor(json.dumps(cursor))
-    return SensorResult(run_requests=run_requests)
+    # An empty batch means there are no partitions at all; otherwise the next tick picks
+    # up after the last key handled here, wrapping to the start once the list is spent.
+    cursor.last_scanned_course_run_id = batch[-1] if batch else None
+    context.log.info(
+        "Checked %s of %s %s course runs (offset %s), requesting %s re-exports.",
+        len(batch),
+        len(course_run_ids),
+        openedx.deployment,
+        resume_from,
+        len(run_requests),
+    )
+    return SensorResult(
+        run_requests=run_requests,
+        cursor=cursor.model_dump_json(exclude_none=True),
+    )
