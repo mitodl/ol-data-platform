@@ -348,6 +348,46 @@ def asset_check_failure_message(
     ]
 
 
+def collect_new_check_failures(
+    instance: Any, cursor: int | None
+) -> tuple[list[Any], str | None]:
+    """Read the next batch of asset check evaluations above ``cursor``.
+
+    Returns the ERROR-severity failures in that batch and the cursor to store,
+    or an empty list and None when there is nothing new.
+
+    ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
+    after ordering, so descending order returns the *newest* batch above the
+    cursor; advancing the cursor past it would permanently skip any older
+    backlog beyond MAX_CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
+    events above the cursor, so a backlog drains in order, one batch per tick,
+    with no gaps and no repeats.
+    """
+    records = instance.get_event_records(
+        EventRecordsFilter(
+            event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
+            after_cursor=cursor,
+        ),
+        limit=MAX_CHECK_EVALUATIONS_PER_TICK,
+        ascending=True,
+    )
+    if not records:
+        return [], None
+
+    evaluations = [
+        record.event_log_entry.dagster_event.event_specific_data for record in records
+    ]
+    # WARN-severity checks are advisory; only ERROR is worth a notification.
+    failures = [
+        evaluation
+        for evaluation in evaluations
+        if not evaluation.passed and evaluation.severity == AssetCheckSeverity.ERROR
+    ]
+    # The newest record of an ascending batch: nothing older is left behind,
+    # nothing newer is re-delivered.
+    return failures, str(records[-1].storage_id)
+
+
 @sensor(
     name="asset_check_failure_sensor",
     minimum_interval_seconds=300,
@@ -362,25 +402,11 @@ def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:
     """Post newly-failed ERROR-severity asset checks to Slack."""
     cursor = int(context.cursor) if context.cursor else None
 
-    records = context.instance.get_event_records(
-        EventRecordsFilter(
-            event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
-            after_cursor=cursor,
-        ),
-        limit=MAX_CHECK_EVALUATIONS_PER_TICK,
-        ascending=False,
-    )
-    if not records:
+    failures, next_cursor = collect_new_check_failures(context.instance, cursor)
+    if next_cursor is None:
         return
 
-    failures = []
-    for record in records:
-        evaluation = record.event_log_entry.dagster_event.event_specific_data
-        # WARN-severity checks are advisory; only ERROR is worth a notification.
-        if not evaluation.passed and evaluation.severity == AssetCheckSeverity.ERROR:
-            failures.append(evaluation)
-
-    context.update_cursor(str(records[0].storage_id))
+    context.update_cursor(next_cursor)
 
     if not failures:
         return

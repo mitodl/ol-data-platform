@@ -6,17 +6,23 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from dagster import AssetCheckSeverity
 from data_platform.definitions import (
+    MAX_CHECK_EVALUATIONS_PER_TICK,
     MAX_RETRIES_TAG,
     RETRY_NUMBER_TAG,
     WILL_RETRY_TAG,
     asset_check_failure_message,
+    collect_new_check_failures,
     defs,
     error_message,
     get_exception,
     truncate_text,
     will_be_retried,
 )
+
+ERROR = AssetCheckSeverity.ERROR
+WARN = AssetCheckSeverity.WARN
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -178,6 +184,100 @@ def test_sensors_are_defined_without_vault_or_sentry() -> None:
 
 
 # ── Asset check alerting ──────────────────────────────────────────────────────
+
+
+def _evaluation(
+    *, asset: str, check: str = "freshness_check", passed: bool, severity: Any
+) -> Any:
+    return SimpleNamespace(
+        asset_key=SimpleNamespace(to_user_string=lambda: asset),
+        check_name=check,
+        passed=passed,
+        severity=severity,
+    )
+
+
+def _record(storage_id: int, evaluation: Any) -> Any:
+    return SimpleNamespace(
+        storage_id=storage_id,
+        event_log_entry=SimpleNamespace(
+            dagster_event=SimpleNamespace(event_specific_data=evaluation)
+        ),
+    )
+
+
+def _instance_returning(records: list[Any], captured: dict[str, Any]) -> Any:
+    # limit/ascending are keyword-only here because the production call site
+    # passes them by keyword; positional use would not match reality.
+    def get_event_records(_filter: Any, *, limit: int, ascending: bool) -> list[Any]:
+        captured["limit"] = limit
+        captured["ascending"] = ascending
+        return records
+
+    return SimpleNamespace(get_event_records=get_event_records)
+
+
+def test_collect_keeps_only_error_severity_failures() -> None:
+    captured: dict[str, Any] = {}
+    records = [
+        _record(1, _evaluation(asset="a", passed=False, severity=ERROR)),
+        _record(2, _evaluation(asset="b", passed=False, severity=WARN)),
+        _record(3, _evaluation(asset="c", passed=True, severity=ERROR)),
+    ]
+
+    failures, _ = collect_new_check_failures(
+        _instance_returning(records, captured), None
+    )
+
+    assert [f.asset_key.to_user_string() for f in failures] == ["a"]
+
+
+def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
+    """Regression: a full batch must not strand the events older than it.
+
+    Reading descending returns the *newest* batch above the cursor; advancing
+    past it permanently drops every older event once a backlog exceeds
+    MAX_CHECK_EVALUATIONS_PER_TICK.
+    """
+    captured: dict[str, Any] = {}
+    backlog = [
+        _record(
+            storage_id,
+            _evaluation(asset=f"asset_{storage_id}", passed=False, severity=ERROR),
+        )
+        for storage_id in range(1, MAX_CHECK_EVALUATIONS_PER_TICK + 1)
+    ]
+
+    failures, next_cursor = collect_new_check_failures(
+        _instance_returning(backlog, captured), 0
+    )
+
+    assert captured["ascending"] is True, "descending order silently drops backlog"
+    assert captured["limit"] == MAX_CHECK_EVALUATIONS_PER_TICK
+    assert len(failures) == MAX_CHECK_EVALUATIONS_PER_TICK
+    # Newest of the ascending batch: nothing older is stranded, nothing newer
+    # is re-delivered.
+    assert next_cursor == str(backlog[-1].storage_id)
+
+
+def test_collect_advances_cursor_even_when_nothing_failed() -> None:
+    """A batch of passing checks must not be re-scanned forever."""
+    captured: dict[str, Any] = {}
+    records = [_record(7, _evaluation(asset="a", passed=True, severity=ERROR))]
+
+    failures, next_cursor = collect_new_check_failures(
+        _instance_returning(records, captured), None
+    )
+
+    assert failures == []
+    assert next_cursor == "7"
+
+
+def test_collect_reports_no_cursor_when_there_is_nothing_new() -> None:
+    failures, next_cursor = collect_new_check_failures(_instance_returning([], {}), 42)
+
+    assert failures == []
+    assert next_cursor is None
 
 
 def test_asset_check_failure_message_lists_each_failed_check() -> None:
