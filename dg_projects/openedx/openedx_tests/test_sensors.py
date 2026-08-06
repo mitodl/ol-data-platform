@@ -1,6 +1,7 @@
 """Tests for openedx.sensors.openedx."""
 
 import threading
+import time
 from collections.abc import Iterator
 from datetime import timedelta
 from typing import Protocol
@@ -334,7 +335,15 @@ def test_blocked_workers_do_not_hang_the_tick(
     This is the exact failure mode this branch exists to fix: without a
     timeout on as_completed, a rate-limit storm blocking every worker would
     hang the sweep loop until the gRPC tick timeout killed it, producing and
-    saving nothing.
+    saving nothing. The elapsed-time assertion is what pins that: the
+    empty-result assertion alone would still hold even if the as_completed
+    timeout were removed entirely, since _BlockingClient self-releases after
+    5s and the in-loop deadline check would then end the tick anyway - just
+    much slower. See test_body_timeout_is_not_swallowed_as_an_exhausted_budget
+    below for the regression test that pins the narrowed except clause
+    itself (a timeout from inside the loop body must propagate, not be
+    caught by the same handler that ends the sweep on a genuine budget
+    exhaustion).
     """
     monkeypatch.setattr(
         "openedx.sensors.openedx.SWEEP_TIME_BUDGET", timedelta(seconds=0.05)
@@ -345,13 +354,44 @@ def test_blocked_workers_do_not_hang_the_tick(
     factory = _FakeFactory(client)
 
     try:
+        start = time.monotonic()
         result = course_version_sensor(
             build_sensor_context(instance=instance, sensor_name=SENSOR_NAME), factory
         )
+        elapsed = time.monotonic() - start
     finally:
         client.release.set()
 
     assert result.run_requests == []
+    assert elapsed < 2.0
+
+
+def test_body_timeout_is_not_swallowed_as_an_exhausted_budget(
+    instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A TimeoutError raised from inside the loop body must propagate.
+
+    last_exported_version does a Postgres event-log query, so a genuine
+    socket or database timeout there is a TimeoutError (socket.timeout is an
+    alias of it since Python 3.10). The except TimeoutError around the
+    as_completed advance must not also catch this, or a real timeout gets
+    mislabeled in the logs as an exhausted sweep budget and silently
+    swallowed instead of surfacing as a failed tick.
+    """
+    keys = ["course-v1:org+num+run"]
+    _seed_partitions(instance, keys)
+    factory = _FakeFactory(_FakeClient({"course-v1:org+num+run": "version-one"}))
+
+    def _raise_timeout(*_args: object, **_kwargs: object) -> str | None:
+        msg = "simulated database timeout"
+        raise TimeoutError(msg)
+
+    monkeypatch.setattr("openedx.sensors.openedx.last_exported_version", _raise_timeout)
+
+    with pytest.raises(TimeoutError):
+        course_version_sensor(
+            build_sensor_context(instance=instance, sensor_name=SENSOR_NAME), factory
+        )
 
 
 def test_every_partition_failing_raises(instance: DagsterInstance) -> None:

@@ -121,7 +121,7 @@ SWEEP_TIME_BUDGET = timedelta(seconds=200)
 MAX_RUN_REQUESTS_PER_TICK = 8
 
 
-def course_version_sensor(
+def course_version_sensor(  # noqa: PLR0915
     context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
 ) -> SensorResult:
     """Request an export for every course whose published version changed.
@@ -151,58 +151,64 @@ def course_version_sensor(
             executor.submit(openedx.client.get_course_outline, key): key
             for key in pending_keys
         }
-        try:
-            # timeout so a rate-limit storm that blocks every worker (see
-            # fetch_with_auth's unbounded 429 retry) still lets the tick
-            # return instead of hanging until the gRPC server kills it.
-            for future in as_completed(
-                futures, timeout=SWEEP_TIME_BUDGET.total_seconds()
+        # timeout so a rate-limit storm that blocks every worker (see
+        # fetch_with_auth's unbounded 429 retry) still lets the tick return
+        # instead of hanging until the gRPC server kills it. The timeout is
+        # caught only around advancing the iterator, so a TimeoutError raised
+        # from within the loop body (e.g. a Postgres query timeout from
+        # last_exported_version) still propagates instead of being swallowed.
+        completed = as_completed(futures, timeout=SWEEP_TIME_BUDGET.total_seconds())
+        while True:
+            try:
+                future = next(completed)
+            except StopIteration:
+                break
+            except TimeoutError:
+                context.log.info(
+                    "Sweep time budget exhausted while workers were still in flight"
+                )
+                break
+            if (
+                len(run_requests) >= MAX_RUN_REQUESTS_PER_TICK
+                or time.monotonic() > deadline
             ):
-                if (
-                    len(run_requests) >= MAX_RUN_REQUESTS_PER_TICK
-                    or time.monotonic() > deadline
-                ):
-                    break
-                course_run_id = futures[future]
-                examined += 1
-                try:
-                    published_version = future.result()["published_version"]
-                except httpx.HTTPStatusError as error:
-                    if error.response.status_code == HTTP_NOT_FOUND:
-                        context.log.info(
-                            "Course outline not found for key %s", course_run_id
-                        )
-                    else:
-                        failures += 1
-                        context.log.exception(
-                            "Failed to fetch the course outline for %s",
-                            course_run_id,
-                        )
-                    continue
-                except Exception:
+                break
+            course_run_id = futures[future]
+            examined += 1
+            try:
+                published_version = future.result()["published_version"]
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code == HTTP_NOT_FOUND:
+                    context.log.info(
+                        "Course outline not found for key %s", course_run_id
+                    )
+                else:
                     failures += 1
                     context.log.exception(
-                        "Failed to fetch the course outline for %s", course_run_id
+                        "Failed to fetch the course outline for %s",
+                        course_run_id,
                     )
-                    continue
-                if published_version == last_exported_version(
-                    context.instance, course_xml_key, course_run_id
-                ):
-                    continue
-                run_requests.append(
-                    RunRequest(
-                        asset_selection=[
-                            AssetKey((deployment, "openedx", "courseware")),
-                            course_xml_key,
-                            AssetKey((deployment, "openedx", "course_content_webhook")),
-                        ],
-                        partition_key=course_run_id,
-                        tags={"published_version": published_version},
-                    )
+                continue
+            except Exception:
+                failures += 1
+                context.log.exception(
+                    "Failed to fetch the course outline for %s", course_run_id
                 )
-        except TimeoutError:
-            context.log.info(
-                "Sweep time budget exhausted while workers were still in flight"
+                continue
+            if published_version == last_exported_version(
+                context.instance, course_xml_key, course_run_id
+            ):
+                continue
+            run_requests.append(
+                RunRequest(
+                    asset_selection=[
+                        AssetKey((deployment, "openedx", "courseware")),
+                        course_xml_key,
+                        AssetKey((deployment, "openedx", "course_content_webhook")),
+                    ],
+                    partition_key=course_run_id,
+                    tags={"published_version": published_version},
+                )
             )
     finally:
         # Not the `with` form: its __exit__ waits for in-flight workers, which
