@@ -137,7 +137,13 @@ class OpenEdxDeploymentComponent:
             ],
             job=None,
             default_status=DefaultSensorStatus.STOPPED,
-            minimum_interval_seconds=60 * 60,
+            # TEMPORARY (mitodl/hq#12739): the sensor scans a bounded slice of the
+            # partitions per tick, so cadence sets how fast it works through the
+            # ~3 month backlog of un-exported course runs. Ticking every 5 minutes
+            # instead of hourly turns a multi-day first pass into a few hours. Put
+            # this back to `60 * 60` once the backlog is drained -- steady state
+            # needs nothing like this rate.
+            minimum_interval_seconds=5 * 60,
             evaluation_fn=course_version_sensor,
         )
 
