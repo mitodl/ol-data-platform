@@ -53,6 +53,13 @@ sources:
     - name: global_id
       description: Global unique identifier across MIT Learning platforms
 
+    config:
+      freshness:
+        warn_after: {count: 1, period: day}
+        error_after: {count: 2, period: day}
+      # updated_on is a native timestamp column (staging casts it via
+      # cast_timestamp_to_iso8601), so it is used directly without parsing.
+      loaded_at_field: updated_on
   - name: raw__mitlearn__app__postgres__profiles_profile
     description: MIT Learn user profile information including preferences and personal
       details
