@@ -21,6 +21,20 @@ Every environment appears in every map. There is deliberately no fallback --
 so the QA code location wrote the production warehouse while the StarRocks
 project next to it targeted QA. The two disagreed for months because neither
 had to say what it meant.
+
+Adding an environment
+---------------------
+A fifth environment, ``local`` (k3d + Tilt, its own object store and Iceberg
+catalog), is planned -- see RFC 12711's Local-2/3/4 tasks, which specify that
+``local`` extends *this* convention rather than introducing a third resolution
+style. It is NOT a rename of ``dev``: ``dev`` connects to the remote QA cluster
+and reads the production lake, while ``local`` reaches neither and is fed by
+local ingest and fixtures. Both will need to exist.
+
+When it lands, ``DAGSTER_ENV`` gains the value and every map below needs an
+entry -- plus ``_ENVS`` in ``ol_dbt_cli/commands/starrocks.py``, which mirrors
+these. Until then ``resolve_for_environment`` raises on it, which is the point:
+the failure is a missing declaration, not a silently inherited warehouse.
 """
 
 import os
