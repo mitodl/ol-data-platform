@@ -1,5 +1,6 @@
-import json
-from datetime import UTC, datetime, timedelta
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import timedelta
 
 import httpx2 as httpx
 from dagster import (
@@ -15,7 +16,6 @@ from dagster._core.storage.dagster_run import NOT_FINISHED_STATUSES
 from dagster._core.storage.tags import PARTITION_NAME_TAG, SENSOR_NAME_TAG
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
-from pydantic import BaseModel
 
 from openedx.lib.magic_numbers import HTTP_NOT_FOUND
 from openedx.partitions.openedx import (
@@ -65,13 +65,6 @@ def in_flight_partitions(instance: DagsterInstance, sensor_name: str) -> set[str
     }
 
 
-class CourseCursor(BaseModel):
-    published_version: str
-    published_at: datetime | None = None
-    course_start: datetime | None = None
-    course_end: datetime | None = None
-
-
 def course_run_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
@@ -113,78 +106,97 @@ def course_run_sensor(
     )
 
 
+# 16 workers measured at ~53 outline fetches/sec against mitxonline with no
+# throttling. ceiling: raise only with fresh numbers from the authenticated
+# endpoint, which is slower than the anonymous one used to measure.
+OUTLINE_FETCH_WORKERS = 16
+# The deployment sets DAGSTER_SENSOR_GRPC_TIMEOUT_SECONDS=300 in
+# ol-infrastructure applications/dagster/__main__.py. Change these together.
+SWEEP_TIME_BUDGET = timedelta(seconds=200)
+# Each request is one run holding a slot in a global pool of 30 while it polls
+# Studio. ceiling: raise this only after export runs get their own concurrency
+# pool, or unrelated pipelines queue behind catch-up exports.
+MAX_RUN_REQUESTS_PER_TICK = 8
+
+
 def course_version_sensor(
     context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
-):
-    course_run_ids = OPENEDX_COURSE_RUN_PARTITIONS[
-        openedx.deployment
-    ].get_partition_keys(dynamic_partitions_store=context.instance)
-    # There is a dictionary consisting of course_run_ids as the keys, and the values are
-    # instances of the CourseCursor pydantic class. This sensor calls the
-    # openedx.client.get_course_outline method for a given course_run_id to detect the
-    # current published_version and other metadata to populate an instance of the
-    # CourseCursor object. For any course runs that have course_end datetime that is
-    # more than 3 months in the past, don't bother fetching their versions. For any
-    # course_run_ids that don't have keys in the context cursor, create an entry in the
-    # cursor dictionary with the results of the call to the get_course_outline method.
-    # Returning a SensorResult with a list of RunRequest objects for each course_run_id
-    # instead of AssetMaterialization objects should trigger pipeline runs for the
-    # updated course runs instead of recording asset events.
+) -> SensorResult:
+    """Request an export for every course whose published version changed.
 
-    cursor: dict[str, str] = json.loads(context.cursor or "{}")
-    run_requests = []
-    for course_run_id in course_run_ids:
-        course_cursor = CourseCursor(
-            **json.loads(
-                cursor.get(
-                    course_run_id,
-                    CourseCursor(
-                        published_version="",
-                        course_end=datetime(9999, 12, 31, tzinfo=UTC),
-                    ).model_dump_json(),
+    Stateless by design: materialization metadata says what was exported and run
+    records say what is already in flight, so there is no cursor to lose. A tick
+    cut short by the budget or the cap simply emits what it collected - the work
+    it did not reach still mismatches and gets picked up next tick.
+    """
+    deployment = openedx.deployment
+    partition_keys = OPENEDX_COURSE_RUN_PARTITIONS[deployment].get_partition_keys(
+        dynamic_partitions_store=context.instance
+    )
+    course_xml_key = AssetKey((deployment, "openedx", "raw_data", "course_xml"))
+    skip_keys = in_flight_partitions(context.instance, context.sensor_name)
+    pending_keys = [key for key in partition_keys if key not in skip_keys]
+
+    deadline = time.monotonic() + SWEEP_TIME_BUDGET.total_seconds()
+    run_requests: list[RunRequest] = []
+    examined = 0
+
+    executor = ThreadPoolExecutor(max_workers=OUTLINE_FETCH_WORKERS)
+    try:
+        futures = {
+            executor.submit(openedx.client.get_course_outline, key): key
+            for key in pending_keys
+        }
+        for future in as_completed(futures):
+            if (
+                len(run_requests) >= MAX_RUN_REQUESTS_PER_TICK
+                or time.monotonic() > deadline
+            ):
+                break
+            course_run_id = futures[future]
+            examined += 1
+            try:
+                published_version = future.result()["published_version"]
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code == HTTP_NOT_FOUND:
+                    context.log.info(
+                        "Course outline not found for key %s", course_run_id
+                    )
+                else:
+                    context.log.exception(
+                        "Failed to fetch the course outline for %s", course_run_id
+                    )
+                continue
+            except Exception:
+                context.log.exception(
+                    "Failed to fetch the course outline for %s", course_run_id
                 )
-            )
-        )
-        if (
-            course_cursor
-            and course_cursor.course_end
-            and course_cursor.course_end <= datetime.now(tz=UTC) - timedelta(days=90)
-        ):
-            continue
-        try:
-            response = openedx.client.get_course_outline(course_run_id)
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code != HTTP_NOT_FOUND:
-                raise
-            context.log.exception("Course outline not found for key %s", course_run_id)
-            continue
-        if response["published_version"] != course_cursor.published_version:
-            course_update = CourseCursor(
-                published_version=response["published_version"],
-                published_at=datetime.fromisoformat(response["published_at"]),
-                course_start=datetime.fromisoformat(response["course_start"])
-                if response["course_start"]
-                else None,
-                course_end=datetime.fromisoformat(response["course_end"])
-                if response["course_end"]
-                else None,
-            )
+                continue
+            if published_version == last_exported_version(
+                context.instance, course_xml_key, course_run_id
+            ):
+                continue
             run_requests.append(
                 RunRequest(
                     asset_selection=[
-                        AssetKey((openedx.deployment, "openedx", "courseware")),
-                        AssetKey(
-                            (openedx.deployment, "openedx", "raw_data", "course_xml")
-                        ),
-                        AssetKey(
-                            (openedx.deployment, "openedx", "course_content_webhook")
-                        ),
+                        AssetKey((deployment, "openedx", "courseware")),
+                        course_xml_key,
+                        AssetKey((deployment, "openedx", "course_content_webhook")),
                     ],
                     partition_key=course_run_id,
-                    tags={"published_version": response["published_version"]},
+                    tags={"published_version": published_version},
                 )
             )
-            cursor[course_run_id] = course_update.model_dump_json()
+    finally:
+        # Not the `with` form: its __exit__ waits for in-flight workers, which
+        # would block the tick for up to 60s if one is inside the 429 backoff.
+        executor.shutdown(wait=False, cancel_futures=True)
 
-    context.update_cursor(json.dumps(cursor))
+    context.log.info(
+        "Examined %s of %s partitions (%s in flight, skipped), requesting %s exports",
+        examined,
+        len(partition_keys),
+        len(skip_keys),
+        len(run_requests),
+    )
     return SensorResult(run_requests=run_requests)
