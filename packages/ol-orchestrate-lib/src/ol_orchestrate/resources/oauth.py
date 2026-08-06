@@ -75,7 +75,9 @@ class OAuthApiClient(ConfigurableResource):
         if self._cached_username is None:
             response = self.http_client.get(
                 f"{self.base_url}/api/user/v1/me",
-                headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+                headers={
+                    "Authorization": (f"{self.token_type} {self._fetch_access_token()}")
+                },
             )
             response.raise_for_status()
             self._cached_username = response.json()["username"]

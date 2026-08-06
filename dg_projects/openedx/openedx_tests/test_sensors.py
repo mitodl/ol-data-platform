@@ -540,6 +540,51 @@ def test_a_new_course_run_is_exported_exactly_once(instance: DagsterInstance) ->
     assert _requested_partitions(version_result) == {new_key}
 
 
+class _PartlyBlockingClient:
+    """Serves a few outlines instantly, then blocks on everything else."""
+
+    def __init__(self, fast: dict[str, str]) -> None:
+        self.fast = fast
+        self.release = threading.Event()
+
+    def get_course_outline(self, course_id: str) -> dict[str, str]:
+        if course_id in self.fast:
+            return {"published_version": self.fast[course_id]}
+        self.release.wait(timeout=5)
+        return {"published_version": "unused"}
+
+
+def test_reaching_the_cap_returns_without_awaiting_more_fetches(
+    instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hitting MAX_RUN_REQUESTS_PER_TICK must end the tick immediately.
+
+    Checking the cap after advancing as_completed means the tick blocks on one
+    more fetch whose result it has already decided to discard -- which, when
+    the LMS is slow, is exactly when the sensor can least afford to wait. The
+    elapsed assertion is what pins it: the run-request assertion alone holds
+    either way.
+    """
+    monkeypatch.setattr("openedx.sensors.openedx.MAX_RUN_REQUESTS_PER_TICK", 2)
+    fast = {f"course-v1:org+num+fast{index}": "version-one" for index in range(2)}
+    slow = [f"course-v1:org+num+slow{index}" for index in range(4)]
+    _seed_partitions(instance, [*fast, *slow])
+    client = _PartlyBlockingClient(fast)
+
+    try:
+        start = time.monotonic()
+        result = course_version_sensor(
+            build_sensor_context(instance=instance, sensor_name=SENSOR_NAME),
+            _FakeFactory(client),
+        )
+        elapsed = time.monotonic() - start
+    finally:
+        client.release.set()
+
+    assert len(result.run_requests) == 2
+    assert elapsed < 2.0
+
+
 def test_an_in_flight_export_is_not_duplicated(instance: DagsterInstance) -> None:
     """Once this sensor's export is running, the next tick leaves it alone."""
     new_key = "course-v1:org+num+new"

@@ -130,7 +130,9 @@ def course_run_sensor(
     return SensorResult(
         dynamic_partitions_requests=[
             OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].build_add_request(
-                partition_keys=list(new_course_run_ids)
+                # Sorted because the difference above is a set: a stable order
+                # keeps tick logs and any downstream diff readable.
+                partition_keys=sorted(new_course_run_ids)
             )
         ],
     )
@@ -216,7 +218,14 @@ def course_version_sensor(
         # from within the loop body (e.g. a Postgres query timeout from
         # exported_versions) still propagates instead of being swallowed.
         completed = as_completed(futures, timeout=SWEEP_TIME_BUDGET.total_seconds())
-        while True:
+        # Both limits are checked before advancing the iterator, not after.
+        # Advancing blocks until another fetch finishes, so testing them after
+        # the fact makes the tick wait on work whose result it has already
+        # decided to discard.
+        while (
+            len(run_requests) < MAX_RUN_REQUESTS_PER_TICK
+            and time.monotonic() <= deadline
+        ):
             try:
                 future = next(completed)
             except StopIteration:
@@ -225,11 +234,6 @@ def course_version_sensor(
                 context.log.info(
                     "Sweep time budget exhausted while workers were still in flight"
                 )
-                break
-            if (
-                len(run_requests) >= MAX_RUN_REQUESTS_PER_TICK
-                or time.monotonic() > deadline
-            ):
                 break
             course_run_id = futures[future]
             examined += 1
