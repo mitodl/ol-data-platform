@@ -4,6 +4,7 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(order_by='updated_on', partition_columns='line_id') }}
 , renamed as (
 
     select
@@ -12,7 +13,7 @@ with source as (
         , program_run_id as programrun_id
         ,{{ cast_timestamp_to_iso8601('created_on') }} as programrunline_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as programrunline_updated_on
-    from source
+    from most_recent_source
 
 )
 
