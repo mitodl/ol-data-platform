@@ -2,14 +2,19 @@
 
 import os
 import re
+from datetime import timedelta
 
 from dagster import (
+    AssetCheckSeverity,
     AssetSelection,
     AssetSpec,
     AutomationConditionSensorDefinition,
     DefaultScheduleStatus,
+    DefaultSensorStatus,
     Definitions,
     ScheduleDefinition,
+    build_last_update_freshness_checks,
+    build_sensor_for_freshness_checks,
     define_asset_job,
     with_source_code_references,
 )
@@ -22,6 +27,7 @@ from dagster_dbt import (
     DbtCliResource,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
@@ -54,6 +60,8 @@ from lakehouse.sensors import (
     iceberg_snapshot_pointer_lag_sensor,
     iceberg_snapshot_pointer_repair_job,
 )
+
+init_sentry("lakehouse")
 
 trino_host_map = {
     "dev": "mitol-ol-data-lake-production.trino.galaxy.starburst.io",
@@ -423,22 +431,49 @@ resources_dict = {
 if not SKIP_AIRBYTE:
     resources_dict["airbyte"] = airbyte_workspace
 
+# Freshness checks on the layers the business actually reads. Deliberately not
+# applied to every dbt asset: staging and intermediate models are refreshed on
+# their own cadences and would generate far more noise than signal.
+FRESHNESS_CHECKED_GROUPS = {"mart", "reporting", "dimensional"}
+freshness_checked_assets = [
+    key for key in dbt_model_keys if key.path[0] in FRESHNESS_CHECKED_GROUPS
+]
+
+# 26 hours, against the 24-hour default sync cadence -- a nightly build that
+# runs a little late must not page anyone.
+dbt_layer_freshness_checks = build_last_update_freshness_checks(
+    assets=freshness_checked_assets,
+    lower_bound_delta=timedelta(hours=26),
+    severity=AssetCheckSeverity.ERROR,
+)
+
+dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(
+    freshness_checks=dbt_layer_freshness_checks,
+    name="dbt_layer_freshness_sensor",
+    minimum_interval_seconds=3600,
+    default_status=DefaultSensorStatus.STOPPED,
+)
+
 defs = Definitions(
-    assets=[
-        *with_source_code_references([full_dbt_project]),
-        *with_source_code_references([starrocks_dbt_assets]),
-        *airbyte_assets,
-        *superset_assets,
-        *superset_starrocks_assets,
-        generate_instructor_onboarding_user_list,
-        update_access_forge_repo,
-        iceberg_dbt_layer_maintenance,
-        iceberg_raw_layer_maintenance,
-        refresh_starrocks_analytics_mvs,
-    ],
+    assets=with_sentry_hooks(
+        [
+            *with_source_code_references([full_dbt_project]),
+            *with_source_code_references([starrocks_dbt_assets]),
+            *airbyte_assets,
+            *superset_assets,
+            *superset_starrocks_assets,
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
+            iceberg_dbt_layer_maintenance,
+            iceberg_raw_layer_maintenance,
+            refresh_starrocks_analytics_mvs,
+        ]
+    ),
+    asset_checks=dbt_layer_freshness_checks,
     resources=resources_dict,
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
+        dbt_layer_freshness_sensor,
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour

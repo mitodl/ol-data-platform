@@ -18,6 +18,7 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
+from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
@@ -26,6 +27,8 @@ from openedx.jobs.normalize_logs import (
     jsonify_tracking_logs,
     normalize_tracking_logs,
 )
+
+init_sentry("openedx")
 
 # Initialize vault with resilient loading
 try:
@@ -202,7 +205,7 @@ def _create_deployment_repository(
 
     return create_repository_using_definitions_args(
         name=f"{deployment_name}_openedx",
-        assets=deployment_defs.assets,
+        assets=with_sentry_hooks(deployment_defs.assets or []),
         sensors=deployment_defs.sensors,
         resources=deployment_defs.resources,
     )
