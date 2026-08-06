@@ -4,10 +4,12 @@ from datetime import UTC, datetime, timedelta
 import httpx2 as httpx
 from dagster import (
     AssetKey,
+    DagsterInstance,
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
 )
+from dagster._core.event_api import AssetRecordsFilter
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from pydantic import BaseModel
@@ -16,6 +18,28 @@ from openedx.lib.magic_numbers import HTTP_NOT_FOUND
 from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
+
+COURSEWARE_PUBLISHED_VERSION_METADATA = "courseware_published_version"
+
+
+def last_exported_version(
+    instance: DagsterInstance, asset_key: AssetKey, partition_key: str
+) -> str | None:
+    """Return the course version recorded on the partition's latest export.
+
+    Returns None when the partition has never been exported, or was exported
+    before course_xml started recording the version - both of which mean "we do
+    not know what is in S3", so the caller should re-export.
+    """
+    records = instance.fetch_materializations(
+        AssetRecordsFilter(asset_key=asset_key, asset_partitions=[partition_key]),
+        limit=1,
+    ).records
+    if not records:
+        return None
+    metadata = records[0].asset_materialization.metadata
+    version = metadata.get(COURSEWARE_PUBLISHED_VERSION_METADATA)
+    return version.value if version else None
 
 
 class CourseCursor(BaseModel):
