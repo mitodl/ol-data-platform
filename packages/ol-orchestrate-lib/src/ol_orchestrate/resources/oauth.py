@@ -1,3 +1,4 @@
+import threading
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -11,6 +12,9 @@ from pydantic import Field, PrivateAttr, ValidationError, validator
 from ol_orchestrate.resources.secrets.vault import Vault
 
 TOO_MANY_REQUESTS = 429
+# Each retry sleeps for Retry-After (default 60s), so this is the point past
+# which a caller is better served by an exception than by more waiting.
+MAX_RATE_LIMIT_RETRIES = 3
 
 
 class OAuthApiClient(ConfigurableResource):
@@ -36,6 +40,12 @@ class OAuthApiClient(ConfigurableResource):
     _access_token_expires: datetime | None = PrivateAttr(default=None)
     _cached_username: str | None = PrivateAttr(default=None)
     _http_client: httpx.Client | None = PrivateAttr(default=None)
+    # This client is shared across worker threads (course_version_sensor fans
+    # outline fetches out over a pool), so the lazily-populated caches below
+    # need guarding: an unsynchronized check-then-set lets every thread observe
+    # a cold cache at once and issue its own token or /me request.
+    _token_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
+    _username_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
 
     @property
     def http_client(self) -> httpx.Client:
@@ -51,8 +61,20 @@ class OAuthApiClient(ConfigurableResource):
         return token_type
 
     def _fetch_access_token(self) -> str | None:
-        now = datetime.now(tz=UTC)
-        if self._access_token is None or (self._access_token_expires or now) <= now:
+        def expired() -> bool:
+            now = datetime.now(tz=UTC)
+            return (
+                self._access_token is None or (self._access_token_expires or now) <= now
+            )
+
+        if not expired():
+            return self._access_token
+        with self._token_lock:
+            # Re-check inside the lock: whichever thread lost the race can use
+            # the token the winner just fetched instead of requesting another.
+            if not expired():
+                return self._access_token
+            now = datetime.now(tz=UTC)
             payload = {
                 "grant_type": "client_credentials",
                 "client_id": self.client_id,
@@ -72,15 +94,23 @@ class OAuthApiClient(ConfigurableResource):
         # The username never changes for a service account, so this is fetched
         # once per client instance. ceiling: a rotated service account needs a
         # new resource instance, which every Dagster run gets anyway.
-        if self._cached_username is None:
-            response = self.http_client.get(
-                f"{self.base_url}/api/user/v1/me",
-                headers={
-                    "Authorization": (f"{self.token_type} {self._fetch_access_token()}")
-                },
-            )
-            response.raise_for_status()
-            self._cached_username = response.json()["username"]
+        if self._cached_username is not None:
+            return self._cached_username
+        with self._username_lock:
+            # Re-check inside the lock. Without it a cold client called from a
+            # worker pool issues one /me request per thread on the first tick,
+            # which is the burst this cache exists to remove.
+            if self._cached_username is None:
+                response = self.http_client.get(
+                    f"{self.base_url}/api/user/v1/me",
+                    headers={
+                        "Authorization": (
+                            f"{self.token_type} {self._fetch_access_token()}"
+                        )
+                    },
+                )
+                response.raise_for_status()
+                self._cached_username = response.json()["username"]
         return self._cached_username
 
     def fetch_with_auth(
@@ -88,6 +118,7 @@ class OAuthApiClient(ConfigurableResource):
         request_url: str,
         page_size: int = 100,
         extra_params: dict[str, Any] | None = None,
+        rate_limit_retries: int = MAX_RATE_LIMIT_RETRIES,
     ) -> dict[Any, Any] | tuple[dict[Any, Any], int]:
         if self.token_url == f"{self.base_url}/oauth2/access_token":
             request_params = {"username": self._username, "page_size": page_size}
@@ -107,12 +138,23 @@ class OAuthApiClient(ConfigurableResource):
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as error_response:
-            if error_response.response.status_code == TOO_MANY_REQUESTS:
+            # Bounded on purpose. Retrying forever means a caller can never be
+            # sure this returns, and callers that abandon their threads --
+            # course_version_sensor shuts its pool down with wait=False -- would
+            # then accumulate a fresh set of immortal workers every tick under a
+            # sustained rate limit.
+            if (
+                error_response.response.status_code == TOO_MANY_REQUESTS
+                and rate_limit_retries > 0
+            ):
                 retry_after = error_response.response.headers.get("Retry-After", 60)
                 delay = int(retry_after) if retry_after.isdigit() else 60
                 time.sleep(delay)
                 return self.fetch_with_auth(
-                    request_url, page_size=page_size, extra_params=extra_params
+                    request_url,
+                    page_size=page_size,
+                    extra_params=extra_params,
+                    rate_limit_retries=rate_limit_retries - 1,
                 )
             raise
         return response.json()

@@ -190,6 +190,15 @@ def course_version_sensor(
     cut short by the budget or the cap simply emits what it collected - the work
     it did not reach still mismatches and gets picked up next tick.
     """
+    # The clock starts here, before the event-log queries below, because the
+    # gRPC tick timeout covers those too. Timing only the fetch phase would let
+    # a slow partition or materialization query eat the margin between the
+    # budget and the timeout and still hand the sweep a full budget after it --
+    # reproducing the killed-tick-with-no-output failure this sensor exists to
+    # fix.
+    sweep_start = time.monotonic()
+    deadline = sweep_start + SWEEP_TIME_BUDGET.total_seconds()
+
     deployment = openedx.deployment
     partition_keys = OPENEDX_COURSE_RUN_PARTITIONS[deployment].get_partition_keys(
         dynamic_partitions_store=context.instance
@@ -199,8 +208,6 @@ def course_version_sensor(
     pending_keys = [key for key in partition_keys if key not in skip_keys]
     exported = exported_versions(context.instance, course_xml_key, pending_keys)
 
-    sweep_start = time.monotonic()
-    deadline = sweep_start + SWEEP_TIME_BUDGET.total_seconds()
     run_requests: list[RunRequest] = []
     examined = 0
     failures = 0
@@ -211,13 +218,18 @@ def course_version_sensor(
             executor.submit(openedx.client.get_course_outline, key): key
             for key in pending_keys
         }
+        # Only whatever is left of the budget after the queries above, so the
+        # total stays bounded however long they took. Floored above zero
+        # because as_completed treats a non-positive timeout as "already
+        # expired" and would skip even futures that are ready.
+        remaining = max(deadline - time.monotonic(), 0.1)
         # timeout so a rate-limit storm that blocks every worker (see
-        # fetch_with_auth's unbounded 429 retry) still lets the tick return
+        # fetch_with_auth's rate-limited retry) still lets the tick return
         # instead of hanging until the gRPC server kills it. The timeout is
         # caught only around advancing the iterator, so a TimeoutError raised
-        # from within the loop body (e.g. a Postgres query timeout from
-        # exported_versions) still propagates instead of being swallowed.
-        completed = as_completed(futures, timeout=SWEEP_TIME_BUDGET.total_seconds())
+        # from within the loop body still propagates instead of being
+        # swallowed.
+        completed = as_completed(futures, timeout=remaining)
         # Both limits are checked before advancing the iterator, not after.
         # Advancing blocks until another fetch finishes, so testing them after
         # the fact makes the tick wait on work whose result it has already
