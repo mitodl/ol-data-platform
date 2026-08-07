@@ -17,6 +17,7 @@ from data_platform.definitions import (
     defs,
     error_message,
     get_exception,
+    sentry_fingerprint,
     truncate_text,
     will_be_retried,
 )
@@ -50,11 +51,11 @@ def _context(step_failure_events: list[Any], failure_message: str = "") -> Any:
     )
 
 
-def _step_failure(step_key: str, error_text: str) -> Any:
+def _step_failure(step_key: str, error_text: str, cls_name: str = "ValueError") -> Any:
     return SimpleNamespace(
         step_key=step_key,
         event_specific_data=SimpleNamespace(
-            error=SimpleNamespace(to_string=lambda: error_text)
+            error=SimpleNamespace(to_string=lambda: error_text, cls_name=cls_name)
         ),
     )
 
@@ -140,6 +141,37 @@ def test_error_message_always_links_back_to_the_run() -> None:
     actions = [b for b in blocks if b["type"] == "actions"]
     assert actions, "message carries no link back to Dagster"
     assert "/runs/" in actions[0]["elements"][0]["url"]
+
+
+# ── Sentry fingerprinting ─────────────────────────────────────────────────────
+
+
+def test_sensor_fingerprint_matches_the_in_process_hook() -> None:
+    """The two reporting paths must group into one Sentry issue, not two.
+
+    ol_orchestrate.lib.sentry's hook uses
+    ``[job_name, step_key, type(exception).__name__]``; a mismatch here raises a
+    duplicate issue for every single failure.
+    """
+    context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+
+    assert sentry_fingerprint(context) == ["a_job", "some_model", "ValueError"]
+
+
+def test_sensor_fingerprint_groups_process_deaths_separately() -> None:
+    """No step failure means the hook never ran, so there is nothing to match."""
+    context = _context([])
+
+    assert sentry_fingerprint(context) == ["a_job", "run", "run_failure"]
+
+
+def test_sensor_fingerprint_survives_a_missing_error_payload() -> None:
+    failure = SimpleNamespace(
+        step_key="some_model", event_specific_data=SimpleNamespace()
+    )
+    context = _context([failure])
+
+    assert sentry_fingerprint(context) == ["a_job", "some_model", "run_failure"]
 
 
 # ── dbt error extraction ──────────────────────────────────────────────────────

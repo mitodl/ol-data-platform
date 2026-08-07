@@ -120,6 +120,32 @@ def will_be_retried(run: DagsterRun, instance: Any) -> bool:
     return retry_number < max_retries
 
 
+def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
+    """Build a fingerprint matching the one the in-process hook uses.
+
+    ol_orchestrate.lib.sentry fingerprints a step failure as
+    ``[job_name, step_key, <exception class name>]``. This has to produce the
+    identical triple for the same failure, or the two reporting paths raise two
+    Sentry issues for every failure instead of collapsing into one.
+
+    A run that died without any step failure event -- OOM, eviction, a run
+    monitoring timeout -- has no exception class and no step, and the hook
+    never ran for it, so there is nothing to align with. Those get their own
+    grouping instead.
+    """
+    run = context.dagster_run
+    step_failures = context.get_step_failure_events()
+    if not step_failures:
+        return [run.job_name, "run", "run_failure"]
+
+    failure = step_failures[0]
+    error = getattr(failure.event_specific_data, "error", None)
+    # cls_name is the serialized form of the same type(exception).__name__ the
+    # hook captures in-process.
+    error_type = getattr(error, "cls_name", None) or "run_failure"
+    return [run.job_name, failure.step_key, error_type]
+
+
 def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | None:
     """Report a run failure to Sentry and return the event ID.
 
@@ -127,9 +153,6 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
     better fidelity but cannot run when the process itself dies -- an OOM-killed
     run worker, a pod reaped by run monitoring, or a failure during run startup
     before any step executed. Those only ever surface here.
-
-    Both paths fingerprint on the same values, so a failure reported by both
-    collapses into one Sentry issue rather than two.
     """
     if not sentry_sdk.get_client().is_active():
         return None
@@ -153,7 +176,7 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
                 "tags": dict(run.tags),
             },
         )
-        scope.fingerprint = [run.job_name, step_key, "run_failure"]
+        scope.fingerprint = sentry_fingerprint(context)
         event_id = sentry_sdk.capture_message(
             f"Dagster run failure: {run.job_name}",
             level="error",
