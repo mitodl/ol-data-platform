@@ -162,7 +162,7 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
     required_resource_keys={"openedx", "s3"},
     output_required=False,
 )
-def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
+def course_xml(context: AssetExecutionContext, courseware):
     course_key = context.partition_key
     course_status = context.resources.openedx.client.check_course_status(course_key)
     # if the course is found, trigger the XML export
@@ -222,7 +222,13 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         yield Output(
             (course_file, target_path),
             data_version=DataVersion(data_version),
-            metadata={"course_id": course_key, "object_key": target_path},
+            metadata={
+                "course_id": course_key,
+                "object_key": target_path,
+                # Read by course_version_sensor to decide whether the archive in
+                # S3 is older than the course's current published version.
+                "courseware_published_version": courseware["published_version"],
+            },
         )
     # if the course is not found, refer to the last successful materialization
     elif course_status in {None, HTTP_NOT_FOUND}:
