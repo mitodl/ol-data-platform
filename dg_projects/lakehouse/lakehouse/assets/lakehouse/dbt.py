@@ -20,36 +20,13 @@ from dagster_dbt import (
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
+from lakehouse.lib.dbt_environment import DBT_TARGET
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 
 DBT_REPO_DIR = (
     Path(__file__).parents[5].joinpath("src/ol_dbt")
     if DAGSTER_ENV == "dev"
     else Path("/opt/dbt")
-)
-
-
-def resolve_dbt_target(
-    target_map: Mapping[str, str], *, override_env_var: str, default: str
-) -> str:
-    """Resolve the dbt profile target for this environment from *target_map*.
-
-    Single source of truth shared by a DbtProject (which parses the manifest,
-    and therefore the Dagster asset graph) and the DbtCliResource that executes
-    it, so the graph always matches what actually runs. *override_env_var*
-    takes precedence over the mapping when set. Shared across engine-scoped
-    dbt asset sets (see dbt_starrocks.py) so each just supplies its own map.
-    """
-    if override := os.environ.get(override_env_var):
-        return override
-    return target_map.get(DAGSTER_ENV, default)
-
-
-# qa and production both execute against the production target.
-DBT_TARGET = resolve_dbt_target(
-    {"dev": "dev_production", "ci": "ci"},
-    override_env_var="DAGSTER_DBT_TARGET",
-    default="production",
 )
 
 dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
