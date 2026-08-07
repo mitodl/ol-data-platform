@@ -11,12 +11,15 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
 )
+from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
 from ol_orchestrate.lib.utils import (
     authenticate_vault,
     s3_uploads_bucket,
     unauthenticated_vault,
 )
 from student_risk_probability.assets.risk_probability import student_risk_probability
+
+init_sentry("student_risk_probability")
 
 # Initialize vault with resilient loading
 try:
@@ -74,6 +77,6 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
     },
-    assets=[student_risk_probability],
+    assets=with_sentry_hooks([student_risk_probability]),
     jobs=[data_export_job],
 )

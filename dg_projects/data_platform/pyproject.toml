@@ -6,26 +6,33 @@ dependencies = [
     "dagster>=1.12.10",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
-    "dagster-slack ~=0.29.0",
     "ol-orchestrate-lib",
+    # slack-sdk directly rather than dagster-slack: the only thing we used from
+    # dagster-slack was make_slack_on_run_failure_sensor, and its sensor gives
+    # no way to skip a tick, which is what retry suppression needs.
+    "slack-sdk ~=3.36",
 ]
 
 [project.entry-points]
-"dagster.components" = { orchestration_platform = "data_platform.lib"}
+"dagster.components" = { data_platform = "data_platform.lib"}
 
 [dependency-groups]
 dev = [
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver",
+    "pytest>=9.0.1,<10",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["data_platform_tests"]
 
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "orchestration_platform.definitions"
-project_name = "orchestration-platform"
+module_name = "data_platform.definitions"
+project_name = "data-platform"
 
 [tool.dg]
 directory_type = "project"

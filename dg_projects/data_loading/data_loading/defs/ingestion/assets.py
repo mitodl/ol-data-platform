@@ -22,6 +22,7 @@ from ol_dlt.sources import (
     podcast_rss,
 )
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
+from ol_orchestrate.lib.sentry import with_sentry_hooks
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
@@ -131,13 +132,15 @@ edxorg_s3_table_assets = [
 
 
 defs = Definitions(
-    assets=[
-        oll_assets,
-        mitpe_assets,
-        mit_climate_assets,
-        mit_edx_programs_assets,
-        podcast_rss_assets,
-        keycloak_assets,
-        *edxorg_s3_table_assets,
-    ],
+    assets=with_sentry_hooks(
+        [
+            oll_assets,
+            mitpe_assets,
+            mit_climate_assets,
+            mit_edx_programs_assets,
+            podcast_rss_assets,
+            keycloak_assets,
+            *edxorg_s3_table_assets,
+        ]
+    ),
 )

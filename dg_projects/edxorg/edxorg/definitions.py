@@ -26,6 +26,7 @@ from ol_orchestrate.io_managers.filepath import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
+from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
@@ -65,6 +66,8 @@ from edxorg.ops.object_storage import (
     download_files_from_s3,
     upload_files_to_s3,
 )
+
+init_sentry("edxorg")
 
 # Initialize vault with resilient loading
 try:
@@ -277,18 +280,20 @@ defs = Definitions(
         sync_edxorg_program_reports,
         gcs_sync_job,
     ],
-    assets=[
-        edxorg_raw_data_archive.to_source_asset(),
-        edxorg_raw_tracking_logs.to_source_asset(),
-        normalize_edxorg_tracking_log,
-        dummy_edxorg_course_structure,
-        flatten_edxorg_course_structure,
-        extract_edxorg_courserun_metadata,
-        dummy_edxorg_course_xml,
-        edxorg_course_content_webhook,
-        edxorg_program_metadata,
-        edxorg_mitx_course_metadata,
-        *edxorg_db_table_specs,
-    ],
+    assets=with_sentry_hooks(
+        [
+            edxorg_raw_data_archive.to_source_asset(),
+            edxorg_raw_tracking_logs.to_source_asset(),
+            normalize_edxorg_tracking_log,
+            dummy_edxorg_course_structure,
+            flatten_edxorg_course_structure,
+            extract_edxorg_courserun_metadata,
+            dummy_edxorg_course_xml,
+            edxorg_course_content_webhook,
+            edxorg_program_metadata,
+            edxorg_mitx_course_metadata,
+            *edxorg_db_table_specs,
+        ]
+    ),
     schedules=[edxorg_api_daily_schedule],
 )

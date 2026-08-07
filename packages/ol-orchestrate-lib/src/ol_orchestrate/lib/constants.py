@@ -1,9 +1,28 @@
 import os
-from typing import Literal
+from typing import Literal, get_args
 
-DAGSTER_ENV: Literal["dev", "ci", "qa", "production"] = os.environ.get(  # type: ignore[assignment]
-    "DAGSTER_ENVIRONMENT", "dev"
-)
+DagsterEnv = Literal["dev", "ci", "qa", "production"]
+
+VALID_DAGSTER_ENVS: tuple[str, ...] = get_args(DagsterEnv)
+
+_dagster_env = os.environ.get("DAGSTER_ENVIRONMENT", "dev")
+
+# DAGSTER_ENV is typed as a Literal but sourced from the environment, so
+# nothing enforces the contract at runtime. Every code location then indexes
+# environment-keyed dicts with it (Vault addresses, Trino and StarRocks hosts,
+# Slack channels), and a typo would surface as a bare `KeyError: 'productoin'`
+# from whichever dict happened to be read first. Validating here -- the single
+# point where the value is derived -- turns that into one clear message, for
+# every code location at once.
+if _dagster_env not in VALID_DAGSTER_ENVS:
+    msg = (
+        f"DAGSTER_ENVIRONMENT is set to {_dagster_env!r}, which is not a "
+        f"recognized environment. Expected one of: "
+        f"{', '.join(VALID_DAGSTER_ENVS)}."
+    )
+    raise ValueError(msg)
+
+DAGSTER_ENV: DagsterEnv = _dagster_env  # type: ignore[assignment]
 
 if DAGSTER_ENV == "dev":
     VAULT_ADDRESS = os.getenv("VAULT_ADDR", "https://vault-qa.odl.mit.edu")
