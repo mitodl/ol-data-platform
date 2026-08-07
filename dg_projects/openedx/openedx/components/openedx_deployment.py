@@ -11,7 +11,6 @@ from dagster import (
     SensorDefinition,
     SourceAsset,
 )
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -135,9 +134,18 @@ class OpenEdxDeploymentComponent:
         # the courseware source asset, and every downstream's
         # upstream_or_code_changes() then reacts to the versions that
         # observation reports.
+        #
+        # Evaluated every 5 minutes, not hourly. Each link in
+        # courseware -> course_xml -> extract_courserun_details -> webhook can
+        # only advance on a tick, and an observation lands *after* the tick that
+        # requested it, so an hourly interval put roughly an hour between every
+        # pair of steps -- a republish would take most of a day to reach the
+        # webhook. How often the LMS is actually swept is set by the source
+        # asset's cron, not by this: a tick that finds nothing to do costs a
+        # graph evaluation and no API calls.
         automation_sensor = AutomationConditionSensorDefinition(
             f"{self.deployment_name}_openedx_automation_sensor",
-            minimum_interval_seconds=300 if DAGSTER_ENV == "dev" else 60 * 60,
+            minimum_interval_seconds=300,
             target=list(assets.values()),
         )
 

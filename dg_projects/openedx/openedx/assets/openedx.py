@@ -269,8 +269,12 @@ def course_structure(context: AssetExecutionContext):
     output_required=False,
     # Exports are slow (they poll Studio for minutes) and arrive in bursts: a
     # republished term, or a fresh deployment where every course is new, asks
-    # for all of them at once. Their own pool keeps that from filling the
-    # global run slots and queueing every unrelated pipeline behind it.
+    # for all of them at once, which without a limit of its own fills the
+    # global run slots and queues every unrelated pipeline behind it.
+    #
+    # Naming the pool here only makes that limit *settable*; it does not impose
+    # one. Until a slot limit is configured for `openedx_course_export` on the
+    # instance (Deployment -> Concurrency), these runs are still unbounded.
     pool="openedx_course_export",
 )
 def course_xml(context: AssetExecutionContext):

@@ -1,5 +1,6 @@
 """Tests for the openedx/courseware observable source asset and what it drives."""
 
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
@@ -18,6 +19,15 @@ from dagster import (
 )
 from dagster._core.definitions.asset_daemon_cursor import AssetDaemonCursor
 from dagster._core.definitions.observe import observe
+from dagster._core.events import (
+    AssetMaterializationPlannedData,
+    DagsterEvent,
+    DagsterEventType,
+)
+from dagster._core.events.log import EventLogEntry
+from dagster._core.storage.dagster_run import DagsterRunStatus
+from dagster._core.storage.tags import PARTITION_NAME_TAG
+from dagster._core.test_utils import create_run_for_test
 from openedx.assets.openedx import (
     HTTP_NOT_FOUND,
     build_courseware_source_asset,
@@ -31,6 +41,7 @@ from openedx.lib.assets_helper import (
 DEPLOYMENT = "mitxonline"
 COURSEWARE_KEY = AssetKey([DEPLOYMENT, "openedx", "courseware"])
 COURSE_XML_KEY = AssetKey([DEPLOYMENT, "openedx", "raw_data", "course_xml"])
+EXPORT_JOB = "__ASSET_JOB"
 
 
 @pytest.fixture
@@ -218,6 +229,90 @@ def _record_export(instance: DagsterInstance, partition_key: str) -> None:
     instance.report_runless_asset_event(
         AssetMaterialization(asset_key=COURSE_XML_KEY, partition=partition_key)
     )
+
+
+def _start_export_run(instance: DagsterInstance, partition_key: str):
+    """Stage an export run that Dagster reports as in flight for course_xml.
+
+    The MATERIALIZATION_PLANNED event is the load-bearing part -- that is what
+    in_progress() reads for a partitioned asset, not the run record.
+    """
+    run = create_run_for_test(
+        instance,
+        job_name=EXPORT_JOB,
+        status=DagsterRunStatus.STARTED,
+        asset_selection={COURSE_XML_KEY},
+        tags={PARTITION_NAME_TAG: partition_key},
+    )
+    instance.handle_new_event(
+        EventLogEntry(
+            error_info=None,
+            level="debug",
+            user_message="",
+            run_id=run.run_id,
+            timestamp=time.time(),
+            dagster_event=DagsterEvent(
+                event_type_value=DagsterEventType.ASSET_MATERIALIZATION_PLANNED.value,
+                job_name=EXPORT_JOB,
+                event_specific_data=AssetMaterializationPlannedData(
+                    asset_key=COURSE_XML_KEY, partition=partition_key
+                ),
+            ),
+        )
+    )
+    return run
+
+
+def _finish_export_run(instance: DagsterInstance, run, partition_key: str) -> None:
+    """Complete a staged export run successfully, archive and all."""
+    _record_export(instance, partition_key)
+    instance.handle_new_event(
+        EventLogEntry(
+            error_info=None,
+            level="debug",
+            user_message="",
+            run_id=run.run_id,
+            timestamp=time.time(),
+            dagster_event=DagsterEvent(
+                event_type_value=DagsterEventType.RUN_SUCCESS.value,
+                job_name=EXPORT_JOB,
+            ),
+        )
+    )
+
+
+def test_a_republish_during_an_export_is_not_lost(
+    instance: DagsterInstance, partitions: DynamicPartitionsDefinition
+) -> None:
+    """A course republished mid-export still gets exported afterwards.
+
+    Exports poll Studio for minutes and the sweep runs on a cron, so a
+    republish landing inside a running export is routine rather than exotic.
+    Without the latch in upstream_or_code_changes() the only tick where
+    data_version_changed is true is the one ~in_progress() suppresses, and the
+    running export then succeeds -- so nothing fails, nothing re-fires, and the
+    archive silently stays a version behind until the course changes again.
+    """
+    instance.add_dynamic_partitions(partitions.name, ["course-a"])
+    client = _OutlineClient({"course-a": "v1"})
+    defs = _definitions(partitions, client)
+
+    _observe(defs, instance)
+    requested, cursor = _requested(defs, instance, None)
+    assert requested == {"course-a"}
+    _record_export(instance, "course-a")
+    requested, cursor = _requested(defs, instance, cursor)
+    assert requested == set(), "v1 is exported"
+
+    in_flight = _start_export_run(instance, "course-a")
+    client.versions["course-a"] = "v2"
+    _observe(defs, instance)
+    requested, cursor = _requested(defs, instance, cursor)
+    assert requested == set(), "suppressed while the earlier export runs"
+
+    _finish_export_run(instance, in_flight, "course-a")
+    requested, cursor = _requested(defs, instance, cursor)
+    assert requested == {"course-a"}, "v2 must still be exported"
 
 
 def test_the_observation_drives_the_full_export_cycle(
