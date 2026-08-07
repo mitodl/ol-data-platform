@@ -62,10 +62,17 @@ This ordering keeps commitment low (all three read the same tables) and treats M
 discovery vehicle between "a dashboard is enough" and "we need a real app."
 
 **MVP surface content (Superset unless noted):**
-1. **Support triage** — cluster list ranked by size/recency, filterable by
-   `source_status`/`source_priority`/`source_channel`/`source_tags`, each cluster
-   drill-through to constituent (redacted) tickets with `source_url` deep-links back to
-   Zendesk. Sentiment facet from `dim_sentiment`.
+1. **Support triage** — cluster list ranked by **distinct conversation count** (not row count — at turn
+   grain one verbose ticket contributes many turns) and recency, filterable by
+   `dim_feedback_channel`, tags via `bridge_feedback_tag`, and status/priority extracted from
+   `source_metadata` with `json_query_string`. Each cluster drills through to constituent (redacted) turns,
+   grouped by `conversation_id`, with `source_url` deep-links back to Zendesk. Sentiment facet from
+   `dim_sentiment`. Conversation-level context (age, resolution state) joins from
+   `afact_feedback_conversation`.
+
+   *Superset note:* the variant column means status/priority are a computed dataset column
+   (`json_query_string(source_metadata, '$.ticket_status')`) rather than a physical one — define them once
+   on the Superset dataset so every chart filters on a named column, not an expression.
 2. **Engineering systemic view** — same cluster list but filtered to systemic clusters
    (HDBSCAN non-noise, above a `min_cluster_size` threshold; noise/one-offs hidden), sorted
    by cluster cohesion/size, with category labels from `dim_feedback_category`.

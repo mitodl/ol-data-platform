@@ -7,12 +7,19 @@ Resolves the open items the dimensional-model design handed to downstream tasks:
 clustering (`tk-...-clustering-approach-...a1d7d6`), category discovery
 (`tk-...-llm-driven-category-discovery-...550aba`), and sentiment
 (`tk-...-sentiment-mapping-...92988e`). Grounded in the discovery cost model
-(~1.18M text records; one-time embed ≈ $2–16; MVP = ~198K Zendesk tickets, batch).
+(~1.18M text records; one-time embed ≈ $2–16). **The MVP figure of ~198K is stale** — it was the Zendesk
+*ticket* count, and rev. 2 moves the grain to turns; see §B.2.
 
 The guiding principle from the RFC: **the durable artifact is the feedback fact +
 persisted embeddings; clustering/category/sentiment are re-runnable consumers of it.**
 Nothing here rewrites `tfact_feedback`; all ML output lands in the `feedback_embeddings`
 sidecar or the late-arriving `category_fk`/`sentiment_fk` update.
+
+> **REVISED 2026-08-07 (rev. 2) — grain moved from ticket to turn** (design §1). Two consequences for this
+> spec, both worked through below: the **record count is now public requester *comments*, not tickets**
+> (§B.2), and the **text profile changes** — a mid-conversation turn is shorter and more context-dependent
+> than a ticket description, which is exactly the regime where the semantic-normalization eval arm (§B.1)
+> matters most.
 
 ---
 
@@ -111,6 +118,30 @@ comparison. Let the harness decide; do not hardcode a winner in the spec.
   column for the MVP (no new service; the batch clustering job reads the set into memory — fine at
   this scale). StarRocks HNSW becomes the serving-tier index once deployed (ADR).
 
+### B.2 Volume and text profile at turn grain (rev. 2)
+
+The discovery cost model (~1.18M records, one-time embed ≈ $2–16, MVP ≈ 198K Zendesk *tickets*) assumed
+ticket grain. At turn grain the MVP input is public, requester-authored **comments**, and that multiplier is
+**unmeasured** — it is a prerequisite in `feedback_zendesk_mvp_spec.md` §0 and must be run before the
+embedding budget is treated as known. Embedding cost scales linearly, so even a 3–5× multiplier keeps the
+one-time backfill in low tens of dollars; the reason to measure is sizing and runtime, not affordability.
+
+Three substantive effects, not just a bigger number:
+
+- **Turn grain helps clustering.** Under ticket grain only the opening comment is embedded, so a problem
+  first articulated in turn 4 ("actually the real issue is the certificate never generated") is invisible to
+  the systemic-issue detector. That is a recall gap, and it is the kind of thing this system exists to find.
+- **Turn text is shorter and more context-dependent.** The ~1,000-char average for `ticket_description` does
+  not hold for follow-up turns, which skew short and often refer back ("still not working", "same as
+  before"). This is precisely the short/noisy regime where the 2026 support-ticket-clustering evidence
+  reports **semantic-normalization before embedding** to be the largest lever (§B.1) — so the eval arm gets
+  *more* important, not less, and should be scored separately on opening vs. follow-up turns.
+- **Cluster sizes stop being ticket counts.** A single verbose ticket can contribute many turns to one
+  cluster. `min_cluster_size` therefore no longer reads as "how many tickets before we call it systemic" —
+  rank clusters by **distinct `conversation_id`**, not row count, or one talkative user manufactures a
+  systemic issue. This is a real change to §C's tuning story and to `afact_feedback_cluster_daily`, which
+  carries `distinct_conversation_count` for the same reason.
+
 **Rejected:** re-embedding on every run (the prototype #10793 flaw the RFC fixes).
 **Upgraded from "rejected" to "evaluate seriously" (new evidence, 2026-07):** LLM
 **semantic-normalization before embedding**. Recent support-ticket-clustering literature reports it
@@ -141,8 +172,10 @@ cohesion signal that lets a human say "this is recurring."
     HDBSCAN's condensed tree without baking in its manual truncation.
 - **Dimensionality reduction: UMAP** to ~5–15 dims before HDBSCAN (HDBSCAN degrades in
   raw high-dim space). `n_neighbors`/`min_cluster_size` are the two knobs to tune on a
-  Zendesk sample; `min_cluster_size` is effectively the "how many tickets before we call
-  it systemic" threshold and should be a config, not hardcoded.
+  Zendesk sample and should be config, not hardcoded.
+  **rev. 2:** at turn grain `min_cluster_size` counts *turns*, not tickets, so it no longer reads directly
+  as "how many tickets before we call it systemic". Rank and threshold clusters by **distinct
+  `conversation_id`** (§B.2) so one verbose conversation cannot manufacture a systemic issue.
 - **Pre-embedding LLM semantic-normalization is a first-class eval arm here** (see §B.1): recent
   support-ticket-clustering evidence (2026) reports it is the single largest lever on cluster
   quality for short/noisy ticket text. Evaluate `normalize→embed→cluster` against `embed→cluster`
@@ -235,7 +268,8 @@ material. `dim_sentiment` and the fact column are unaffected by which wins.
 
 ## F. What is explicitly deferred (non-blocking for spec/MVP)
 
-- Embedding model final pick + GPU/CPU throughput at full 1.18M scale (MVP proves it at 198K).
+- Embedding model final pick + GPU/CPU throughput at full scale (MVP proves it on the Zendesk turn corpus,
+  whose size is the §B.2 measurement).
 - Dedicated vector store / online serving (Iceberg ARRAY suffices for batch).
 - Aspect-based sentiment; multi-lingual handling.
 - Semantic-summary-before-embedding and hierarchical truncation from prototype #10793 —
