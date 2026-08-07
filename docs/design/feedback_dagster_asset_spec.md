@@ -188,7 +188,9 @@ Two options, both in use in the repo:
 - **Cron alternative:** wrap the assets in `define_asset_job(...)` + a
   `dg.ScheduleDefinition(cron_schedule="0 4 * * *", execution_timezone="Etc/UTC")` (pattern:
   `dg_projects/data_loading/.../schedules.py`) if a fixed cadence is preferred over
-  data-driven triggering. MVP volume (~198K) runs comfortably in one nightly batch.
+  data-driven triggering. MVP volume is the Zendesk turn count (`feedback_ml_approach.md` §B.2 — the old
+  ~198K ticket figure no longer applies); still expected to run comfortably in one nightly batch, but
+  confirm against the measurement before fixing the schedule.
 
 ---
 

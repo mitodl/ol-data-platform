@@ -21,17 +21,32 @@ this shape at the `stg__…__feedback` boundary:
 |---|---|---|---|
 | `source_slug` | string | maps to `dim_feedback_source.source_slug` | yes |
 | `occurred_at` | ISO8601 timestamp | source event time | yes |
-| `source_record_ref` | string | **stable source-native id** — idempotency key + business key (§2) | yes |
+| `source_record_ref` | string | **stable source-native id of the TURN** — idempotency key + business key (§2) | yes |
 | `text` | string | raw free text (redaction happens in-warehouse, design §7) | yes |
+| `channel_slug` | string | maps to `dim_feedback_channel.channel_slug` — how the feedback arrived | yes |
 | `title` | string | subject/heading; nullable | no |
-| `conversation_ref` | string | thread/ticket id — roll utterances → conversation | no |
+| `conversation_ref` | string | thread/ticket id — roll turns → conversation | no |
+| `turn_index` | integer | ordinal of this turn within the conversation | no |
 | `subject_user_ref` | string | **global/openedx user id** (NOT a source-local PK); email only as last resort | no |
 | `courserun_readable_id` | string | course scope; null for non-course sources | no |
 | `platform` | string | platform readable id; nullable | no |
 | `subject_type` | string | **what the feedback is about**: `courseware_block` \| `course_run` \| `course` \| `program` \| `page_url` \| `resource` \| `unspecified` | no |
 | `subject_ref` | string | source-native id of that thing (edX usage key, courserun readable id, decoded URL) | no |
 | `subject_url` | string | canonical/decoded deep link to the subject | no |
-| `source_metadata` | JSON | tags, status, priority, channel, csat, brand, group, etc. | no |
+| `explicit_rating` | string | conformed explicit signal — Zendesk CSAT, tutor rating, ORA score | no |
+| `created_at` | ISO8601 timestamp | source lifecycle timestamp | no |
+| `updated_at` | ISO8601 timestamp | source lifecycle timestamp | no |
+| `source_metadata` | JSON | **everything not yet conformed** — status, priority, brand, group, due date, custom fields | no |
+
+**The conformance rule that decides what is a field vs. what is `source_metadata`:**
+
+> An attribute earns a contract field only if **two or more sources can populate it**. Everything else rides
+> in `source_metadata`, and is promoted to a field if and when a second source starts supplying it — in the
+> same change that onboards that source.
+
+This is why `channel_slug`, `explicit_rating`, `created_at`/`updated_at` and `turn_index` are fields (every
+or most sources have them) while status, priority, brand, group and due date are not (Zendesk-only). Adopted
+2026-08-07 after RFC review; the full per-attribute audit is in [`feedback_erd.md`](./feedback_erd.md) §1.
 
 **Design rules:**
 - `subject_user_ref` is a **global identity ref, never a source row PK** — this is what lets
@@ -40,10 +55,14 @@ this shape at the `stg__…__feedback` boundary:
   which shares the `dim_user` NULL-email identity-collapse failure class; see design §3.)
 - `text`/`title` carry **raw** text across the contract; redaction is a warehouse step
   (design §7), not a producer responsibility — so producers never need Presidio.
-- `source_metadata` is the extension point: anything source-specific rides in the JSON and is
-  projected into the fact's non-conformed facet columns (`source_status`, `source_priority`,
-  `source_tags`, `source_channel`, `source_brand`, `source_group`, `csat_score`) without changing
-  the contract.
+- `source_metadata` is the extension point, and it **survives into the fact as a variant column** rather
+  than being flattened into facet columns (design §2c). Iceberg v2 has no native JSON type, so it persists
+  as a varchar holding a JSON string, read back with the cross-db `json_query_string` /
+  `json_extract_value` macros. This is the mechanism that makes a new source additive: a producer arriving
+  with attributes nobody has seen before needs no schema change.
+- **`source_record_ref` identifies a turn, not a conversation.** For Zendesk that is `comment_id`, with
+  `ticket_id` in `conversation_ref` (design §1). Adapters that emit one row per conversation are not
+  conformant — the grain is one atomic utterance, and every source's own model already works that way.
 - **`subject_*` answers "what is this feedback about?"** — the axis you aggregate on, and the one
   the contract originally lacked (raised on [#2422](https://github.com/mitodl/ol-data-platform/pull/2422#issuecomment-3157271372)).
   It is a *polymorphic degenerate triple*: always carryable, whatever the subject is. The fact resolves
@@ -63,13 +82,18 @@ feedback_pk = generate_surrogate_key([source_slug, source_record_ref])
 `source_record_ref` is a **stable business identifier from the source system**, never a
 warehouse/Airbyte/Postgres row PK:
 
-| Source | `source_record_ref` |
-|---|---|
-| Zendesk | `ticket_id` |
-| edX forum | `post_id` |
-| Learn AI tutor | `thread_id` + `checkpoint_pk` (or message index) |
-| ORA | `submission_uuid` |
-| edX feedback plugin | plugin-native event/record id |
+| Source | `source_record_ref` (the **turn**) | `conversation_ref` |
+|---|---|---|
+| Zendesk | `comment_id` | `ticket_id` |
+| edX forum | `post_id` | thread id |
+| Learn AI tutor | `checkpoint_id` | `chatsession_thread_id` |
+| ORA | `submission_uuid` | n/a |
+| edX feedback plugin | plugin-native event/record id | n/a |
+
+> **Changed 2026-08-07 (rev. 2).** Zendesk's `source_record_ref` moved from `ticket_id` to `comment_id` when
+> the grain moved from ticket to turn (design §1). The formula is unchanged; the *value* is not — which is
+> exactly why the grain decision had to land before the fact ships. Regenerating this key after the fact has
+> consumers is the rebuild this strategy exists to avoid.
 
 Because `feedback_pk` regenerates **identically** regardless of which pipe delivered the
 event, the interim→data-bus swap re-lands the same rows with the same keys — enabling
