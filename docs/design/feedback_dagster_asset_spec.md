@@ -6,8 +6,10 @@ and [`feedback_ml_approach.md`](./feedback_ml_approach.md)
 
 The scheduled batch job that turns the redacted feedback fact into embeddings, clusters,
 LLM-proposed categories, and sentiment. Grounded in the existing repo orchestration
-patterns. **The fact ships without this asset**; this is purely additive (fills
-`embedding_id`, `category_fk`, `sentiment_fk`, and the `feedback_embeddings` sidecar).
+patterns. **The fact ships without this asset**; this is purely additive (fills `category_fk` /
+`sentiment_fk` on the fact and populates the sidecar tables `feedback_embeddings`,
+`feedback_cluster_run`, `feedback_cluster_assignment` — see
+[`feedback_erd.md`](./feedback_erd.md) §3).
 
 > **REVISED 2026-07-10 (rev. 3) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
 > Because the strategic direction is to **retire Trino for StarRocks**, all AI compute stays
@@ -70,18 +72,28 @@ read/write Iceberg via `get_dbt_model_as_dataframe(...)`
 [dbt] int__feedback__unioned   (redacted text + feedback_pk)      ← upstream AssetKey dep
    │
    ▼
-feedback_embeddings            @asset  → writes feedback_embeddings (feedback_pk, vector,
-   │                                     model_version)  [embedding computed ONCE per model_version]
+feedback_embeddings            @asset  → writes feedback_embeddings
+   │                                     grain (feedback_pk, model_version); vector, vector_dim,
+   │                                     text_variant  [embedding computed ONCE per model_version]
    ▼
-feedback_clusters              @asset  → adds cluster_id, cluster_probability, cluster_run_id
-   │                                     to feedback_embeddings (UMAP→HDBSCAN)
+feedback_clusters              @asset  → writes feedback_cluster_run (one row: algorithm, params,
+   │                                     cluster_count, noise_count, silhouette) AND
+   │                                     feedback_cluster_assignment, grain
+   │                                     (feedback_pk, cluster_run_id)  (UMAP→HDBSCAN)
+   │                                     — it NEVER writes back to feedback_embeddings
    ├─────────────► feedback_category_proposals  @asset → LLM-labels clusters → dim_feedback_category
-   │                                                     (category_source='llm_discovered', status='proposed')
+   │                                                     (category_source='llm_discovered', status='proposed',
+   │                                                      cluster_run_id = provenance)
    └─────────────► feedback_sentiment           @asset → sentiment per feedback_pk (explicit + kNN/classifier)
                                                           → writes sentiment_fk assignments
    ▼
-tfact_feedback late-arriving update  ← category_fk / sentiment_fk / embedding_id upsert by feedback_pk
+tfact_feedback late-arriving update  ← category_fk / sentiment_fk upsert by feedback_pk
 ```
+
+The clustering asset writing its own tables rather than mutating `feedback_embeddings` is the
+grain split from `feedback_ml_approach.md` §A: vectors are per `(feedback_pk, model_version)`,
+assignments are per `(feedback_pk, cluster_run_id)`. Re-clustering is then append-only and can
+never disturb the vectors it read.
 
 - **Redaction placement (design §7 / MVP spec §3):** the `feedback_embeddings` asset does
   the Presidio redaction on its input (or reads an already-redacted `int__feedback__unioned`
@@ -104,8 +116,9 @@ tfact_feedback late-arriving update  ← category_fk / sentiment_fk / embedding_
   uses against `reporting.cheating_detection_report`.)
 - **Write** results: return a `pl.DataFrame` from the asset; the `io_manager` key
   (`PolarsIcebergIOManager`, configured in `definitions.py`) persists it to the target
-  Iceberg table. `feedback_embeddings` is a new Iceberg table with the schema in
-  `feedback_ml_approach.md` §B/§C.
+  Iceberg table. `feedback_embeddings`, `feedback_cluster_run` and `feedback_cluster_assignment`
+  are new Iceberg tables with the schemas in `feedback_ml_approach.md` §A/§B/§C
+  (ERD: [`feedback_erd.md`](./feedback_erd.md) §3).
 - **Late-arriving `category_fk`/`sentiment_fk` back onto `tfact_feedback`:** because dbt owns
   `tfact_feedback`, the cleanest MVP path is an incremental dbt model / `merge` keyed by
   `feedback_pk` that reads the assignment table this asset writes — not a direct Python
@@ -184,8 +197,8 @@ Two options, both in use in the repo:
 1. dbt models (`feedback_zendesk_mvp_spec.md`) — `tfact_feedback` + dims. **Ships and is
    useful with tag-seeded categories + CSAT-derived sentiment, no ML.**
 2. Scaffold `dg_projects/feedback_clustering/`; add deps; provision Vault path.
-3. `feedback_embeddings` asset (embed + redact) → sidecar table.
-4. `feedback_clusters` asset (UMAP+HDBSCAN).
+3. `feedback_embeddings` asset (embed + redact) → vector sidecar.
+4. `feedback_clusters` asset (UMAP+HDBSCAN) → `feedback_cluster_run` + `feedback_cluster_assignment`.
 5. `feedback_category_proposals` + `feedback_sentiment` assets → assignment tables.
 6. dbt late-arriving join of assignment tables onto `tfact_feedback` (`category_fk`/`sentiment_fk`).
 7. Human curation loop on `dim_feedback_category` (approve/merge proposed labels).
