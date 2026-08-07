@@ -28,7 +28,10 @@ this shape at the `stg__…__feedback` boundary:
 | `subject_user_ref` | string | **global/openedx user id** (NOT a source-local PK); email only as last resort | no |
 | `courserun_readable_id` | string | course scope; null for non-course sources | no |
 | `platform` | string | platform readable id; nullable | no |
-| `source_metadata` | JSON | tags, status, priority, channel, csat, etc. | no |
+| `subject_type` | string | **what the feedback is about**: `courseware_block` \| `course_run` \| `course` \| `program` \| `page_url` \| `resource` \| `unspecified` | no |
+| `subject_ref` | string | source-native id of that thing (edX usage key, courserun readable id, decoded URL) | no |
+| `subject_url` | string | canonical/decoded deep link to the subject | no |
+| `source_metadata` | JSON | tags, status, priority, channel, csat, brand, group, etc. | no |
 
 **Design rules:**
 - `subject_user_ref` is a **global identity ref, never a source row PK** — this is what lets
@@ -39,7 +42,15 @@ this shape at the `stg__…__feedback` boundary:
   (design §7), not a producer responsibility — so producers never need Presidio.
 - `source_metadata` is the extension point: anything source-specific rides in the JSON and is
   projected into the fact's non-conformed facet columns (`source_status`, `source_priority`,
-  `source_tags`, `source_channel`, `csat_score`) without changing the contract.
+  `source_tags`, `source_channel`, `source_brand`, `source_group`, `csat_score`) without changing
+  the contract.
+- **`subject_*` answers "what is this feedback about?"** — the axis you aggregate on, and the one
+  the contract originally lacked (raised on [#2422](https://github.com/mitodl/ol-data-platform/pull/2422#issuecomment-3157271372)).
+  It is a *polymorphic degenerate triple*: always carryable, whatever the subject is. The fact resolves
+  it to a conformed FK where one exists — `courserun_fk` for course runs, the new
+  `content_block_fk → dim_course_content` for edX blocks (design §2a). Producers emit the raw ref;
+  **normalising it is the adapter's job**, e.g. decoding the encoded Appzi URL in
+  `int__feedback__zendesk`.
 
 ---
 

@@ -62,7 +62,10 @@ Output columns = the common feedback event contract (design §5), source-typed:
 | `source_record_ref` | `ticket_id` (**idempotency + business key**, §6 of design) |
 | `title` | `ticket_subject` |
 | `text` | `ticket_description` (= first comment body) |
-| `source_metadata` | struct/JSON: `ticket_tags`, `ticket_status`, `ticket_priority`, `ticket_source_channel`, `ticket_satisfaction_rating_score`, `ticket_satisfaction_rating_comment`, `group_name`, `organization_name`, `ticket_api_url` |
+| `subject_type` | `'page_url'` for Appzi-originated tickets; `'course_run'` where ticket metadata names a course; else `'unspecified'` |
+| `subject_ref` | decoded Appzi URL / course readable id / null (see notes) |
+| `subject_url` | decoded Appzi URL, else null |
+| `source_metadata` | struct/JSON: `ticket_tags`, `ticket_status`, `ticket_priority`, `ticket_source_channel`, `ticket_satisfaction_rating_score`, `ticket_satisfaction_rating_comment`, `brand_name`, `group_name`, `organization_name`, `ticket_api_url` |
 
 Notes:
 - **`ticket_description` = first comment only** (confirmed). That is the correct MVP grain
@@ -70,6 +73,17 @@ Notes:
   `int__zendesk__ticket_comment` is a Phase-2 option, not MVP.
 - Carry `ticket_api_url` through as the `source_url` deep-link.
 - Do **not** redact here — redaction is centralized in `int__feedback__unioned` (§3).
+- **Brand & group** (@pdpinch, [hq#12607](https://github.com/mitodl/hq/issues/12607)): `int__zendesk__ticket`
+  already carries `brand_name` and `group_name` (joined from `stg__zendesk__brand` / `stg__zendesk__group`),
+  so this is a pass-through. They ride in `source_metadata` and are projected to the `source_brand` /
+  `source_group` facet columns on the fact, so Superset filters a plain varchar rather than a JSON extract.
+  **Evaluate during implementation:** Zendesk *brand* is effectively "which help centre/product the ticket
+  came in through" — the closest thing Zendesk has to a platform. If brands map cleanly onto `dim_platform`,
+  `platform_fk` need not be null for Zendesk after all.
+- **Subject** (design §2a): the Appzi URL is **encoded in the source** — decode it *here*, in the adapter, not
+  in consumers. Where a ticket's metadata names a course, emit `subject_type='course_run'` and let the fact
+  resolve `courserun_fk`. `content_block_fk` is not populated by Zendesk; it arrives with the edX plugin
+  source in Phase 2.
 
 ---
 
@@ -117,9 +131,13 @@ left join dim_user as users
     on lower(unioned.subject_user_ref) = users.email   -- dim_user.user_pk = surrogate_key(lower(email))
 
 -- conformed FKs not populated for Zendesk (nullable, correct):
--- courserun_fk, platform_fk  -> null at MVP
--- organization_fk -> resolve from source_metadata.organization_name if/when a
---    dim_organization join key exists; null-tolerant otherwise
+-- courserun_fk    -> null at MVP unless subject_type='course_run' resolves a readable id
+-- content_block_fk -> null at MVP (arrives with the edX plugin source, design §2a)
+-- platform_fk     -> null at MVP; re-evaluate once brand_name is landed (see §2 notes)
+-- organization_fk -> NULL at MVP, and structurally so: dim_organization.organization_pk =
+--    generate_surrogate_key(['platform','source_id']) and Zendesk supplies neither
+--    (dim_organization.sql:38). The Zendesk org/group is carried as the source_group facet
+--    instead. Design §2b records this as an explicit decision, not an oversight.
 
 -- late-arriving, null at insert, updated by ML asset (design §4a/§4b):
 cast(null as varchar) as category_fk
@@ -149,11 +167,15 @@ interim→data-bus source swap, and (2) `category_fk`/`sentiment_fk` are late-ar
 that need a stable row key to target. We keep the compound-uniqueness test *as well* (§8).
 
 **Output columns** (fact): `feedback_pk`, `feedback_source_fk`, `user_fk`, `courserun_fk`,
-`platform_fk`, `organization_fk`, `category_fk`, `sentiment_fk`, `time_fk`, `date_fk`,
+`content_block_fk`, `platform_fk`, `organization_fk`, `category_fk`, `sentiment_fk`, `time_fk`, `date_fk`,
 `conversation_id` (=`conversation_ref`), `source_record_id` (=`source_record_ref`),
-`source_url`, `feedback_title` (redacted), `feedback_text` (redacted), `feedback_text_chars`,
-`embedding_id` (nullable), `source_status`, `source_priority`, `source_tags`,
-`source_channel`, `csat_score`, `feedback_occurred_at`, `feedback_ingested_at`.
+`source_url`, `subject_type`, `subject_ref`, `subject_url`, `feedback_title` (redacted),
+`feedback_text` (redacted), `feedback_text_chars`, `source_status`, `source_priority`, `source_tags`,
+`source_channel`, `source_brand`, `source_group`, `csat_score`, `feedback_occurred_at`,
+`feedback_ingested_at`.
+
+No `embedding_id`: the ML sidecar joins on `feedback_pk` (design §4d), so the column would add no
+reachability while forcing a write to the fact when embeddings land.
 
 ---
 
@@ -201,8 +223,9 @@ Both are late-arriving updates, so the fact builds and is useful before the ML a
 The scheduled batch asset (pull → redact → embed → cluster → LLM-label → write
 category/sentiment back) is specified separately once the orchestration layout is confirmed.
 The dbt models above are independently buildable and testable *without* the ML asset — the
-ML asset only fills `embedding_id`, `category_fk`, `sentiment_fk`, and the `feedback_embeddings`
-sidecar. This ordering lets the fact ship first.
+ML asset only fills `category_fk` / `sentiment_fk` on the fact and populates the sidecar tables
+(`feedback_embeddings`, `feedback_cluster_run`, `feedback_cluster_assignment`). This ordering lets
+the fact ship first.
 
 ---
 
@@ -212,8 +235,12 @@ Mirror the `tfact_discussion_events` yml style:
 - Per-column `not_null` on: `feedback_pk`, `feedback_source_fk`, `source_record_id`,
   `feedback_occurred_at`, `time_fk`, `date_fk`.
 - `unique` on `feedback_pk`.
-- Nullable (description-only, no not_null): `user_fk`, `courserun_fk`, `platform_fk`,
-  `organization_fk`, `category_fk`, `sentiment_fk`, `embedding_id`.
+- Nullable (description-only, no not_null): `user_fk`, `courserun_fk`, `content_block_fk`,
+  `platform_fk`, `organization_fk`, `category_fk`, `sentiment_fk`, `subject_ref`, `subject_url`,
+  `source_brand`, `source_group`.
+- `accepted_values` on `subject_type` (`courseware_block`, `course_run`, `course`, `program`,
+  `page_url`, `resource`, `unspecified`) — it is the discriminator for the polymorphic subject ref,
+  so an unconstrained value silently breaks every consumer that switches on it.
 - Model-level `dbt_expectations.expect_compound_columns_to_be_unique` on
   `['feedback_source_fk', 'source_record_id']` (belt-and-suspenders alongside the `feedback_pk`
   unique test — matches the precedent's compound-uniqueness convention; both columns exist on the

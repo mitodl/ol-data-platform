@@ -21,7 +21,8 @@ sidecar or the late-arriving `category_fk`/`sentiment_fk` update.
 ```
 int__feedback__unioned (redacted text, feedback_pk)          [dbt]
   → embed        : text → vector, persisted once             [py asset: feedback_embeddings]
-  → cluster      : vectors → cluster_id per cluster_run       [py asset: feedback_embeddings.cluster_id]
+  → cluster      : vectors → cluster_id per cluster_run       [py asset: feedback_cluster_run
+                                                               + feedback_cluster_assignment]
   → label        : cluster centroid/samples → category label  [py asset: dim_feedback_category (proposed)]
   → sentiment    : text/vector → sentiment_slug               [py asset: sentiment_fk]
   → assign       : write category_fk/sentiment_fk back        [dbt incremental or py upsert]
@@ -30,6 +31,22 @@ int__feedback__unioned (redacted text, feedback_pk)          [dbt]
 Each stage is idempotent and keyed by `feedback_pk` + `model_version`/`cluster_run_id`,
 so a re-run never duplicates and never mutates the fact grain. Embedding is computed
 **once per (feedback_pk, model_version)**; only cluster/label/sentiment re-run cheaply.
+
+**The sidecar is three tables, not one** (design §4d; ERD in [`feedback_erd.md`](./feedback_erd.md) §3).
+Vectors are one row per `(feedback_pk, model_version)`; cluster assignments are one row per
+`(feedback_pk, cluster_run_id)`. Collapsing them into a single `feedback_embeddings` table means
+re-clustering against an unchanged model rewrites or duplicates vector rows — which is exactly the
+"re-clustering never touches the durable artifact" property this design exists to buy:
+
+| Table | Grain | Holds |
+|---|---|---|
+| `feedback_embeddings` | `(feedback_pk, model_version)` | `vector` (Iceberg `ARRAY<float>`), `vector_dim`, `text_variant`, `embedded_at` |
+| `feedback_cluster_run` | `(cluster_run_id)` | `model_version`, `algorithm`, `run_params`, `cluster_count`, `noise_count`, `silhouette`, `run_status`, `run_at` |
+| `feedback_cluster_assignment` | `(feedback_pk, cluster_run_id)` | `cluster_id` (`-1` = noise = one-off), `cluster_probability` |
+
+`text_variant` (`raw` \| `llm_normalized`) makes the semantic-normalisation eval arm (§B.1) a *row*
+distinction rather than a separate pipeline — both arms coexist under one `model_version` sweep.
+`dim_feedback_category.cluster_run_id` records which run proposed a category.
 
 ---
 
@@ -144,9 +161,9 @@ cohesion signal that lets a human say "this is recurring."
   separate compiled dep — decide at implementation based on the Dagster image's build
   constraints). All CPU, no service.
 
-**Cluster-quality columns** on `feedback_embeddings` are added *only if the chosen
-algorithm produces them* (RFC step 6): `cluster_id`, `cluster_probability`,
-`cluster_run_id`, `model_version` — silhouette/persistence optional.
+**Cluster-quality columns** are added *only if the chosen algorithm produces them* (RFC step 6):
+`cluster_id` + `cluster_probability` on `feedback_cluster_assignment`; run-level `silhouette`,
+`cluster_count`, `noise_count` on `feedback_cluster_run` (§A) — persistence optional.
 
 ---
 

@@ -8,6 +8,9 @@ Conforms to the existing Kimball layer in `src/ol_dbt/models/dimensional` (`tfac
 `dbt_utils.generate_surrogate_key`, `*_fk` in facts, `time_fk`/`date_fk`). Precedents: `tfact_discussion_events`,
 `tfact_chatbot_events`.
 
+> **Diagrams:** [`feedback_erd.md`](./feedback_erd.md) renders this model (plus the contract, the ML sidecar
+> and the Phase-1 subset) as Mermaid ERDs, and records the schema deltas applied below in §5.
+
 ---
 
 ## 1. Grain
@@ -40,7 +43,8 @@ feedback_source_fk    -> dim_feedback_source.feedback_source_pk
 user_fk               -> dim_user.user_pk            (nullable; anonymous/aggregate sources)
 platform_fk           -> dim_platform.platform_pk    (nullable; non-course sources e.g. Zendesk)
 courserun_fk          -> dim_course_run.courserun_pk  (nullable; only course-scoped sources)
-organization_fk       -> dim_organization.organization_pk (nullable; Zendesk group/org)
+content_block_fk      -> dim_course_content.content_block_pk (nullable; resolves subject_ref, §2a)
+organization_fk       -> dim_organization.organization_pk (nullable; Zendesk group/org — see §2b)
 category_fk           -> dim_feedback_category.feedback_category_pk (late-arriving, §4a)
 sentiment_fk          -> dim_sentiment.sentiment_pk           (late-arriving, §4b)
 time_fk               -> dim_time
@@ -51,17 +55,23 @@ conversation_id       -- thread/ticket id, source-native (roll up utterances →
 source_record_id      -- source PK (zendesk ticket_id, forum post_id, checkpoint id, ora id)
 source_url            -- deep link back to origin (ticket api url, forum page_url)
 
+-- subject: WHAT the feedback is about (§2a) — polymorphic, degenerate
+subject_type          -- courseware_block | course_run | course | program | page_url | resource | unspecified
+subject_ref           -- source-native id of that thing (edX usage key, courserun readable id, decoded URL)
+subject_url           -- canonical/decoded deep link to the subject (nullable)
+
 -- text (REDACTED — see §7; raw text never lands in the fact)
 feedback_title        -- subject / post_title (redacted)
 feedback_text         -- description / post_content / human_message / feedback_text (redacted)
 feedback_text_chars   -- length metric (pre-redaction), for sizing/analytics
-embedding_id          -- FK/handle into the embedding + cluster store (§4c); nullable until scored
 
 -- source-native descriptive attributes (kept for facet filters; NOT conformed)
 source_status         -- zendesk ticket_status / null
 source_priority       -- zendesk ticket_priority / null
 source_tags           -- array<varchar>: zendesk ticket_tags, forum roles, etc. (category SEEDS, §4a)
 source_channel        -- zendesk source_channel / tutor agent / forum component
+source_brand          -- zendesk brand_name (hq#12607) / null
+source_group          -- zendesk group_name (hq#12607) / null
 csat_score            -- zendesk satisfaction_rating_score / tutor rating / null (explicit sentiment)
 
 -- audit
@@ -72,6 +82,36 @@ feedback_ingested_at
 Materialized `table`. Nullable FKs are expected and correct: Zendesk has no courserun; forum/tutor have no
 org; anonymous feedback has no user. The fact tolerates sparse conformance — that is what makes it
 *source-flexible*.
+
+### 2a. Subject — what the feedback is *about*
+
+Added after review feedback on [#2422](https://github.com/mitodl/ol-data-platform/pull/2422#issuecomment-3157271372):
+the model captured *who* said it, *when*, and *in what conversation*, but had no unambiguous slot for what it
+concerns — which is exactly the axis you aggregate on. Known cases: the edX feedback plugin captures the
+courseware block id; some Zendesk tickets carry course metadata; Appzi-originated tickets capture the
+(encoded) URL the user was viewing.
+
+Modelled as a **polymorphic degenerate triple plus one conformed FK**, deliberately *not* a new
+`dim_feedback_subject` — the subject is polymorphic across dimensions that already exist (a block is
+`dim_course_content`, a run is `dim_course_run`, a program is `dim_program`), and a new dim would shadow them.
+
+- `subject_type` / `subject_ref` / `subject_url` — the universal fallback, always populated where known,
+  including for URLs and references that resolve to nothing in the warehouse.
+- Resolve to a conformed FK where one exists. `courserun_fk` already covers the course-run case; the only new
+  conformed join is **`content_block_fk → dim_course_content.content_block_pk`** — the existing SCD for Open
+  edX blocks (courses, chapters, subsections, problems, videos) used by `tfact_problem_events` and
+  `tfact_course_navigation_events`. edX-plugin and ORA feedback therefore joins the courseware star with no
+  new dimensional work.
+- **Appzi URL decoding is the source adapter's job** (`int__feedback__zendesk`), populating
+  `subject_url`/`subject_ref` — not every consumer's query.
+
+### 2b. `organization_fk` is unresolvable for Zendesk under the current key
+
+`dim_organization.organization_pk = generate_surrogate_key(['platform', 'source_id'])`
+(`src/ol_dbt/models/dimensional/dim_organization.sql:38`). Zendesk supplies neither, so `organization_fk`
+stays **null** for Zendesk and the Zendesk organisation/group is carried as the `source_group` facet instead.
+Either that is acceptable, or `dim_organization` needs a Zendesk-aware alternate key — recorded here so it is
+an explicit decision rather than a surprise at build time.
 
 ---
 
@@ -102,6 +142,7 @@ category_label         -- human label (LLM-proposed, human-approved)
 category_parent_slug   -- optional hierarchy (cluster → category → theme)
 category_status        -- proposed | approved | merged | deprecated
 category_source        -- 'llm_discovered' | 'seed' | 'manual'
+cluster_run_id         -- provenance: which cluster run proposed this category (§4d)
 first_seen_at / updated_at
 ```
 Bootstrapped, **not cold-start**: seed from Zendesk `ticket_tags` (2,354 distinct) + `group_name`, then LLM-label
@@ -129,11 +170,28 @@ is_course_scoped       -- bool (whether courserun_fk applies)
 ```
 
 ### 4d. Embedding + cluster store (NOT in the dimensional schema)
-Vectors and cluster assignments live in a **sidecar** table (`feedback_embeddings`) keyed by `embedding_id`,
-not in `tfact_feedback` (facts stay narrow, embeddings churn on re-clustering). It holds: `embedding_id`,
-`feedback_pk`, `vector`, `cluster_id`, `cluster_run_id`, `model_version`. `dim_feedback_category` is the
-*curated* projection of stable clusters; the sidecar is the *mutable* ML working set. This keeps re-clustering
-from rewriting the fact.
+Vectors and cluster assignments live in **sidecar** tables keyed by `feedback_pk`, not in `tfact_feedback`
+(facts stay narrow, embeddings churn on re-clustering). `dim_feedback_category` is the *curated* projection of
+stable clusters; the sidecar is the *mutable* ML working set. This keeps re-clustering from rewriting the fact.
+
+**Three tables, not one** — vectors and cluster assignments have different grains, and collapsing them means
+re-clustering against an unchanged model rewrites or duplicates vector rows, losing the very property this
+sidecar exists to buy:
+
+```
+feedback_embeddings          -- grain (feedback_pk, model_version)
+    vector (Iceberg ARRAY<float>), vector_dim, text_variant, embedded_at
+
+feedback_cluster_run         -- grain (cluster_run_id) — one row per clustering run
+    model_version, algorithm, run_params, cluster_count, noise_count, silhouette,
+    run_status ('candidate'|'approved'), run_at
+
+feedback_cluster_assignment  -- grain (feedback_pk, cluster_run_id)
+    cluster_id (-1 = noise = one-off), cluster_probability
+```
+
+Consequence: the fact carries **no `embedding_id`**. The sidecar joins on `feedback_pk`, so an
+`embedding_id` column would add no reachability while forcing a write to the fact when embeddings land.
 
 ---
 
