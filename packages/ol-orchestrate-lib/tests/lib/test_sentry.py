@@ -38,7 +38,7 @@ def recorded_events(monkeypatch: pytest.MonkeyPatch) -> RecordingTransport:
     transport = RecordingTransport()
     # init_sentry short-circuits once it has run, and pytest shares a process
     # across tests, so reset the guard to get a real init here.
-    monkeypatch.setattr(sentry_lib, "_initialized", False)
+    monkeypatch.setattr(sentry_lib, "_initialized_location", None)
     monkeypatch.setenv("SENTRY_DSN", "https://key@example.ingest.sentry.io/1")
     monkeypatch.setenv("SENTRY_RELEASE", "test-release")
     sentry_sdk.init(
@@ -89,18 +89,41 @@ def test_with_sentry_hooks_preserves_order_of_mixed_input() -> None:
 
 def test_init_sentry_without_dsn_is_a_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     """Local dagster dev and test collection run with no DSN set."""
-    monkeypatch.setattr(sentry_lib, "_initialized", False)
+    monkeypatch.setattr(sentry_lib, "_initialized_location", None)
     monkeypatch.delenv("SENTRY_DSN", raising=False)
 
     assert sentry_lib.init_sentry("some_location") is False
 
 
 def test_init_sentry_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sentry_lib, "_initialized", False)
+    monkeypatch.setattr(sentry_lib, "_initialized_location", None)
     monkeypatch.setenv("SENTRY_DSN", "https://key@example.ingest.sentry.io/1")
 
     assert sentry_lib.init_sentry("some_location") is True
     assert sentry_lib.init_sentry("some_location") is True
+
+
+def test_init_sentry_retags_when_a_different_location_initializes(
+    monkeypatch: pytest.MonkeyPatch,
+    recorded_events: RecordingTransport,
+) -> None:
+    """Importing two code locations into one process must not mis-tag events.
+
+    Each location gets its own process in the deployment, so this only arises
+    locally and in tests -- but silently keeping the first location's name was
+    misleading in exactly those places.
+    """
+    # The fixture has already built a client around the recording transport.
+    # Pretend the process was initialized for first_location so init_sentry
+    # takes the re-tag path rather than rebuilding that client away.
+    monkeypatch.setattr(sentry_lib, "_initialized_location", "first_location")
+
+    assert sentry_lib.init_sentry("second_location") is True
+
+    sentry_sdk.capture_message("something broke")
+
+    event = recorded_events.events()[-1]
+    assert event["tags"]["dagster_code_location"] == "second_location"
 
 
 # ── capture_exception_to_sentry ───────────────────────────────────────────────

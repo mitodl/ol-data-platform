@@ -31,7 +31,10 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 # the event we just captured can die with the process.
 SENTRY_FLUSH_TIMEOUT_SECONDS = 5.0
 
-_initialized = False
+# The code location this process has been initialized for, or None. Tracks the
+# name rather than a bare bool so a second call naming a *different* location
+# still re-tags -- see init_sentry.
+_initialized_location: str | None = None
 
 
 def init_sentry(code_location: str) -> bool:
@@ -40,30 +43,43 @@ def init_sentry(code_location: str) -> bool:
     Returns True when Sentry was configured, False when it was skipped because
     no DSN is set. An unset DSN is the normal case for local ``dagster dev``
     and for test collection, so it is a no-op rather than an error.
+
+    Repeat calls naming the same location are a no-op. A call naming a
+    different one re-tags without re-initializing the client, so the tag names
+    whichever location was loaded most recently. In this deployment every code
+    location gets its own container and its own process, so that case only
+    arises locally or in tests; note that a single process genuinely emitting
+    from two locations at once would need the tag set per-event instead.
     """
-    global _initialized  # noqa: PLW0603
+    global _initialized_location  # noqa: PLW0603
 
     dsn = os.environ.get("SENTRY_DSN")
-    if not dsn or _initialized:
-        return _initialized
+    if not dsn:
+        return False
 
-    sentry_sdk.init(
-        dsn=dsn,
-        environment=DAGSTER_ENV,
-        release=os.environ.get("SENTRY_RELEASE"),
-        # Log records become breadcrumbs but never events. Every event this
-        # deployment sends comes from an explicit capture below or from the
-        # run failure sensor, so a step failure is reported once rather than
-        # once per logger that happens to shout about it.
-        integrations=[LoggingIntegration(level=logging.INFO, event_level=None)],
-    )
-    # Dagster logs the full failure of every step through its own logger. Left
-    # alone it floods the breadcrumb trail with the same traceback we are
-    # already attaching to the event.
-    ignore_logger("dagster")
+    if _initialized_location is None:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=DAGSTER_ENV,
+            release=os.environ.get("SENTRY_RELEASE"),
+            # Log records become breadcrumbs but never events. Every event this
+            # deployment sends comes from an explicit capture below or from the
+            # run failure sensor, so a step failure is reported once rather
+            # than once per logger that happens to shout about it.
+            integrations=[LoggingIntegration(level=logging.INFO, event_level=None)],
+        )
+        # Dagster logs the full failure of every step through its own logger.
+        # Left alone it floods the breadcrumb trail with the same traceback we
+        # are already attaching to the event.
+        ignore_logger("dagster")
+    elif _initialized_location == code_location:
+        return True
 
+    # Deliberately not re-running sentry_sdk.init() on a location change:
+    # rebuilding the client would drop anything its transport still has
+    # buffered.
     sentry_sdk.set_tag("dagster_code_location", code_location)
-    _initialized = True
+    _initialized_location = code_location
     return True
 
 
