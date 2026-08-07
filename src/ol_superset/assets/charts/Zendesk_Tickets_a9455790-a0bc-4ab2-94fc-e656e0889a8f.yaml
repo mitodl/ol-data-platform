@@ -55,7 +55,7 @@ params:
   - '["ticket_created_at", false]'
   percent_metrics: []
   query_mode: raw
-  row_limit: 100000
+  row_limit: 50000
   server_pagination: false
   show_cell_bars: true
   table_timestamp_format: smart_date
