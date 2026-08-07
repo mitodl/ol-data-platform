@@ -40,8 +40,8 @@ class OAuthApiClient(ConfigurableResource):
     _access_token_expires: datetime | None = PrivateAttr(default=None)
     _cached_username: str | None = PrivateAttr(default=None)
     _http_client: httpx.Client | None = PrivateAttr(default=None)
-    # This client is shared across worker threads (course_version_sensor fans
-    # outline fetches out over a pool), so the lazily-populated caches below
+    # This client is shared across worker threads (the openedx/courseware
+    # observation fans outline fetches out over a pool), so the caches below
     # need guarding: an unsynchronized check-then-set lets every thread observe
     # a cold cache at once and issue its own token or /me request.
     _token_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
@@ -139,9 +139,9 @@ class OAuthApiClient(ConfigurableResource):
             response.raise_for_status()
         except httpx.HTTPStatusError as error_response:
             # Bounded on purpose. Retrying forever means a caller can never be
-            # sure this returns, and callers that abandon their threads --
-            # course_version_sensor shuts its pool down with wait=False -- would
-            # then accumulate a fresh set of immortal workers every tick under a
+            # sure this returns. The openedx/courseware observation waits on
+            # its whole worker pool, so one thread parked in an unbounded
+            # backoff would hang the observation run indefinitely under a
             # sustained rate limit.
             if (
                 error_response.response.status_code == TOO_MANY_REQUESTS

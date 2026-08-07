@@ -84,10 +84,10 @@ def test_username_is_fetched_once(client: OAuthApiClient) -> None:
 def test_username_is_fetched_once_under_concurrent_first_access() -> None:
     """A cold client hit from many threads must still make one /me request.
 
-    course_version_sensor fans outline fetches over a worker pool, and each of
-    those calls fetch_with_auth, which reads this property. An unsynchronized
-    check-then-set lets every worker observe the cold cache at once and issue
-    its own lookup -- an authentication burst on the first tick of every fresh
+    The openedx/courseware observation fans outline fetches over a worker pool,
+    and each of those calls fetch_with_auth, which reads this property. An
+    unsynchronized check-then-set lets every worker observe the cold cache at
+    once and issue its own lookup -- an authentication burst on every fresh
     resource instance, which is exactly what the cache exists to prevent.
     """
     workers = 8
@@ -110,9 +110,9 @@ def test_username_is_fetched_once_under_concurrent_first_access() -> None:
 def test_rate_limit_retries_are_bounded() -> None:
     """429 retries stop, so a caller is guaranteed a return or an exception.
 
-    Retrying forever means a worker thread can outlive the tick that spawned
-    it; course_version_sensor abandons its pool with wait=False, so under a
-    sustained rate limit every tick would leak another set of immortal threads.
+    The openedx/courseware observation waits on its whole worker pool, so a
+    thread parked in an unbounded 429 backoff would hang the observation run
+    for as long as the rate limit lasted.
     """
     client = _build_client()
     throttling = _ThrottlingClient()
