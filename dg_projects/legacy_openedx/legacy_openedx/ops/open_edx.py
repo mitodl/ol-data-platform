@@ -690,7 +690,10 @@ def export_single_edx_course(  # noqa: C901, PLR0911
         if state == "Succeeded":
             context.log.info("Export succeeded for course %s", course_id)
             return course_id
-        if state in {"Failed", "Canceled", "Retrying"}:
+        # "Retrying" is deliberately absent: Studio uses it for a task it is
+        # about to attempt again, so treating it as terminal abandoned exports
+        # that were still in progress.
+        if state in {"Failed", "Canceled"}:
             context.log.warning(
                 "Export reached terminal failure state '%s' for course %s",
                 state,

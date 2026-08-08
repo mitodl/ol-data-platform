@@ -297,6 +297,9 @@ def course_xml(context: AssetExecutionContext):
         )
         successful_exports: set[str] = set()
         failed_exports: set[str] = set()
+        # Keyed by course id, so a failure or a timeout can say what Studio
+        # last reported instead of just that something went wrong.
+        last_seen_status: dict[str, str] = {}
         tasks = exported_courses["upload_task_ids"]
         start_time = datetime.now(tz=UTC)
         while len(successful_exports.union(failed_exports)) < len(tasks):
@@ -304,7 +307,11 @@ def course_xml(context: AssetExecutionContext):
                 datetime.now(tz=UTC) - start_time
                 > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
             ):
-                err_msg = f"Course export timed out for {course_key}"
+                err_msg = (
+                    f"Course export timed out for {course_key} after "
+                    f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}. Last status "
+                    f"reported by Studio: {last_seen_status or 'none'}"
+                )
                 raise TimeoutError(err_msg)
             time.sleep(timedelta(seconds=20).seconds)
             for course_id, task_id in tasks.items():
@@ -316,9 +323,17 @@ def course_xml(context: AssetExecutionContext):
                 )
                 state = task_status.get("state")
                 details = task_status.get("details")
+                last_seen_status[course_id] = (
+                    f"{state}{f' ({details})' if details else ''}"
+                )
                 if state == "Succeeded":
                     successful_exports.add(course_id)
-                elif state in {"Failed", "Canceled", "Retrying"}:
+                elif state in {"Failed", "Canceled"}:
+                    # "Retrying" is deliberately not terminal. Studio uses it
+                    # for a task it is about to attempt again, so counting it
+                    # as a failure ended this loop early and reported a course
+                    # as unexportable while its export was still in progress.
+                    # A task that retries forever is caught by the timeout.
                     failed_exports.add(course_id)
                 elif details:
                     context.log.info(
@@ -328,7 +343,14 @@ def course_xml(context: AssetExecutionContext):
                         details,
                     )
         if failed_exports:
-            errmsg = f"Unable to export the course XML for {course_key}"
+            reported = {
+                course: last_seen_status.get(course)
+                for course in sorted(failed_exports)
+            }
+            errmsg = (
+                f"Unable to export the course XML for {course_key}. "
+                f"Studio reported: {reported}"
+            )
             raise Exception(errmsg)  # noqa: TRY002
         s3_location = exported_courses["upload_urls"][course_key]
         context.log.debug("Attempting to download the course XML from %s", s3_location)

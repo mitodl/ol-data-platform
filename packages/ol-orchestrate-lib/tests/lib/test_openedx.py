@@ -9,7 +9,9 @@ import pytest
 from ol_orchestrate.lib.openedx import (
     CourseStaticAssetsBundle,
     CourseXmlBlock,
+    generate_block_indexes,
     process_course_xml_blocks,
+    un_nest_course_structure,
 )
 
 
@@ -380,3 +382,67 @@ def test_process_course_xml_blocks_structural_dirs_excluded():
     assert "chapter" in block_types, "Real block types should still be included"
 
     temp_dir.cleanup()
+
+
+def _block(category: str, children: list[str], display_name: str = "Block"):
+    return {
+        "category": category,
+        "children": children,
+        "metadata": {"display_name": display_name, "start": "2026-01-01T00:00:00Z"},
+    }
+
+
+def test_generate_block_indexes_walks_depth_first():
+    """Blocks are numbered in the order a learner encounters them."""
+    structure = {
+        "course": _block("course", ["chapter_1", "chapter_2"]),
+        "chapter_1": _block("chapter", ["seq_1"]),
+        "seq_1": _block("sequential", []),
+        "chapter_2": _block("chapter", []),
+    }
+
+    indexes = generate_block_indexes(structure, "course")
+
+    assert list(indexes) == ["course", "chapter_1", "seq_1", "chapter_2"]
+    assert indexes["course"] == 1
+    assert indexes["chapter_2"] == 4
+
+
+def test_generate_block_indexes_skips_children_absent_from_the_structure():
+    """A child named by its parent but missing from the document is skipped.
+
+    Courses that source content from a library do this: the parent lists the
+    block, but the block itself is not in the course structure document.
+    Indexing it by key raised
+    ``KeyError: 'block-v1:...+type@sequential+block@...'`` and failed the
+    whole course_structure asset for that course.
+    """
+    structure = {
+        "course": _block("course", ["chapter_1"]),
+        "chapter_1": _block("chapter", ["library_block", "seq_1"]),
+        "seq_1": _block("sequential", []),
+    }
+
+    indexes = generate_block_indexes(structure, "course")
+
+    assert "library_block" not in indexes
+    assert list(indexes) == ["course", "chapter_1", "seq_1"]
+    # The sequence stays contiguous over the blocks that actually exist.
+    assert list(indexes.values()) == [1, 2, 3]
+
+
+def test_generate_block_indexes_tolerates_a_missing_root():
+    """No block with category 'course' leaves root_block as an empty string."""
+    assert generate_block_indexes({"chapter_1": _block("chapter", [])}, "") == {}
+
+
+def test_un_nest_course_structure_survives_a_library_reference():
+    """The full un-nest path completes for a course with a library block."""
+    structure = {
+        "course": _block("course", ["chapter_1"], display_name="A Course"),
+        "chapter_1": _block("chapter", ["library_block"]),
+    }
+
+    blocks = un_nest_course_structure("course-v1:Org+Num+Run", structure, None)
+
+    assert {block["block_id"] for block in blocks} == {"course", "chapter_1"}

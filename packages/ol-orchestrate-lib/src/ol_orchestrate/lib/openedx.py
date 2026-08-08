@@ -26,12 +26,21 @@ def generate_block_indexes(
     previous_block_id = root_block_id
     while block_stack:
         block_id = block_stack.pop()
+        block_contents = course_structure.get(block_id)
+        if block_contents is None:
+            # A block can be listed as a child without appearing in the
+            # structure document itself. Courses that pull content from a
+            # library do this -- the parent sequential names the block, but
+            # the block lives in the library rather than the course. Skipped
+            # rather than indexed, since a block that will never appear in
+            # the output would otherwise leave a gap in the sequence.
+            continue
         block_index[block_id] = block_index.get(previous_block_id, 0) + 1
         previous_block_id = block_id
         # Add new blocks to the end of the list, ensure that the traversal is done in
         # order of definition by reversing, since we're pulling from the end of the list
         # for each iteration.
-        block_stack.extend(reversed(course_structure[block_id]["children"]))
+        block_stack.extend(reversed(block_contents["children"]))
     return block_index
 
 
