@@ -46,7 +46,7 @@ class OpenEdxApiClient(OAuthApiClient):
             response_data = self.fetch_with_auth(
                 request_url,
                 page_size=page_size,
-                extra_params=parse_qs(urlparse(next_page).query),
+                extra_params=parse_qs(urlparse(str(next_page)).query),
             )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
@@ -143,7 +143,7 @@ class OpenEdxApiClient(OAuthApiClient):
         yield count, results
         while next_page:
             response_data = self.fetch_with_auth(
-                request_url, extra_params=parse_qs(next_page)
+                request_url, extra_params=parse_qs(urlparse(str(next_page)).query)
             )
             next_page = response_data["next"]
             yield response_data["results"]
@@ -163,7 +163,8 @@ class OpenEdxApiClient(OAuthApiClient):
         yield count, results
         while next_page:
             response_data = self.fetch_with_auth(
-                course_catalog_url, extra_params=parse_qs(next_page)
+                course_catalog_url,
+                extra_params=parse_qs(urlparse(str(next_page)).query),
             )
             next_page = response_data["next"]
             yield response_data["results"]
