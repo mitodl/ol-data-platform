@@ -10,7 +10,7 @@
 # Usage with Helm chart:
 #   Set dagsterDaemon.image.repository and dagsterDaemon.image.tag in values.yaml
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 # Install uv for faster Python dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
