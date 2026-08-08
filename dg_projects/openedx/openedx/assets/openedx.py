@@ -34,6 +34,7 @@ from dagster import (
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
     process_course_xml_blocks,
@@ -617,9 +618,14 @@ def openedx_course_content_webhook(
         )
 
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"Learn API webhook notification failed for course_id={course_id} "
-            f"with status code {error.response.status_code} and error: {error!s}"
+        context.log.exception(
+            "Learn API webhook notification failed for course_id=%s with status "
+            "code %s",
+            course_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise Exception(error_message) from error  # noqa: TRY002
+        raise http_failure(
+            error,
+            f"Learn API webhook notification failed for course_id={course_id}",
+            metadata={"course_id": course_id, "source": source},
+        ) from error

@@ -19,6 +19,7 @@ from ol_orchestrate.lib.constants import (
     EXPORT_TYPE_COMMON_CARTRIDGE,
     EXPORT_TYPE_EXTENSIONS,
 )
+from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.utils import compute_zip_content_hash
 
 canvas_course_ids = DynamicPartitionsDefinition(name="canvas_course_ids")
@@ -87,10 +88,22 @@ def export_course_content(context: AssetExecutionContext):
     export_type = EXPORT_TYPE_COMMON_CARTRIDGE
     extension = EXPORT_TYPE_EXTENSIONS[export_type]
 
-    course = context.resources.canvas_api.client.get_course(course_id)
-    export_course_response = context.resources.canvas_api.client.export_course_content(
-        course_id, export_type
-    )
+    try:
+        course = context.resources.canvas_api.client.get_course(course_id)
+        export_course_response = (
+            context.resources.canvas_api.client.export_course_content(
+                course_id, export_type
+            )
+        )
+    except httpx.HTTPStatusError as error:
+        # A 404 here is a partition for a course that has been deleted or is
+        # no longer visible to the service account. Nothing to export, and no
+        # number of reruns brings it back -- the partition needs removing.
+        raise http_failure(
+            error,
+            f"Unable to start a Canvas content export for course {course_id}",
+            metadata={"course_id": course_id},
+        ) from error
     context.log.info(
         "Initiated export of course ID %s: %s", course_id, export_course_response
     )
@@ -258,9 +271,14 @@ def course_content_metadata(
         )
 
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"Learn API webhook notification failed for course_id={course_id} "
-            f"with status code {error.response.status_code} and error: {error!s}"
+        context.log.exception(
+            "Learn API webhook notification failed for course_id=%s with status "
+            "code %s",
+            course_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise Exception(error_message) from error  # noqa: TRY002
+        raise http_failure(
+            error,
+            f"Learn API webhook notification failed for course_id={course_id}",
+            metadata={"course_id": course_id},
+        ) from error
