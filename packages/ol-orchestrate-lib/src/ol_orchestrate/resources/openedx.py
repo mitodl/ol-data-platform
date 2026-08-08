@@ -2,7 +2,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Self
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from httpx2 import HTTPStatusError
@@ -36,8 +36,17 @@ class OpenEdxApiClient(OAuthApiClient):
         next_page = response_data["pagination"].get("next")
         yield course_data
         while next_page:
+            # `next` is an absolute URL. Only its query string is wanted here:
+            # parse_qs on the whole URL yields a single entry whose *key* is
+            # everything up to the first '=' -- i.e. the entire URL -- so the
+            # real `page` parameter was never sent, every request refetched
+            # page 1, and each round trip appended another copy of the URL to
+            # the query string until it was long enough to trip the rate
+            # limiter.
             response_data = self.fetch_with_auth(
-                request_url, page_size=page_size, extra_params=parse_qs(next_page)
+                request_url,
+                page_size=page_size,
+                extra_params=parse_qs(urlparse(next_page).query),
             )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]

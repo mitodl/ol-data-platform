@@ -147,7 +147,11 @@ class OAuthApiClient(ConfigurableResource):
                 error_response.response.status_code == TOO_MANY_REQUESTS
                 and rate_limit_retries > 0
             ):
-                retry_after = error_response.response.headers.get("Retry-After", 60)
+                # Default as a string: the header value is one when present,
+                # and an int default made the `.isdigit()` below raise
+                # AttributeError on exactly the case this branch exists to
+                # handle -- a 429 whose response omits Retry-After.
+                retry_after = error_response.response.headers.get("Retry-After", "60")
                 delay = int(retry_after) if retry_after.isdigit() else 60
                 time.sleep(delay)
                 return self.fetch_with_auth(
