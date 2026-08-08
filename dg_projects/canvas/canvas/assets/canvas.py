@@ -99,6 +99,11 @@ def export_course_content(context: AssetExecutionContext):
         # A 404 here is a partition for a course that has been deleted or is
         # no longer visible to the service account. Nothing to export, and no
         # number of reruns brings it back -- the partition needs removing.
+        context.log.exception(
+            "Unable to start a Canvas content export for course %s with status code %s",
+            course_id,
+            error.response.status_code,
+        )
         raise http_failure(
             error,
             f"Unable to start a Canvas content export for course {course_id}",
