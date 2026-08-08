@@ -7,8 +7,10 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from ol_orchestrate.lib.openedx import (
+    CourseExportOutcome,
     CourseStaticAssetsBundle,
     CourseXmlBlock,
+    classify_course_export_state,
     generate_block_indexes,
     process_course_xml_blocks,
     un_nest_course_structure,
@@ -382,6 +384,57 @@ def test_process_course_xml_blocks_structural_dirs_excluded():
     assert "chapter" in block_types, "Real block types should still be included"
 
     temp_dir.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ("Succeeded", CourseExportOutcome.SUCCEEDED),
+        ("Failed", CourseExportOutcome.FAILED),
+        ("Canceled", CourseExportOutcome.FAILED),
+        # The regression: Studio uses Retrying for a task it is about to
+        # attempt again, and both poll loops used to count it as terminal.
+        ("Retrying", CourseExportOutcome.PENDING),
+        ("In Progress", CourseExportOutcome.PENDING),
+        ("Pending", CourseExportOutcome.PENDING),
+        # An undocumented or absent state keeps the caller waiting rather
+        # than inventing a verdict; the poll loop's timeout bounds it.
+        ("Something New", CourseExportOutcome.PENDING),
+        (None, CourseExportOutcome.PENDING),
+    ],
+)
+def test_classify_course_export_state(
+    state: str | None, expected: CourseExportOutcome
+) -> None:
+    """Retrying must not be terminal; unknown states must not be either."""
+    assert classify_course_export_state(state) == expected
+
+
+def test_retrying_then_succeeded_completes_the_export() -> None:
+    """A task that retries and then succeeds must finish, not fail.
+
+    This is the production sequence that broke: the first Retrying poll
+    marked the course failed, satisfied the loop's completion condition and
+    raised "Unable to export the course XML" while Studio was still working.
+    Driving the accumulate logic over the sequence shows the loop now runs to
+    the Succeeded state.
+    """
+    succeeded: set[str] = set()
+    failed: set[str] = set()
+    course_id = "course-v1:MITxT+MITx+0T2026"
+
+    for state in ("In Progress", "Retrying", "Retrying", "Succeeded"):
+        outcome = classify_course_export_state(state)
+        if outcome is CourseExportOutcome.SUCCEEDED:
+            succeeded.add(course_id)
+        elif outcome is CourseExportOutcome.FAILED:
+            failed.add(course_id)
+        # The loop keeps polling while neither set has the course in it.
+        if succeeded or failed:
+            break
+
+    assert succeeded == {course_id}
+    assert failed == set()
 
 
 def _block(category: str, children: list[str], display_name: str = "Block"):

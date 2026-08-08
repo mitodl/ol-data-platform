@@ -35,6 +35,8 @@ from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
+    CourseExportOutcome,
+    classify_course_export_state,
     process_course_xml,
     process_course_xml_blocks,
     process_video_xml,
@@ -326,14 +328,10 @@ def course_xml(context: AssetExecutionContext):
                 last_seen_status[course_id] = (
                     f"{state}{f' ({details})' if details else ''}"
                 )
-                if state == "Succeeded":
+                outcome = classify_course_export_state(state)
+                if outcome is CourseExportOutcome.SUCCEEDED:
                     successful_exports.add(course_id)
-                elif state in {"Failed", "Canceled"}:
-                    # "Retrying" is deliberately not terminal. Studio uses it
-                    # for a task it is about to attempt again, so counting it
-                    # as a failure ended this loop early and reported a course
-                    # as unexportable while its export was still in progress.
-                    # A task that retries forever is caught by the timeout.
+                elif outcome is CourseExportOutcome.FAILED:
                     failed_exports.add(course_id)
                 elif details:
                     context.log.info(

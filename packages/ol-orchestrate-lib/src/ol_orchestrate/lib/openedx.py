@@ -5,12 +5,48 @@ import logging
 import mimetypes
 import tarfile
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, Any
 from xml.etree.ElementTree import ElementTree, tostring
 
 from pydantic import BaseModel, Field
+
+
+class CourseExportOutcome(StrEnum):
+    """What a Studio course-export task state means for a polling caller."""
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    PENDING = "pending"
+
+
+# Studio's terminal states. "Retrying" is deliberately not among them: Studio
+# uses it for a task it is about to attempt again, and both callers used to
+# count it as a failure, which ended their poll loop early and reported a
+# course as unexportable while its export was still running.
+COURSE_EXPORT_SUCCEEDED_STATE = "Succeeded"
+COURSE_EXPORT_FAILED_STATES = frozenset({"Failed", "Canceled"})
+
+
+def classify_course_export_state(state: str | None) -> CourseExportOutcome:
+    """Map a Studio export task state onto keep-polling / done / failed.
+
+    Extracted from the poll loops in the ``openedx`` and ``legacy_openedx``
+    code locations so the classification -- the part that was actually wrong,
+    and the part worth pinning -- can be tested without standing up the Studio
+    task API.
+
+    An unrecognised or absent state counts as PENDING: the loop keeps waiting
+    and its timeout provides the bound, which is safer than inventing a
+    verdict for a state Studio has not documented to us.
+    """
+    if state == COURSE_EXPORT_SUCCEEDED_STATE:
+        return CourseExportOutcome.SUCCEEDED
+    if state in COURSE_EXPORT_FAILED_STATES:
+        return CourseExportOutcome.FAILED
+    return CourseExportOutcome.PENDING
 
 
 def generate_block_indexes(
