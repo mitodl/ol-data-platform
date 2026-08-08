@@ -5,6 +5,7 @@ from dagster import (
     ConfigurableIOManager,
     DagsterEventType,
     EventRecordsFilter,
+    Failure,
     InputContext,
     MetadataValue,
     OutputContext,
@@ -17,6 +18,12 @@ from upath import UPath
 
 from ol_orchestrate.resources.secrets.vault import Vault
 
+# How far back through an asset partition's materialization history to look for
+# an event that records a `path`. Only guards against a handful of malformed
+# events at the head of the history -- if the most recent dozen all lack a
+# location there is a real problem to surface, not to paper over.
+MATERIALIZATION_LOOKBACK = 10
+
 
 class FileObjectIOManager(ConfigurableIOManager):
     path_prefix: str | None = None
@@ -28,20 +35,84 @@ class FileObjectIOManager(ConfigurableIOManager):
     _s3_fs: S3FileSystem = PrivateAttr(default=None)
 
     def load_input(self, context: InputContext) -> UPath:
-        asset_dep = context.instance.get_event_records(
+        """Resolve an upstream asset partition to the object it was written to.
+
+        The location is read back out of the upstream materialization event
+        rather than recomputed, so this is only ever as trustworthy as the
+        event log. Three things can go wrong, and all three used to surface as
+        an opaque ``KeyError``/``IndexError`` inside the io manager or as a
+        ``NoSuchKey`` from fsspec several frames later:
+
+        * the partition has never been materialized,
+        * the newest materialization carries no ``path`` metadata,
+        * the recorded object is no longer in the bucket.
+
+        None of those are fixable by running the step again, so each raises a
+        ``Failure`` naming the asset, the partition and the path, with retries
+        disabled. Retrying a missing S3 key just multiplies the alert.
+        """
+        asset_label = context.asset_key.to_user_string()
+        records = context.instance.get_event_records(
             event_records_filter=EventRecordsFilter(
                 asset_key=context.asset_key,
                 event_type=DagsterEventType.ASSET_MATERIALIZATION,
                 asset_partitions=[context.partition_key],
             ),
-            limit=1,
-        )[0]
+            limit=MATERIALIZATION_LOOKBACK,
+        )
+        if not records:
+            raise Failure(
+                description=(
+                    f"No materialization of {asset_label} partition "
+                    f"{context.partition_key!r} has been recorded, so there is "
+                    "no location to load from. Materialize the upstream asset "
+                    "for this partition first."
+                ),
+                allow_retries=False,
+            )
 
-        asset_path = UPath(asset_dep.asset_materialization.metadata["path"].value)
-        return UPath(
+        # Newest first. Deliberately does not fall back to an older event when
+        # the newest one points at a missing object: these paths are content
+        # hashed, so an earlier event is an earlier *version* of the data, and
+        # silently loading it would trade a loud failure for stale results.
+        # Only events with no location at all get skipped over.
+        path_metadata = next(
+            (
+                metadata
+                for record in records
+                if (metadata := record.asset_materialization.metadata.get("path"))
+                is not None
+            ),
+            None,
+        )
+        if path_metadata is None:
+            raise Failure(
+                description=(
+                    f"None of the last {len(records)} materializations of "
+                    f"{asset_label} partition {context.partition_key!r} recorded "
+                    "a 'path'. The upstream asset emitted materialization events "
+                    "without a location, so there is nothing to load."
+                ),
+                allow_retries=False,
+            )
+
+        asset_path = UPath(path_metadata.value)
+        resolved_path = UPath(
             asset_path,
             **self.configure_path_fs(asset_path.protocol).storage_options,
         )
+        if not resolved_path.exists():
+            raise Failure(
+                description=(
+                    f"{asset_label} partition {context.partition_key!r} points at "
+                    f"{asset_path}, which does not exist. The materialization "
+                    "event outlived the object it describes -- re-materialize the "
+                    "upstream asset to write it again."
+                ),
+                metadata={"path": MetadataValue.path(str(asset_path))},
+                allow_retries=False,
+            )
+        return resolved_path
 
     def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> None:
         context.log.info("Writing contents of %s to %s", *obj)
