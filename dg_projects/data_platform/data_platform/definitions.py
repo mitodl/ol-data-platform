@@ -123,7 +123,12 @@ def will_be_retried(run: DagsterRun, instance: Any) -> bool:
 # Dagster wraps anything raised by user code in one of these before putting it
 # on the step failure event, so the serialized error's cls_name is the wrapper
 # rather than the exception the in-process hook saw. Sourced from the concrete
-# subclasses of DagsterUserCodeExecutionError.
+# subclasses of DagsterUserCodeExecutionError, plus RetryRequestedFromPolicy,
+# which is not one of those but wraps the same way: an op with a RetryPolicy
+# that exhausts its attempts serializes as
+# ``RetryRequestedFromPolicy -> <the user's exception>`` while the hook still
+# reports the user's exception. Several learning_resources assets carry a
+# RetryPolicy, so this is a live path, not a hypothetical one.
 DAGSTER_USER_CODE_WRAPPERS = frozenset(
     {
         "DagsterConfigMappingFunctionError",
@@ -135,6 +140,7 @@ DAGSTER_USER_CODE_WRAPPERS = frozenset(
         "DagsterTypeLoadingError",
         "DagsterUserCodeExecutionError",
         "DagsterUserCodeLoadError",
+        "RetryRequestedFromPolicy",
     }
 )
 
