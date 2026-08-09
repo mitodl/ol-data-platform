@@ -83,8 +83,11 @@ def test_load_input_skips_materializations_without_a_path(tmp_path: Path) -> Non
 def test_load_input_fails_without_retries_when_object_is_gone(tmp_path: Path) -> None:
     """A path recorded for an object that no longer exists is terminal.
 
-    Retrying cannot conjure the key back, so retries are disabled rather than
-    letting run_retries multiply one dead partition into four alerts.
+    Retrying cannot conjure the key back, so the Failure is marked
+    non-retryable and names the path that is missing. Note that
+    ``allow_retries`` only governs an op/asset ``RetryPolicy`` -- the
+    run-level auto-reexecution daemon ignores it -- so this asserts the
+    property, not that the run is spared a re-run.
     """
     missing = tmp_path / "expired.xml.tar.gz"
 

@@ -48,8 +48,18 @@ class FileObjectIOManager(ConfigurableIOManager):
         * the recorded object is no longer in the bucket.
 
         None of those are fixable by running the step again, so each raises a
-        ``Failure`` naming the asset, the partition and the path, with retries
-        disabled. Retrying a missing S3 key just multiplies the alert.
+        ``Failure`` naming the asset, the partition and the path -- which is
+        the actual win here, since the previous errors named none of them.
+
+        ``allow_retries=False`` is set for correctness but does less than it
+        sounds like: Dagster only consults it when the op or asset carries a
+        ``RetryPolicy`` (see
+        ``dagster._core.execution.plan.utils.op_execution_error_boundary``).
+        The run-level auto-reexecution daemon decides from run status and the
+        ``dagster/max_retries`` / ``dagster/retry_on_asset_or_op_failure``
+        tags and never looks at it, so these failures are still re-run by
+        ``run_retries``. Suppressing that would mean a run-tag or instance
+        level change, which is deliberately out of scope here.
         """
         asset_label = context.asset_key.to_user_string()
         records = context.instance.get_event_records(
