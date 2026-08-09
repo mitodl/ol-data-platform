@@ -120,6 +120,57 @@ def will_be_retried(run: DagsterRun, instance: Any) -> bool:
     return retry_number < max_retries
 
 
+# Dagster wraps anything raised by user code in one of these before putting it
+# on the step failure event, so the serialized error's cls_name is the wrapper
+# rather than the exception the in-process hook saw. Sourced from the concrete
+# subclasses of DagsterUserCodeExecutionError, plus RetryRequestedFromPolicy,
+# which is not one of those but wraps the same way: an op with a RetryPolicy
+# that exhausts its attempts serializes as
+# ``RetryRequestedFromPolicy -> <the user's exception>`` while the hook still
+# reports the user's exception. Several learning_resources assets carry a
+# RetryPolicy, so this is a live path, not a hypothetical one.
+DAGSTER_USER_CODE_WRAPPERS = frozenset(
+    {
+        "DagsterConfigMappingFunctionError",
+        "DagsterExecutionHandleOutputError",
+        "DagsterExecutionLoadInputError",
+        "DagsterExecutionStepExecutionError",
+        "DagsterResourceFunctionError",
+        "DagsterTypeCheckError",
+        "DagsterTypeLoadingError",
+        "DagsterUserCodeExecutionError",
+        "DagsterUserCodeLoadError",
+        "RetryRequestedFromPolicy",
+    }
+)
+
+# The wrapping is one level deep in practice. The bound only stops a malformed
+# or self-referential cause chain from spinning.
+MAX_ERROR_CAUSE_DEPTH = 5
+
+
+def user_code_error_type(error: Any) -> str:
+    """Name the exception the user's code raised, not Dagster's wrapper.
+
+    A step that raises FileNotFoundError serializes as
+
+        cls_name = "DagsterExecutionStepExecutionError"
+        cause.cls_name = "FileNotFoundError"
+
+    while the in-process hook records ``type(exception).__name__`` -- the
+    FileNotFoundError. Fingerprinting on the un-unwrapped cls_name therefore
+    never matched the hook, and every step failure raised two Sentry issues:
+    one from the hook and one from this sensor. Unwrapping the wrapper
+    recovers the name the hook used.
+    """
+    for _ in range(MAX_ERROR_CAUSE_DEPTH):
+        cause = getattr(error, "cause", None)
+        if cause is None or error.cls_name not in DAGSTER_USER_CODE_WRAPPERS:
+            break
+        error = cause
+    return error.cls_name
+
+
 def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
     """Build a fingerprint matching the one the in-process hook uses.
 
@@ -140,9 +191,9 @@ def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
 
     failure = step_failures[0]
     error = getattr(failure.event_specific_data, "error", None)
-    # cls_name is the serialized form of the same type(exception).__name__ the
-    # hook captures in-process.
-    error_type = getattr(error, "cls_name", None) or "run_failure"
+    error_type = (
+        user_code_error_type(error) if error is not None else None
+    ) or "run_failure"
     return [run.job_name, failure.step_key, error_type]
 
 

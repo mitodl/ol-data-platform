@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from dagster import AssetCheckSeverity
+from dagster import AssetCheckSeverity, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
     MAX_RETRIES_TAG,
@@ -51,11 +51,18 @@ def _context(step_failure_events: list[Any], failure_message: str = "") -> Any:
     )
 
 
-def _step_failure(step_key: str, error_text: str, cls_name: str = "ValueError") -> Any:
+def _step_failure(
+    step_key: str,
+    error_text: str,
+    cls_name: str = "ValueError",
+    cause: Any = None,
+) -> Any:
     return SimpleNamespace(
         step_key=step_key,
         event_specific_data=SimpleNamespace(
-            error=SimpleNamespace(to_string=lambda: error_text, cls_name=cls_name)
+            error=SimpleNamespace(
+                to_string=lambda: error_text, cls_name=cls_name, cause=cause
+            )
         ),
     )
 
@@ -172,6 +179,127 @@ def test_sensor_fingerprint_survives_a_missing_error_payload() -> None:
     context = _context([failure])
 
     assert sentry_fingerprint(context) == ["a_job", "some_model", "run_failure"]
+
+
+def test_sensor_fingerprint_unwraps_dagsters_user_code_wrapper() -> None:
+    """The serialized error is Dagster's wrapper, not what user code raised.
+
+    A step raising FileNotFoundError serializes with
+    ``cls_name="DagsterExecutionStepExecutionError"`` and the real exception one
+    level down in ``cause``. Fingerprinting the wrapper never matched the hook's
+    ``type(exception).__name__``, so every step failure raised two Sentry issues
+    instead of one -- DAGSTER-3 from the hook and DAGSTER-5 from this sensor,
+    for the identical failures.
+    """
+    context = _context(
+        [
+            _step_failure(
+                "extract_edxorg_courserun_metadata",
+                "boom",
+                cls_name="DagsterExecutionStepExecutionError",
+                cause=SimpleNamespace(cls_name="FileNotFoundError", cause=None),
+            )
+        ]
+    )
+
+    assert sentry_fingerprint(context) == [
+        "a_job",
+        "extract_edxorg_courserun_metadata",
+        "FileNotFoundError",
+    ]
+
+
+def test_sensor_fingerprint_unwraps_only_the_dagster_layer() -> None:
+    """Unwrapping stops at the first non-Dagster class.
+
+    The hook captures the exception user code raised, not whatever that was
+    chained from, so descending the whole cause chain would miss it in the
+    other direction.
+    """
+    context = _context(
+        [
+            _step_failure(
+                "some_model",
+                "boom",
+                cls_name="DagsterExecutionLoadInputError",
+                cause=SimpleNamespace(
+                    cls_name="FileNotFoundError",
+                    cause=SimpleNamespace(cls_name="NoSuchKey", cause=None),
+                ),
+            )
+        ]
+    )
+
+    assert sentry_fingerprint(context)[2] == "FileNotFoundError"
+
+
+def test_sensor_fingerprint_keeps_a_wrapper_with_no_cause() -> None:
+    """A wrapper that serialized without a cause still names something."""
+    context = _context(
+        [
+            _step_failure(
+                "some_model", "boom", cls_name="DagsterExecutionStepExecutionError"
+            )
+        ]
+    )
+
+    assert sentry_fingerprint(context)[2] == "DagsterExecutionStepExecutionError"
+
+
+@pytest.mark.parametrize(
+    "retry_policy", [None, RetryPolicy(max_retries=1)], ids=["plain", "retried"]
+)
+def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
+    retry_policy: RetryPolicy | None,
+) -> None:
+    """End-to-end: the sensor and the hook must agree on a real failure.
+
+    The hand-built fixtures above are only as good as our model of Dagster's
+    serialization -- and the original bug survived precisely because the old
+    fixture set cls_name to the user exception directly, which is not what
+    Dagster produces. This executes a real job and compares the sensor's
+    fingerprint against what the *actual* hook records, rather than against a
+    hardcoded string, so neither side can drift without failing here.
+
+    The ``retried`` case covers an op whose RetryPolicy is exhausted, which
+    Dagster serializes as ``RetryRequestedFromPolicy -> <user exception>``.
+    Several learning_resources assets carry a RetryPolicy, so that wrapper is
+    on a live path.
+    """
+    from dagster import (  # noqa: PLC0415
+        DagsterEventType,
+        HookContext,
+        failure_hook,
+        job,
+        op,
+    )
+
+    hook_recorded: dict[str, str] = {}
+
+    @failure_hook(name="record")
+    def record(context: HookContext) -> None:
+        # Mirrors ol_orchestrate.lib.sentry.capture_exception_to_sentry.
+        hook_recorded[context.step_key] = type(context.op_exception).__name__
+
+    @op(retry_policy=retry_policy)
+    def raises_file_not_found():
+        msg = "The specified key does not exist."
+        raise FileNotFoundError(msg)
+
+    @job(hooks={record})
+    def a_job():
+        raises_file_not_found()
+
+    result = a_job.execute_in_process(raise_on_error=False)
+    step_failures = [
+        event
+        for event in result.all_events
+        if event.event_type == DagsterEventType.STEP_FAILURE
+    ]
+    fingerprint = sentry_fingerprint(_context(step_failures))
+
+    assert fingerprint[2] == hook_recorded["raises_file_not_found"]
+    assert fingerprint == ["a_job", "raises_file_not_found", "FileNotFoundError"]
 
 
 # ── dbt error extraction ──────────────────────────────────────────────────────
