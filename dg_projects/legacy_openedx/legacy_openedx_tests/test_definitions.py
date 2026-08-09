@@ -7,6 +7,15 @@ import pytest
 
 MODULE_UNDER_TEST = "legacy_openedx.definitions"
 
+# ol_orchestrate.lib.constants snapshots DAGSTER_ENVIRONMENT and VAULT_ADDR
+# into module-level DAGSTER_ENV/VAULT_ADDRESS at import, and the module under
+# test imports those *values*. Evicting only the leaf leaves the cached
+# constants in place, so `definitions` would rebind to a VAULT_ADDRESS
+# resolved from whatever environment imported constants first -- in practice
+# the real vault-qa host, which turns a fast connection refusal into a network
+# timeout and quietly stops testing the degraded path.
+MODULES_TO_EVICT = (MODULE_UNDER_TEST, "ol_orchestrate.lib.constants")
+
 
 def _import_with_vault_unreachable(monkeypatch: pytest.MonkeyPatch):
     """Import the code location fresh, with Vault unreachable.
@@ -19,13 +28,15 @@ def _import_with_vault_unreachable(monkeypatch: pytest.MonkeyPatch):
     Everything being set up here happens at *import* time, so a cached entry
     in ``sys.modules`` would hand back a module built under whatever
     environment imported it first and none of the patching would apply.
-    Evicting it forces re-execution against this environment; monkeypatch
-    restores the previous entry on teardown so the eviction cannot leak.
+    Evicting forces re-execution against this environment; monkeypatch
+    restores the previous entries on teardown so the eviction cannot leak.
+    The constants module has to go too -- see MODULES_TO_EVICT.
     """
     monkeypatch.setenv("VAULT_ADDR", "http://127.0.0.1:1")
     monkeypatch.setenv("VAULT_ADDRESS", "http://127.0.0.1:1")
     monkeypatch.setenv("DAGSTER_ENVIRONMENT", "qa")
-    monkeypatch.delitem(sys.modules, MODULE_UNDER_TEST, raising=False)
+    for module_name in MODULES_TO_EVICT:
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         # Deferred on purpose: the module does its Vault authentication at
@@ -55,6 +66,35 @@ def test_import_is_not_served_from_the_module_cache(
     second = _import_with_vault_unreachable(monkeypatch)
 
     assert first is not second
+
+
+def test_vault_address_comes_from_this_test_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The module must see the closed port, not a stale real Vault host.
+
+    ol_orchestrate.lib.constants resolves VAULT_ADDRESS at import time, and
+    legacy_openedx.definitions imports the resolved value. Evicting only
+    definitions left the cached constants in place, so an earlier import
+    anywhere in the session would leave this pointed at vault-qa.odl.mit.edu
+    -- a network timeout instead of an immediate connection refusal, and no
+    longer a test of the degraded path at all.
+
+    Primes the cache with constants resolved against a *different* address
+    first, which is what any earlier import in the session does. Without the
+    constants eviction the assertion below sees that stale host instead.
+    """
+    monkeypatch.delitem(sys.modules, "ol_orchestrate.lib.constants", raising=False)
+    monkeypatch.setenv("VAULT_ADDR", "https://vault-qa.odl.mit.edu")
+    monkeypatch.setenv("DAGSTER_ENVIRONMENT", "qa")
+    import ol_orchestrate.lib.constants as stale_constants  # noqa: PLC0415
+
+    assert stale_constants.VAULT_ADDRESS == "https://vault-qa.odl.mit.edu"
+
+    definitions = _import_with_vault_unreachable(monkeypatch)
+
+    assert definitions.VAULT_ADDRESS == "http://127.0.0.1:1"
+    assert definitions.vault_authenticated is False
 
 
 def test_repository_builds_without_vault(definitions) -> None:
