@@ -53,14 +53,21 @@ sklearn/UMAP + HDBSCAN** (Fenic offers only K-means; we need HDBSCAN's noise cla
 one-off complaints from systemic signal — `feedback_ml_approach.md` §C).
 
 ```
-int__feedback__unioned (redacted text, feedback_pk)                    [dbt/SQL — portable, no AI funcs]
+int__feedback__conversation (redacted turns assembled)                 [dbt/SQL — portable, no AI funcs]
   → Fenic pipeline in a Dagster asset:                                  [engine-external, Apache-2.0]
-       .semantic.embed        → EmbeddingType column → Iceberg ARRAY<float> sidecar
+       summarize              → conversation_summary (multi-turn only)
+       .semantic.embed        → EmbeddingType column → Iceberg ARRAY<float> on the conversation fact
        .semantic.analyze_sentiment / .classify (optional; see §E note)
   → feedback_clusters : our sklearn UMAP+HDBSCAN over the vectors       [engine-external]
   → dim_feedback_category : LLM-label clusters (Fenic semantic op or a client call)
   → sentiment_fk : explicit-CSAT seed + embedding-kNN (default) or Fenic analyze_sentiment
+  → all of it written to afact_feedback_conversation, one row per conversation
 ```
+
+> **Rev. 3 (2026-08-10):** the grain of everything above is the **conversation**, and the target is
+> `afact_feedback_conversation` rather than a per-turn embeddings sidecar
+> (`feedback_dimensional_model.md` §5a). The engine-externality argument — the actual subject of this ADR —
+> is unaffected: it is about *where compute runs*, not what it is keyed by.
 
 **Embedding model is chosen by TASK EFFECTIVENESS, not by provider/PII** (owner direction,
 2026-07-10: Bedrock/in-account is **not** a requirement; select the model on how well it clusters

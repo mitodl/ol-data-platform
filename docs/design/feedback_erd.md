@@ -1,7 +1,7 @@
 # Feedback Aggregation — Entity-Relationship Diagrams
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-07 (rev. 2 — turn grain + conformance rule) · Companion to
+Date: 2026-08-10 (rev. 3 — conversation-grain analysis fact) · Companion to
 [`feedback_dimensional_model.md`](./feedback_dimensional_model.md),
 [`feedback_event_contract_spec.md`](./feedback_event_contract_spec.md) and
 [`feedback_ml_approach.md`](./feedback_ml_approach.md).
@@ -12,6 +12,11 @@ than as prose. Also posted as an addendum on
 
 **Reading the diagrams:** `||--o{` = required FK (never null). `|o--o{` = **nullable** FK — sparse
 conformance is the flexibility mechanism, so most of the star is deliberately optional.
+
+**Two facts.** `tfact_feedback` (§1) is the *ingested* record — one row per turn, insert-only.
+`afact_feedback_conversation` (§4) is the *inferred* layer — one row per conversation, carrying the summary,
+the embedding, the sentiment, the category and the cluster. Read §4 to see where the models write; nothing
+writes to §1 after insert.
 
 ---
 
@@ -43,8 +48,6 @@ erDiagram
     dim_feedback_channel  ||--o{ tfact_feedback : "feedback_channel_fk"
     dim_date              ||--o{ tfact_feedback : "occurred / created / updated (role-playing)"
     dim_time              ||--o{ tfact_feedback : "occurred / created / updated (role-playing)"
-    dim_feedback_category |o--o{ tfact_feedback : "category_fk (late-arriving)"
-    dim_sentiment         |o--o{ tfact_feedback : "sentiment_fk (late-arriving)"
     dim_user              |o--o{ tfact_feedback : "user_fk (identity: highest-risk join)"
     dim_platform          |o--o{ tfact_feedback : "platform_fk"
     dim_course_run        |o--o{ tfact_feedback : "courserun_fk (course-scoped sources)"
@@ -63,8 +66,6 @@ erDiagram
         varchar courserun_fk FK "nullable - Zendesk is not course-scoped"
         varchar content_block_fk FK "nullable - resolves subject_ref for edX blocks"
         varchar organization_fk FK "nullable"
-        varchar category_fk FK "nullable at insert - ML or seed fills later"
-        varchar sentiment_fk FK "nullable at insert - rating or model fills later"
         integer occurred_date_fk FK "required - role-playing on the utterance timestamp"
         integer occurred_time_fk FK "required"
         integer created_date_fk FK "role-playing"
@@ -139,9 +140,13 @@ erDiagram
 ```
 
 Two dimensions are conformed-by-construction (`dim_feedback_source`, `dim_feedback_channel`), two are
-derived and source-agnostic (`dim_feedback_category`, `dim_sentiment`), one is explicitly source-scoped
-(`dim_feedback_tag`). `dim_user`, `dim_platform`, `dim_course_run`, `dim_organization`,
-`dim_course_content` and `dim_date`/`dim_time` are reused as-is.
+derived and source-agnostic (`dim_feedback_category`, `dim_sentiment` — which attach to the **conversation**
+fact in §4, not here), one is explicitly source-scoped (`dim_feedback_tag`). `dim_user`, `dim_platform`,
+`dim_course_run`, `dim_organization`, `dim_course_content` and `dim_date`/`dim_time` are reused as-is.
+
+**`tfact_feedback` is insert-only (rev. 3).** `category_fk` and `sentiment_fk` used to hang off this fact as
+late-arriving updates; they moved to `afact_feedback_conversation` (§4) along with the rest of the generated
+layer, so nothing writes to a row of this fact after it lands.
 
 ### Why these attributes and not others
 
@@ -237,35 +242,65 @@ carried through **as a variant**, which is what makes a new source additive rath
 
 ---
 
-## 4. Conversation lifecycle — `afact_feedback_conversation`
+## 4. The analysis fact — `afact_feedback_conversation`
 
-At turn grain, conversation-level attributes (status, priority, due date, CSAT, resolution time) repeat
-across every row of a conversation. They belong to a different grain, so they get their own table: an
-**accumulating-snapshot fact at conversation grain**, following the repo's `afact_` prefix for
-non-transactional facts.
+**One row per conversation**, keyed on the source's own thread id. It holds two things: the conversation
+lifecycle attributes that would otherwise repeat across every turn, **and everything a model generated** —
+the summary, the embedding, the sentiment, the category and the cluster (rev. 3).
+
+The conversation is the analysis unit because a complaint usually emerges across several turns. Embedding
+turns independently splits one issue into several weak cluster members and scores sentiment off a fragment.
+This is *not* a return to ticket grain: `tfact_feedback` still records every turn (§2), and the assembled
+conversation is built from all of them.
 
 ```mermaid
 erDiagram
-    afact_feedback_conversation ||--o{ tfact_feedback : "conversation_id"
-    dim_feedback_source ||--o{ afact_feedback_conversation : "feedback_source_fk"
-    dim_date            ||--o{ afact_feedback_conversation : "opened / resolved / closed (role-playing)"
-    dim_user            |o--o{ afact_feedback_conversation : "opened_by_user_fk"
+    afact_feedback_conversation ||--o{ tfact_feedback : "conversation_id (turns roll up)"
+    dim_feedback_source   ||--o{ afact_feedback_conversation : "feedback_source_fk"
+    dim_date              ||--o{ afact_feedback_conversation : "opened / last_turn / resolved / closed"
+    dim_user              |o--o{ afact_feedback_conversation : "opened_by_user_fk"
+    dim_feedback_category |o--o{ afact_feedback_conversation : "category_fk (generated)"
+    dim_sentiment         |o--o{ afact_feedback_conversation : "sentiment_fk (generated)"
+    feedback_cluster_run  |o--o{ afact_feedback_conversation : "cluster_run_id (which run assigned it)"
 
     afact_feedback_conversation {
         varchar feedback_conversation_pk PK "surrogate_key(source_slug, conversation_ref)"
+        varchar conversation_id "degenerate - joins tfact_feedback.conversation_id"
         varchar feedback_source_fk FK
         varchar opened_by_user_fk FK "nullable"
         integer opened_date_fk FK "available today"
+        integer last_turn_date_fk FK "available today"
         integer first_response_date_fk FK "BLOCKED - needs ticket_metrics"
         integer resolved_date_fk FK "BLOCKED - needs ticket_metrics"
         integer closed_date_fk FK "BLOCKED - needs ticket_metrics"
         integer turn_count "available today"
         integer participant_count "available today"
+        integer conversation_text_chars "summed pre-redaction length of kept turns"
         integer resolution_duration_seconds "BLOCKED - the how-long-was-it-open measure"
         varchar final_status "available today - current-state snapshot"
-        varchar explicit_rating "available today"
+        varchar explicit_rating "available today - and now grain-matched to sentiment_fk"
+        varchar conversation_summary "GENERATED - LLM abstract of the exchange, from redacted text only"
+        varchar summary_model_version "null = not summarized (single-turn or under the length threshold)"
+        timestamp summarized_at
+        array embedding_vector "GENERATED - Iceberg ARRAY of float; StarRocks HNSW indexes it later"
+        integer embedding_dim "Matryoshka sweep: 256, 512, 1024"
+        varchar embedding_model_version "makes the model choice reversible without touching tfact_feedback"
+        varchar embedding_input "summary or concatenated_turns - what was actually embedded"
+        timestamp embedded_at
+        varchar category_fk FK "GENERATED - nullable, a valid queryable state"
+        varchar sentiment_fk FK "GENERATED - nullable"
+        varchar sentiment_source "explicit_rating or model - which tier produced it"
+        varchar cluster_run_id FK "GENERATED - the approved run"
+        integer cluster_id "-1 = noise = one-off complaint, not systemic"
+        float cluster_probability "cohesion signal for ranking systemic issues"
+        timestamp conversation_ingested_at
     }
 ```
+
+**The summary is the one per-record LLM cost in the design.** It is skipped for single-turn conversations and
+conversations under a length threshold — where the raw text already *is* the summary — which makes ORA and
+the edX plugin free by construction. Cost is sized in `feedback_dimensional_model.md` §5b and must be
+sample-measured before the backfill.
 
 **Partially blocked on ingestion.** The Zendesk streams landed in the lake
 (`src/ol_dbt/models/staging/zendesk/_zendesk__sources.yml`) are exactly seven:
@@ -280,34 +315,28 @@ synced. In the `tickets` stream, "solved"/"closed" appear only as *values of `ti
 with no history.
 
 So this table ships with `turn_count`, `participant_count`, `opened_date_fk`, `final_status` and
-`explicit_rating` now, and the duration measures land once `ticket_metrics` is added to the connector —
-an ingestion ticket, tracked separately. The grain does not move when they arrive.
+`explicit_rating` now, the generated columns fill in as the ML asset lands, and the duration measures arrive
+once `ticket_metrics` is added to the connector — an ingestion ticket, tracked separately. The grain does not
+move when any of them arrive.
 
 ---
 
-## 5. ML sidecar — embeddings, cluster runs, categories
+## 5. Run provenance and the strategic rollup
+
+The per-turn ML sidecar from rev. 2 (`feedback_embeddings`, `feedback_cluster_assignment`) is **withdrawn** —
+its contents live on `afact_feedback_conversation` (§4). Two tables remain, both genuinely different grains
+from the conversation fact:
 
 ```mermaid
 erDiagram
-    tfact_feedback              ||--o{ feedback_embeddings : "feedback_pk"
-    tfact_feedback              ||--o{ feedback_cluster_assignment : "feedback_pk"
-    feedback_cluster_run        ||--o{ feedback_cluster_assignment : "cluster_run_id"
+    feedback_cluster_run        ||--o{ feedback_cluster_candidate : "cluster_run_id"
     feedback_cluster_run        |o--o{ dim_feedback_category : "cluster_run_id (provenance)"
-    dim_feedback_category       |o--o{ tfact_feedback : "category_fk (late-arriving)"
-    tfact_feedback              ||--o{ afact_feedback_cluster_daily : "aggregated"
-
-    feedback_embeddings {
-        varchar feedback_pk PK "part of compound key"
-        varchar model_version PK "part of compound key - makes the model choice reversible"
-        array vector "Iceberg ARRAY of float - StarRocks HNSW indexes this later, a load not a re-embed"
-        integer vector_dim "Matryoshka sweep: 256, 512, 1024"
-        varchar text_variant "raw or llm_normalized - the semantic-normalisation eval arm"
-        timestamp embedded_at
-    }
+    afact_feedback_conversation ||--o{ feedback_cluster_candidate : "feedback_conversation_pk"
+    afact_feedback_conversation ||--o{ afact_feedback_cluster_daily : "aggregated"
 
     feedback_cluster_run {
         varchar cluster_run_id PK
-        varchar model_version FK "which embeddings this run consumed"
+        varchar embedding_model_version "which generation of vectors this run consumed"
         varchar algorithm "umap+hdbscan"
         json run_params "min_cluster_size, n_neighbors - config not hardcoded"
         integer cluster_count
@@ -317,11 +346,11 @@ erDiagram
         timestamp run_at
     }
 
-    feedback_cluster_assignment {
-        varchar feedback_pk PK "part of compound key"
+    feedback_cluster_candidate {
+        varchar feedback_conversation_pk PK "part of compound key"
         varchar cluster_run_id PK "part of compound key"
-        integer cluster_id "-1 = noise = one-off complaint"
-        float cluster_probability "cohesion signal for ranking systemic issues"
+        integer cluster_id
+        float cluster_probability
     }
 
     afact_feedback_cluster_daily {
@@ -331,20 +360,24 @@ erDiagram
         varchar category_fk FK
         varchar sentiment_fk FK
         integer cluster_id
-        integer feedback_count
+        integer conversation_count "at conversation grain this IS the cluster size"
         integer distinct_user_count
-        integer distinct_conversation_count "turn grain means turns per conversation varies"
         float avg_explicit_rating
     }
 ```
 
-`dim_feedback_category` is the *curated, stable* projection; `feedback_cluster_*` is the *churny* ML working
-set. Only an approved run advances the dimension — that decoupling is what lets clustering re-run freely.
+`feedback_cluster_candidate` holds **only runs that have not been promoted**. Promoting a run copies its
+assignment onto `afact_feedback_conversation` and drops the candidate rows; it exists so a proposed run can
+be compared against the live one during the embedding-model bake-off, and nothing outside the ML pipeline
+should read it.
 
-**Turn grain changes the ML volumes.** The record count is now public-requester *comments*, not tickets.
-Embedding cost scales linearly and stays small at these magnitudes, but the multiplier must be measured
-before committing (see §7). Turn grain also *helps* clustering: a follow-up complaint in turn 4 of a ticket
-is currently invisible, because only the first comment is embedded.
+`dim_feedback_category` remains the *curated, stable* projection — only an approved run advances it, which is
+what still lets clustering re-run freely.
+
+**Conversation grain simplifies the rollup.** Rev. 2 had to carry both `feedback_count` and
+`distinct_conversation_count`, and had to warn that `min_cluster_size` counted turns rather than tickets so
+one talkative reporter could manufacture a systemic issue. At conversation grain a cluster's size *is* its
+conversation count, and that whole caveat disappears.
 
 ---
 
@@ -356,11 +389,12 @@ erDiagram
     dim_feedback_channel  ||--o{ tfact_feedback : "feedback_channel_fk - from comment_source_channel"
     dim_date              ||--o{ tfact_feedback : "occurred / created / updated"
     dim_time              ||--o{ tfact_feedback : "occurred / created / updated"
-    dim_feedback_category |o--o{ tfact_feedback : "category_fk - seeded from ticket_tags"
-    dim_sentiment         |o--o{ tfact_feedback : "sentiment_fk - from satisfaction_rating_score"
     dim_user              |o--o{ tfact_feedback : "user_fk - comment author, email path"
     tfact_feedback        ||--o{ bridge_feedback_tag : "feedback_pk"
     dim_feedback_tag      ||--o{ bridge_feedback_tag : "feedback_tag_pk"
+    afact_feedback_conversation ||--o{ tfact_feedback : "conversation_id = ticket_id"
+    dim_feedback_category |o--o{ afact_feedback_conversation : "category_fk - seeded from ticket_tags"
+    dim_sentiment         |o--o{ afact_feedback_conversation : "sentiment_fk - from satisfaction_rating_score"
 
     tfact_feedback {
         varchar feedback_pk PK "surrogate_key(zendesk, comment_id)"
@@ -383,23 +417,27 @@ flowchart TD
     C --> D["int__feedback__zendesk<br/>(NEW - conform to the event contract, filter to public requester turns)"]
     C2 --> D
     D --> E["int__feedback__unioned<br/>(NEW - union all sources + Presidio redaction)"]
-    E --> F["tfact_feedback<br/>(NEW - resolve FKs, mint feedback_pk)"]
+    E --> F["tfact_feedback<br/>(NEW - resolve FKs, mint feedback_pk; INSERT-ONLY)"]
     F --> G["bridge_feedback_tag"]
-    C2 --> H["afact_feedback_conversation<br/>(NEW - conversation grain; durations blocked on ticket_metrics)"]
-    F --> H
-    F --> I["afact_feedback_cluster_daily<br/>(Phase 2)"]
-    E -.->|Fenic, engine-external| J["feedback_embeddings<br/>feedback_cluster_run<br/>feedback_cluster_assignment"]
-    J -.->|LLM label, human approve| K["dim_feedback_category"]
-    K -.->|late-arriving update| F
+    F --> M["int__feedback__conversation<br/>(NEW - assemble kept turns per conversation, ordered)"]
+    C2 --> H["afact_feedback_conversation<br/>(NEW - lifecycle + generated columns)"]
+    M --> H
+    M -.->|Fenic / sklearn, engine-external| N["summarize -> embed -> cluster -> sentiment"]
+    N -.->|writes generated columns| H
+    N -.-> J["feedback_cluster_run<br/>feedback_cluster_candidate"]
+    N -.->|LLM label, human approve| K["dim_feedback_category"]
+    K -.->|category_fk| H
+    H --> I["afact_feedback_cluster_daily<br/>(Phase 2)"]
     L["forum / tutor / ORA / edX plugin<br/>(Phase 2 - additive CTEs)"] --> E
 ```
 
-**MVP cost check.** This moves Phase 1 from 3 new dimensions to **4 dimensions + 1 bridge + 1 conversation
-fact**. All of the additions are `select distinct` cheap (`dim_feedback_channel`, `dim_feedback_tag`) or a
-straight aggregation (`afact_feedback_conversation`), so the build cost is small — but it is a real increase
-and worth confirming deliberately. The argument for paying it now: reshaping a fact after it has consumers
-is the expensive version, and the grain change in §2 has to land before the fact ships regardless, because
-it moves the business key.
+**MVP cost check.** Phase 1 is **4 dimensions + 1 bridge + 2 facts**. The dimension additions are `select
+distinct` cheap and the conversation fact is a straight aggregation, so the dbt build cost is small. Rev. 3
+adds no tables — it withdraws the two per-turn sidecar tables and widens the conversation fact — but it does
+add the per-conversation LLM summary, which is the one cost worth confirming on a sample before the backfill
+(`feedback_dimensional_model.md` §5b). The argument for paying the reshaping now: reshaping a fact after it
+has consumers is the expensive version, and the grain change in §2 has to land before the fact ships
+regardless, because it moves the business key.
 
 ---
 
@@ -412,10 +450,25 @@ it moves the business key.
 | Add the `ticket_metrics` stream to the Zendesk Airbyte connector | ingestion, separate ticket | resolution/closure durations in `afact_feedback_conversation` |
 | Confirm the conformed `channel_slug` value set against each source's actual channel values | modeling | `dim_feedback_channel` seed |
 | `dim_organization.organization_pk = generate_surrogate_key(['platform','source_id'])` (`dim_organization.sql:38`) — Zendesk supplies neither | known-null, explicit decision | `organization_fk` for Zendesk stays null; org rides in `source_metadata` |
+| Measure the multi-turn share of tickets and sample-price the summary step | measurement | the summarization budget and the skip threshold (§4) |
+| Decide `embedding_input`: summary vs. concatenated turns vs. both as eval arms | modeling | the bake-off in `feedback_ml_approach.md` §B.1 |
 
 ---
 
 ## 8. Change log
+
+**rev. 3 (2026-08-10)** — the analysis unit moves from the turn to the conversation
+([RFC #12210](https://github.com/mitodl/hq/discussions/12210)):
+
+- **`afact_feedback_conversation` is now the analysis fact** (§4) — summary, embedding vector, `category_fk`,
+  `sentiment_fk` and cluster membership join the lifecycle columns it already had.
+- **`category_fk`/`sentiment_fk` removed from `tfact_feedback`** (§1), which makes that fact **insert-only**.
+- **Withdrawn:** `feedback_embeddings` and `feedback_cluster_assignment` (§5). `feedback_cluster_run` stays;
+  a small `feedback_cluster_candidate` replaces the assignment table for unpromoted runs only.
+- **Added `conversation_summary`** with an explicit skip rule and a stated per-record LLM cost.
+- `afact_feedback_cluster_daily` aggregates the conversation fact, so `feedback_count` /
+  `distinct_conversation_count` collapse to one measure and the `min_cluster_size` caveat disappears.
+- **Unchanged:** turn grain, the Zendesk comment sourcing, business keys, the conformance rule, the contract.
 
 **rev. 2 (2026-08-07)** — from [@KatelynGit's RFC
 review](https://github.com/mitodl/hq/discussions/12210#discussioncomment-17937328) and the conformance rule

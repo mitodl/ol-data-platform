@@ -1,15 +1,21 @@
 # Feedback Aggregation — Dagster ML Asset Spec (MVP)
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-07-10 · Companion to [`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md)
+Date: 2026-08-10 (rev. 4 — conversation grain) · Companion to
+[`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md)
 and [`feedback_ml_approach.md`](./feedback_ml_approach.md)
 
-The scheduled batch job that turns the redacted feedback fact into embeddings, clusters,
-LLM-proposed categories, and sentiment. Grounded in the existing repo orchestration
-patterns. **The fact ships without this asset**; this is purely additive (fills `category_fk` /
-`sentiment_fk` on the fact and populates the sidecar tables `feedback_embeddings`,
-`feedback_cluster_run`, `feedback_cluster_assignment` — see
-[`feedback_erd.md`](./feedback_erd.md) §3).
+The scheduled batch job that turns assembled, redacted conversations into summaries, embeddings, clusters,
+LLM-proposed categories, and sentiment. Grounded in the existing repo orchestration patterns. **The fact
+ships without this asset**; this is purely additive — it fills the generated columns on
+`afact_feedback_conversation` and writes `feedback_cluster_run` (see
+[`feedback_erd.md`](./feedback_erd.md) §4/§5).
+
+> **REVISED 2026-08-10 (rev. 4) — the analysis unit is the conversation** (design §5a). The asset reads
+> `int__feedback__conversation` (one row per conversation, turns assembled and ordered) instead of
+> `int__feedback__unioned`, gains a **summarization stage** (§2), and writes **one target table** instead of
+> a three-table per-turn sidecar. **It never writes to `tfact_feedback`** — that fact is now insert-only, so
+> the rev. 3 "late-arriving `category_fk`/`sentiment_fk` upsert onto the fact" is gone entirely.
 
 > **REVISED 2026-07-10 (rev. 3) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
 > Because the strategic direction is to **retire Trino for StarRocks**, all AI compute stays
@@ -49,6 +55,7 @@ dg_projects/feedback_clustering/
     definitions.py          # Definitions(assets, resources={io_manager, vault, llm}, jobs, schedules)
     assets/feedback_clustering.py   # thin @asset(s)
     resources/llm.py        # NEW Vault-backed LLM/embeddings client factory
+    lib/summarize.py        # conversation summarization + the skip rule (ml §A.1)
     lib/embed.py            # embedding + redaction helpers
     lib/cluster.py          # UMAP+HDBSCAN helpers
     lib/label.py            # LLM cluster-labeling + sentiment helpers
@@ -69,39 +76,42 @@ read/write Iceberg via `get_dbt_model_as_dataframe(...)`
 (`ol_orchestrate.lib.glue_helper`) and the `io_manager` (`PolarsIcebergIOManager`).
 
 ```
-[dbt] int__feedback__unioned   (redacted text + feedback_pk)      ← upstream AssetKey dep
+[dbt] int__feedback__conversation  (redacted turns assembled per conversation)  ← upstream AssetKey dep
    │
    ▼
-feedback_embeddings            @asset  → writes feedback_embeddings
-   │                                     grain (feedback_pk, model_version); vector, vector_dim,
-   │                                     text_variant  [embedding computed ONCE per model_version]
+feedback_summaries             @asset  → conversation_summary + summary_model_version
+   │                                     SKIPS turn_count = 1 and short conversations (ml §A.1)
+   ▼
+feedback_embeddings            @asset  → embedding_vector, embedding_dim, embedding_input,
+   │                                     embedding_model_version   [computed ONCE per version]
    ▼
 feedback_clusters              @asset  → writes feedback_cluster_run (one row: algorithm, params,
-   │                                     cluster_count, noise_count, silhouette) AND
-   │                                     feedback_cluster_assignment, grain
-   │                                     (feedback_pk, cluster_run_id)  (UMAP→HDBSCAN)
-   │                                     — it NEVER writes back to feedback_embeddings
+   │                                     cluster_count, noise_count, silhouette) + cluster_id /
+   │                                     cluster_probability per conversation  (UMAP→HDBSCAN)
    ├─────────────► feedback_category_proposals  @asset → LLM-labels clusters → dim_feedback_category
    │                                                     (category_source='llm_discovered', status='proposed',
    │                                                      cluster_run_id = provenance)
-   └─────────────► feedback_sentiment           @asset → sentiment per feedback_pk (explicit + kNN/classifier)
-                                                          → writes sentiment_fk assignments
+   └─────────────► feedback_sentiment           @asset → sentiment per conversation
+                                                          (explicit rating + kNN/classifier)
    ▼
-tfact_feedback late-arriving update  ← category_fk / sentiment_fk upsert by feedback_pk
+afact_feedback_conversation  ← the generated columns, one row per conversation
 ```
 
-The clustering asset writing its own tables rather than mutating `feedback_embeddings` is the
-grain split from `feedback_ml_approach.md` §A: vectors are per `(feedback_pk, model_version)`,
-assignments are per `(feedback_pk, cluster_run_id)`. Re-clustering is then append-only and can
-never disturb the vectors it read.
+Asset names are retained from rev. 3 where the stage is the same; what changed is the grain (conversation,
+not turn) and the target (one fact table, not three sidecars). Each stage stamps its own version column, so
+re-running one stage does not invalidate the others: re-clustering reuses the stored vectors, and re-embedding
+reuses the stored summaries.
 
-- **Redaction placement (design §7 / MVP spec §3):** the `feedback_embeddings` asset does
-  the Presidio redaction on its input (or reads an already-redacted `int__feedback__unioned`
-  column). Recommend redaction lives here in Python since Presidio is Python — the fact then
-  reads redacted text produced by this asset. **Decision for implementation:** either (a)
-  the asset writes `text_redacted` back to a table the fact reads, or (b) `int__feedback__unioned`
-  is itself a Python-materialized step. Pick (a) to keep dbt pure-SQL; documented as the one
-  interleave point.
+**Unpromoted runs** go to `feedback_cluster_candidate`, not straight onto the fact — that is what lets a
+proposed run be compared against the live one during the embedding bake-off (`feedback_ml_approach.md` §B.1).
+Promotion copies the assignment onto `afact_feedback_conversation` and drops the candidate rows.
+
+- **Redaction placement (design §7 / MVP spec §3):** unchanged in substance — Presidio is Python, so
+  redaction happens in a Python asset upstream of both the fact and this pipeline. **Decision for
+  implementation:** either (a) an asset writes `text_redacted` back to a table the fact reads, or (b)
+  `int__feedback__unioned` is itself a Python-materialized step. Pick (a) to keep dbt pure-SQL; documented as
+  the one interleave point. Note the assembly step (`int__feedback__conversation`) is plain SQL over
+  already-redacted turns, so it adds no new interleave.
 - **`code_version`** on each asset (as `student_risk_probability` does) so a helper/model
   change re-triggers via declarative automation.
 - **`pool=`** set per asset (concurrency governed by the production instance pool config —
@@ -111,20 +121,21 @@ never disturb the vectors it read.
 
 ## 3. Reading & writing data (exact repo helpers)
 
-- **Read** the dbt fact/union: `get_dbt_model_as_dataframe(database_name="ol_warehouse_production_<schema>",
-  table_name="int__feedback__unioned")` → Polars. (Same call `student_risk_probability`
+- **Read** the assembled conversations:
+  `get_dbt_model_as_dataframe(database_name="ol_warehouse_production_<schema>",
+  table_name="int__feedback__conversation")` → Polars. (Same call `student_risk_probability`
   uses against `reporting.cheating_detection_report`.)
 - **Write** results: return a `pl.DataFrame` from the asset; the `io_manager` key
   (`PolarsIcebergIOManager`, configured in `definitions.py`) persists it to the target
-  Iceberg table. `feedback_embeddings`, `feedback_cluster_run` and `feedback_cluster_assignment`
-  are new Iceberg tables with the schemas in `feedback_ml_approach.md` §A/§B/§C
-  (ERD: [`feedback_erd.md`](./feedback_erd.md) §3).
-- **Late-arriving `category_fk`/`sentiment_fk` back onto `tfact_feedback`:** because dbt owns
-  `tfact_feedback`, the cleanest MVP path is an incremental dbt model / `merge` keyed by
-  `feedback_pk` that reads the assignment table this asset writes — not a direct Python
-  mutation of the fact. So the asset writes `feedback_category_assignments` /
-  `feedback_sentiment_assignments` Iceberg tables, and a dbt step joins them onto the fact.
-  This keeps the fact dbt-owned and the ML output append-only.
+  Iceberg table. `feedback_cluster_run` and `feedback_cluster_candidate` are new Iceberg tables with the
+  schemas in `feedback_ml_approach.md` §A (ERD: [`feedback_erd.md`](./feedback_erd.md) §5).
+- **Getting the generated columns onto `afact_feedback_conversation`:** dbt owns that table, so the assets
+  write per-stage Iceberg output tables (`feedback_summaries`, `feedback_embeddings`,
+  `feedback_cluster_assignments`, `feedback_sentiment_assignments`) keyed by `feedback_conversation_pk`, and
+  the dbt model left-joins them onto the conversation aggregate. Same pattern as rev. 3, one grain up — and
+  because the target is a derived aggregate rather than a transactional fact, this join is a plain rebuild
+  rather than an incremental `merge` into a fact with consumers.
+- **Nothing writes to `tfact_feedback`.** There is no ML-owned column on it any more.
 
 ---
 
@@ -138,7 +149,7 @@ torch/hdbscan/umap/faiss/qdrant/pgvector anywhere). Add to the **new project's**
 |---|---|---|
 | Embeddings (local, PII-safe) | `sentence-transformers` (pulls `torch`) | default; CPU ok at MVP. Heavy image — consider a CPU-only torch wheel. |
 | Dim-reduction + clustering | `umap-learn`, `hdbscan` | or use in-stack `scikit-learn` `HDBSCAN`≥1.3 to avoid `hdbscan` compiled dep — decide on image build constraints. `scikit-learn` already proven in-stack. |
-| LLM cluster labeling + (fallback) sentiment | Anthropic client (Claude Haiku/Sonnet class) | one call per *cluster*, not per record — cheap batch. |
+| Conversation summarization + LLM cluster labeling + (fallback) sentiment | Anthropic client (Claude Haiku/Sonnet class) | **Two different cost profiles:** labeling is one call per *cluster* (hundreds — trivial); summarization is one call per *multi-turn conversation* (`feedback_ml_approach.md` §A.1 — the one per-record LLM cost, low hundreds of dollars one-time for Zendesk, to be sample-measured). Batch both; cap and checkpoint the summarizer so a failed run does not re-pay for work already done. |
 | PII redaction | `presidio-analyzer`, `presidio-anonymizer` (+ spaCy model) | precedent: OM profiler already runs Presidio recognizers. |
 
 **Image-size caveat:** `torch` + spaCy make a large image. If that is a problem, the
@@ -181,35 +192,43 @@ Register in `Definitions.resources` alongside the `vault` resource
 
 Two options, both in use in the repo:
 - **(recommend) Declarative automation:** put `automation_condition=upstream_or_code_changes()`
-  (`ol_orchestrate.lib.automation_policies`) on the `feedback_embeddings` asset so it re-runs
-  when `int__feedback__unioned` refreshes or the code version changes. Downstream cluster/
+  (`ol_orchestrate.lib.automation_policies`) on the `feedback_summaries` asset so it re-runs
+  when `int__feedback__conversation` refreshes or the code version changes. Downstream embed/cluster/
   label/sentiment assets chain off it. This is what `student_risk_probability` and the dbt
-  assets use — no cron to maintain.
+  assets use — no cron to maintain. **Caveat now that summarization costs money per conversation:** make the
+  summarizer incremental on `feedback_conversation_pk` (only unsummarized or changed conversations), or an
+  upstream refresh re-pays for the whole corpus.
 - **Cron alternative:** wrap the assets in `define_asset_job(...)` + a
   `dg.ScheduleDefinition(cron_schedule="0 4 * * *", execution_timezone="Etc/UTC")` (pattern:
   `dg_projects/data_loading/.../schedules.py`) if a fixed cadence is preferred over
-  data-driven triggering. MVP volume is the Zendesk turn count (`feedback_ml_approach.md` §B.2 — the old
-  ~198K ticket figure no longer applies); still expected to run comfortably in one nightly batch, but
-  confirm against the measurement before fixing the schedule.
+  data-driven triggering. MVP volume is ~198K Zendesk **conversations** (`feedback_ml_approach.md` §B.2),
+  which runs comfortably in one nightly batch; only the first backfill is large, and it is bounded by the
+  summarizer's throughput rather than the embedder's.
 
 ---
 
 ## 7. Build order (so the fact ships first)
 
-1. dbt models (`feedback_zendesk_mvp_spec.md`) — `tfact_feedback` + dims. **Ships and is
-   useful with tag-seeded categories + CSAT-derived sentiment, no ML.**
+1. dbt models (`feedback_zendesk_mvp_spec.md`) — `tfact_feedback` + dims +
+   `int__feedback__conversation` + `afact_feedback_conversation` with its **lifecycle columns only**.
+   **Ships and is useful with tag-seeded categories + CSAT-derived sentiment, no ML.**
 2. Scaffold `dg_projects/feedback_clustering/`; add deps; provision Vault path.
-3. `feedback_embeddings` asset (embed + redact) → vector sidecar.
-4. `feedback_clusters` asset (UMAP+HDBSCAN) → `feedback_cluster_run` + `feedback_cluster_assignment`.
-5. `feedback_category_proposals` + `feedback_sentiment` assets → assignment tables.
-6. dbt late-arriving join of assignment tables onto `tfact_feedback` (`category_fk`/`sentiment_fk`).
-7. Human curation loop on `dim_feedback_category` (approve/merge proposed labels).
+3. `feedback_summaries` asset (multi-turn conversations only) — **sample-measure the cost first** (§4).
+4. `feedback_embeddings` asset → vectors keyed by `feedback_conversation_pk`.
+5. `feedback_clusters` asset (UMAP+HDBSCAN) → `feedback_cluster_run` + assignments.
+6. `feedback_category_proposals` + `feedback_sentiment` assets → assignment tables.
+7. dbt join of the stage outputs onto `afact_feedback_conversation`'s generated columns.
+8. Human curation loop on `dim_feedback_category` (approve/merge proposed labels), and run promotion
+   (candidate → live cluster assignment).
 
 ---
 
 ## 8. Explicit non-goals (MVP)
 
 - No online/real-time embedding or serving (batch only).
-- No dedicated vector DB (Iceberg `ARRAY<float>` sidecar; revisit at Phase 2/serving need).
-- No GPU requirement (CPU batch at MVP scale; revisit at full 1.18M-row scale).
+- No dedicated vector DB (Iceberg `ARRAY<float>` column on the conversation fact; revisit at Phase 2/serving
+  need).
+- No GPU requirement (CPU batch at MVP scale; revisit at the full ~600K-conversation scale).
 - No cross-source clustering until forum/tutor/ORA sources land (Phase 2).
+- **No turn-level embeddings.** Conversations only; the turn grain in `tfact_feedback` keeps the option open
+  if a retrieval use case ever needs it.

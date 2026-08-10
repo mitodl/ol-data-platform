@@ -1,7 +1,7 @@
 # Feedback Aggregation — Zendesk MVP Implementation Spec
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-07 (rev. 2 — turn grain) · Companion to
+Date: 2026-08-10 (rev. 3 — conversation-grain analysis fact) · Companion to
 [`feedback_dimensional_model.md`](./feedback_dimensional_model.md),
 [`feedback_erd.md`](./feedback_erd.md) and [`feedback_ml_approach.md`](./feedback_ml_approach.md)
 
@@ -13,10 +13,17 @@ Convention baseline: mirrors `tfact_discussion_events` (the existing multi-sourc
 same timestamp macros, same FK-by-lookup-join pattern, same `_dim__models.yml` contract
 style. Divergence from precedent is called out explicitly where intentional.
 
-> **rev. 2 changes the grain source.** Zendesk is modelled at **comment (turn) grain**, not ticket grain
-> (design §1). The adapter reads `int__zendesk__ticket_comment`, filters to public requester-authored
-> comments, and joins `int__zendesk__ticket` for conversation-level attributes. `source_record_ref` is
-> `comment_id`; `conversation_ref` is `ticket_id`.
+> **rev. 2 changes the grain source, and it stands.** Zendesk is modelled at **comment (turn) grain**, not
+> ticket grain (design §1). The adapter reads `int__zendesk__ticket_comment` — verified to exist at one row
+> per comment, carrying `ticket_id` and `comment_plain_body` — filters to public requester-authored comments,
+> and joins `int__zendesk__ticket` for conversation-level attributes. `source_record_ref` is `comment_id`;
+> `conversation_ref` is `ticket_id`.
+
+> **rev. 3 changes where the models write, not where the turns come from.** `category_fk`/`sentiment_fk`
+> leave `tfact_feedback` (§4) and join the summary, embedding and cluster columns on
+> `afact_feedback_conversation` (§5), which becomes the analysis fact. A new
+> `int__feedback__conversation` assembles each ticket's kept turns for the ML batch. The Zendesk sourcing,
+> the filter, the business key and the turn grain are all unchanged.
 
 ---
 
@@ -25,7 +32,7 @@ style. Divergence from precedent is called out explicitly where intentional.
 | Item | What | Why |
 |---|---|---|
 | `comment_author_user_id` on `int__zendesk__ticket_comment` | it exists in `stg__zendesk__ticket_comment` but the int model exposes only `comment_author` (a *name*) | needed to classify requester-vs-agent turns **and** to resolve `user_fk`. Blocking. |
-| Volume measurement | count public, requester-authored comments per ticket | sizes the fact and the embedding budget; the previous ~198K ticket estimate no longer applies |
+| Volume measurement | count public, requester-authored comments per ticket, and the **multi-turn share** | sizes `tfact_feedback`, and the multi-turn share drives the summarization budget (`feedback_ml_approach.md` §A.1). The embedding budget is back to the ~198K *conversation* count under rev. 3 |
 | `ticket_metrics` Airbyte stream | not currently synced (see §5a of the design doc) | duration measures on `afact_feedback_conversation`. **Non-blocking** — that table ships without them |
 
 ---
@@ -47,11 +54,14 @@ raw__thirdparty__zendesk_support__ticket_comments  (existing Airbyte raw)
       ▼
   int__feedback__unioned        (NEW — UNION of all sources; MVP = zendesk only; + PII redaction §7)
       ▼
-  tfact_feedback                (NEW — resolve conformed FKs, generate feedback_pk)
+  tfact_feedback                (NEW — resolve conformed FKs, generate feedback_pk; INSERT-ONLY)
       ▼
   bridge_feedback_tag           (NEW — explode ticket tags → dim_feedback_tag)
 
-  afact_feedback_conversation   (NEW — conversation grain, from int__zendesk__ticket + turn aggregates)
+  int__feedback__conversation   (NEW — assemble a ticket's kept turns, ordered by turn_index; ML input)
+      ▼
+  afact_feedback_conversation   (NEW — the analysis fact: lifecycle from int__zendesk__ticket + turn
+                                 aggregates, plus the generated summary/embedding/sentiment/category/cluster)
 
   dim_feedback_source           (NEW — seed rows, static/near-static)
   dim_feedback_channel          (NEW — seed rows, conformed channel value set)
@@ -196,9 +206,8 @@ left join dim_user as users
 --    (dim_organization.sql:38). The Zendesk org/group rides in source_metadata instead.
 --    Design §2b records this as an explicit decision, not an oversight.
 
--- late-arriving, null at insert, updated by ML asset (design §4a/§4b):
-cast(null as varchar) as category_fk
-cast(null as varchar) as sentiment_fk
+-- rev. 3: NO category_fk / sentiment_fk here. They are model-derived and live on
+-- afact_feedback_conversation (§5). With them gone this fact has no post-insert write path.
 
 -- role-playing date/time (design §2d) — bare date_fk/time_fk are renamed because the
 -- fact now carries three timestamps and the unqualified name would be ambiguous
@@ -227,13 +236,15 @@ identity-collapse bug (`tk-re-derive-identity-conformed-dimension-joins-pos-b7ca
 
 **Divergence from precedent (intentional):** `tfact_chatbot_events`/`tfact_discussion_events`
 mint no `*_pk` and rely on a model-level `expect_compound_columns_to_be_unique` test. This
-fact mints an explicit `feedback_pk` from the stable source business key because (1) the
+fact mints an explicit `feedback_pk` from the stable source business key because the
 migration strategy (design §6) requires the same PK to regenerate identically across the
-interim→data-bus source swap, and (2) `category_fk`/`sentiment_fk` are late-arriving updates
-that need a stable row key to target. We keep the compound-uniqueness test *as well* (§8).
+interim→data-bus source swap. (Rev. 2's second reason — giving late-arriving
+`category_fk`/`sentiment_fk` a stable row to target — no longer applies, since rev. 3 moved both off this
+fact. The migration reason alone still justifies the divergence.) We keep the compound-uniqueness test
+*as well* (§8).
 
 **Output columns** (fact): `feedback_pk`, `feedback_source_fk`, `feedback_channel_fk`, `user_fk`,
-`courserun_fk`, `content_block_fk`, `platform_fk`, `organization_fk`, `category_fk`, `sentiment_fk`,
+`courserun_fk`, `content_block_fk`, `platform_fk`, `organization_fk`,
 `occurred_date_fk`, `occurred_time_fk`, `created_date_fk`, `created_time_fk`, `updated_date_fk`,
 `updated_time_fk`, `conversation_id` (=`conversation_ref`), `turn_index`, `is_conversation_opening`,
 `source_record_id` (=`source_record_ref`), `source_url`, `subject_type`, `subject_ref`, `subject_url`,
@@ -244,9 +255,10 @@ that need a stable row key to target. We keep the compound-uniqueness test *as w
 **Removed in rev. 2** (design §0 conformance rule): `source_status`, `source_priority`, `source_channel`,
 `source_brand`, `source_group` → `source_metadata`; `source_tags` → `bridge_feedback_tag`; `csat_score`
 renamed `explicit_rating`.
+**Removed in rev. 3:** `category_fk`, `sentiment_fk` → `afact_feedback_conversation` (design §5a).
 
-No `embedding_id`: the ML sidecar joins on `feedback_pk` (design §4f), so the column would add no
-reachability while forcing a write to the fact when embeddings land.
+No embedding column and no `embedding_id`: vectors live on the conversation fact (design §4f), which joins to
+this one on `conversation_id`.
 
 ---
 
@@ -293,45 +305,66 @@ Rows: `positive`, `neutral`, `negative` (design §4b), `sentiment_pk = generate_
   `category_source='llm_discovered'` rows; humans flip `category_status` to `approved`.
 - SCD-lite: relabel changes `category_label`, never `category_slug`.
 
-### `afact_feedback_conversation` — conversation grain (NEW in rev. 2)
-Per design §5a. Reads `int__zendesk__ticket` for conversation attributes and aggregates
-`tfact_feedback` for `turn_count` / `participant_count`.
-`feedback_conversation_pk = generate_surrogate_key(['source_slug', 'conversation_ref'])`.
+### `int__feedback__conversation` — the ML input (NEW in rev. 3)
+One row per `(source_slug, conversation_ref)`, assembling that conversation's kept turns from
+`int__feedback__unioned` in `turn_index` order — the redacted text concatenated with a turn delimiter, plus
+`turn_count`, `participant_count` and `conversation_text_chars`. This is what the summarizer and embedder
+read; it exists so the ML batch never has to re-derive conversation assembly in Python, and so the assembly
+logic is testable in dbt.
 
-MVP ships the available-today columns (`opened_date_fk`, `turn_count`, `participant_count`,
-`final_status`, `explicit_rating`). The duration measures (`first_response_date_fk`, `resolved_date_fk`,
-`closed_date_fk`, `resolution_duration_seconds`) are **blocked on the `ticket_metrics` Airbyte stream**
-(§0) and land additively — the grain does not move when they arrive.
+For non-conversational sources (`is_conversational = false`) this is a pass-through of a single turn —
+`conversation_ref = source_record_ref` — so ORA and the edX plugin need no special case.
+
+### `afact_feedback_conversation` — the analysis fact (NEW in rev. 2, widened in rev. 3)
+Per design §5a. `feedback_conversation_pk = generate_surrogate_key(['source_slug', 'conversation_ref'])`.
+Two column groups:
+
+- **Lifecycle** — reads `int__zendesk__ticket` for conversation attributes and aggregates `tfact_feedback`
+  for `turn_count` / `participant_count` / `last_turn_date_fk` / `conversation_text_chars`.
+- **Generated (rev. 3)** — `conversation_summary`, `embedding_vector`, `category_fk`, `sentiment_fk`,
+  `cluster_id` and their version stamps, left-joined from the ML asset's per-stage output tables
+  (`feedback_dagster_asset_spec.md` §3). All nullable; the table is queryable and useful before any of them
+  are populated.
+
+MVP ships the available-today lifecycle columns (`opened_date_fk`, `last_turn_date_fk`, `turn_count`,
+`participant_count`, `final_status`, `explicit_rating`) first. The duration measures
+(`first_response_date_fk`, `resolved_date_fk`, `closed_date_fk`, `resolution_duration_seconds`) are
+**blocked on the `ticket_metrics` Airbyte stream** (§0); the generated columns arrive with the ML asset.
+Both land additively — the grain does not move when they arrive.
+
+**Row count is known:** one row per Zendesk ticket, ~198K. Unlike the turn fact, this table needs no volume
+measurement before it can be sized.
 
 ---
 
 ## 6. Sentiment & category assignment at MVP
 
+Both now land on `afact_feedback_conversation`, not on `tfact_feedback` (rev. 3).
+
 - **Sentiment (`sentiment_fk`):** MVP can populate a *coarse* sentiment immediately from the
   explicit signal with **no model**: map `explicit_rating`
-  (`'good'`→positive, `'bad'`→negative, `'offered'`/null→neutral/unknown) → `dim_sentiment`.
-  The model-based sentiment (`feedback_ml_approach.md` §E) upgrades the null/`offered` rows
-  later. This gives a working sentiment facet on day one for the rated subset.
-  **Turn-grain caveat:** the Zendesk rating is a *ticket*-level signal, so at turn grain it applies the same
-  sentiment to every turn of a rated ticket. That is a weak label — fine for seeding and validating the
-  model, misleading if read as per-turn sentiment. The model-derived value should take precedence over the
-  propagated rating for non-opening turns.
+  (`'good'`→positive, `'bad'`→negative, `'offered'`/null→neutral/unknown) → `dim_sentiment`, with
+  `sentiment_source = 'explicit_rating'`. The model-based sentiment (`feedback_ml_approach.md` §E) upgrades
+  the null/`offered` rows later with `sentiment_source = 'model'`.
+  **Rev. 3 removes rev. 2's caveat here:** the Zendesk rating is a ticket-level signal and the target row is
+  now a ticket, so this is a grain-matched label rather than a value propagated across turns. It is a real
+  label for the rated ~6% of tickets, which is exactly what the model tier needs for validation.
 - **Category (`category_fk`):** MVP can assign the tag-seed category by mapping a ticket's
-  dominant tag (via `bridge_feedback_tag`) → its seed `category_slug`. Cluster-based reassignment comes with
-  the ML asset. Unassigned = null (queryable).
+  dominant tag (via `bridge_feedback_tag`, aggregated to the ticket) → its seed `category_slug`.
+  Cluster-based reassignment comes with the ML asset. Unassigned = null (queryable).
 
-Both are late-arriving updates, so the fact builds and is useful before the ML asset exists.
+Both are nullable columns on a derived aggregate, so the whole warehouse layer builds and is useful before
+the ML asset exists.
 
 ---
 
 ## 7. Dagster asset (MVP) — SEE `feedback_dagster_asset_spec.md`
 
-The scheduled batch asset (pull → redact → embed → cluster → LLM-label → write
-category/sentiment back) is specified separately once the orchestration layout is confirmed.
-The dbt models above are independently buildable and testable *without* the ML asset — the
-ML asset only fills `category_fk` / `sentiment_fk` on the fact and populates the sidecar tables
-(`feedback_embeddings`, `feedback_cluster_run`, `feedback_cluster_assignment`). This ordering lets
-the fact ship first.
+The scheduled batch asset (assemble → summarize → embed → cluster → LLM-label → sentiment) is specified
+separately. The dbt models above are independently buildable and testable *without* the ML asset — it only
+fills the generated columns on `afact_feedback_conversation` and writes `feedback_cluster_run`. This ordering
+lets both facts ship first, and rev. 3 strengthens it: the ML asset no longer touches `tfact_feedback` at
+all, so there is no dbt↔Dagster write ordering to coordinate on the transactional fact.
 
 ---
 
@@ -342,7 +375,7 @@ Mirror the `tfact_discussion_events` yml style:
   `feedback_occurred_at`, `occurred_date_fk`, `occurred_time_fk`.
 - `unique` on `feedback_pk`.
 - Nullable (description-only, no not_null): `user_fk`, `courserun_fk`, `content_block_fk`,
-  `platform_fk`, `organization_fk`, `category_fk`, `sentiment_fk`, `subject_ref`, `subject_url`,
+  `platform_fk`, `organization_fk`, `subject_ref`, `subject_url`,
   `explicit_rating`, `source_metadata`.
 - `accepted_values` on `subject_type` (`courseware_block`, `course_run`, `course`, `program`,
   `page_url`, `resource`, `unspecified`) — it is the discriminator for the polymorphic subject ref,
@@ -366,7 +399,17 @@ Mirror the `tfact_discussion_events` yml style:
   `dim_feedback_tag` a compound-unique on `['source_slug', 'tag_slug']`.
 - `bridge_feedback_tag`: `not_null` on both columns, compound-unique on the pair, `relationships` to
   `tfact_feedback.feedback_pk` and `dim_feedback_tag.feedback_tag_pk`.
-- `afact_feedback_conversation`: `unique` + `not_null` on `feedback_conversation_pk`; `turn_count >= 1`.
+- `afact_feedback_conversation`: `unique` + `not_null` on `feedback_conversation_pk`; `not_null` on
+  `conversation_id` and `feedback_source_fk`; `turn_count >= 1`; `relationships` from `conversation_id` to
+  `tfact_feedback.conversation_id` **and the reverse** — every turn's `conversation_id` must resolve here, so
+  a conversation cannot go missing from the analysis fact and quietly drop its turns out of every cluster.
+  Generated columns are all nullable (description-only): `conversation_summary`, `embedding_vector`,
+  `category_fk`, `sentiment_fk`, `cluster_id`. Two consistency tests worth having once the ML asset lands:
+  `embedding_model_version` is not null wherever `embedding_vector` is, and `summary_model_version` is null
+  exactly where the §A.1 skip rule applies (`turn_count = 1` or under the length threshold) — that second one
+  is the guard that a silent summarizer failure doesn't read as "short conversation".
+- `int__feedback__conversation`: compound-unique on `['source_slug', 'conversation_ref']`; `turn_count`
+  matches the turn count in `tfact_feedback` for the same conversation.
 
 ---
 
@@ -376,15 +419,18 @@ Per repo convention (`ol-dbt` CLI, DuckDB-over-Iceberg local): after writing mod
 `local register` + a targeted `dbt build --select +tfact_feedback` to validate the fact and
 its upstreams compile and pass tests against live Iceberg data.
 
-**Volume is no longer ~198K.** That figure was the ticket count; at turn grain the row count is public,
-requester-authored *comments*. Measuring that multiplier is a §0 prerequisite — run it first, because it
-sizes both the fact and the embedding budget.
+**Two different volumes now.** `afact_feedback_conversation` is ~198K rows (one per ticket — a known figure).
+`tfact_feedback` is public, requester-authored *comments*, whose multiplier over tickets is still unmeasured;
+that measurement is a §0 prerequisite. Rev. 3 lowers its stakes — the embedding budget is now driven by the
+conversation count, not the turn count — but it still sizes the turn fact and, via the multi-turn share, the
+summarization budget.
 
 Validate: `feedback_pk` uniqueness; the three turn-grain tests (§8); null-`user_fk` rate (sanity-check
 identity resolution isn't silently collapsing); distinct `conversation_id` count vs. `int__zendesk__ticket`
 row count (these *should* match — a mismatch means the filter dropped whole tickets, e.g. tickets whose only
-public comment is from an agent, which is worth knowing rather than discovering later); and the
-`is_conversation_opening` count vs. the same.
+public comment is from an agent, which is worth knowing rather than discovering later); the
+`is_conversation_opening` count vs. the same; and that `afact_feedback_conversation` has exactly one row per
+distinct `conversation_id` in the turn fact.
 
 ---
 
@@ -397,5 +443,6 @@ public comment is from an agent, which is worth knowing rather than discovering 
 - No full-thread agent replies — the §2 filter keeps requester turns only. Agent responses are a
   support-quality dataset, not feedback, and would need their own justification to include.
 - No data-bus/analytics-api ingress (Phase 3, gated on the write path — RFC Open Questions).
-- No embedding/clustering *required* for the fact to be useful (ML asset is additive).
+- No embedding/clustering *required* for either fact to be useful (ML asset is additive).
+- No turn-level embeddings or summaries — the analysis unit is the conversation (design §5a).
 - No cross-source identity rollups until `tk-...-b7ca16` is re-derived.

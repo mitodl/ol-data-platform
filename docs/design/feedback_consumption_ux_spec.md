@@ -12,8 +12,14 @@ side that validates the model actually serves its audiences.
 
 ## 1. Audiences × altitude (from the RFC)
 
-Four audiences at three altitudes. Each maps to a specific slice of `tfact_feedback` +
-`dim_feedback_category`/`dim_sentiment` and a specific row-level access rule.
+Four audiences at three altitudes. Each maps to a specific slice of the fact pair —
+`afact_feedback_conversation` (the analysis unit: summary, cluster, category, sentiment) drilling through to
+`tfact_feedback` (the turns) — plus a specific row-level access rule.
+
+> **Rev. 3 note.** Cluster listings, category and sentiment now read from
+> `afact_feedback_conversation`; `tfact_feedback` is the drill-down target, not the primary query surface.
+> The practical gain for consumers is that a cluster row carries an LLM summary of the conversation, so a
+> triage list is readable without expanding threads.
 
 | Audience | Altitude | Core question | Grain they work at | Row-level access |
 |---|---|---|---|---|
@@ -46,8 +52,8 @@ platform **already operates**:
 **Recommendation — phased and audience-matched, not one surface:**
 1. **MVP (fastest value): Superset** for leadership trends and the support/eng cluster tables —
    it's already operated, RLS is already solved as code, and it matches the RFC's
-   "near-zero new infrastructure" posture. Datasets point at `tfact_feedback` /
-   `afact_feedback_cluster_daily` / the dims.
+   "near-zero new infrastructure" posture. Datasets point at `afact_feedback_conversation` /
+   `afact_feedback_cluster_daily` / the dims, with `tfact_feedback` as the drill-through detail.
 2. **Interactive + curation surface: a deployed Marimo notebook-as-webapp** — the right home for
    cluster exploration, semantic search, and the **category-curation loop** (approve/merge
    LLM-proposed labels), and the **cheapest way to prototype the real UX** before deciding whether
@@ -62,13 +68,13 @@ This ordering keeps commitment low (all three read the same tables) and treats M
 discovery vehicle between "a dashboard is enough" and "we need a real app."
 
 **MVP surface content (Superset unless noted):**
-1. **Support triage** — cluster list ranked by **distinct conversation count** (not row count — at turn
-   grain one verbose ticket contributes many turns) and recency, filterable by
-   `dim_feedback_channel`, tags via `bridge_feedback_tag`, and status/priority extracted from
-   `source_metadata` with `json_query_string`. Each cluster drills through to constituent (redacted) turns,
-   grouped by `conversation_id`, with `source_url` deep-links back to Zendesk. Sentiment facet from
-   `dim_sentiment`. Conversation-level context (age, resolution state) joins from
-   `afact_feedback_conversation`.
+1. **Support triage** — cluster list over `afact_feedback_conversation`, ranked by conversation count and
+   recency (at conversation grain the cluster's member count *is* its conversation count, so rev. 2's
+   distinct-count workaround is gone), filterable by `dim_feedback_channel`, tags via `bridge_feedback_tag`,
+   and status/priority extracted from `source_metadata` with `json_query_string`. Each cluster lists its
+   conversations **by `conversation_summary`** — readable without expanding anything — and each conversation
+   drills through to its constituent (redacted) turns in `tfact_feedback`, with `source_url` deep-links back
+   to Zendesk. Sentiment facet from `dim_sentiment`; age and resolution state are columns on the same row.
 
    *Superset note:* the variant column means status/priority are a computed dataset column
    (`json_query_string(source_metadata, '$.ticket_status')`) rather than a physical one — define them once
@@ -115,9 +121,14 @@ Row-level access can be enforced at **two layers**, and the surface choice (§2)
 
 - **Redacted text only** is exposed in any consumption surface (raw text stays in
   `raw`/`stg` under existing PII classification + Lakekeeper/Cedar authz — design §7).
-- **Leadership** sees the aggregate fact only (no row-level text) — enforced by pointing
-  their dashboards at `afact_feedback_cluster_daily`, not `tfact_feedback`.
-- Re-applying PII classification + Lakekeeper/Cedar authz at the new fact/dims is tracked by
+  **`conversation_summary` counts as text for this purpose** — it is generated from redacted input and
+  inherits that classification, so it is governed exactly like `feedback_text`, not treated as an
+  aggregate.
+- **Leadership** sees the aggregate rollup only (no row-level text) — enforced by pointing
+  their dashboards at `afact_feedback_cluster_daily`, **not** `afact_feedback_conversation`. Note the
+  rev. 3 sharpening: the conversation fact is an `afact_` but it is *not* text-free, so "leadership sees
+  aggregates" can no longer be read as "leadership sees anything prefixed `afact_`".
+- Re-applying PII classification + Lakekeeper/Cedar authz at the new facts/dims is tracked by
   `tk-re-apply-pii-classification-lakekeeper-cedar-aut-1b3516` (p3).
 
 ---

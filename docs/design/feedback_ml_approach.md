@@ -1,71 +1,104 @@
 # Feedback Aggregation — ML/LLM Approach Spec
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-07-10 · Companion to [`feedback_dimensional_model.md`](./feedback_dimensional_model.md)
+Date: 2026-08-10 (rev. 3 — conversation-grain analysis) · Companion to
+[`feedback_dimensional_model.md`](./feedback_dimensional_model.md)
 
 Resolves the open items the dimensional-model design handed to downstream tasks:
 clustering (`tk-...-clustering-approach-...a1d7d6`), category discovery
 (`tk-...-llm-driven-category-discovery-...550aba`), and sentiment
-(`tk-...-sentiment-mapping-...92988e`). Grounded in the discovery cost model
-(~1.18M text records; one-time embed ≈ $2–16). **The MVP figure of ~198K is stale** — it was the Zendesk
-*ticket* count, and rev. 2 moves the grain to turns; see §B.2.
+(`tk-...-sentiment-mapping-...92988e`). Grounded in the discovery cost model (~1.18M text records; one-time
+embed ≈ $2–16). At rev. 3's conversation grain the embedding input is **~198K Zendesk conversations**
+(~600K across all sources) rather than the turn corpus — see §B.2.
 
-The guiding principle from the RFC: **the durable artifact is the feedback fact +
-persisted embeddings; clustering/category/sentiment are re-runnable consumers of it.**
-Nothing here rewrites `tfact_feedback`; all ML output lands in the `feedback_embeddings`
-sidecar or the late-arriving `category_fk`/`sentiment_fk` update.
+The guiding principle from the RFC: **the durable artifact is the feedback fact; everything a model produces
+is a re-runnable derived layer.** Nothing here writes to `tfact_feedback` — as of rev. 3 that fact is
+insert-only and has no late-arriving update path at all. All ML output lands on
+`afact_feedback_conversation`.
 
-> **REVISED 2026-08-07 (rev. 2) — grain moved from ticket to turn** (design §1). Two consequences for this
-> spec, both worked through below: the **record count is now public requester *comments*, not tickets**
-> (§B.2), and the **text profile changes** — a mid-conversation turn is shorter and more context-dependent
-> than a ticket description, which is exactly the regime where the semantic-normalization eval arm (§B.1)
-> matters most.
+> **REVISED 2026-08-10 (rev. 3) — the analysis unit is the conversation, not the turn** (design §5a).
+> `tfact_feedback` keeps its turn grain, but summarization, embedding, sentiment and clustering all operate
+> on the **assembled conversation** and write one row per conversation. Consequences worked through below:
+> the record count is conversations (~198K for Zendesk, a *known* number) rather than an unmeasured comment
+> multiplier (§B.2); a new **summarization stage** is the one per-record LLM cost (§A.1); `min_cluster_size`
+> once again reads as "how many conversations before we call it systemic" (§C); and the Zendesk CSAT signal
+> becomes grain-matched to the sentiment it seeds (§E).
+
+> **REVISED 2026-08-07 (rev. 2) — `tfact_feedback` grain moved from ticket to turn** (design §1). Still in
+> force: the fact records every requester turn, sourced from `int__zendesk__ticket_comment`. Rev. 3 changes
+> what the *models* consume, not what the fact records — and the turn grain is precisely what makes a
+> complete conversation assemblable.
 
 ---
 
 ## A. Pipeline shape (single batch Dagster asset graph, MVP)
 
 ```
-int__feedback__unioned (redacted text, feedback_pk)          [dbt]
-  → embed        : text → vector, persisted once             [py asset: feedback_embeddings]
-  → cluster      : vectors → cluster_id per cluster_run       [py asset: feedback_cluster_run
-                                                               + feedback_cluster_assignment]
-  → label        : cluster centroid/samples → category label  [py asset: dim_feedback_category (proposed)]
-  → sentiment    : text/vector → sentiment_slug               [py asset: sentiment_fk]
-  → assign       : write category_fk/sentiment_fk back        [dbt incremental or py upsert]
+int__feedback__conversation (redacted turns assembled per conversation) [dbt]
+  → summarize    : turns → conversation_summary               [py; SKIPPED for single-turn/short — §A.1]
+  → embed        : summary or turns → vector                  [py]
+  → cluster      : vectors → cluster_id per cluster_run       [py; + feedback_cluster_run]
+  → label        : cluster centroid/samples → category label  [py: dim_feedback_category (proposed)]
+  → sentiment    : rating or text/vector → sentiment_slug     [py]
+  → write        : one row per conversation                   [afact_feedback_conversation]
 ```
 
-Each stage is idempotent and keyed by `feedback_pk` + `model_version`/`cluster_run_id`,
-so a re-run never duplicates and never mutates the fact grain. Embedding is computed
-**once per (feedback_pk, model_version)**; only cluster/label/sentiment re-run cheaply.
+Every stage is keyed by `feedback_conversation_pk` and stamps the version that produced it
+(`summary_model_version`, `embedding_model_version`, `cluster_run_id`), so a re-run is an idempotent
+overwrite of a derived row. **No stage writes to `tfact_feedback`.**
 
-**The sidecar is three tables, not one** (design §4d; ERD in [`feedback_erd.md`](./feedback_erd.md) §3).
-Vectors are one row per `(feedback_pk, model_version)`; cluster assignments are one row per
-`(feedback_pk, cluster_run_id)`. Collapsing them into a single `feedback_embeddings` table means
-re-clustering against an unchanged model rewrites or duplicates vector rows — which is exactly the
-"re-clustering never touches the durable artifact" property this design exists to buy:
+**One target table, not a sidecar** (design §4f/§5a; ERD in [`feedback_erd.md`](./feedback_erd.md) §4). The
+rev. 2 sidecar split — `feedback_embeddings` at `(feedback_pk, model_version)` and
+`feedback_cluster_assignment` at `(feedback_pk, cluster_run_id)` — is withdrawn. All of it collapses onto one
+row per conversation, and two tables survive at genuinely different grains:
 
 | Table | Grain | Holds |
 |---|---|---|
-| `feedback_embeddings` | `(feedback_pk, model_version)` | `vector` (Iceberg `ARRAY<float>`), `vector_dim`, `text_variant`, `embedded_at` |
-| `feedback_cluster_run` | `(cluster_run_id)` | `model_version`, `algorithm`, `run_params`, `cluster_count`, `noise_count`, `silhouette`, `run_status`, `run_at` |
-| `feedback_cluster_assignment` | `(feedback_pk, cluster_run_id)` | `cluster_id` (`-1` = noise = one-off), `cluster_probability` |
+| `afact_feedback_conversation` | `(feedback_conversation_pk)` | summary, `embedding_vector`, `embedding_dim`, `embedding_input`, `category_fk`, `sentiment_fk`, `cluster_id`, `cluster_probability` + version stamps |
+| `feedback_cluster_run` | `(cluster_run_id)` | `embedding_model_version`, `algorithm`, `run_params`, `cluster_count`, `noise_count`, `silhouette`, `run_status`, `run_at` |
+| `feedback_cluster_candidate` | `(feedback_conversation_pk, cluster_run_id)` | `cluster_id`, `cluster_probability` — **unpromoted runs only**, for run-vs-run comparison |
 
-`text_variant` (`raw` \| `llm_normalized`) makes the semantic-normalisation eval arm (§B.1) a *row*
-distinction rather than a separate pipeline — both arms coexist under one `model_version` sweep.
-`dim_feedback_category.cluster_run_id` records which run proposed a category.
+**What the collapse costs, honestly.** Re-clustering now rewrites the afact row, vector column included — the
+property rev. 2's split was bought to preserve. The vector *value* is carried forward rather than recomputed,
+so nothing is re-embedded; what is lost is holding several generations live in production simultaneously.
+That is a bake-off need, and `feedback_cluster_candidate` (plus scratch tables during the §B.1 evaluation)
+covers it off the critical path. What is bought is a single table for consumers and an insert-only fact.
+
+`embedding_input` (`summary` \| `concatenated_turns`) is what makes the summarize-before-embed question
+(§B.1) a *column* on the eval rather than a separate pipeline. `dim_feedback_category.cluster_run_id` still
+records which run proposed a category.
+
+### A.1 Summarization — the one per-record LLM call
+
+New in rev. 3. `conversation_summary` is an LLM abstract of the assembled redacted turns. It serves two
+purposes: it is what a human reads in a cluster listing instead of scrolling a thread, and it is a candidate
+for `embedding_input` — which is the same lever §B.1 already identified as the largest single contributor to
+cluster quality on short, noisy ticket text. Rev. 3 promotes it from an eval arm to a first-class artifact,
+so its cost has to be stated rather than assumed away:
+
+- **Skip rule:** conversations with `turn_count = 1` or under a length threshold are **not** summarized —
+  the raw text already is the summary. `summary_model_version` stays null and `embedding_input` is
+  `concatenated_turns`. ORA and the edX plugin are single-turn by construction and are free.
+- **Order of magnitude (validate on a sample first):** the multi-turn share of ~198K Zendesk conversations at
+  ~1–2K input and ~100 output tokens each lands the one-time backfill in the low hundreds of dollars at
+  Haiku-class pricing; steady state (~24K conversations/yr, a fraction multi-turn) is tens of dollars a year.
+  One to two orders of magnitude above the $2–16 embedding backfill, still small absolutely — but it is a
+  real departure from the "trivial batch cost" posture this project has carried since discovery, and it is
+  the number to measure before committing.
+- **PII:** summaries are generated from Presidio-redacted text only and inherit that classification.
 
 ---
 
 ## B. Embedding (foundation for clustering AND sentiment)
 
-**Decision: one shared embedding, computed once, stored in the `feedback_embeddings`
-sidecar.** Both clustering and (semantic) sentiment consume it — do not embed twice.
+**Decision: one shared embedding per conversation, computed once, stored on
+`afact_feedback_conversation`.** Both clustering and (semantic) sentiment consume it — do not embed twice.
 
 > **REVISED 2026-07-10 (rev. 4) — see [`adr_embedding_compute_strategy.md`](./adr_embedding_compute_strategy.md).**
 > Compute stays engine-external via **Fenic (Apache-2.0)** in a Dagster asset, writing vectors to
-> an open Iceberg `ARRAY<float>` sidecar (portable across Trino→StarRocks; StarRocks later indexes
-> those vectors with HNSW). **Bedrock/in-account is NOT a requirement** — the **embedding model is
+> an open Iceberg `ARRAY<float>` column (rev. 3: on `afact_feedback_conversation`; portable across
+> Trino→StarRocks, and StarRocks later indexes those vectors with HNSW — a load, not a re-embed).
+> **Bedrock/in-account is NOT a requirement** — the **embedding model is
 > chosen by task effectiveness** (clustering + retrieval on OUR feedback corpus), with egress of
 > Presidio-redacted text to a managed provider acceptable. Model selection is specified as an
 > evaluation below, not a fixed pick. Persist-once, `model_version`, Iceberg storage, and
@@ -111,36 +144,45 @@ comparison. Let the harness decide; do not hardcode a winner in the spec.
   Presidio-redacted text only. Raw text never reaches the embedding step. (Redaction remains
   required even though provider egress is now acceptable — it is a data-minimization guarantee,
   not just an egress control.)
-- **`model_version` is a first-class column** on `feedback_embeddings`. Changing the model (or the
-  dimension) = new `model_version` rows, old retained until re-cluster completes (no torn state).
-  This is what makes the model choice reversible and the eval low-risk.
-- **Vector storage:** ~1.18M × (256–1024) float32 ≈ 1.2–4.8 GB. Store as an Iceberg `ARRAY<float>`
-  column for the MVP (no new service; the batch clustering job reads the set into memory — fine at
-  this scale). StarRocks HNSW becomes the serving-tier index once deployed (ADR).
+- **`embedding_model_version` is a first-class column** on `afact_feedback_conversation`. Changing the model
+  (or the dimension) = a rebuild of the derived table under a new version stamp, with the bake-off run
+  against scratch/candidate tables so production is never in a torn state. This is what makes the model
+  choice reversible and the eval low-risk — and it costs nothing on `tfact_feedback`, which is untouched.
+- **Vector storage:** at conversation grain the vector count is *conversations*, not turns — ~198K for the
+  Zendesk MVP and roughly 600K across all sources (Zendesk tickets + forum threads + tutor threads + ORA
+  submissions), against the ~1.18M *turn* figure the earlier estimate used. At (256–1024) float32 that is
+  ~0.2–2.5 GB. Store as an Iceberg `ARRAY<float>` column for the MVP (no new service; the batch clustering
+  job reads the set into memory — comfortable at this scale). StarRocks HNSW becomes the serving-tier index
+  once deployed (ADR).
 
-### B.2 Volume and text profile at turn grain (rev. 2)
+### B.2 Volume and text profile at conversation grain (rev. 3)
 
-The discovery cost model (~1.18M records, one-time embed ≈ $2–16, MVP ≈ 198K Zendesk *tickets*) assumed
-ticket grain. At turn grain the MVP input is public, requester-authored **comments**, and that multiplier is
-**unmeasured** — it is a prerequisite in `feedback_zendesk_mvp_spec.md` §0 and must be run before the
-embedding budget is treated as known. Embedding cost scales linearly, so even a 3–5× multiplier keeps the
-one-time backfill in low tens of dollars; the reason to measure is sizing and runtime, not affordability.
+**The embedding input count is now a known number, not an unmeasured multiplier.** Rev. 2 put the ML input at
+public, requester-authored *comments*, whose ratio to tickets nobody had measured. Rev. 3 embeds
+conversations, so the MVP input is **~198K Zendesk tickets** — the figure discovery actually measured — and
+roughly ~600K across all sources once forum threads, tutor threads and ORA submissions are onboarded, versus
+the ~1.18M turn-level corpus. Embedding cost returns to the original $2–16 order of magnitude.
 
-Three substantive effects, not just a bigger number:
+The turn-count measurement in `feedback_zendesk_mvp_spec.md` §0 is **still required**, but for different
+reasons now: it sizes `tfact_feedback` itself, and it determines the multi-turn share that drives the
+summarization budget (§A.1).
 
-- **Turn grain helps clustering.** Under ticket grain only the opening comment is embedded, so a problem
-  first articulated in turn 4 ("actually the real issue is the certificate never generated") is invisible to
-  the systemic-issue detector. That is a recall gap, and it is the kind of thing this system exists to find.
-- **Turn text is shorter and more context-dependent.** The ~1,000-char average for `ticket_description` does
-  not hold for follow-up turns, which skew short and often refer back ("still not working", "same as
-  before"). This is precisely the short/noisy regime where the 2026 support-ticket-clustering evidence
-  reports **semantic-normalization before embedding** to be the largest lever (§B.1) — so the eval arm gets
-  *more* important, not less, and should be scored separately on opening vs. follow-up turns.
-- **Cluster sizes stop being ticket counts.** A single verbose ticket can contribute many turns to one
-  cluster. `min_cluster_size` therefore no longer reads as "how many tickets before we call it systemic" —
-  rank clusters by **distinct `conversation_id`**, not row count, or one talkative user manufactures a
-  systemic issue. This is a real change to §C's tuning story and to `afact_feedback_cluster_daily`, which
-  carries `distinct_conversation_count` for the same reason.
+Three substantive effects, not just a different number:
+
+- **Conversation grain fixes the recall gap without reintroducing the old one.** Rev. 1's ticket grain
+  embedded only the opening comment, so a problem first articulated in turn 4 ("actually the real issue is
+  the certificate never generated") was invisible to the systemic-issue detector. Embedding the *assembled*
+  conversation includes turn 4 — while also keeping it attached to the turn-1 context that makes it
+  interpretable, which per-turn embedding threw away.
+- **The text profile improves in the direction §B.1 cares about.** Isolated follow-up turns skew short and
+  referential ("still not working", "same as before") — the worst case for an embedding model. An assembled
+  conversation, and more so its summary, is self-contained. This does not retire the summarize-before-embed
+  eval arm; it makes it a comparison between two coherent inputs (`embedding_input = summary` vs.
+  `concatenated_turns`) rather than a rescue operation on fragments.
+- **Cluster size means what it should again.** A cluster's member count *is* its distinct-conversation count,
+  so `min_cluster_size` reads directly as "how many conversations before we call this systemic" and one
+  talkative reporter can no longer manufacture a systemic issue. Rev. 2's rank-by-`distinct conversation_id`
+  workaround and `afact_feedback_cluster_daily`'s twin count columns both go away.
 
 **Rejected:** re-embedding on every run (the prototype #10793 flaw the RFC fixes).
 **Upgraded from "rejected" to "evaluate seriously" (new evidence, 2026-07):** LLM
@@ -155,8 +197,8 @@ Zendesk descriptions (avg ~1,000 chars) and least on already-short sources (tuto
 
 ## C. Clustering (systemic-issue detection) — `tk-...-a1d7d6`
 
-**Goal:** turn per-utterance embeddings into clusters that distinguish a *systemic issue*
-(many tickets, one root theme) from a *one-off*. Output = `cluster_id` + a cluster-size /
+**Goal:** turn per-conversation embeddings into clusters that distinguish a *systemic issue*
+(many conversations, one root theme) from a *one-off*. Output = `cluster_id` + a cluster-size /
 cohesion signal that lets a human say "this is recurring."
 
 - **Algorithm: HDBSCAN** (density-based) as the default, over UMAP-reduced embeddings.
@@ -173,29 +215,30 @@ cohesion signal that lets a human say "this is recurring."
 - **Dimensionality reduction: UMAP** to ~5–15 dims before HDBSCAN (HDBSCAN degrades in
   raw high-dim space). `n_neighbors`/`min_cluster_size` are the two knobs to tune on a
   Zendesk sample and should be config, not hardcoded.
-  **rev. 2:** at turn grain `min_cluster_size` counts *turns*, not tickets, so it no longer reads directly
-  as "how many tickets before we call it systemic". Rank and threshold clusters by **distinct
-  `conversation_id`** (§B.2) so one verbose conversation cannot manufacture a systemic issue.
-- **Pre-embedding LLM semantic-normalization is a first-class eval arm here** (see §B.1): recent
-  support-ticket-clustering evidence (2026) reports it is the single largest lever on cluster
-  quality for short/noisy ticket text. Evaluate `normalize→embed→cluster` against `embed→cluster`
-  on the labeled sample (silhouette + tag-agreement + human coherence); adopt only where the
-  measured lift justifies the per-record LLM cost — likely worth it for the long Zendesk
-  descriptions, likely not for already-short sources.
-- **Re-clustering is cheap and expected:** each run writes a new `cluster_run_id`; the
-  sidecar keeps prior runs. `dim_feedback_category` (curated) only advances when a human
-  approves labels from a run (design §4a), decoupling churny clustering from the stable
-  category dimension.
+  **rev. 3:** at conversation grain `min_cluster_size` counts conversations, so it reads directly as "how
+  many conversations before we call it systemic" and needs no correction. (Rev. 2's rank-by-distinct-
+  `conversation_id` workaround, required when clustering turns, is retired.)
+- **Summary-vs-raw is the eval arm** (see §B.1/§A.1): recent support-ticket-clustering evidence (2026)
+  reports LLM normalization before embedding is the single largest lever on cluster quality for short/noisy
+  ticket text. Rev. 3 makes the summary a first-class artifact, so this becomes a comparison between
+  `embedding_input = 'summary'` and `embedding_input = 'concatenated_turns'` on the labeled sample
+  (silhouette + tag-agreement + human coherence). Adopt the summary as the embedding input only where the
+  measured lift justifies its per-conversation LLM cost — expected to help most on long multi-turn Zendesk
+  tickets and not at all on single-turn sources, which the §A.1 skip rule never summarizes anyway.
+- **Re-clustering is cheap and expected:** each run writes a new `cluster_run_id` to `feedback_cluster_run`;
+  an unpromoted run's assignments sit in `feedback_cluster_candidate` until approved, at which point they are
+  copied onto `afact_feedback_conversation`. `dim_feedback_category` (curated) only advances when a human
+  approves labels from a run (design §4a), decoupling churny clustering from the stable category dimension.
 - **Cross-source clustering (Phase 2):** because all sources share one embedding space in
-  `int__feedback__unioned`, a cluster can span Zendesk + forum + tutor — this is the
+  `int__feedback__conversation`, a cluster can span Zendesk + forum + tutor — this is the
   mechanism behind `afact_feedback_cluster_daily` (cluster × category × sentiment × date ×
   source). No algorithm change needed; just don't filter `source_slug` at cluster time.
 - **Deps:** `umap-learn`, `hdbscan` (or `scikit-learn`'s `HDBSCAN` ≥1.3 to avoid the
   separate compiled dep — decide at implementation based on the Dagster image's build
   constraints). All CPU, no service.
 
-**Cluster-quality columns** are added *only if the chosen algorithm produces them* (RFC step 6):
-`cluster_id` + `cluster_probability` on `feedback_cluster_assignment`; run-level `silhouette`,
+**Cluster-quality columns** are added *only if the chosen algorithm produces them*:
+`cluster_id` + `cluster_probability` on `afact_feedback_conversation`; run-level `silhouette`,
 `cluster_count`, `noise_count` on `feedback_cluster_run` (§A) — persistence optional.
 
 ---
@@ -216,10 +259,11 @@ cohesion signal that lets a human say "this is recurring."
 
 **Key design invariants (from §4a):**
 - **SCD-lite on `category_slug`:** relabeling changes `category_label`, never the slug —
-  so `category_fk` on the fact is stable across renames.
-- **Assignment is late-arriving:** a ticket gets `category_fk` after insert, by mapping its
-  `cluster_id` → the approved category for that cluster. Uncategorized = `category_fk` null
-  (a valid, queryable state).
+  so `category_fk` is stable across renames.
+- **Assignment lands on `afact_feedback_conversation`** (rev. 3), by mapping a conversation's `cluster_id` →
+  the approved category for that cluster. Uncategorized = `category_fk` null (a valid, queryable state).
+  This is no longer a "late-arriving update to the fact" — the fact has no update path; it is a rebuild of a
+  derived column.
 - **LLM cost is bounded:** one LLM call *per cluster*, not per record (there are hundreds
   of clusters, not millions of tickets). This is the critical cost distinction from the
   rejected per-record semantic-summary approach.
@@ -234,10 +278,16 @@ is why it is a dbt/warehouse dimension and not raw model output.
 
 ## E. Sentiment mapping — `tk-...-92988e`
 
-**Grain:** `sentiment_fk` on `tfact_feedback`, one sentiment per utterance.
+**Grain:** `sentiment_fk` on `afact_feedback_conversation`, one sentiment per **conversation** (rev. 3).
 `dim_sentiment` starts coarse: `positive | neutral | negative` (design §4b), with a
 `polarity_score_bucket` for trend rollups. Aspect-based sentiment is a later refinement,
 not MVP.
+
+> **Rev. 3 fixes a grain mismatch.** Zendesk's `satisfaction_rating_score` is a *ticket*-level signal. At
+> turn grain it had to be propagated to every turn of a rated ticket, which rev. 2 had to flag as a weak and
+> potentially misleading label. It is now the same grain as the sentiment it seeds, so tier 1 below is an
+> exact label rather than an approximation — which also makes the tier-2 validation set trustworthy.
+> `sentiment_source` (`explicit_rating` | `model`) records which tier produced each row.
 
 **Two-tier derivation, cheapest-signal-first:**
 1. **Explicit signals seed & validate (free, high-precision):** where the source carries
@@ -262,16 +312,20 @@ not MVP.
 + embedding-kNN, explicit + local classifier, explicit + LLM) on a labeled Zendesk sample,
 pick by accuracy-vs-cost. Default assumption: **explicit signals + embedding-kNN** wins on
 cost and is "good enough" for trend-level sentiment; upgrade only if the accuracy gap is
-material. `dim_sentiment` and the fact column are unaffected by which wins.
+material. `dim_sentiment` and the conversation-fact column are unaffected by which wins.
 
 ---
 
 ## F. What is explicitly deferred (non-blocking for spec/MVP)
 
-- Embedding model final pick + GPU/CPU throughput at full scale (MVP proves it on the Zendesk turn corpus,
-  whose size is the §B.2 measurement).
+- Embedding model final pick + GPU/CPU throughput at full scale (MVP proves it on ~198K Zendesk
+  conversations).
 - Dedicated vector store / online serving (Iceberg ARRAY suffices for batch).
 - Aspect-based sentiment; multi-lingual handling.
-- Semantic-summary-before-embedding and hierarchical truncation from prototype #10793 —
-  test as hypotheses on a sample, do not inherit (RFC Open Questions).
+- **Turn-level embeddings.** Rev. 3 embeds conversations only. If a later retrieval use case needs
+  "find me the exact turn where this was said", turn-level vectors can be added as a genuine sidecar then —
+  the turn grain in `tfact_feedback` preserves the option. Nothing in the MVP needs it.
+- Hierarchical truncation from prototype #10793 — test as a hypothesis on a sample, do not inherit
+  (RFC Open Questions). Semantic-summary-before-embedding is no longer deferred: rev. 3 makes the summary a
+  first-class artifact and its use as `embedding_input` a scored eval arm (§A.1, §C).
 - Cross-source `afact_feedback_cluster_daily` tuning (Phase 2).
