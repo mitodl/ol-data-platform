@@ -58,8 +58,10 @@ SLACK_CHANNEL_BY_ENV = {
 slack_channel = SLACK_CHANNEL_BY_ENV[DAGSTER_ENV]
 
 # Bounds a single tick's Slack payload and its event-log scan. A backlog larger
-# than this is drained over subsequent ticks via the cursor.
-MAX_CHECK_EVALUATIONS_PER_TICK = 50
+# than this is drained over subsequent ticks via the cursor. Capped at 49, not
+# 50: asset_check_failure_message adds one header block on top of one detail
+# block per failure, and Slack rejects a chat.postMessage over 50 blocks.
+MAX_CHECK_EVALUATIONS_PER_TICK = 49
 
 MAX_SLACK_TEXT_LENGTH = 3000
 # Leaves room for the surrounding header and step key within Slack's limit.
@@ -381,9 +383,13 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
 
 
 def asset_check_failure_message(
-    records: Sequence[Any],
+    failures: Sequence[tuple[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Format a batch of failed asset check evaluations for Slack."""
+    """Format a batch of failed asset check evaluations for Slack.
+
+    Each failure links to the run that produced it rather than a shared link,
+    since a single batch can span multiple runs.
+    """
     detail_blocks = [
         {
             "type": "section",
@@ -394,8 +400,13 @@ def asset_check_failure_message(
                     f"`{evaluation.check_name}`"
                 ),
             },
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "View run"},
+                "url": f"{dagster_url}/runs/{run_id}",
+            },
         }
-        for evaluation in records
+        for run_id, evaluation in failures
     ]
     return [
         {
@@ -404,31 +415,25 @@ def asset_check_failure_message(
                 "type": "plain_text",
                 "text": (
                     f"Dagster {DAGSTER_ENV.capitalize()} Asset Check Failure "
-                    f"({len(records)})"
+                    f"({len(failures)})"
                 ),
             },
         },
         *detail_blocks,
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "View asset checks"},
-                    "url": f"{dagster_url}/asset-groups",
-                }
-            ],
-        },
     ]
 
 
 def collect_new_check_failures(
     instance: Any, cursor: int | None
-) -> tuple[list[Any], str | None]:
+) -> tuple[list[tuple[str, Any]], str | None]:
     """Read the next batch of asset check evaluations above ``cursor``.
 
-    Returns the ERROR-severity failures in that batch and the cursor to store,
-    or an empty list and None when there is nothing new.
+    Returns (run_id, evaluation) pairs for the ERROR-severity failures in that
+    batch and the cursor to store, or an empty list and None when there is
+    nothing new. The run_id travels with each evaluation because
+    ``AssetCheckEvaluation`` itself carries none -- it is only on the
+    surrounding event log record -- and the Slack message needs it to link
+    back to the run that raised the failure.
 
     ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
     after ordering, so descending order returns the *newest* batch above the
@@ -449,12 +454,16 @@ def collect_new_check_failures(
         return [], None
 
     evaluations = [
-        record.event_log_entry.dagster_event.event_specific_data for record in records
+        (
+            record.event_log_entry.run_id,
+            record.event_log_entry.dagster_event.event_specific_data,
+        )
+        for record in records
     ]
     # WARN-severity checks are advisory; only ERROR is worth a notification.
     failures = [
-        evaluation
-        for evaluation in evaluations
+        (run_id, evaluation)
+        for run_id, evaluation in evaluations
         if not evaluation.passed and evaluation.severity == AssetCheckSeverity.ERROR
     ]
     # The newest record of an ascending batch: nothing older is left behind,

@@ -14,6 +14,7 @@ from data_platform.definitions import (
     WILL_RETRY_TAG,
     asset_check_failure_message,
     collect_new_check_failures,
+    dagster_url,
     defs,
     error_message,
     get_exception,
@@ -357,11 +358,12 @@ def _evaluation(
     )
 
 
-def _record(storage_id: int, evaluation: Any) -> Any:
+def _record(storage_id: int, evaluation: Any, run_id: str = "a-run-id") -> Any:
     return SimpleNamespace(
         storage_id=storage_id,
         event_log_entry=SimpleNamespace(
-            dagster_event=SimpleNamespace(event_specific_data=evaluation)
+            run_id=run_id,
+            dagster_event=SimpleNamespace(event_specific_data=evaluation),
         ),
     )
 
@@ -389,7 +391,22 @@ def test_collect_keeps_only_error_severity_failures() -> None:
         _instance_returning(records, captured), None
     )
 
-    assert [f.asset_key.to_user_string() for f in failures] == ["a"]
+    assert [e.asset_key.to_user_string() for _, e in failures] == ["a"]
+
+
+def test_collect_pairs_each_failure_with_its_run_id() -> None:
+    """The run_id must survive alongside the evaluation for Slack to link to it."""
+    captured: dict[str, Any] = {}
+    records = [
+        _record(1, _evaluation(asset="a", passed=False, severity=ERROR), run_id="r1"),
+        _record(2, _evaluation(asset="b", passed=False, severity=ERROR), run_id="r2"),
+    ]
+
+    failures, _ = collect_new_check_failures(
+        _instance_returning(records, captured), None
+    )
+
+    assert [run_id for run_id, _ in failures] == ["r1", "r2"]
 
 
 def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
@@ -420,6 +437,23 @@ def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
     assert next_cursor == str(backlog[-1].storage_id)
 
 
+def test_a_full_batch_of_failures_stays_within_slacks_block_limit() -> None:
+    """Regression: Slack rejects chat.postMessage payloads over 50 blocks.
+
+    asset_check_failure_message adds one header block on top of one detail
+    block per failure, so a full MAX_CHECK_EVALUATIONS_PER_TICK-sized batch
+    of failures must leave room for that header.
+    """
+    failures = [
+        _check_failure(f"run-{i}", f"asset_{i}")
+        for i in range(MAX_CHECK_EVALUATIONS_PER_TICK)
+    ]
+
+    blocks = asset_check_failure_message(failures)
+
+    assert len(blocks) <= 50
+
+
 def test_collect_advances_cursor_even_when_nothing_failed() -> None:
     """A batch of passing checks must not be re-scanned forever."""
     captured: dict[str, Any] = {}
@@ -440,21 +474,44 @@ def test_collect_reports_no_cursor_when_there_is_nothing_new() -> None:
     assert next_cursor is None
 
 
+def _check_failure(run_id: str, asset: str) -> tuple[str, Any]:
+    return (
+        run_id,
+        SimpleNamespace(
+            asset_key=SimpleNamespace(to_user_string=lambda: asset),
+            check_name="freshness_check",
+        ),
+    )
+
+
 def test_asset_check_failure_message_lists_each_failed_check() -> None:
-    evaluations = [
-        SimpleNamespace(
-            asset_key=SimpleNamespace(to_user_string=lambda: "mart/enrollments"),
-            check_name="freshness_check",
-        ),
-        SimpleNamespace(
-            asset_key=SimpleNamespace(to_user_string=lambda: "reporting/revenue"),
-            check_name="freshness_check",
-        ),
+    failures = [
+        _check_failure("run-1", "mart/enrollments"),
+        _check_failure("run-2", "reporting/revenue"),
     ]
 
-    blocks = asset_check_failure_message(evaluations)
+    blocks = asset_check_failure_message(failures)
 
     text = _block_text(blocks)
     assert "mart/enrollments" in text
     assert "reporting/revenue" in text
     assert "(2)" in blocks[0]["text"]["text"]
+
+
+def test_asset_check_failure_message_links_each_check_to_its_own_run() -> None:
+    """Regression: each check must link to the run that surfaced it, not the
+    generic asset graph -- a batch of failures can span multiple runs.
+    """
+    failures = [
+        _check_failure("run-1", "mart/enrollments"),
+        _check_failure("run-2", "reporting/revenue"),
+    ]
+
+    blocks = asset_check_failure_message(failures)
+
+    detail_blocks = [b for b in blocks if b["type"] == "section"]
+    urls = [b["accessory"]["url"] for b in detail_blocks]
+    assert urls == [
+        f"{dagster_url}/runs/run-1",
+        f"{dagster_url}/runs/run-2",
+    ]
