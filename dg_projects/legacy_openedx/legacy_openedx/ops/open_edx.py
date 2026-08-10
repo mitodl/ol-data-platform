@@ -27,7 +27,11 @@ from dagster import (
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.file_rendering import write_csv
-from ol_orchestrate.lib.openedx import un_nest_course_structure
+from ol_orchestrate.lib.openedx import (
+    CourseExportOutcome,
+    classify_course_export_state,
+    un_nest_course_structure,
+)
 from pydantic import Field
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -687,10 +691,11 @@ def export_single_edx_course(  # noqa: C901, PLR0911
                 status,
             )
             return None
-        if state == "Succeeded":
+        outcome = classify_course_export_state(state)
+        if outcome is CourseExportOutcome.SUCCEEDED:
             context.log.info("Export succeeded for course %s", course_id)
             return course_id
-        if state in {"Failed", "Canceled", "Retrying"}:
+        if outcome is CourseExportOutcome.FAILED:
             context.log.warning(
                 "Export reached terminal failure state '%s' for course %s",
                 state,

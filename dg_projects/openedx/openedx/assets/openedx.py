@@ -36,6 +36,9 @@ from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
+    CourseExportOutcome,
+    classify_course_export_state,
+    course_export_task_id,
     process_course_xml,
     process_course_xml_blocks,
     process_video_xml,
@@ -298,14 +301,27 @@ def course_xml(context: AssetExecutionContext):
         )
         successful_exports: set[str] = set()
         failed_exports: set[str] = set()
-        tasks = exported_courses["upload_task_ids"]
+        # Keyed by course id, so a failure or a timeout can say what Studio
+        # last reported instead of just that something went wrong.
+        last_seen_status: dict[str, str] = {}
+        # Only ever one course is requested, so the poll set is built from that
+        # course rather than from whatever the response happens to contain.
+        # Reading upload_task_ids directly meant a course Studio declined to
+        # queue produced an empty mapping: the loop ran zero times, nothing was
+        # recorded as failed, and execution fell through to a bare KeyError on
+        # upload_urls further down.
+        tasks = {course_key: course_export_task_id(course_key, exported_courses)}
         start_time = datetime.now(tz=UTC)
         while len(successful_exports.union(failed_exports)) < len(tasks):
             if (
                 datetime.now(tz=UTC) - start_time
                 > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
             ):
-                err_msg = f"Course export timed out for {course_key}"
+                err_msg = (
+                    f"Course export timed out for {course_key} after "
+                    f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}. Last status "
+                    f"reported by Studio: {last_seen_status or 'none'}"
+                )
                 raise TimeoutError(err_msg)
             time.sleep(timedelta(seconds=20).seconds)
             for course_id, task_id in tasks.items():
@@ -317,9 +333,13 @@ def course_xml(context: AssetExecutionContext):
                 )
                 state = task_status.get("state")
                 details = task_status.get("details")
-                if state == "Succeeded":
+                last_seen_status[course_id] = (
+                    f"{state}{f' ({details})' if details else ''}"
+                )
+                outcome = classify_course_export_state(state)
+                if outcome is CourseExportOutcome.SUCCEEDED:
                     successful_exports.add(course_id)
-                elif state in {"Failed", "Canceled", "Retrying"}:
+                elif outcome is CourseExportOutcome.FAILED:
                     failed_exports.add(course_id)
                 elif details:
                     context.log.info(
@@ -329,7 +349,14 @@ def course_xml(context: AssetExecutionContext):
                         details,
                     )
         if failed_exports:
-            errmsg = f"Unable to export the course XML for {course_key}"
+            reported = {
+                course: last_seen_status.get(course)
+                for course in sorted(failed_exports)
+            }
+            errmsg = (
+                f"Unable to export the course XML for {course_key}. "
+                f"Studio reported: {reported}"
+            )
             raise Exception(errmsg)  # noqa: TRY002
         s3_location = exported_courses["upload_urls"][course_key]
         context.log.debug("Attempting to download the course XML from %s", s3_location)

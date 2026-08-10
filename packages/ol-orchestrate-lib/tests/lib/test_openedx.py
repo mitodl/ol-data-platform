@@ -4,12 +4,19 @@ import json
 import tarfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import pytest
 from ol_orchestrate.lib.openedx import (
+    CourseExportNotQueuedError,
+    CourseExportOutcome,
     CourseStaticAssetsBundle,
     CourseXmlBlock,
+    classify_course_export_state,
+    course_export_task_id,
+    generate_block_indexes,
     process_course_xml_blocks,
+    un_nest_course_structure,
 )
 
 
@@ -380,3 +387,179 @@ def test_process_course_xml_blocks_structural_dirs_excluded():
     assert "chapter" in block_types, "Real block types should still be included"
 
     temp_dir.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ("Succeeded", CourseExportOutcome.SUCCEEDED),
+        ("Failed", CourseExportOutcome.FAILED),
+        ("Canceled", CourseExportOutcome.FAILED),
+        # The regression: Studio uses Retrying for a task it is about to
+        # attempt again, and both poll loops used to count it as terminal.
+        ("Retrying", CourseExportOutcome.PENDING),
+        ("In Progress", CourseExportOutcome.PENDING),
+        ("Pending", CourseExportOutcome.PENDING),
+        # An undocumented or absent state keeps the caller waiting rather
+        # than inventing a verdict; the poll loop's timeout bounds it.
+        ("Something New", CourseExportOutcome.PENDING),
+        (None, CourseExportOutcome.PENDING),
+    ],
+)
+def test_classify_course_export_state(
+    state: str | None, expected: CourseExportOutcome
+) -> None:
+    """Retrying must not be terminal; unknown states must not be either."""
+    assert classify_course_export_state(state) == expected
+
+
+def test_retrying_then_succeeded_completes_the_export() -> None:
+    """A task that retries and then succeeds must finish, not fail.
+
+    This is the production sequence that broke: the first Retrying poll
+    marked the course failed, satisfied the loop's completion condition and
+    raised "Unable to export the course XML" while Studio was still working.
+    Driving the accumulate logic over the sequence shows the loop now runs to
+    the Succeeded state.
+    """
+    succeeded: set[str] = set()
+    failed: set[str] = set()
+    course_id = "course-v1:MITxT+MITx+0T2026"
+
+    for state in ("In Progress", "Retrying", "Retrying", "Succeeded"):
+        outcome = classify_course_export_state(state)
+        if outcome is CourseExportOutcome.SUCCEEDED:
+            succeeded.add(course_id)
+        elif outcome is CourseExportOutcome.FAILED:
+            failed.add(course_id)
+        # The loop keeps polling while neither set has the course in it.
+        if succeeded or failed:
+            break
+
+    assert succeeded == {course_id}
+    assert failed == set()
+
+
+COURSE_KEY = "course-v1:MITxT+MITx+0T2026"
+
+
+def test_course_export_task_id_returns_the_queued_task() -> None:
+    """The happy path hands back the task id the poll loop needs."""
+    response = {
+        "failed_uploads": {},
+        "upload_task_ids": {COURSE_KEY: "f65e2212-fd97-4645-83cd-7f1c442efb21"},
+        "upload_urls": {COURSE_KEY: "https://example.s3.amazonaws.com/course.tar.gz"},
+    }
+
+    assert (
+        course_export_task_id(COURSE_KEY, response)
+        == "f65e2212-fd97-4645-83cd-7f1c442efb21"
+    )
+
+
+def test_course_export_task_id_surfaces_studios_queue_failure() -> None:
+    """A declined course must report Studio's reason, not a KeyError.
+
+    export_courses returns HTTP 400 as a documented partial failure: the
+    course lands in failed_uploads and is absent from upload_task_ids. Reading
+    upload_task_ids directly gave an empty poll set, so the loop ran zero
+    times, nothing was recorded as failed, and the asset fell through to
+    `exported_courses["upload_urls"][course_key]` -- a bare KeyError that
+    threw away the explanation sitting in the response.
+    """
+    response = {
+        "failed_uploads": {COURSE_KEY: "Course not found"},
+        "upload_task_ids": {},
+        "upload_urls": {},
+    }
+
+    with pytest.raises(CourseExportNotQueuedError) as exc_info:
+        course_export_task_id(COURSE_KEY, response)
+
+    assert COURSE_KEY in str(exc_info.value)
+    assert "Course not found" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"upload_task_ids": {}},
+        {"upload_task_ids": {"course-v1:Other+Course+1T2026": "abc"}},
+        {"upload_task_ids": {COURSE_KEY: None}},
+        {"upload_task_ids": {COURSE_KEY: ""}},
+        {},
+    ],
+    ids=["empty", "different-course", "null-task", "blank-task", "no-key"],
+)
+def test_course_export_task_id_rejects_a_response_with_no_task(
+    response: dict[str, Any],
+) -> None:
+    """No usable task id is terminal, whether or not Studio explained itself."""
+    with pytest.raises(CourseExportNotQueuedError) as exc_info:
+        course_export_task_id(COURSE_KEY, response)
+
+    assert COURSE_KEY in str(exc_info.value)
+
+
+def _block(category: str, children: list[str], display_name: str = "Block"):
+    return {
+        "category": category,
+        "children": children,
+        "metadata": {"display_name": display_name, "start": "2026-01-01T00:00:00Z"},
+    }
+
+
+def test_generate_block_indexes_walks_depth_first():
+    """Blocks are numbered in the order a learner encounters them."""
+    structure = {
+        "course": _block("course", ["chapter_1", "chapter_2"]),
+        "chapter_1": _block("chapter", ["seq_1"]),
+        "seq_1": _block("sequential", []),
+        "chapter_2": _block("chapter", []),
+    }
+
+    indexes = generate_block_indexes(structure, "course")
+
+    assert list(indexes) == ["course", "chapter_1", "seq_1", "chapter_2"]
+    assert indexes["course"] == 1
+    assert indexes["chapter_2"] == 4
+
+
+def test_generate_block_indexes_skips_children_absent_from_the_structure():
+    """A child named by its parent but missing from the document is skipped.
+
+    Courses that source content from a library do this: the parent lists the
+    block, but the block itself is not in the course structure document.
+    Indexing it by key raised
+    ``KeyError: 'block-v1:...+type@sequential+block@...'`` and failed the
+    whole course_structure asset for that course.
+    """
+    structure = {
+        "course": _block("course", ["chapter_1"]),
+        "chapter_1": _block("chapter", ["library_block", "seq_1"]),
+        "seq_1": _block("sequential", []),
+    }
+
+    indexes = generate_block_indexes(structure, "course")
+
+    assert "library_block" not in indexes
+    assert list(indexes) == ["course", "chapter_1", "seq_1"]
+    # The sequence stays contiguous over the blocks that actually exist.
+    assert list(indexes.values()) == [1, 2, 3]
+
+
+def test_generate_block_indexes_tolerates_a_missing_root():
+    """No block with category 'course' leaves root_block as an empty string."""
+    assert generate_block_indexes({"chapter_1": _block("chapter", [])}, "") == {}
+
+
+def test_un_nest_course_structure_survives_a_library_reference():
+    """The full un-nest path completes for a course with a library block."""
+    structure = {
+        "course": _block("course", ["chapter_1"], display_name="A Course"),
+        "chapter_1": _block("chapter", ["library_block"]),
+    }
+
+    blocks = un_nest_course_structure("course-v1:Org+Num+Run", structure, None)
+
+    assert {block["block_id"] for block in blocks} == {"course", "chapter_1"}

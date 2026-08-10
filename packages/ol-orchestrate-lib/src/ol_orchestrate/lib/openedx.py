@@ -5,12 +5,82 @@ import logging
 import mimetypes
 import tarfile
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, Any
 from xml.etree.ElementTree import ElementTree, tostring
 
 from pydantic import BaseModel, Field
+
+
+class CourseExportOutcome(StrEnum):
+    """What a Studio course-export task state means for a polling caller."""
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    PENDING = "pending"
+
+
+# Studio's terminal states. "Retrying" is deliberately not among them: Studio
+# uses it for a task it is about to attempt again, and both callers used to
+# count it as a failure, which ended their poll loop early and reported a
+# course as unexportable while its export was still running.
+COURSE_EXPORT_SUCCEEDED_STATE = "Succeeded"
+COURSE_EXPORT_FAILED_STATES = frozenset({"Failed", "Canceled"})
+
+
+def classify_course_export_state(state: str | None) -> CourseExportOutcome:
+    """Map a Studio export task state onto keep-polling / done / failed.
+
+    Extracted from the poll loops in the ``openedx`` and ``legacy_openedx``
+    code locations so the classification -- the part that was actually wrong,
+    and the part worth pinning -- can be tested without standing up the Studio
+    task API.
+
+    An unrecognised or absent state counts as PENDING: the loop keeps waiting
+    and its timeout provides the bound, which is safer than inventing a
+    verdict for a state Studio has not documented to us.
+    """
+    if state == COURSE_EXPORT_SUCCEEDED_STATE:
+        return CourseExportOutcome.SUCCEEDED
+    if state in COURSE_EXPORT_FAILED_STATES:
+        return CourseExportOutcome.FAILED
+    return CourseExportOutcome.PENDING
+
+
+class CourseExportNotQueuedError(Exception):
+    """Studio accepted the export request but queued no task for the course."""
+
+
+def course_export_task_id(course_key: str, export_response: dict[str, Any]) -> str:
+    """Pull the export task id for ``course_key``, or say why there isn't one.
+
+    ``export_courses`` returns HTTP 400 as a documented *partial* failure: the
+    courses that could not be queued are listed under ``failed_uploads`` and
+    are simply absent from ``upload_task_ids``. Callers that went straight to
+    ``upload_task_ids`` therefore got an empty mapping, polled nothing, decided
+    nothing had failed, and fell through to a ``KeyError`` on ``upload_urls``
+    -- discarding the reason Studio had put in the response.
+
+    Raises CourseExportNotQueuedError naming Studio's own explanation.
+    """
+    failed_uploads = export_response.get("failed_uploads") or {}
+    if course_key in failed_uploads:
+        msg = (
+            f"Studio declined to queue an export for {course_key}: "
+            f"{failed_uploads[course_key]}"
+        )
+        raise CourseExportNotQueuedError(msg)
+
+    task_id = (export_response.get("upload_task_ids") or {}).get(course_key)
+    if not task_id:
+        msg = (
+            f"Studio returned no export task for {course_key} and did not say "
+            f"why. Full response: {export_response}"
+        )
+        raise CourseExportNotQueuedError(msg)
+    return task_id
 
 
 def generate_block_indexes(
@@ -26,12 +96,21 @@ def generate_block_indexes(
     previous_block_id = root_block_id
     while block_stack:
         block_id = block_stack.pop()
+        block_contents = course_structure.get(block_id)
+        if block_contents is None:
+            # A block can be listed as a child without appearing in the
+            # structure document itself. Courses that pull content from a
+            # library do this -- the parent sequential names the block, but
+            # the block lives in the library rather than the course. Skipped
+            # rather than indexed, since a block that will never appear in
+            # the output would otherwise leave a gap in the sequence.
+            continue
         block_index[block_id] = block_index.get(previous_block_id, 0) + 1
         previous_block_id = block_id
         # Add new blocks to the end of the list, ensure that the traversal is done in
         # order of definition by reversing, since we're pulling from the end of the list
         # for each iteration.
-        block_stack.extend(reversed(course_structure[block_id]["children"]))
+        block_stack.extend(reversed(block_contents["children"]))
     return block_index
 
 
