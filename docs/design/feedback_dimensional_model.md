@@ -228,7 +228,11 @@ together — which at turn grain is the common case, not the exception.
 | `dim_course_content` | `content_block_pk` | edX plugin, ORA, forum (via `subject_ref`, §2a) |
 | `dim_date` / `dim_time` | role-playing, §2d | all |
 
-**Identity is the highest-risk join** (cf. open p0 bug `tk-fix-dim-user-null-email-identity-collapse`).
+**Identity is the highest-risk join.** The p0 `dim_user` NULL-email collapse bug that motivated this warning
+is **fixed and merged** ([#2400](https://github.com/mitodl/ol-data-platform/pull/2400), 2026-07-15 — all six
+union branches now filter `email is not null`, plus a `not_null` regression test). The risk that remains is
+structural, not that specific bug: `dim_user.user_pk = generate_surrogate_key([lower(email)])`, and Zendesk
+can only resolve identity by email, so every unmatched or shared address is still a miss or a merge.
 Resolve `user_fk` via the same paths the existing facts use — `openedx_user_id` → `dim_user.mitlearn_openedx_user_id`
 (forum/tutor), `user_global_id` (tutor `int__learn_ai__chatbot`), email (Zendesk comment author, last resort).
 Never key the fact off a source's local PK (§6).

@@ -51,8 +51,8 @@ or most sources have them) while status, priority, brand, group and due date are
 **Design rules:**
 - `subject_user_ref` is a **global identity ref, never a source row PK** — this is what lets
   `user_fk` resolve against `dim_user` consistently across sources and survive the migration.
-  (Zendesk, lacking an openedx id, uses requester email as the documented last-resort ref —
-  which shares the `dim_user` NULL-email identity-collapse failure class; see design §3.)
+  (Zendesk, lacking an openedx id, uses the comment author's email as the documented last-resort ref;
+  see design §3 for the residual identity risk — the specific NULL-email collapse bug is fixed.)
 - `text`/`title` carry **raw** text across the contract; redaction is a warehouse step
   (design §7), not a producer responsibility — so producers never need Presidio.
 - `source_metadata` is the extension point, and it **survives into the fact as a variant column** rather

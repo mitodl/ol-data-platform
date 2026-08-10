@@ -222,13 +222,17 @@ left join dim_user as users
 **Identity resolution — the highest-risk join (design §3, RFC Consequences).** Zendesk has
 no openedx user id, so `user_fk` resolves via **email → `dim_user.email`** (which is how
 `dim_user.user_pk` itself is generated: `generate_surrogate_key(['lower(email)'])`). This is
-the last-resort path and shares the failure class of the open p0 `dim_user` NULL-email
-identity-collapse bug (`tk-re-derive-identity-conformed-dimension-joins-pos-b7ca16`). Guard:
+the last-resort path. The p0 `dim_user` NULL-email identity-collapse bug it used to share a failure class
+with is **fixed and merged** ([#2400](https://github.com/mitodl/ol-data-platform/pull/2400), 2026-07-15), so
+the residual risk is the structural one — email is the only identifier Zendesk offers, and
+`dim_user.user_pk` is keyed on it. Guard:
 - Never key `feedback_pk` off the resolved `user_fk` (it keys off `source_record_ref`), so a
   bad identity join can never collapse or duplicate the fact grain.
 - `user_fk` stays **nullable**; an unresolved author email = null `user_fk`, not a wrong
   join. Do not coalesce to a sentinel.
-- Re-run `tk-...-b7ca16` before enabling any cross-source identity rollups on this fact.
+- Measure the null-`user_fk` rate on first build and treat a high rate as a finding, not noise —
+  `tk-...-b7ca16` (post-swap identity re-derivation) is the task that revisits this after the data-bus
+  migration, but the MVP number is worth knowing on day one.
 - **rev. 2:** the email resolves from `comment_author_user_id`, not `ticket_requester_user_id`. At turn grain
   the author of a given turn is the correct identity, and the §2 filter already restricts to requester turns
   — so the two agree today, but keying off the comment author is the honest expression and stays correct if
@@ -445,4 +449,5 @@ distinct `conversation_id` in the turn fact.
 - No data-bus/analytics-api ingress (Phase 3, gated on the write path — RFC Open Questions).
 - No embedding/clustering *required* for either fact to be useful (ML asset is additive).
 - No turn-level embeddings or summaries — the analysis unit is the conversation (design §5a).
-- No cross-source identity rollups until `tk-...-b7ca16` is re-derived.
+- No cross-source identity rollups — Zendesk resolves `user_fk` by email only, so joining its users to
+  course-scoped sources' users waits for the Phase 2 sources that carry an openedx id.
