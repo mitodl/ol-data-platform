@@ -4,13 +4,16 @@ import json
 import tarfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import pytest
 from ol_orchestrate.lib.openedx import (
+    CourseExportNotQueuedError,
     CourseExportOutcome,
     CourseStaticAssetsBundle,
     CourseXmlBlock,
     classify_course_export_state,
+    course_export_task_id,
     generate_block_indexes,
     process_course_xml_blocks,
     un_nest_course_structure,
@@ -435,6 +438,67 @@ def test_retrying_then_succeeded_completes_the_export() -> None:
 
     assert succeeded == {course_id}
     assert failed == set()
+
+
+COURSE_KEY = "course-v1:MITxT+MITx+0T2026"
+
+
+def test_course_export_task_id_returns_the_queued_task() -> None:
+    """The happy path hands back the task id the poll loop needs."""
+    response = {
+        "failed_uploads": {},
+        "upload_task_ids": {COURSE_KEY: "f65e2212-fd97-4645-83cd-7f1c442efb21"},
+        "upload_urls": {COURSE_KEY: "https://example.s3.amazonaws.com/course.tar.gz"},
+    }
+
+    assert (
+        course_export_task_id(COURSE_KEY, response)
+        == "f65e2212-fd97-4645-83cd-7f1c442efb21"
+    )
+
+
+def test_course_export_task_id_surfaces_studios_queue_failure() -> None:
+    """A declined course must report Studio's reason, not a KeyError.
+
+    export_courses returns HTTP 400 as a documented partial failure: the
+    course lands in failed_uploads and is absent from upload_task_ids. Reading
+    upload_task_ids directly gave an empty poll set, so the loop ran zero
+    times, nothing was recorded as failed, and the asset fell through to
+    `exported_courses["upload_urls"][course_key]` -- a bare KeyError that
+    threw away the explanation sitting in the response.
+    """
+    response = {
+        "failed_uploads": {COURSE_KEY: "Course not found"},
+        "upload_task_ids": {},
+        "upload_urls": {},
+    }
+
+    with pytest.raises(CourseExportNotQueuedError) as exc_info:
+        course_export_task_id(COURSE_KEY, response)
+
+    assert COURSE_KEY in str(exc_info.value)
+    assert "Course not found" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"upload_task_ids": {}},
+        {"upload_task_ids": {"course-v1:Other+Course+1T2026": "abc"}},
+        {"upload_task_ids": {COURSE_KEY: None}},
+        {"upload_task_ids": {COURSE_KEY: ""}},
+        {},
+    ],
+    ids=["empty", "different-course", "null-task", "blank-task", "no-key"],
+)
+def test_course_export_task_id_rejects_a_response_with_no_task(
+    response: dict[str, Any],
+) -> None:
+    """No usable task id is terminal, whether or not Studio explained itself."""
+    with pytest.raises(CourseExportNotQueuedError) as exc_info:
+        course_export_task_id(COURSE_KEY, response)
+
+    assert COURSE_KEY in str(exc_info.value)
 
 
 def _block(category: str, children: list[str], display_name: str = "Block"):

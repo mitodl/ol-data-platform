@@ -49,6 +49,40 @@ def classify_course_export_state(state: str | None) -> CourseExportOutcome:
     return CourseExportOutcome.PENDING
 
 
+class CourseExportNotQueuedError(Exception):
+    """Studio accepted the export request but queued no task for the course."""
+
+
+def course_export_task_id(course_key: str, export_response: dict[str, Any]) -> str:
+    """Pull the export task id for ``course_key``, or say why there isn't one.
+
+    ``export_courses`` returns HTTP 400 as a documented *partial* failure: the
+    courses that could not be queued are listed under ``failed_uploads`` and
+    are simply absent from ``upload_task_ids``. Callers that went straight to
+    ``upload_task_ids`` therefore got an empty mapping, polled nothing, decided
+    nothing had failed, and fell through to a ``KeyError`` on ``upload_urls``
+    -- discarding the reason Studio had put in the response.
+
+    Raises CourseExportNotQueuedError naming Studio's own explanation.
+    """
+    failed_uploads = export_response.get("failed_uploads") or {}
+    if course_key in failed_uploads:
+        msg = (
+            f"Studio declined to queue an export for {course_key}: "
+            f"{failed_uploads[course_key]}"
+        )
+        raise CourseExportNotQueuedError(msg)
+
+    task_id = (export_response.get("upload_task_ids") or {}).get(course_key)
+    if not task_id:
+        msg = (
+            f"Studio returned no export task for {course_key} and did not say "
+            f"why. Full response: {export_response}"
+        )
+        raise CourseExportNotQueuedError(msg)
+    return task_id
+
+
 def generate_block_indexes(
     course_structure: dict[str, Any], root_block_id: str
 ) -> dict[str, int]:
