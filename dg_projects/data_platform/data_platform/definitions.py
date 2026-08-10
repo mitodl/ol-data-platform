@@ -58,8 +58,10 @@ SLACK_CHANNEL_BY_ENV = {
 slack_channel = SLACK_CHANNEL_BY_ENV[DAGSTER_ENV]
 
 # Bounds a single tick's Slack payload and its event-log scan. A backlog larger
-# than this is drained over subsequent ticks via the cursor.
-MAX_CHECK_EVALUATIONS_PER_TICK = 50
+# than this is drained over subsequent ticks via the cursor. Capped at 49, not
+# 50: asset_check_failure_message adds one header block on top of one detail
+# block per failure, and Slack rejects a chat.postMessage over 50 blocks.
+MAX_CHECK_EVALUATIONS_PER_TICK = 49
 
 MAX_SLACK_TEXT_LENGTH = 3000
 # Leaves room for the surrounding header and step key within Slack's limit.

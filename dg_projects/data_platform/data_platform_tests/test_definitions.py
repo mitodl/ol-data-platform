@@ -437,6 +437,23 @@ def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
     assert next_cursor == str(backlog[-1].storage_id)
 
 
+def test_a_full_batch_of_failures_stays_within_slacks_block_limit() -> None:
+    """Regression: Slack rejects chat.postMessage payloads over 50 blocks.
+
+    asset_check_failure_message adds one header block on top of one detail
+    block per failure, so a full MAX_CHECK_EVALUATIONS_PER_TICK-sized batch
+    of failures must leave room for that header.
+    """
+    failures = [
+        _check_failure(f"run-{i}", f"asset_{i}")
+        for i in range(MAX_CHECK_EVALUATIONS_PER_TICK)
+    ]
+
+    blocks = asset_check_failure_message(failures)
+
+    assert len(blocks) <= 50
+
+
 def test_collect_advances_cursor_even_when_nothing_failed() -> None:
     """A batch of passing checks must not be re-scanned forever."""
     captured: dict[str, Any] = {}
