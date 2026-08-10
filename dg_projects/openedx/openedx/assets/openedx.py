@@ -37,6 +37,7 @@ from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     CourseExportOutcome,
     classify_course_export_state,
+    course_export_task_id,
     process_course_xml,
     process_course_xml_blocks,
     process_video_xml,
@@ -302,7 +303,13 @@ def course_xml(context: AssetExecutionContext):
         # Keyed by course id, so a failure or a timeout can say what Studio
         # last reported instead of just that something went wrong.
         last_seen_status: dict[str, str] = {}
-        tasks = exported_courses["upload_task_ids"]
+        # Only ever one course is requested, so the poll set is built from that
+        # course rather than from whatever the response happens to contain.
+        # Reading upload_task_ids directly meant a course Studio declined to
+        # queue produced an empty mapping: the loop ran zero times, nothing was
+        # recorded as failed, and execution fell through to a bare KeyError on
+        # upload_urls further down.
+        tasks = {course_key: course_export_task_id(course_key, exported_courses)}
         start_time = datetime.now(tz=UTC)
         while len(successful_exports.union(failed_exports)) < len(tasks):
             if (
