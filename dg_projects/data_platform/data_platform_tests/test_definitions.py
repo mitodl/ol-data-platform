@@ -313,6 +313,34 @@ def test_get_exception_extracts_dbt_errors() -> None:
     assert "irrelevant" not in result
 
 
+def test_get_exception_counts_the_failed_dbt_nodes() -> None:
+    text = (
+        "dagster_dbt.errors.DagsterDbtCliRuntimeError: oh no\n"
+        "Errors parsed from dbt logs:\n\n"
+        "46 of 65 ERROR accepted_values_gender  [ERROR in 260.14s]\n\n"
+        "59 of 65 ERROR unique_program_enrollment  [ERROR in 262.23s]\n"
+    )
+
+    assert "*DBT Error* (2 failed):" in get_exception(text)
+
+
+def test_the_failed_count_reflects_nodes_truncation_drops() -> None:
+    """The count is what tells you a truncated list is not the whole story."""
+    text = (
+        "dagster_dbt.errors.DagsterDbtCliRuntimeError: oh no\n"
+        "Errors parsed from dbt logs:\n\n"
+        + "".join(
+            f"{n} of 99 ERROR test_{n}  [ERROR in 1s]\n" + "x" * 200 + "\n"
+            for n in range(1, 41)
+        )
+    )
+
+    result = get_exception(text)
+
+    assert "*DBT Error* (40 failed):" in result
+    assert result.endswith("...```")
+
+
 def test_get_exception_formats_generic_errors() -> None:
     result = get_exception("ValueError: nope\n\nStack Trace:\nirrelevant")
 

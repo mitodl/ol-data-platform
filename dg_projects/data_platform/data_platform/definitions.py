@@ -9,6 +9,7 @@ message can carry the resulting event ID, which is what turns a notification
 into something you can actually go and look up.
 """
 
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -75,6 +76,17 @@ def truncate_text(text: str, max_length: int = MAX_SLACK_TEXT_LENGTH) -> str:
 
 DBT_ERROR_MARKER = "dagster_dbt.errors.DagsterDbtCliRuntimeError"
 DBT_LOG_PREAMBLE = "Errors parsed from dbt logs:\n\n"
+# dbt's per-node result line, e.g. "46 of 65 ERROR accepted_values_foo [ERROR in 260s]".
+DBT_FAILED_NODE_RE = re.compile(r"^\d+ of \d+ ERROR", re.MULTILINE)
+
+
+def count_dbt_failures(dbt_log_msg: str) -> int:
+    """How many dbt nodes failed, counted before any truncation.
+
+    The log is cut at MAX_SLACK_ERROR_LENGTH, so a run failing more nodes than
+    fit would otherwise read as though the ones that fit were all of them.
+    """
+    return len(DBT_FAILED_NODE_RE.findall(dbt_log_msg))
 
 
 def get_exception(text: str, substring: str = "\n\nStack Trace:") -> str:
@@ -88,8 +100,10 @@ def get_exception(text: str, substring: str = "\n\nStack Trace:") -> str:
         # error -- "Model x failed" arrived as "l x failed".
         dbt_log_index = text.find(DBT_LOG_PREAMBLE) + len(DBT_LOG_PREAMBLE)
         dbt_log_msg = text[dbt_log_index:index] if index != -1 else text[dbt_log_index:]
+        failed = count_dbt_failures(dbt_log_msg)
+        header = f"*DBT Error* ({failed} failed):" if failed else "*DBT Error:*"
         body = truncate_text(dbt_log_msg, MAX_SLACK_ERROR_LENGTH)
-        return f"*DBT Error:*\n```{body}```"
+        return f"{header}\n```{body}```"
     else:
         # Return full text if substring not found
         body = truncate_text(
