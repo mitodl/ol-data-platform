@@ -62,6 +62,11 @@ slack_channel = SLACK_CHANNEL_BY_ENV[DAGSTER_ENV]
 # block per failure, and Slack rejects a chat.postMessage over 50 blocks.
 MAX_CHECK_EVALUATIONS_PER_TICK = 49
 
+# Metadata dagster-dbt stamps on every check evaluation it builds from a dbt
+# result. Matched as a set: any one of these keys can occur on a hand-written
+# check, but the three together identify the evaluation as dbt's.
+DBT_PROVENANCE_KEYS = frozenset({"unique_id", "invocation_id", "status"})
+
 MAX_SLACK_TEXT_LENGTH = 3000
 # Leaves room for the surrounding header and step key within Slack's limit.
 MAX_SLACK_ERROR_LENGTH = 2900
@@ -76,8 +81,10 @@ def truncate_text(text: str, max_length: int = MAX_SLACK_TEXT_LENGTH) -> str:
 
 DBT_ERROR_MARKER = "dagster_dbt.errors.DagsterDbtCliRuntimeError"
 DBT_LOG_PREAMBLE = "Errors parsed from dbt logs:\n\n"
-# dbt's per-node result line, e.g. "46 of 65 ERROR accepted_values_foo [ERROR in 260s]".
-DBT_FAILED_NODE_RE = re.compile(r"^\d+ of \d+ ERROR", re.MULTILINE)
+# dbt's per-node result line. Both terminal states count: a test that could not
+# run logs ERROR ("46 of 65 ERROR accepted_values_foo"), a test whose assertion
+# was violated logs FAIL with its row count ("46 of 65 FAIL 12 not_null_foo").
+DBT_FAILED_NODE_RE = re.compile(r"^\d+ of \d+ (?:ERROR|FAIL)\b", re.MULTILINE)
 
 
 def count_dbt_failures(dbt_log_msg: str) -> int:
@@ -400,12 +407,17 @@ def is_reported_by_the_run_failure_sensor(evaluation: Any) -> bool:
     described a test that errored before evaluating anything in the same words
     as a violated assertion.
 
-    dagster-dbt stamps the dbt node status onto each check evaluation it emits;
-    freshness checks and native Dagster asset checks carry none. Those two have
-    no failed run behind them, so this sensor is the only thing that will ever
-    report them.
+    Identified by dagster-dbt's full provenance, not by ``status`` alone:
+    ``status`` is caller-defined metadata that a native check is free to record
+    (``{"status": "unhealthy"}``), and dropping those would silence a check
+    nothing else reports. All three keys together are stamped only by
+    dagster-dbt's own result-to-evaluation conversion.
+
+    Freshness checks and native Dagster asset checks carry no such signature.
+    Those have no failed run behind them, so this sensor is the only thing that
+    will ever report them.
     """
-    return "status" in (evaluation.metadata or {})
+    return set(evaluation.metadata or {}) >= DBT_PROVENANCE_KEYS
 
 
 def asset_check_failure_message(

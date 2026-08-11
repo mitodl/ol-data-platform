@@ -314,11 +314,24 @@ def test_get_exception_extracts_dbt_errors() -> None:
 
 
 def test_get_exception_counts_the_failed_dbt_nodes() -> None:
+    """Both terminal states count: a test that could not run and one that failed."""
     text = (
         "dagster_dbt.errors.DagsterDbtCliRuntimeError: oh no\n"
         "Errors parsed from dbt logs:\n\n"
         "46 of 65 ERROR accepted_values_gender  [ERROR in 260.14s]\n\n"
+        "51 of 65 FAIL 12 not_null_user_username  [FAIL 12 in 4.02s]\n\n"
         "59 of 65 ERROR unique_program_enrollment  [ERROR in 262.23s]\n"
+    )
+
+    assert "*DBT Error* (3 failed):" in get_exception(text)
+
+
+def test_a_run_with_only_assertion_failures_is_still_counted() -> None:
+    text = (
+        "dagster_dbt.errors.DagsterDbtCliRuntimeError: oh no\n"
+        "Errors parsed from dbt logs:\n\n"
+        "3 of 65 FAIL 1 not_null_courserun_readable_id  [FAIL 1 in 2.10s]\n\n"
+        "4 of 65 FAIL 908 accepted_values_platform  [FAIL 908 in 3.44s]\n"
     )
 
     assert "*DBT Error* (2 failed):" in get_exception(text)
@@ -527,9 +540,40 @@ def test_dbt_test_failures_are_left_to_the_run_failure_sensor(status: str) -> No
     anything. dbt build exits non-zero on either status, so the run fails and
     the run failure sensor reports it with dbt's own error text.
     """
-    evaluation = _check_failure("run-1", "mart/x", {"status": status})[1]
+    evaluation = _check_failure(
+        "run-1",
+        "mart/x",
+        {"status": status, "unique_id": "test.open_learning.x", "invocation_id": "abc"},
+    )[1]
 
     assert is_reported_by_the_run_failure_sensor(evaluation) is True
+
+
+def test_a_native_check_recording_its_own_status_is_reported_here() -> None:
+    """``status`` is caller-defined, so it cannot identify a check as dbt's.
+
+    A native check is free to record {"status": "unhealthy"}, and no run failure
+    stands behind it -- dropping it would silence it everywhere.
+    """
+    evaluation = _check_failure("run-1", "mart/x", {"status": "unhealthy"})[1]
+
+    assert is_reported_by_the_run_failure_sensor(evaluation) is False
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"unique_id": "test.open_learning.x", "invocation_id": "abc"},
+        {"status": "fail", "invocation_id": "abc"},
+        {"status": "fail", "unique_id": "test.open_learning.x"},
+    ],
+)
+def test_a_partial_dbt_signature_is_not_enough_to_drop_a_check(
+    metadata: dict[str, Any],
+) -> None:
+    evaluation = _check_failure("run-1", "mart/x", metadata)[1]
+
+    assert is_reported_by_the_run_failure_sensor(evaluation) is False
 
 
 def test_freshness_checks_are_still_reported_here() -> None:
@@ -564,7 +608,11 @@ def test_collect_drops_dbt_tests_but_keeps_freshness_checks() -> None:
                 asset="mart/y",
                 passed=False,
                 severity=ERROR,
-                metadata={"status": "error"},
+                metadata={
+                    "status": "error",
+                    "unique_id": "test.open_learning.y",
+                    "invocation_id": "abc",
+                },
             ),
         ),
     ]
