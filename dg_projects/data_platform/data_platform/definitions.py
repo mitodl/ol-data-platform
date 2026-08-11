@@ -32,12 +32,10 @@ from slack_sdk import WebClient
 
 init_sentry("data_platform")
 
-# Dagster's own run tags. Hardcoded rather than imported: the constants live in
-# dagster._core.storage.tags, which is private, but the tag strings themselves
-# are stable and documented.
-WILL_RETRY_TAG = "dagster/will_retry"
+# Dagster's own run tag. Hardcoded rather than imported: the constant lives in
+# dagster._core.storage.tags, which is private, but the tag string itself is
+# stable and documented.
 RETRY_NUMBER_TAG = "dagster/retry_number"
-MAX_RETRIES_TAG = "dagster/max_retries"
 
 DAGSTER_URL_BY_ENV = {
     "dev": "http://localhost:3000",
@@ -100,26 +98,20 @@ def get_exception(text: str, substring: str = "\n\nStack Trace:") -> str:
         return f"*Error:*\n```{body}```"
 
 
-def will_be_retried(run: DagsterRun, instance: Any) -> bool:
-    """Whether Dagster is going to automatically retry this failed run.
+def is_retry_of_a_reported_failure(run: DagsterRun) -> bool:
+    """Whether an earlier attempt of this run already raised the alert.
 
-    Without this check the sensor fires once per attempt, so a single broken
-    model becomes four identical alerts under the deployment's
-    ``run_retries.max_retries: 3``.
+    The deployment runs ``run_retries.max_retries: 3``, and the sensor fires per
+    attempt, so a broken model would otherwise produce four identical alerts.
 
-    Prefers the daemon's own recorded decision. The tag is written by the
-    auto-reexecution daemon, which can lag this sensor's tick, so fall back to
-    the same arithmetic the daemon uses.
+    Reporting the first attempt and skipping its retries is what bounds that to
+    one. Skipping every attempt Dagster *might* retry -- what this used to do --
+    bounded it to one only when the run kept failing: a transient failure that
+    passed on retry had every attempt suppressed and was never reported at all.
+    That is the common case for infrastructure races, which are exactly the
+    failures worth seeing once.
     """
-    will_retry_tag = run.tags.get(WILL_RETRY_TAG)
-    if will_retry_tag is not None:
-        return will_retry_tag.lower() == "true"
-
-    if not instance.run_retries_enabled:
-        return False
-    retry_number = int(run.tags.get(RETRY_NUMBER_TAG, 0))
-    max_retries = int(run.tags.get(MAX_RETRIES_TAG, instance.run_retries_max_retries))
-    return retry_number < max_retries
+    return int(run.tags.get(RETRY_NUMBER_TAG, 0)) > 0
 
 
 # Dagster wraps anything raised by user code in one of these before putting it
@@ -354,18 +346,20 @@ def get_slack_token() -> str:
     default_status=DefaultSensorStatus.STOPPED,
     description=(
         "Reports run failures across all code locations to Sentry and Slack. "
-        "Suppresses attempts that Dagster is going to retry automatically."
+        "Reports the first failed attempt and suppresses its automatic retries, "
+        "so a failure is announced once whether or not a retry clears it."
     ),
 )
 def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
     """Report a failed run to Sentry, then announce it in Slack."""
     run = context.dagster_run
 
-    if will_be_retried(run, context.instance):
+    if is_retry_of_a_reported_failure(run):
         context.log.info(
-            "Skipping notification for run %s: Dagster will retry it "
-            "automatically. The final attempt will be reported.",
+            "Skipping notification for run %s: it is retry %s of a failure "
+            "already reported on the first attempt.",
             run.run_id,
+            run.tags.get(RETRY_NUMBER_TAG),
         )
         return
 
@@ -380,6 +374,24 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
         blocks=error_message(context, sentry_event_id),
         text=f"Dagster {DAGSTER_ENV} run failure: {run.job_name}",
     )
+
+
+def is_reported_by_the_run_failure_sensor(evaluation: Any) -> bool:
+    """Whether a failed check's run already reported this with full detail.
+
+    A failing dbt test makes ``dbt build`` exit non-zero, which fails the step
+    and the run, so the run failure sensor announces it with dbt's own error
+    text -- naming every failed test and the database error underneath. Repeating
+    it here added a second message that named the check but not the cause, and
+    described a test that errored before evaluating anything in the same words
+    as a violated assertion.
+
+    dagster-dbt stamps the dbt node status onto each check evaluation it emits;
+    freshness checks and native Dagster asset checks carry none. Those two have
+    no failed run behind them, so this sensor is the only thing that will ever
+    report them.
+    """
+    return "status" in (evaluation.metadata or {})
 
 
 def asset_check_failure_message(
@@ -460,11 +472,14 @@ def collect_new_check_failures(
         )
         for record in records
     ]
-    # WARN-severity checks are advisory; only ERROR is worth a notification.
+    # WARN-severity checks are advisory; only ERROR is worth a notification. dbt
+    # tests are dropped because their run failure already reports them in full.
     failures = [
         (run_id, evaluation)
         for run_id, evaluation in evaluations
-        if not evaluation.passed and evaluation.severity == AssetCheckSeverity.ERROR
+        if not evaluation.passed
+        and evaluation.severity == AssetCheckSeverity.ERROR
+        and not is_reported_by_the_run_failure_sensor(evaluation)
     ]
     # The newest record of an ascending batch: nothing older is left behind,
     # nothing newer is re-delivered.
@@ -476,9 +491,10 @@ def collect_new_check_failures(
     minimum_interval_seconds=300,
     default_status=DefaultSensorStatus.STOPPED,
     description=(
-        "Announces ERROR-severity asset check failures, including the freshness "
-        "checks, in Slack. Asset checks do not fail their run, so the run "
-        "failure sensor never sees them."
+        "Announces ERROR-severity failures of checks that have no failed run "
+        "behind them -- the freshness checks and any native Dagster asset check "
+        "-- in Slack. A failing dbt test does fail its run, so it is left to the "
+        "run failure sensor, which reports it with dbt's own error text."
     ),
 )
 def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:

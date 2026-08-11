@@ -9,18 +9,17 @@ import pytest
 from dagster import AssetCheckSeverity, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
-    MAX_RETRIES_TAG,
     RETRY_NUMBER_TAG,
-    WILL_RETRY_TAG,
     asset_check_failure_message,
     collect_new_check_failures,
     dagster_url,
     defs,
     error_message,
     get_exception,
+    is_reported_by_the_run_failure_sensor,
+    is_retry_of_a_reported_failure,
     sentry_fingerprint,
     truncate_text,
-    will_be_retried,
 )
 
 ERROR = AssetCheckSeverity.ERROR
@@ -34,13 +33,6 @@ def _run(**tags: str) -> Any:
         tags=tags,
         run_id="0123abcd-4567-89ef-0123-456789abcdef",
         job_name="a_job",
-    )
-
-
-def _instance(*, enabled: bool = True, max_retries: int = 3) -> Any:
-    return SimpleNamespace(
-        run_retries_enabled=enabled,
-        run_retries_max_retries=max_retries,
     )
 
 
@@ -79,28 +71,29 @@ def _block_text(blocks: list[dict[str, Any]]) -> str:
 # ── Retry suppression ─────────────────────────────────────────────────────────
 
 
-def test_will_be_retried_trusts_the_daemon_tag() -> None:
-    assert will_be_retried(_run(**{WILL_RETRY_TAG: "true"}), _instance()) is True
-    assert will_be_retried(_run(**{WILL_RETRY_TAG: "false"}), _instance()) is False
+def test_the_first_attempt_of_a_failure_is_reported() -> None:
+    """Regression: suppressing every attempt Dagster might retry meant a
+    transient failure that passed on the next attempt was never reported.
+
+    An Iceberg split on a __dbt_tmp path or a staging table that vanished
+    mid-test clears on rerun, so each of those runs had all of its failed
+    attempts suppressed and the only surviving alert was the asset check
+    message, which carries no error text.
+    """
+    assert is_retry_of_a_reported_failure(_run()) is False
 
 
-def test_will_be_retried_falls_back_when_tag_not_yet_written() -> None:
-    """The auto-reexecution daemon can lag this sensor's tick."""
-    assert will_be_retried(_run(), _instance(max_retries=3)) is True
-    assert (
-        will_be_retried(_run(**{RETRY_NUMBER_TAG: "3"}), _instance(max_retries=3))
-        is False
-    )
+@pytest.mark.parametrize("retry_number", ["1", "2", "3"])
+def test_automatic_retries_of_a_reported_failure_are_suppressed(
+    retry_number: str,
+) -> None:
+    """One alert per broken run, not one per attempt: under the deployment's
+    run_retries.max_retries of 3 a persistent failure would otherwise announce
+    itself four times.
+    """
+    run = _run(**{RETRY_NUMBER_TAG: retry_number})
 
-
-def test_will_be_retried_is_false_when_retries_disabled() -> None:
-    assert will_be_retried(_run(), _instance(enabled=False)) is False
-
-
-def test_will_be_retried_prefers_per_run_max_retries_tag() -> None:
-    run = _run(**{RETRY_NUMBER_TAG: "1", MAX_RETRIES_TAG: "1"})
-
-    assert will_be_retried(run, _instance(max_retries=99)) is False
+    assert is_retry_of_a_reported_failure(run) is True
 
 
 # ── Message formatting ────────────────────────────────────────────────────────
@@ -348,13 +341,19 @@ def test_sensors_are_defined_without_vault_or_sentry() -> None:
 
 
 def _evaluation(
-    *, asset: str, check: str = "freshness_check", passed: bool, severity: Any
+    *,
+    asset: str,
+    check: str = "freshness_check",
+    passed: bool,
+    severity: Any,
+    metadata: dict[str, Any] | None = None,
 ) -> Any:
     return SimpleNamespace(
         asset_key=SimpleNamespace(to_user_string=lambda: asset),
         check_name=check,
         passed=passed,
         severity=severity,
+        metadata=metadata or {},
     )
 
 
@@ -474,14 +473,81 @@ def test_collect_reports_no_cursor_when_there_is_nothing_new() -> None:
     assert next_cursor is None
 
 
-def _check_failure(run_id: str, asset: str) -> tuple[str, Any]:
+def _check_failure(
+    run_id: str,
+    asset: str,
+    metadata: dict[str, Any] | None = None,
+    check_name: str = "freshness_check",
+) -> tuple[str, Any]:
     return (
         run_id,
         SimpleNamespace(
             asset_key=SimpleNamespace(to_user_string=lambda: asset),
-            check_name="freshness_check",
+            check_name=check_name,
+            metadata=metadata or {},
         ),
     )
+
+
+@pytest.mark.parametrize("status", ["error", "fail"])
+def test_dbt_test_failures_are_left_to_the_run_failure_sensor(status: str) -> None:
+    """Regression: a failing dbt test was announced twice, and the second
+    message named the check without the cause.
+
+    An accepted_values check on a gender column read as invalid production data
+    when the test had errored on ICEBERG_CANNOT_OPEN_SPLIT before evaluating
+    anything. dbt build exits non-zero on either status, so the run fails and
+    the run failure sensor reports it with dbt's own error text.
+    """
+    evaluation = _check_failure("run-1", "mart/x", {"status": status})[1]
+
+    assert is_reported_by_the_run_failure_sensor(evaluation) is True
+
+
+def test_freshness_checks_are_still_reported_here() -> None:
+    """These have no run behind them at all, so nothing else will report them.
+
+    Their passed=False genuinely means the asset is stale, and dagster-dbt's
+    node status -- the marker for a dbt-sourced check -- is absent.
+    """
+    evaluation = _check_failure("run-1", "mart/enrollments")[1]
+
+    assert is_reported_by_the_run_failure_sensor(evaluation) is False
+
+
+def test_a_check_with_no_metadata_at_all_is_reported_here() -> None:
+    """A native Dagster asset check need not attach metadata, and a failing one
+    does not fail its run the way a dbt test does.
+    """
+    evaluation = SimpleNamespace(metadata=None)
+
+    assert is_reported_by_the_run_failure_sensor(evaluation) is False
+
+
+def test_collect_drops_dbt_tests_but_keeps_freshness_checks() -> None:
+    """The filter has to run inside the collector, not the formatter, or the
+    sensor posts an empty message for a batch of nothing but dbt tests.
+    """
+    records = [
+        _record(1, _evaluation(asset="mart/x", passed=False, severity=ERROR)),
+        _record(
+            2,
+            _evaluation(
+                asset="mart/y",
+                passed=False,
+                severity=ERROR,
+                metadata={"status": "error"},
+            ),
+        ),
+    ]
+
+    failures, next_cursor = collect_new_check_failures(
+        _instance_returning(records, {}), None
+    )
+
+    assert [e.asset_key.to_user_string() for _, e in failures] == ["mart/x"]
+    # The cursor still advances past the dropped record, or it is rescanned.
+    assert next_cursor == "2"
 
 
 def test_asset_check_failure_message_lists_each_failed_check() -> None:
