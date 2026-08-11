@@ -347,17 +347,28 @@ def test_the_observation_drives_the_full_export_cycle(
     assert requested == {"course-b"}, "republished"
 
 
-def test_the_observation_is_requested_once_an_hour(
+def test_the_automation_daemon_never_requests_an_observation_run(
     instance: DagsterInstance, partitions: DynamicPartitionsDefinition
 ) -> None:
-    """The cron tick is what schedules the sweep now that the sensor is gone.
+    """No automation condition on courseware means no observation runs. Ever.
 
-    Once per hour, not once per evaluation: the automation sensor ticks far
-    more often than that, and every extra tick would be another full outline
-    sweep of the deployment.
+    This is the regression guard for the outage this asset caused. An
+    AutomationCondition is evaluated per *partition*, so hanging an hourly cron
+    on it asked for one observation run per course -- 3,500 an hour in
+    production -- and because the observe function sweeps the whole deployment
+    regardless of which partition its run was requested for, every one of those
+    runs re-fetched every course. The run queue never drained and no export ran.
+
+    Crossing an hour boundary with several partitions registered is exactly the
+    shape that used to fan out, so it is what gets asserted on.
     """
-    instance.add_dynamic_partitions(partitions.name, ["course-a"])
-    defs = _definitions(partitions, _OutlineClient({"course-a": "v1"}))
+    instance.add_dynamic_partitions(
+        partitions.name, ["course-a", "course-b", "course-c"]
+    )
+    defs = _definitions(
+        partitions,
+        _OutlineClient({"course-a": "v1", "course-b": "v1", "course-c": "v1"}),
+    )
     selection = AssetSelection.assets(COURSEWARE_KEY)
 
     def _evaluate(at: datetime, cursor: AssetDaemonCursor | None):
@@ -371,13 +382,13 @@ def test_the_observation_is_requested_once_an_hour(
         return result.total_requested, result.cursor
 
     requested, cursor = _evaluate(datetime(2026, 8, 7, 13, 0, 1, tzinfo=UTC), None)
-    assert requested == 0, "no cron boundary crossed yet"
+    assert requested == 0
 
     requested, cursor = _evaluate(datetime(2026, 8, 7, 13, 5, 0, tzinfo=UTC), cursor)
-    assert requested == 0, "still the same hour"
+    assert requested == 0
 
     requested, cursor = _evaluate(datetime(2026, 8, 7, 14, 0, 1, tzinfo=UTC), cursor)
-    assert requested == 1, "the hour turned over"
+    assert requested == 0, "an hour boundary must not fan out into observation runs"
 
 
 def test_a_partition_registered_later_is_exported(

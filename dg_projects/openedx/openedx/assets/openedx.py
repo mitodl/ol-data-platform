@@ -7,10 +7,12 @@ import json
 import logging
 import tarfile
 import time
+from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Any, NamedTuple
 from urllib.parse import urlparse
 
 import httpx2 as httpx
@@ -20,7 +22,6 @@ from dagster import (
     AssetIn,
     AssetKey,
     AssetOut,
-    AutomationCondition,
     DataVersion,
     DataVersionsByPartition,
     OpExecutionContext,
@@ -87,6 +88,90 @@ def published_version_of(
         raise OutlineFetchError from error
 
 
+class CoursewareSweep(NamedTuple):
+    """What one pass over a deployment's course outlines produced.
+
+    ``unswept`` is the tail the pass never reached -- empty unless a deadline
+    cut it short. Its callers use it to decide where the next pass starts, so
+    that a budget that always expires in the same place cannot starve the
+    courses that sit past it.
+    """
+
+    versions: dict[str, str]
+    failures: int
+    unswept: list[str]
+
+
+def sweep_course_versions(
+    client: Any,
+    course_run_ids: Sequence[str],
+    log: logging.Logger,
+    deadline: datetime | None = None,
+) -> CoursewareSweep:
+    """Fetch the published version of every course run, concurrently.
+
+    ``deadline`` bounds the wall clock the fetch phase may spend. Without one
+    the sweep runs to completion, which is what a run wants; a sensor passes one
+    because an unbounded sweep that outlives its tick emits *nothing* and saves
+    no progress -- the failure that left courses un-exported from May to August.
+
+    Stopping early is safe in a way that stopping late is not: a course left out
+    of ``versions`` emits no observation, so its last known version stands and
+    the next pass picks it up. Reporting a version we did not actually read, or
+    reporting nothing at all because the tick was killed, are the two outcomes
+    worth avoiding.
+    """
+    versions: dict[str, str] = {}
+    failures = 0
+    unswept: list[str] = []
+    timed_out = False
+    executor = ThreadPoolExecutor(max_workers=OUTLINE_FETCH_WORKERS)
+    try:
+        futures = {
+            executor.submit(client.get_course_outline, course_run_id): course_run_id
+            for course_run_id in course_run_ids
+        }
+        timeout = (
+            None
+            if deadline is None
+            else max(0.0, (deadline - datetime.now(tz=UTC)).total_seconds())
+        )
+        try:
+            for future in as_completed(futures, timeout=timeout):
+                course_run_id = futures[future]
+                try:
+                    published_version = published_version_of(future, course_run_id, log)
+                except OutlineFetchError:
+                    failures += 1
+                    continue
+                # A partition left out of the mapping emits no observation at
+                # all, so its last known version stands. That is what we want
+                # for a course that has vanished from the LMS: there is nothing
+                # to export, and inventing a version would look like a change.
+                if published_version is not None:
+                    versions[course_run_id] = published_version
+        except TimeoutError:
+            timed_out = True
+        unswept = [
+            course_run_id
+            for future, course_run_id in futures.items()
+            if not future.done()
+        ]
+    finally:
+        # wait=False so a blocked worker cannot hold the caller past the
+        # deadline it just set; cancel_futures so the ones still queued do not
+        # go on issuing requests against an LMS that is already struggling.
+        executor.shutdown(wait=False, cancel_futures=True)
+    if timed_out:
+        log.warning(
+            "Course outline sweep ran out of time with %s of %s course runs "
+            "unswept; the next pass resumes from them.",
+            len(unswept),
+            len(course_run_ids),
+        )
+    return CoursewareSweep(versions=versions, failures=failures, unswept=unswept)
+
+
 def build_courseware_source_asset(
     deployment: str, partitions_def: PartitionsDefinition
 ) -> SourceAsset:
@@ -105,6 +190,21 @@ def build_courseware_source_asset(
     straight to the decorator, because the ``late_bind_partition_to_asset`` /
     ``add_prefix_to_asset_keys`` helpers are written against AssetsDefinition
     and have no SourceAsset equivalent.
+
+    Deliberately carries no ``automation_condition``. An AutomationCondition is
+    evaluated per *partition*, so an hourly cron on a 3,500-partition asset asks
+    for 3,500 observation runs an hour -- and because the observe function
+    sweeps the whole deployment regardless of which partition its run was
+    requested for, each of those runs re-fetched every course. That is O(N^2)
+    against the LMS and it saturated the run queue to the point where no export
+    ran at all. ``courseware_observation_sensor`` does the sweep once per tick
+    and reports the versions directly, with no run in between.
+
+    The asset stays *observable* even though nothing auto-observes it: the
+    data-version comparison that suppresses a re-export when a course has not
+    changed is only reached for observable assets, and a materializable
+    upstream with no materialization would trip ``any_deps_missing()`` and block
+    every downstream outright.
     """
 
     @observable_source_asset(
@@ -112,63 +212,43 @@ def build_courseware_source_asset(
         partitions_def=partitions_def,
         description="An instance of courseware running in an Open edX environment.",
         group_name="openedx",
-        # cron_tick_passed rather than on_cron: this asset has no dependencies,
-        # so the dep-freshness half of on_cron is vacuous, and an edge-triggered
-        # hourly tick is the whole intent. in_progress guards against a sweep
-        # that outruns the interval stacking observation runs on top of itself.
-        automation_condition=AutomationCondition.cron_tick_passed("0 * * * *")
-        & ~AutomationCondition.in_progress(),
         required_resource_keys={"openedx"},
     )
     def courseware(context: OpExecutionContext) -> DataVersionsByPartition:
         """Report the published version of every registered course run.
 
-        Observation is per *asset*, not per partition: this runs once for the
-        whole deployment and must return a DataVersionsByPartition (a bare
-        DataVersion is rejected outright for a partitioned asset). So the
-        concurrent fetch lives here, and a full sweep is one run rather than
-        one run per course.
+        Kept so the asset is observable and so a whole deployment can still be
+        swept on demand from the UI. Routine observation comes from
+        ``courseware_observation_sensor`` instead -- see the factory docstring.
         """
-        client = context.resources.openedx.client
         partition_keys = partitions_def.get_partition_keys(
             dynamic_partitions_store=context.instance
         )
-        versions: dict[str, DataVersion] = {}
-        failures = 0
-        with ThreadPoolExecutor(max_workers=OUTLINE_FETCH_WORKERS) as executor:
-            futures = {
-                executor.submit(client.get_course_outline, course_run_id): course_run_id
-                for course_run_id in partition_keys
-            }
-            for future in as_completed(futures):
-                course_run_id = futures[future]
-                try:
-                    published_version = published_version_of(
-                        future, course_run_id, context.log
-                    )
-                except OutlineFetchError:
-                    failures += 1
-                    continue
-                # A partition left out of the mapping emits no observation at
-                # all, so its last known version stands. That is what we want
-                # for a course that has vanished from the LMS: there is nothing
-                # to export, and inventing a version would look like a change.
-                if published_version is not None:
-                    versions[course_run_id] = DataVersion(published_version)
+        sweep = sweep_course_versions(
+            context.resources.openedx.client, partition_keys, context.log
+        )
         context.log.info(
             "Observed %s of %s %s course runs, %s failed",
-            len(versions),
+            len(sweep.versions),
             len(partition_keys),
             deployment,
-            failures,
+            sweep.failures,
         )
         # A sweep where every lookup failed is a bad token or a 500-ing LMS, not
         # a deployment with nothing to say. Reporting it as a clean observation
         # would leave every downstream quiet, hourly, forever.
-        if partition_keys and failures == len(partition_keys):
-            msg = f"Course outline sweep failed for all {failures} {deployment} courses"
+        if partition_keys and sweep.failures == len(partition_keys):
+            msg = (
+                f"Course outline sweep failed for all {sweep.failures} "
+                f"{deployment} courses"
+            )
             raise RuntimeError(msg)
-        return DataVersionsByPartition(versions)
+        return DataVersionsByPartition(
+            {
+                course_run_id: DataVersion(version)
+                for course_run_id, version in sweep.versions.items()
+            }
+        )
 
     return courseware
 

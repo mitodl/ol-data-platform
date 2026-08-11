@@ -26,7 +26,7 @@ from openedx.lib.assets_helper import (
     late_bind_partition_to_asset,
 )
 from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
-from openedx.sensors.openedx import course_run_sensor
+from openedx.sensors.openedx import course_run_sensor, courseware_observation_sensor
 
 
 class OpenEdxDeploymentComponent:
@@ -130,19 +130,41 @@ class OpenEdxDeploymentComponent:
             evaluation_fn=course_run_sensor,
         )
 
-        # Drives the whole export graph: it requests the hourly observation of
-        # the courseware source asset, and every downstream's
-        # upstream_or_code_changes() then reacts to the versions that
-        # observation reports.
+        # Sweeps the LMS once an hour and reports each course run's published
+        # version as an observation on the courseware source asset. This is what
+        # gives the export graph a reason to run.
+        #
+        # It lives here rather than on the source asset as an automation
+        # condition because conditions are evaluated per partition: an hourly
+        # cron on a 3,500-partition asset requested 3,500 observation runs an
+        # hour, each of which swept the whole deployment anyway. One tick, one
+        # sweep, no runs.
+        observation_sensor = SensorDefinition(
+            name=f"{self.deployment_name}_courseware_observation_sensor",
+            description=("Report the published version of every Open edX course run."),
+            # Observations are emitted directly, so the selection exists only to
+            # give the definition a target -- as with course_run_sensor, the
+            # courseware source asset itself cannot be one.
+            asset_selection=[
+                course_xml_asset,
+                course_content_webhook_asset,
+            ],
+            job=None,
+            default_status=DefaultSensorStatus.STOPPED,
+            minimum_interval_seconds=60 * 60,
+            evaluation_fn=courseware_observation_sensor,
+        )
+
+        # Turns the versions the observation sensor reports into export runs, via
+        # each downstream's upstream_or_code_changes().
         #
         # Evaluated every 5 minutes, not hourly. Each link in
         # courseware -> course_xml -> extract_courserun_details -> webhook can
-        # only advance on a tick, and an observation lands *after* the tick that
-        # requested it, so an hourly interval put roughly an hour between every
-        # pair of steps -- a republish would take most of a day to reach the
-        # webhook. How often the LMS is actually swept is set by the source
-        # asset's cron, not by this: a tick that finds nothing to do costs a
-        # graph evaluation and no API calls.
+        # only advance on a tick, so an hourly interval put roughly an hour
+        # between every pair of steps -- a republish would take most of a day to
+        # reach the webhook. How often the LMS is actually swept is set by the
+        # observation sensor, not by this: a tick that finds nothing to do costs
+        # a graph evaluation and no API calls.
         automation_sensor = AutomationConditionSensorDefinition(
             f"{self.deployment_name}_openedx_automation_sensor",
             minimum_interval_seconds=300,
@@ -151,6 +173,7 @@ class OpenEdxDeploymentComponent:
 
         return [
             courseware_sensor,
+            observation_sensor,
             automation_sensor,
         ]
 

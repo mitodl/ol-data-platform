@@ -41,6 +41,35 @@ def _asset_graph(component: OpenEdxDeploymentComponent) -> AssetGraph:
     )
 
 
+def test_the_courseware_source_asset_has_no_automation_condition(
+    component: OpenEdxDeploymentComponent,
+) -> None:
+    """Nothing may auto-observe courseware per partition.
+
+    An AutomationCondition here is evaluated once per partition, so it asks for
+    one whole-deployment outline sweep per course. The observation sensor is the
+    only thing that should be driving observation.
+    """
+    graph = _asset_graph(component)
+    courseware_key = next(
+        key for key in graph.get_all_asset_keys() if key.path[-1] == "courseware"
+    )
+
+    assert graph.get(courseware_key).automation_condition is None
+
+
+def test_the_observation_sensor_is_wired_hourly(
+    component: OpenEdxDeploymentComponent,
+) -> None:
+    """The sweep runs once an hour, and it is the only thing that observes."""
+    sensors = component.build_sensors(component.build_assets())
+    observation_sensor = next(
+        sensor for sensor in sensors if sensor.name.endswith("_observation_sensor")
+    )
+
+    assert observation_sensor.minimum_interval_seconds == 60 * 60
+
+
 def test_build_assets_returns_both_asset_types(
     component: OpenEdxDeploymentComponent,
 ) -> None:
