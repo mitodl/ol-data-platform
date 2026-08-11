@@ -13,6 +13,7 @@ from openedx.sensors.openedx import (
     course_run_sensor,
     courseware_observation_sensor,
     cursor_offset,
+    next_offset,
     resume_order,
 )
 
@@ -274,40 +275,57 @@ def test_resume_order_rotates_and_wraps() -> None:
     assert resume_order([], 3) == []
 
 
-def test_a_sweep_that_runs_out_of_budget_resumes_where_it_stopped(
+def test_next_offset_steps_past_a_course_that_never_finishes() -> None:
+    """A blocker must not pin the cursor to its own index.
+
+    Resuming at the earliest miss looks fairer, but a course that blocks every
+    tick would hold the cursor at its index forever: the same prefix is swept
+    again and again and the tail behind it is never reached.
+    """
+    assert next_offset(0, 3, 4) == 3, "steps past what finished"
+    assert next_offset(3, 3, 4) == 2, "wraps"
+    assert next_offset(0, 0, 4) == 1, "a pass that finished nothing still moves"
+    assert next_offset(0, 4, 4) == 0, "a full pass returns to the top"
+    assert next_offset(0, 1, 0) == 0, "no partitions, nowhere to go"
+
+
+def test_a_blocked_course_does_not_stop_the_rest_being_reached(
     instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The tail a budget cuts off is the head of the next tick.
+    """Successive partial ticks still reach every course behind the blocker.
 
-    Without this the sweep would re-fetch the same prefix on every tick and the
-    courses behind the cut would never be observed at all -- exports for them
-    would stop silently, which is the failure mode that went unnoticed from May
-    to August.
+    The failure this guards is silent: a course that hangs on every tick used
+    to pin the cursor to its index, so the sweep re-fetched the same prefix
+    forever and the courses behind it were simply never observed -- their
+    exports would stop, with a green tick every hour and nothing in the logs
+    that looks like a problem.
     """
     monkeypatch.setattr(
         "openedx.sensors.openedx.COURSEWARE_SWEEP_BUDGET", timedelta(seconds=1)
     )
-    _seed_partitions(instance, ["course-a", "course-b", "course-c"])
-    # course-a blocks past the budget, so the tick ends with it unswept.
-    client = _OutlineClient(
-        {"course-a": "v1", "course-b": "v1", "course-c": "v1"},
-        blocks={"course-a"},
-    )
+    keys = ["course-a", "course-b", "course-c", "course-d"]
+    _seed_partitions(instance, keys)
+    # course-a never answers, on this tick or any other.
+    client = _OutlineClient(dict.fromkeys(keys, "v1"), blocks={"course-a"})
 
-    first = courseware_observation_sensor(
-        build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
-        _FakeFactory(client),
-    )
+    observed: set[str] = set()
+    cursors: list[str | None] = []
+    cursor: str | None = None
+    for _ in range(4):
+        result = courseware_observation_sensor(
+            build_sensor_context(
+                instance=instance,
+                sensor_name=OBSERVATION_SENSOR_NAME,
+                cursor=cursor,
+            ),
+            _FakeFactory(client),
+        )
+        observed |= set(_observations(result))
+        cursor = result.cursor
+        cursors.append(cursor)
     client.released.set()
 
-    observed = set(_observations(first))
-    assert "course-a" not in observed, "the blocked course cannot have been observed"
-    assert observed, "the courses that did answer are still reported"
-    assert first.cursor is not None
-
-    # The next tick starts at the course the budget cut off, rather than
-    # re-fetching the prefix it already has.
-    resumed = resume_order(
-        ["course-a", "course-b", "course-c"], cursor_offset(first.cursor)
+    assert observed == {"course-b", "course-c", "course-d"}, (
+        "every course except the blocked one must be reachable"
     )
-    assert resumed[0] == "course-a"
+    assert len(set(cursors)) > 1, "the cursor must move rather than pin on the blocker"

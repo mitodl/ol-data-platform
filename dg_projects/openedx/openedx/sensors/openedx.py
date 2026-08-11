@@ -106,6 +106,24 @@ def resume_order(course_run_ids: Sequence[str], offset: int) -> list[str]:
     return ordered[start:] + ordered[:start]
 
 
+def next_offset(offset: int, attempted: int, total: int) -> int:
+    """Where the next sweep should start.
+
+    Steps over everything this pass actually finished, rather than resuming at
+    the first course it missed. Resuming at the miss reads as fairer and is
+    not: a course that blocks on every tick pins the cursor to its own index,
+    so each tick re-sweeps the same prefix and the tail behind it is never
+    reached at all. Stepping past costs that one course a full wraparound
+    before it is retried, and in exchange every other course stays reachable.
+
+    Advances by at least one so that a pass where nothing finished -- every
+    worker blocked -- still moves rather than pinning in the same place.
+    """
+    if total <= 0:
+        return 0
+    return (offset + max(1, attempted)) % total
+
+
 def courseware_observation_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
@@ -125,6 +143,12 @@ def courseware_observation_sensor(
     hour, a permanently saturated run queue, and no exports. One tick, one
     sweep, no runs.
     """
+    # Anchored at entry rather than at the sweep. The tick timeout covers the
+    # partition lookup below as well, so starting the clock after it would let a
+    # slow partitions-store query eat the margin and then hand the sweep a full
+    # budget anyway -- which is the killed-tick-with-no-output failure this
+    # budget exists to prevent.
+    deadline = datetime.now(tz=UTC) + COURSEWARE_SWEEP_BUDGET
     deployment = openedx.deployment
     course_run_ids = OPENEDX_COURSE_RUN_PARTITIONS[deployment].get_partition_keys(
         dynamic_partitions_store=context.instance
@@ -133,13 +157,13 @@ def courseware_observation_sensor(
         context.log.info("No %s course run partitions to observe.", deployment)
         return SensorResult()
 
-    sorted_ids = sorted(course_run_ids)
-    ordered = resume_order(sorted_ids, cursor_offset(context.cursor))
+    offset = cursor_offset(context.cursor)
+    ordered = resume_order(course_run_ids, offset)
     sweep = sweep_course_versions(
         openedx.client,
         ordered,
         context.log,
-        deadline=datetime.now(tz=UTC) + COURSEWARE_SWEEP_BUDGET,
+        deadline=deadline,
     )
     context.log.info(
         "Observed %s of %s %s course runs, %s failed, %s left for the next tick.",
@@ -171,11 +195,5 @@ def courseware_observation_sensor(
             )
             for course_run_id, version in sweep.versions.items()
         ],
-        # Resume at the first course this pass did not get to. ``unswept`` is
-        # built in submission order, so its head is the earliest thing missed --
-        # which is not the same as advancing by the number consumed, because
-        # completion order is not submission order and the course that blocked
-        # can sit anywhere in the list. A pass that finished goes back to the
-        # top, since there is nothing outstanding to be fair to.
-        cursor=str(sorted_ids.index(sweep.unswept[0])) if sweep.unswept else "0",
+        cursor=str(next_offset(offset, attempted, len(ordered))),
     )
