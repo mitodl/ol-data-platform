@@ -163,7 +163,7 @@ select
     ) as user_full_name
     , deduplicated_users.user_gender
     , deduplicated_users.user_birth_year
-    , deduplicated_users.user_country
+    , deduplicated_users.user_country as user_address_country
 from deduplicated_users
 left join micromasters_user_full_name
     on deduplicated_users.user_email = micromasters_user_full_name.user_email
