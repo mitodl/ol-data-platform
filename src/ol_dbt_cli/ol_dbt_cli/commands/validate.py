@@ -147,7 +147,7 @@ def _check_yaml_sql_sync(
     if undocumented:
         report.add(
             "yaml_sql_sync",
-            Severity.WARNING,
+            Severity.ERROR,
             model_name,
             f"Columns in SQL output but not documented in YAML: {sorted(undocumented)}",
             "Add these columns to the model's YAML schema file.",

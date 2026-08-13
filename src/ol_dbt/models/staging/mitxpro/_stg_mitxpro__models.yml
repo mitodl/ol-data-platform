@@ -1626,6 +1626,8 @@ models:
     - not_null
   - name: cms_coursepage_external_marketing_url
     description: str,  the URL of the external course web page
+  - name: cms_coursepage_search_image_id
+    description: int, foreign key to wagtailimages_image for the course's search image
   - name: cms_coursepage_model
     description: str,  whether the course page record is in the cms_coursepage or
       cms_externalcoursepage table. This can not be used reliably to determine if
@@ -1764,6 +1766,9 @@ models:
     description: str,  the URL of the external program web page
   - name: cms_programpage_is_featured
     description: bool, whether the program is featured
+  - name: cms_programpage_search_image_id
+    description: int, foreign key to wagtailimages_image for the program's search
+      image
   - name: cms_programpage_model
     description: str,  whether the program page record is in the cms_programpage or
       cms_externalprogramepage table. This can not be used reliably to determine if

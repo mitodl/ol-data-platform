@@ -76,8 +76,22 @@ models:
     description: int, FK to wagtailimages_image for the program thumbnail
   - name: cms_programpage_background_image_id
     description: int, FK to wagtailimages_image for the program hero background
+  - name: cms_programpage_letter_logo_id
+    description: int, FK to wagtailimages_image for the program's letter logo image
   - name: cms_programpage_description
     description: str, program description rendered in the CMS
+  - name: cms_programpage_faculty_description
+    description: str, faculty description rendered in the CMS
+  - name: cms_programpage_title_over_image
+    description: str, title text overlaid on the program's hero background image
+  - name: cms_programpage_home_page_url
+    description: str, URL the program page's home page link points to
+  - name: cms_programpage_home_page_url_title
+    description: str, link text/title displayed for the program home page URL
+  - name: cms_programpage_contact_email
+    description: str, email used to contact the program team
+  - name: cms_programpage_subscribe_link
+    description: str, URL for the program's mailing list subscribe link
 - name: stg__micromasters__app__postgres__courses_course
   columns:
   - name: course_id
@@ -1056,12 +1070,37 @@ models:
       and the page slug. NULL for unpublished pages.
   - name: wagtail_page_url_path
     description: str, internal Wagtail tree path (e.g. /home/scm/)
+  - name: wagtail_page_title
+    description: str, human-readable title of the page
   - name: wagtail_page_is_live
     description: boolean, whether the page is currently published
+  - name: wagtail_page_depth
+    description: int, depth of this page in the Wagtail page tree. A root node has
+      a depth of 1.
+  - name: wagtail_page_path
+    description: str, materialized path string used by Wagtail's tree implementation
+      to represent this page's position in the page tree
+  - name: wagtail_page_seo_title
+    description: str, alternate SEO-crafted title, for use in the page's <title> HTML
+      tag.
+  - name: wagtail_page_search_description
+    description: str, SEO-crafted description of the content, used for search indexing.
+      This is also suitable for the page's <meta name="description"> HTML tag.
+  - name: wagtail_page_has_unpublished_changes
+    description: boolean, set to True when the page is either in draft or published
+      with draft changes.
+  - name: content_type_id
+    description: int, foreign key to django_contenttype identifying the specific page
+      type (e.g. cms_programpage) for this page
+  - name: owner_id
+    description: int, foreign key to auth_user for the user who owns/created this
+      page
   - name: wagtail_page_first_published_on
     description: timestamp, when the page was first published
   - name: wagtail_page_last_published_on
     description: timestamp, when the page was most recently published
+  - name: wagtail_page_latest_revision_created_on
+    description: timestamp, date and time of the page's latest revision
 - name: stg__micromasters__app__postgres__wagtailimages_image
   description: Images uploaded to the MicroMasters Wagtail CMS image library. Used
     to resolve thumbnail_image_id foreign keys on cms_programpage to full image URLs.
@@ -1082,6 +1121,26 @@ models:
     description: int, image width in pixels
   - name: image_height
     description: int, image height in pixels
+  - name: image_file_hash
+    description: str, hash of the image file used for deduplication
+  - name: image_file_size
+    description: int, size of the image file in bytes
+  - name: image_created_on
+    description: timestamp, when the image was uploaded to the CMS
+  - name: collection_id
+    description: int, foreign key to the Wagtail collection this image belongs to
+  - name: image_focal_point_x
+    description: int, x coordinate of the focal point used for smart cropping
+  - name: image_focal_point_y
+    description: int, y coordinate of the focal point used for smart cropping
+  - name: image_focal_point_width
+    description: int, width of the focal point region used for smart cropping
+  - name: image_focal_point_height
+    description: int, height of the focal point region used for smart cropping
+  - name: uploaded_by_user_id
+    description: int, foreign key to auth_user for the user who uploaded the image
+  - name: image_description
+    description: str, optional description of the image as entered in the CMS
 - name: stg__micromasters__app__user_program_certificate_override_list
   description: Certain users should receive a certificate even though they do not
     meet all the program certificate requirements. This list has the user_id on user_edxorg
