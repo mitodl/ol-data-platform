@@ -295,7 +295,7 @@ def process_edxorg_archive_bundle(
                         ),
                         # Create a row hash to allow for deduplicating data
                         plh.concat_str(pl.all().fill_null(""))
-                        .chash.sha256()
+                        .chash.sha2_256()
                         .alias("row_hash"),
                     )
                     df.sink_csv(
