@@ -156,6 +156,8 @@ models:
     description: int, foreign key to the ticket audit record
   - name: comment_author_user_id
     description: int, foreign key to the user who created the comment
+    tests:
+    - not_null
   - name: comment_body_string
     description: text, the comment string.
   - name: comment_html_body

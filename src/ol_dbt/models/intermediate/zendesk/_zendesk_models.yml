@@ -113,8 +113,13 @@ models:
     description: array, list of tokens received from uploading files for comment attachments.
   - name: audit_id
     description: int, foreign key to the ticket audit record
+  - name: comment_author_user_id
+    description: int, foreign key to the user who created the comment
   - name: comment_author
     description: str, the name of the author of the comment.
+  - name: comment_author_email
+    description: str, the primary email address of the comment author. May be null
+      for permanently deleted users or authors absent from stg__zendesk__user.
   - name: comment_html_body
     description: text, the comment formatted as HTML
   - name: comment_plain_body
