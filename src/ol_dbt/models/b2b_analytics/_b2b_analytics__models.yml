@@ -66,7 +66,34 @@ models:
   - name: monthly_active_learners
     description: Distinct learners with any activity in the month.
   - name: new_enrollments
-    description: Sum of the daily enrolled_count flag within the month.
+    description: >
+      Sum of the daily enrolled_count flag within the month -- an EVENT count
+      (learner x course run), not a learner count. Floor it via
+      enrolling_learners, not via its own value.
+  - name: enrolling_learners
+    description: >
+      Distinct learners who newly enrolled in the month -- the cohort
+      new_enrollments is attributable to. Note enrolling does not by itself set
+      active_count, so this is not a subset of monthly_active_learners.
+  - name: certificates_earned
+    description: >
+      Certificates earned in the month -- an EVENT count (learner x course run).
+      Floor it via certified_learners.
+  - name: certified_learners
+    description: Distinct learners who earned a certificate in the month.
+  - name: video_watchers
+    description: >
+      Distinct learners who watched a video in the month -- the cohort
+      total_videos_watched is attributable to, and a strict subset of
+      monthly_active_learners.
+  - name: problem_attempters
+    description: >
+      Distinct learners who attempted a problem in the month -- the cohort
+      total_problems_attempted is attributable to.
+  - name: chatbot_users
+    description: >
+      Distinct learners who used the chatbot in the month -- the cohort
+      total_chatbot_interactions is attributable to.
 
 - name: mv_b2b_program_funnel
   description: >
@@ -104,7 +131,22 @@ models:
   - name: engagement_rate_pct
     description: engaged_learners / total_enrolled_learners * 100.
   - name: avg_videos_per_engaged_learner
-    description: total_videos_watched / count of learners with videos_watched > 0.
+    description: >
+      total_videos_watched / engaged_learners -- averaged across every engaged
+      learner, so learners who watched nothing count as 0.
+  - name: video_watchers
+    description: >
+      Distinct learners who watched at least one video -- the cohort
+      total_videos_watched is attributable to, and a strict subset of
+      engaged_learners.
+  - name: avg_problems_per_engaged_learner
+    description: >
+      total_problems_attempted / engaged_learners -- averaged across every
+      engaged learner, so learners who attempted nothing count as 0.
+  - name: problem_attempters
+    description: >
+      Distinct learners who attempted at least one problem -- the cohort
+      total_problems_attempted is attributable to.
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
