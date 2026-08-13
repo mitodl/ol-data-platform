@@ -5,18 +5,22 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import re
+
 import pytest
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
     documented_columns,
-    drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
     materialized_view_relations,
+    relations_missing_columns,
     retry_delay,
 )
+from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
 # Verbatim from the failed run: an FE rolling restart began 39s into the build,
 # so the follower dbt was connected to could no longer forward DDL to the leader.
@@ -92,6 +96,22 @@ class TestLooksRetriable:
 
     def test_embedded_digits_do_not_trip_the_word_boundary(self):
         assert not looks_retriable(Exception("Rows affected: 20130, 12006, 110445"))
+
+
+class TestRetriableCodesAgreeWithTheResource:
+    def test_same_wire_protocol_codes_on_both_paths(self):
+        """The drift preflight runs through StarRocksResource, not through the
+        dbt build's retry loop, so a code the classifier here treats as
+        transient but the resource re-raises would abort the whole asset before
+        the build ever starts. 2003 CR_CONN_HOST_ERROR was exactly that gap.
+        """
+        classifier_codes = {
+            int(code) for code in re.findall(r"\d{4}", RETRIABLE_ERROR_PATTERN.pattern)
+        }
+        assert classifier_codes == set(_RETRIABLE_ERRORS)
+
+    def test_a_failed_connect_is_retriable(self):
+        assert 2003 in _RETRIABLE_ERRORS
 
 
 class TestRetryDelay:
@@ -358,19 +378,41 @@ class TestLiveColumns:
         }
 
 
-class TestDriftedRelations:
+class TestRelationsMissingColumns:
     def test_added_column_is_drift(self):
         """PR #2520: the dbt model grew five cohort columns and the deployed MV
         kept the old SELECT, which a plain `dbt build` reports as success.
         """
         documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
         live = {"b2b_analytics.mv_a": {"org_key"}}
-        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+        assert relations_missing_columns(documented, live) == ["b2b_analytics.mv_a"]
 
-    def test_removed_column_is_drift(self):
+    def test_renamed_column_is_drift(self):
+        """A rename reaches this as an add of the new name, so it is caught by
+        the same one-directional check.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
+        live = {"b2b_analytics.mv_a": {"org_key", "video_viewers"}}
+        assert relations_missing_columns(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_an_undocumented_live_column_is_not_drift(self):
+        """The whole reason this is a subset check and not set equality. Nothing
+        enforces that the YAML lists every emitted column, and under equality
+        one undocumented column would full-refresh the dashboard's views on
+        every scheduled run.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key"}}
+        live = {"b2b_analytics.mv_a": {"org_key", "organization_name"}}
+        assert relations_missing_columns(documented, live) == []
+
+    def test_a_pure_removal_is_the_known_blind_spot(self):
+        """Dropped from the SQL and the YAML, still present in the view: not
+        reported. Documented as acceptable -- the leftover column is stale but
+        harmless, since ol-analytics-api projects its own field list.
+        """
         documented = {"b2b_analytics.mv_a": {"org_key"}}
         live = {"b2b_analytics.mv_a": {"org_key", "dropped_col"}}
-        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+        assert relations_missing_columns(documented, live) == []
 
     def test_matching_columns_are_not_drift(self):
         """The common case -- it must not force a full refresh, since that drops
@@ -378,7 +420,7 @@ class TestDriftedRelations:
         """
         columns = {"org_key", "video_watchers"}
         assert (
-            drifted_relations(
+            relations_missing_columns(
                 {"b2b_analytics.mv_a": columns}, {"b2b_analytics.mv_a": columns}
             )
             == []
@@ -386,7 +428,9 @@ class TestDriftedRelations:
 
     def test_a_view_that_does_not_exist_yet_is_not_drift(self):
         """This build creates it with the current SELECT; nothing to refresh."""
-        assert drifted_relations({"b2b_analytics.mv_new": {"org_key"}}, {}) == []
+        assert (
+            relations_missing_columns({"b2b_analytics.mv_new": {"org_key"}}, {}) == []
+        )
 
     def test_ignores_live_relations_dbt_does_not_own(self):
         """The query filters by schema, so tables created outside dbt come back
@@ -397,7 +441,7 @@ class TestDriftedRelations:
             "b2b_analytics.mv_a": {"org_key"},
             "b2b_analytics.some_manual_table": {"whatever"},
         }
-        assert drifted_relations(documented, live) == []
+        assert relations_missing_columns(documented, live) == []
 
     def test_result_is_sorted(self):
         documented = {
@@ -405,7 +449,7 @@ class TestDriftedRelations:
             "b2b_analytics.mv_a": {"org_key", "new_col"},
         }
         live = {"b2b_analytics.mv_a": {"org_key"}, "b2b_analytics.mv_b": {"org_key"}}
-        assert drifted_relations(documented, live) == [
+        assert relations_missing_columns(documented, live) == [
             "b2b_analytics.mv_a",
             "b2b_analytics.mv_b",
         ]

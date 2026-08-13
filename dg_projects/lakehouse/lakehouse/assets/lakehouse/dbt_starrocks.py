@@ -20,10 +20,10 @@ from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
     documented_columns,
-    drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
+    relations_missing_columns,
     retry_delay,
 )
 from lakehouse.resources.starrocks import StarRocksResource
@@ -82,8 +82,10 @@ _ENV_LOCK = threading.Lock()
 # which needs one).
 
 
-def _stale_materialized_views(starrocks: StarRocksResource) -> list[str]:
-    """MVs whose columns in StarRocks disagree with the dbt manifest.
+def _stale_materialized_views(
+    context: AssetExecutionContext, starrocks: StarRocksResource
+) -> list[str]:
+    """MVs in StarRocks that are missing a column the dbt manifest documents.
 
     dbt cannot find these itself. dbt-core only replaces an existing
     materialized view under --full-refresh, and asks the adapter for
@@ -100,8 +102,20 @@ def _stale_materialized_views(starrocks: StarRocksResource) -> list[str]:
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
     documented = documented_columns(manifest)
+    if not documented:
+        # Nothing to compare against, and `live_column_query` would build an
+        # empty `IN ()` -- a syntax error. Logged rather than passed over in
+        # silence: it means the schema YAML lost its `columns:`, which also
+        # disables the rebuild these models depend on.
+        context.log.warning(
+            "No StarRocks materialized view documents any columns -- skipping "
+            "the column-drift check. An edited MV SELECT will not be rebuilt."
+        )
+        return []
     query, params = live_column_query(documented)
-    return drifted_relations(documented, live_columns(starrocks.fetch(query, params)))
+    return relations_missing_columns(
+        documented, live_columns(starrocks.fetch(query, params))
+    )
 
 
 @dbt_assets(
@@ -127,18 +141,18 @@ def starrocks_dbt_assets(
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
 
-    Escalates to --full-refresh when a materialized view's columns in StarRocks
-    have fallen behind the manifest, since a plain build would not notice --
-    see `_stale_materialized_views`.
+    Escalates to --full-refresh when a materialized view in StarRocks is
+    missing a column the manifest documents, since a plain build would not
+    notice -- see `_stale_materialized_views`.
     """
     build_args = ["build"]
-    stale = _stale_materialized_views(starrocks)
+    stale = _stale_materialized_views(context, starrocks)
     if stale:
         # --full-refresh drops and recreates every selected MV, not just the
-        # drifted ones, which is why it is conditional: each recreated view is
+        # stale ones, which is why it is conditional: each recreated view is
         # briefly absent, and ol-analytics-api queries these live.
         context.log.info(
-            "Materialized views whose columns differ from the dbt manifest -- "
+            "Materialized views missing a column the dbt manifest documents -- "
             "building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )

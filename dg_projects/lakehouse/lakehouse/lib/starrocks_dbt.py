@@ -26,10 +26,11 @@ RETRY_BASE_DELAY = 30
 
 # Error signatures worth another attempt, in two families.
 #
-# 1044/1045/2003/2006/2013 -- MySQL wire-protocol codes.
-# StarRocksResource._RETRIABLE_ERRORS carries the same set minus 2003
-# CR_CONN_HOST_ERROR, which only a *fresh* connect to an already-gone FE returns
-# and which the resource therefore never sees (it connects once, up front).
+# 1044/1045/2003/2006/2013 -- MySQL wire-protocol codes, the same set
+# StarRocksResource._RETRIABLE_ERRORS retries. (It used to omit 2003
+# CR_CONN_HOST_ERROR on the theory that the resource never sees a failed
+# connect; it does -- every attempt in _run() opens its own connection, and an
+# FE rolling restart is exactly how that fails.)
 # 1044/1045 are the Vault case: a just-created dynamic user may not be visible
 # yet on the FE node dbt happened to connect to.
 #
@@ -114,16 +115,22 @@ def _materialized_view_nodes(
 
 
 def documented_columns(manifest: Mapping[str, Any]) -> dict[str, set[str]]:
-    """Map each StarRocks MV to the column set it is *supposed* to have.
+    """Map each StarRocks MV to the columns its schema YAML documents.
 
-    Read from the manifest's `columns` -- i.e. the schema YAML -- rather than by
-    parsing the model's SELECT. `+meta: required_docs: true` on b2b_analytics
-    makes that YAML mandatory and `ol-dbt validate` holds it to the SQL, so it
-    is the contract both this repo and ol-analytics-api are written against.
+    Read from the manifest's `columns` rather than by parsing the model's
+    SELECT, because the YAML is the contract ol-analytics-api is written
+    against: a column nobody documented is a column no consumer projects.
 
-    A model with no documented columns is omitted rather than treated as
-    "expects nothing": an empty set would differ from every live MV and so
-    would force a full refresh on every run.
+    Treat it as a subset of the model's output, not as the full schema.
+    b2b_analytics documents every emitted column today and its YAML says so,
+    but nothing enforces that: `+meta: required_docs: true` only requires a
+    model-level description and `ol-dbt validate` merely warns about
+    undocumented columns. `relations_missing_columns` compares
+    one-directionally for that reason -- an equality check would turn the
+    first undocumented column anyone adds into "drift on every run".
+
+    A model with no documented columns at all is omitted -- there is nothing
+    to check it against.
     """
     return {
         f"{node['schema']}.{node['alias']}": {
@@ -168,22 +175,32 @@ def live_columns(rows: list[Mapping[str, Any]]) -> dict[str, set[str]]:
     return columns
 
 
-def drifted_relations(
+def relations_missing_columns(
     documented: Mapping[str, set[str]], live: Mapping[str, set[str]]
 ) -> list[str]:
-    """MVs whose columns in StarRocks no longer match what dbt says they are.
+    """MVs that lack a column their schema YAML documents.
 
-    These need `dbt build --full-refresh` to actually change: dbt-core only
-    replaces an existing materialized view under that flag, and
-    dbt-starrocks' `get_materialized_view_configuration_changes` is an empty
-    macro, so an edited SELECT is otherwise a silent no-op (a plain build logs
-    "no configuration changes were identified" and the MV keeps its old query).
+    These need `dbt build --full-refresh` to catch up: dbt-core only replaces
+    an existing materialized view under that flag, and dbt-starrocks'
+    `get_materialized_view_configuration_changes` is an empty macro, so an
+    edited SELECT is otherwise a silent no-op (a plain build logs "no
+    configuration changes were identified" and the MV keeps its old query).
+
+    Deliberately one-directional -- documented columns absent from the view,
+    not set inequality. Nothing enforces that the YAML lists every emitted
+    column (see `documented_columns`), and under equality the first
+    undocumented column anyone adds would make every MV look drifted on every
+    run, full-refreshing views the dashboard reads live. A column ADDED to a
+    model is documented and absent, so it is caught; a RENAME is caught the
+    same way, via the new name. The blind spot is a pure removal -- dropped
+    from both SQL and YAML, still present in the view -- which leaves a stale
+    column that consumers do not project and so does not break them.
 
     A relation missing from *live* does not exist yet -- this build creates it
-    with the current SELECT, so it is not drift.
+    with the current SELECT, so there is nothing to rebuild.
     """
     return sorted(
         relation
         for relation, columns in documented.items()
-        if relation in live and live[relation] != columns
+        if relation in live and columns - live[relation]
     )

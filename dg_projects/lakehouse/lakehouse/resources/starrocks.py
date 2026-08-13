@@ -35,8 +35,11 @@ def _make_ssl_context() -> ssl.SSLContext:
 # MySQL-wire-protocol error codes that warrant a fresh Vault credential + retry.
 # 1044 ER_DBACCESS_DENIED_ERROR / 1045 ER_ACCESS_DENIED_ERROR - the dynamic user
 #   Vault just created hasn't propagated across StarRocks FE nodes yet.
+# 2003 CR_CONN_HOST_ERROR - the connect() below failed outright, which is what
+#   an FE rolling restart looks like from here. Every attempt opens its own
+#   connection, so this is reachable on all of them, not just the first.
 # 2006 CR_SERVER_GONE_ERROR / 2013 CR_SERVER_LOST - dropped connection.
-_RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2006, 2013})
+_RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2003, 2006, 2013})
 _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
 
