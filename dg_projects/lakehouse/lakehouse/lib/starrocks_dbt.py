@@ -121,13 +121,14 @@ def documented_columns(manifest: Mapping[str, Any]) -> dict[str, set[str]]:
     SELECT, because the YAML is the contract ol-analytics-api is written
     against: a column nobody documented is a column no consumer projects.
 
-    Treat it as a subset of the model's output, not as the full schema.
-    b2b_analytics documents every emitted column today and its YAML says so,
-    but nothing enforces that: `+meta: required_docs: true` only requires a
-    model-level description and `ol-dbt validate` merely warns about
-    undocumented columns. `relations_missing_columns` compares
-    one-directionally for that reason -- an equality check would turn the
-    first undocumented column anyone adds into "drift on every run".
+    This is the model's FULL output schema, which is what lets
+    `drifted_relations` compare by equality. `ol-dbt validate`'s yaml_sql_sync
+    check errors in both directions -- a documented column with no matching
+    SQL alias, and a SQL column the YAML omits (ol-data-platform#2555) -- so a
+    model whose YAML and SELECT disagree cannot merge. If that check is ever
+    relaxed back to a warning, or starts skipping these models (it skips any
+    model whose SELECT * sqlglot cannot expand; none do today), this stops
+    being a full schema and the equality check has to weaken with it.
 
     A model with no documented columns at all is omitted -- there is nothing
     to check it against.
@@ -175,10 +176,10 @@ def live_columns(rows: list[Mapping[str, Any]]) -> dict[str, set[str]]:
     return columns
 
 
-def relations_missing_columns(
+def drifted_relations(
     documented: Mapping[str, set[str]], live: Mapping[str, set[str]]
 ) -> list[str]:
-    """MVs that lack a column their schema YAML documents.
+    """MVs whose columns in StarRocks no longer match what dbt says they are.
 
     These need `dbt build --full-refresh` to catch up: dbt-core only replaces
     an existing materialized view under that flag, and dbt-starrocks'
@@ -186,15 +187,9 @@ def relations_missing_columns(
     edited SELECT is otherwise a silent no-op (a plain build logs "no
     configuration changes were identified" and the MV keeps its old query).
 
-    Deliberately one-directional -- documented columns absent from the view,
-    not set inequality. Nothing enforces that the YAML lists every emitted
-    column (see `documented_columns`), and under equality the first
-    undocumented column anyone adds would make every MV look drifted on every
-    run, full-refreshing views the dashboard reads live. A column ADDED to a
-    model is documented and absent, so it is caught; a RENAME is caught the
-    same way, via the new name. The blind spot is a pure removal -- dropped
-    from both SQL and YAML, still present in the view -- which leaves a stale
-    column that consumers do not project and so does not break them.
+    Set equality, so an added, renamed, or removed column all count. That
+    rests on `documented_columns` being the model's full output schema, which
+    ol-dbt validate now enforces -- read the caveat there before weakening it.
 
     A relation missing from *live* does not exist yet -- this build creates it
     with the current SELECT, so there is nothing to rebuild.
@@ -202,5 +197,5 @@ def relations_missing_columns(
     return sorted(
         relation
         for relation, columns in documented.items()
-        if relation in live and columns - live[relation]
+        if relation in live and columns != live[relation]
     )

@@ -151,10 +151,10 @@ models:
       # dbt-starrocks reports no configuration changes otherwise. The Dagster
       # asset compares each MV's live columns against this project's manifest
       # and escalates to --full-refresh on a mismatch (see
-      # lakehouse/assets/lakehouse/dbt_starrocks.py), so a column add/rename
-      # lands on the next scheduled build -- but it is driven by the `columns:`
-      # in the schema YAML, so document a new column there or the rebuild will
-      # not trigger. Consumers that project the column (ol-analytics-api's
+      # lakehouse/assets/lakehouse/dbt_starrocks.py), so a column add, rename or
+      # removal lands on the next scheduled build. It reads the `columns:` in
+      # the schema YAML, which ol-dbt validate holds to the SQL in both
+      # directions. Consumers that project the column (ol-analytics-api's
       # build_select) must still deploy AFTER that build, or their SELECT errors
       # on an unknown column.
       +materialized: table

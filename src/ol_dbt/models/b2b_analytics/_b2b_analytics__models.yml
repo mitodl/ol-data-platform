@@ -1,10 +1,9 @@
 ---
 # Every column each model emits is documented here, in SELECT order. That is a
 # contract, not a courtesy: the Dagster StarRocks asset compares this list
-# against the live materialized view and rebuilds the view when a documented
-# column is missing from it (lakehouse/lib/starrocks_dbt.py). A column added to
-# the SQL but not listed here will not trigger that rebuild, so the deployed MV
-# silently keeps its old SELECT.
+# against the live materialized view and rebuilds the view when the two differ
+# (lakehouse/lib/starrocks_dbt.py). ol-dbt validate errors in both directions,
+# so the lists cannot fall out of step without CI saying so.
 version: 2
 models:
 - name: mv_b2b_contract_utilization
