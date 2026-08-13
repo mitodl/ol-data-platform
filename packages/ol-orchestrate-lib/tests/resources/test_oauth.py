@@ -37,6 +37,24 @@ class _ThrottlingClient:
         return httpx.Response(429, request=request, headers={"Retry-After": "0"})
 
 
+class _HeaderlessThrottlingClient:
+    """Answers 429 with no Retry-After, then 200.
+
+    A 429 that omits Retry-After is the case the backoff default exists for,
+    and the case that used to crash before the retry could happen.
+    """
+
+    def __init__(self) -> None:
+        self.gets = 0
+
+    def get(self, *args, **kwargs):  # noqa: ARG002
+        self.gets += 1
+        if self.gets == 1:
+            request = httpx.Request("GET", "https://lms.example.com/api/thing/")
+            return httpx.Response(429, request=request)
+        return _Response()
+
+
 class _CountingClient:
     """httpx.Client stand-in that counts GETs and records their headers."""
 
@@ -126,6 +144,29 @@ def test_rate_limit_retries_are_bounded() -> None:
 
     # The initial attempt plus exactly two retries.
     assert throttling.gets == 3
+
+
+def test_rate_limit_retry_survives_a_missing_retry_after_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 429 without Retry-After must back off, not raise AttributeError.
+
+    The default was the int 60, so `retry_after.isdigit()` blew up with
+    ``AttributeError: 'int' object has no attribute 'isdigit'`` -- turning a
+    recoverable rate limit into a hard job failure on precisely the responses
+    this branch was written to handle.
+    """
+    slept: list[float] = []
+    monkeypatch.setattr("ol_orchestrate.resources.oauth.time.sleep", slept.append)
+
+    client = _build_client()
+    client._http_client = _HeaderlessThrottlingClient()
+    client._cached_username = "svc-account"  # skip the /me lookup
+
+    assert client.fetch_with_auth("https://lms.example.com/api/thing/") == {
+        "username": "svc-account"
+    }
+    assert slept == [60]
 
 
 def test_username_lookup_honours_the_configured_token_type() -> None:
