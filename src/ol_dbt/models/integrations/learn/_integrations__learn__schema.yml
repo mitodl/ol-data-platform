@@ -25,8 +25,36 @@ models:
   - name: etl_source
     description: Always 'ocw'.
     tests: [not_null]
+  - name: description
+    description: Course description from the OCW website.
+  - name: url
+    description: URL of the course on OCW production (ocw.mit.edu).
+  - name: image_url
+    description: Course image URL.
   - name: published
     description: Whether the course is live on ocw.mit.edu.
+  - name: platform
+    description: Always 'ocw', matches etl_source.
+  - name: level
+    description: >
+      Comma-separated course level(s), e.g. Undergraduate, Graduate,
+      Non-Credit, High School.
+  - name: term
+    description: Course term, e.g. Spring, Summer, Fall, January IAP, or blank.
+  - name: year
+    description: Course year.
+  - name: course_number
+    description: Primary course number, e.g. '21A.850J'.
+  - name: extra_course_numbers
+    description: Additional course numbers beyond the primary, e.g. 'STS.484J'.
+  - name: topics
+    description: >
+      Comma-separated topic labels, preferring speciality, then subtopic,
+      then topic.
+  - name: instructors
+    description: Comma-separated instructor names.
+  - name: departments
+    description: Comma-separated department names offering the course.
 
 - name: integrations__learn__mitxonline_courses
   description: >
@@ -47,6 +75,36 @@ models:
   - name: etl_source
     description: Always 'mitxonline'.
     tests: [not_null]
+  - name: description
+    description: Course description shown on the course's home/product page.
+  - name: url
+    description: MITx Online course page URL path (relative).
+  - name: image_url
+    description: Course image URL.
+  - name: published
+    description: Whether the course is live on mitxonline.mit.edu.
+  - name: platform
+    description: Always 'mitxonline', matches etl_source.
+  - name: page_slug
+    description: MITx Online CMS page slug, used for constructing the course page's
+      URL.
+  - name: topics
+    description: Comma-separated topic names for the course.
+  - name: instructors
+    description: Comma-separated instructor names for the course.
+  - name: certification_type
+    description: Either 'MicroMasters Credential' or 'Certificate of Completion'.
+  - name: price
+    description: >
+      Product price in plain text, e.g. '$250 - $1000 (financial assistance
+      available)'.
+  - name: length
+    description: >
+      Short description of how long the course takes to complete, e.g.
+      '4 weeks'.
+  - name: effort
+    description: >
+      Short description of expected weekly effort, e.g. '1-3 hours per week'.
   - name: runs
     description: >
       Pipe-delimited run metadata strings joined with semicolons.
@@ -72,6 +130,36 @@ models:
   - name: etl_source
     description: Always 'mitxonline'.
     tests: [not_null]
+  - name: description
+    description: Program description shown on the program's home/product page.
+  - name: url
+    description: MITx Online program page URL path (relative).
+  - name: image_url
+    description: Program image URL.
+  - name: published
+    description: Whether the program is live on mitxonline.mit.edu.
+  - name: platform
+    description: Always 'mitxonline', matches etl_source.
+  - name: program_type
+    description: >
+      Program type, free text from the source CMS, e.g. 'MicroMasters',
+      'Series'.
+  - name: certification_type
+    description: Either 'MicroMasters Credential' or 'Certificate of Completion'.
+  - name: topics
+    description: >
+      Comma-separated topic names aggregated across all courses in the
+      program.
+  - name: instructors
+    description: Comma-separated instructor names for the program.
+  - name: page_slug
+    description: MITx Online CMS page slug, used for constructing the program page's
+      URL.
+  - name: price
+    description: Product price in plain text, e.g. '$250 - $1000'.
+  - name: effort
+    description: >
+      Short description of expected weekly effort, e.g. '1-3 hours per week'.
   - name: courses
     description: Comma-separated list of course readable_ids belonging to this program.
 
@@ -94,6 +182,32 @@ models:
   - name: etl_source
     description: Always 'xpro'.
     tests: [not_null]
+  - name: description
+    description: Course description displayed on the xPRO course page.
+  - name: url
+    description: xPRO course page URL path (relative).
+  - name: image_url
+    description: Course image URL.
+  - name: published
+    description: Whether the course is live on xpro.mit.edu.
+  - name: platform
+    description: >
+      Platform name for the course, sourced from xPRO's platform dimension
+      table (e.g. 'xPRO'). Unlike etl_source, this is not a fixed literal.
+  - name: page_slug
+    description: xPRO CMS page slug, used for constructing the course page's URL.
+  - name: topics
+    description: Comma-separated topic names for the course.
+  - name: instructors
+    description: Comma-separated instructor names for the course.
+  - name: length
+    description: >
+      Short description of how long the course takes to complete, e.g.
+      '4 weeks'.
+  - name: effort
+    description: Short description of expected weekly time commitment.
+  - name: format
+    description: Course format, e.g. 'Online', 'Other'.
   - name: runs
     description: >
       Pipe-delimited run metadata strings joined with semicolons.
@@ -118,6 +232,32 @@ models:
   - name: etl_source
     description: Always 'xpro'.
     tests: [not_null]
+  - name: description
+    description: Program description displayed on the xPRO program page.
+  - name: url
+    description: xPRO program page URL path (relative).
+  - name: image_url
+    description: Program image URL.
+  - name: published
+    description: Whether the program is live on xpro.mit.edu.
+  - name: platform
+    description: >
+      Platform name for the program, sourced from xPRO's platform dimension
+      table (e.g. 'xPRO'). Unlike etl_source, this is not a fixed literal.
+  - name: page_slug
+    description: xPRO CMS page slug, used for constructing the program page's URL.
+  - name: topics
+    description: Comma-separated topic names for the program.
+  - name: instructors
+    description: Comma-separated instructor names for the program.
+  - name: length
+    description: >
+      Short description of how long the program takes to complete, e.g.
+      '4 weeks'.
+  - name: effort
+    description: Short description of expected weekly time commitment.
+  - name: format
+    description: Program format, e.g. 'Online', 'Other'.
   - name: courses
     description: Comma-separated list of course readable_ids belonging to this program.
 
@@ -144,6 +284,18 @@ models:
   - name: etl_source
     description: Always 'micromasters'.
     tests: [not_null]
+  - name: description
+    description: Program description.
+  - name: url
+    description: >
+      Absolute URL for the program's page on micromasters.mit.edu, or NULL
+      for unpublished pages.
+  - name: image_url
+    description: Absolute URL for the program's thumbnail image.
+  - name: published
+    description: Whether the program is live on micromasters.mit.edu.
+  - name: platform
+    description: Always 'micromasters', matches etl_source.
   - name: courses
     description: >
       Comma-separated list of course readable_ids ordered by position_in_program.
@@ -168,11 +320,41 @@ models:
   - name: etl_source
     description: Always 'mit_edx'.
     tests: [not_null]
-  - name: runs
+  - name: description
+    description: Short course description from the edX.org catalog API.
+  - name: url
+    description: URL for the course's About page on edx.org.
+  - name: image_url
+    description: URL for the course image from the edX.org catalog API.
+  - name: published
+    description: True if at least one course run is published.
+  - name: platform
     description: >
-      Pipe-delimited run metadata strings joined with semicolons.
-      Format per run: courserun_key|start_on|end_on|is_published
+      Always 'edxorg' (differs from etl_source, which is 'mit_edx').
+  - name: page_slug
+    description: >
+      Always NULL; edX.org courses have no CMS page slug (placeholder for
+      contract parity with other sources).
   - name: topics
     description: Comma-separated subject names from the edX.org course record.
   - name: instructors
     description: Comma-separated instructor names aggregated across all course runs.
+  - name: certification_type
+    description: >
+      Course type from the edX.org catalog API, e.g. audit, verified,
+      professional; used as this contract's certification_type.
+  - name: price
+    description: >
+      Maximum non-audit/honor seat price across all published runs, cast to
+      a string, or NULL if no priced seats.
+  - name: length
+    description: >
+      Max course run duration across published runs, e.g. '4 weeks'.
+  - name: effort
+    description: >
+      Max course run time commitment across published runs, e.g.
+      '5-7 hours per week'.
+  - name: runs
+    description: >
+      Pipe-delimited run metadata strings joined with semicolons.
+      Format per run: courserun_key|start_on|end_on|is_published

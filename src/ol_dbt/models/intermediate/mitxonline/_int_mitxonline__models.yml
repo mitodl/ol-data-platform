@@ -515,6 +515,8 @@ models:
     - not_null
   - name: order_created_on
     description: timestamp, specifying when the order was initially created
+  - name: order_updated_on
+    description: timestamp, specifying when the order was most recently updated
   - name: order_reference_number
     description: string, readable id for the order. Shared with micromasters
     tests:
@@ -685,6 +687,10 @@ models:
     - not_null
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
     tests:
     - not_null
   - name: courserunenrollment_enrollment_mode
@@ -895,6 +901,10 @@ models:
     description: timestamp, specifying when an enrollment was initially created
     tests:
     - not_null
+  - name: programenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - not_null
   - name: programenrollment_enrollment_mode
     description: str, enrollment mode for user
   - name: programenrollment_enrollment_status
@@ -989,6 +999,9 @@ models:
     description: timestamp, date and time when the course page was first published
   - name: course_page_last_published_on
     description: timestamp, date and time when the course page was last published
+  - name: course_image_url
+    description: str, fully-qualified URL for the course's featured image, resolved
+      from the course page's feature image in the Wagtail CMS
 
 - name: int__mitxonline__course_to_departments
   description: Intermediate model for MITxOnline course to department
@@ -1337,6 +1350,9 @@ models:
     description: timestamp, date and time when the page was first published
   - name: program_page_last_published_on
     description: timestamp, date and time when the page was last published
+  - name: program_image_url
+    description: str, fully-qualified URL for the program's featured image, resolved
+      from the program page's feature image in the Wagtail CMS
 
 - name: int__mitxonline__program_requirements
   columns:
@@ -1384,6 +1400,9 @@ models:
     description: int, indicating the number of required courses to earn certificate
     tests:
     - not_null
+  - name: course_order_in_program
+    description: int, sequential number indicating the display order of the course
+      within the program, derived from the course node's path in the MITx Online CMS
 
 - name: int__mitxonline__program_certificates
   columns:
@@ -2171,6 +2190,9 @@ models:
     description: int, foreign key to the courses_course table
     tests:
     - not_null
+  - name: instructor_source_id
+    description: str, platform-native stable identifier for the instructor (the Wagtail
+      page ID of the instructor's CMS page, cast to varchar)
   - name: instructor_name
     description: str, the name of the instructor.
     tests:
