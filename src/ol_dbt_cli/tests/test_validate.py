@@ -91,8 +91,8 @@ class TestYamlSqlSync:
         report = ValidationReport()
         _check_yaml_sql_sync("stg_users", yaml_registry, parsed, report)
 
-        warnings = [i for i in report.issues if i.severity == Severity.WARNING]
-        assert any("user_name" in i.message for i in warnings)
+        errors = [i for i in report.issues if i.severity == Severity.ERROR]
+        assert any("user_name" in i.message for i in errors)
 
     def test_no_issues_when_in_sync(self) -> None:
         registry = _simple_registry("user_id", "user_email")
