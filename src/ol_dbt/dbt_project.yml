@@ -148,10 +148,15 @@ models:
       +enabled: "{{ target.type == 'starrocks' }}"
       # Editing an MV's SELECT is a silent no-op on a plain `dbt build`: dbt only
       # replaces an existing materialized view on --full-refresh, and
-      # dbt-starrocks reports no configuration changes otherwise. Ship a column
-      # add/rename here with a one-off `dbt run --full-refresh --select
-      # b2b_analytics` (or drop the MV) BEFORE any consumer projects the new
-      # column, or ol-analytics-api's SELECT of it errors on an unknown column.
+      # dbt-starrocks reports no configuration changes otherwise. The Dagster
+      # asset compares each MV's live columns against this project's manifest
+      # and escalates to --full-refresh on a mismatch (see
+      # lakehouse/assets/lakehouse/dbt_starrocks.py), so a column add/rename
+      # lands on the next scheduled build -- but it is driven by the `columns:`
+      # in the schema YAML, so document a new column there or the rebuild will
+      # not trigger. Consumers that project the column (ol-analytics-api's
+      # build_select) must still deploy AFTER that build, or their SELECT errors
+      # on an unknown column.
       +materialized: table
       # The engine-scoping label: dbt_starrocks.py's dbt_assets selects
       # `tag:starrocks`, and dbt.py's Trino-scoped set excludes it. Moving a
