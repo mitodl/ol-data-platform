@@ -1080,6 +1080,10 @@ models:
     description: timestamp, specifying when an enrollment was initially created
     tests:
     - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - not_null
   - name: courserunenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment changed. Options
       are 'deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled'
@@ -1267,6 +1271,9 @@ models:
     description: timestamp, date and time when the program page was first published
   - name: cms_programpage_last_published_on
     description: timestamp, date and time when the program page was last published
+  - name: cms_programpage_image_url
+    description: str, fully-qualified URL for the program's search/feature image,
+      resolved from the program page's search image in the Wagtail CMS
 
 - name: int__mitxpro__program_runs
   description: Intermediate model of program runs in MITxPro
@@ -1368,6 +1375,9 @@ models:
     description: timestamp, date and time when the course page was first published
   - name: cms_coursepage_last_published_on
     description: timestamp, date and time when the course page was last published
+  - name: cms_coursepage_image_url
+    description: str, fully-qualified URL for the course's search/feature image, resolved
+      from the course page's search image in the Wagtail CMS
 
 - name: int__mitxpro__course_runs
   description: Intermediate model of course runs in MIT xPro.
@@ -1934,6 +1944,10 @@ models:
     description: int, primary key in courses_program
     tests:
     - not_null
+  - name: course_order
+    description: int, sequential number (1-indexed) indicating the display order of
+      the course within the program, derived from the position of the course page
+      in cms_coursesinprogrampage_coursepage_wagtail_page_ids
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

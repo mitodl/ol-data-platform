@@ -148,6 +148,12 @@ models:
     description: timestamp, date and time when the course certificate was initially
       created on the corresponding platform; null when the learner has not yet earned
       a certificate
+  - name: courseruncertificate_issued_on
+    description: timestamp, date and time when the course certificate was issued to
+      the learner. For MITx Online, this is the actual issued_on date from the source
+      system. For other platforms, this falls back to courseruncertificate_created_on
+      as they don't track a separate issued date. Null when the learner has not yet
+      earned a certificate.
 
 - name: int__combined__courserun_certificates
   description: course certificates model combined from different platforms. It excludes

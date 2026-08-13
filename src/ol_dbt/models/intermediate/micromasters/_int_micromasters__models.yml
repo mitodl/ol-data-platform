@@ -172,6 +172,11 @@ models:
       website
     tests:
     - not_null
+  - name: program_page_url
+    description: str, fully-qualified live URL of the program's page on MicroMasters.
+      NULL for unpublished pages.
+  - name: program_image_url
+    description: str, fully-qualified image URL for the program's thumbnail image
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       arguments:
@@ -209,6 +214,8 @@ models:
     description: int, indicating the number of required courses to earn certificate
     tests:
     - not_null
+  - name: course_position_in_program
+    description: int, sequential number indicating the course position in a program
 
 - name: int__micromasters__program_certificates
   description: MicroMasters program certificate earners. User's profile fields are

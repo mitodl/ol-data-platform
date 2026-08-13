@@ -1833,6 +1833,9 @@ models:
   - name: course_video_url
     description: str, URL to the video to be displayed for this course. It can be
       an HLS or Youtube video URL.
+  - name: course_feature_image_id
+    description: int, foreign key to wagtailimages_image for the course's feature
+      image
 
 - name: stg__mitxonline__app__postgres__cms_programpage
   description: program page metadata sourced from Wagtail CMS
@@ -1874,6 +1877,9 @@ models:
   - name: program_video_url
     description: str, URL to the video to be displayed for this program. It can be
       an HLS or Youtube video URL.
+  - name: program_feature_image_id
+    description: int, foreign key to wagtailimages_image for the program's feature
+      image
 
 - name: stg__mitxonline__app__postgres__courses_coursetopic
   columns:
@@ -2195,6 +2201,9 @@ models:
   - name: image_file
     description: str, path to the image file in storage. May be an S3 key or a CDN-relative
       path - prepend the MITx Online media base URL to form a full image URL.
+  - name: image_url
+    description: str, fully-qualified image URL constructed by prepending mitxonline_media_url
+      to image_file
   - name: image_title
     description: str, title/label for the image as entered in the CMS
   - name: image_width
