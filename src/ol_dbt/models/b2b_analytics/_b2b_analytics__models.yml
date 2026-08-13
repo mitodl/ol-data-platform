@@ -1,4 +1,9 @@
 ---
+# Every column each model emits is documented here, in SELECT order. That is a
+# contract, not a courtesy: the Dagster StarRocks asset compares this list
+# against the live materialized view and rebuilds the view when the two differ
+# (lakehouse/lib/starrocks_dbt.py). ol-dbt validate errors in both directions,
+# so the lists cannot fall out of step without CI saying so.
 version: 2
 models:
 - name: mv_b2b_contract_utilization
@@ -7,18 +12,30 @@ models:
     materialized view, refreshed by the Dagster b2b_organization MV-refresh asset.
     Consumers: L&D manager dashboard header card, MIT admin overview.
   columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id) -- the
       identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
-  - name: organization_key
-    description: Org identifier, joined via dim_organization (platform='mitxonline'
-      only).
+  - name: organization_name
+    description: Display name of the organization.
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+  - name: b2b_contract_name
+    description: Display name of the contract.
+  - name: b2b_contract_is_active
+    description: Whether the contract is currently active.
+  - name: b2b_contract_start_date
+    description: Contract start date.
+  - name: b2b_contract_end_date
+    description: Contract end date -- drives the at_risk window in mv_b2b_mit_admin_contract_health.
   - name: seat_limit
     description: b2b_contract_max_learners.
+  - name: b2b_contract_membership_type
+    description: Contract membership type.
   - name: seats_consumed
     description: Distinct learners enrolled in any course run under this contract.
   - name: active_learners
@@ -36,11 +53,26 @@ models:
     course_run. Manual-refresh materialized view. Consumers: L&D manager course-level
     drill-down.
   columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id) -- the
       identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: b2b_contract_name
+    description: Display name of the contract.
+  - name: courserun_pk
+    description: Surrogate key of the course run.
+  - name: courserun_readable_id
+    description: Human-readable course run identifier.
+  - name: courserun_title
+    description: Course run title.
   - name: enrolled_learners
     description: Distinct learners enrolled in this course run.
   - name: active_learners
@@ -49,6 +81,10 @@ models:
     description: Distinct learners with a passing grade.
   - name: certified_learners
     description: Distinct learners with a non-revoked certificate.
+  - name: active_rate_pct
+    description: active_learners / enrolled_learners * 100.
+  - name: completion_rate_pct
+    description: certified_learners / enrolled_learners * 100.
 
 - name: mv_b2b_monthly_engagement_trend
   description: >
@@ -58,11 +94,19 @@ models:
     free-text fallback values; those resolve to a null sso_organization_id).
     Consumers: L&D manager engagement trend chart.
   columns:
+  - name: organization_key
+    description: >
+      Org identifier from organization_administration_report. Includes free-text
+      fallback values that resolve to no mitxonline org.
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id) -- the
       identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: activity_year_and_month
+    description: The month this row aggregates, from the source report.
   - name: monthly_active_learners
     description: Distinct learners with any activity in the month.
   - name: new_enrollments
@@ -81,15 +125,26 @@ models:
       Floor it via certified_learners.
   - name: certified_learners
     description: Distinct learners who earned a certificate in the month.
+  - name: total_videos_watched
+    description: >
+      Videos watched in the month -- an EVENT count. Floor it via video_watchers.
   - name: video_watchers
     description: >
       Distinct learners who watched a video in the month -- the cohort
       total_videos_watched is attributable to, and a strict subset of
       monthly_active_learners.
+  - name: total_problems_attempted
+    description: >
+      Problems attempted in the month -- an EVENT count. Floor it via
+      problem_attempters.
   - name: problem_attempters
     description: >
       Distinct learners who attempted a problem in the month -- the cohort
       total_problems_attempted is attributable to.
+  - name: total_chatbot_interactions
+    description: >
+      Chatbot interactions in the month -- an EVENT count. Floor it via
+      chatbot_users.
   - name: chatbot_users
     description: >
       Distinct learners who used the chatbot in the month -- the cohort
@@ -102,11 +157,29 @@ models:
     (cert in any program course) until tfact_program_certificate ships.
     Consumers: L&D manager program progression view.
   columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id) -- the
       identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: b2b_contract_name
+    description: Display name of the contract.
+  - name: program_pk
+    description: Surrogate key of the program.
+  - name: program_title
+    description: Program title.
+  - name: total_courses
+    description: >
+      Distinct courses in this program that the contract actually covers -- the
+      denominator is scoped to (contract, program), not to the full program, so
+      completion rates aren't understated for partial-program contracts.
   - name: enrolled_in_contract_courses
     description: Learners enrolled in any contract course belonging to this program.
   - name: enrolled_via_program
@@ -123,30 +196,67 @@ models:
     values; those resolve to a null sso_organization_id). Consumers: L&D manager
     course detail panel.
   columns:
+  - name: organization_key
+    description: >
+      Org identifier from organization_administration_report. Includes free-text
+      fallback values that resolve to no mitxonline org.
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id) -- the
       identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: courserun_readable_id
+    description: Human-readable course run identifier.
+  - name: courserun_title
+    description: Course run title.
+  - name: total_enrolled_learners
+    description: Distinct learners appearing for this org x course run.
+  - name: engaged_learners
+    description: >
+      Distinct learners with any activity (active_count > 0) -- the denominator
+      of both avg_* columns and of engagement_rate_pct.
   - name: engagement_rate_pct
     description: engaged_learners / total_enrolled_learners * 100.
-  - name: avg_videos_per_engaged_learner
+  - name: total_videos_watched
     description: >
-      total_videos_watched / engaged_learners -- averaged across every engaged
-      learner, so learners who watched nothing count as 0.
+      Videos watched, all-time -- an EVENT count. Floor it via video_watchers.
   - name: video_watchers
     description: >
       Distinct learners who watched at least one video -- the cohort
       total_videos_watched is attributable to, and a strict subset of
       engaged_learners.
-  - name: avg_problems_per_engaged_learner
+  - name: avg_videos_per_engaged_learner
     description: >
-      total_problems_attempted / engaged_learners -- averaged across every
-      engaged learner, so learners who attempted nothing count as 0.
+      total_videos_watched / engaged_learners -- averaged across every engaged
+      learner, so learners who watched nothing count as 0.
+  - name: total_problems_attempted
+    description: >
+      Problems attempted, all-time -- an EVENT count. Floor it via
+      problem_attempters.
   - name: problem_attempters
     description: >
       Distinct learners who attempted at least one problem -- the cohort
       total_problems_attempted is attributable to.
+  - name: avg_problems_per_engaged_learner
+    description: >
+      total_problems_attempted / engaged_learners -- averaged across every
+      engaged learner, so learners who attempted nothing count as 0.
+  - name: total_chatbot_interactions
+    description: >
+      Chatbot interactions, all-time -- an EVENT count. Floor it via
+      chatbot_users.
+  - name: chatbot_users
+    description: >
+      Distinct learners who used the chatbot -- the cohort
+      total_chatbot_interactions is attributable to.
+  - name: chatbot_adoption_pct
+    description: chatbot_users / total_enrolled_learners * 100.
+  - name: certificates_earned
+    description: >
+      Certificates earned, all-time -- an EVENT count (learner x course run), so
+      it is not a learner cohort and cannot floor itself.
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -154,11 +264,43 @@ models:
     requesting org) -- MIT admin view only. Manual-refresh materialized view.
     Consumers: MIT contract admin dashboard.
   columns:
+  # The model selects * from its contract_stats CTE, so unlike the other five
+  # there is no literal column list in the SQL to read these off -- the CTE's
+  # own SELECT is the source of truth.
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id) -- the
       identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: b2b_contract_name
+    description: Display name of the contract.
+  - name: b2b_contract_is_active
+    description: Whether the contract is currently active -- drives the inactive health_status.
+  - name: b2b_contract_start_date
+    description: Contract start date.
+  - name: b2b_contract_end_date
+    description: Contract end date -- drives the at_risk 90-day window.
+  - name: seat_limit
+    description: b2b_contract_max_learners.
+  - name: b2b_contract_membership_type
+    description: Contract membership type.
+  - name: seats_consumed
+    description: Distinct learners enrolled in any course run under this contract.
+  - name: active_learners
+    description: Distinct learners with an active enrollment under this contract.
+  - name: certified_learners
+    description: Distinct learners holding a non-revoked certificate under this contract.
+  - name: seat_utilization_pct
+    description: seats_consumed / seat_limit * 100.
+  - name: completion_rate_pct
+    description: certified_learners / seats_consumed * 100.
   - name: health_status
     description: >
       One of: inactive (contract not active), at_risk (utilization < 25% and

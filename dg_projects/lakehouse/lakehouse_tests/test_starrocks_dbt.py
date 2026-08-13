@@ -5,14 +5,22 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import re
+
 import pytest
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
+    documented_columns,
+    drifted_relations,
+    live_column_query,
+    live_columns,
     looks_retriable,
     materialized_view_relations,
     retry_delay,
 )
+from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
 # Verbatim from the failed run: an FE rolling restart began 39s into the build,
 # so the follower dbt was connected to could no longer forward DDL to the leader.
@@ -90,6 +98,22 @@ class TestLooksRetriable:
         assert not looks_retriable(Exception("Rows affected: 20130, 12006, 110445"))
 
 
+class TestRetriableCodesAgreeWithTheResource:
+    def test_same_wire_protocol_codes_on_both_paths(self):
+        """The drift preflight runs through StarRocksResource, not through the
+        dbt build's retry loop, so a code the classifier here treats as
+        transient but the resource re-raises would abort the whole asset before
+        the build ever starts. 2003 CR_CONN_HOST_ERROR was exactly that gap.
+        """
+        classifier_codes = {
+            int(code) for code in re.findall(r"\d{4}", RETRIABLE_ERROR_PATTERN.pattern)
+        }
+        assert classifier_codes == set(_RETRIABLE_ERRORS)
+
+    def test_a_failed_connect_is_retriable(self):
+        assert 2003 in _RETRIABLE_ERRORS
+
+
 class TestRetryDelay:
     def test_schedule_doubles(self):
         assert [retry_delay(a) for a in range(1, MAX_BUILD_ATTEMPTS)] == [30, 60, 120]
@@ -124,13 +148,16 @@ class TestRetryDelay:
         assert RETRY_BASE_DELAY >= 30
 
 
-def _model_node(name, *, schema="b2b_analytics", materialized, tags):
+def _model_node(name, *, schema="b2b_analytics", materialized, tags, columns=None):
     return {
         "resource_type": "model",
         "schema": schema,
         "alias": name,
         "tags": tags,
         "config": {"materialized": materialized, "tags": tags},
+        # dbt keys `columns` by name and nests the docs under it; only the keys
+        # matter here.
+        "columns": {name: {"name": name} for name in columns or []},
     }
 
 
@@ -256,3 +283,159 @@ class TestMaterializedViewRelations:
         )
         with pytest.raises(ValueError, match="No materialized_view models tagged"):
             materialized_view_relations(manifest)
+
+
+def _mv_node(name, columns, *, schema="b2b_analytics"):
+    return _model_node(
+        name,
+        schema=schema,
+        materialized="materialized_view",
+        tags=["starrocks"],
+        columns=columns,
+    )
+
+
+def _rows(relation, columns):
+    schema, table = relation.split(".")
+    return [
+        {"table_schema": schema, "table_name": table, "column_name": column}
+        for column in columns
+    ]
+
+
+class TestDocumentedColumns:
+    def test_keys_by_relation_and_lowercases(self):
+        manifest = _manifest(
+            [_mv_node("mv_b2b_program_funnel", ["Org_Key", "STARTED"])]
+        )
+        assert documented_columns(manifest) == {
+            "b2b_analytics.mv_b2b_program_funnel": {"org_key", "started"}
+        }
+
+    def test_omits_models_with_no_documented_columns(self):
+        """An empty set differs from every live MV, so treating "undocumented"
+        as "expects nothing" would drop and recreate the view on every run.
+        `+meta: required_docs: true` should keep this unreachable.
+        """
+        manifest = _manifest([_mv_node("mv_b2b_program_funnel", [])])
+        assert documented_columns(manifest) == {}
+
+    def test_ignores_tables_and_other_engines(self):
+        manifest = _manifest(
+            [
+                _mv_node("mv_b2b_program_funnel", ["org_key"]),
+                _model_node(
+                    "b2b_seed_table",
+                    materialized="table",
+                    tags=["starrocks"],
+                    columns=["org_key"],
+                ),
+                _model_node(
+                    "some_trino_mv",
+                    schema="ol_warehouse_production_mart",
+                    materialized="materialized_view",
+                    tags=["mart"],
+                    columns=["org_key"],
+                ),
+            ]
+        )
+        assert set(documented_columns(manifest)) == {
+            "b2b_analytics.mv_b2b_program_funnel"
+        }
+
+
+class TestLiveColumnQuery:
+    def test_one_placeholder_per_distinct_schema(self):
+        query, params = live_column_query(
+            {
+                "b2b_analytics.mv_a": set(),
+                "b2b_analytics.mv_b": set(),
+                "b2b_analytics_qa.mv_a": set(),
+            }
+        )
+        assert params == ("b2b_analytics", "b2b_analytics_qa")
+        assert query.count("%s") == len(params)
+
+    def test_schema_names_are_bound_not_interpolated(self):
+        query, params = live_column_query({"b2b_analytics.mv_a": set()})
+        assert "b2b_analytics" not in query
+        assert params == ("b2b_analytics",)
+
+
+class TestLiveColumns:
+    def test_folds_rows_into_relations(self):
+        rows = _rows("b2b_analytics.mv_a", ["org_key", "started"]) + _rows(
+            "b2b_analytics.mv_b", ["org_key"]
+        )
+        assert live_columns(rows) == {
+            "b2b_analytics.mv_a": {"org_key", "started"},
+            "b2b_analytics.mv_b": {"org_key"},
+        }
+
+    def test_lowercases_column_names(self):
+        assert live_columns(_rows("b2b_analytics.mv_a", ["Org_Key"])) == {
+            "b2b_analytics.mv_a": {"org_key"}
+        }
+
+
+class TestDriftedRelations:
+    def test_added_column_is_drift(self):
+        """PR #2520: the dbt model grew five cohort columns and the deployed MV
+        kept the old SELECT, which a plain `dbt build` reports as success.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
+        live = {"b2b_analytics.mv_a": {"org_key"}}
+        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_renamed_column_is_drift(self):
+        documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
+        live = {"b2b_analytics.mv_a": {"org_key", "video_viewers"}}
+        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_removed_column_is_drift(self):
+        """Only reachable as equality, not as "documented columns are missing".
+        Safe to assert because ol-dbt validate errors on a SQL column the YAML
+        omits (#2555), so a live column absent from `documented` really is one
+        the model no longer emits -- not one nobody got around to documenting.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key"}}
+        live = {"b2b_analytics.mv_a": {"org_key", "dropped_col"}}
+        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_matching_columns_are_not_drift(self):
+        """The common case -- it must not force a full refresh, since that drops
+        and recreates views ol-analytics-api is serving from.
+        """
+        columns = {"org_key", "video_watchers"}
+        assert (
+            drifted_relations(
+                {"b2b_analytics.mv_a": columns}, {"b2b_analytics.mv_a": columns}
+            )
+            == []
+        )
+
+    def test_a_view_that_does_not_exist_yet_is_not_drift(self):
+        """This build creates it with the current SELECT; nothing to refresh."""
+        assert drifted_relations({"b2b_analytics.mv_new": {"org_key"}}, {}) == []
+
+    def test_ignores_live_relations_dbt_does_not_own(self):
+        """The query filters by schema, so tables created outside dbt come back
+        in the same result set.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key"}}
+        live = {
+            "b2b_analytics.mv_a": {"org_key"},
+            "b2b_analytics.some_manual_table": {"whatever"},
+        }
+        assert drifted_relations(documented, live) == []
+
+    def test_result_is_sorted(self):
+        documented = {
+            "b2b_analytics.mv_b": {"org_key", "new_col"},
+            "b2b_analytics.mv_a": {"org_key", "new_col"},
+        }
+        live = {"b2b_analytics.mv_a": {"org_key"}, "b2b_analytics.mv_b": {"org_key"}}
+        assert drifted_relations(documented, live) == [
+            "b2b_analytics.mv_a",
+            "b2b_analytics.mv_b",
+        ]

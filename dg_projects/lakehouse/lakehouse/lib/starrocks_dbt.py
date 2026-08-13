@@ -8,7 +8,7 @@ or dbt.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 # Retries are of the whole `dbt build`, since dbt-starrocks has no adapter-level
@@ -26,10 +26,11 @@ RETRY_BASE_DELAY = 30
 
 # Error signatures worth another attempt, in two families.
 #
-# 1044/1045/2003/2006/2013 -- MySQL wire-protocol codes.
-# StarRocksResource._RETRIABLE_ERRORS carries the same set minus 2003
-# CR_CONN_HOST_ERROR, which only a *fresh* connect to an already-gone FE returns
-# and which the resource therefore never sees (it connects once, up front).
+# 1044/1045/2003/2006/2013 -- MySQL wire-protocol codes, the same set
+# StarRocksResource._RETRIABLE_ERRORS retries. (It used to omit 2003
+# CR_CONN_HOST_ERROR on the theory that the resource never sees a failed
+# connect; it does -- every attempt in _run() opens its own connection, and an
+# FE rolling restart is exactly how that fails.)
 # 1044/1045 are the Vault case: a just-created dynamic user may not be visible
 # yet on the FE node dbt happened to connect to.
 #
@@ -87,10 +88,7 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
     """
     relations = sorted(
         f"{node['schema']}.{node['alias']}"
-        for node in manifest["nodes"].values()
-        if node["resource_type"] == "model"
-        and node["config"]["materialized"] == "materialized_view"
-        and STARROCKS_TAG in node["tags"]
+        for node in _materialized_view_nodes(manifest)
     )
     if not relations:
         # Not defensive: an empty list would make the refresh asset a silent
@@ -102,3 +100,102 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
         )
         raise ValueError(msg)
     return relations
+
+
+def _materialized_view_nodes(
+    manifest: Mapping[str, Any],
+) -> Iterator[Mapping[str, Any]]:
+    return (
+        node
+        for node in manifest["nodes"].values()
+        if node["resource_type"] == "model"
+        and node["config"]["materialized"] == "materialized_view"
+        and STARROCKS_TAG in node["tags"]
+    )
+
+
+def documented_columns(manifest: Mapping[str, Any]) -> dict[str, set[str]]:
+    """Map each StarRocks MV to the columns its schema YAML documents.
+
+    Read from the manifest's `columns` rather than by parsing the model's
+    SELECT, because the YAML is the contract ol-analytics-api is written
+    against: a column nobody documented is a column no consumer projects.
+
+    This is the model's FULL output schema, which is what lets
+    `drifted_relations` compare by equality. `ol-dbt validate`'s yaml_sql_sync
+    check errors in both directions -- a documented column with no matching
+    SQL alias, and a SQL column the YAML omits (ol-data-platform#2555) -- so a
+    model whose YAML and SELECT disagree cannot merge. If that check is ever
+    relaxed back to a warning, or starts skipping these models (it skips any
+    model whose SELECT * sqlglot cannot expand; none do today), this stops
+    being a full schema and the equality check has to weaken with it.
+
+    A model with no documented columns at all is omitted -- there is nothing
+    to check it against.
+    """
+    return {
+        f"{node['schema']}.{node['alias']}": {
+            name.lower() for name in node.get("columns", {})
+        }
+        for node in _materialized_view_nodes(manifest)
+        if node.get("columns")
+    }
+
+
+def live_column_query(relations: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
+    """Build a parameterized information_schema query for *relations*' schemas.
+
+    Filtering by schema rather than by name keeps the statement short and the
+    parameter list to one entry per schema (in practice: one). Rows for tables
+    dbt doesn't own come back too and are dropped by the relation lookup in
+    `drifted_relations`.
+    """
+    schemas = sorted({relation.split(".", 1)[0] for relation in relations})
+    placeholders = ", ".join(["%s"] * len(schemas))
+    # S608: the only thing interpolated is a run of `%s` placeholders -- the
+    # schema names themselves are bound by the driver, never formatted in.
+    query = (
+        "select table_schema, table_name, column_name "  # noqa: S608
+        "from information_schema.columns "
+        f"where table_schema in ({placeholders})"
+    )
+    return query, tuple(schemas)
+
+
+def live_columns(rows: list[Mapping[str, Any]]) -> dict[str, set[str]]:
+    """Fold `live_column_query` rows into {relation: {column, ...}}.
+
+    Keys are the lowercase labels the query selects; values are lowercased to
+    match `documented_columns`, since a column name is case-insensitive over
+    the MySQL wire protocol but the two sources spell it independently.
+    """
+    columns: dict[str, set[str]] = {}
+    for row in rows:
+        relation = f"{row['table_schema']}.{row['table_name']}"
+        columns.setdefault(relation, set()).add(row["column_name"].lower())
+    return columns
+
+
+def drifted_relations(
+    documented: Mapping[str, set[str]], live: Mapping[str, set[str]]
+) -> list[str]:
+    """MVs whose columns in StarRocks no longer match what dbt says they are.
+
+    These need `dbt build --full-refresh` to catch up: dbt-core only replaces
+    an existing materialized view under that flag, and dbt-starrocks'
+    `get_materialized_view_configuration_changes` is an empty macro, so an
+    edited SELECT is otherwise a silent no-op (a plain build logs "no
+    configuration changes were identified" and the MV keeps its old query).
+
+    Set equality, so an added, renamed, or removed column all count. That
+    rests on `documented_columns` being the model's full output schema, which
+    ol-dbt validate now enforces -- read the caveat there before weakening it.
+
+    A relation missing from *live* does not exist yet -- this build creates it
+    with the current SELECT, so there is nothing to rebuild.
+    """
+    return sorted(
+        relation
+        for relation, columns in documented.items()
+        if relation in live and columns != live[relation]
+    )

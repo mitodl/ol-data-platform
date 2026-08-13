@@ -8,6 +8,7 @@ connection -- no passwords are held in Dagster config.
 import logging
 import ssl
 import time
+from typing import Any
 
 from dagster import ConfigurableResource, ResourceDependency
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -34,8 +35,11 @@ def _make_ssl_context() -> ssl.SSLContext:
 # MySQL-wire-protocol error codes that warrant a fresh Vault credential + retry.
 # 1044 ER_DBACCESS_DENIED_ERROR / 1045 ER_ACCESS_DENIED_ERROR - the dynamic user
 #   Vault just created hasn't propagated across StarRocks FE nodes yet.
+# 2003 CR_CONN_HOST_ERROR - the connect() below failed outright, which is what
+#   an FE rolling restart looks like from here. Every attempt opens its own
+#   connection, so this is reachable on all of them, not just the first.
 # 2006 CR_SERVER_GONE_ERROR / 2013 CR_SERVER_LOST - dropped connection.
-_RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2006, 2013})
+_RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2003, 2006, 2013})
 _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
 
@@ -86,6 +90,24 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         generating a new one and retrying gives replication another round to catch
         up rather than reusing credentials known to be affected.
         """
+        self._run(sql)
+
+    def fetch(self, sql: str, params: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+        """Run *sql* and return its rows, with `execute`'s credential retry.
+
+        *params* are passed through to the driver's own placeholder
+        substitution (`%s`) rather than interpolated into *sql*.
+
+        Retrying a SELECT is unconditionally safe; `execute` shares this path
+        because everything it runs (REFRESH MATERIALIZED VIEW, DDL) is
+        idempotent too, and a retry only happens when the previous attempt
+        failed to connect or died mid-statement.
+        """
+        return self._run(sql, params) or []
+
+    def _run(
+        self, sql: str, params: tuple[str, ...] | None = None
+    ) -> list[dict[str, Any]] | None:
         last_exc: OperationalError | None = None
         for attempt in range(_MAX_ATTEMPTS):
             if attempt:
@@ -119,7 +141,8 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
 
             try:
                 with conn.cursor() as cursor:
-                    cursor.execute(sql)
+                    cursor.execute(sql, params)
+                    rows = cursor.fetchall()
                 conn.commit()
             except OperationalError as exc:
                 if exc.args[0] not in _RETRIABLE_ERRORS:
@@ -127,7 +150,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                 last_exc = exc
                 continue
             else:
-                return
+                return list(rows)
             finally:
                 conn.close()
 
