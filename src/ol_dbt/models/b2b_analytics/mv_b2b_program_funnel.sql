@@ -15,6 +15,7 @@ with org_program_runs as (
         org.sso_organization_id,
         org.organization_name,
         c.contract_pk,
+        c.contract_id,
         c.b2b_contract_name,
         bpc.program_fk,
         bpc.course_fk,
@@ -46,6 +47,7 @@ select
     opr.sso_organization_id,
     opr.organization_name,
     opr.contract_pk,
+    opr.contract_id,
     opr.b2b_contract_name,
     p.program_pk,
     p.program_title,
@@ -67,6 +69,6 @@ left join {{ source('dimensional', 'tfact_certificate') }} cert
     on e.user_fk = cert.user_fk and opr.courserun_fk = cert.courserun_fk
 group by
     opr.organization_key, opr.sso_organization_id, opr.organization_name,
-    opr.contract_pk, opr.b2b_contract_name,
+    opr.contract_pk, opr.contract_id, opr.b2b_contract_name,
     p.program_pk, p.program_title,
     pcc.total_courses

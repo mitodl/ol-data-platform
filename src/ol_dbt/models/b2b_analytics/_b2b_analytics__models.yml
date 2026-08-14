@@ -24,6 +24,13 @@ models:
     description: Display name of the organization.
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      identifier that appears in mitxonline manager-dashboard URLs and that
+      ol-analytics-api filters contracts on. contract_pk above is the
+      dimensional surrogate (md5 of this value) and is the join key to
+      dim_contract; a caller holding a contract from mitxonline has this one.
   - name: b2b_contract_name
     description: Display name of the contract.
   - name: b2b_contract_is_active
@@ -65,6 +72,13 @@ models:
     description: Display name of the organization.
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      identifier that appears in mitxonline manager-dashboard URLs and that
+      ol-analytics-api filters contracts on. contract_pk above is the
+      dimensional surrogate (md5 of this value) and is the join key to
+      dim_contract; a caller holding a contract from mitxonline has this one.
   - name: b2b_contract_name
     description: Display name of the contract.
   - name: courserun_pk
@@ -169,6 +183,13 @@ models:
     description: Display name of the organization.
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      identifier that appears in mitxonline manager-dashboard URLs and that
+      ol-analytics-api filters contracts on. contract_pk above is the
+      dimensional surrogate (md5 of this value) and is the join key to
+      dim_contract; a caller holding a contract from mitxonline has this one.
   - name: b2b_contract_name
     description: Display name of the contract.
   - name: program_pk
@@ -279,6 +300,13 @@ models:
     description: Display name of the organization.
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      identifier that appears in mitxonline manager-dashboard URLs and that
+      ol-analytics-api filters contracts on. contract_pk above is the
+      dimensional surrogate (md5 of this value) and is the join key to
+      dim_contract; a caller holding a contract from mitxonline has this one.
   - name: b2b_contract_name
     description: Display name of the contract.
   - name: b2b_contract_is_active
@@ -306,3 +334,167 @@ models:
       One of: inactive (contract not active), at_risk (utilization < 25% and
       expiring within 90 days), high_utilization (utilization >= 90%), healthy
       (utilization >= 50% and not at_risk), early_stage (everything else).
+- name: mv_b2b_contract_monthly_engagement_trend
+  description: >
+    Monthly engagement, enrollment, and content-interaction totals per org x
+    contract -- the contract-scoped sibling of mv_b2b_monthly_engagement_trend,
+    which stays at org x month. Both grains exist because the MIT Learn
+    dashboard mirrors mitxonline's manager dashboard, which is nested under
+    manager/organizations/{org}/contracts/{contract}, while the org-level
+    panels remain in service. Manual-refresh materialized view. Source:
+    organization_administration_report inner-joined to the dimensional
+    contract/course-run bridge, so free-text organization_key rows (which
+    resolve to no contract) are excluded here even though the org-level view
+    keeps them. Publishing both grains makes a suppressed contract recoverable
+    by subtraction from the org row once an org holds more than one contract --
+    see the complement-disclosure work in ol-analytics-api.
+    Consumers: L&D manager engagement trend chart, contract-scoped.
+  columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      identifier that appears in mitxonline manager-dashboard URLs and that
+      ol-analytics-api filters contracts on.
+  - name: b2b_contract_name
+    description: Display name of the contract.
+  - name: activity_year_and_month
+    description: The month this row aggregates, from the source report.
+  - name: monthly_active_learners
+    description: >
+      Distinct learners with any activity in the month, under course runs
+      belonging to this contract. A learner active under two contracts counts
+      in both rows, so contract rows do not partition the org's learner count.
+  - name: new_enrollments
+    description: >
+      Sum of the daily enrolled_count flag within the month -- an EVENT count
+      (learner x course run), not a learner count. Floor it via
+      enrolling_learners, not via its own value.
+  - name: enrolling_learners
+    description: >
+      Distinct learners who newly enrolled in the month -- the cohort
+      new_enrollments is attributable to. Note enrolling does not by itself set
+      active_count, so this is not a subset of monthly_active_learners.
+  - name: certificates_earned
+    description: >
+      Certificates earned in the month -- an EVENT count (learner x course run).
+      Floor it via certified_learners.
+  - name: certified_learners
+    description: Distinct learners who earned a certificate in the month.
+  - name: total_videos_watched
+    description: >
+      Videos watched in the month -- an EVENT count. Floor it via video_watchers.
+  - name: video_watchers
+    description: >
+      Distinct learners who watched a video in the month -- the cohort
+      total_videos_watched is attributable to, and a strict subset of
+      monthly_active_learners.
+  - name: total_problems_attempted
+    description: >
+      Problems attempted in the month -- an EVENT count. Floor it via
+      problem_attempters.
+  - name: problem_attempters
+    description: >
+      Distinct learners who attempted a problem in the month -- the cohort
+      total_problems_attempted is attributable to.
+  - name: total_chatbot_interactions
+    description: >
+      Chatbot interactions in the month -- an EVENT count. Floor it via
+      chatbot_users.
+  - name: chatbot_users
+    description: >
+      Distinct learners who used the chatbot in the month -- the cohort
+      total_chatbot_interactions is attributable to.
+- name: mv_b2b_contract_content_engagement_depth
+  description: >
+    All-time content engagement depth per org x contract x course run -- the
+    contract-scoped sibling of mv_b2b_content_engagement_depth, which stays at
+    org x course run. Because a course run belongs to exactly one contract,
+    adding the contract labels rows rather than splitting them: every count
+    here equals its org-level counterpart for the same course run, which is
+    what makes the complement recoverable when only some contracts are
+    suppressed. Manual-refresh materialized view. Source:
+    organization_administration_report inner-joined to the dimensional
+    contract/course-run bridge.
+    Consumers: L&D manager content-engagement panel, contract-scoped.
+  columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      identifier that appears in mitxonline manager-dashboard URLs and that
+      ol-analytics-api filters contracts on.
+  - name: b2b_contract_name
+    description: Display name of the contract.
+  - name: courserun_readable_id
+    description: Course run identifier (e.g. course-v1:MITx+6.00+2026).
+  - name: courserun_title
+    description: Display title of the course run.
+  - name: total_enrolled_learners
+    description: Distinct learners enrolled in this course run under this contract.
+  - name: engaged_learners
+    description: >
+      Distinct learners with any activity (active_count > 0) in this course run.
+  - name: engagement_rate_pct
+    description: engaged_learners as a percentage of total_enrolled_learners.
+  - name: total_videos_watched
+    description: >
+      Videos watched in this course run -- an EVENT count. Floor it via
+      video_watchers.
+  - name: video_watchers
+    description: >
+      Distinct learners who watched a video -- the cohort total_videos_watched
+      is attributable to, and a strict subset of engaged_learners.
+  - name: avg_videos_per_engaged_learner
+    description: >
+      total_videos_watched divided by engaged_learners. Derived from BOTH
+      cohorts: the denominator is engaged_learners, but the numerator is
+      contributed only by video_watchers, so an unsuppressed average times a
+      published engaged_learners recovers the total.
+  - name: total_problems_attempted
+    description: >
+      Problems attempted in this course run -- an EVENT count. Floor it via
+      problem_attempters.
+  - name: problem_attempters
+    description: >
+      Distinct learners who attempted a problem -- the cohort
+      total_problems_attempted is attributable to.
+  - name: avg_problems_per_engaged_learner
+    description: >
+      total_problems_attempted divided by engaged_learners. Derived from both
+      cohorts, for the same reason as avg_videos_per_engaged_learner.
+  - name: total_chatbot_interactions
+    description: >
+      Chatbot interactions in this course run -- an EVENT count. Floor it via
+      chatbot_users.
+  - name: chatbot_users
+    description: >
+      Distinct learners who used the chatbot -- the cohort
+      total_chatbot_interactions is attributable to.
+  - name: chatbot_adoption_pct
+    description: chatbot_users as a percentage of total_enrolled_learners.
+  - name: certificates_earned
+    description: >
+      Certificates earned in this course run -- an EVENT count. This view emits
+      no certified-learner cohort, so ol-analytics-api floors it as a count of
+      itself, which is weaker than flooring a cohort.
