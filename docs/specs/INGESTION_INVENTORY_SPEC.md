@@ -269,7 +269,35 @@ ignored `status` would either resurrect paused ingestion on apply or silently dr
 the inventory, and both are wrong. `status` is therefore a required field on each connection,
 and pausing something becomes a reviewable one-line diff rather than a UI click.
 
-### 3.7 RFC 12711's `layer` enum is incomplete — it needs extending, not reinterpreting
+### 3.7 The `(deployment, layer)` vocabulary — resolved 2026-08-14
+
+**Decision: vendor SaaS sources become deployments in their own right, with the existing
+`api` layer, and `thirdparty` stops being a pseudo-deployment.** So `(salesforce, api)` and
+`(zendesk, api)` are distinct keys instead of colliding under `(thirdparty, api)`.
+
+That leaves five values to add rather than eleven: `hubspot`, `bigquery`, `google_sheets`,
+`s3`, `openedx_notes`.
+
+Two things dissolved on inspection rather than needing a decision. `raw__ovs__postgres__` and
+`raw__ocw__studio__postgres__` do not need a `postgres` or `studio_postgres` layer, and do not
+need renaming: §1.1 already established that names are never parsed and `table_prefix` is
+declared, so the prefix and the layer are simply allowed to disagree. Both units are
+`app_postgres` with their existing prefixes untouched.
+
+`openedx_notes` is the one that had to be added rather than absorbed: MITx Online's edX Notes
+is a different MySQL database from its Open edX one, so `mysql` cannot name both. The draft
+renderer demonstrated the failure by folding 8 edX Notes tables into `mitxonline__mysql` —
+RFC 12711 §3's own warning about source-level keys, one level down.
+
+The vocabulary lives in `ingestion/inventory/vocabulary.yml` as **data, not code**: adding a
+source is an edit there plus a unit file, with no change to `ol_dbt_cli`. The validator checks
+membership; the JSON Schema only checks the shape, because a closed enum in the schema would
+put the vocabulary in two places.
+
+**Still to do:** raise the amendment on RFC 12711, since the key is shared and the
+per-model `meta.qa_branches` contract in that RFC's step 4 names the same pairs.
+
+### 3.7.1 The original finding, for the record
 
 The six values (`mysql`, `mongodb`, `api`, `tracking_logs`, `fastly`, `app_postgres`) were
 derived from the Open edX and app-database deployments. Against the real connection set, 20 of

@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mitodl/ol-data-platform/ingestion/inventory/schema/unit.schema.json",
+  "title": "Ingestion inventory unit",
+  "description": "One (deployment, layer) ingestion unit. See docs/specs/INGESTION_INVENTORY_SPEC.md §3. Shape only — cross-unit invariants (prefix overlap, global raw_table uniqueness, vocabulary membership) are checked by `ol-dbt inventory validate`, which JSON Schema cannot express.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "deployment", "layer", "scope", "strategies", "loader", "table_prefix", "tables"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "deployment": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Must appear in vocabulary.yml `deployments`."
+    },
+    "layer": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Must appear in vocabulary.yml `layers`."
+    },
+    "scope": {
+      "enum": ["scoped", "singleton"]
+    },
+    "strategies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qa", "local"],
+      "properties": {
+        "qa": {
+          "enum": ["ingest", "mirror", "omit"]
+        },
+        "local": {
+          "enum": ["ingest", "fixture", "omit"],
+          "description": "`mirror` is deliberately absent: a laptop has no Vault path and no route to a production replica (RFC 12711 §3)."
+        }
+      }
+    },
+    "mirror_max_age_days": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Required iff a strategy is `mirror`; no default, so it is a decision per unit."
+    },
+    "loader": {
+      "enum": ["airbyte", "dlt"]
+    },
+    "table_prefix": {
+      "type": "string",
+      "pattern": "^raw__[a-z0-9_]+__$",
+      "description": "Declared, never parsed from table names (§1.1)."
+    },
+    "dagster_visible": {
+      "type": "boolean",
+      "default": true,
+      "description": "False asserts that no dbt model depends on this unit, which is the only way a connection may be named so that Dagster's selector drops it (§3.3 rule 6)."
+    },
+    "airbyte": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind", "connections"],
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "pattern": "^source-[a-z0-9-]+$"
+        },
+        "replication_method": {
+          "enum": ["xmin", "cursor", "cdc", "n/a"],
+          "description": "How the source detects change; `xmin` has no dlt equivalent (§3.4)."
+        },
+        "connections": {
+          "type": "array",
+          "minItems": 1,
+          "description": "A list: one unit legitimately has several connections, e.g. a huge table split out to run on its own cadence (§3.5).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "status", "sync_interval_hours", "streams"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Byte-exact, arrow included — Dagster derives group names from it (§1.3)."
+              },
+              "status": {
+                "enum": ["active", "inactive"]
+              },
+              "sync_interval_hours": {
+                "type": "integer",
+                "enum": [6, 12, 24]
+              },
+              "streams": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "dlt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_module", "write_disposition"],
+      "properties": {
+        "source_module": {
+          "type": "string",
+          "pattern": "^ol_dlt\\.sources\\.[a-z0-9_.]+$"
+        },
+        "write_disposition": {
+          "enum": ["merge", "replace", "append"]
+        }
+      }
+    },
+    "tables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "raw_table", "sync_mode"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The stream name at the source."
+          },
+          "raw_table": {
+            "type": "string",
+            "pattern": "^raw__[A-Za-z0-9_]+$"
+          },
+          "sync_mode": {
+            "enum": [
+              "full_refresh_overwrite",
+              "full_refresh_overwrite_deduped",
+              "full_refresh_append",
+              "full_refresh_update",
+              "full_refresh_soft_delete",
+              "incremental_append",
+              "incremental_deduped_history",
+              "incremental_update",
+              "incremental_soft_delete"
+            ]
+          },
+          "cursor_field": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"}
+          },
+          "primary_key": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"}
+          },
+          "excluded_columns": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "modeled": {
+            "type": "boolean",
+            "default": false,
+            "description": "True iff this table is declared in the dbt sources YAML (§1.4)."
+          },
+          "renamed_from": {
+            "type": "string",
+            "description": "Acknowledges a rename so the removal check does not fire (§7.2)."
+          }
+        }
+      }
+    }
+  }
+}

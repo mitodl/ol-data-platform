@@ -1,0 +1,64 @@
+---
+# Controlled vocabulary for the ingestion inventory's (deployment, layer) key.
+#
+# This is DATA, not code: adding a source is an edit here plus a unit file, and
+# nothing in ol_dbt_cli needs to change. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.7.
+#
+# The key semantics come from RFC 12711 §3: a unit is one (deployment, layer)
+# pair, because layers within a single deployment have independent ingestion
+# histories and a source-level key records facts that are false.
+
+# A deployment is a thing we run, or a vendor whose API we read. Vendor-owned
+# SaaS sources are deployments in their own right (decided 2026-08-14) rather
+# than sharing a `thirdparty` pseudo-deployment, so that (salesforce, api) and
+# (zendesk, api) are distinct keys instead of colliding.
+deployments:
+  # Open Learning deployments
+- bootcamps
+- edxorg
+- learn_ai
+- micromasters
+- mitlearn
+- mitx
+- mitxonline
+- mitxresidential
+- ocw
+- oll
+- open_discussions
+- ovs
+- xpro
+- mit_climate
+- mitpe
+  # Partner / affiliate data sets
+- emeritus
+- global_alumni
+- irx
+  # Vendor SaaS, read through their APIs
+- github
+- hubspot
+- mailgun
+- salesforce
+- zendesk
+
+# A layer is the system within a deployment that the data comes out of. Two
+# layers of one deployment are separate units because they fail, and are
+# re-established, independently.
+layers:
+  # Databases behind an application
+- app_postgres          # the deployment's own application database
+- mysql                 # Open edX MySQL
+- mongodb               # Open edX forum
+- openedx_notes         # MITx Online's edX Notes MySQL — a DIFFERENT database
+                        # from `mysql`; folding the two loses one of them
+  # Extracted or served data
+- api                   # an HTTP API, including every vendor SaaS source
+- tracking_logs         # Open edX tracking log events
+- s3                    # files landed in a bucket
+- bigquery              # a BigQuery dataset shared with us
+- google_sheets         # a maintained spreadsheet
+- fastly                # Fastly access logs
+- hubspot               # HubSpot, which is per-deployment rather than shared,
+                        # so it cannot be a `hubspot` deployment + `api` layer
+
+# Layers whose data is not owned by a single deployment would go here if we ever
+# have one; today every unit is (deployment, layer) with both sides populated.
