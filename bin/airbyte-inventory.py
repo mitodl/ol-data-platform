@@ -56,7 +56,6 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import urlsplit
 
 import httpx
 import yaml
@@ -127,55 +126,52 @@ def _resolve_password(password: str | None) -> str:
     raise SystemExit(msg)
 
 
-def _relative_next(next_url: str) -> str:
-    """Turn a `next` link into a URL relative to the client's base_url.
-
-    A self-hosted Airbyte builds `next` against localhost, so the host is
-    unusable; and because base_url already carries the API path, the path has to
-    be stripped back to the part after it or httpx doubles it. Same class of
-    workaround as AirbyteOSSClient._paginated_request in
-    dg_projects/lakehouse/lakehouse/resources/airbyte.py.
-    """
-    parts = urlsplit(next_url)
-    path = parts.path
-    if path.startswith(PUBLIC_API_PATH):
-        path = path[len(PUBLIC_API_PATH) :]
-    relative = path.lstrip("/")
-    return f"{relative}?{parts.query}" if parts.query else relative
-
-
 def _paginated_get(
     client: httpx.Client,
     path: str,
     params: dict[str, Any],
+    id_key: str,
 ) -> list[dict[str, Any]]:
-    """Follow the public API's `next` links until they run out."""
+    """Page through a list endpoint by explicit offset, de-duplicating by id.
+
+    Deliberately does NOT follow the response's `next` link. A self-hosted
+    Airbyte builds `next` against localhost, and it emits one even on the final
+    page, so following it re-reads page 1 forever. Offset paging is the same
+    number of requests and depends on nothing the server gets wrong.
+
+    Advances `offset` by the number of records the server actually returned,
+    never by the number requested — the server is free to cap `limit`, and
+    assuming otherwise stops paging after the first short page.
+
+    Stops when a page comes back empty or carries no id we have not already
+    seen, so a server that ignores `offset` costs one extra request rather than
+    looping forever.
+    """
+    limit = int(params.get("limit", 50))
     collected: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    url: str | None = path
-    while url:
-        if url in seen:
-            # A `next` that points at a page already fetched would spin forever.
-            _progress(f"  stopping: {url} repeated — pagination is not advancing")
-            break
-        seen.add(url)
+    seen_ids: set[str] = set()
+    offset = 0
+    while True:
+        page_params = {**params, "limit": limit, "offset": offset}
         started = time.monotonic()
-        response = client.get(url, params=params)
+        response = client.get(path, params=page_params)
         if response.status_code == httpx.codes.UNAUTHORIZED:
             msg = f"401 from {response.url} — check --username/--password."
             raise SystemExit(msg)
         response.raise_for_status()
-        payload = response.json()
-        collected.extend(payload.get("data", []))
-        if len(seen) > 1 or time.monotonic() - started > SLOW_REQUEST_SECONDS:
+        page = response.json().get("data", [])
+        fresh = [item for item in page if item.get(id_key) not in seen_ids]
+        seen_ids.update(item[id_key] for item in fresh if id_key in item)
+        collected.extend(fresh)
+        elapsed = time.monotonic() - started
+        if offset or elapsed > SLOW_REQUEST_SECONDS:
             _progress(
-                f"    page {len(seen)}: {len(collected)} so far "
-                f"({time.monotonic() - started:.1f}s)"
+                f"    offset {offset}: +{len(fresh)} new of {len(page)} "
+                f"({len(collected)} total, {elapsed:.1f}s)"
             )
-        next_url = payload.get("next") or ""
-        url = _relative_next(next_url) if next_url else None
-        params = {}
-    return collected
+        if not page or not fresh:
+            return collected
+        offset += len(page)
 
 
 def _redact(value: Any, *, enabled: bool) -> Any:
@@ -246,13 +242,17 @@ def dump(  # noqa: PLR0913
             common["workspaceIds"] = [workspace_id]
 
         _progress(f"Fetching from {base_url} as {username} …")
-        workspaces = _paginated_get(client, "/workspaces", dict(common))
+        workspaces = _paginated_get(client, "/workspaces", dict(common), "workspaceId")
         _progress(f"  workspaces:   {len(workspaces)}")
-        sources = _paginated_get(client, "/sources", dict(common))
+        sources = _paginated_get(client, "/sources", dict(common), "sourceId")
         _progress(f"  sources:      {len(sources)}")
-        destinations = _paginated_get(client, "/destinations", dict(common))
+        destinations = _paginated_get(
+            client, "/destinations", dict(common), "destinationId"
+        )
         _progress(f"  destinations: {len(destinations)}")
-        connections = _paginated_get(client, "/connections", dict(common))
+        connections = _paginated_get(
+            client, "/connections", dict(common), "connectionId"
+        )
         _progress(f"  connections:  {len(connections)}")
 
         # Some server versions omit stream configs from the list response.
@@ -314,11 +314,39 @@ def dump(  # noqa: PLR0913
 # ---------------------------------------------------------------------------
 
 
+SNAPSHOT_ID_KEYS = {
+    "workspaces": "workspaceId",
+    "sources": "sourceId",
+    "destinations": "destinationId",
+    "connections": "connectionId",
+}
+
+
 def _load_snapshot(path: Path) -> dict[str, Any]:
     if not path.exists():
         msg = f"No snapshot at {path}. Run `airbyte-inventory dump` first."
         raise SystemExit(msg)
-    return json.loads(path.read_text())
+    snapshot = json.loads(path.read_text())
+
+    # Snapshots taken before the offset-paging fix contain page 1 several times
+    # over, which silently inflates every count downstream.
+    duplicated = {
+        collection: (len(items), len({i[key] for i in items if key in i}))
+        for collection, key in SNAPSHOT_ID_KEYS.items()
+        if len(items := snapshot.get(collection, []))
+        != len({i[key] for i in items if key in i})
+    }
+    if duplicated:
+        detail = ", ".join(
+            f"{name} {total}→{distinct}"
+            for name, (total, distinct) in duplicated.items()
+        )
+        msg = (
+            f"{path} contains duplicate records ({detail}). It was taken with a "
+            "broken pagination loop; re-run `airbyte-inventory dump`."
+        )
+        raise SystemExit(msg)
+    return snapshot
 
 
 def dagster_group_name(connection_name: str) -> str:
