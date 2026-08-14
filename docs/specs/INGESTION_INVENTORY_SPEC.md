@@ -398,7 +398,7 @@ ol-infrastructure; 7 closes the loop.
 | # | Step | Done when |
 |---|---|---|
 | 1 | `src/ol_ingest` package + `ol-ingest` CLI skeleton (cyclopts), JSON Schema, loader, `validate` | `ol-ingest validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
-| 2 | `ol-ingest dump --from-airbyte` — build the initial inventory from the live workspace via the existing `AirbyteOSSClient` (`dg_projects/lakehouse/lakehouse/resources/airbyte.py`, incl. its localhost-pagination workaround at `:81-115`) | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
+| 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this** (see below); folding it into `ol-ingest` is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
 | 3 | `ol-ingest reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR | The three buckets of §5 are reported; every one of the 372 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
 | 4 | CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes |
 | 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
@@ -408,6 +408,39 @@ ol-infrastructure; 7 closes the loop.
 Steps 1–4 unblock `tk-step-2-extend-the-rfc-12319-ingestion-inventory--5a2841` (RFC 12711's
 critical path) — that step needs the schema and the file, not the Pulumi half. Do not hold it
 for step 6.
+
+### Step 2 is already runnable: `bin/airbyte-inventory.py`
+
+Reading the live workspace does not need the `ol-ingest` package to exist first, and the
+findings are what tell us whether the schema above survives contact with production. The
+script is read-only — every call is a GET — and takes the basic-auth credentials Dagster
+already uses:
+
+```shell
+export AIRBYTE_PASSWORD="$(vault kv get -mount=secret-data \
+    -field=dagster_unhashed_password dagster-http-auth-password)"
+
+uv run python bin/airbyte-inventory.py all --username dagster
+#   → airbyte-snapshot.json   redacted JSON snapshot
+#   → airbyte-findings.md     findings A–F below
+#   → ingestion/inventory/units/*.yml   draft units, TODO-marked
+```
+
+`report` and `render` re-run offline against a saved snapshot, so iterating on the derivation
+costs nothing and needs no further credentials. Findings produced:
+
+| | Finding | Answers |
+|---|---|---|
+| A | Replication method per source | which connections are on xmin (§3.4, `tk-…-51f299`) |
+| B | Sync modes, cursor fields, primary keys | which incremental streams have no explicit cursor, and which dedup streams have no PK to merge on |
+| C | Dagster coupling | connections the selector drops, groups silently on the 24h default, dead interval-map entries (§1.3) |
+| D | Schedules | connections carrying their own Airbyte cron, i.e. double-scheduled (§6.4) |
+| E | dbt reconcile | loaded-but-unmodeled and modeled-but-unloaded tables (§1.4) |
+| F | Table prefixes | the authoritative `prefix` per connection, and any prefix shared by two connections (§1.1, §3.3 rule 4) |
+
+The draft units are for review, not for merging: `scope`, both `strategies`, and any layer the
+prefix does not determine are emitted as `TODO`, and a unit fed by more than one connection
+carries a `_todo` naming the conflict rather than silently keeping one connection's metadata.
 
 ---
 
