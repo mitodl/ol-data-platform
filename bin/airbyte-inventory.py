@@ -51,6 +51,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -94,6 +95,9 @@ SENSITIVE_KEY_MARKERS = (
 # Layer names RFC 12711 §3 allows, and how prefix segments map onto them.
 KNOWN_LAYERS = ("mysql", "mongodb", "api", "tracking_logs", "fastly", "app_postgres")
 
+# Anything slower than this gets a progress line, so a stall is attributable.
+SLOW_REQUEST_SECONDS = 5.0
+
 INCREMENTAL_SYNC_MODES = (
     "incremental_append",
     "incremental_deduped_history",
@@ -105,6 +109,11 @@ INCREMENTAL_SYNC_MODES = (
 # ---------------------------------------------------------------------------
 # API client
 # ---------------------------------------------------------------------------
+
+
+def _progress(message: str) -> None:
+    """Write progress to stderr, flushed — a `\\r` line never flushes itself."""
+    print(message, file=sys.stderr, flush=True)
 
 
 def _resolve_password(password: str | None) -> str:
@@ -142,8 +151,15 @@ def _paginated_get(
 ) -> list[dict[str, Any]]:
     """Follow the public API's `next` links until they run out."""
     collected: list[dict[str, Any]] = []
+    seen: set[str] = set()
     url: str | None = path
     while url:
+        if url in seen:
+            # A `next` that points at a page already fetched would spin forever.
+            _progress(f"  stopping: {url} repeated — pagination is not advancing")
+            break
+        seen.add(url)
+        started = time.monotonic()
         response = client.get(url, params=params)
         if response.status_code == httpx.codes.UNAUTHORIZED:
             msg = f"401 from {response.url} — check --username/--password."
@@ -151,6 +167,11 @@ def _paginated_get(
         response.raise_for_status()
         payload = response.json()
         collected.extend(payload.get("data", []))
+        if len(seen) > 1 or time.monotonic() - started > SLOW_REQUEST_SECONDS:
+            _progress(
+                f"    page {len(seen)}: {len(collected)} so far "
+                f"({time.monotonic() - started:.1f}s)"
+            )
         next_url = payload.get("next") or ""
         url = _relative_next(next_url) if next_url else None
         params = {}
@@ -194,8 +215,14 @@ def dump(  # noqa: PLR0913
     include_deleted: bool = False,
     stream_properties: Annotated[
         bool,
-        Parameter(help="Also fetch per-source stream schemas (sync modes, cursors)."),
-    ] = True,
+        Parameter(
+            help=(
+                "Also fetch per-source stream schemas (available sync modes, "
+                "source-defined cursors). SLOW: one schema discovery per source, "
+                "minutes each on a large database. No finding uses it yet."
+            )
+        ),
+    ] = False,
     full_config: Annotated[
         bool,
         Parameter(
@@ -218,19 +245,20 @@ def dump(  # noqa: PLR0913
         if workspace_id:
             common["workspaceIds"] = [workspace_id]
 
-        print(f"Fetching from {base_url} as {username} …", file=sys.stderr)
+        _progress(f"Fetching from {base_url} as {username} …")
         workspaces = _paginated_get(client, "/workspaces", dict(common))
-        print(f"  workspaces:   {len(workspaces)}", file=sys.stderr)
+        _progress(f"  workspaces:   {len(workspaces)}")
         sources = _paginated_get(client, "/sources", dict(common))
-        print(f"  sources:      {len(sources)}", file=sys.stderr)
+        _progress(f"  sources:      {len(sources)}")
         destinations = _paginated_get(client, "/destinations", dict(common))
-        print(f"  destinations: {len(destinations)}", file=sys.stderr)
+        _progress(f"  destinations: {len(destinations)}")
         connections = _paginated_get(client, "/connections", dict(common))
-        print(f"  connections:  {len(connections)}", file=sys.stderr)
+        _progress(f"  connections:  {len(connections)}")
 
         # Some server versions omit stream configs from the list response.
         for connection in connections:
             if not (connection.get("configurations") or {}).get("streams"):
+                _progress(f"  stream config for {connection['name']} …")
                 detail = client.get(f"/connections/{connection['connectionId']}")
                 if detail.is_success:
                     connection["configurations"] = detail.json().get(
@@ -239,18 +267,27 @@ def dump(  # noqa: PLR0913
 
         schemas: dict[str, Any] = {}
         if stream_properties:
-            pairs = {(c["sourceId"], c["destinationId"]) for c in connections}
-            for index, (source_id, destination_id) in enumerate(sorted(pairs), start=1):
-                print(
-                    f"  stream schemas {index}/{len(pairs)}", end="\r", file=sys.stderr
-                )
+            sources_by_id = {s["sourceId"]: s for s in sources}
+            pairs = sorted({(c["sourceId"], c["destinationId"]) for c in connections})
+            _progress(
+                f"  fetching stream schemas for {len(pairs)} source/destination "
+                "pair(s) — each one makes Airbyte discover the source schema, "
+                "which can take minutes on a large database"
+            )
+            for index, (source_id, destination_id) in enumerate(pairs, start=1):
+                name = sources_by_id.get(source_id, {}).get("name", source_id)
+                _progress(f"    [{index}/{len(pairs)}] {name} …")
+                started = time.monotonic()
                 response = client.get(
                     "/streams",
                     params={"sourceId": source_id, "destinationId": destination_id},
                 )
                 if response.is_success:
                     schemas[source_id] = response.json()
-            print(file=sys.stderr)
+                _progress(
+                    f"    [{index}/{len(pairs)}] {name} → {response.status_code} "
+                    f"in {time.monotonic() - started:.1f}s"
+                )
 
     for actor in (*sources, *destinations):
         actor["configuration"] = _redact(
@@ -268,7 +305,7 @@ def dump(  # noqa: PLR0913
         "stream_properties": schemas,
     }
     output.write_text(json.dumps(snapshot, indent=2, sort_keys=False))
-    print(f"Wrote {output} ({output.stat().st_size / 1024:.0f} KiB)", file=sys.stderr)
+    _progress(f"Wrote {output} ({output.stat().st_size / 1024:.0f} KiB)")
     return output
 
 
@@ -700,7 +737,7 @@ def report(
     text = "\n".join(lines)
     if output:
         output.write_text(text)
-        print(f"Wrote {output}", file=sys.stderr)
+        _progress(f"Wrote {output}")
     else:
         print(text)
 
@@ -874,24 +911,23 @@ def render(  # noqa: C901, PLR0912, PLR0915
             header
             + yaml.safe_dump(unit, sort_keys=False, width=100, allow_unicode=True)
         )
-        print(f"  {path}  ({len(unit['tables'])} tables)", file=sys.stderr)
+        _progress(f"  {path}  ({len(unit['tables'])} tables)")
 
-    print(f"\nWrote {len(units)} draft unit file(s) to {output_dir}", file=sys.stderr)
+    _progress(f"\nWrote {len(units)} draft unit file(s) to {output_dir}")
     todo_units = [
         f"{deployment}__{layer}"
         for deployment, layer in units
         if deployment == "TODO" or layer.startswith("TODO")
     ]
     if todo_units:
-        print(
+        _progress(
             f"{len(todo_units)} unit(s) need a hand-assigned (deployment, layer): "
-            f"{', '.join(sorted(todo_units))}",
-            file=sys.stderr,
+            f"{', '.join(sorted(todo_units))}"
         )
     if unresolved:
-        print("Connections whose unit key could not be inferred:", file=sys.stderr)
+        _progress("Connections whose unit key could not be inferred:")
         for name in unresolved:
-            print(f"  - {name}", file=sys.stderr)
+            _progress(f"  - {name}")
 
 
 @app.command
