@@ -414,6 +414,30 @@ def _predicted_raw_table(connection: dict[str, Any], stream: dict[str, Any]) -> 
     return f"{connection.get('prefix') or ''}{stream.get('name', '')}"
 
 
+def _effective_prefix(connection: dict[str, Any]) -> str:
+    """Return the connection's prefix, or the shared head of its stream names.
+
+    Two naming mechanisms are in use. Database connections set a `prefix` and
+    carry short stream names (`users_user`). File/S3 connections set no prefix
+    and carry the fully-qualified name in the stream itself
+    (`raw__mitx__openedx__tracking_logs`). For the second kind the unit's
+    table_prefix is the common `raw__…__` head of its stream names.
+    """
+    if prefix := connection.get("prefix"):
+        return str(prefix)
+    names = [s.get("name", "") for s in _streams_of(connection)]
+    if not names or not all(name.startswith("raw__") for name in names):
+        return ""
+    segments = [name.split("__") for name in names]
+    shared: list[str] = []
+    for index in range(min(len(parts) for parts in segments) - 1):
+        column = {parts[index] for parts in segments}
+        if len(column) != 1:
+            break
+        shared.append(column.pop())
+    return "__".join(shared) + "__" if shared else ""
+
+
 # ---------------------------------------------------------------------------
 # Findings
 # ---------------------------------------------------------------------------
@@ -827,7 +851,7 @@ def render(  # noqa: C901, PLR0912, PLR0915
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     unresolved: list[str] = []
     for connection in sorted(data["connections"], key=lambda c: c["name"].lower()):
-        prefix = connection.get("prefix") or ""
+        prefix = _effective_prefix(connection)
         deployment, layer, confident = _infer_unit_key(prefix)
         if not confident:
             unresolved.append(f"{connection['name']} (prefix {prefix or '(none)'})")
@@ -848,7 +872,7 @@ def render(  # noqa: C901, PLR0912, PLR0915
                     "replication_method": _replication_method(
                         source.get("configuration")
                     ),
-                    "table_prefix": connection.get("prefix") or "",
+                    "table_prefix": _effective_prefix(connection),
                     "dagster_group": group,
                     "sync_interval_hours": interval_map.get(group),
                 }
@@ -958,8 +982,8 @@ def render(  # noqa: C901, PLR0912, PLR0915
             _progress(f"  - {name}")
 
 
-@app.command
-def all(  # noqa: A001, PLR0913
+@app.command(name="all")
+def run_all(  # noqa: PLR0913
     *,
     username: Annotated[str, Parameter(env_var="AIRBYTE_USERNAME")] = "dagster",
     password: Annotated[
