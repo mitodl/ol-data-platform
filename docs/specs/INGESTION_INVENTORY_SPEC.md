@@ -536,10 +536,14 @@ reproduce, and several of them changed this spec (§1.1, §3.4–§3.7).
 
 Findings that are work items rather than schema changes:
 
-- **Bootcamps ingestion is gone.** The source exists with zero connections, its interval-map
-  entry `bootcamps_production_app_db__s3_data_lake` matches nothing, and dbt still models 19
-  `raw__bootcamps__app__postgres__*` tables. This is precisely the silent failure §7.2's check
-  is designed to catch, and it has already happened.
+- **Bootcamps ingestion is gone, deliberately** — the app is no longer deployed (confirmed
+  2026-08-14). The source exists with zero connections, its interval-map entry
+  `bootcamps_production_app_db__s3_data_lake` matches nothing, and dbt still models 19
+  `raw__bootcamps__app__postgres__*` tables against data that stopped arriving. Nothing was
+  lost, but nothing was cleaned up either, and the tables read as current to anyone who does
+  not already know. This is the case `retired.yml` exists for (§7.2) and it is the natural
+  first entry: the check would not have prevented the retirement, it would have forced the
+  decommission to be written down where a reader of the raw layer can see it.
 - **9 connection groups fall through to the 24h default** because their derived name is absent
   from `group_name_to_interval` — including Zendesk, Open Discussions, GitHub, both HubSpots,
   and xPro's Studentmodule History. Generating the map from the inventory (step 7) removes the
@@ -547,9 +551,13 @@ Findings that are work items rather than schema changes:
 - **2 interval-map entries are dead** (`bootcamps_production_app_db`, `edxorg_production_course_tables`).
 - **4 connections are invisible to Dagster** — all four point at the legacy S3-Glue
   destinations and all four are paused, so this is dead config rather than a gap.
-- **Both Salesforce connections are paused**, while `ol_salesforce__s3_data_lake` sits in the
-  interval map at 24h and dbt models Salesforce tables. Confirm whether that is intended
-  before step 3 transcribes it.
+- **Both Salesforce connections are paused deliberately** — the data was not being used and
+  keeping the connection active cost a seat licence (confirmed 2026-08-14). Salesforce is
+  therefore the worked example of the other lifecycle: `status: inactive`, kept in the
+  inventory rather than retired, because the decision is reversible and the reason is
+  economic. It is also why paused units cannot simply be omitted (§3.6) — Salesforce still
+  has a live interval-map entry, dbt models, and 568 configured streams, and all of that is
+  correct and should stay, just not running.
 - **1,185 loaded-but-unmodeled tables** against 374 modelled — the §1.4 ratio, now measured.
 
 ---
