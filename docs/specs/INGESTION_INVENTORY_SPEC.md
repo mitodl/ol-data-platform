@@ -1,0 +1,427 @@
+# Ingestion Inventory & Airbyte Config-as-Code — Spec
+
+**Status:** Spec (accepted direction; implements RFC 12319 step 1 and unblocks RFC 12711 step 2)
+**Project:** `wp-airbyte-dlt-migration-programmatic-airbyte-manag-14e813`
+**Task:** `tk-airbyte-config-as-code-terraform-provider-via-pu-d71323`
+**RFC:** [mitodl/hq#12319](https://github.com/mitodl/hq/discussions/12319) — Airbyte → dlt migration
+and programmatic Airbyte management (**Accepted 2026-08-13**)
+**Related RFC:** [mitodl/hq#12711](https://github.com/mitodl/hq/discussions/12711) §3 —
+fixes the `(deployment, layer)` entry shape this spec extends
+(`docs/specs/QA_DATA_TOPOLOGY_SPEC.md`)
+**Code pinned at:** `1ff30dcae0a1b8a8562244f67f5946facb3ac332` (ol-data-platform),
+`3ab56f5d3` (ol-infrastructure)
+
+RFC 12319 decided *that* the interim Airbyte setup gets managed as code, that a YAML inventory
+is the human source of truth, and that the inventory is a normal PR-reviewed file with a CI
+check. RFC 12711 §3 fixed the key and the per-environment `strategies` map. This document
+specifies the parts neither settled: what an entry contains below the unit level, where the
+file lives, how it crosses the repo boundary into Pulumi, what generates what, and how the
+first version of the file gets built without hand-transcribing 372 table declarations.
+
+It does not revisit those decisions, and it does not cover the dlt cutover itself (RFC 12319
+phase 2, strictly sequenced after this lands).
+
+---
+
+## 1. Four measured findings that shape the schema
+
+Each of these invalidates an obvious design, so they come before the schema rather than after.
+
+### 1.1 Raw table names are not positionally parseable
+
+The natural shortcut — derive `(deployment, layer)` from the `raw__<deployment>__<layer>__…`
+table name — does not work. Across the 372 raw tables declared in `src/ol_dbt/models/**/_*sources.yml`
+there are 23 distinct two-segment prefixes with at least four incompatible shapes:
+
+| Prefix | Shape | Tables |
+|---|---|---|
+| `raw__mitx__openedx__mysql__*` | deployment, layer, system, table | 54 |
+| `raw__ovs__postgres__ui_video` | deployment, **system**, table (no layer) | 6 |
+| `raw__thirdparty__zendesk_support__tickets` | pseudo-deployment, vendor, table | 7 |
+| `raw__thirdparty__salesforce___destination_v2__Opportunity` | vendor + Airbyte destination artifact, **mixed case**, triple underscore | 2 |
+| `raw__edxorg__s3__tables__auth_user` | deployment, system, sub-namespace, table | 18 |
+
+**Consequence:** each unit declares its `table_prefix` explicitly. The inventory maps
+prefix → unit; nothing parses names. A validator rule asserts prefixes are non-overlapping,
+which is what makes the mapping total and unambiguous.
+
+### 1.2 `loader:` in the dbt sources YAML is already wrong
+
+`src/ol_dbt/models/staging/edxorg/_edxorg_sources.yml` declares `loader: airbyte`, but
+`raw__edxorg__s3__tables__*` is produced by dlt — `src/ol_dlt/ol_dlt/sources/edxorg_s3/__init__.py:180`
+builds exactly that resource name. edxorg is the one *completed* Airbyte→dlt migration and the
+dbt metadata still says Airbyte. Eighteen `raw__edxorg__s3__*` tables sit under that wrong label,
+and four other files already say `loader: dlt` (`mitpe`, `oll`, `mit_climate`,
+`edxorg__discovery`), so the field is neither reliably right nor reliably absent.
+
+**Consequence:** `loader` is an inventory field, and `ol-dbt generate` emits it rather than
+`_adjust_source_schema_pattern` hard-coding `loader: airbyte`
+(`src/ol_dbt_cli/ol_dbt_cli/commands/generate.py:91`). It also means the loader-agnostic dedup
+macro (`tk-loader-agnostic-dbt-raw-metadata-macro-confirm-t-eec760`) must resolve through the
+inventory, not through `source.loader` — today's values would route 18 dlt tables to the
+Airbyte branch.
+
+### 1.3 Connection names are load-bearing in Dagster, character for character
+
+`dg_projects/lakehouse/lakehouse/definitions.py:197-199` selects connections with
+`conn.name.lower().endswith("s3 data lake")`. `OLAirbyteTranslator`
+(`definitions.py:164-182`) derives each asset's Dagster group name from the connection name by
+stripping the U+2192 arrow and non-alphanumerics, and `group_name_to_interval`
+(`definitions.py:219-254`) keys 32 sync cadences off those derived strings, defaulting to 24 h
+for anything unlisted (`definitions.py:266`).
+
+So a config-as-code rollout that "cleans up" connection names would silently re-group every
+asset, orphan 32 schedule entries, and downgrade 6- and 12-hour syncs to daily — with no error
+anywhere.
+
+**Consequence:** import fidelity is a hard requirement, not a nicety. The generated
+`airbyte_connection.name` must reproduce today's name byte-for-byte, arrow included. The
+inventory carries the connection name as data, and a validator rule asserts every unit's name
+still ends with `s3 data lake`. Renaming becomes a deliberate, separately reviewed change that
+must move `group_name_to_interval` in the same commit — and step 5 below removes that hazard
+entirely by generating the interval map from the inventory.
+
+### 1.4 dbt sources are a projection of ingestion, not a census of it
+
+The 17 sources files declare 372 raw tables. Production raw holds ~2,090 (2026-08-05 audit;
+QA holds 2,738). The inventory is a statement about *what is loaded*, so it is roughly 5×
+larger than what dbt declares, and generating dbt source YAML for all of it would bury the
+curated column descriptions and trip the undocumented-column gate added in #2555.
+
+**Consequence:** each table entry carries `modeled: true|false` (default `false`). Only
+`modeled: true` tables are emitted into dbt sources YAML, and generation merges rather than
+overwrites — `_merge_sources_content` (`generate.py:119-188`) already preserves existing
+descriptions and does the right thing. The gap between loaded and modeled becomes a report
+(`ol-ingest report --unmodeled`), which is the constructive form of RFC 12711's open
+"QA raw cleanup" question: a table loaded for two years and never modeled is a candidate for
+retirement, and now it is countable.
+
+---
+
+## 2. The seam: what the inventory owns and what it does not
+
+The inventory lives in ol-data-platform and is owned by data engineering. Connection *identity*
+is infrastructure and stays in ol-infrastructure. The join key is the unit key.
+
+| Fact | Owner | Why |
+|---|---|---|
+| Which deployments/layers we load | inventory (ol-data-platform) | It is the analytics contract |
+| Which tables/streams, their cursor field, PK, sync mode | inventory | Changes with dbt models, reviewed by the same people |
+| Which tables are modeled in dbt | inventory | Generates the sources YAML |
+| Per-environment `strategies` (qa/local) | inventory | RFC 12711 §3 |
+| Sync cadence | inventory | Today split between Dagster and Airbyte; §5 unifies it |
+| DB host, port, SSL, Vault path, credentials | ol-infrastructure | Stack references and secrets; must never be in a data repo |
+| Airbyte workspace ID, destination config, connector definition/version pins | ol-infrastructure | Airbyte-implementation detail, disposable with Airbyte |
+| Airbyte source/destination/connection UUIDs | Pulumi state | Machine identity, not a human decision |
+
+The practical test: **anything that would have to be rewritten when a source moves to dlt does
+not belong in the inventory.** Host and credentials get rewritten (dlt reads them from Vault at
+connect time — see `pat-reusable-ol-dlt-database-source-databasesourcesp-7cd605`); table lists,
+cursors and primary keys do not. That is what makes the inventory survive the migration and
+makes the later cutover a backend swap.
+
+---
+
+## 3. Inventory schema v1
+
+### 3.1 Physical layout
+
+```
+ingestion/
+  inventory/
+    units/<deployment>__<layer>.yml     # one file per unit; ~40 files
+    schema/unit.schema.json             # JSON Schema, version-stamped
+    retired.yml                         # graveyard, see §7.2
+```
+
+One file per unit rather than one big file: units are the review granularity (a PR adds tables
+to one layer), the largest unit is ~55 tables, and per-file ownership keeps merge conflicts off
+the critical path when several source migrations run in sequence.
+
+### 3.2 Unit entry
+
+RFC 12711 §3's shape is the head of the entry and is reproduced verbatim; everything from
+`loader:` down is new here.
+
+```yaml
+schema_version: 1
+
+deployment: mitxonline            # mitx | mitxonline | xpro | mitlearn | edxorg | ...
+layer: app_postgres               # mysql | mongodb | api | tracking_logs | fastly | app_postgres
+scope: scoped                     # scoped | singleton
+strategies:
+  qa: ingest                      # ingest | mirror | omit
+  local: fixture                  # ingest | fixture | omit
+# mirror_max_age_days: 30         # required iff any strategy is `mirror`
+
+loader: airbyte                   # airbyte | dlt
+table_prefix: raw__mitxonline__app__postgres__   # §1.1; must be unique across all units
+sync_interval_hours: 6            # drives both the Dagster schedule and Airbyte's schedule
+
+airbyte:                          # required iff loader == airbyte; dropped at cutover
+  connection_name: "MITx Online Production App DB → S3 Data Lake"   # §1.3, byte-exact
+  source_kind: source-postgres
+  replication_method: xmin        # xmin | cursor | cdc  — see §3.4
+
+dlt:                              # required iff loader == dlt
+  source_module: ol_dlt.sources.edxorg_s3
+  write_disposition: merge        # merge | replace | append
+
+tables:
+  - name: ecommerce_basketdiscount        # stream name at the source
+    raw_table: raw__mitxonline__app__postgres__ecommerce_basketdiscount
+    sync_mode: incremental_append         # provider enum, §6.2
+    cursor_field: [updated_on]            # required iff sync_mode starts with `incremental`
+    primary_key: [id]
+    modeled: true                         # §1.4; default false
+    # excluded_columns: [password]        # optional; enforced by both backends
+    # renamed_from: ecommerce_basket_discount   # §7.2
+```
+
+### 3.3 Rules the validator enforces
+
+Carried over from RFC 12711 §3, unchanged:
+
+1. `local: mirror` is rejected by the schema (the enum omits the value).
+2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d.
+3. `mirror_max_age_days` is required iff any strategy is `mirror`, with no default.
+
+New here:
+
+4. `table_prefix` values are pairwise non-overlapping, and every `tables[].raw_table` starts
+   with its unit's prefix. This is what makes prefix → unit total (§1.1).
+5. `cursor_field` is required iff `sync_mode` is incremental, and must name a column the
+   table actually has once §8's warehouse reconcile runs.
+6. `airbyte.connection_name` ends with `s3 data lake` (case-insensitive) — the Dagster
+   selector's precondition (§1.3).
+7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`.
+8. Every `raw_table` is globally unique across units.
+
+### 3.4 `replication_method` is deliberately recorded, and is not decorative
+
+`airbyte.replication_method` records how the Postgres source detects change: `xmin`, an
+explicit cursor column, or CDC. Two open questions read straight off it once the inventory is
+populated:
+
+- `tk-determine-per-source-incremental-cursor-viabilit-51f299` — which connections use xmin,
+  and therefore which need a replacement cursor column chosen before dlt can take over. Today
+  that answer requires crawling the Airbyte UI; after this lands it is `rg replication_method: xmin`.
+- The Airbyte-side deadline: source-postgres 3.8+ refuses xmin mode outright on any database
+  that has ever exceeded 2^32 lifetime transactions
+  (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent
+  of the dlt migration, and the inventory is where its blast radius becomes enumerable.
+
+RFC 12319's resolution stands: no connection uses CDC today, so `cdc` is a legal value the
+validator accepts and nothing currently sets.
+
+---
+
+## 4. Crossing the repo boundary: a rendered JSON contract
+
+The Pulumi program in ol-infrastructure must not import a Python package from ol-data-platform,
+and Pulumi must not parse the YAML dialect directly. The contract between the repos is a
+**rendered JSON document**, produced by `ol-ingest render airbyte --format json`, carrying
+`schema_version` and only the Airbyte-relevant fields.
+
+Two reasons this is a JSON render and not the YAML file:
+
+1. The YAML is a source-of-truth format that will keep growing dlt-shaped fields; the render is
+   narrow and stable, so ol-infrastructure does not break when the inventory schema grows.
+2. The render is produced by a validated command. A malformed inventory fails in ol-data-platform
+   CI, not halfway through a Pulumi apply against production Airbyte.
+
+The transport is the pattern this org already runs for Superset:
+`src/ol_concourse/pipelines/applications/ol_superset_deploy.py:19-25` declares an
+`ol-data-platform-repository` git resource with a `paths=[...]` filter and hands the checkout
+to a task as an input (`:57`). The Airbyte config job does the same with
+`paths=["ingestion/inventory/"]`, runs `ol-ingest render`, and passes the resulting JSON to the
+Pulumi task as a file input, located by an environment variable. A change to the inventory
+therefore triggers exactly one pipeline, and nothing else re-plans.
+
+The Pulumi program reads that JSON with the standard library. No cross-repo Python dependency
+exists in either direction.
+
+---
+
+## 5. What the inventory generates
+
+| Target | Command | Notes |
+|---|---|---|
+| dbt sources YAML | `ol-dbt generate sources --from-inventory` | Merges into existing files; emits `loader` from the unit (§1.2); only `modeled: true` tables (§1.4) |
+| Airbyte config | `ol-ingest render airbyte` → Pulumi | §4, §6 |
+| Dagster sync cadence | `ol-ingest render dagster-intervals` | Replaces the hand-maintained `group_name_to_interval` literal (`definitions.py:219-254`) |
+| dlt source specs | `ol-ingest render dlt` | Phase 2 only; emits `DatabaseSourceSpec`/`DatabaseTable` inputs (`src/ol_dlt/ol_dlt/database.py`) |
+
+**Warehouse introspection does not disappear — it changes role.** `ol-dbt generate sources`
+today discovers tables *downstream* of ingestion, from Trino or the local DuckDB registry
+(`generate.py:196-216`, `380-395`). That path becomes `ol-ingest reconcile`: a check that
+compares what the warehouse actually holds against what the inventory says should be there,
+reported in three buckets — *in inventory, missing from warehouse* (ingestion is broken),
+*in warehouse, missing from inventory* (undeclared drift), *in both* (fine). It stays useful
+precisely because it is an independent observation; making it the source of truth is the
+current defect.
+
+The Dagster interval map is worth calling out as the immediate win: it is a hand-maintained
+32-entry dict of strings that must match names Airbyte generates, with a silent 24-hour default
+for typos (§1.3). Generating it removes an entire class of "why did this source go stale"
+incident.
+
+---
+
+## 6. Airbyte-as-code mechanics
+
+### 6.1 Provider, edition, auth
+
+The official `airbytehq/airbyte` Terraform provider (v1.3.0, released 2026-08-11) supports OSS
+self-managed instances and accepts **HTTP Basic** (`username` / `password`) alongside OAuth and
+bearer auth. That matches the existing APISIX basic-auth API route Dagster already uses —
+`server_url = https://api-airbyte.odl.mit.edu/api/public/v1`, credentials from the same Vault
+KV v1 secret Dagster reads (`definitions.py:139-154`, path `dagster-http-auth-password`, mount
+`secret-data`). No new ingress, no OIDC dance for machine access.
+
+Consumed via Pulumi with `pulumi package add terraform-provider airbytehq/airbyte`, generating
+a local SDK under `sdks/airbyte/` and a workspace member entry — the pattern already
+established by `sdks/rootly` and `sdks/qdrant-cloud` (`pyproject.toml:45-46,323-327`).
+
+### 6.2 Use the generic resources from day one
+
+Typed connector resources (`airbyte_source_postgres`, …) were deprecated in provider 1.0 and
+**removed in 1.1**. Since we have no existing Terraform state, there is nothing to migrate and
+no reason to adopt a removed API: use `airbyte_source` / `airbyte_destination` with the
+`airbyte_connector_configuration` data source, which resolves `definition_id` from a connector
+name, validates configuration against the connector's JSONSchema at plan time, and splits
+sensitive from non-sensitive values so diffs stay readable (the whole `configuration` attribute
+is otherwise marked sensitive and shows as an opaque blob).
+
+Pin `connector_version` explicitly. An unpinned data source resolves "latest", which silently
+couples every plan to whatever Airbyte published that morning — and connector upgrades are
+exactly the kind of change that must be a reviewed diff here, given 3.8's xmin refusal (§3.4).
+
+Connection streams map onto the inventory almost one-to-one: `configurations.streams[]` takes
+`name`, `sync_mode` (one of `full_refresh_overwrite`, `full_refresh_append`,
+`incremental_append`, `incremental_deduped_history`, …), `cursor_field` (list),
+`primary_key` (list of lists), and `selected_fields`. The inventory's `excluded_columns` is
+rendered as the complement into `selected_fields`.
+
+### 6.3 The replacement hazard, and the apply gate
+
+`source_id` and `destination_id` on `airbyte_connection`, and `workspace_id` / `definition_id`
+on `airbyte_source`, all **require replacement if changed**. A replaced connection is a new
+connection: its sync state — the cursor position Airbyte has been advancing for years — is
+gone, and the next sync either re-reads everything or, worse, starts from empty state on an
+append destination.
+
+This is the single largest operational risk in the whole config-as-code exercise, and it is
+entirely a preview-time-detectable condition. Therefore:
+
+**The apply job fails if the Pulumi preview contains any delete or replace of an
+`airbyte_source`, `airbyte_destination`, or `airbyte_connection`.** Deliberate replacements are
+performed by a human running the apply with an explicit override flag, never by the pipeline.
+This gate goes in before the first import, not after.
+
+`configuration` is *not* replacement-forcing, which is what makes §7's credential rotation an
+in-place update.
+
+### 6.4 Import, not recreate
+
+Every existing source, destination and connection is imported into Pulumi state by UUID
+(the provider supports `terraform import` / `import` blocks for all three; Pulumi's `import`
+resource option carries the same). The acceptance test for the import phase is a **clean
+preview**: after importing, `pulumi preview` shows zero changes of any kind. Any diff at that
+point is a fidelity bug in the rendered config — a stream ordering, a namespace format, a
+schedule type — and must be fixed in the renderer, not applied away.
+
+Airbyte's connection schedules are expected to be manual (Dagster triggers syncs; the group
+jobs and schedules are built at `definitions.py:259-283`). This must be confirmed per
+connection during import: if any connection carries its own Airbyte-side cron, it is
+double-scheduled today, and the inventory's `sync_interval_hours` has to reconcile the two
+rather than silently pick one.
+
+### 6.5 A separate, disposable stack
+
+The connection config goes in a **new** Pulumi project, `applications/airbyte_connections`, not
+into `applications/airbyte` (which deploys the server itself). The whole point is that this
+stack is disposable: as each source migrates to dlt, its unit flips `loader: dlt`, the renderer
+stops emitting it, and Pulumi removes the connection. When the last one goes, the stack is
+destroyed and the Airbyte server stack outlives it only as long as it takes to shut down.
+
+---
+
+## 7. Two things that make the file honest
+
+### 7.1 Credentials: Vault static roles
+
+Airbyte stores connector config once and never renews a lease, so Vault *dynamic* database
+roles structurally cannot work — the lease expires and the connection breaks. Switch source
+read-replica credentials to Vault **static** roles: stable username, Vault-rotated password
+(`tk-switch-source-read-replica-creds-from-vault-dyna-812a53`).
+
+Because `configuration` is not replacement-forcing (§6.3), reconciling a rotated password is an
+in-place update of `airbyte_source` — cheap and non-destructive. But it is not automatic:
+Airbyte keeps using the old password until an apply runs. So the rotation period and the apply
+cadence are one decision, not two. Specify them together in the same PR: a scheduled apply job
+whose period is strictly shorter than the static role's rotation period, so a rotation is always
+picked up before the next one lands.
+
+Note what Airbyte's own external-secret-manager setting does *not* do: it governs where Airbyte
+persists a secret it already holds. It does not consume Vault leases and does not rotate
+database credentials. It is not an alternative to this.
+
+### 7.2 Removals are acknowledged in the file, not in a review comment
+
+RFC 12319's resolution requires CI to fail on any unacknowledged table removal or rename,
+because the failure mode is silent: a dropped entry means the loader simply stops loading, with
+no error anywhere and a dbt model that quietly goes stale.
+
+Mechanism, following the ratchet pattern this repo already runs for dimensional layering
+(`src/ol_dbt_cli/ol_dbt_cli/commands/validate.py:568-619`):
+
+- The check diffs the inventory against the PR's merge base.
+- Any `(unit, raw_table)` that disappears must appear either in `ingestion/inventory/retired.yml`
+  with a date and a reason, or as `renamed_from:` on another entry in the same unit.
+- Unacknowledged disappearance is an `ERROR` and is **not** baselineable — like RFC 12711 §2's
+  declaration-contradicts-declaration finding, it is always fixable by editing text and has no
+  legitimate upstream cause.
+- `retired.yml` entries are never deleted. The graveyard is the record of what we used to load,
+  and it is what makes "when did this table stop arriving" answerable.
+
+Renames are the subtle half: a rename looks like a delete plus an add, and without
+`renamed_from:` it passes an add-only check while silently orphaning every downstream model.
+
+---
+
+## 8. Steps and acceptance criteria
+
+Strictly sequential, per RFC 12319's resolution 3. Steps 1–3 are ol-data-platform; 4–6 are
+ol-infrastructure; 7 closes the loop.
+
+| # | Step | Done when |
+|---|---|---|
+| 1 | `src/ol_ingest` package + `ol-ingest` CLI skeleton (cyclopts), JSON Schema, loader, `validate` | `ol-ingest validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
+| 2 | `ol-ingest dump --from-airbyte` — build the initial inventory from the live workspace via the existing `AirbyteOSSClient` (`dg_projects/lakehouse/lakehouse/resources/airbyte.py`, incl. its localhost-pagination workaround at `:81-115`) | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
+| 3 | `ol-ingest reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR | The three buckets of §5 are reported; every one of the 372 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
+| 4 | CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes |
+| 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
+| 6 | Concourse job: `ol-data-platform-repository` resource → `ol-ingest render airbyte` → Pulumi apply (§4) | An inventory PR merge triggers exactly one pipeline and produces the expected no-op preview |
+| 7 | Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5) | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2) |
+
+Steps 1–4 unblock `tk-step-2-extend-the-rfc-12319-ingestion-inventory--5a2841` (RFC 12711's
+critical path) — that step needs the schema and the file, not the Pulumi half. Do not hold it
+for step 6.
+
+---
+
+## 9. Open questions
+
+None blocking. Three worth deciding as the steps that surface them land:
+
+1. **Salesforce's `_destination_v2` table names** (§1.1) embed an Airbyte destination artifact
+   and mixed case in the raw table name. Migrating that source to dlt cannot reproduce the
+   name, so it is a rename with downstream model edits. Decide during step 3 whether to
+   normalize now (while it is still Airbyte-owned and the rename is one PR) or at cutover.
+2. **~1,700 loaded-but-unmodeled tables** (§1.4). The report exists after step 3; whether
+   unmodeled tables get retired, and on what evidence, is RFC 12711's open QA-cleanup question
+   and should be answered with the numbers in hand.
+3. **Whether `sync_interval_hours` belongs on the unit or the table.** Today's cadence is per
+   Airbyte connection, and connections are per unit, so unit-level is correct now. A dlt source
+   can schedule per resource, so this may want to move later. Not worth pre-building.
