@@ -104,7 +104,7 @@ curated column descriptions and trip the undocumented-column gate added in #2555
 `modeled: true` tables are emitted into dbt sources YAML, and generation merges rather than
 overwrites — `_merge_sources_content` (`generate.py:119-188`) already preserves existing
 descriptions and does the right thing. The gap between loaded and modeled becomes a report
-(`ol-ingest report --unmodeled`), which is the constructive form of RFC 12711's open
+(`ol-dbt inventory report --unmodeled`), which is the constructive form of RFC 12711's open
 "QA raw cleanup" question: a table loaded for two years and never modeled is a candidate for
 retirement, and now it is countable.
 
@@ -292,11 +292,11 @@ Raise it on 12711 before the inventory is populated (step 3), not after.
 
 ---
 
-## 4. Crossing the repo boundary: a rendered JSON contract
+## 4. Crossing the repo boundary: a committed, generated JSON
 
 The Pulumi program in ol-infrastructure must not import a Python package from ol-data-platform,
 and Pulumi must not parse the YAML dialect directly. The contract between the repos is a
-**rendered JSON document**, produced by `ol-ingest render airbyte --format json`, carrying
+**rendered JSON document**, produced by `ol-dbt inventory render airbyte`, carrying
 `schema_version` and only the Airbyte-relevant fields.
 
 Two reasons this is a JSON render and not the YAML file:
@@ -306,16 +306,44 @@ Two reasons this is a JSON render and not the YAML file:
 2. The render is produced by a validated command. A malformed inventory fails in ol-data-platform
    CI, not halfway through a Pulumi apply against production Airbyte.
 
-The transport is the pattern this org already runs for Superset:
-`src/ol_concourse/pipelines/applications/ol_superset_deploy.py:19-25` declares an
-`ol-data-platform-repository` git resource with a `paths=[...]` filter and hands the checkout
-to a task as an input (`:57`). The Airbyte config job does the same with
-`paths=["ingestion/inventory/"]`, runs `ol-ingest render`, and passes the resulting JSON to the
-Pulumi task as a file input, located by an environment variable. A change to the inventory
-therefore triggers exactly one pipeline, and nothing else re-plans.
+**The rendered JSON is committed into ol-infrastructure**, beside the stack that consumes it,
+with a header naming its source and forbidding hand edits. It is not fetched, and no pipeline
+renders it.
 
-The Pulumi program reads that JSON with the standard library. No cross-repo Python dependency
-exists in either direction.
+### Why there is no cross-repo pipeline
+
+An earlier draft of this spec specified a Concourse job that watched
+`ingestion/inventory/` in ol-data-platform, rendered the JSON and applied Pulumi. That was
+machinery for an event that does not happen often enough to need it, and it duplicated
+something that already exists.
+
+`applications/airbyte` is already one of the 33 applications managed by the **`simple_pulumi`
+meta-pipeline** (`src/ol_concourse/pipelines/infrastructure/simple_pulumi/`) — the pattern for
+stacks with no build steps, "triggered solely by infrastructure code changes".
+`applications/airbyte_connections` registers there like any other stack, and a change to the
+committed JSON *is* an infrastructure code change, so it triggers with no new plumbing.
+
+The cost is one extra pull request:
+
+1. Inventory PR in ol-data-platform; CI validates it (§7.2).
+2. Run the render; open a small PR in ol-infrastructure with the regenerated JSON.
+3. The standard stack pipeline applies it on merge.
+
+That is a fair trade for a file that changes a handful of times a year, and it puts the diff in
+front of the people reviewing infrastructure changes, in the repo where it takes effect — which
+is where an Airbyte connection change most wants a second pair of eyes. During the phase-2
+migration, when units flip `loader: airbyte → dlt` one at a time, that review is the point.
+
+### The automation that does earn its place: drift detection
+
+Static configuration that silently stops describing reality is the failure this whole project
+exists to end, and an auto-apply does nothing about it — the divergence it cannot catch is
+someone editing a connection in the Airbyte UI.
+
+So the recurring job runs the *other* direction: on a schedule, dump the live workspace, diff it
+against the inventory, and report any difference. Same read-only path `bin/airbyte-inventory.py`
+already uses. This is what makes the inventory trustworthy between changes, and it is the only
+part of the Airbyte-as-code story that needs to run on a timer.
 
 ---
 
@@ -324,13 +352,33 @@ exists in either direction.
 | Target | Command | Notes |
 |---|---|---|
 | dbt sources YAML | `ol-dbt generate sources --from-inventory` | Merges into existing files; emits `loader` from the unit (§1.2); only `modeled: true` tables (§1.4) |
-| Airbyte config | `ol-ingest render airbyte` → Pulumi | §4, §6 |
-| Dagster sync cadence | `ol-ingest render dagster-intervals` | Replaces the hand-maintained `group_name_to_interval` literal (`definitions.py:219-254`) |
-| dlt source specs | `ol-ingest render dlt` | Phase 2 only; emits `DatabaseSourceSpec`/`DatabaseTable` inputs (`src/ol_dlt/ol_dlt/database.py`) |
+| Airbyte config | `ol-dbt inventory render airbyte` → committed JSON → Pulumi | §4, §6 |
+| Dagster sync cadence | `ol-dbt inventory render dagster-intervals` | Replaces the hand-maintained `group_name_to_interval` literal (`definitions.py:219-254`) |
+| dlt source specs | `ol-dbt inventory render dlt` | Phase 2 only; emits `DatabaseSourceSpec`/`DatabaseTable` inputs (`src/ol_dlt/ol_dlt/database.py`) |
+
+### Where this lives: `ol-dbt inventory`, not a new package
+
+The commands go under the existing CLI as an `inventory` sub-app, and the schema, loader and
+validation rules go in a module beside them.
+
+The case for a separate `ol_ingest` package rested on two consumers that would not want dbt in
+their dependency tree. §4 removed the first — there is no Concourse task rendering JSON, so
+nothing at the repo boundary needs a light install. The second is real but not yet here:
+phase 2 builds dlt sources in `dg_projects/data_loading`, a separately packaged Dagster code
+location, and making it depend on `ol_dbt_cli` (duckdb, dbt-core, dbt-trino) to read a YAML file
+would be wrong — `src/ol_dlt` is already excluded from the workspace for exactly that reason.
+
+Against that: `ol-dbt validate` already has the `Severity` enum, the error/warning/info split,
+`--format json` for CI, and baseline load/write plumbing (`validate.py:1291-1374`), all of which
+§7.2's check wants. Building a second CLI to reuse none of it is the more expensive mistake
+today.
+
+So: land it in `ol_dbt_cli`, keep the inventory module free of dbt and duckdb imports so the
+split stays cheap, and split it out when phase 2 actually needs it — not before.
 
 **Warehouse introspection does not disappear — it changes role.** `ol-dbt generate sources`
 today discovers tables *downstream* of ingestion, from Trino or the local DuckDB registry
-(`generate.py:196-216`, `380-395`). That path becomes `ol-ingest reconcile`: a check that
+(`generate.py:196-216`, `380-395`). That path becomes `ol-dbt inventory reconcile`: a check that
 compares what the warehouse actually holds against what the inventory says should be there,
 reported in three buckets — *in inventory, missing from warehouse* (ingestion is broken),
 *in warehouse, missing from inventory* (undeclared drift), *in both* (fine). It stays useful
@@ -473,21 +521,25 @@ ol-infrastructure; 7 closes the loop.
 
 | # | Step | Done when |
 |---|---|---|
-| 1 | `src/ol_ingest` package + `ol-ingest` CLI skeleton (cyclopts), JSON Schema, loader, `validate` | `ol-ingest validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
-| 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this** (see below); folding it into `ol-ingest` is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
-| 3 | `ol-ingest reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR | The three buckets of §5 are reported; every one of the 372 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
+| 1 | `ol-dbt inventory` sub-app (§5): JSON Schema, dbt-free loader, `validate` | `ol-dbt inventory validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
+| 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
+| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
 | 4 | CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes |
 | 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
-| 6 | Concourse job: `ol-data-platform-repository` resource → `ol-ingest render airbyte` → Pulumi apply (§4) | An inventory PR merge triggers exactly one pipeline and produces the expected no-op preview |
+| 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |
 | 7 | Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5) | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2) |
+| 8 | Scheduled drift check: dump the live workspace, diff against the inventory, report differences (§4) | A connection edited in the UI is reported within a day |
 
 Steps 1–4 unblock `tk-step-2-extend-the-rfc-12319-ingestion-inventory--5a2841` (RFC 12711's
 critical path) — that step needs the schema and the file, not the Pulumi half. Do not hold it
 for step 6.
 
+Step 8 is the one piece that runs on a timer, and it is deliberately last: it compares live
+Airbyte against the inventory, so it only means something once the inventory is real.
+
 ### Step 2 is already runnable: `bin/airbyte-inventory.py`
 
-Reading the live workspace does not need the `ol-ingest` package to exist first, and the
+Reading the live workspace does not need the `inventory` sub-app to exist first, and the
 findings are what tell us whether the schema above survives contact with production. The
 script is read-only — every call is a GET — and takes the basic-auth credentials Dagster
 already uses:
