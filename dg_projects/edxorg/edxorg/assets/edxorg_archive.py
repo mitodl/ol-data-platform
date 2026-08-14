@@ -144,6 +144,21 @@ class EdxorgArchiveProcessConfig(Config):
     )
 
 
+def _skip_upload_if_unchanged(archive_file: Path, object_path: str) -> bool:
+    """Delete ``archive_file`` and return True if ``object_path`` already exists.
+
+    object_key is a sha256 of the file contents, so an existing object at
+    object_path is guaranteed byte-identical to archive_file -- re-uploading
+    it would just assign S3 a fresh ETag to the same key. That races with any
+    edxorg_s3 dlt read that already listed the old ETag and is mid-fetch,
+    surfacing as s3fs.FileExpired/PreconditionFailed downstream.
+    """
+    if not UPath(object_path).exists():
+        return False
+    archive_file.unlink()
+    return True
+
+
 @op(
     name="process_edxorg_archive_bundle",
     required_resource_keys={"gcp_gcs"},
@@ -206,7 +221,7 @@ class EdxorgArchiveProcessConfig(Config):
         "db_table__workflow_assessmentworkflowstep": DynamicOut(is_required=False),
     },
 )
-def process_edxorg_archive_bundle(
+def process_edxorg_archive_bundle(  # noqa: PLR0915
     context: OpExecutionContext,
     config: EdxorgArchiveProcessConfig,
     edxorg_raw_data_archive: Path,
@@ -351,6 +366,13 @@ def process_edxorg_archive_bundle(
             object_path = (
                 "s3://" + f"{config.s3_bucket}/{config.s3_prefix}/{object_key}"
             )
+            if _skip_upload_if_unchanged(archive_file, object_path):
+                context.log.debug(
+                    "Skipping upload of %s -- unchanged content already at %s",
+                    tinfo.name,
+                    object_path,
+                )
+                continue
             shared_metadata = {
                 "path": MetadataValue.path(object_path),
                 "object_key": object_key,
