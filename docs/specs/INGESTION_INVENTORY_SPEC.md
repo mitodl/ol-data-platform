@@ -45,6 +45,18 @@ there are 23 distinct two-segment prefixes with at least four incompatible shape
 prefix → unit; nothing parses names. A validator rule asserts prefixes are non-overlapping,
 which is what makes the mapping total and unambiguous.
 
+**Confirmed against the live workspace (2026-08-14, §8.1).** There are exactly two naming
+mechanisms, and neither is a positional parse:
+
+- 31 connections set an Airbyte `prefix` (`raw__mitxonline__app__postgres__`) and carry short
+  stream names (`users_user`). Raw table = prefix + stream name.
+- 12 connections set **no prefix at all** and carry the fully-qualified name in the stream
+  itself (`raw__mitx__openedx__tracking_logs`, `raw__edxorg__s3__program_course`). These are
+  the S3/file and tracking-log sources.
+
+So a unit's `table_prefix` is the connection's `prefix` where one exists, and the common
+`raw__…__` head of its stream names where none does.
+
 ### 1.2 `loader:` in the dbt sources YAML is already wrong
 
 `src/ol_dbt/models/staging/edxorg/_edxorg_sources.yml` declares `loader: airbyte`, but
@@ -147,7 +159,7 @@ RFC 12711 §3's shape is the head of the entry and is reproduced verbatim; every
 schema_version: 1
 
 deployment: mitxonline            # mitx | mitxonline | xpro | mitlearn | edxorg | ...
-layer: app_postgres               # mysql | mongodb | api | tracking_logs | fastly | app_postgres
+layer: app_postgres               # see §3.7 — RFC 12711's six values are not enough
 scope: scoped                     # scoped | singleton
 strategies:
   qa: ingest                      # ingest | mirror | omit
@@ -156,10 +168,13 @@ strategies:
 
 loader: airbyte                   # airbyte | dlt
 table_prefix: raw__mitxonline__app__postgres__   # §1.1; must be unique across all units
-sync_interval_hours: 6            # drives both the Dagster schedule and Airbyte's schedule
 
 airbyte:                          # required iff loader == airbyte; dropped at cutover
-  connection_name: "MITx Online Production App DB → S3 Data Lake"   # §1.3, byte-exact
+  connections:                    # a LIST — one unit can have several (§3.5)
+    - name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
+      status: active              # active | inactive — §3.6
+      sync_interval_hours: 12     # per connection, not per unit (§3.5)
+      streams: [assessment_assessment, …]             # which tables this one carries
   source_kind: source-postgres
   replication_method: xmin        # xmin | cursor | cdc  — see §3.4
 
@@ -188,14 +203,18 @@ Carried over from RFC 12711 §3, unchanged:
 
 New here:
 
-4. `table_prefix` values are pairwise non-overlapping, and every `tables[].raw_table` starts
-   with its unit's prefix. This is what makes prefix → unit total (§1.1).
+4. `table_prefix` values are pairwise non-overlapping **across units**, and every
+   `tables[].raw_table` starts with its unit's prefix. This is what makes prefix → unit total
+   (§1.1). Note the direction: prefix → unit must be a function; connection → prefix need not
+   be injective, because a unit legitimately has several connections (§3.5).
 5. `cursor_field` is required iff `sync_mode` is incremental, and must name a column the
    table actually has once §8's warehouse reconcile runs.
-6. `airbyte.connection_name` ends with `s3 data lake` (case-insensitive) — the Dagster
-   selector's precondition (§1.3).
+6. Every `airbyte.connections[].name` ends with `s3 data lake` (case-insensitive) — the
+   Dagster selector's precondition (§1.3) — or the unit is marked `dagster_visible: false`,
+   which is an assertion that no dbt model depends on it (§8.1 finding C).
 7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`.
-8. Every `raw_table` is globally unique across units.
+8. Every `raw_table` is globally unique across units, and appears in exactly one connection's
+   `streams` within its unit.
 
 ### 3.4 `replication_method` is deliberately recorded, and is not decorative
 
@@ -211,8 +230,65 @@ populated:
   (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent
   of the dlt migration, and the inventory is where its blast radius becomes enumerable.
 
-RFC 12319's resolution stands: no connection uses CDC today, so `cdc` is a legal value the
-validator accepts and nothing currently sets.
+RFC 12319's resolution needs one correction of fact, which does not change its conclusion.
+CDC *is* in use: the three MongoDB forum connections (`mongodb-v2`, which is change-stream
+based by design) carry `_ab_cdc_cursor` on 13 streams. All three connections are **inactive**
+and the source is not wanted, so the migration remains delete-capture-neutral in practice —
+but the RFC's blanket "no Airbyte connection uses CDC" was established by grepping dbt models,
+which cannot see a cursor that is never modelled. State it as "the only CDC connections are
+the three MongoDB forum ones, all paused".
+
+### 3.5 A unit has connections, plural — and cadence lives on the connection
+
+Four prefixes are shared by two connections each, and all four are the same deliberate
+pattern: one enormous table split into its own connection so it can run on a different
+schedule.
+
+| Unit prefix | Bulk connection | Split-out connection |
+|---|---|---|
+| `raw__mitx__openedx__mysql__` | MITx Residential Open edX DB (70) | …Studentmodule History (1) |
+| `raw__mitxonline__openedx__mysql__` | MITx Online Open edX DB (64) | …Student Module History (1) |
+| `raw__xpro__openedx__mysql__` | xPro Open edX DB (66) | …Studentmodule History (1) |
+| `raw__irx__edxorg__bigquery__` | IRx BigQuery (3) | IRx BigQuery - Email Opt In (1) |
+
+In three of the four the split-out stream is
+`coursewarehistoryextended_studentmodulehistoryextended` — the largest table in Open edX.
+
+This is not a defect to normalize away; it is the reason cadence cannot sit on the unit. The
+interval map runs the bulk Open edX connections at 12h and the history ones separately, so
+`sync_interval_hours` belongs on `airbyte.connections[]`, and the unit's `tables` are
+partitioned across them by the connection's `streams` list. **This closes open question 3**,
+which asked whether cadence was a unit or table property: it is neither — it is a property of
+the connection, and the connection is the thing config-as-code creates.
+
+### 3.6 Paused connections are inventory data, not absences
+
+12 of 43 connections are `inactive`, and Dagster builds assets for 8 of them — including
+Open Discussions (93 streams) and both HubSpot connections. A config-as-code import that
+ignored `status` would either resurrect paused ingestion on apply or silently drop it from
+the inventory, and both are wrong. `status` is therefore a required field on each connection,
+and pausing something becomes a reviewable one-line diff rather than a UI click.
+
+### 3.7 RFC 12711's `layer` enum is incomplete — it needs extending, not reinterpreting
+
+The six values (`mysql`, `mongodb`, `api`, `tracking_logs`, `fastly`, `app_postgres`) were
+derived from the Open edX and app-database deployments. Against the real connection set, 20 of
+35 draft units have no legal `layer`. The missing values are all vendor/SaaS or
+second-database layers:
+
+`hubspot`, `salesforce`, `zendesk`, `mailgun`, `github`, `bigquery`, `google_sheets`, `s3`,
+`studio_postgres` (OCW), `postgres` (ODL Video Service, which has no `app` segment), and
+`openedx_notes` (MITx Online's edX Notes MySQL, a distinct database from the Open edX one).
+
+Two of those deserve attention rather than a mechanical addition: `postgres` for ODL Video
+Service is the same thing `app_postgres` names elsewhere and should probably be renamed at the
+source; and `openedx_notes` is genuinely a separate layer that a `mysql`-only enum silently
+merges into the Open edX database — the draft renderer did exactly that, folding 8 edX Notes
+tables into `mitxonline__mysql`, which is the failure mode RFC 12711 §3 warns about applied to
+layers instead of deployments.
+
+**This is a change to RFC 12711's schema, not just this spec's**, since the key is shared.
+Raise it on 12711 before the inventory is populated (step 3), not after.
 
 ---
 
@@ -441,6 +517,40 @@ costs nothing and needs no further credentials. Findings produced:
 The draft units are for review, not for merging: `scope`, both `strategies`, and any layer the
 prefix does not determine are emitted as `TODO`, and a unit fed by more than one connection
 carries a `_todo` naming the conflict rather than silently keeping one connection's metadata.
+
+### 8.1 Measured state, 2026-08-14
+
+The first clean run against production. These numbers are the baseline the inventory has to
+reproduce, and several of them changed this spec (§1.1, §3.4–§3.7).
+
+| | |
+|---|---:|
+| Connections | 43 (31 active, **12 paused**) |
+| Configured streams | 1,518 (**723 on active connections**) |
+| Sources | 50 — of which several have no connection at all |
+| Destinations | 4 (one live `s3-data-lake`, three legacy `s3`/`s3-glue`) |
+| Sources on `xmin` | 11, covering 560 streams |
+| Incremental streams with no explicit cursor | 514 — i.e. riding xmin |
+| Distinct explicit cursor fields | 22, dominated by Salesforce's `SystemModstamp` (1,176) |
+| Connections carrying their own Airbyte cron | **0** — Dagster is the sole trigger, as assumed |
+
+Findings that are work items rather than schema changes:
+
+- **Bootcamps ingestion is gone.** The source exists with zero connections, its interval-map
+  entry `bootcamps_production_app_db__s3_data_lake` matches nothing, and dbt still models 19
+  `raw__bootcamps__app__postgres__*` tables. This is precisely the silent failure §7.2's check
+  is designed to catch, and it has already happened.
+- **9 connection groups fall through to the 24h default** because their derived name is absent
+  from `group_name_to_interval` — including Zendesk, Open Discussions, GitHub, both HubSpots,
+  and xPro's Studentmodule History. Generating the map from the inventory (step 7) removes the
+  whole class.
+- **2 interval-map entries are dead** (`bootcamps_production_app_db`, `edxorg_production_course_tables`).
+- **4 connections are invisible to Dagster** — all four point at the legacy S3-Glue
+  destinations and all four are paused, so this is dead config rather than a gap.
+- **Both Salesforce connections are paused**, while `ol_salesforce__s3_data_lake` sits in the
+  interval map at 24h and dbt models Salesforce tables. Confirm whether that is intended
+  before step 3 transcribes it.
+- **1,185 loaded-but-unmodeled tables** against 374 modelled — the §1.4 ratio, now measured.
 
 ---
 
