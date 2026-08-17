@@ -14,6 +14,7 @@ from dagster import AssetCheckSeverity, StaticPartitionsDefinition, asset
 from ol_orchestrate.lib.failed_partitions import (
     FAILED_PARTITION_CHECK_NAME,
     MAX_REPORTED_PARTITION_KEYS,
+    _recovery_text,
     build_failed_partition_checks,
     failed_partition_check_schedule,
     failed_partition_subset,
@@ -195,3 +196,38 @@ def test_the_sample_is_capped_but_the_count_is_not(instance) -> None:
     assert evaluation.metadata["failed_partitions"].value == 40
     assert len(evaluation.metadata["sample"].value) == MAX_REPORTED_PARTITION_KEYS
     assert evaluation.metadata["sample_truncated"].value is True
+    # nsmallest, so the sample is still the lowest keys in order despite never
+    # sorting the whole set.
+    assert evaluation.metadata["sample"].value == [
+        f"p{index:03d}" for index in range(MAX_REPORTED_PARTITION_KEYS)
+    ]
+
+
+def test_a_truncated_sample_says_to_fix_all_of_them() -> None:
+    """Told to "re-materialize the listed partitions" against a truncated
+    sample, an operator fixes twenty, watches the list they were given go
+    green, and leaves the rest failed -- the same silent staleness these checks
+    exist to end.
+    """
+    text = _recovery_text(count=400, truncated=True)
+
+    assert "all 400 failed partitions" in text
+    assert "Dagster UI has the rest" in text
+
+
+def test_an_untruncated_sample_points_at_the_list() -> None:
+    text = _recovery_text(count=3, truncated=False)
+
+    assert "the partitions listed below" in text
+    assert "all 3" not in text
+
+
+@pytest.mark.parametrize("truncated", [True, False])
+def test_the_recovery_text_always_says_nothing_retries_automatically(
+    *, truncated: bool
+) -> None:
+    """The part an operator cannot infer from a red check on their own."""
+    text = _recovery_text(count=5, truncated=truncated)
+
+    assert "Nothing retries these automatically" in text
+    assert "re-materiali" in text

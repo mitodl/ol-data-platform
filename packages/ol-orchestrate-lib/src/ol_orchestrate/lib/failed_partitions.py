@@ -34,8 +34,13 @@ renders it against the asset it concerns, ``asset_check_failure_sensor`` in the
 data_platform code location already announces ERROR-severity check failures to
 Slack, and a check is evaluated on a schedule independent of materialization --
 which is what makes it a standing signal rather than another event.
+
+The Slack half of that is a notification, not a report: the existing formatter
+carries the asset, the check and a run link, so the failed keys live in the
+check metadata and the UI rather than in the message.
 """
 
+import heapq
 from collections.abc import Sequence
 
 from dagster import (
@@ -53,8 +58,14 @@ from dagster import (
     define_asset_job,
 )
 
-# Failed partition keys carried in the check metadata. Enough to start work from
-# the notification alone; the count is always exact, and the UI has the rest.
+# Failed partition keys carried in the check metadata, where the Dagster UI
+# renders them against the asset. The count is always exact; this only caps the
+# sample.
+#
+# Note that the Slack notification does NOT carry them: data_platform's
+# asset_check_failure_message renders the asset name, the check name and a link
+# to the run, and nothing from the evaluation's metadata. Slack tells you which
+# check went red; the keys are one click away, not in the message.
 MAX_REPORTED_PARTITION_KEYS = 20
 
 FAILED_PARTITION_CHECK_NAME = "no_partitions_left_failed"
@@ -87,6 +98,29 @@ def failed_partition_subset(instance, asset_key: AssetKey, partitions_def):
         # the chance to fail yet.
         return None
     return cache_value.deserialize_failed_partition_subsets(partitions_def)
+
+
+def _recovery_text(count: int, truncated: bool) -> str:  # noqa: FBT001
+    """Say what has to happen next, and over how many partitions.
+
+    The count matters as much as the procedure. Told to "re-materialize the
+    listed partitions" against a truncated sample, an operator fixes twenty of
+    them, sees the list they were given go green, and leaves the rest failed --
+    which is the same silent staleness these checks exist to end.
+    """
+    scope = (
+        f"all {count} failed partitions -- the sample below is the first "
+        f"{MAX_REPORTED_PARTITION_KEYS}, and the asset's partition view in the "
+        "Dagster UI has the rest"
+        if truncated
+        else "the partitions listed below"
+    )
+    return (
+        "Nothing retries these automatically -- the automation condition spent "
+        "its one retry when they first failed, and only an upstream change, a "
+        "code version change or a manual re-materialization will ask for them "
+        f"again. Fix the cause, then re-materialize {scope}."
+    )
 
 
 def build_failed_partition_checks(
@@ -127,23 +161,21 @@ def _check_for(asset_key: AssetKey, partitions_def) -> AssetChecksDefinition:
                 passed=True, metadata={"failed_partitions": MetadataValue.int(0)}
             )
 
-        keys = sorted(failed.get_partition_keys())
+        # nsmallest rather than sorted()[:n]: sorting the whole set to keep
+        # twenty of it would rebuild the very structure this function reads a
+        # subset to avoid, and at O(F log F) rather than O(F log 20).
+        truncated = count > MAX_REPORTED_PARTITION_KEYS
+        sample = heapq.nsmallest(
+            MAX_REPORTED_PARTITION_KEYS, failed.get_partition_keys()
+        )
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.ERROR,
             metadata={
                 "failed_partitions": MetadataValue.int(count),
-                "sample": MetadataValue.json(keys[:MAX_REPORTED_PARTITION_KEYS]),
-                "sample_truncated": MetadataValue.bool(
-                    count > MAX_REPORTED_PARTITION_KEYS
-                ),
-                "recovery": MetadataValue.md(
-                    "Nothing retries these automatically -- the automation "
-                    "condition spent its one retry when they first failed, and "
-                    "only an upstream change, a code version change or a manual "
-                    "re-materialization will ask for them again. Fix the cause, "
-                    "then re-materialize the listed partitions."
-                ),
+                "sample": MetadataValue.json(sample),
+                "sample_truncated": MetadataValue.bool(truncated),
+                "recovery": MetadataValue.md(_recovery_text(count, truncated)),
             },
         )
 

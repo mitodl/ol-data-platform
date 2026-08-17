@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import sentry_sdk
 from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
@@ -13,6 +14,7 @@ from data_platform.definitions import (
     MAX_SLACK_TEXT_LENGTH,
     RETRY_NUMBER_TAG,
     asset_check_failure_message,
+    capture_run_failure_to_sentry,
     collect_new_check_failures,
     dagster_url,
     defs,
@@ -29,12 +31,44 @@ from data_platform.definitions import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.sentry import PARTITION_NAME_TAG
+from sentry_sdk.transport import Transport
 
 ERROR = AssetCheckSeverity.ERROR
 WARN = AssetCheckSeverity.WARN
 CODE_LOCATION = "edxorg"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+class RecordingTransport(Transport):
+    """Stands in for the Sentry HTTP transport and keeps every event."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.envelopes: list[Any] = []
+
+    def capture_envelope(self, envelope: Any) -> None:
+        self.envelopes.append(envelope)
+
+    def events(self) -> list[dict[str, Any]]:
+        return [
+            item.payload.json
+            for envelope in self.envelopes
+            for item in envelope.items
+            if item.headers.get("type") == "event"
+        ]
+
+
+@pytest.fixture
+def recorded_events() -> RecordingTransport:
+    """Initialize Sentry against a recording transport for one test.
+
+    capture_run_failure_to_sentry no-ops unless a client is active, so the
+    tests that assert on its output have to give it one.
+    """
+    transport = RecordingTransport()
+    sentry_sdk.init(dsn="https://key@example.ingest.sentry.io/1", transport=transport)
+    return transport
 
 
 def _origin(location_name: str | None) -> Any:
@@ -213,18 +247,34 @@ def test_sensor_fingerprint_names_the_location_that_broke() -> None:
     assert sentry_fingerprint(context)[1] == "lakehouse"
 
 
-def test_the_sensor_tags_the_partition_like_the_hook_does() -> None:
+def test_the_sensor_tags_the_partition_like_the_hook_does(
+    recorded_events: RecordingTransport,
+) -> None:
     """Both paths read the same run tag, so a partitioned failure is findable
     whichever one reported it.
+
+    Asserts on the event capture_run_failure_to_sentry actually emitted. An
+    earlier version of this test called a local helper that re-implemented the
+    production tag lookup, so it would have passed with the tag removed
+    entirely.
     """
-    run = _run(**{PARTITION_NAME_TAG: "course-v1:MITx+6.002x+2T2024"})
+    context = _context([_step_failure("some_model", "boom")])
+    context.dagster_run.tags[PARTITION_NAME_TAG] = "course-v1:MITx+6.002x+2T2024"
 
-    assert _partition_of(run) == "course-v1:MITx+6.002x+2T2024"
+    capture_run_failure_to_sentry(context)
+
+    (event,) = recorded_events.events()
+    assert event["tags"]["dagster_partition"] == "course-v1:MITx+6.002x+2T2024"
 
 
-def test_an_unpartitioned_run_is_tagged_none() -> None:
+def test_an_unpartitioned_run_is_tagged_none(
+    recorded_events: RecordingTransport,
+) -> None:
     """Matches the hook's fallback, so the two are one Sentry search."""
-    assert _partition_of(_run()) == "none"
+    capture_run_failure_to_sentry(_context([_step_failure("some_model", "boom")]))
+
+    (event,) = recorded_events.events()
+    assert event["tags"]["dagster_partition"] == "none"
 
 
 def test_sensor_fingerprint_tolerates_a_run_with_no_origin() -> None:
