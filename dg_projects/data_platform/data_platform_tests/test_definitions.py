@@ -28,6 +28,7 @@ from data_platform.definitions import (
     truncate_text,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.sentry import PARTITION_NAME_TAG
 
 ERROR = AssetCheckSeverity.ERROR
 WARN = AssetCheckSeverity.WARN
@@ -54,6 +55,11 @@ def _run(location: str | None = CODE_LOCATION, **tags: str) -> Any:
         job_name="a_job",
         remote_job_origin=_origin(location),
     )
+
+
+def _partition_of(run: Any) -> str:
+    """Return what capture_run_failure_to_sentry tags as dagster_partition."""
+    return run.tags.get(PARTITION_NAME_TAG, "none")
 
 
 def _context(
@@ -205,6 +211,20 @@ def test_sensor_fingerprint_names_the_location_that_broke() -> None:
     context = _context([_step_failure("some_model", "boom")], location="lakehouse")
 
     assert sentry_fingerprint(context)[1] == "lakehouse"
+
+
+def test_the_sensor_tags_the_partition_like_the_hook_does() -> None:
+    """Both paths read the same run tag, so a partitioned failure is findable
+    whichever one reported it.
+    """
+    run = _run(**{PARTITION_NAME_TAG: "course-v1:MITx+6.002x+2T2024"})
+
+    assert _partition_of(run) == "course-v1:MITx+6.002x+2T2024"
+
+
+def test_an_unpartitioned_run_is_tagged_none() -> None:
+    """Matches the hook's fallback, so the two are one Sentry search."""
+    assert _partition_of(_run()) == "none"
 
 
 def test_sensor_fingerprint_tolerates_a_run_with_no_origin() -> None:

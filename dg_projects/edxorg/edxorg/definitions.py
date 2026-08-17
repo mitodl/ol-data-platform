@@ -26,6 +26,10 @@ from ol_orchestrate.io_managers.filepath import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
+from ol_orchestrate.lib.failed_partitions import (
+    build_failed_partition_checks,
+    failed_partition_check_schedule,
+)
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
@@ -246,6 +250,17 @@ sensor_list = [
 ]
 
 # Create unified definitions
+# Group A lives here: these are the partitions that sit silently in a failed
+# state once the bounded retry has been spent, which is what the inventory
+# checks exist to surface.
+failed_partition_checks = build_failed_partition_checks(
+    [
+        extract_edxorg_courserun_metadata,
+        flatten_edxorg_course_structure,
+        edxorg_course_content_webhook,
+    ]
+)
+
 defs = Definitions(
     resources={
         "io_manager": FileObjectIOManager(
@@ -296,5 +311,9 @@ defs = Definitions(
             *edxorg_db_table_specs,
         ]
     ),
-    schedules=[edxorg_api_daily_schedule],
+    asset_checks=failed_partition_checks,
+    schedules=[
+        edxorg_api_daily_schedule,
+        failed_partition_check_schedule(failed_partition_checks),
+    ],
 )

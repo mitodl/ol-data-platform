@@ -38,6 +38,7 @@ from dagster import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.sentry import (
     INTERRUPTION_ERRORS,
+    PARTITION_NAME_TAG,
     failure_fingerprint,
     init_sentry,
 )
@@ -280,6 +281,10 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         scope.set_tag("dagster_step", step_key)
         scope.set_tag("dagster_run_id", run.run_id)
         scope.set_tag("dagster_code_location", code_location_of(run) or "unknown")
+        # Matches the hook's tag, which reads the same run tag. Without it a
+        # partitioned asset's issue names everything except the one identifier
+        # you need to go and look at the failure.
+        scope.set_tag("dagster_partition", run.tags.get(PARTITION_NAME_TAG, "none"))
         scope.set_tag("captured_by", "sensor")
         scope.set_context(
             "dagster_run",

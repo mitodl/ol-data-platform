@@ -36,6 +36,11 @@ SENTRY_FLUSH_TIMEOUT_SECONDS = 5.0
 # still re-tags -- see init_sentry.
 _initialized_location: str | None = None
 
+# Dagster's own run tag. Hardcoded rather than imported: the constant lives in
+# the private dagster._core.storage.tags, but the tag string is stable and
+# documented.
+PARTITION_NAME_TAG = "dagster/partition"
+
 # A run worker that receives SIGTERM -- a deploy rolling the deployment, a node
 # draining, a pod evicted -- raises this on its way out. It is the process being
 # taken away, not the code being wrong, and there is nothing in the traceback
@@ -76,6 +81,24 @@ def drop_interruptions(
 def current_code_location() -> str | None:
     """Return the code location this process was initialized for, if any."""
     return _initialized_location
+
+
+def partition_key_of(context: HookContext) -> str:
+    """Return the partition this step ran for, or ``none``.
+
+    Deliberately a tag rather than context: for a partitioned asset "which
+    partitions are broken" is the whole question, and an issue naming the job,
+    the step and the run but not the partition cannot answer it without opening
+    runs one at a time.
+
+    ``HookContext`` exposes no partition of its own, so this reads the run tag
+    Dagster stamps on every partitioned run -- one extra instance read on a path
+    that is already about to write to Sentry and block on a flush.
+    """
+    run = context.instance.get_run_by_id(context.run_id)
+    if run is None:
+        return "unknown"
+    return run.tags.get(PARTITION_NAME_TAG, "none")
 
 
 def init_sentry(code_location: str) -> bool:
@@ -165,6 +188,7 @@ def capture_exception_to_sentry(context: HookContext) -> None:
         scope.set_tag("dagster_job", context.job_name)
         scope.set_tag("dagster_step", context.step_key)
         scope.set_tag("dagster_run_id", context.run_id)
+        scope.set_tag("dagster_partition", partition_key_of(context))
         scope.set_tag("captured_by", "hook")
         # Group by the step that broke rather than by traceback text, so a
         # recurring failure of one dbt model stays a single issue.
