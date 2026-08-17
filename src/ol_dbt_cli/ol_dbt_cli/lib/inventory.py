@@ -46,13 +46,20 @@ class Unit:
     def key(self) -> str:
         return f"{self.data.get('deployment', '?')}/{self.data.get('layer', '?')}"
 
+    # Both accessors tolerate the wrong type rather than assuming the schema has
+    # already passed: they are read while reporting on units that failed it, and
+    # a hand-edited `tables: 3` should produce a schema error, not a TypeError.
+
     @property
     def tables(self) -> list[dict[str, Any]]:
-        return self.data.get("tables") or []
+        tables = self.data.get("tables")
+        return tables if isinstance(tables, list) else []
 
     @property
     def connections(self) -> list[dict[str, Any]]:
-        return (self.data.get("airbyte") or {}).get("connections") or []
+        airbyte = self.data.get("airbyte")
+        connections = airbyte.get("connections") if isinstance(airbyte, dict) else None
+        return connections if isinstance(connections, list) else []
 
 
 @dataclass

@@ -66,7 +66,8 @@ def validate(
     try:
         units = validate_inventory(inventory_dir, report)
     except FileNotFoundError as error:
-        err_console.print(f"[bold red]{error}")
+        # The message carries a filesystem path, which may contain brackets.
+        err_console.print(f"[bold red]{escape(str(error))}")
         sys.exit(1)
 
     if output_format == "json":

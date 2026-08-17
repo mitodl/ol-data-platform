@@ -288,6 +288,14 @@ class TestCrossUnit:
         report = _run(inventory)
         assert "is also declared by" in _messages(report)
 
+    def test_a_scalar_tables_field_is_a_schema_error_not_a_crash(self, inventory: Path) -> None:
+        # Malformed units are still read while reporting, so the accessors have
+        # to tolerate the wrong type rather than assume the schema passed.
+        _mutate(inventory, "mitxonline__mysql", APP_UNIT, tables=3)
+        report = _run(inventory)
+        assert report.errors
+        assert "tables" in _messages(report)
+
     def test_malformed_units_do_not_masquerade_as_duplicate_keys(self, inventory: Path) -> None:
         # Two units missing `deployment` both key as `?/?`. Reporting that as a
         # duplicate key blames the wrong thing — the shape errors are the finding.
