@@ -306,7 +306,9 @@ def _check_cross_unit(units: list[Unit], report: ValidationReport) -> None:
                 unit.key,
                 f"(deployment, layer) is already defined by {seen_keys[unit.key].name}",
             )
-        seen_keys[unit.key] = unit.path
+        # setdefault, not assignment: with three units sharing a key, the third
+        # should point at the original, not at the second duplicate.
+        seen_keys.setdefault(unit.key, unit.path)
         for table in unit.tables:
             raw_table = table.get("raw_table", "")
             if raw_table in seen_tables:
@@ -316,7 +318,7 @@ def _check_cross_unit(units: list[Unit], report: ValidationReport) -> None:
                     unit.key,
                     f"{raw_table} is also declared by {seen_tables[raw_table]}",
                 )
-            seen_tables[raw_table] = unit.key
+            seen_tables.setdefault(raw_table, unit.key)
 
 
 def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Unit]:
