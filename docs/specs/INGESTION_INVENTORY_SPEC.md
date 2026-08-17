@@ -16,7 +16,7 @@ is the human source of truth, and that the inventory is a normal PR-reviewed fil
 check. RFC 12711 §3 fixed the key and the per-environment `strategies` map. This document
 specifies the parts neither settled: what an entry contains below the unit level, where the
 file lives, how it crosses the repo boundary into Pulumi, what generates what, and how the
-first version of the file gets built without hand-transcribing 372 table declarations.
+first version of the file gets built without hand-transcribing 374 table declarations.
 
 It does not revisit those decisions, and it does not cover the dlt cutover itself (RFC 12319
 phase 2, strictly sequenced after this lands).
@@ -30,7 +30,7 @@ Each of these invalidates an obvious design, so they come before the schema rath
 ### 1.1 Raw table names are not positionally parseable
 
 The natural shortcut — derive `(deployment, layer)` from the `raw__<deployment>__<layer>__…`
-table name — does not work. Across the 372 raw tables declared in `src/ol_dbt/models/**/_*sources.yml`
+table name — does not work. Across the 374 raw tables declared in `src/ol_dbt/models/**/_*sources.yml`
 there are 23 distinct two-segment prefixes with at least four incompatible shapes:
 
 | Prefix | Shape | Tables |
@@ -95,7 +95,11 @@ entirely by generating the interval map from the inventory.
 
 ### 1.4 dbt sources are a projection of ingestion, not a census of it
 
-The 17 sources files declare 372 raw tables. Production raw holds ~2,090 (2026-08-05 audit;
+The 17 sources files declare 374 raw tables — reproduce with
+`rg --no-filename -o '^\s*- name: (raw__[A-Za-z0-9_]+)$' -r '$1' -g '_*sources.yml' src/ol_dbt/models | sort -u | wc -l`.
+The mixed-case Salesforce tables mean a `[a-z0-9_]` character class undercounts by two.
+`_b2b_analytics__sources.yml` and `_reporting__sources.yml` contribute nothing here: they
+declare no `raw__*` tables at all. Production raw holds ~2,090 (2026-08-05 audit;
 QA holds 2,738). The inventory is a statement about *what is loaded*, so it is roughly 5×
 larger than what dbt declares, and generating dbt source YAML for all of it would bury the
 curated column descriptions and trip the undocumented-column gate added in #2555.
@@ -173,7 +177,8 @@ airbyte:                          # required iff loader == airbyte; dropped at c
   connections:                    # a LIST — one unit can have several (§3.5)
     - name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
       status: active              # active | inactive — §3.6
-      sync_interval_hours: 12     # per connection, not per unit (§3.5)
+      sync_interval_hours: 12     # per connection (§3.5); drives the DAGSTER
+                                  # schedule only — Airbyte renders as `manual`
       streams: [assessment_assessment, …]             # which tables this one carries
   source_kind: source-postgres
   replication_method: xmin        # xmin | cursor | cdc  — see §3.4
@@ -260,6 +265,13 @@ interval map runs the bulk Open edX connections at 12h and the history ones sepa
 partitioned across them by the connection's `streams` list. **This closes open question 3**,
 which asked whether cadence was a unit or table property: it is neither — it is a property of
 the connection, and the connection is the thing config-as-code creates.
+
+**`sync_interval_hours` drives the Dagster schedule and nothing else.** The renderer emits
+`schedule = { schedule_type = "manual" }` on every `airbyte_connection`, unconditionally.
+Airbyte holding its own cron as well is the double-scheduling §6.4 warns about, and the
+measured state confirms manual is today's reality: zero of 43 connections carry an Airbyte
+cron (§8.1). Rendering the cadence into both places would create the problem this field exists
+to describe.
 
 ### 3.6 Paused connections are inventory data, not absences
 
@@ -445,15 +457,29 @@ name, validates configuration against the connector's JSONSchema at plan time, a
 sensitive from non-sensitive values so diffs stay readable (the whole `configuration` attribute
 is otherwise marked sensitive and shows as an opaque blob).
 
-Pin `connector_version` explicitly. An unpinned data source resolves "latest", which silently
-couples every plan to whatever Airbyte published that morning — and connector upgrades are
-exactly the kind of change that must be a reviewed diff here, given 3.8's xmin refusal (§3.4).
+Pin `connector_version` explicitly, but be precise about what that buys: it fixes the
+**registry schema the configuration is validated against**, so an unpinned data source
+validates against whatever Airbyte published that morning. It does **not** govern the
+connector version actually running in the workspace — `airbyte_source` receives only
+`definition_id` and `configuration`, and neither carries an image tag.
+
+Managing the deployed version is a separate resource: `airbyte_source_definition` /
+`airbyte_destination_definition`, whose `docker_image_tag` is required. Until those are under
+Pulumi, a connector upgrade is still an unreviewed change made in the Airbyte UI — which
+matters more than usual here, since source-postgres 3.8 is exactly the upgrade that turns
+xmin from working into a hard failure (§3.4). Bringing the definitions under management is
+worth doing in step 5, and is called out there.
 
 Connection streams map onto the inventory almost one-to-one: `configurations.streams[]` takes
-`name`, `sync_mode` (one of `full_refresh_overwrite`, `full_refresh_append`,
+`name`, `namespace`, `sync_mode` (one of `full_refresh_overwrite`, `full_refresh_append`,
 `incremental_append`, `incremental_deduped_history`, …), `cursor_field` (list),
 `primary_key` (list of lists), and `selected_fields`. The inventory's `excluded_columns` is
 rendered as the complement into `selected_fields`.
+
+`namespace` is not optional in practice: 790 of the 1,518 configured streams carry one
+(`public`, `edxapp`, `forum`, `edxapp_csmh`, `edx_notes_api`, …). A render that omits it
+cannot reproduce the imported connection, so §6.4's empty-preview gate would never pass — and
+it is also the only thing distinguishing equal table names in two schemas of one source.
 
 ### 6.3 The replacement hazard, and the apply gate
 
@@ -553,7 +579,7 @@ ol-infrastructure; 7 closes the loop.
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
 | 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
 | 4 | CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes |
-| 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
+| 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection — plus `airbyte_source_definition`/`airbyte_destination_definition`, so the deployed `docker_image_tag` is a reviewed diff rather than a UI click (§6.2) | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
 | 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |
 | 7 | Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5) | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2) |
 | 8 | Scheduled drift check: dump the live workspace, diff against the inventory, report differences (§4) | A connection edited in the UI is reported within a day |

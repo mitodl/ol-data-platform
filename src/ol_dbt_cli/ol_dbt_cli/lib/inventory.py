@@ -297,6 +297,7 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
     validator = _load_schema(inventory_dir)
     units = load_units(inventory_dir)
 
+    well_formed = []
     for unit in units:
         if not _check_shape(unit, validator, report):
             # Later rules index into fields the schema just proved absent.
@@ -306,6 +307,9 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
         _check_loader_block(unit, report)
         _check_tables(unit, report)
         _check_connections(unit, report)
+        well_formed.append(unit)
 
-    _check_cross_unit(units, report)
+    # Only well-formed units: two units missing `deployment` both key as `?/?`,
+    # and reporting that as a duplicate key blames the wrong thing.
+    _check_cross_unit(well_formed, report)
     return units

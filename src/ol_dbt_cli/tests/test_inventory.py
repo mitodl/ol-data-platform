@@ -288,6 +288,17 @@ class TestCrossUnit:
         report = _run(inventory)
         assert "is also declared by" in _messages(report)
 
+    def test_malformed_units_do_not_masquerade_as_duplicate_keys(self, inventory: Path) -> None:
+        # Two units missing `deployment` both key as `?/?`. Reporting that as a
+        # duplicate key blames the wrong thing — the shape errors are the finding.
+        for name in ("broken_one", "broken_two"):
+            broken = copy.deepcopy(DLT_UNIT)
+            del broken["deployment"]
+            _write(inventory, name, broken)
+        report = _run(inventory)
+        assert "already defined by" not in _messages(report)
+        assert "'deployment' is a required property" in _messages(report)
+
     def test_duplicate_unit_key_is_rejected(self, inventory: Path) -> None:
         clone = copy.deepcopy(DLT_UNIT)
         clone["table_prefix"] = "raw__edxorg__discovery__"

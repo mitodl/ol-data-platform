@@ -126,6 +126,11 @@
             "minLength": 1,
             "description": "The stream name at the source."
           },
+          "namespace": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The stream's source namespace (schema/database), e.g. `public` or `edxapp`. Required whenever the live connection sets one — 790 of 1,518 streams do — because `configurations.streams[]` carries it and an import that omits it cannot produce a clean preview (§6.4). It is also what disambiguates equal table names in two schemas."
+          },
           "raw_table": {
             "type": "string",
             "pattern": "^raw__[A-Za-z0-9_]+$"

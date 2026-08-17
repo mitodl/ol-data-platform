@@ -283,7 +283,10 @@ def dump(  # noqa: PLR0913
                     params={"sourceId": source_id, "destinationId": destination_id},
                 )
                 if response.is_success:
-                    schemas[source_id] = response.json()
+                    # Keyed by the pair, not the source: Salesforce and Mailgun
+                    # each feed two destinations, so a source-only key would keep
+                    # whichever came last.
+                    schemas[f"{source_id}:{destination_id}"] = response.json()
                 _progress(
                     f"    [{index}/{len(pairs)}] {name} → {response.status_code} "
                     f"in {time.monotonic() - started:.1f}s"
@@ -569,7 +572,17 @@ def _finding_c_dagster(snapshot: dict[str, Any]) -> list[str]:
             connection
         )
 
-    derived = {dagster_group_name(c["name"]): c["name"] for c in selected}
+    # Several connections can derive the same group name — the derivation strips
+    # every non-alphanumeric, so "Foo-Bar" and "Foo Bar" collide. That is a
+    # production problem, not just an audit one: Dagster would collapse both into
+    # one asset group. Collect names per group so a collision is reported rather
+    # than silently overwritten.
+    derived: dict[str, list[str]] = {}
+    for connection in selected:
+        derived.setdefault(dagster_group_name(connection["name"]), []).append(
+            connection["name"]
+        )
+    collisions = {group: names for group, names in derived.items() if len(names) > 1}
     missing_from_map = sorted(set(derived) - set(interval_map))
     dead_entries = sorted(set(interval_map) - set(derived))
 
@@ -591,7 +604,17 @@ def _finding_c_dagster(snapshot: dict[str, Any]) -> list[str]:
             f"- **{len(dead_entries)} interval-map entry(ies) match no "
             "connection** → dead config."
         ),
+        (
+            f"- **{len(collisions)} group name(s) derived from more than one "
+            "connection** → Dagster collapses them into one asset group."
+        ),
     ]
+    if collisions:
+        lines += ["", "Group-name collisions:"]
+        lines += [
+            f"- `{group}` ← {', '.join(names)}"
+            for group, names in sorted(collisions.items())
+        ]
     if dropped:
         lines += ["", "Connections the selector drops:"]
         lines += [f"- {c['name']}" for c in dropped]
@@ -600,7 +623,9 @@ def _finding_c_dagster(snapshot: dict[str, Any]) -> list[str]:
             "",
             "Derived group names absent from the interval map (defaulting to 24h):",
         ]
-        lines += [f"- `{group}` ← {derived[group]}" for group in missing_from_map]
+        lines += [
+            f"- `{group}` ← {', '.join(derived[group])}" for group in missing_from_map
+        ]
     if dead_entries:
         lines += ["", "Interval-map entries with no matching connection:"]
         lines += [f"- `{group}` ({interval_map[group]}h)" for group in dead_entries]
@@ -928,6 +953,12 @@ def render(  # noqa: C901, PLR0912, PLR0915
                     "raw_table": raw_table,
                     "sync_mode": stream.get("syncMode"),
                 }
+                # 790 of 1,518 streams carry a namespace (public, edxapp,
+                # forum, …). Dropping it makes the rendered config unable to
+                # reproduce the imported connection, so the empty-preview gate
+                # would never pass.
+                if stream.get("namespace"):
+                    entry["namespace"] = stream["namespace"]
                 if stream.get("cursorField"):
                     entry["cursor_field"] = stream["cursorField"]
                 if stream.get("primaryKey"):
