@@ -5,7 +5,6 @@ from dagster import (
     ConfigurableIOManager,
     DagsterEventType,
     EventRecordsFilter,
-    Failure,
     InputContext,
     MetadataValue,
     OutputContext,
@@ -16,17 +15,19 @@ from pydantic import PrivateAttr
 from s3fs import S3FileSystem
 from upath import UPath
 
+from ol_orchestrate.lib.failures import PermanentFailure
 from ol_orchestrate.resources.secrets.vault import Vault
 
 
-class UpstreamObjectUnavailable(Failure):
+class UpstreamObjectUnavailable(PermanentFailure):
     """The upstream materialization does not point at a readable object.
 
-    A distinct class rather than a bare ``Failure`` so the three ways this
-    happens -- no materialization, no path in its metadata, a path whose object
-    is gone -- group as one Sentry issue naming the key, instead of dissolving
-    into whatever the reader raised downstream. Nothing a rerun does changes
-    any of them, which is why they carry ``allow_retries=False``.
+    A distinct class rather than a bare ``PermanentFailure`` so the three ways
+    this happens -- no materialization, no path in its metadata, a path whose
+    object is gone -- group as one Sentry issue naming the key, instead of
+    dissolving into whatever the reader raised downstream. Nothing a rerun does
+    changes any of them, which is why they carry ``allow_retries=False`` and
+    stop ``run_retries`` via the ``stop_run_retries`` hook.
     """
 
 

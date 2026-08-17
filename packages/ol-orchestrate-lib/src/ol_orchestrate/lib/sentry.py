@@ -179,7 +179,12 @@ def capture_exception_to_sentry(context: HookContext) -> None:
 
 
 def with_sentry_hooks(assets: Sequence[Any]) -> list[Any]:
-    """Attach the Sentry failure hook to every AssetsDefinition in ``assets``.
+    """Attach only the Sentry failure hook to every AssetsDefinition.
+
+    Prefer ``ol_orchestrate.lib.failures.with_failure_hooks``, which attaches
+    this alongside the hook that stops ``run_retries`` re-running a permanent
+    failure. This narrower form exists for assets that deliberately want
+    reporting without that retry behaviour.
 
     Hooks are attached to the asset rather than to a job on purpose. Job-level
     hooks only fire for runs launched from a job, which would miss everything

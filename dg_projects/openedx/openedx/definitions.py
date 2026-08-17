@@ -18,7 +18,8 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
@@ -205,7 +206,7 @@ def _create_deployment_repository(
 
     return create_repository_using_definitions_args(
         name=f"{deployment_name}_openedx",
-        assets=with_sentry_hooks(deployment_defs.assets or []),
+        assets=with_failure_hooks(deployment_defs.assets or []),
         sensors=deployment_defs.sensors,
         resources=deployment_defs.resources,
     )

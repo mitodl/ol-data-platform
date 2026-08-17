@@ -26,7 +26,8 @@ from ol_orchestrate.io_managers.filepath import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
-from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
@@ -280,7 +281,7 @@ defs = Definitions(
         sync_edxorg_program_reports,
         gcs_sync_job,
     ],
-    assets=with_sentry_hooks(
+    assets=with_failure_hooks(
         [
             edxorg_raw_data_archive.to_source_asset(),
             edxorg_raw_tracking_logs.to_source_asset(),

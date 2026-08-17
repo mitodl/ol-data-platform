@@ -10,6 +10,7 @@ from dagster import (
     AssetOut,
     DataVersion,
     DynamicPartitionsDefinition,
+    Failure,
     Output,
     asset,
     multi_asset,
@@ -19,6 +20,7 @@ from ol_orchestrate.lib.constants import (
     EXPORT_TYPE_COMMON_CARTRIDGE,
     EXPORT_TYPE_EXTENSIONS,
 )
+from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.utils import compute_zip_content_hash
 
@@ -129,9 +131,21 @@ def export_course_content(context: AssetExecutionContext):
             )
             break
         elif export_status["workflow_state"] in ["failed", "error"]:
-            message = f"Export failed for course {course_id}"
-            context.log.error(message)
-            raise Exception(message)  # noqa: TRY002
+            context.log.error("Export failed for course %s", course_id)
+            # Canvas has reached a terminal state for this export. Asking again
+            # produces the same state, so this must not go back on the retry
+            # treadmill.
+            message = (
+                "Canvas reported a terminal failure state for this course "
+                "export. Rerunning will not change it."
+            )
+            raise permanent_failure(
+                message,
+                metadata={
+                    "course_id": course_id,
+                    "workflow_state": export_status["workflow_state"],
+                },
+            )
         else:
             context.log.info(
                 "Waiting for course content export (state: %s)",
@@ -140,9 +154,23 @@ def export_course_content(context: AssetExecutionContext):
             retry_count += 1
             time.sleep(120)
     else:
-        message = f"Course content export timed out for {course_id}"
-        context.log.error(message)
-        raise Exception(message)  # noqa: TRY002
+        context.log.error("Course content export timed out for %s", course_id)
+        # Deliberately NOT a permanent_failure. A slow export is the ordinary
+        # reason for this, and a later attempt can genuinely succeed -- the
+        # problem with DAGSTER-7 was never that it retried, it was that the
+        # retry was unbounded. The M1 cap in upstream_or_code_changes() is what
+        # bounds it; claiming permanence here would suppress a real retry.
+        raise Failure(
+            description=(
+                "Canvas did not finish the course content export within the "
+                "polling window. A later attempt may succeed."
+            ),
+            metadata={
+                "course_id": course_id,
+                "polling_attempts": retry_count,
+                "last_workflow_state": export_status["workflow_state"],
+            },
+        )
 
     course_content_path = Path(f"{course_id}_course_content.{extension}")
     downloaded_path = context.resources.canvas_api.client.download_course_export(

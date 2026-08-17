@@ -27,7 +27,8 @@ from dagster_dbt import (
     DbtCliResource,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
@@ -455,7 +456,7 @@ dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(
 )
 
 defs = Definitions(
-    assets=with_sentry_hooks(
+    assets=with_failure_hooks(
         [
             *with_source_code_references([full_dbt_project]),
             *with_source_code_references([starrocks_dbt_assets]),

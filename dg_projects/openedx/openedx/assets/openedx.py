@@ -24,6 +24,7 @@ from dagster import (
     AssetOut,
     DataVersion,
     DataVersionsByPartition,
+    MetadataValue,
     OpExecutionContext,
     Output,
     PartitionsDefinition,
@@ -35,6 +36,7 @@ from dagster import (
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
     CourseExportOutcome,
@@ -433,11 +435,23 @@ def course_xml(context: AssetExecutionContext):
                 course: last_seen_status.get(course)
                 for course in sorted(failed_exports)
             }
+            # Studio reporting Failed is a terminal answer about this version of
+            # the course, not a hiccup -- re-asking returns the same thing until
+            # the course itself changes. Raised as a bare Exception it was never
+            # classified at all, so run_retries and the automation condition both
+            # kept re-running it: 2,587 events on DAGSTER-6.
             errmsg = (
-                f"Unable to export the course XML for {course_key}. "
-                f"Studio reported: {reported}"
+                f"Studio could not export the course XML for {course_key}, and "
+                "reported a terminal failure state. Rerunning will not change "
+                "that; the course itself has to be fixed or republished."
             )
-            raise Exception(errmsg)  # noqa: TRY002
+            raise permanent_failure(
+                errmsg,
+                metadata={
+                    "course_key": str(course_key),
+                    "studio_status": MetadataValue.json(reported),
+                },
+            )
         s3_location = exported_courses["upload_urls"][course_key]
         context.log.debug("Attempting to download the course XML from %s", s3_location)
         s3_path = urlparse(s3_location)
