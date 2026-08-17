@@ -145,6 +145,24 @@ WAREHOUSE_ENV_BY_DAGSTER_ENV: dict[str, str] = {
 _WAREHOUSE_SCHEMA = re.compile(r"^ol_warehouse_(?P<env>[a-z]+)_(?P<layer>.+)$")
 
 
+# Share of tables that may fail before the nightly maintenance asset itself
+# fails. Above this it is a systemic problem -- broken Trino credentials, a Glue
+# outage -- rather than a handful of awkward tables.
+MAINTENANCE_FAILURE_RATE = 0.05
+
+
+def maintenance_failure_threshold(tables_attempted: int) -> int:
+    """Return how many failed tables it takes to fail the maintenance asset.
+
+    ``floor(5%) + 1`` is the first count that is genuinely *more* than 5%.
+    ``max(1, int(5%))`` was not: at 21 tables it tripped on a single failure
+    (4.8%) and at 100 it tripped on exactly 5. The ``+ 1`` also makes the floor
+    of one fall out naturally, since a single failure out of twenty or fewer is
+    already over the line.
+    """
+    return int(tables_attempted * MAINTENANCE_FAILURE_RATE) + 1
+
+
 def warehouse_env_for(dagster_env: str) -> str:
     """Return the warehouse environment ``dagster_env`` is allowed to maintain."""
     return WAREHOUSE_ENV_BY_DAGSTER_ENV.get(dagster_env, "qa")

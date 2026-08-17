@@ -56,6 +56,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     get_glue_catalog,
     load_maintenance_configs_from_manifest,
     load_raw_layer_maintenance_work,
+    maintenance_failure_threshold,
     non_dbt_singleton_tables,
     raw_config_for_table,
     remove_orphan_files,
@@ -326,7 +327,7 @@ def iceberg_dbt_layer_maintenance(
     # that raised outright -- under a total outage that is zero, and a threshold
     # against zero never trips.
     if failures:
-        failure_threshold = max(1, int(tables_attempted * 0.05))
+        failure_threshold = maintenance_failure_threshold(tables_attempted)
         if len(failed_tables) >= failure_threshold:
             context.log.error(
                 "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",

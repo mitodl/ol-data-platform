@@ -9,6 +9,7 @@ import pytest
 from ol_orchestrate.lib.iceberg_maintenance import (
     RAW_LAYER_GROUP_CONFIGS,
     load_maintenance_configs_from_manifest,
+    maintenance_failure_threshold,
     non_dbt_singleton_tables,
     raw_config_for_table,
     scope_schema_to_env,
@@ -407,3 +408,53 @@ class TestEnvironmentScoping:
         assert [t.schema_name for t in non_dbt_singleton_tables("qa")] == [
             "ol_warehouse_qa_reporting"
         ]
+
+
+# ── Failure threshold ─────────────────────────────────────────────────────────
+
+
+class TestMaintenanceFailureThreshold:
+    """The asset's contract is "fail if more than 5% of tables failed".
+
+    Getting that boundary wrong in the tripping direction turns nightly
+    maintenance into a nightly false alarm, which is how an alerting channel
+    stops being read.
+    """
+
+    @pytest.mark.parametrize(
+        ("tables_attempted", "expected"),
+        [
+            # The two boundaries that were wrong under max(1, int(5%)): one
+            # failure in 21 is 4.8%, and exactly five in 100 is 5% -- neither is
+            # *more* than 5%.
+            (21, 2),
+            (100, 6),
+            # A single failure is over the line for any small set.
+            (1, 1),
+            (20, 2),
+            # The real fleet size.
+            (628, 32),
+        ],
+    )
+    def test_the_first_count_over_five_percent(
+        self, tables_attempted: int, expected: int
+    ) -> None:
+        assert maintenance_failure_threshold(tables_attempted) == expected
+
+    @pytest.mark.parametrize("tables_attempted", [1, 20, 21, 99, 100, 628, 1300])
+    def test_the_threshold_is_always_genuinely_over_five_percent(
+        self, tables_attempted: int
+    ) -> None:
+        """The property behind the table above, stated directly."""
+        threshold = maintenance_failure_threshold(tables_attempted)
+
+        assert threshold / tables_attempted > 0.05
+        assert (threshold - 1) / tables_attempted <= 0.05, (
+            "and it is the *first* such count"
+        )
+
+    def test_a_single_failure_never_slips_through(self) -> None:
+        """The floor of one is load-bearing: an empty run must not report a
+        threshold of zero and fail on nothing.
+        """
+        assert maintenance_failure_threshold(0) == 1

@@ -178,10 +178,16 @@ def test_qa_and_production_do_not_share_an_issue(
     Without it a QA-only defect and a production outage merge into one issue and
     the list cannot tell you which you are looking at.
     """
+    # Both environments set explicitly. Letting the first one inherit the
+    # process's DAGSTER_ENV makes the test a tautology when that is `ci` or
+    # `dev`, and an outright failure when it is `qa`.
+    monkeypatch.setattr(sentry_lib, "DAGSTER_ENV", "production")
     production = sentry_lib.failure_fingerprint("lakehouse", "dbt_build", "Failure")
     monkeypatch.setattr(sentry_lib, "DAGSTER_ENV", "qa")
     qa = sentry_lib.failure_fingerprint("lakehouse", "dbt_build", "Failure")
 
+    assert production[0] == "production"
+    assert qa[0] == "qa"
     assert production != qa
 
 

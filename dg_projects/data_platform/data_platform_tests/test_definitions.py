@@ -16,8 +16,10 @@ from data_platform.definitions import (
     defs,
     error_message,
     get_exception,
+    is_an_interrupted_worker,
     is_reported_by_the_run_failure_sensor,
     is_retry_of_a_reported_failure,
+    record_announcement,
     repeats_to_announce,
     sentry_fingerprint,
     truncate_text,
@@ -362,6 +364,64 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
     ]
 
 
+# ── Interrupted workers ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "cls_name", ["DagsterExecutionInterruptedError", "KeyboardInterrupt"]
+)
+def test_a_terminated_worker_is_not_reported_by_the_sensor(cls_name: str) -> None:
+    """The before_send filter cannot catch this path.
+
+    ol_orchestrate.lib.sentry.drop_interruptions reads exception.values, which
+    only an exception event has. This sensor reports through capture_message, so
+    its events carry no exception and sail past the filter -- a SIGTERM'd worker
+    was dropped on the hook path and reported on this one (DAGSTER-1R/1S/1T).
+    """
+    context = _context([_step_failure("some_model", "boom", cls_name=cls_name)])
+
+    assert is_an_interrupted_worker(context) is True
+
+
+def test_an_interruption_wrapped_by_dagster_is_still_caught() -> None:
+    """The serialized error is Dagster's wrapper with the real type below it."""
+    context = _context(
+        [
+            _step_failure(
+                "some_model",
+                "boom",
+                cls_name="DagsterExecutionStepExecutionError",
+                cause=SimpleNamespace(
+                    cls_name="DagsterExecutionInterruptedError", cause=None
+                ),
+            )
+        ]
+    )
+
+    assert is_an_interrupted_worker(context) is True
+
+
+def test_an_ordinary_failure_is_still_reported() -> None:
+    context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+
+    assert is_an_interrupted_worker(context) is False
+
+
+def test_a_run_with_no_step_failure_is_still_reported() -> None:
+    """An OOM kill or a run-monitoring reap has no step error to inspect, and is
+    exactly the case this sensor exists to catch.
+    """
+    assert is_an_interrupted_worker(_context([])) is False
+
+
+def test_a_step_failure_with_no_error_payload_is_still_reported() -> None:
+    failure = SimpleNamespace(
+        step_key="some_model", event_specific_data=SimpleNamespace()
+    )
+
+    assert is_an_interrupted_worker(_context([failure])) is False
+
+
 # ── Slack rate limiting ───────────────────────────────────────────────────────
 
 
@@ -382,17 +442,24 @@ def _instance() -> Any:
     return SimpleNamespace(run_storage=FakeKeyValueStore())
 
 
+def announce(instance: Any, key: str, now: float) -> int | None:
+    """Perform a full successful announcement: decide, then commit the window."""
+    repeats = repeats_to_announce(instance, key, now)
+    if repeats is not None:
+        record_announcement(instance, key, now)
+    return repeats
+
+
 def test_a_failure_nobody_has_seen_is_announced() -> None:
     instance = _instance()
 
-    assert repeats_to_announce(instance, "k", now := 1_000.0) == 0
-    assert instance.run_storage.values["k"] == f"{now}:0"
+    assert repeats_to_announce(instance, "k", 1_000.0) == 0
 
 
 def test_the_same_failure_repeating_is_not_announced_again() -> None:
     """~27,900 Slack messages for DAGSTER-3 alone, every one of them identical."""
     instance = _instance()
-    repeats_to_announce(instance, "k", 1_000.0)
+    announce(instance, "k", 1_000.0)
 
     assert repeats_to_announce(instance, "k", 1_060.0) is None
     assert repeats_to_announce(instance, "k", 1_120.0) is None
@@ -401,29 +468,69 @@ def test_the_same_failure_repeating_is_not_announced_again() -> None:
 def test_the_next_announcement_carries_what_it_swallowed() -> None:
     """One failure and four thousand failures are different situations."""
     instance = _instance()
-    repeats_to_announce(instance, "k", 1_000.0)
+    announce(instance, "k", 1_000.0)
     for tick in range(4):
         repeats_to_announce(instance, "k", 1_100.0 + tick)
 
-    assert repeats_to_announce(instance, "k", 1_000.0 + 31 * 60) == 4
+    assert announce(instance, "k", 1_000.0 + 31 * 60) == 4
 
 
 def test_the_count_resets_after_it_is_reported() -> None:
     instance = _instance()
-    repeats_to_announce(instance, "k", 1_000.0)
+    announce(instance, "k", 1_000.0)
     repeats_to_announce(instance, "k", 1_100.0)
     later = 1_000.0 + 31 * 60
-    repeats_to_announce(instance, "k", later)
+    announce(instance, "k", later)
 
-    assert repeats_to_announce(instance, "k", later + 31 * 60) == 0
+    assert announce(instance, "k", later + 31 * 60) == 0
 
 
 def test_distinct_failures_do_not_silence_each_other() -> None:
     """The key is the Sentry fingerprint, so two defects are two rate limits."""
     instance = _instance()
-    repeats_to_announce(instance, "one", 1_000.0)
+    announce(instance, "one", 1_000.0)
 
     assert repeats_to_announce(instance, "two", 1_000.0) == 0
+
+
+def test_deciding_to_announce_does_not_itself_open_the_window() -> None:
+    """A Slack or Vault failure must not silence the next thirty minutes.
+
+    The post is deliberately unguarded so a broken alerting path fails the tick
+    loudly. If the window opened before the post, that tick's retry would find a
+    record saying the failure had already been announced and suppress it -- and
+    every later occurrence with it, until the window expired.
+    """
+    instance = _instance()
+
+    assert repeats_to_announce(instance, "k", 1_000.0) == 0
+    assert instance.run_storage.values == {}, "nothing committed before the post"
+
+    # The tick failed and Dagster retried it.
+    assert repeats_to_announce(instance, "k", 1_060.0) == 0, "still announces"
+
+
+def test_a_failed_post_does_not_lose_the_suppressed_count() -> None:
+    """The count survives a failed retry rather than resetting to zero."""
+    instance = _instance()
+    announce(instance, "k", 1_000.0)
+    for tick in range(3):
+        repeats_to_announce(instance, "k", 1_100.0 + tick)
+
+    later = 1_000.0 + 31 * 60
+    assert repeats_to_announce(instance, "k", later) == 3, "post fails here"
+
+    assert repeats_to_announce(instance, "k", later + 60) == 3, "retry still has it"
+
+
+def test_suppressions_are_recorded_even_though_announcements_are_not() -> None:
+    """The suppress path posts nothing, so it has nothing to fail after."""
+    instance = _instance()
+    announce(instance, "k", 1_000.0)
+
+    repeats_to_announce(instance, "k", 1_060.0)
+
+    assert instance.run_storage.values["k"] == "1000.0:1"
 
 
 def test_a_suppressed_repeat_is_named_in_the_next_message() -> None:
