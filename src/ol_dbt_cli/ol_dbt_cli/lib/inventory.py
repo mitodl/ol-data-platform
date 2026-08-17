@@ -99,7 +99,12 @@ def _load_schema(inventory_dir: Path) -> Draft202012Validator:
 
 def _check_shape(unit: Unit, validator: Draft202012Validator, report: ValidationReport) -> bool:
     """Validate against the JSON Schema. Returns False if the unit is unusable."""
-    errors = sorted(validator.iter_errors(unit.data), key=lambda e: list(e.absolute_path))
+    # Paths mix property names and array indices, so stringify before sorting:
+    # comparing an int to a str raises rather than ordering.
+    errors = sorted(
+        validator.iter_errors(unit.data),
+        key=lambda e: [str(part) for part in e.absolute_path],
+    )
     for error in errors:
         location = "/".join(str(part) for part in error.absolute_path) or "(root)"
         report.add(
