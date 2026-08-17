@@ -18,27 +18,46 @@ from data_platform.definitions import (
     get_exception,
     is_reported_by_the_run_failure_sensor,
     is_retry_of_a_reported_failure,
+    repeats_to_announce,
     sentry_fingerprint,
     truncate_text,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 ERROR = AssetCheckSeverity.ERROR
 WARN = AssetCheckSeverity.WARN
+CODE_LOCATION = "edxorg"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _run(**tags: str) -> Any:
+def _origin(location_name: str | None) -> Any:
+    """Build the nesting the sensor reads a run's code location out of."""
+    if location_name is None:
+        return None
+    return SimpleNamespace(
+        repository_origin=SimpleNamespace(
+            code_location_origin=SimpleNamespace(location_name=location_name)
+        )
+    )
+
+
+def _run(location: str | None = CODE_LOCATION, **tags: str) -> Any:
     return SimpleNamespace(
         tags=tags,
         run_id="0123abcd-4567-89ef-0123-456789abcdef",
         job_name="a_job",
+        remote_job_origin=_origin(location),
     )
 
 
-def _context(step_failure_events: list[Any], failure_message: str = "") -> Any:
+def _context(
+    step_failure_events: list[Any],
+    failure_message: str = "",
+    location: str | None = CODE_LOCATION,
+) -> Any:
     return SimpleNamespace(
-        dagster_run=_run(),
+        dagster_run=_run(location=location),
         get_step_failure_events=lambda: step_failure_events,
         failure_event=SimpleNamespace(message=failure_message),
     )
@@ -150,20 +169,56 @@ def test_error_message_always_links_back_to_the_run() -> None:
 def test_sensor_fingerprint_matches_the_in_process_hook() -> None:
     """The two reporting paths must group into one Sentry issue, not two.
 
-    ol_orchestrate.lib.sentry's hook uses
-    ``[job_name, step_key, type(exception).__name__]``; a mismatch here raises a
-    duplicate issue for every single failure.
+    Both build it through ol_orchestrate.lib.sentry.failure_fingerprint; a
+    mismatch here raises a duplicate issue for every single failure.
     """
     context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
 
-    assert sentry_fingerprint(context) == ["a_job", "some_model", "ValueError"]
+    assert sentry_fingerprint(context) == [
+        DAGSTER_ENV,
+        CODE_LOCATION,
+        "some_model",
+        "ValueError",
+    ]
+
+
+def test_sensor_fingerprint_does_not_group_on_the_launch_path() -> None:
+    """DAGSTER-2C and DAGSTER-29 were one OVS failure wearing two issue numbers.
+
+    The triple used to lead with ``job_name``, so the same defect split in two
+    when one run came from the automation sensor's ``__ASSET_JOB`` and the other
+    from ``ovs_videos_webhook_job``. How a run was launched is not a property of
+    what broke.
+    """
+    context = _context([_step_failure("ovs_videos", "boom")])
+
+    assert context.dagster_run.job_name not in sentry_fingerprint(context)
+
+
+def test_sensor_fingerprint_names_the_location_that_broke() -> None:
+    """The location tag was hardcoded to this sensor's own code location."""
+    context = _context([_step_failure("some_model", "boom")], location="lakehouse")
+
+    assert sentry_fingerprint(context)[1] == "lakehouse"
+
+
+def test_sensor_fingerprint_tolerates_a_run_with_no_origin() -> None:
+    """A run submitted without a remote origin still has to group somewhere."""
+    context = _context([_step_failure("some_model", "boom")], location=None)
+
+    assert sentry_fingerprint(context)[1] == "unknown"
 
 
 def test_sensor_fingerprint_groups_process_deaths_separately() -> None:
     """No step failure means the hook never ran, so there is nothing to match."""
     context = _context([])
 
-    assert sentry_fingerprint(context) == ["a_job", "run", "run_failure"]
+    assert sentry_fingerprint(context) == [
+        DAGSTER_ENV,
+        CODE_LOCATION,
+        "run",
+        "run_failure",
+    ]
 
 
 def test_sensor_fingerprint_survives_a_missing_error_payload() -> None:
@@ -172,7 +227,12 @@ def test_sensor_fingerprint_survives_a_missing_error_payload() -> None:
     )
     context = _context([failure])
 
-    assert sentry_fingerprint(context) == ["a_job", "some_model", "run_failure"]
+    assert sentry_fingerprint(context) == [
+        DAGSTER_ENV,
+        CODE_LOCATION,
+        "some_model",
+        "run_failure",
+    ]
 
 
 def test_sensor_fingerprint_unwraps_dagsters_user_code_wrapper() -> None:
@@ -197,7 +257,8 @@ def test_sensor_fingerprint_unwraps_dagsters_user_code_wrapper() -> None:
     )
 
     assert sentry_fingerprint(context) == [
-        "a_job",
+        DAGSTER_ENV,
+        CODE_LOCATION,
         "extract_edxorg_courserun_metadata",
         "FileNotFoundError",
     ]
@@ -224,7 +285,7 @@ def test_sensor_fingerprint_unwraps_only_the_dagster_layer() -> None:
         ]
     )
 
-    assert sentry_fingerprint(context)[2] == "FileNotFoundError"
+    assert sentry_fingerprint(context)[3] == "FileNotFoundError"
 
 
 def test_sensor_fingerprint_keeps_a_wrapper_with_no_cause() -> None:
@@ -237,7 +298,7 @@ def test_sensor_fingerprint_keeps_a_wrapper_with_no_cause() -> None:
         ]
     )
 
-    assert sentry_fingerprint(context)[2] == "DagsterExecutionStepExecutionError"
+    assert sentry_fingerprint(context)[3] == "DagsterExecutionStepExecutionError"
 
 
 @pytest.mark.parametrize(
@@ -292,8 +353,91 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
     ]
     fingerprint = sentry_fingerprint(_context(step_failures))
 
-    assert fingerprint[2] == hook_recorded["raises_file_not_found"]
-    assert fingerprint == ["a_job", "raises_file_not_found", "FileNotFoundError"]
+    assert fingerprint[3] == hook_recorded["raises_file_not_found"]
+    assert fingerprint == [
+        DAGSTER_ENV,
+        CODE_LOCATION,
+        "raises_file_not_found",
+        "FileNotFoundError",
+    ]
+
+
+# ── Slack rate limiting ───────────────────────────────────────────────────────
+
+
+class FakeKeyValueStore:
+    """The two run-storage cursor calls the rate limiter uses."""
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    def get_cursor_values(self, keys: set[str]) -> dict[str, str]:
+        return {key: self.values[key] for key in keys if key in self.values}
+
+    def set_cursor_values(self, pairs: dict[str, str]) -> None:
+        self.values.update(pairs)
+
+
+def _instance() -> Any:
+    return SimpleNamespace(run_storage=FakeKeyValueStore())
+
+
+def test_a_failure_nobody_has_seen_is_announced() -> None:
+    instance = _instance()
+
+    assert repeats_to_announce(instance, "k", now := 1_000.0) == 0
+    assert instance.run_storage.values["k"] == f"{now}:0"
+
+
+def test_the_same_failure_repeating_is_not_announced_again() -> None:
+    """~27,900 Slack messages for DAGSTER-3 alone, every one of them identical."""
+    instance = _instance()
+    repeats_to_announce(instance, "k", 1_000.0)
+
+    assert repeats_to_announce(instance, "k", 1_060.0) is None
+    assert repeats_to_announce(instance, "k", 1_120.0) is None
+
+
+def test_the_next_announcement_carries_what_it_swallowed() -> None:
+    """One failure and four thousand failures are different situations."""
+    instance = _instance()
+    repeats_to_announce(instance, "k", 1_000.0)
+    for tick in range(4):
+        repeats_to_announce(instance, "k", 1_100.0 + tick)
+
+    assert repeats_to_announce(instance, "k", 1_000.0 + 31 * 60) == 4
+
+
+def test_the_count_resets_after_it_is_reported() -> None:
+    instance = _instance()
+    repeats_to_announce(instance, "k", 1_000.0)
+    repeats_to_announce(instance, "k", 1_100.0)
+    later = 1_000.0 + 31 * 60
+    repeats_to_announce(instance, "k", later)
+
+    assert repeats_to_announce(instance, "k", later + 31 * 60) == 0
+
+
+def test_distinct_failures_do_not_silence_each_other() -> None:
+    """The key is the Sentry fingerprint, so two defects are two rate limits."""
+    instance = _instance()
+    repeats_to_announce(instance, "one", 1_000.0)
+
+    assert repeats_to_announce(instance, "two", 1_000.0) == 0
+
+
+def test_a_suppressed_repeat_is_named_in_the_next_message() -> None:
+    blocks = error_message(
+        _context([_step_failure("some_model", "boom")]), None, suppressed_repeats=4_000
+    )
+
+    assert "4000 further failures" in _block_text(blocks)
+
+
+def test_no_repeat_block_when_there_was_nothing_to_suppress() -> None:
+    blocks = error_message(_context([_step_failure("some_model", "boom")]))
+
+    assert "further failures" not in _block_text(blocks)
 
 
 # ── dbt error extraction ──────────────────────────────────────────────────────

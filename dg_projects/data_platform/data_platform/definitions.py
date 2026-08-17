@@ -27,7 +27,7 @@ from dagster import (
     sensor,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.sentry import init_sentry
+from ol_orchestrate.lib.sentry import failure_fingerprint, init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault
 from slack_sdk import WebClient
 
@@ -186,13 +186,26 @@ def user_code_error_type(error: Any) -> str:
     return error.cls_name
 
 
+def code_location_of(run: DagsterRun) -> str | None:
+    """Which code location launched ``run``.
+
+    This sensor monitors every code location, so the location cannot be a
+    constant here the way it can inside a run worker. It used to be tagged as
+    "data_platform" for every run regardless of origin, which named the sensor's
+    own location rather than the one that broke.
+    """
+    if run.remote_job_origin is None:
+        return None
+    return run.remote_job_origin.repository_origin.code_location_origin.location_name
+
+
 def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
     """Build a fingerprint matching the one the in-process hook uses.
 
-    ol_orchestrate.lib.sentry fingerprints a step failure as
-    ``[job_name, step_key, <exception class name>]``. This has to produce the
-    identical triple for the same failure, or the two reporting paths raise two
-    Sentry issues for every failure instead of collapsing into one.
+    Both paths delegate to ol_orchestrate.lib.sentry.failure_fingerprint. They
+    have to produce the identical list for the same failure, or the two
+    reporting paths raise two Sentry issues for every failure instead of
+    collapsing into one.
 
     A run that died without any step failure event -- OOM, eviction, a run
     monitoring timeout -- has no exception class and no step, and the hook
@@ -200,16 +213,17 @@ def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
     grouping instead.
     """
     run = context.dagster_run
+    location = code_location_of(run)
     step_failures = context.get_step_failure_events()
     if not step_failures:
-        return [run.job_name, "run", "run_failure"]
+        return failure_fingerprint(location, "run", "run_failure")
 
     failure = step_failures[0]
     error = getattr(failure.event_specific_data, "error", None)
     error_type = (
         user_code_error_type(error) if error is not None else None
     ) or "run_failure"
-    return [run.job_name, failure.step_key, error_type]
+    return failure_fingerprint(location, failure.step_key, error_type)
 
 
 def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | None:
@@ -231,7 +245,7 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         scope.set_tag("dagster_job", run.job_name)
         scope.set_tag("dagster_step", step_key)
         scope.set_tag("dagster_run_id", run.run_id)
-        scope.set_tag("dagster_code_location", "data_platform")
+        scope.set_tag("dagster_code_location", code_location_of(run) or "unknown")
         scope.set_tag("captured_by", "sensor")
         scope.set_context(
             "dagster_run",
@@ -255,6 +269,7 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
 def error_message(
     context: RunFailureSensorContext,
     sentry_event_id: str | None = None,
+    suppressed_repeats: int = 0,
 ) -> list[dict[str, Any]]:
     """Format error message for Slack notification."""
 
@@ -323,6 +338,23 @@ def error_message(
         *error_details,
     ]
 
+    # The count is the difference between "an asset broke" and "an asset has
+    # been breaking on a loop since the last message", which the unbatched
+    # stream could not express except by posting thousands of times.
+    if suppressed_repeats:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f":repeat: *{suppressed_repeats} further failures* of "
+                        "this same step were suppressed since the last message."
+                    ),
+                },
+            }
+        )
+
     if sentry_event_id:
         blocks.append(
             {
@@ -348,6 +380,56 @@ def error_message(
     return blocks
 
 
+# How long one distinct failure stays announced before it is announced again.
+# The sensor fires per failed run with no ceiling, so a single broken asset on
+# the automation treadmill posted ~27,900 messages in fourteen days -- past the
+# first few, every one of them said exactly what the one before it said.
+SLACK_REPEAT_WINDOW_SECONDS = 30 * 60
+
+# Namespaced so these cannot collide with Dagster's own cursor keys in the same
+# table.
+SLACK_ANNOUNCEMENT_KEY_PREFIX = "ol/slack_failure_announced/"
+
+
+def slack_announcement_key(fingerprint: Sequence[str]) -> str:
+    """Build the rate-limit key for a failure, keyed the way Sentry groups it."""
+    return SLACK_ANNOUNCEMENT_KEY_PREFIX + "|".join(fingerprint)
+
+
+def repeats_to_announce(
+    instance: Any,
+    key: str,
+    now: float,
+) -> int | None:
+    """Whether to post, and how many repeats were swallowed since last time.
+
+    Returns None to stay quiet, or the number of occurrences suppressed since
+    the previous message -- which is the part worth saying, because "this failed
+    once" and "this failed four thousand times" are different situations and the
+    unbatched stream rendered them identically.
+
+    State lives in the run storage KV table rather than the sensor cursor:
+    ``RunFailureSensorContext`` is invoked once per failed run and exposes no
+    cursor to carry counts between those invocations.
+    """
+    record = instance.run_storage.get_cursor_values({key}).get(key)
+    if not record:
+        instance.run_storage.set_cursor_values({key: f"{now}:0"})
+        return 0
+
+    announced_at, _, count = record.partition(":")
+    last_announced, suppressed = float(announced_at), int(count)
+
+    if now - last_announced < SLACK_REPEAT_WINDOW_SECONDS:
+        instance.run_storage.set_cursor_values(
+            {key: f"{last_announced}:{suppressed + 1}"}
+        )
+        return None
+
+    instance.run_storage.set_cursor_values({key: f"{now}:0"})
+    return suppressed
+
+
 def get_slack_token() -> str:
     """Read the Slack bot token from Vault.
 
@@ -368,7 +450,8 @@ def get_slack_token() -> str:
     description=(
         "Reports run failures across all code locations to Sentry and Slack. "
         "Reports the first failed attempt and suppresses its automatic retries, "
-        "so a failure is announced once whether or not a retry clears it."
+        "so a failure is announced once whether or not a retry clears it. "
+        "Slack is rate-limited per distinct failure; Sentry gets every one."
     ),
 )
 def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
@@ -384,7 +467,26 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
         )
         return
 
+    fingerprint = sentry_fingerprint(context)
     sentry_event_id = capture_run_failure_to_sentry(context)
+
+    # Sentry still receives every failure -- it aggregates, and the count is the
+    # signal. Slack does not aggregate, so the same failure repeating is rate
+    # limited to one message per window with a count of what it swallowed.
+    repeats = repeats_to_announce(
+        context.instance,
+        slack_announcement_key(fingerprint),
+        context.dagster_run.create_timestamp.timestamp(),
+    )
+    if repeats is None:
+        context.log.info(
+            "Suppressing Slack notification for run %s: %s was already "
+            "announced within the last %d minutes.",
+            run.run_id,
+            "|".join(fingerprint),
+            SLACK_REPEAT_WINDOW_SECONDS // 60,
+        )
+        return
 
     # Deliberately unguarded. A failure here fails the sensor tick, which
     # surfaces in the Dagster UI and in Sentry -- the alternative is alerting
@@ -392,7 +494,7 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
     client = WebClient(token=get_slack_token())
     client.chat_postMessage(
         channel=slack_channel,
-        blocks=error_message(context, sentry_event_id),
+        blocks=error_message(context, sentry_event_id, repeats),
         text=f"Dagster {DAGSTER_ENV} run failure: {run.job_name}",
     )
 

@@ -12,7 +12,7 @@ a natural authoritative registry, and we use each one directly:
 
 - dbt-managed tables  → ``manifest.json`` + Dagster materialization event log
 - Raw / Airbyte tables → Glue catalog live scan + Iceberg snapshot timestamps
-- Non-dbt singletons  → ``NON_DBT_SINGLETON_TABLES`` module-level constant
+- Non-dbt singletons  → ``non_dbt_singleton_tables()``
 
 The Airbyte layer cannot use the Dagster event log for timing because
 ``OLAirbyteTranslator`` prefixes asset keys with ``ol_warehouse_raw_data`` and
@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -128,22 +129,75 @@ RAW_LAYER_GROUP_CONFIGS: dict[str, RawLayerGroupConfig] = {
     "_default": RawLayerGroupConfig(snapshot_retention_days=7),
 }
 
-# Tables written outside dbt and Airbyte that still need Iceberg maintenance.
-# Add new entries here as additional inference pipelines or ad-hoc writers land.
-NON_DBT_SINGLETON_TABLES: list[TableMaintenanceConfig] = [
-    TableMaintenanceConfig(
-        model_name="student_risk_probability",
-        schema_name="ol_warehouse_production_reporting",
-        materialized="table",
-        # Asset key matches the Dagster asset in the student_risk_probability
-        # code location.
-        asset_key=["reporting", "student_risk_probability"],
-        snapshot_retention_days=7,
-        orphan_retention_days=7,
-        optimize_after_every_n_runs=1,
-        analyze_after_every_n_runs=7,
-    ),
-]
+# Which warehouse environment each Dagster environment maintains. dev maps to
+# production because DAGSTER_ENV="dev" targets the production dbt profile
+# (dev_production), so a developer is already reading real production tables.
+WAREHOUSE_ENV_BY_DAGSTER_ENV: dict[str, str] = {
+    "production": "production",
+    "qa": "qa",
+    "dev": "production",
+    "ci": "qa",
+}
+
+# Warehouse schemas are ``ol_warehouse_<env>_<layer>``. The env segment is a
+# single token, so the layer -- which may itself contain underscores -- is
+# whatever follows it.
+_WAREHOUSE_SCHEMA = re.compile(r"^ol_warehouse_(?P<env>[a-z]+)_(?P<layer>.+)$")
+
+
+def warehouse_env_for(dagster_env: str) -> str:
+    """Return the warehouse environment ``dagster_env`` is allowed to maintain."""
+    return WAREHOUSE_ENV_BY_DAGSTER_ENV.get(dagster_env, "qa")
+
+
+def scope_schema_to_env(schema_name: str, warehouse_env: str) -> str:
+    """Rewrite ``schema_name``'s environment segment to ``warehouse_env``.
+
+    One image ships to every environment carrying one ``manifest.json``, and
+    that manifest is compiled against production -- so its ``node['schema']``
+    reads ``ol_warehouse_production_intermediate`` whichever environment loads
+    it. QA maintenance was therefore issuing OPTIMIZE and ANALYZE against
+    production schemas, and the only thing stopping it was
+    ``data-lake-query-engine-role-qa`` lacking ``glue:GetTable``. An IAM denial
+    is not a scoping mechanism; it is a safety net that would disappear the
+    moment someone widened that role for an unrelated reason.
+
+    A schema that is not ``ol_warehouse_<env>_<layer>`` cannot be proven to
+    belong to any environment, so it raises rather than being passed through --
+    the failure this exists to prevent is silent cross-environment writes.
+    """
+    match = _WAREHOUSE_SCHEMA.match(schema_name)
+    if match is None:
+        msg = (
+            f"Cannot scope {schema_name!r} to the {warehouse_env} warehouse: it "
+            "is not of the form ol_warehouse_<env>_<layer>, so which "
+            "environment it belongs to is unknowable."
+        )
+        raise ValueError(msg)
+    return f"ol_warehouse_{warehouse_env}_{match['layer']}"
+
+
+def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]:
+    """Tables written outside dbt and Airbyte that still need maintenance.
+
+    A function rather than a constant so the schemas are scoped to the calling
+    environment for the same reason the dbt-derived ones are. Add new entries
+    here as additional inference pipelines or ad-hoc writers land.
+    """
+    return [
+        TableMaintenanceConfig(
+            model_name="student_risk_probability",
+            schema_name=f"ol_warehouse_{warehouse_env}_reporting",
+            materialized="table",
+            # Asset key matches the Dagster asset in the student_risk_probability
+            # code location.
+            asset_key=["reporting", "student_risk_probability"],
+            snapshot_retention_days=7,
+            orphan_retention_days=7,
+            optimize_after_every_n_runs=1,
+            analyze_after_every_n_runs=7,
+        ),
+    ]
 
 
 # ── Catalog Factory ───────────────────────────────────────────────────────────
@@ -311,6 +365,7 @@ def _pyiceberg_version() -> str:
 
 def load_maintenance_configs_from_manifest(
     manifest_path: str | Path,
+    warehouse_env: str,
 ) -> list[TableMaintenanceConfig]:
     """Parse dbt ``manifest.json`` and return a ``TableMaintenanceConfig`` per model.
 
@@ -320,11 +375,11 @@ def load_maintenance_configs_from_manifest(
     skipped rather than having Python-side defaults applied silently, which
     would diverge from the dbt config over time.
 
-    The Glue/Trino schema name is read directly from ``node['schema']``, which
-    dbt fully resolves at compile time (e.g. ``ol_warehouse_production_mart``).
-    Using the resolved value is safer than reconstructing it from
-    ``config.schema`` + an env prefix, because it reflects the actual target
-    the manifest was compiled against.
+    ``node['schema']`` is the schema dbt resolved *at compile time*, and the
+    manifest is compiled once against production and then baked into an image
+    that ships everywhere. Taking it at face value is what pointed QA's
+    maintenance at production schemas, so ``warehouse_env`` rewrites the
+    environment segment of every schema and rejects any that does not carry one.
 
     The Dagster AssetKey path is ``[config.schema, model_name]`` to match
     ``DbtAutomationTranslator.get_group_name``, which returns ``config.schema``
@@ -344,12 +399,13 @@ def load_maintenance_configs_from_manifest(
         if materialized not in ("table", "incremental"):
             continue  # skip view, ephemeral, seed-backed models
 
-        # Use the fully-resolved schema from the manifest node (e.g.
-        # "ol_warehouse_production_mart"), not config.schema (bare suffix).
-        schema_name = node.get("schema", "")
-        if not schema_name:
+        # The manifest's resolved schema (e.g. "ol_warehouse_production_mart"),
+        # re-pointed at this environment. config.schema is only the bare suffix.
+        compiled_schema = node.get("schema", "")
+        if not compiled_schema:
             log.debug("Skipping %s — no schema on manifest node", unique_id)
             continue
+        schema_name = scope_schema_to_env(compiled_schema, warehouse_env)
 
         # config.schema is the bare suffix (e.g. "mart") used as the Dagster
         # asset group name by DbtAutomationTranslator.get_group_name.
