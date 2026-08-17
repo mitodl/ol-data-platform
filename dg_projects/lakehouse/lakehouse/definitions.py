@@ -149,6 +149,12 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # Attach to a sync that is already in flight rather than raising. The
+        # automation condition and Airbyte's own scheduler both launch syncs, so
+        # a tick landing on top of a running sync is routine, not exceptional --
+        # left at the library default of False it raised "Found sync job for
+        # connection_id=... already running" across ten connections.
+        poll_previous_running_sync=True,
     )
     if not SKIP_AIRBYTE
     else None
