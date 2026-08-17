@@ -244,13 +244,28 @@ class TestRules:
         report = _run(inventory)
         assert "no connection carries its stream" in _messages(report)
 
+    def test_duplicate_stream_name_within_a_unit_is_rejected(self, inventory: Path) -> None:
+        # Two same-named streams in different source namespaces cannot be
+        # expressed — raw_table is prefix + name, so Airbyte would write both
+        # into one destination table — and the renderer resolves a connection's
+        # stream to its namespace by name.
+        unit = copy.deepcopy(APP_UNIT)
+        second = copy.deepcopy(unit["tables"][0])
+        second["raw_table"] = "raw__mitxonline__openedx__mysql__auth_user_other"
+        second["namespace"] = "edxapp_csmh"
+        unit["tables"].append(second)
+        unit["airbyte"]["connections"][0]["streams"] = ["auth_user", "auth_user"]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "is declared by 2 tables in this unit" in _messages(report)
+
     def test_table_carried_by_two_connections_is_rejected(self, inventory: Path) -> None:
         unit = copy.deepcopy(APP_UNIT)
         unit["airbyte"]["connections"][1]["streams"] = ["auth_user"]
         unit["tables"] = [unit["tables"][0]]
         _write(inventory, "mitxonline__mysql", unit)
         report = _run(inventory)
-        assert "is carried by 2 connections" in _messages(report)
+        assert "is carried 2 times within this unit" in _messages(report)
 
 
 class TestCrossUnit:

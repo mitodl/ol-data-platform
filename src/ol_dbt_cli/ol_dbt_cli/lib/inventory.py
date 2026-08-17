@@ -14,6 +14,7 @@ imports narrow now is what makes that a move rather than a rewrite.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -252,8 +253,26 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
                 CHECK,
                 Severity.ERROR,
                 unit.key,
-                f"{raw_table} is carried by {count} connections in the same unit",
-                "Two connections loading one table race each other into the same raw table.",
+                f"{raw_table} is carried {count} times within this unit",
+                "Whether that is two connections or one connection listing the "
+                "stream twice, both writes land in the same raw table.",
+            )
+
+    # The renderer joins a connection's stream name to its table entry to find
+    # the stream's `namespace` (§6.2), so the name has to identify one table.
+    # Two same-named streams in different source namespaces cannot be expressed
+    # here — and they could not be loaded either: `raw_table` is prefix + name,
+    # so Airbyte would write both into one destination table.
+    names = Counter(str(table.get("name", "")) for table in unit.tables)
+    for name, count in sorted(names.items()):
+        if count > 1:
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"stream name {name!r} is declared by {count} tables in this unit",
+                "Stream name must identify one table, since that is how a "
+                "connection's `streams` entry resolves to its namespace.",
             )
 
 
