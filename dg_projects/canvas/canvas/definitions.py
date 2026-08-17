@@ -19,7 +19,8 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import (
     authenticate_vault,
     s3_uploads_bucket,
@@ -126,7 +127,7 @@ defs = Definitions(
         ),
         "google_sheet_config": GoogleSheetConfig(service_account_json=gs_secrets),
     },
-    assets=with_sentry_hooks([export_course_content, course_content_metadata]),
+    assets=with_failure_hooks([export_course_content, course_content_metadata]),
     schedules=[canvas_course_export_schedule],
     sensors=[canvas_google_sheet_course_id_sensor],
 )

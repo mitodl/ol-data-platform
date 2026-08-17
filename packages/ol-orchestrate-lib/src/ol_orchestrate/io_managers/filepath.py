@@ -15,7 +15,20 @@ from pydantic import PrivateAttr
 from s3fs import S3FileSystem
 from upath import UPath
 
+from ol_orchestrate.lib.failures import PermanentFailure
 from ol_orchestrate.resources.secrets.vault import Vault
+
+
+class UpstreamObjectUnavailable(PermanentFailure):
+    """The upstream materialization does not point at a readable object.
+
+    A distinct class rather than a bare ``PermanentFailure`` so the three ways
+    this happens -- no materialization, no path in its metadata, a path whose
+    object is gone -- group as one Sentry issue naming the key, instead of
+    dissolving into whatever the reader raised downstream. Nothing a rerun does
+    changes any of them, which is why they carry ``allow_retries=False`` and
+    stop ``run_retries`` via the ``stop_run_retries`` hook.
+    """
 
 
 class FileObjectIOManager(ConfigurableIOManager):
@@ -28,6 +41,15 @@ class FileObjectIOManager(ConfigurableIOManager):
     _s3_fs: S3FileSystem = PrivateAttr(default=None)
 
     def load_input(self, context: InputContext) -> UPath:
+        """Resolve the upstream materialization to a path that actually exists.
+
+        The materialization record is a claim about the object store, not the
+        object store. Trusting it unconditionally is what turned one missing S3
+        key into ~368,000 failed runs: the manager handed back a path to nothing,
+        the reader raised NoSuchKey deep in whatever library opened it, and the
+        automation condition asked for the same run again. Checking here fails
+        once, permanently, and names the key.
+        """
         asset_dep = context.instance.get_event_records(
             event_records_filter=EventRecordsFilter(
                 asset_key=context.asset_key,
@@ -35,13 +57,51 @@ class FileObjectIOManager(ConfigurableIOManager):
                 asset_partitions=[context.partition_key],
             ),
             limit=1,
-        )[0]
+        )
+        target = f"{context.asset_key.to_user_string()} / {context.partition_key}"
+        if not asset_dep:
+            raise UpstreamObjectUnavailable(
+                description=(
+                    f"No materialization recorded for {target}, so there is no "
+                    "path to load. The upstream needs to run before this asset "
+                    "can."
+                ),
+                metadata={"asset_key": context.asset_key.to_user_string()},
+                allow_retries=False,
+            )
 
-        asset_path = UPath(asset_dep.asset_materialization.metadata["path"].value)
-        return UPath(
+        path_metadata = asset_dep[0].asset_materialization.metadata.get("path")
+        if path_metadata is None:
+            raise UpstreamObjectUnavailable(
+                description=(
+                    f"The latest materialization of {target} recorded no 'path' "
+                    "metadata. Whatever wrote it did not go through this IO "
+                    "manager's handle_output."
+                ),
+                metadata={"asset_key": context.asset_key.to_user_string()},
+                allow_retries=False,
+            )
+
+        asset_path = UPath(path_metadata.value)
+        resolved_path = UPath(
             asset_path,
             **self.configure_path_fs(asset_path.protocol).storage_options,
         )
+        if not resolved_path.exists():
+            raise UpstreamObjectUnavailable(
+                description=(
+                    f"{target} recorded a path to an object that is not there: "
+                    f"{resolved_path}. The materialization outlived the object -- "
+                    "expired by a lifecycle rule, deleted, or written to a "
+                    "different bucket than the one recorded."
+                ),
+                metadata={
+                    "asset_key": context.asset_key.to_user_string(),
+                    "missing_path": MetadataValue.text(str(resolved_path)),
+                },
+                allow_retries=False,
+            )
+        return resolved_path
 
     def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> None:
         context.log.info("Writing contents of %s to %s", *obj)

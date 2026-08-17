@@ -11,7 +11,8 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
 )
-from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import (
     authenticate_vault,
     s3_uploads_bucket,
@@ -77,6 +78,6 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
     },
-    assets=with_sentry_hooks([student_risk_probability]),
+    assets=with_failure_hooks([student_risk_probability]),
     jobs=[data_export_job],
 )

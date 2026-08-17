@@ -11,8 +11,17 @@ def upstream_or_code_changes() -> AutomationCondition:
     indefinitely on stale data while every tick reports nothing to do.
 
     ``execution_failed`` is level-triggered -- true for as long as the latest
-    execution of the target is a failure -- so it keeps asking until a run
-    succeeds and goes quiet the moment one does. That covers the run that fails.
+    execution of the target is a failure. Used bare that is unbounded: a
+    partition that can never succeed is re-requested on every tick forever, and
+    ``run_retries.max_retries`` multiplies each request. That is how a single
+    broken asset produced ~368,000 failed runs in fourteen days.
+
+    ``.newly_true()`` converts it to an edge. It fires on the tick where the
+    latest execution first becomes a failure and not again, because the level
+    never drops back to false while the retry is in flight or after it also
+    fails. One failure therefore buys exactly one re-request; a success clears
+    the level, so the next genuine failure fires again. That covers the run that
+    fails without covering the run that can never succeed.
 
     The upstream signal is latched on top of it, because failure is not the only
     way the edge gets lost. ``~in_progress()`` gates the whole conjunction, so an
@@ -40,6 +49,13 @@ def upstream_or_code_changes() -> AutomationCondition:
     backfill -- no longer clears a pending upstream change, so one automation run
     can follow it. That is the conservative direction to err in, and it settles
     after that single run.
+
+    Deploy note: ``NewlyTrueCondition`` diffs against the previous tick's true
+    subset held in its cursor, and there is no cursor on the first evaluation.
+    Every partition that is *already* failed therefore reads as newly true once,
+    and fires one request each on a single tick. Against a large standing set of
+    failures that is a stampede -- so clear the failed set, or roll this out a
+    code location at a time, before deploying it.
     """
     not_in_progress = ~AutomationCondition.in_progress()
     no_upstream_dependencies_in_process = ~AutomationCondition.any_deps_in_progress()
@@ -53,7 +69,7 @@ def upstream_or_code_changes() -> AutomationCondition:
     )
     has_code_changes = AutomationCondition.code_version_changed()
     newly_missing = AutomationCondition.newly_missing()
-    latest_execution_failed = AutomationCondition.execution_failed()
+    execution_newly_failed = AutomationCondition.execution_failed().newly_true()
     all_upstream_dependencies_present = ~AutomationCondition.any_deps_missing()
     return (
         not_in_progress
@@ -62,7 +78,7 @@ def upstream_or_code_changes() -> AutomationCondition:
             has_upstream_changes
             | has_code_changes
             | newly_missing
-            | latest_execution_failed
+            | execution_newly_failed
         )
         & all_upstream_dependencies_present
     )

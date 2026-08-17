@@ -4,7 +4,10 @@ Two assets run on staggered nightly schedules:
 
 ``iceberg_dbt_layer_maintenance`` (02:00 UTC)
     Processes all dbt-managed tables discovered from ``manifest.json`` plus the
-    non-dbt singleton tables listed in ``NON_DBT_SINGLETON_TABLES``.
+    non-dbt singleton tables from ``non_dbt_singleton_tables()``. Both are
+    scoped to ``WAREHOUSE_ENV``: the manifest is compiled against production and
+    baked into an image that ships to every environment, so its resolved schemas
+    have to be re-pointed at the environment actually running.
 
     For each table it runs:
     - OPTIMIZE  (Trino)   — compact small files; triggered when materialization
@@ -48,14 +51,16 @@ from dagster import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
-    NON_DBT_SINGLETON_TABLES,
     TableMaintenanceConfig,
     expire_snapshots,
     get_glue_catalog,
     load_maintenance_configs_from_manifest,
     load_raw_layer_maintenance_work,
+    maintenance_failure_threshold,
+    non_dbt_singleton_tables,
     raw_config_for_table,
     remove_orphan_files,
+    warehouse_env_for,
 )
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 from pyiceberg.catalog.glue import GlueCatalog
@@ -65,18 +70,11 @@ from lakehouse.assets.lakehouse.dbt import dbt_project
 log = logging.getLogger(__name__)
 
 # Each environment runs maintenance only against its own catalog and schema set.
-# dev uses production because DAGSTER_ENV="dev" targets the production dbt profile
-# (dev_production), meaning developers run against real production Iceberg tables.
-_RAW_GLUE_DATABASE_MAP: dict[str, str] = {
-    "production": "ol_warehouse_production_raw",
-    "qa": "ol_warehouse_qa_raw",
-    "dev": "ol_warehouse_production_raw",
-    "ci": "ol_warehouse_qa_raw",
-}
-
-RAW_GLUE_DATABASE = _RAW_GLUE_DATABASE_MAP.get(
-    DAGSTER_ENV, "ol_warehouse_production_raw"
-)
+# The mapping lives in ol_orchestrate.lib.iceberg_maintenance so the raw layer
+# and the dbt layer cannot drift apart -- the dbt layer used to have no mapping
+# at all, and pointed QA at production.
+WAREHOUSE_ENV = warehouse_env_for(DAGSTER_ENV)
+RAW_GLUE_DATABASE = f"ol_warehouse_{WAREHOUSE_ENV}_raw"
 # Parallelism for raw layer: enough to be fast across 1,300+ tables without
 # hitting Glue API rate limits (default per-account limit is ~200 req/s).
 RAW_LAYER_WORKERS = 8
@@ -246,13 +244,16 @@ def iceberg_dbt_layer_maintenance(
     """Run Iceberg maintenance for all dbt-managed tables and non-dbt singletons."""
     configs = load_maintenance_configs_from_manifest(
         manifest_path=dbt_project.manifest_path,
+        warehouse_env=WAREHOUSE_ENV,
     )
-    all_configs = [*configs, *NON_DBT_SINGLETON_TABLES]
+    singletons = non_dbt_singleton_tables(WAREHOUSE_ENV)
+    all_configs = [*configs, *singletons]
     context.log.info(
-        "Loaded %d table configs (%d dbt, %d singleton)",
+        "Loaded %d table configs (%d dbt, %d singleton) for the %s warehouse",
         len(all_configs),
         len(configs),
-        len(NON_DBT_SINGLETON_TABLES),
+        len(singletons),
+        WAREHOUSE_ENV,
     )
 
     # Cursor of the previous maintenance run — used to count dbt materializations
@@ -272,10 +273,18 @@ def iceberg_dbt_layer_maintenance(
     snapshots_expired = 0
     orphans_removed = 0
     failures: list[str] = []
+    # Counted separately from `failures`, which holds one entry per failed
+    # *operation* -- OPTIMIZE and ANALYZE and EXPIRE can each fail for the same
+    # table. Comparing that count against a count of tables is what produced
+    # "failed for 1256/628 tables".
+    failed_tables: set[str] = set()
+    tables_attempted = 0
 
     for cfg in all_configs:
         if not cfg.enabled:
             continue
+        table = f"{cfg.schema_name}.{cfg.model_name}"
+        tables_attempted += 1
         try:
             result = _run_table_maintenance(
                 cfg, context.instance, last_cursor, trino_maintenance, catalog
@@ -287,41 +296,48 @@ def iceberg_dbt_layer_maintenance(
                 tables_analyzed += 1
             snapshots_expired += result["snapshots_expired"]
             orphans_removed += result["orphans_removed"]
-            failures.extend(
-                f"{cfg.schema_name}.{cfg.model_name}: {err}" for err in result["errors"]
-            )
+            if result["errors"]:
+                failed_tables.add(table)
+            failures.extend(f"{table}: {err}" for err in result["errors"])
         except Exception as exc:  # noqa: BLE001
-            log.warning(
-                "Maintenance failed for %s.%s: %s", cfg.schema_name, cfg.model_name, exc
-            )
-            failures.append(f"{cfg.schema_name}.{cfg.model_name}: {exc}")
+            log.warning("Maintenance failed for %s: %s", table, exc)
+            failed_tables.add(table)
+            failures.append(f"{table}: {exc}")
 
     context.log.info(
         "dbt layer maintenance complete: %d tables processed, %d optimized, "
-        "%d analyzed, %d snapshot batches expired, %d failures",
+        "%d analyzed, %d snapshot batches expired, %d failed operations across "
+        "%d tables",
         tables_processed,
         tables_optimized,
         tables_analyzed,
         snapshots_expired,
         len(failures),
+        len(failed_tables),
     )
 
-    # Fail the asset if maintenance failures exceed 5% of tables processed.
-    # This surfaces systemic failures (broken Trino credentials, Glue outage)
-    # that would otherwise accumulate silently in metadata while Dagster marks
-    # the run SUCCESS, advancing the cursor and blocking retries.
+    # Fail the asset if maintenance failed for more than 5% of tables. This
+    # surfaces systemic failures (broken Trino credentials, Glue outage) that
+    # would otherwise accumulate silently in metadata while Dagster marks the
+    # run SUCCESS, advancing the cursor and blocking retries.
+    #
+    # A table that failed every operation is one table, not three: the ratio is
+    # only meaningful if both sides count the same thing. The denominator is
+    # tables attempted rather than `tables_processed`, which excludes the ones
+    # that raised outright -- under a total outage that is zero, and a threshold
+    # against zero never trips.
     if failures:
-        failure_threshold = max(1, int(tables_processed * 0.05))
-        if len(failures) >= failure_threshold:
+        failure_threshold = maintenance_failure_threshold(tables_attempted)
+        if len(failed_tables) >= failure_threshold:
             context.log.error(
                 "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",
-                len(failures),
-                tables_processed,
+                len(failed_tables),
+                tables_attempted,
                 failure_threshold,
             )
             msg = (
                 f"Iceberg maintenance failed for "
-                f"{len(failures)}/{tables_processed} "
+                f"{len(failed_tables)}/{tables_attempted} "
                 f"tables (threshold {failure_threshold}). "
                 f"First failures: {failures[:5]}"
             )
@@ -330,11 +346,14 @@ def iceberg_dbt_layer_maintenance(
     return Output(
         value=None,
         metadata={
+            "warehouse_env": MetadataValue.text(WAREHOUSE_ENV),
+            "tables_attempted": MetadataValue.int(tables_attempted),
             "tables_processed": MetadataValue.int(tables_processed),
             "tables_optimized": MetadataValue.int(tables_optimized),
             "tables_analyzed": MetadataValue.int(tables_analyzed),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
             "orphans_removed": MetadataValue.int(orphans_removed),
+            "failed_tables": MetadataValue.int(len(failed_tables)),
             "failure_count": MetadataValue.int(len(failures)),
             # Cap at 20 entries so the Dagster UI doesn't time out rendering
             "failure_details": MetadataValue.json(failures[:20]),

@@ -172,15 +172,30 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
 
     @cached_method
     def get_client(self) -> AirbyteClient:
+        """Build the OSS client, carrying every setting the base class carries.
+
+        The polling four -- poll_interval, poll_timeout, cancel_on_termination
+        and poll_previous_running_sync -- were missing from this list, so
+        configuring them on the workspace set a field the client never saw and
+        every sync silently ran on the library defaults. That is why
+        ``poll_previous_running_sync`` did not take effect and ten connections
+        raised "already running" instead of waiting (DAGSTER-D, S, V, W, Y, Z,
+        11, 12, 19, 1W).
+        """
         return AirbyteOSSClient(
             api_server=self.api_server,
             username=self.username,
             password=self.password,
             client_id=self.client_id,
             client_secret=self.client_secret,
+            workspace_id=self.workspace_id,
             request_max_retries=self.request_max_retries,
             request_retry_delay=self.request_retry_delay,
             request_timeout=self.request_timeout,
+            poll_interval=self.poll_interval,
+            poll_timeout=self.poll_timeout,
+            cancel_on_termination=self.cancel_on_termination,
+            poll_previous_running_sync=self.poll_previous_running_sync,
             rest_api_base_url=self.rest_api_base_url
             or f"{self.api_server}/api/public/{AIRBYTE_REST_API_VERSION}",
             configuration_api_base_url=self.configuration_api_base_url

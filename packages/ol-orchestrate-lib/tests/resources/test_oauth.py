@@ -142,3 +142,76 @@ def test_username_lookup_honours_the_configured_token_type() -> None:
     http_client = client._http_client
     assert http_client is not None
     assert http_client.headers[0]["Authorization"] == "Bearer token"
+
+
+class _ThrottlingClientWithoutRetryAfter(_ThrottlingClient):
+    """Answers 429 with no Retry-After header at all.
+
+    Which is the ordinary case: the header is optional, and the edX courses API
+    frequently omits it.
+    """
+
+    def get(self, *args, **kwargs) -> httpx.Response:  # noqa: ARG002
+        self.gets += 1
+        request = httpx.Request("GET", "https://lms.example.com/api/thing/")
+        return httpx.Response(429, request=request)
+
+
+def test_a_429_without_retry_after_still_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DAGSTER-E: the retry path for 429s crashed on a 429.
+
+    The header default was the int 60, so ``retry_after.isdigit()`` raised
+    AttributeError -- and the traceback then named an int rather than the rate
+    limit that actually caused it.
+    """
+    slept: list[float] = []
+    monkeypatch.setattr(
+        "ol_orchestrate.resources.oauth.time.sleep",
+        slept.append,
+    )
+    client = _build_client()
+    throttling = _ThrottlingClientWithoutRetryAfter()
+    client._http_client = throttling
+    client._cached_username = "svc-account"
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.fetch_with_auth(
+            "https://lms.example.com/api/thing/", rate_limit_retries=2
+        )
+
+    assert throttling.gets == 3, "the retry path ran rather than raising AttributeError"
+    assert slept == [60, 60], "and fell back to the documented 60 second wait"
+
+
+def test_a_non_numeric_retry_after_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retry-After may be an HTTP-date rather than a delta-seconds count."""
+    slept: list[float] = []
+    monkeypatch.setattr(
+        "ol_orchestrate.resources.oauth.time.sleep",
+        slept.append,
+    )
+
+    class _HttpDateRetryAfter(_ThrottlingClient):
+        def get(self, *args, **kwargs) -> httpx.Response:  # noqa: ARG002
+            self.gets += 1
+            request = httpx.Request("GET", "https://lms.example.com/api/thing/")
+            return httpx.Response(
+                429,
+                request=request,
+                headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+            )
+
+    client = _build_client()
+    client._http_client = _HttpDateRetryAfter()
+    client._cached_username = "svc-account"
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.fetch_with_auth(
+            "https://lms.example.com/api/thing/", rate_limit_retries=1
+        )
+
+    assert slept == [60]

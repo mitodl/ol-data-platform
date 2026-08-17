@@ -36,6 +36,47 @@ SENTRY_FLUSH_TIMEOUT_SECONDS = 5.0
 # still re-tags -- see init_sentry.
 _initialized_location: str | None = None
 
+# A run worker that receives SIGTERM -- a deploy rolling the deployment, a node
+# draining, a pod evicted -- raises this on its way out. It is the process being
+# taken away, not the code being wrong, and there is nothing in the traceback
+# for anyone to act on.
+INTERRUPTION_ERRORS = frozenset(
+    {
+        "DagsterExecutionInterruptedError",
+        "KeyboardInterrupt",
+    }
+)
+
+
+def exception_type_of(event: dict[str, Any]) -> str | None:
+    """Return the type name of the exception an event carries, if it has one."""
+    values = (event.get("exception") or {}).get("values") or []
+    return values[-1].get("type") if values else None
+
+
+def drop_interruptions(
+    event: dict[str, Any],
+    hint: dict[str, Any],  # noqa: ARG001
+) -> dict[str, Any] | None:
+    """``before_send``: suppress events that only report a terminated process.
+
+    Deliberately narrow. Connection-class transients -- pgbouncer churn, httpx
+    timeouts, DNS -- are handled by giving the assets that touch the database
+    and external HTTP a ``RetryPolicy`` instead of by filtering here: a step
+    failure hook fires only once a RetryPolicy is exhausted, so a connection
+    error that still reaches Sentry is one that survived its retries and is
+    worth reading. Filtering those at the transport would hide the sustained
+    outage along with the blip.
+    """
+    if exception_type_of(event) in INTERRUPTION_ERRORS:
+        return None
+    return event
+
+
+def current_code_location() -> str | None:
+    """Return the code location this process was initialized for, if any."""
+    return _initialized_location
+
 
 def init_sentry(code_location: str) -> bool:
     """Initialize the Sentry SDK for a Dagster code location.
@@ -67,6 +108,7 @@ def init_sentry(code_location: str) -> bool:
             # run failure sensor, so a step failure is reported once rather
             # than once per logger that happens to shout about it.
             integrations=[LoggingIntegration(level=logging.INFO, event_level=None)],
+            before_send=drop_interruptions,
         )
         # Dagster logs the full failure of every step through its own logger.
         # Left alone it floods the breadcrumb trail with the same traceback we
@@ -81,6 +123,30 @@ def init_sentry(code_location: str) -> bool:
     sentry_sdk.set_tag("dagster_code_location", code_location)
     _initialized_location = code_location
     return True
+
+
+def failure_fingerprint(
+    code_location: str | None,
+    step_key: str | None,
+    exception_type: str,
+) -> list[str]:
+    """Build the grouping key for a step failure, shared by both capture paths.
+
+    ``step_key`` identifies the asset that broke. ``job_name`` -- which this
+    triple used to lead with -- identifies how the run was *launched*, which is
+    not a property of the defect: the same OVS webhook failure arrived as two
+    separate issues because one run came from the automation sensor's
+    ``__ASSET_JOB`` and the other from ``ovs_videos_webhook_job``.
+
+    The environment leads instead. QA and production share one Sentry project,
+    so without it a QA-only defect and a production outage merge into a single
+    issue and become indistinguishable in the list.
+
+    Both capture paths must build this identically or every failure raises two
+    issues rather than one, which is why they call this rather than each
+    assembling their own list.
+    """
+    return [DAGSTER_ENV, code_location or "unknown", step_key or "run", exception_type]
 
 
 @failure_hook(name="capture_exception_to_sentry")
@@ -102,18 +168,23 @@ def capture_exception_to_sentry(context: HookContext) -> None:
         scope.set_tag("captured_by", "hook")
         # Group by the step that broke rather than by traceback text, so a
         # recurring failure of one dbt model stays a single issue.
-        scope.fingerprint = [
-            context.job_name,
+        scope.fingerprint = failure_fingerprint(
+            current_code_location(),
             context.step_key,
             type(exception).__name__,
-        ]
+        )
         sentry_sdk.capture_exception(exception)
 
     sentry_sdk.flush(timeout=SENTRY_FLUSH_TIMEOUT_SECONDS)
 
 
 def with_sentry_hooks(assets: Sequence[Any]) -> list[Any]:
-    """Attach the Sentry failure hook to every AssetsDefinition in ``assets``.
+    """Attach only the Sentry failure hook to every AssetsDefinition.
+
+    Prefer ``ol_orchestrate.lib.failures.with_failure_hooks``, which attaches
+    this alongside the hook that stops ``run_retries`` re-running a permanent
+    failure. This narrower form exists for assets that deliberately want
+    reporting without that retry behaviour.
 
     Hooks are attached to the asset rather than to a job on purpose. Job-level
     hooks only fire for runs launched from a job, which would miss everything

@@ -214,11 +214,34 @@ def test_update_is_retried_after_a_failed_run(harness, behaviour) -> None:
     harness.execute_downstream()
 
     assert harness.tick() == [PARTITION]
-    assert harness.tick() == [PARTITION]
+
+
+def test_the_failure_retry_is_one_run_not_a_treadmill(harness, behaviour) -> None:
+    """A failure that keeps failing must stop asking.
+
+    execution_failed is level-triggered, so used bare it stays true for as long
+    as the latest execution is a failure -- a partition that can never succeed
+    is re-requested on every tick forever, and run_retries multiplies each
+    request. That is the mechanism behind ~368,000 failed runs from one asset in
+    fourteen days. .newly_true() spends the failure on a single re-request.
+    """
+    harness.reach_steady_state(behaviour)
+    harness.observe("v2")
+    harness.tick()
+
+    behaviour.mode = DownstreamBehaviour.FAIL
+    harness.execute_downstream()
+    assert harness.tick() == [PARTITION], "one retry for the failure"
+
+    assert harness.tick() == [], "and not a second one for the same failure"
+
+    harness.execute_downstream()
+    assert harness.tick() == [], "nor for the retry that failed the same way"
+    assert harness.tick() == []
 
 
 def test_retrying_stops_once_a_run_succeeds(harness, behaviour) -> None:
-    """The retry is level-triggered, so a success clears it."""
+    """A success clears the failure, so nothing is outstanding."""
     harness.reach_steady_state(behaviour)
     harness.observe("v2")
     harness.tick()
@@ -230,6 +253,31 @@ def test_retrying_stops_once_a_run_succeeds(harness, behaviour) -> None:
     harness.execute_downstream()
 
     assert harness.tick() == []
+
+
+def test_a_later_failure_gets_its_own_retry(harness, behaviour) -> None:
+    """Bounding the retry must not spend it permanently.
+
+    execution_failed falls back to false when a run succeeds, so the next
+    genuine failure is a fresh edge and earns its own re-request. Without that
+    the bound would silently downgrade to "one retry per asset, ever".
+    """
+    harness.reach_steady_state(behaviour)
+    harness.observe("v2")
+    harness.tick()
+    behaviour.mode = DownstreamBehaviour.FAIL
+    harness.execute_downstream()
+    assert harness.tick() == [PARTITION]
+    behaviour.mode = DownstreamBehaviour.SUCCEED
+    harness.execute_downstream()
+    assert harness.tick() == []
+
+    harness.observe("v3")
+    assert harness.tick() == [PARTITION]
+    behaviour.mode = DownstreamBehaviour.FAIL
+    harness.execute_downstream()
+
+    assert harness.tick() == [PARTITION]
 
 
 def test_update_survives_a_run_that_was_already_in_flight(harness, behaviour) -> None:

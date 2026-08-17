@@ -8,6 +8,7 @@ import pytest
 import sentry_sdk
 from dagster import AssetSpec, Definitions, asset, materialize
 from ol_orchestrate.lib import sentry as sentry_lib
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from sentry_sdk.transport import Transport
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -158,10 +159,49 @@ def test_failing_asset_reports_real_exception_to_sentry(
     assert event["tags"]["captured_by"] == "hook"
     assert event["tags"]["dagster_step"] == "exploding_asset"
     assert event["fingerprint"] == [
-        job.name,
+        DAGSTER_ENV,
+        # No init_sentry() in this fixture, so no location has been recorded.
+        "unknown",
         "exploding_asset",
         "ValueError",
     ]
+    assert job.name not in event["fingerprint"], (
+        "job_name describes the launch path, not the defect"
+    )
+
+
+def test_qa_and_production_do_not_share_an_issue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One Sentry project holds both, so the environment has to group them apart.
+
+    Without it a QA-only defect and a production outage merge into one issue and
+    the list cannot tell you which you are looking at.
+    """
+    # Both environments set explicitly. Letting the first one inherit the
+    # process's DAGSTER_ENV makes the test a tautology when that is `ci` or
+    # `dev`, and an outright failure when it is `qa`.
+    monkeypatch.setattr(sentry_lib, "DAGSTER_ENV", "production")
+    production = sentry_lib.failure_fingerprint("lakehouse", "dbt_build", "Failure")
+    monkeypatch.setattr(sentry_lib, "DAGSTER_ENV", "qa")
+    qa = sentry_lib.failure_fingerprint("lakehouse", "dbt_build", "Failure")
+
+    assert production[0] == "production"
+    assert qa[0] == "qa"
+    assert production != qa
+
+
+def test_a_terminated_run_worker_is_not_reported() -> None:
+    """SIGTERM during a deploy or an eviction is not a defect (DAGSTER-1R/1S/1T)."""
+    event = {"exception": {"values": [{"type": "DagsterExecutionInterruptedError"}]}}
+
+    assert sentry_lib.drop_interruptions(event, {}) is None
+
+
+def test_a_real_exception_still_gets_through() -> None:
+    event = {"exception": {"values": [{"type": "ValueError"}]}}
+
+    assert sentry_lib.drop_interruptions(event, {}) is event
 
 
 def test_successful_asset_reports_nothing(

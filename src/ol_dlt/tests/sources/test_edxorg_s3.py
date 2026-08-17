@@ -227,3 +227,73 @@ def test_pipeline_for_shares_destination_with_singleton_pipeline() -> None:
         == singleton.destination.config_params["bucket_url"]
     )
     assert per_table.dataset_name == singleton.dataset_name
+
+
+# ── read_edxorg_tsv ───────────────────────────────────────────────────────────
+
+
+class _FakeFileItem(dict[str, Any]):
+    """The three FileItemDict members the reader touches."""
+
+    def __init__(self, url: str, content: bytes) -> None:
+        super().__init__(
+            file_url=url, file_name=url.rsplit("/", 1)[-1], size_in_bytes=len(content)
+        )
+        self._content = content
+
+    def open(self):  # noqa: ANN201
+        return io.BytesIO(self._content)
+
+
+def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
+    """Drive the reader's generator directly, past dlt's transformer wrapper."""
+    return list(
+        edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001
+            items, **edxorg_s3._CSV_READER_OPTIONS
+        )
+    )
+
+
+def test_reader_returns_rows_for_a_well_formed_file() -> None:
+    batches = _read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)])
+
+    rows = [row for batch in batches for row in batch.to_pylist()]
+    assert [r["id"] for r in rows] == ["1", "2"]
+
+
+def test_reader_skips_an_empty_file_instead_of_failing_the_table() -> None:
+    """from_csv_auto cannot infer a dialect from zero bytes, and reports it in
+    the same words as a genuinely malformed file.
+
+    An empty export is not an error -- there is nothing in it -- so it must not
+    take the whole table's load down with it.
+    """
+    batches = _read(
+        [
+            _FakeFileItem("s3://bucket/empty.tsv", b""),
+            _FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV),
+        ]
+    )
+
+    rows = [row for batch in batches for row in batch.to_pylist()]
+    assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
+
+
+def test_reader_names_the_s3_object_it_could_not_read() -> None:
+    """DAGSTER-1C..1V reported a sniffing failure against
+    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5`` -- DuckDB's handle for
+    the open file object, which maps to nothing anyone can go and look at.
+
+    Whatever the underlying cause turns out to be, the error has to say which
+    object it was or nobody can reproduce it.
+    """
+    # Two header fields, a data row with far more -- unreadable under the pinned
+    # dialect with strict mode off and null padding deliberately unset.
+    unreadable = b'id\tname\n1\t"unterminated quote\n'
+
+    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
+        _read(
+            [_FakeFileItem("s3://bucket/db_table/auth_user/prod/x/bad.tsv", unreadable)]
+        )
+
+    assert "s3://bucket/db_table/auth_user/prod/x/bad.tsv" in str(raised.value)

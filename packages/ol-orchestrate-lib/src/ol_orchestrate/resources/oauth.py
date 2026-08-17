@@ -147,7 +147,12 @@ class OAuthApiClient(ConfigurableResource):
                 error_response.response.status_code == TOO_MANY_REQUESTS
                 and rate_limit_retries > 0
             ):
-                retry_after = error_response.response.headers.get("Retry-After", 60)
+                # Default as a string: the fallback used to be the int 60, and
+                # `.isdigit()` on it raised AttributeError -- so a 429 with no
+                # Retry-After header crashed the retry path that exists to
+                # handle 429s, and the traceback named the int rather than the
+                # rate limit (DAGSTER-E).
+                retry_after = error_response.response.headers.get("Retry-After", "60")
                 delay = int(retry_after) if retry_after.isdigit() else 60
                 time.sleep(delay)
                 return self.fetch_with_auth(

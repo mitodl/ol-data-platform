@@ -5,10 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from ol_orchestrate.lib.iceberg_maintenance import (
     RAW_LAYER_GROUP_CONFIGS,
     load_maintenance_configs_from_manifest,
+    maintenance_failure_threshold,
+    non_dbt_singleton_tables,
     raw_config_for_table,
+    scope_schema_to_env,
+    warehouse_env_for,
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -84,7 +89,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert len(configs) == 1
         cfg = configs[0]
@@ -96,10 +103,10 @@ class TestLoadMaintenanceConfigsFromManifest:
         assert cfg.analyze_after_every_n_runs == 7
         assert cfg.asset_key == ["mart", "mart__revenue"]
 
-    def test_schema_name_from_node_schema_not_config_schema(
+    def test_layer_comes_from_node_schema_not_config_schema(
         self, tmp_path: Path
     ) -> None:
-        """node['schema'] is used directly; config.schema is not reconstructed."""
+        """The layer is taken from node['schema'], not rebuilt from config.schema."""
         manifest = _make_manifest(
             {
                 "model.proj.dim_user": _model_node(
@@ -115,10 +122,40 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert len(configs) == 1
         assert configs[0].schema_name == "ol_warehouse_production_dimensional"
+
+    def test_a_qa_load_never_returns_a_production_schema(self, tmp_path: Path) -> None:
+        """The DAGSTER-R bug: one manifest, compiled against production, shipped
+        to every environment.
+
+        QA read ``ol_warehouse_production_intermediate`` straight out of the
+        manifest and issued OPTIMIZE and ANALYZE against it. The only thing that
+        stopped it was data-lake-query-engine-role-qa lacking glue:GetTable --
+        an IAM denial standing in for a scoping rule that was never written.
+        """
+        manifest = _make_manifest(
+            {
+                "model.proj.int_enrollments": _model_node(
+                    "model.proj.int_enrollments",
+                    schema="ol_warehouse_production_intermediate",
+                    config_schema="intermediate",
+                    iceberg_meta=_iceberg_meta(),
+                )
+            }
+        )
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="qa"
+        )
+
+        assert configs[0].schema_name == "ol_warehouse_qa_intermediate"
 
     def test_model_without_iceberg_meta_is_skipped(self, tmp_path: Path) -> None:
         """Models without iceberg_maintenance in compiled meta are excluded."""
@@ -135,7 +172,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert configs == []
 
@@ -152,7 +191,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert configs == []
 
@@ -175,7 +216,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert configs == []
 
@@ -197,7 +240,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert len(configs) == 1
         assert configs[0].materialized == "incremental"
@@ -229,7 +274,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert configs == []
 
@@ -252,7 +299,9 @@ class TestLoadMaintenanceConfigsFromManifest:
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        configs = load_maintenance_configs_from_manifest(manifest_path)
+        configs = load_maintenance_configs_from_manifest(
+            manifest_path, warehouse_env="production"
+        )
 
         assert configs[0].asset_key == ["mart", "fct_enrollments"]
 
@@ -306,3 +355,106 @@ class TestRawConfigForTable:
         default = RAW_LAYER_GROUP_CONFIGS["_default"]
         assert default.snapshot_retention_days == 7
         assert default.orphan_retention_days == 7
+
+
+# ── Environment scoping ───────────────────────────────────────────────────────
+
+
+class TestEnvironmentScoping:
+    """Which warehouse a given Dagster environment is allowed to touch."""
+
+    @pytest.mark.parametrize(
+        ("dagster_env", "warehouse_env"),
+        [
+            ("production", "production"),
+            ("qa", "qa"),
+            # dev targets the dev_production dbt profile, so a developer is
+            # already reading real production tables.
+            ("dev", "production"),
+            ("ci", "qa"),
+        ],
+    )
+    def test_known_environments_map_to_their_warehouse(
+        self, dagster_env: str, warehouse_env: str
+    ) -> None:
+        assert warehouse_env_for(dagster_env) == warehouse_env
+
+    def test_an_unknown_environment_falls_back_to_qa(self) -> None:
+        """A typo'd or new DAGSTER_ENV must not inherit production."""
+        assert warehouse_env_for("staging") == "qa"
+
+    @pytest.mark.parametrize(
+        ("schema", "expected"),
+        [
+            ("ol_warehouse_production_intermediate", "ol_warehouse_qa_intermediate"),
+            ("ol_warehouse_production_mart", "ol_warehouse_qa_mart"),
+            ("ol_warehouse_qa_raw", "ol_warehouse_qa_raw"),
+            # The layer keeps its own underscores.
+            ("ol_warehouse_production_raw_data", "ol_warehouse_qa_raw_data"),
+        ],
+    )
+    def test_the_env_segment_is_rewritten_and_the_layer_kept(
+        self, schema: str, expected: str
+    ) -> None:
+        assert scope_schema_to_env(schema, "qa") == expected
+
+    def test_a_schema_with_no_env_segment_is_rejected(self) -> None:
+        """Passing it through would be a silent cross-environment write."""
+        with pytest.raises(ValueError, match="ol_warehouse_<env>_<layer>"):
+            scope_schema_to_env("information_schema", "qa")
+
+    def test_singletons_are_scoped_to_the_calling_environment(self) -> None:
+        """The hand-written list hardcoded production for every environment."""
+        assert [t.schema_name for t in non_dbt_singleton_tables("qa")] == [
+            "ol_warehouse_qa_reporting"
+        ]
+
+
+# ── Failure threshold ─────────────────────────────────────────────────────────
+
+
+class TestMaintenanceFailureThreshold:
+    """The asset's contract is "fail if more than 5% of tables failed".
+
+    Getting that boundary wrong in the tripping direction turns nightly
+    maintenance into a nightly false alarm, which is how an alerting channel
+    stops being read.
+    """
+
+    @pytest.mark.parametrize(
+        ("tables_attempted", "expected"),
+        [
+            # The two boundaries that were wrong under max(1, int(5%)): one
+            # failure in 21 is 4.8%, and exactly five in 100 is 5% -- neither is
+            # *more* than 5%.
+            (21, 2),
+            (100, 6),
+            # A single failure is over the line for any small set.
+            (1, 1),
+            (20, 2),
+            # The real fleet size.
+            (628, 32),
+        ],
+    )
+    def test_the_first_count_over_five_percent(
+        self, tables_attempted: int, expected: int
+    ) -> None:
+        assert maintenance_failure_threshold(tables_attempted) == expected
+
+    @pytest.mark.parametrize("tables_attempted", [1, 20, 21, 99, 100, 628, 1300])
+    def test_the_threshold_is_always_genuinely_over_five_percent(
+        self, tables_attempted: int
+    ) -> None:
+        """The property behind the table above, stated directly."""
+        threshold = maintenance_failure_threshold(tables_attempted)
+
+        assert threshold / tables_attempted > 0.05
+        assert (threshold - 1) / tables_attempted <= 0.05, (
+            "and it is the *first* such count"
+        )
+
+    def test_a_single_failure_never_slips_through(self) -> None:
+        """The floor of one is load-bearing: an empty run must not report a
+        threshold of zero and fail on nothing.
+        """
+        assert maintenance_failure_threshold(0) == 1

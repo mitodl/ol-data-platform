@@ -17,14 +17,15 @@ Run standalone:
 
 import hashlib
 import logging
-from collections.abc import Generator
+from collections.abc import Generator, Iterable, Iterator
 from typing import Any
 
 import dlt
 import pyarrow as pa
 import s3fs
 from dlt.sources import incremental
-from dlt.sources.filesystem import filesystem, read_csv_duckdb
+from dlt.sources.filesystem import FileItemDict, filesystem
+from dlt.sources.filesystem.helpers import fetch_arrow
 
 from ol_dlt import config
 
@@ -76,6 +77,60 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
     # files). dbt casts downstream.
     "all_varchar": True,
 }
+
+
+class EdxorgTSVUnreadableError(Exception):
+    """DuckDB could not read one edxorg TSV, named in the message."""
+
+
+@dlt.transformer(standalone=True)
+def read_edxorg_tsv(
+    items: Iterable[FileItemDict],
+    chunk_size: int = 5000,
+    **duckdb_kwargs: Any,
+) -> Iterator[Any]:
+    """Read edxorg TSVs, naming the file when DuckDB cannot read one.
+
+    Same work as ``dlt.sources.filesystem.read_csv_duckdb`` with
+    ``use_pyarrow=True``, wrapped for two reasons.
+
+    First, diagnosability. ``duckdb.from_csv_auto`` is handed an open file
+    object, so the file it names in an error is DuckDB's internal handle --
+    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5``. Eleven Sentry issues
+    (DAGSTER-1C and friends) reported a sniffing failure against a content hash
+    that maps to nothing anyone can open. The S3 URL is right here; putting it in
+    the exception is the difference between a reproducible bug and a shrug.
+
+    Second, empty files. ``from_csv_auto`` cannot infer a dialect from zero
+    bytes and fails with the same "not possible to automatically detect the CSV
+    parsing dialect" message as a genuinely malformed file. An empty export is
+    not an error -- there is simply nothing in it -- so it is skipped and logged
+    rather than failing the whole table.
+
+    Note that pinning the dialect does not remove the sniffer: DuckDB still runs
+    it to find the header and column count. The delimiter, quote and escape are
+    already pinned in ``_CSV_READER_OPTIONS`` and these failures happened anyway.
+    """
+    import duckdb  # noqa: PLC0415
+
+    for item in items:
+        if not item.get("size_in_bytes"):
+            logger.warning(
+                "Skipping empty edxorg TSV %s -- nothing to read.", item["file_url"]
+            )
+            continue
+
+        with item.open() as file_handle:
+            try:
+                file_data = duckdb.from_csv_auto(file_handle, **duckdb_kwargs)
+                batches = list(fetch_arrow(file_data, chunk_size))
+            except duckdb.Error as error:
+                msg = (
+                    f"DuckDB could not read the edxorg TSV {item['file_url']} "
+                    f"({item.get('size_in_bytes')} bytes): {error}"
+                )
+                raise EdxorgTSVUnreadableError(msg) from error
+        yield from batches
 
 
 def _make_deduplicator():  # noqa: ANN202
@@ -215,7 +270,7 @@ def edxorg_s3_source(
         # *returns* another DltResource would replace the outer resource and
         # discard its name/hints; applying hints on the pipe avoids that.
         yield (
-            (files | read_csv_duckdb(use_pyarrow=True, **_CSV_READER_OPTIONS))
+            (files | read_edxorg_tsv(**_CSV_READER_OPTIONS))
             .with_name(resource_name)
             # Drop rows whose (row_hash, extracted_course_key) was already seen
             # earlier in this run (see _make_deduplicator docstring).

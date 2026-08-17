@@ -12,15 +12,21 @@ consults it only when the op or asset carries a ``RetryPolicy`` (see
 ``dagster._core.execution.plan.utils.op_execution_error_boundary``). It has no
 effect on the run-level auto-reexecution daemon, which decides purely from run
 status, the ``dagster/max_retries`` and
-``dagster/retry_on_asset_or_op_failure`` tags, and the run group size. So a
-permanent failure raised here is still re-run by ``run_retries`` unless that is
-suppressed at the run or instance level.
+``dagster/retry_on_asset_or_op_failure`` tags, and the run group size.
+
+``PermanentHTTPFailure`` is a ``PermanentFailure``, so the ``stop_run_retries``
+hook in ``ol_orchestrate.lib.failures`` stamps that run tag when one is raised
+and the daemon declines to retry. Without that inheritance the classification
+here is inert against ``run_retries`` -- which is how a Learn API 405 was
+correctly identified as unretryable and then retried 5,363 times.
 """
 
 from typing import Any
 
 from dagster import Failure, MetadataValue
 from httpx2 import HTTPStatusError
+
+from ol_orchestrate.lib.failures import PermanentFailure
 
 HTTP_SERVER_ERROR_FLOOR = 500
 HTTP_SERVER_ERROR_CEILING = 600
@@ -30,14 +36,14 @@ HTTP_SERVER_ERROR_CEILING = 600
 RETRYABLE_CLIENT_ERRORS = frozenset({408, 429})
 
 
-class PermanentHTTPFailure(Failure):
+class PermanentHTTPFailure(PermanentFailure):
     """A response a rerun cannot change: the request itself is being rejected.
 
-    A distinct class rather than a plain ``Failure`` so Sentry can separate it
-    from the transient case. Both the in-process hook and the run failure
-    sensor fingerprint on the exception's class name, so every ``Failure``
-    raised from one step used to collapse into a single issue no matter which
-    status produced it.
+    A distinct class rather than a plain ``PermanentFailure`` so Sentry can
+    separate it from the transient case. Both the in-process hook and the run
+    failure sensor fingerprint on the exception's class name, so every
+    ``Failure`` raised from one step used to collapse into a single issue no
+    matter which status produced it.
     """
 
 

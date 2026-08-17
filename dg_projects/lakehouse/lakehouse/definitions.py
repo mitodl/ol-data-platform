@@ -27,7 +27,8 @@ from dagster_dbt import (
     DbtCliResource,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.sentry import init_sentry, with_sentry_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
@@ -148,6 +149,12 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # Attach to a sync that is already in flight rather than raising. The
+        # automation condition and Airbyte's own scheduler both launch syncs, so
+        # a tick landing on top of a running sync is routine, not exceptional --
+        # left at the library default of False it raised "Found sync job for
+        # connection_id=... already running" across ten connections.
+        poll_previous_running_sync=True,
     )
     if not SKIP_AIRBYTE
     else None
@@ -455,7 +462,7 @@ dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(
 )
 
 defs = Definitions(
-    assets=with_sentry_hooks(
+    assets=with_failure_hooks(
         [
             *with_source_code_references([full_dbt_project]),
             *with_source_code_references([starrocks_dbt_assets]),
