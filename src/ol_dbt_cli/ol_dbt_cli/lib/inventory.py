@@ -215,8 +215,10 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
     if unit.data.get("loader") != "airbyte":
         return
     dagster_visible = unit.data.get("dagster_visible", True)
-    declared = {str(table.get("raw_table", "")) for table in unit.tables}
-    prefix = unit.data.get("table_prefix", "")
+    # Joined on the stream NAME, not on `table_prefix + name`: `raw_table` is
+    # declared per table and need not be the concatenation, so rebuilding it
+    # here would invent disagreements that are not the author's error.
+    declared = {str(table.get("name", "")) for table in unit.tables}
 
     carried: dict[str, int] = {}
     for connection in unit.connections:
@@ -231,29 +233,29 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
                 "never materialize. Set dagster_visible: false if that is intended.",
             )
         for stream in connection.get("streams") or []:
-            carried[f"{prefix}{stream}"] = carried.get(f"{prefix}{stream}", 0) + 1
+            carried[str(stream)] = carried.get(str(stream), 0) + 1
 
-    for raw_table in sorted(declared - set(carried)):
+    for stream in sorted(declared - set(carried)):
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
-            f"{raw_table} is declared but no connection carries its stream",
+            f"table {stream!r} is declared but no connection carries that stream",
         )
-    for raw_table in sorted(set(carried) - declared):
+    for stream in sorted(set(carried) - declared):
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
-            f"a connection carries {raw_table} but the unit does not declare it",
+            f"a connection carries stream {stream!r} but the unit declares no such table",
         )
-    for raw_table, count in sorted(carried.items()):
+    for stream, count in sorted(carried.items()):
         if count > 1:
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
-                f"{raw_table} is carried {count} times within this unit",
+                f"stream {stream!r} is carried {count} times within this unit",
                 "Whether that is two connections or one connection listing the "
                 "stream twice, both writes land in the same raw table.",
             )

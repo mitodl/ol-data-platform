@@ -397,6 +397,21 @@ def _dbt_raw_tables() -> set[str]:
     return tables
 
 
+# Airbyte's own spelling → the inventory's vocabulary. `STANDARD` is Airbyte's
+# name for cursor-based replication, which is what the inventory calls `cursor`.
+REPLICATION_METHODS = {
+    "xmin": "xmin",
+    "standard": "cursor",
+    "cursor": "cursor",
+    "cdc": "cdc",
+}
+
+
+def _normalized_replication_method(configuration: dict[str, Any] | None) -> str:
+    raw = _replication_method(configuration)
+    return REPLICATION_METHODS.get(raw.lower(), "n/a")
+
+
 def _replication_method(configuration: dict[str, Any] | None) -> str:
     """Pull the replication method out of a source config, whatever shape it takes."""
     if not isinstance(configuration, dict):
@@ -883,6 +898,7 @@ def render(  # noqa: C901, PLR0912, PLR0915
         grouped[deployment, layer].append(connection)
 
     units: dict[tuple[str, str], dict[str, Any]] = {}
+    todos_by_key: dict[tuple[str, str], list[str]] = {}
     for key, connections in grouped.items():
         deployment, layer = key
         todos: list[str] = []
@@ -894,8 +910,13 @@ def render(  # noqa: C901, PLR0912, PLR0915
                 {
                     "connection_name": connection["name"],
                     "source_kind": f"source-{source.get('sourceType', 'unknown')}",
-                    "replication_method": _replication_method(
+                    "replication_method": _normalized_replication_method(
                         source.get("configuration")
+                    ),
+                    "status": connection.get("status", "active"),
+                    "streams": sorted(
+                        str(stream.get("name", ""))
+                        for stream in _streams_of(connection)
                     ),
                     "table_prefix": _effective_prefix(connection),
                     "dagster_group": group,
@@ -922,25 +943,35 @@ def render(  # noqa: C901, PLR0912, PLR0915
                 "(deployment, layer) could not be inferred — assign it by hand"
             )
 
+        # Structurally schema-valid (§3): every required key present and every
+        # list in the right shape, so `ol-dbt inventory validate` reports only
+        # the TODO values a human still has to decide — not a wall of shape
+        # errors on top of them.
         unit: dict[str, Any] = {
+            "schema_version": 1,
             "deployment": deployment,
             "layer": layer,
             "scope": "TODO",
             "strategies": {"qa": "TODO", "local": "TODO"},
             "loader": "airbyte",
             "table_prefix": sorted(prefixes)[0],
-            "sync_interval_hours": max(intervals) if intervals else 24,
+            "airbyte": {
+                "source_kind": actors[0]["source_kind"],
+                "replication_method": actors[0]["replication_method"],
+                "connections": [
+                    {
+                        "name": actor["connection_name"],
+                        "status": actor["status"],
+                        "sync_interval_hours": actor["sync_interval_hours"] or 24,
+                        "streams": actor["streams"],
+                    }
+                    for actor in actors
+                ],
+            },
         }
-        if len(actors) == 1:
-            unit["airbyte"] = {
-                k: actors[0][k]
-                for k in ("connection_name", "source_kind", "replication_method")
-            }
-        else:
-            todos.insert(
-                0, f"{len(actors)} connections map to this unit — the schema allows one"
-            )
-            unit["airbyte_connections"] = actors
+        kinds = {actor["source_kind"] for actor in actors}
+        if len(kinds) > 1:
+            todos.append(f"connections use different source kinds ({sorted(kinds)})")
 
         tables: dict[str, dict[str, Any]] = {}
         for connection in connections:
@@ -972,8 +1003,9 @@ def render(  # noqa: C901, PLR0912, PLR0915
                     )
                 tables.setdefault(raw_table, entry)
         unit["tables"] = sorted(tables.values(), key=lambda t: t["raw_table"])
-        if todos:
-            unit["_todo"] = todos
+        # Kept beside the unit rather than inside it: the schema forbids unknown
+        # keys, and renderer scratch notes should not earn a slot in it.
+        todos_by_key[key] = todos
         units[key] = unit
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -990,6 +1022,8 @@ def render(  # noqa: C901, PLR0912, PLR0915
             "# strategies, and any layer that could not be inferred from the prefix.\n"
             "# See docs/specs/INGESTION_INVENTORY_SPEC.md §3.\n"
         )
+        for todo in todos_by_key.get((deployment, layer), []):
+            header += f"# TODO: {todo}\n"
         path.write_text(
             header
             + yaml.safe_dump(unit, sort_keys=False, width=100, allow_unicode=True)

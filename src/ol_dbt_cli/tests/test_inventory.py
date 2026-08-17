@@ -242,7 +242,7 @@ class TestRules:
         unit["airbyte"]["connections"][1]["streams"] = ["something_else"]
         _write(inventory, "mitxonline__mysql", unit)
         report = _run(inventory)
-        assert "no connection carries its stream" in _messages(report)
+        assert "no connection carries that stream" in _messages(report)
 
     def test_duplicate_stream_name_within_a_unit_is_rejected(self, inventory: Path) -> None:
         # Two same-named streams in different source namespaces cannot be
