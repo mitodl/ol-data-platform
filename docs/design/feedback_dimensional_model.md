@@ -1,8 +1,8 @@
 # Feedback Aggregation — Dimensional Model Design
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-10 (rev. 3 — conversation-grain analysis fact; rev. 2 turn grain + conformance rule;
-original schema 2026-07-06) ·
+Date: 2026-08-13 (rev. 4 — fixes from [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422);
+rev. 3 conversation-grain analysis fact; rev. 2 turn grain + conformance rule; original schema 2026-07-06) ·
 See [`README_feedback_aggregation.md`](./README_feedback_aggregation.md) for the full spec set.
 
 Conforms to the existing Kimball layer in `src/ol_dbt/models/dimensional` (`tfact_*` transactional facts,
@@ -91,6 +91,9 @@ feedback_pk           -- generate_surrogate_key([source_slug, source_record_ref]
 feedback_source_fk    -> dim_feedback_source.feedback_source_pk
 feedback_channel_fk   -> dim_feedback_channel.feedback_channel_pk  (conformed; every source has one)
 user_fk               -> dim_user.user_pk            (nullable; anonymous/aggregate sources)
+subject_user_ref       -- WHO said it, kept RAW alongside user_fk, not just consumed by the join and
+                       --   dropped (nullable; rev. 4, §3 below) — lets user_fk be re-resolved later
+                       --   against a future dim_user without rebuilding this insert-only fact
 platform_fk           -> dim_platform.platform_pk    (nullable; non-course sources e.g. Zendesk)
 courserun_fk          -> dim_course_run.courserun_pk  (nullable; only course-scoped sources)
 content_block_fk      -> dim_course_content.content_block_pk (nullable; resolves subject_ref, §2a)
@@ -171,6 +174,20 @@ Modelled as a **polymorphic degenerate triple plus one conformed FK**, deliberat
   edX blocks (courses, chapters, subsections, problems, videos) used by `tfact_problem_events` and
   `tfact_course_navigation_events`. edX-plugin and ORA feedback therefore joins the courseware star with no
   new dimensional work.
+- **The `content_block_fk` join must specify a version (fixed rev. 4, @copilot).** `dim_course_content` is
+  versioned: `content_block_pk = generate_surrogate_key(['block_id', 'retrieved_at'])`
+  (`dim_course_content.sql:141`), and the same `block_id` legitimately has multiple rows across course
+  structure snapshots, distinguished by the dimension's own `is_latest` flag. Resolving `subject_ref` on
+  `block_id` alone, without also constraining `platform`/`courserun_readable_id` and picking a version, can
+  fan out one feedback row into several (a join hit per retained snapshot) or land on an arbitrary one. The
+  rule: join on `block_id` **and** `platform` **and** `courserun_readable_id`, filtered to
+  `is_latest = true` — i.e. resolve against the block's *current* structure, not an as-of-`occurred_at`
+  lookup. That is deliberately the simpler of the two options: feedback about a courseware block is about
+  the block as a concept, not about a specific structural snapshot of the course, and courseware structure
+  changes within a run are rare enough that the drift this trades away is not worth the added join
+  complexity at MVP. `content_block_fk` is null for the Zendesk-only MVP regardless (§2a is not exercised
+  until Phase 2's edX-plugin/ORA sources land), so this is a rule for the Phase 2 adapter to implement, not
+  something MVP builds against today.
 - **Appzi URL decoding is the source adapter's job** (`int__feedback__zendesk`), populating
   `subject_url`/`subject_ref` — not every consumer's query.
 
@@ -231,11 +248,25 @@ together — which at turn grain is the common case, not the exception.
 **Identity is the highest-risk join.** The p0 `dim_user` NULL-email collapse bug that motivated this warning
 is **fixed and merged** ([#2400](https://github.com/mitodl/ol-data-platform/pull/2400), 2026-07-15 — all six
 union branches now filter `email is not null`, plus a `not_null` regression test). The risk that remains is
-structural, not that specific bug: `dim_user.user_pk = generate_surrogate_key([lower(email)])`, and Zendesk
-can only resolve identity by email, so every unmatched or shared address is still a miss or a merge.
+structural, not that specific bug — and the structure changed since rev. 3 (fixed rev. 4, @rachellougee):
+`dim_user.user_pk` is **not** `generate_surrogate_key([lower(email)])`; on current `main` it is
+`generate_surrogate_key(['user_identity_source', 'user_identity_id'])`, where
+`user_identity_id = coalesce(user_global_id, id_source_user_id, email)` — email is the *last-resort*
+component of the key, not the whole of it. Zendesk still resolves identity by email only, so the join in
+`feedback_zendesk_mvp_spec.md` §4 targets `dim_user.email` (a plain column, present regardless of which
+identifier won the key) rather than reconstructing the PK formula — every unmatched or shared address is
+still a miss or a merge, that part is unchanged.
 Resolve `user_fk` via the same paths the existing facts use — `openedx_user_id` → `dim_user.mitlearn_openedx_user_id`
 (forum/tutor), `user_global_id` (tutor `int__learn_ai__chatbot`), email (Zendesk comment author, last resort).
 Never key the fact off a source's local PK (§6).
+
+**Re-matching after the fact loads (rev. 4).** `tfact_feedback` is insert-only (§2) and loads incrementally,
+so `user_fk` is resolved once, at load time — an author who does not match today (typo'd email, no account
+yet, a `dim_user` coverage gap) has no automatic path to being matched later. `subject_user_ref` (the raw
+identity ref) is therefore kept as a column on the fact specifically so `user_fk` can be recomputed against
+a later `dim_user` without a rebuild — `feedback_zendesk_mvp_spec.md` §4 has the detail. `tk-...-b7ca16`
+covers identity re-derivation as part of the data-bus migration specifically; it is not what makes MVP
+re-matching possible, `subject_user_ref`'s retention is.
 
 At turn grain the Zendesk identity path resolves against the **comment author**, not the ticket requester —
 which needs `comment_author_user_id` carried through `int__zendesk__ticket_comment` (it exists in
@@ -410,7 +441,13 @@ is the decision to put them in the same table:
 ```
 -- identity
 feedback_conversation_pk    -- generate_surrogate_key([source_slug, conversation_ref])
-conversation_id             -- degenerate; the source-native thread/ticket id (joins tfact_feedback)
+conversation_id             -- degenerate; the source-native thread/ticket id. Joins tfact_feedback on
+                             --   (feedback_source_fk, conversation_id) TOGETHER, never conversation_id
+                             --   alone — it is source-native and unqualified ids can collide across
+                             --   Zendesk/forum/tutor (fixed rev. 4, @copilot). feedback_conversation_pk
+                             --   already hashes both source_slug and conversation_ref for exactly this
+                             --   reason; this note makes the same requirement explicit for hand-written
+                             --   joins and tests against the degenerate column.
 feedback_source_fk          -> dim_feedback_source
 opened_by_user_fk           -> dim_user (nullable)
 
@@ -527,11 +564,13 @@ rebuild: the same `feedback_pk` regenerates identically regardless of pipe.
 ## 7. PII handling (mandatory pre-embed)
 
 Zendesk ticket text and `int__learn_ai__chatbot.human_message` carry emails/phones/names —
-`ticket_description` is profiler-flagged `PII.Sensitive`. A **redaction step in the `int__` layer**
-(Presidio — precedent: the OM profiler already runs Presidio recognizers) masks entities before text lands
-in `tfact_feedback` or the embedding store. Raw text stays in `raw`/`stg` under existing PII classification
-+ Lakekeeper/Cedar authz; the fact carries redacted text only. Access to the fact is still governed per
-§audience (course instructors see their courserun; support/eng see tickets; leadership sees aggregates).
+`ticket_description` is profiler-flagged `PII.Sensitive`. A **redaction step between `int__feedback__unioned`
+and `tfact_feedback`** — `feedback_redacted`, a Python Dagster asset since Presidio is Python, not SQL (§8
+layering; fixed rev. 4 to be its own Phase-1 asset rather than sharing one with embedding — see
+`feedback_zendesk_mvp_spec.md` §3) — masks entities before text lands in `tfact_feedback` or the embedding
+store. Raw text stays in `raw`/`stg` under existing PII classification + Lakekeeper/Cedar authz; the fact
+carries redacted text only. Access to the fact is still governed per §audience (course instructors see their
+courserun; support/eng see tickets; leadership sees aggregates).
 
 **Turn grain widens the exposure surface, so this gets *more* important, not less.** The redaction target is
 now `comment_plain_body` across every kept turn, not just `ticket_description`. Follow-up turns are where
@@ -548,12 +587,15 @@ assuming the classification carries over.
 raw__<source>__…                         (existing per source; new: raw__learn_ai__…__feedback)
   → stg__<source>__…__feedback           (conform to §5 contract, light typing)
     → int__feedback__<source>            (per-source adapter; TURN grain + source filters §1)
-      → int__feedback__unioned           (UNION all sources into the common shape + redact PII §7)
-        → tfact_feedback                  (resolve conformed FKs, generate feedback_pk §6 — INSERT-ONLY)
-          → bridge_feedback_tag           (explode source tags → dim_feedback_tag §4e)
-          → int__feedback__conversation   (assemble kept turns per conversation_id, ordered by turn_index)
-            → afact_feedback_conversation (§5a — lifecycle + summary + vector + sentiment/category/cluster)
-              → afact_feedback_cluster_daily  (cluster × category × sentiment × date × source rollup)
+      → int__feedback__unioned           (UNION all sources into the common shape)
+        → feedback_redacted               (Dagster Python asset — Presidio masking §7; a Phase-1
+                                           prerequisite for the fact, NOT part of the ML asset in §8 below —
+                                           fixed rev. 4, see feedback_zendesk_mvp_spec.md §3)
+          → tfact_feedback                  (resolve conformed FKs, generate feedback_pk §6 — INSERT-ONLY)
+            → bridge_feedback_tag           (explode source tags → dim_feedback_tag §4e)
+            → int__feedback__conversation   (assemble kept turns per conversation_id, ordered by turn_index)
+              → afact_feedback_conversation (§5a — lifecycle + summary + vector + sentiment/category/cluster)
+                → afact_feedback_cluster_daily  (cluster × category × sentiment × date × source rollup)
 ```
 The ML batch (Dagster asset) reads `int__feedback__conversation` (redacted, assembled) and writes
 `afact_feedback_conversation` plus proposed rows on `dim_feedback_category`. **It never writes to
@@ -615,6 +657,28 @@ moves the business key (§6).
 ---
 
 ## 11. Change log
+
+**rev. 4 (2026-08-13)** — implementation-blocking fixes from
+[#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422), no grain/key/shape changes:
+
+- **`content_block_fk` needs a version rule** (§2a) — `dim_course_content` is versioned
+  (`generate_surrogate_key(['block_id', 'retrieved_at'])`), so resolving `subject_ref` on `block_id` alone
+  can fan out or pick an arbitrary snapshot. Rule: join on `block_id` + `platform` + `courserun_readable_id`,
+  filtered to `is_latest = true`. Applies to Phase 2 (edX plugin/ORA); `content_block_fk` is null for
+  Zendesk-only MVP.
+- **`conversation_id` joins must be qualified by source** (§5a) — it is source-native and can collide across
+  Zendesk/forum/tutor, so joins and tests against it use `(feedback_source_fk, conversation_id)`, matching
+  what `feedback_conversation_pk` already hashes.
+- **`dim_user.user_pk`'s formula corrected** (§3) — it is no longer `generate_surrogate_key([lower(email)])`;
+  current `main` uses `generate_surrogate_key(['user_identity_source', 'user_identity_id'])` with
+  `user_identity_id = coalesce(user_global_id, id_source_user_id, email)`. The Zendesk join is unaffected (it
+  targets the `email` column, not the PK formula) but the doc's claim about the formula was stale.
+- **`subject_user_ref` is retained on `tfact_feedback`** (§2), not just consumed by the `user_fk` join and
+  dropped — answers "how do we re-match identity later" for an insert-only fact that never revisits a loaded
+  row (@rachellougee).
+- **Redaction is its own Phase-1 asset** (§7/§8) — `feedback_redacted`, upstream of `tfact_feedback` and
+  distinct from the ML/clustering asset, fixing a dependency cycle in rev. 3's placement (detail in
+  `feedback_zendesk_mvp_spec.md` §3).
 
 **rev. 3 (2026-08-10)** — the analysis unit moves from the turn to the conversation
 ([RFC #12210](https://github.com/mitodl/hq/discussions/12210)):

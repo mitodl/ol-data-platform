@@ -1,7 +1,9 @@
 # Feedback Aggregation — Common Event Contract & Business-Key Strategy
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-07-10 · Resolves `tk-...-common-feedback-event-contract-bus-245a8e`
+Date: 2026-08-13 (rev. 4 — `conversation_ref` required, `source_url` added, stale ticket-grain reference
+fixed; see [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422)) · original 2026-07-10 ·
+Resolves `tk-...-common-feedback-event-contract-bus-245a8e`
 Consolidates design §5–6; companion to [`feedback_dimensional_model.md`](./feedback_dimensional_model.md).
 
 This is the **highest-leverage migration de-risker** (do at spec time regardless of interim
@@ -25,7 +27,7 @@ this shape at the `stg__…__feedback` boundary:
 | `text` | string | raw free text (redaction happens in-warehouse, design §7) | yes |
 | `channel_slug` | string | maps to `dim_feedback_channel.channel_slug` — how the feedback arrived | yes |
 | `title` | string | subject/heading; nullable | no |
-| `conversation_ref` | string | thread/ticket id — roll turns → conversation | no |
+| `conversation_ref` | string | thread/ticket id — roll turns → conversation. **Non-conversational sources set this to `source_record_ref`** (their own turn id) rather than omitting it — see the design rule below | **yes** |
 | `turn_index` | integer | ordinal of this turn within the conversation | no |
 | `subject_user_ref` | string | **global/openedx user id** (NOT a source-local PK); email only as last resort | no |
 | `courserun_readable_id` | string | course scope; null for non-course sources | no |
@@ -33,6 +35,7 @@ this shape at the `stg__…__feedback` boundary:
 | `subject_type` | string | **what the feedback is about**: `courseware_block` \| `course_run` \| `course` \| `program` \| `page_url` \| `resource` \| `unspecified` | no |
 | `subject_ref` | string | source-native id of that thing (edX usage key, courserun readable id, decoded URL) | no |
 | `subject_url` | string | canonical/decoded deep link to the subject | no |
+| `source_url` | string | deep link back to the source record itself (ticket API URL, forum page URL) — distinct from `subject_url`, which links to what the feedback is *about* | no |
 | `explicit_rating` | string | conformed explicit signal — Zendesk CSAT, tutor rating, ORA score | no |
 | `created_at` | ISO8601 timestamp | source lifecycle timestamp | no |
 | `updated_at` | ISO8601 timestamp | source lifecycle timestamp | no |
@@ -63,6 +66,19 @@ or most sources have them) while status, priority, brand, group and due date are
 - **`source_record_ref` identifies a turn, not a conversation.** For Zendesk that is `comment_id`, with
   `ticket_id` in `conversation_ref` (design §1). Adapters that emit one row per conversation are not
   conformant — the grain is one atomic utterance, and every source's own model already works that way.
+- **`conversation_ref` is required, not optional (fixed rev. 4, @copilot).** It is a component of
+  `feedback_conversation_pk = generate_surrogate_key([source_slug, conversation_ref])`
+  (`feedback_dimensional_model.md` §5a), and every event — conversational or not — must resolve to exactly
+  one `afact_feedback_conversation` row. **Non-conversational sources (ORA, the edX plugin) set
+  `conversation_ref = source_record_ref`** — the event degenerates to a one-turn conversation of itself,
+  which is what `dim_feedback_source.is_conversational = false` marks and is why those sources need no
+  special-case handling downstream (design §1). An adapter that leaves `conversation_ref` null produces an
+  event with no valid conversation row to land on.
+- **`source_url` is a required *field on the fact*, but sourced from every adapter, not the contract's
+  `subject_*` triple.** `tfact_feedback` and the Zendesk adapter (`feedback_zendesk_mvp_spec.md` §2, §4) both
+  carry a `source_url` — the deep link back to the record itself (e.g. `ticket_api_url`), distinct from
+  `subject_url` (a link to what the feedback is *about*). Added to the contract table above (rev. 4,
+  @copilot) so future adapters have a defined source for it instead of inventing one ad hoc.
 - **`subject_*` answers "what is this feedback about?"** — the axis you aggregate on, and the one
   the contract originally lacked (raised on [#2422](https://github.com/mitodl/ol-data-platform/pull/2422#issuecomment-3157271372)).
   It is a *polymorphic degenerate triple*: always carryable, whatever the subject is. The fact resolves
@@ -133,8 +149,11 @@ decisions that feedback must conform to rather than set.
 
 - **Interim learn-ai feedback table:** shape its columns to §1 so `stg__learn_ai__…__feedback`
   is a near pass-through (RFC Implementation step 2).
-- **Zendesk adapter (MVP):** `int__feedback__zendesk` maps ticket columns → §1
-  (`feedback_zendesk_mvp_spec.md` §2). `source_record_ref = ticket_id`.
+- **Zendesk adapter (MVP):** `int__feedback__zendesk` maps comment columns → §1
+  (`feedback_zendesk_mvp_spec.md` §2). `source_record_ref = comment_id` (the **turn**, not the ticket —
+  fixed rev. 4, @copilot/@rachellougee: this line still said `ticket_id`, which is the rev. 1 grain and
+  conflicts with §2's own table below; implementing it as written would collapse every comment in a ticket
+  onto one `feedback_pk`). `conversation_ref = ticket_id`.
 - **Future producers (edX plugin, etc.):** emit §1 directly or via a thin staging adapter.
 - **The fact never reads a source's raw shape** — only `int__feedback__unioned` in the §1
   contract shape. This is the isolation that makes new sources additive.

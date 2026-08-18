@@ -16,7 +16,7 @@ signals for four audiences (support, engineering, instructors, leadership).
 | [`feedback_erd.md`](./feedback_erd.md) | **Start here for the shape:** the conformance rule, Mermaid ERDs for the star schema, the event contract, the conversation analysis fact, run provenance and the Phase-1 subset; carries the change log | (visual index) |
 | [`feedback_dimensional_model.md`](./feedback_dimensional_model.md) | Dimensional model: the fact pair — `tfact_feedback` at turn grain and `afact_feedback_conversation` at conversation grain — conformed dims, sparse FKs, subject reference, the `source_metadata` variant, the summary, PII redaction, phasing | schema design (discovery) |
 | [`feedback_event_contract_spec.md`](./feedback_event_contract_spec.md) | Common feedback event contract + migration-proof business keys; data-bus alignment as a bounded dependency | `...contract-bus-245a8e` |
-| [`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md) | Build-ready Zendesk MVP: exact dbt models/columns `int__feedback__zendesk → __unioned → tfact_feedback` + 3 dims + tests | (MVP implementation) |
+| [`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md) | Build-ready Zendesk MVP: exact dbt models/columns `int__feedback__zendesk → __unioned → feedback_redacted → tfact_feedback` + 3 dims + tests | (MVP implementation) |
 | [`feedback_ml_approach.md`](./feedback_ml_approach.md) | Embedding (local, PII-safe), clustering (UMAP+HDBSCAN), category discovery (seed + LLM-label), sentiment (explicit + kNN/classifier) | `...clustering-...a1d7d6`, `...category-...550aba`, `...sentiment-...92988e` |
 | [`feedback_dagster_asset_spec.md`](./feedback_dagster_asset_spec.md) | Batch ML Dagster asset cloned from `student_risk_probability`; Vault-backed LLM resource; net-new deps; scheduling | (ML pipeline orchestration) |
 | [`feedback_consumption_ux_spec.md`](./feedback_consumption_ux_spec.md) | Audiences × altitude, surface options (Superset / Marimo notebook-as-webapp / net-new app), per-persona actions, access control | `...ui-ux-...476d23` |
@@ -110,6 +110,9 @@ signals for four audiences (support, engineering, instructors, leadership).
 - Carry `comment_author_user_id` through `int__zendesk__ticket_comment` — **blocking** for the turn grain
   (classifies requester-vs-agent turns and resolves `user_fk`). Verified against the repo: the column exists
   in `stg__zendesk__ticket_comment` and the int model joins it away, exposing only `comment_author` as a name.
+- Carry `ticket_requester_user_id` through `int__zendesk__ticket` (added 2026-08-13) — **blocking**, same
+  reason: the requester-vs-agent filter compares ids, and the int model exposes only `ticket_requester`
+  (a name), even though the join it needs already exists in the model.
 - Measure public, requester-authored comments per ticket **and the multi-turn share** — sizes the turn fact,
   and the multi-turn share drives the summarization budget (2d).
 - Add the `ticket_metrics` Airbyte stream — non-blocking; unblocks conversation duration measures.
@@ -143,8 +146,19 @@ analysis fact (2d) and cut to a ~1,500-word read. Three rounds of feedback have 
 - **Owner direction (2026-08-10)** — cluster the turn records into a coherent conversation and make that
   aggregate fact the home for the generated summary, embeddings and sentiment. This produced key decision
   2d and rev. 3 across the spec set.
+- **@copilot + @rachellougee** ([#2422](https://github.com/mitodl/ol-data-platform/pull/2422), 2026-08-13) —
+  a round of implementation-blocking fixes with no grain/key/shape changes: a second missing prerequisite
+  column (`ticket_requester_user_id`, same class as `comment_author_user_id`); redaction split into its own
+  Phase-1 asset (`feedback_redacted`) to remove a dependency cycle in rev. 3's placement; `conversation_ref`
+  and `source_url` added/required on the event contract; `(feedback_source_fk, conversation_id)` replacing
+  bare `conversation_id` everywhere the turn fact joins the conversation fact; a stale `category_slug`
+  hash-of-hash, a non-existent `unknown` sentiment member, a `participant_count` that was always 1, and an
+  `avg_explicit_rating` on a non-numeric column, all corrected; `feedback_clusters` split into a
+  `@multi_asset`; `dim_user.user_pk`'s formula corrected to match current `main`; and `subject_user_ref`
+  retained on `tfact_feedback` so identity can be re-matched later without a rebuild. Detail and rationale
+  are in each doc's own rev. 4/5 changelog entry.
 
 Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the volume
-measurement and the `comment_author_user_id` change, both of which gate the turn grain. Then begin
-implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts first, ML asset
-additive).
+measurement and the `comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn
+grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts
+first, ML asset additive).

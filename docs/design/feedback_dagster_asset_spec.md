@@ -1,8 +1,9 @@
 # Feedback Aggregation — Dagster ML Asset Spec (MVP)
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-10 (rev. 4 — conversation grain) · Companion to
-[`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md)
+Date: 2026-08-13 (rev. 5 — `feedback_clusters` is a `@multi_asset`; see
+[#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422)) · rev. 4 (2026-08-10, conversation
+grain) · Companion to [`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md)
 and [`feedback_ml_approach.md`](./feedback_ml_approach.md)
 
 The scheduled batch job that turns assembled, redacted conversations into summaries, embeddings, clusters,
@@ -10,6 +11,11 @@ LLM-proposed categories, and sentiment. Grounded in the existing repo orchestrat
 ships without this asset**; this is purely additive — it fills the generated columns on
 `afact_feedback_conversation` and writes `feedback_cluster_run` (see
 [`feedback_erd.md`](./feedback_erd.md) §4/§5).
+
+> **REVISED 2026-08-13 (rev. 5) — `feedback_clusters` is a `@multi_asset`.** §2 specified one stage
+> producing two target tables (`feedback_cluster_run`, `feedback_cluster_candidate`) through a single
+> `@asset`; a plain `@asset` has one materialized output, so that could not actually run as written. Split
+> into two named `AssetOut`s on one `@multi_asset` — same stage, same UMAP+HDBSCAN call, two writes.
 
 > **REVISED 2026-08-10 (rev. 4) — the analysis unit is the conversation** (design §5a). The asset reads
 > `int__feedback__conversation` (one row per conversation, turns assembled and ordered) instead of
@@ -85,9 +91,13 @@ feedback_summaries             @asset  → conversation_summary + summary_model_
 feedback_embeddings            @asset  → embedding_vector, embedding_dim, embedding_input,
    │                                     embedding_model_version   [computed ONCE per version]
    ▼
-feedback_clusters              @asset  → writes feedback_cluster_run (one row: algorithm, params,
-   │                                     cluster_count, noise_count, silhouette) + cluster_id /
-   │                                     cluster_probability per conversation  (UMAP→HDBSCAN)
+feedback_clusters              @multi_asset (two AssetOuts — fixed rev. 4, @copilot: a plain @asset has one
+   │                                     materialized output and cannot populate two target tables from one
+   │                                     DataFrame through PolarsIcebergIOManager)
+   │           ├─ out: feedback_cluster_run       → one row: algorithm, params, cluster_count, noise_count,
+   │           │                                     silhouette   (UMAP→HDBSCAN, run-level)
+   │           └─ out: feedback_cluster_candidate → cluster_id / cluster_probability per conversation
+   │                                                 (per-conversation, this run only — §4f/design §4f)
    ├─────────────► feedback_category_proposals  @asset → LLM-labels clusters → dim_feedback_category
    │                                                     (category_source='llm_discovered', status='proposed',
    │                                                      cluster_run_id = provenance)
@@ -127,7 +137,8 @@ Promotion copies the assignment onto `afact_feedback_conversation` and drops the
   uses against `reporting.cheating_detection_report`.)
 - **Write** results: return a `pl.DataFrame` from the asset; the `io_manager` key
   (`PolarsIcebergIOManager`, configured in `definitions.py`) persists it to the target
-  Iceberg table. `feedback_cluster_run` and `feedback_cluster_candidate` are new Iceberg tables with the
+  Iceberg table. `feedback_clusters` (§2) returns **two** DataFrames, one per `AssetOut`, since it is a
+  `@multi_asset`. `feedback_cluster_run` and `feedback_cluster_candidate` are new Iceberg tables with the
   schemas in `feedback_ml_approach.md` §A (ERD: [`feedback_erd.md`](./feedback_erd.md) §5).
 - **Getting the generated columns onto `afact_feedback_conversation`:** dbt owns that table, so the assets
   write per-stage Iceberg output tables (`feedback_summaries`, `feedback_embeddings`,

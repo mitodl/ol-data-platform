@@ -1,7 +1,8 @@
 # Feedback Aggregation — Entity-Relationship Diagrams
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-10 (rev. 3 — conversation-grain analysis fact) · Companion to
+Date: 2026-08-13 (rev. 4 — fixes from [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422);
+rev. 3 conversation-grain analysis fact) · Companion to
 [`feedback_dimensional_model.md`](./feedback_dimensional_model.md),
 [`feedback_event_contract_spec.md`](./feedback_event_contract_spec.md) and
 [`feedback_ml_approach.md`](./feedback_ml_approach.md).
@@ -55,7 +56,7 @@ erDiagram
     dim_organization      |o--o{ tfact_feedback : "organization_fk"
     tfact_feedback        ||--o{ bridge_feedback_tag : "feedback_pk"
     dim_feedback_tag      ||--o{ bridge_feedback_tag : "feedback_tag_pk"
-    afact_feedback_conversation ||--o{ tfact_feedback : "conversation_id (turns roll up)"
+    afact_feedback_conversation ||--o{ tfact_feedback : "(feedback_source_fk, conversation_id) - turns roll up"
 
     tfact_feedback {
         varchar feedback_pk PK "surrogate_key(source_slug, source_record_ref) - ref is the TURN id"
@@ -212,8 +213,9 @@ lost by widening the grain.
 
 ```mermaid
 erDiagram
-    feedback_event_contract ||--|| int__feedback__unioned : "union all + Presidio redaction"
-    int__feedback__unioned  ||--|| tfact_feedback : "resolve conformed FKs, mint feedback_pk"
+    feedback_event_contract ||--|| int__feedback__unioned : "union all"
+    int__feedback__unioned  ||--|| feedback_redacted : "Presidio redaction (own Phase-1 asset, rev. 4)"
+    feedback_redacted       ||--|| tfact_feedback : "resolve conformed FKs, mint feedback_pk"
 
     feedback_event_contract {
         varchar source_slug "REQUIRED - maps to dim_feedback_source"
@@ -222,14 +224,15 @@ erDiagram
         varchar text "REQUIRED - raw free text, redacted in-warehouse"
         varchar channel_slug "REQUIRED - maps to dim_feedback_channel"
         varchar title "subject or heading"
-        varchar conversation_ref "thread or ticket id"
+        varchar conversation_ref "REQUIRED (rev. 4) - thread/ticket id; non-conversational sources set this to source_record_ref"
         integer turn_index "ordinal within the conversation"
         varchar subject_user_ref "global or openedx user id - NEVER a source row PK"
         varchar courserun_readable_id "course scope"
         varchar platform "platform readable id"
         varchar subject_type "what the feedback is ABOUT"
         varchar subject_ref "source-native id of that thing"
-        varchar subject_url "canonical or decoded deep link"
+        varchar subject_url "canonical or decoded deep link to the SUBJECT"
+        varchar source_url "NEW (rev. 4) - deep link to the record ITSELF, e.g. ticket API URL"
         varchar explicit_rating "CSAT, tutor rating, ORA score - conformed"
         varchar created_at "source lifecycle timestamp"
         varchar updated_at "source lifecycle timestamp"
@@ -255,7 +258,7 @@ conversation is built from all of them.
 
 ```mermaid
 erDiagram
-    afact_feedback_conversation ||--o{ tfact_feedback : "conversation_id (turns roll up)"
+    afact_feedback_conversation ||--o{ tfact_feedback : "(feedback_source_fk, conversation_id) - turns roll up"
     dim_feedback_source   ||--o{ afact_feedback_conversation : "feedback_source_fk"
     dim_date              ||--o{ afact_feedback_conversation : "opened / last_turn / resolved / closed"
     dim_user              |o--o{ afact_feedback_conversation : "opened_by_user_fk"
@@ -265,7 +268,7 @@ erDiagram
 
     afact_feedback_conversation {
         varchar feedback_conversation_pk PK "surrogate_key(source_slug, conversation_ref)"
-        varchar conversation_id "degenerate - joins tfact_feedback.conversation_id"
+        varchar conversation_id "degenerate - joins tfact_feedback on (feedback_source_fk, conversation_id) TOGETHER, never alone (rev. 4)"
         varchar feedback_source_fk FK
         varchar opened_by_user_fk FK "nullable"
         integer opened_date_fk FK "available today"
@@ -362,7 +365,7 @@ erDiagram
         integer cluster_id
         integer conversation_count "at conversation grain this IS the cluster size"
         integer distinct_user_count
-        float avg_explicit_rating
+        integer rated_conversation_count "coverage only - count with a non-null explicit_rating; replaces avg_explicit_rating (rev. 4, see note below)"
     }
 ```
 
@@ -379,6 +382,15 @@ what still lets clustering re-run freely.
 one talkative reporter could manufacture a systemic issue. At conversation grain a cluster's size *is* its
 conversation count, and that whole caveat disappears.
 
+**`rated_conversation_count` replaces `avg_explicit_rating` (fixed rev. 4, @copilot).**
+`explicit_rating` is a heterogeneous *string* across sources — Zendesk `'good'`/`'bad'`, tutor and ORA
+numeric-looking scores that are not on a shared scale — so averaging it as a float requires a conformed
+numeric mapping this design does not define. `sentiment_fk` is already the conformed signal on this rollup
+(derived from `explicit_rating` at MVP, per `feedback_zendesk_mvp_spec.md` §6), so a positive/neutral/
+negative breakdown is available via `sentiment_fk` without inventing a second normalization. The rollup
+keeps only `rated_conversation_count` — coverage, not an average — rather than defining a rating-to-number
+mapping speculatively ahead of a second source needing one.
+
 ---
 
 ## 6. What Phase 1 (Zendesk MVP) builds
@@ -392,7 +404,7 @@ erDiagram
     dim_user              |o--o{ tfact_feedback : "user_fk - comment author, email path"
     tfact_feedback        ||--o{ bridge_feedback_tag : "feedback_pk"
     dim_feedback_tag      ||--o{ bridge_feedback_tag : "feedback_tag_pk"
-    afact_feedback_conversation ||--o{ tfact_feedback : "conversation_id = ticket_id"
+    afact_feedback_conversation ||--o{ tfact_feedback : "(feedback_source_fk, conversation_id) = (zendesk, ticket_id)"
     dim_feedback_category |o--o{ afact_feedback_conversation : "category_fk - seeded from ticket_tags"
     dim_sentiment         |o--o{ afact_feedback_conversation : "sentiment_fk - from satisfaction_rating_score"
 
@@ -413,11 +425,12 @@ Build path:
 flowchart TD
     A["raw__thirdparty__zendesk_support__tickets<br/>raw__thirdparty__zendesk_support__ticket_comments"] --> B["stg__zendesk__ticket<br/>stg__zendesk__ticket_comment<br/>(existing)"]
     B --> C["int__zendesk__ticket_comment<br/>(existing - GRAIN SOURCE; needs comment_author_user_id added)"]
-    B --> C2["int__zendesk__ticket<br/>(existing - conversation attributes)"]
+    B --> C2["int__zendesk__ticket<br/>(existing - conversation attributes; needs ticket_requester_user_id added, rev. 4)"]
     C --> D["int__feedback__zendesk<br/>(NEW - conform to the event contract, filter to public requester turns)"]
     C2 --> D
-    D --> E["int__feedback__unioned<br/>(NEW - union all sources + Presidio redaction)"]
-    E --> F["tfact_feedback<br/>(NEW - resolve FKs, mint feedback_pk; INSERT-ONLY)"]
+    D --> E["int__feedback__unioned<br/>(NEW - union all sources)"]
+    E --> R["feedback_redacted<br/>(NEW, rev. 4 - Dagster Python asset, Presidio masking; Phase-1, upstream of the fact, NOT the ML asset)"]
+    R --> F["tfact_feedback<br/>(NEW - resolve FKs, mint feedback_pk; INSERT-ONLY)"]
     F --> G["bridge_feedback_tag"]
     F --> M["int__feedback__conversation<br/>(NEW - assemble kept turns per conversation, ordered)"]
     C2 --> H["afact_feedback_conversation<br/>(NEW - lifecycle + generated columns)"]
@@ -446,6 +459,7 @@ regardless, because it moves the business key.
 | Item | Kind | Blocks |
 |---|---|---|
 | Carry `comment_author_user_id` through `int__zendesk__ticket_comment` (it is in `stg__zendesk__ticket_comment`, not in the int model) | small dbt change | classifying requester-vs-agent turns; `user_fk` resolution |
+| Carry `ticket_requester_user_id` through `int__zendesk__ticket` (NEW, rev. 4 — the join to `stg__zendesk__user` already exists at `int__zendesk__ticket.sql:117-118`, only `requester.user_name` is selected today) | small dbt change | the §2 filter compares ids, not names — it cannot compile without this |
 | Measure public-requester comment volume per ticket | measurement | sizing the fact and the embedding budget |
 | Add the `ticket_metrics` stream to the Zendesk Airbyte connector | ingestion, separate ticket | resolution/closure durations in `afact_feedback_conversation` |
 | Confirm the conformed `channel_slug` value set against each source's actual channel values | modeling | `dim_feedback_channel` seed |
@@ -456,6 +470,23 @@ regardless, because it moves the business key.
 ---
 
 ## 8. Change log
+
+**rev. 4 (2026-08-13)** — implementation-blocking fixes from
+[#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422), no grain/key/shape changes:
+
+- **`feedback_redacted` is its own node** (§3/§6) — redaction sits between `int__feedback__unioned` and
+  `tfact_feedback` as a distinct Phase-1 Dagster asset, not folded into the same union step or the ML
+  pipeline (detail: `feedback_zendesk_mvp_spec.md` §3).
+- **`conversation_ref` is required** in the contract (§3), with non-conversational sources setting it to
+  `source_record_ref`; **`source_url` added** to the contract (§3) — both were fact/adapter requirements
+  with no contract field to source them from.
+- **`(feedback_source_fk, conversation_id)` replaces bare `conversation_id`** everywhere the turn fact joins
+  the conversation fact (§1/§4/§6) — `conversation_id` is source-native and can collide across sources.
+- **`rated_conversation_count` replaces `avg_explicit_rating`** (§5) — `explicit_rating` is a heterogeneous
+  string, not a number, so it cannot be averaged without a normalization this design doesn't define.
+- **`ticket_requester_user_id` added to the prerequisites** (§7) — the same class of gap as
+  `comment_author_user_id`: the §2 filter needs the id, and `int__zendesk__ticket` today exposes only the
+  requester's name.
 
 **rev. 3 (2026-08-10)** — the analysis unit moves from the turn to the conversation
 ([RFC #12210](https://github.com/mitodl/hq/discussions/12210)):
