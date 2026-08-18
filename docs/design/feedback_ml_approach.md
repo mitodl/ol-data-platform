@@ -76,15 +76,17 @@ for `embedding_input` — which is the same lever §B.1 already identified as th
 cluster quality on short, noisy ticket text. Rev. 3 promotes it from an eval arm to a first-class artifact,
 so its cost has to be stated rather than assumed away:
 
-- **Skip rule:** conversations with `turn_count = 1` or under a length threshold are **not** summarized —
-  the raw text already is the summary. `summary_model_version` stays null and `embedding_input` is
-  `concatenated_turns`. ORA and the edX plugin are single-turn by construction and are free.
-- **Order of magnitude (validate on a sample first):** the multi-turn share of ~198K Zendesk conversations at
-  ~1–2K input and ~100 output tokens each lands the one-time backfill in the low hundreds of dollars at
-  Haiku-class pricing; steady state (~24K conversations/yr, a fraction multi-turn) is tens of dollars a year.
-  One to two orders of magnitude above the $2–16 embedding backfill, still small absolutely — but it is a
-  real departure from the "trivial batch cost" posture this project has carried since discovery, and it is
-  the number to measure before committing.
+- **Skip rule:** conversations with `turn_count = 1` or under **500 characters** of assembled turns are
+  **not** summarized — the raw text already is the summary. `summary_model_version` stays null and
+  `embedding_input` is `concatenated_turns`. ORA and the edX plugin are single-turn by construction and are
+  free. The 500-character cutoff comes from the measured distribution (§B.2): it sits below the 601 p25, so it
+  skips 9,680 of the 52,218 multi-turn Zendesk conversations (18.5%) — the ones that amount to two short
+  replies. A 1,000-character cutoff would sit at the 1,040 median and skip 48.5%.
+- **Cost** (measured 2026-08-14, #2536): 52,218 multi-turn Zendesk conversations at a mean of 1,847
+  characters puts the one-time backfill at **~$37 on Haiku 4.5** via the Batch API (50% off, and a backfill is
+  exactly its shape), or ~$74 on Sonnet 5. Steady state (~24K conversations/yr, a fraction multi-turn) is
+  single-digit dollars a year. Applying the skip threshold above brings the backfill to ~$32, so the threshold
+  is a summary-quality decision rather than a cost lever.
 - **PII:** summaries are generated from Presidio-redacted text only and inherit that classification.
 
 ---
@@ -163,9 +165,27 @@ conversations, so the MVP input is **~198K Zendesk tickets** — the figure disc
 roughly ~600K across all sources once forum threads, tutor threads and ORA submissions are onboarded, versus
 the ~1.18M turn-level corpus. Embedding cost returns to the original $2–16 order of magnitude.
 
-The turn-count measurement in `feedback_zendesk_mvp_spec.md` §0 is **still required**, but for different
-reasons now: it sizes `tfact_feedback` itself, and it determines the multi-turn share that drives the
-summarization budget (§A.1).
+**The turn-count measurement is done** (2026-08-14, #2536), against production
+`stg__zendesk__ticket_comment` filtered to `comment_is_public` and
+`comment_author_user_id = ticket_requester_user_id`:
+
+| | Measured |
+|---|---|
+| Zendesk tickets | 200,485 |
+| No public requester comment (never enter the fact) | 9,659 (4.8%) |
+| Conversations — the embedding input | **190,826** |
+| Turn-grain rows in `tfact_feedback` | **282,470** (1.5 turns/conversation) |
+| Multi-turn (≥2 turns) — the summarizer input | **52,218 (27.4%)** |
+| Assembled characters, multi-turn conversations | p50 1,040 · p90 4,016 · p99 11,691 · max 553,230 · mean 1,847 |
+
+`tfact_feedback` carries 282,470 rows at 1.5 turns per conversation — immaterial for storage or batch
+runtime. `distinct conversation_id` is **190,826**: agent-only tickets carry no requester text and never enter
+the fact, so it runs 4.8% below the ticket count by construction. The summarizer runs on the 52,218 multi-turn
+conversations, which is what puts its cost at ~$37 (§A.1).
+
+The character distribution sets §A.1's 500-character skip threshold. It also argues for capping summarizer
+input: the p99 is 11,691 characters against a 553,230 maximum (~138K tokens), a tail thin enough that
+truncating the longest conversations costs nothing in coverage while bounding the cost of outliers.
 
 Three substantive effects, not just a different number:
 

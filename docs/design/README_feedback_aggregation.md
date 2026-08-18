@@ -113,8 +113,9 @@ signals for four audiences (support, engineering, instructors, leadership).
 - Carry `ticket_requester_user_id` through `int__zendesk__ticket` (added 2026-08-13) — **blocking**, same
   reason: the requester-vs-agent filter compares ids, and the int model exposes only `ticket_requester`
   (a name), even though the join it needs already exists in the model.
-- Measure public, requester-authored comments per ticket **and the multi-turn share** — sizes the turn fact,
-  and the multi-turn share drives the summarization budget (2d).
+- ~~Measure public, requester-authored comments per ticket **and the multi-turn share**~~ — **done**
+  (2026-08-14, #2536): 200,485 tickets give 190,826 conversations and 282,470 turn-grain rows, of which
+  52,218 (27.4%) are multi-turn. This sizes the turn fact and sets the summarization budget (2d).
 - Add the `ticket_metrics` Airbyte stream — non-blocking; unblocks conversation duration measures.
 - Confirm the conformed `channel_slug` value set against each source's actual channel values.
 - Decide `embedding_input` (summary vs. concatenated turns) via the bake-off — non-blocking for the schema.
@@ -158,7 +159,6 @@ analysis fact (2d) and cut to a ~1,500-word read. Three rounds of feedback have 
   retained on `tfact_feedback` so identity can be re-matched later without a rebuild. Detail and rationale
   are in each doc's own rev. 4/5 changelog entry.
 
-Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the volume
-measurement and the `comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn
-grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts
+Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the
+`comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts
 first, ML asset additive).
