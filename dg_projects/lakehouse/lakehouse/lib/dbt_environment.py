@@ -10,7 +10,7 @@ exists to undo:
 
 * **target** -- which cluster to connect to, and which warehouse to WRITE.
 * **data lake env** -- which ``ol_data_lake_<env>`` catalog to READ.
-* **automation** -- whether anything builds here without a human asking.
+* **automation** -- whether the dbt asset graph materializes itself here.
 
 They diverge for ``dev``: a developer's StarRocks target port-forwards to the
 QA cluster but should read production data. The b2b sources used to infer the
@@ -37,7 +37,7 @@ entry -- plus ``_ENVS`` in ``ol_dbt_cli/commands/starrocks.py``, which mirrors
 these. Until then ``resolve_for_environment`` raises on it, which is the point:
 the failure is a missing declaration, not a silently inherited warehouse.
 ``DBT_AUTOMATION_MAP`` is the one to think hardest about for a new environment,
-since it decides whether that environment writes anything unattended.
+since it decides whether that environment materializes dbt models unattended.
 """
 
 import os
@@ -93,6 +93,21 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
 # ``qa`` is off because a QA dbt build is empty or partial until RFC 12711 step 8
 # lands the QA app_postgres layer -- an automated partial build of a union model
 # emits data that looks fine and silently drops rows. Flip it to "on" there.
+#
+# SCOPE, so the name is not read for more than it does: this covers the
+# AutomationCondition path only. The cron ScheduleDefinitions in definitions.py
+# -- b2b_analytics_starrocks_nightly (which builds the tag:starrocks models),
+# dbt_docs_artifacts_daily, and the two iceberg maintenance schedules -- are
+# registered in every environment and gated only by
+# ``default_status=DefaultScheduleStatus.STOPPED``, which is the same
+# seed-once-then-the-instance-wins setting this map replaces for sensors. Whether
+# any of them is running in QA is instance state the repo cannot see -- the same
+# blind spot, one layer over.
+# Left open for RFC 12711 (https://github.com/mitodl/hq/discussions/12711):
+# whether those schedules join this declaration, and
+# whether production's synthesized default_automation_condition_sensor over
+# staging (see dbt_automation_sensor's target in definitions.py) should be closed
+# by dropping staging's condition rather than only excluding it from the target.
 DBT_AUTOMATION_MAP: Mapping[str, str] = {
     "dev": "off",
     "ci": "off",

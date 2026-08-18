@@ -496,10 +496,17 @@ defs = Definitions(
             ),
             # exclude staging as they are already handled by "sync_and_stage_" job
             #
-            # Kept whole in every environment even where automation is off: the
-            # selection is what stops Dagster synthesizing a
-            # default_automation_condition_sensor over a WIDER set of assets
-            # (staging included) than this one deliberately covers.
+            # Note what that exclusion costs in production, where staging models
+            # DO carry a condition: get_default_automation_condition_sensor_target
+            # takes every conditioned key this selection does not cover and
+            # synthesizes `default_automation_condition_sensor` over
+            # AssetSelection.all() minus this one. So staging is automatable there
+            # via a sensor no one declared. Pre-existing and STOPPED unless
+            # started by hand, but the same invisible instance state
+            # DBT_AUTOMATION_MAP exists to remove -- see the open question on that map.
+            #
+            # Where automation is off the question does not arise: no asset
+            # carries a condition, so there is nothing to synthesize over.
             target=(
                 AssetSelection.assets(full_dbt_project)
                 - AssetSelection.groups("staging")
