@@ -877,6 +877,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dagster-postgres"
+version = "0.29.18"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "psycopg2-binary" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/00/55e53d046eae360d1e7475ec93e8ca185dd82346b79011ea14f05a06fde2/dagster_postgres-0.29.18.tar.gz", hash = "sha256:bdba1b9860c524b558b70a11b4cccf1836006058ecc6051700829e5d4f1ad824", size = 406346, upload-time = "2026-08-14T19:23:56.662Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/af/14/fa410bf40917d68a8400b73f7577347261b4bca28e470427578f6fd28999/dagster_postgres-0.29.18-py3-none-any.whl", hash = "sha256:9fdb27984fcc20566d1f3e731e1b039c58593a40d7f764fdcf2da139f9f5f146", size = 25559, upload-time = "2026-08-14T19:23:55.496Z" },
+]
+
+[[package]]
 name = "dagster-rest-resources"
 version = "0.29.18"
 source = { registry = "https://pypi.org/simple" }
@@ -2580,6 +2593,7 @@ dependencies = [
     { name = "boto3" },
     { name = "dagster" },
     { name = "dagster-aws" },
+    { name = "dagster-postgres" },
     { name = "fsspec" },
     { name = "gcsfs" },
     { name = "httpx2" },
@@ -2603,6 +2617,7 @@ requires-dist = [
     { name = "boto3", specifier = "~=1.43.0" },
     { name = "dagster", specifier = "~=1.11" },
     { name = "dagster-aws", specifier = "~=0.29.0" },
+    { name = "dagster-postgres", specifier = "~=0.29.0" },
     { name = "fsspec", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "gcsfs", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "httpx2", specifier = ">=2.2.0" },

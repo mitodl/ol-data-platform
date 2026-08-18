@@ -139,6 +139,13 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
         if existing_options:
             kwargs["connect_args"] = {"options": existing_options}
 
+        # QueuePool keeps its checked-in connections open until the engine is
+        # disposed, and rebuilding below drops the only reference to the old
+        # one. Without this the replaced pool's connections stay open for the
+        # life of the process, pinning PgBouncer server connections that nothing
+        # can ever check out again.
+        self._engine.dispose()
+
         self._engine = create_engine(self.postgres_url, **kwargs)
         event.listen(
             self._engine,
@@ -174,8 +181,11 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             "pool_timeout": Field(
                 IntSource,
                 is_required=False,
-                default_value=3600,
-                description="Recycle connections after N seconds",
+                default_value=30,
+                description=(
+                    "Seconds to wait for a connection from a saturated pool "
+                    "before raising"
+                ),
             ),
         }
 
