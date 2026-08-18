@@ -243,6 +243,8 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
           row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: product_name
+    description: string, name of the product. May be null for bootcamps and edX.org.
   - name: product_type
     description: string, readable product type - either course run or program. May
       be null for bootcamps and edX.org

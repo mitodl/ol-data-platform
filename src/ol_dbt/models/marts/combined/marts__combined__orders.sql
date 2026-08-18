@@ -58,6 +58,10 @@ with bootcamps__ecommerce_order as (
     select * from {{ ref('int__mitxpro__ecommerce_company') }}
 )
 
+, mart_products as (
+    select * from {{ ref('marts__combined__products') }}
+)
+
 , mitxonline_orders as (
     select
         mitxonline__ecommerce_order.order_id
@@ -468,55 +472,59 @@ with bootcamps__ecommerce_order as (
 )
 
 select
-    {{ generate_hash_id('cast(order_id as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || platform') }} as combined_orders_hash_id
-    , platform
-    , order_id
-    , line_id
-    , coupon_code
-    , coupon_id
-    , b2bcoupon_id
-    , b2border_contract_number
-    , coupon_name
-    , coupon_redeemed_on
-    , coupon_type
-    , couponpaymentversion_payment_transaction
-    , courserun_id
-    , courserun_readable_id
-    , discount
-    , order_created_on
-    , order_reference_number
-    , order_state
-    , order_tax_amount
-    , order_tax_country_code
-    , order_tax_rate
-    , order_tax_rate_name
-    , order_total_price_paid_plus_tax
-    , order_total_price_paid
-    , order_type
-    , product_id
-    , product_readable_id
-    , product_type
-    , receipt_authorization_code
-    , receipt_bill_to_address_state
-    , receipt_bill_to_address_country
-    , receipt_payment_amount
-    , receipt_payment_currency
-    , receipt_payment_card_number
-    , receipt_payment_card_type
-    , receipt_payment_method
-    , receipt_payment_timestamp
-    , receipt_payment_transaction_type
-    , receipt_payment_transaction_uuid
-    , receipt_payer_name
-    , receipt_payer_email
-    , receipt_payer_ip_address
-    , receipt_transaction_id
-    , redeemed_email
-    , req_reference_number
-    , unit_price
-    , user_email
-    , user_id
-    , {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
+    {{ generate_hash_id('cast(combined_orders.order_id as varchar)
+        || cast(coalesce(combined_orders.line_id, 9) as varchar)
+        || combined_orders.platform') }} as combined_orders_hash_id
+    , combined_orders.platform
+    , combined_orders.order_id
+    , combined_orders.line_id
+    , combined_orders.coupon_code
+    , combined_orders.coupon_id
+    , combined_orders.b2bcoupon_id
+    , combined_orders.b2border_contract_number
+    , combined_orders.coupon_name
+    , combined_orders.coupon_redeemed_on
+    , combined_orders.coupon_type
+    , combined_orders.couponpaymentversion_payment_transaction
+    , combined_orders.courserun_id
+    , combined_orders.courserun_readable_id
+    , combined_orders.discount
+    , combined_orders.order_created_on
+    , combined_orders.order_reference_number
+    , combined_orders.order_state
+    , combined_orders.order_tax_amount
+    , combined_orders.order_tax_country_code
+    , combined_orders.order_tax_rate
+    , combined_orders.order_tax_rate_name
+    , combined_orders.order_total_price_paid_plus_tax
+    , combined_orders.order_total_price_paid
+    , combined_orders.order_type
+    , combined_orders.product_id
+    , combined_orders.product_readable_id
+    , mart_products.product_name
+    , combined_orders.product_type
+    , combined_orders.receipt_authorization_code
+    , combined_orders.receipt_bill_to_address_state
+    , combined_orders.receipt_bill_to_address_country
+    , combined_orders.receipt_payment_amount
+    , combined_orders.receipt_payment_currency
+    , combined_orders.receipt_payment_card_number
+    , combined_orders.receipt_payment_card_type
+    , combined_orders.receipt_payment_method
+    , combined_orders.receipt_payment_timestamp
+    , combined_orders.receipt_payment_transaction_type
+    , combined_orders.receipt_payment_transaction_uuid
+    , combined_orders.receipt_payer_name
+    , combined_orders.receipt_payer_email
+    , combined_orders.receipt_payer_ip_address
+    , combined_orders.receipt_transaction_id
+    , combined_orders.redeemed_email
+    , combined_orders.req_reference_number
+    , combined_orders.unit_price
+    , combined_orders.user_email
+    , combined_orders.user_id
+    , {{ generate_hash_id('cast(combined_orders.user_id as varchar) || combined_orders.platform') }}
+        as user_hashed_id
 from combined_orders
+left join mart_products
+    on combined_orders.product_readable_id = mart_products.product_readable_id
