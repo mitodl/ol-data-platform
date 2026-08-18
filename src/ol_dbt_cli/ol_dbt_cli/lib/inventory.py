@@ -569,15 +569,38 @@ def dagster_group_name(connection_name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "", re.sub(r"[-\s]+", "_", connection_name)).strip("_").lower()
 
 
+class RenderError(Exception):
+    """The inventory cannot be rendered, and rendering it anyway would be a lie."""
+
+
 def _tables_by_stream(unit: Unit) -> dict[str, dict[str, Any]]:
     """Index a unit's tables by stream name.
 
     `validate` guarantees this is a bijection with the streams the unit's
-    connections carry — that is what the connection rules exist for — so the
-    renderer can index without a fallback, and a KeyError here means validate
-    was skipped rather than that the renderer needs a default.
+    connections carry — that is what the connection rules exist for — but
+    `render` deliberately does not validate first, so it cannot assume it.
     """
     return {str(table.get("name", "")): table for table in unit.tables}
+
+
+def _resolve_stream(unit: Unit, by_stream: dict[str, dict[str, Any]], stream: str) -> dict[str, Any]:
+    """Find the table a connection's stream refers to, or refuse to render.
+
+    Skipping the stream would be worse than failing. This render is applied to
+    production Airbyte: a dropped stream is a connection Pulumi reconfigures to
+    stop carrying a table, which is precisely the silent-omission failure the
+    inventory exists to end — and it would be silent in a committed JSON file
+    that a human reviewed. Better to name the missing declaration and stop.
+    """
+    table = by_stream.get(stream)
+    if table is None:
+        msg = (
+            f"{unit.path.name}: connection stream {stream!r} in unit {unit.key} matches no "
+            f"table in that unit, so there is nothing to render it from. "
+            f"Run `ol-dbt inventory validate` — it reports this and everything else wrong with the file."
+        )
+        raise RenderError(msg)
+    return table
 
 
 def _render_stream(table: dict[str, Any]) -> dict[str, Any]:
@@ -629,7 +652,10 @@ def render_airbyte(units: list[Unit]) -> dict[str, Any]:
                     "status": connection.get("status"),
                     "sync_interval_hours": connection.get("sync_interval_hours"),
                     "dagster_group_name": dagster_group_name(str(connection.get("name", ""))),
-                    "streams": [_render_stream(by_stream[str(stream)]) for stream in connection.get("streams") or []],
+                    "streams": [
+                        _render_stream(_resolve_stream(unit, by_stream, str(stream)))
+                        for stream in connection.get("streams") or []
+                    ],
                 }
                 for connection in unit.connections
             ],

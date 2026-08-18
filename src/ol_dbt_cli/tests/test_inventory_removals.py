@@ -17,6 +17,7 @@ import pytest
 import yaml
 
 from ol_dbt_cli.lib.inventory import (
+    RenderError,
     Snapshot,
     Unit,
     check_removals,
@@ -270,6 +271,17 @@ class TestRenderAirbyte:
         streams = rendered["units"][0]["connections"][0]["streams"]
         assert streams[1]["excluded_columns"] == ["state"]
         assert "selected_fields" not in streams[1]
+
+    def test_an_undeclared_stream_stops_the_render(self) -> None:
+        # `render` does not validate first, so it meets inventories `validate`
+        # would have rejected. Skipping the stream would be worse than failing:
+        # this JSON is applied to production Airbyte, so a dropped stream is a
+        # connection reconfigured to stop carrying a table — silently, in a file
+        # a human reviewed.
+        broken = copy.deepcopy(UNIT)
+        broken["airbyte"]["connections"][0]["streams"].append("never_declared")
+        with pytest.raises(RenderError, match="never_declared"):
+            render_airbyte([_unit(broken)])
 
     def test_dlt_units_are_not_rendered(self) -> None:
         dlt_unit = copy.deepcopy(UNIT)

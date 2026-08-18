@@ -25,6 +25,7 @@ from rich.markup import escape
 from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
 from ol_dbt_cli.lib.inventory import (
     DEFAULT_INVENTORY_DIR,
+    RenderError,
     check_removals,
     load_snapshot,
     load_snapshot_at_ref,
@@ -180,15 +181,24 @@ def render(
     silent 24-hour default for a mistyped key is its own class of stale-source
     incident (§1.3).
 
-    Deliberately does not validate first: a render of an invalid inventory is a
-    thing you sometimes want to look at. CI runs `validate` on the same PR.
+    Deliberately does not validate first: a render of an inventory that fails
+    some rule is a thing you sometimes want to look at, and CI runs `validate`
+    on the same PR anyway. The one exception is an inventory whose render is
+    undefined rather than merely wrong — a connection carrying a stream no table
+    declares. That stops the render with a message rather than silently dropping
+    the stream, because this JSON is applied to production Airbyte and a dropped
+    stream is a connection reconfigured to stop carrying a table.
     """
     if target not in RENDER_TARGETS:
         err_console.print(f"[bold red]Unknown render target {escape(target)!r}. Expected one of: {RENDER_TARGETS}")
         sys.exit(1)
 
     units = load_units(inventory_dir)
-    document: Any = render_airbyte(units) if target == "airbyte" else render_dagster_intervals(units)
+    try:
+        document: Any = render_airbyte(units) if target == "airbyte" else render_dagster_intervals(units)
+    except RenderError as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        sys.exit(1)
     text = json.dumps(document, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
 
     if output:
