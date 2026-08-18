@@ -133,6 +133,13 @@ class PooledPostgresRunStorage(PostgresRunStorage):
         if existing_options:
             kwargs["connect_args"] = {"options": existing_options}
 
+        # QueuePool keeps its checked-in connections open until the engine is
+        # disposed, and rebuilding below drops the only reference to the old
+        # one. Without this the replaced pool's connections stay open for the
+        # life of the process, pinning PgBouncer server connections that nothing
+        # can ever check out again.
+        self._engine.dispose()
+
         self._engine = create_engine(self.postgres_url, **kwargs)
         event.listen(
             self._engine,

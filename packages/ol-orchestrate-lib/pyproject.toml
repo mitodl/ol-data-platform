@@ -14,6 +14,7 @@ dependencies = [
     "boto3 ~=1.43.0",
     "dagster ~= 1.11",
     "dagster-aws ~=0.29.0",
+    "dagster-postgres ~=0.29.0",
     "fsspec (>=2026.0.0,<2027.0.0)",
     "gcsfs (>=2026.0.0,<2027.0.0)",
     "httpx2 >= 2.2.0",
