@@ -5,11 +5,12 @@ can be unit-tested without a parsed dbt manifest on disk -- importing
 ``assets.lakehouse.dbt`` evaluates a ``@dbt_assets`` decorator, which needs
 one. Same reason ``lakehouse.lib.starrocks_dbt`` exists.
 
-Two independent axes, and conflating them is what RFC 12711 step 1 exists to
-undo:
+Three independent axes, and conflating the first two is what RFC 12711 step 1
+exists to undo:
 
 * **target** -- which cluster to connect to, and which warehouse to WRITE.
 * **data lake env** -- which ``ol_data_lake_<env>`` catalog to READ.
+* **automation** -- whether anything builds here without a human asking.
 
 They diverge for ``dev``: a developer's StarRocks target port-forwards to the
 QA cluster but should read production data. The b2b sources used to infer the
@@ -35,6 +36,8 @@ When it lands, ``DAGSTER_ENV`` gains the value and every map below needs an
 entry -- plus ``_ENVS`` in ``ol_dbt_cli/commands/starrocks.py``, which mirrors
 these. Until then ``resolve_for_environment`` raises on it, which is the point:
 the failure is a missing declaration, not a silently inherited warehouse.
+``DBT_AUTOMATION_MAP`` is the one to think hardest about for a new environment,
+since it decides whether that environment writes anything unattended.
 """
 
 import os
@@ -68,6 +71,33 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "ci": "starrocks_production",
     "qa": "starrocks_qa_vault",
     "production": "starrocks_production",
+}
+
+# Whether this environment automates the dbt chain at all: whether dbt and
+# Superset assets carry an AutomationCondition, and whether
+# ``dbt_automation_sensor`` starts running.
+#
+# Until RFC 12711 step 1, DBT_TARGET_MAP had no ``qa`` entry and fell through to
+# production, so this sensor firing in the QA code location built the PRODUCTION
+# warehouse. It did: the newest dbt run_results.json in s3://dagster-data-qa/
+# before that fix is 2026-08-11 and reads ``"target": "production"``. Nothing in
+# the repo said whether the sensor was allowed to run there -- it was a hand-made
+# instance setting, which is how the misrouting stayed invisible for months.
+#
+# ``default_status`` alone would not have prevented it. It only seeds the
+# instance state on first deploy; once a sensor has been toggled in the UI, the
+# instance wins forever. So the enforcing half of this declaration is the
+# AutomationCondition: with automation off, the assets carry no condition and a
+# sensor someone starts by hand evaluates to nothing.
+#
+# ``qa`` is off because a QA dbt build is empty or partial until RFC 12711 step 8
+# lands the QA app_postgres layer -- an automated partial build of a union model
+# emits data that looks fine and silently drops rows. Flip it to "on" there.
+DBT_AUTOMATION_MAP: Mapping[str, str] = {
+    "dev": "off",
+    "ci": "off",
+    "qa": "off",
+    "production": "on",
 }
 
 # Which lake each environment READS. Mirrors trino_catalog_map in
@@ -118,6 +148,24 @@ STARROCKS_DBT_TARGET = resolve_for_environment(
     override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
     what="StarRocks dbt target",
 )
+
+_AUTOMATION_VALUES = frozenset({"on", "off"})
+_automation = resolve_for_environment(
+    DBT_AUTOMATION_MAP,
+    override_env_var="DAGSTER_DBT_AUTOMATION",
+    what="dbt automation mode",
+)
+if _automation not in _AUTOMATION_VALUES:
+    # Checked rather than assumed: `== "on"` alone would read a typo, or an
+    # operator's DAGSTER_DBT_AUTOMATION=true, as "off" -- quietly disabling
+    # production automation instead of failing the import.
+    msg = (
+        f"dbt automation mode is {_automation!r}; expected one of "
+        f"{sorted(_AUTOMATION_VALUES)}."
+    )
+    raise ValueError(msg)
+
+DBT_AUTOMATION_ENABLED = _automation == "on"
 
 DATA_LAKE_ENV = resolve_for_environment(
     DATA_LAKE_ENV_MAP,

@@ -11,6 +11,7 @@ from dagster_dbt import get_asset_key_for_model
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 
 from lakehouse.assets.lakehouse.dbt import full_dbt_project
+from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 _DEFAULT_SCHEMA_BASE = "ol_warehouse_production"
@@ -54,7 +55,12 @@ def create_superset_asset(
     @asset(
         key=asset_key,
         deps=[get_asset_key_for_model([full_dbt_project], dbt_model_name)],
-        automation_condition=upstream_or_code_changes(),
+        # Gated with the dbt assets these follow: dbt_automation_sensor targets
+        # both, so leaving these conditions live would let a sensor started by
+        # hand in an automation-off environment still fire this half.
+        automation_condition=(
+            upstream_or_code_changes() if DBT_AUTOMATION_ENABLED else None
+        ),
         group_name=group_name,
     )
     def _superset_dataset(

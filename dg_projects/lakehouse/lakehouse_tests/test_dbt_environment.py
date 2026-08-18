@@ -7,9 +7,13 @@ answer at all. So the assertions here are mostly about agreement and
 exhaustiveness rather than about specific target names.
 """
 
+import importlib
+
 import pytest
+from lakehouse.lib import dbt_environment
 from lakehouse.lib.dbt_environment import (
     DATA_LAKE_ENV_MAP,
+    DBT_AUTOMATION_MAP,
     DBT_TARGET_MAP,
     STARROCKS_DBT_TARGET_MAP,
     resolve_for_environment,
@@ -23,6 +27,7 @@ ALL_MAPS = pytest.mark.parametrize(
         ("DBT_TARGET_MAP", DBT_TARGET_MAP),
         ("STARROCKS_DBT_TARGET_MAP", STARROCKS_DBT_TARGET_MAP),
         ("DATA_LAKE_ENV_MAP", DATA_LAKE_ENV_MAP),
+        ("DBT_AUTOMATION_MAP", DBT_AUTOMATION_MAP),
     ],
 )
 
@@ -105,3 +110,51 @@ def test_override_env_var_wins(name, value_map, monkeypatch):
         )
         == "an_explicit_override"
     )
+
+
+def test_automation_values_are_legal():
+    """`== "on"` reads anything else as off, so the vocabulary is closed."""
+    assert set(DBT_AUTOMATION_MAP.values()) <= {"on", "off"}
+
+
+def test_only_production_automates():
+    """No environment builds unattended against a warehouse it isn't for.
+
+    `qa` in particular: with DBT_TARGET_MAP missing a `qa` entry, an automated
+    QA build wrote the production warehouse, and the last such run_results.json
+    in s3://dagster-data-qa/ is dated 2026-08-11. Step 1 fixed where a QA build
+    writes; this fixes whether one starts on its own. Flipping `qa` to "on"
+    belongs to RFC 12711 step 8, once the QA lake can actually fill the models.
+    """
+    assert {env for env, mode in DBT_AUTOMATION_MAP.items() if mode == "on"} == {
+        "production"
+    }
+
+
+def test_automation_is_off_in_this_test_environment():
+    """The gate has to survive someone starting the sensor in the UI.
+
+    `default_status` seeds the instance state once and is overridden forever
+    after by a manual toggle -- exactly the invisible instance setting this
+    replaces. So the enforcing half is that an automation-off environment
+    produces assets with NO AutomationCondition, which a hand-started sensor
+    evaluates to nothing. This asserts the boolean those assets read; the
+    translator itself cannot be imported here without a parsed dbt manifest.
+    """
+    assert dbt_environment.DBT_AUTOMATION_ENABLED is False
+
+
+def test_illegal_automation_value_fails_the_import(monkeypatch):
+    """An operator's DAGSTER_DBT_AUTOMATION=true must not read as "off".
+
+    Silently disabling production automation is the expensive direction of a
+    typo here, and nothing downstream would report it -- the assets would just
+    stop carrying a condition.
+    """
+    monkeypatch.setenv("DAGSTER_DBT_AUTOMATION", "true")
+    try:
+        with pytest.raises(ValueError, match="expected one of"):
+            importlib.reload(dbt_environment)
+    finally:
+        monkeypatch.delenv("DAGSTER_DBT_AUTOMATION")
+        importlib.reload(dbt_environment)

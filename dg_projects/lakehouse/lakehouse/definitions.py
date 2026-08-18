@@ -53,6 +53,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 )
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
+from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
@@ -484,7 +485,21 @@ defs = Definitions(
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour
+            # Declared rather than left to the instance, which is how a QA code
+            # location came to build the production warehouse unattended. This
+            # only seeds the state on first deploy -- DBT_AUTOMATION_MAP's
+            # effect on the assets' AutomationCondition is what enforces it.
+            default_status=(
+                DefaultSensorStatus.RUNNING
+                if DBT_AUTOMATION_ENABLED
+                else DefaultSensorStatus.STOPPED
+            ),
             # exclude staging as they are already handled by "sync_and_stage_" job
+            #
+            # Kept whole in every environment even where automation is off: the
+            # selection is what stops Dagster synthesizing a
+            # default_automation_condition_sensor over a WIDER set of assets
+            # (staging included) than this one deliberately covers.
             target=(
                 AssetSelection.assets(full_dbt_project)
                 - AssetSelection.groups("staging")
