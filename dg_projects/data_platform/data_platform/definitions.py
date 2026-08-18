@@ -660,7 +660,13 @@ def asset_check_failure_message(
         metadata_text = format_check_metadata(getattr(evaluation, "metadata", None))
         if metadata_text:
             lines.append(metadata_text)
-        return "\n".join(lines)
+        # Per-field limits (MAX_DESCRIPTION_LENGTH, MAX_METADATA_VALUE_LENGTH)
+        # bound each piece, but not an unbounded metadata *key* or the sum of
+        # several fields together. A section block over Slack's 3000-character
+        # text limit fails the whole chat.postMessage call -- and by then the
+        # sensor has already advanced its cursor past this batch, permanently
+        # dropping it. This is the backstop for that.
+        return truncate_text("\n".join(lines))
 
     detail_blocks = [
         {

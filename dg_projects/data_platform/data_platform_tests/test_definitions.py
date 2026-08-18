@@ -10,6 +10,7 @@ from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
     MAX_METADATA_ENTRIES_PER_FAILURE,
+    MAX_SLACK_TEXT_LENGTH,
     RETRY_NUMBER_TAG,
     asset_check_failure_message,
     collect_new_check_failures,
@@ -1000,3 +1001,29 @@ def test_format_check_metadata_renders_a_timestamp_as_an_iso_datetime() -> None:
 def test_format_check_metadata_handles_no_metadata() -> None:
     assert format_check_metadata(None) == ""
     assert format_check_metadata({}) == ""
+
+
+def test_asset_check_failure_message_caps_the_composed_detail_text() -> None:
+    """Regression (Copilot, PR #2568): per-field limits bound each value, but
+    not an unbounded metadata *key* or the sum of several fields together. A
+    section block over Slack's 3,000-character text limit fails the whole
+    chat.postMessage call -- and by then the sensor has already advanced its
+    cursor past the batch, permanently dropping it.
+    """
+    failures = [
+        _check_failure(
+            "run-1",
+            "mart/enrollments",
+            description="x" * MAX_SLACK_TEXT_LENGTH,
+            metadata={
+                "a" * 500: MetadataValue.text("x" * 500),
+                "b" * 500: MetadataValue.text("x" * 500),
+                "c" * 500: MetadataValue.text("x" * 500),
+            },
+        )
+    ]
+
+    blocks = asset_check_failure_message(failures)
+
+    detail_block = next(b for b in blocks if b["type"] == "section")
+    assert len(detail_block["text"]["text"]) <= MAX_SLACK_TEXT_LENGTH
