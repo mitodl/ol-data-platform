@@ -6,15 +6,17 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from dagster import AssetCheckSeverity, RetryPolicy
+from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
+    MAX_METADATA_ENTRIES_PER_FAILURE,
     RETRY_NUMBER_TAG,
     asset_check_failure_message,
     collect_new_check_failures,
     dagster_url,
     defs,
     error_message,
+    format_check_metadata,
     get_exception,
     is_an_interrupted_worker,
     is_reported_by_the_run_failure_sensor,
@@ -770,6 +772,7 @@ def _check_failure(
     asset: str,
     metadata: dict[str, Any] | None = None,
     check_name: str = "freshness_check",
+    description: str | None = None,
 ) -> tuple[str, Any]:
     return (
         run_id,
@@ -777,6 +780,7 @@ def _check_failure(
             asset_key=SimpleNamespace(to_user_string=lambda: asset),
             check_name=check_name,
             metadata=metadata or {},
+            description=description,
         ),
     )
 
@@ -908,3 +912,91 @@ def test_asset_check_failure_message_links_each_check_to_its_own_run() -> None:
         f"{dagster_url}/runs/run-1",
         f"{dagster_url}/runs/run-2",
     ]
+
+
+# ── Metadata rendering ────────────────────────────────────────────────────────
+
+
+def test_asset_check_failure_message_renders_the_checks_description() -> None:
+    """Regression: a freshness check's own summary -- e.g. how overdue an
+    asset is -- named nothing but the check, leaving the substance a click
+    away.
+    """
+    failures = [
+        _check_failure(
+            "run-1",
+            "mart/enrollments",
+            description="Asset is overdue for an update. The last update was "
+            "3 days ago, which is past the allowed distance of 1 day ago.",
+        )
+    ]
+
+    blocks = asset_check_failure_message(failures)
+
+    assert "overdue for an update" in _block_text(blocks)
+
+
+def test_asset_check_failure_message_renders_a_bounded_slice_of_metadata() -> None:
+    """Scalar metadata a check computed -- the substance Copilot's PR #2565
+    review flagged as unreachable from Slack -- renders inline.
+    """
+    failures = [
+        _check_failure(
+            "run-1",
+            "mart/enrollments",
+            metadata={
+                "failed_partitions": MetadataValue.int(42),
+                "recovery": MetadataValue.md("Re-materialize the failed keys."),
+            },
+        )
+    ]
+
+    blocks = asset_check_failure_message(failures)
+
+    text = _block_text(blocks)
+    assert "failed_partitions" in text
+    assert "42" in text
+    assert "Re-materialize the failed keys." in text
+
+
+def test_format_check_metadata_skips_structured_values() -> None:
+    """JSON and other structured metadata stays in the UI -- rendering it
+    inline is how a notification for 49 failures becomes unreadable.
+    """
+    text = format_check_metadata(
+        {
+            "sample": MetadataValue.json(["p1", "p2", "p3"]),
+            "sample_truncated": MetadataValue.bool(True),
+        }
+    )
+
+    assert "sample_truncated" in text
+    assert "p1" not in text
+
+
+def test_format_check_metadata_bounds_entry_count() -> None:
+    """A check with many scalar metadata keys still gets a bounded message,
+    not the whole mapping.
+    """
+    metadata = {
+        f"key_{i}": MetadataValue.int(i)
+        for i in range(MAX_METADATA_ENTRIES_PER_FAILURE + 5)
+    }
+
+    text = format_check_metadata(metadata)
+
+    assert len(text.splitlines()) == MAX_METADATA_ENTRIES_PER_FAILURE
+
+
+def test_format_check_metadata_renders_a_timestamp_as_an_iso_datetime() -> None:
+    """Freshness checks report timing as unix timestamps; a raw float reads
+    as noise next to the run link, so it renders as a readable datetime.
+    """
+    text = format_check_metadata({"dagster/fresh_until": MetadataValue.timestamp(0.0)})
+
+    assert "1970-01-01" in text
+
+
+def test_format_check_metadata_handles_no_metadata() -> None:
+    assert format_check_metadata(None) == ""
+    assert format_check_metadata({}) == ""
