@@ -275,12 +275,15 @@ def course_content_metadata(
         "course_id": course_id,
         "course_name": metadata["name"],
         "course_code": metadata["course_code"],
-        "course_readable_id": metadata["sis_course_id"],
         "content_path": content_path,
         "metadata_path": metadata_path,
         "source": "canvas",
         "time": time.time(),
     }
+    # Learn rejects a null course_readable_id, which Canvas returns for any
+    # course with no SIS mapping.
+    if metadata["sis_course_id"]:
+        data["course_readable_id"] = metadata["sis_course_id"]
     context.log.info(
         "Sending webhook notification to Learn API for course_id=%s and data=%s",
         course_id,
