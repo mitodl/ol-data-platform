@@ -46,6 +46,11 @@ models:
     description: bool, whether this ticket is publicly visible
   - name: ticket_recipient_email
     description: str, the original recipient e-mail address of the ticket.
+  - name: ticket_requester_user_id
+    description: int, the Zendesk user ID of the requester of the ticket. Used to
+      classify a comment as requester-authored rather than an agent reply.
+    tests:
+    - not_null
   - name: ticket_requester
     description: str, the name of the requester of the ticket.
     tests:

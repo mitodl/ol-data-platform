@@ -1,0 +1,33 @@
+---
+version: 2
+
+models:
+- name: bridge_feedback_tag
+  description: >
+    Many-to-many bridge from feedback turns to source-scoped tags, replacing a
+    multi-valued array column on the fact.
+
+    The tags are a ticket attribute applied to every turn of that ticket. That is
+    correct - a tag describes the conversation, and a per-turn bridge lets you filter
+    turns by their conversation's tags without joining back to the conversation fact.
+  columns:
+  - name: feedback_pk
+    description: str, foreign key to tfact_feedback.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('tfact_feedback')
+          field: feedback_pk
+  - name: feedback_tag_pk
+    description: str, foreign key to dim_feedback_tag.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_feedback_tag')
+          field: feedback_tag_pk
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["feedback_pk", "feedback_tag_pk"]

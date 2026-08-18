@@ -1,0 +1,179 @@
+---
+version: 2
+
+models:
+- name: dim_feedback_source
+  description: Conformed dimension of feedback source systems. One row per source;
+    MVP seeds Zendesk only.
+  columns:
+  - name: feedback_source_pk
+    description: str, surrogate key generated from source_slug.
+    tests:
+    - not_null
+    - unique
+  - name: source_slug
+    description: str, stable machine key for the source. e.g. zendesk, edx_forum.
+    tests:
+    - not_null
+    - unique
+  - name: source_name
+    description: str, display name for the source.
+    tests:
+    - not_null
+  - name: source_medium
+    description: str, the kind of artifact the source produces. e.g. support_ticket,
+      forum_post, chat, assessment, in_product.
+    tests:
+    - not_null
+  - name: source_audience_scope
+    description: str, the altitude the source primarily serves - operational, course
+      or strategic.
+    tests:
+    - not_null
+  - name: is_course_scoped
+    description: boolean, whether courserun_fk applies to feedback from this source.
+    tests:
+    - not_null
+  - name: is_conversational
+    description: boolean, whether conversation_id and turn_index are meaningful for
+      this source. False for single-utterance sources like ORA.
+    tests:
+    - not_null
+
+- name: dim_feedback_channel
+  description: >
+    Conformed dimension for HOW feedback arrived, normalized across sources. This
+    is the
+    one facet that survived the two-or-more-sources conformance rule, which makes
+    it the
+    only attribute available for cross-source comparison of arrival mode -- and is
+    why an
+    unmapped source value must fail loudly rather than bucket into a catch-all.
+  columns:
+  - name: feedback_channel_pk
+    description: str, surrogate key generated from channel_slug.
+    tests:
+    - not_null
+    - unique
+  - name: channel_slug
+    description: str, the conformed channel value.
+    tests:
+    - not_null
+    - unique
+    - accepted_values:
+        arguments:
+          values: ['email', 'web_form', 'in_product_widget', 'chat', 'forum_post',
+            'assessment', 'api']
+  - name: channel_name
+    description: str, display name for the channel.
+    tests:
+    - not_null
+  - name: is_solicited
+    description: boolean, whether we asked for this feedback or the user volunteered
+      it. Volunteered and solicited feedback have different selection biases and should
+      rarely be pooled without saying so.
+    tests:
+    - not_null
+
+- name: dim_sentiment
+  description: Small conformed dimension of sentiment buckets. sentiment_fk is assigned
+    on afact_feedback_conversation, not on the turn fact.
+  columns:
+  - name: sentiment_pk
+    description: str, surrogate key generated from sentiment_slug.
+    tests:
+    - not_null
+    - unique
+  - name: sentiment_slug
+    description: str, the sentiment value - positive, neutral or negative. There is
+      deliberately no 'unknown' member; an unscored conversation carries a null sentiment_fk
+      instead.
+    tests:
+    - not_null
+    - unique
+    - accepted_values:
+        arguments:
+          values: ['positive', 'neutral', 'negative']
+  - name: polarity_score_bucket
+    description: str, optional coarser grouping for trend rollups. Left null at MVP
+      -- it is degenerate with sentiment_slug while the vocabulary is only three values,
+      and earns its place when the sentiment task introduces a finer label set.
+
+- name: dim_feedback_tag
+  description: Source-scoped tags. Deliberately NOT conformed - a Zendesk tag and
+    a forum role that share a string are not the same thing, so the key carries source_slug.
+  columns:
+  - name: feedback_tag_pk
+    description: str, surrogate key generated from source_slug and tag_slug.
+    tests:
+    - not_null
+    - unique
+  - name: tag_slug
+    description: str, the slugified source tag. The stable machine key.
+    tests:
+    - not_null
+  - name: tag_label
+    description: str, the tag as it appears in the source system.
+    tests:
+    - not_null
+  - name: source_slug
+    description: str, which source system uses this tag.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_feedback_source')
+          field: source_slug
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source_slug", "tag_slug"]
+
+- name: dim_feedback_category
+  description: >
+    Feedback categories. Bootstrapped rather than cold-start: seeded from Zendesk
+    ticket
+    tags plus group_name, then extended by LLM-labeled clusters that upsert rows with
+    category_source='llm_discovered' for a human to approve.
+
+    SCD-lite - relabeling changes category_label, never category_slug.
+  columns:
+  - name: feedback_category_pk
+    description: str, surrogate key generated from category_slug.
+    tests:
+    - not_null
+    - unique
+  - name: category_slug
+    description: str, the stable machine key, which survives relabeling.
+    tests:
+    - not_null
+    - unique
+  - name: category_label
+    description: str, the human-readable label. LLM-proposed, human-approved.
+    tests:
+    - not_null
+  - name: category_parent_slug
+    description: str, optional hierarchy parent for cluster to category to theme rollups.
+      Null at MVP.
+  - name: category_status
+    description: str, curation state - proposed, approved, merged or deprecated. Every
+      seeded row starts as proposed.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['proposed', 'approved', 'merged', 'deprecated']
+  - name: category_source
+    description: str, where the category came from - seed, llm_discovered or manual.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['seed', 'llm_discovered', 'manual']
+  - name: cluster_run_id
+    description: str, provenance - which clustering run proposed this category. Null
+      for seeded rows.
+  - name: first_seen_at
+    description: str, ISO8601 timestamp of the earliest ticket carrying this category.
+  - name: updated_at
+    description: str, ISO8601 timestamp of the latest ticket carrying this category.

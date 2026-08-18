@@ -1,0 +1,196 @@
+---
+version: 2
+
+models:
+- name: int__feedback__zendesk
+  description: Zendesk comments conformed to the common feedback event contract. Grain
+    is one public, requester-authored comment -- one turn of a conversation. Agent
+    replies, internal notes and Zendesk sample tickets are filtered out.
+  columns:
+  - name: source_slug
+    description: str, the feedback source this row came from. Always 'zendesk' here.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the Zendesk comment_id. The stable source business key for the
+      turn, and what feedback_pk is minted from.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_ref
+    description: str, the Zendesk ticket_id. Groups a conversation's turns together.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, ordinal of this turn within its conversation, ordered by comment
+      creation time with comment_id as the tie-break.
+    tests:
+    - not_null
+  - name: is_conversation_opening
+    description: boolean, whether this is the first kept turn of the conversation.
+      Recovers the previous first-comment-only view as a filter rather than a grain.
+    tests:
+    - not_null
+  - name: occurred_at
+    description: str, ISO8601 timestamp of the comment itself. The grain's timestamp.
+    tests:
+    - not_null
+  - name: created_at
+    description: str, ISO8601 source lifecycle timestamp of the comment.
+  - name: updated_at
+    description: str, ISO8601 timestamp the parent ticket was last updated.
+  - name: text
+    description: str, the raw comment body. NOT redacted here -- masking happens in
+      the feedback_redacted Dagster asset downstream of int__feedback__unioned.
+  - name: title
+    description: str, the ticket subject. Constant across a ticket's turns.
+  - name: channel_slug
+    description: str, how the feedback arrived, mapped onto the conformed channel
+      value set. Null where a Zendesk channel has no mapping, which fails loudly at
+      the fact rather than bucketing into a catch-all.
+  - name: subject_user_ref
+    description: str, the comment author's email. Zendesk exposes no openedx user
+      id, so this is the last-resort identity path.
+  - name: source_url
+    description: str, the ticket API url, used as the deep link back to the origin.
+      Per-comment deep links are not exposed by the connector.
+  - name: subject_type
+    description: str, discriminator for what the feedback is about. Always 'unspecified'
+      at MVP -- the Appzi URL decode is not yet implemented.
+  - name: subject_ref
+    description: str, source-native id of the thing the feedback is about. Null at
+      MVP.
+  - name: subject_url
+    description: str, canonical deep link to the subject. Null at MVP.
+  - name: courserun_readable_id
+    description: str, null for Zendesk, which is not course-scoped.
+  - name: platform
+    description: str, null for Zendesk. Re-evaluate once brand_name is assessed against
+      dim_platform.
+  - name: explicit_rating
+    description: str, the ticket satisfaction rating score - 'good', 'bad' or 'offered'.
+      A ticket-level signal, so it repeats across a ticket's turns.
+  - name: ticket_tags
+    description: array, the parent ticket's tags, carried for bridge_feedback_tag
+      to explode. Not part of the event contract.
+  - name: source_metadata
+    description: str, JSON of the attributes that have not earned a conformed column
+      -- ticket status, priority, due date, brand, group and organization. Excludes
+      the satisfaction rating comment and custom fields, which carry unredacted free
+      text.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["conversation_ref", "turn_index"]
+
+- name: int__feedback__unioned
+  description: >
+    Every per-source feedback adapter unioned into the common event contract. One
+    source
+    at MVP; adding forum, tutor or ORA is a new CTE plus one `union all`.
+
+    PII: this model carries RAW, unredacted feedback text. Presidio masking happens
+    in
+    the feedback_redacted Dagster asset between this model and tfact_feedback, so
+    raw
+    text exists here under the intermediate schema's grants. Treat access accordingly.
+  columns:
+  - name: source_slug
+    description: str, which source the row came from.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the source-native turn id. Unique within a source.
+    tests:
+    - not_null
+  - name: conversation_ref
+    description: str, the source-native thread id. Non-conversational sources set
+      this to source_record_ref so they degenerate to a one-turn conversation.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, ordinal of the turn within its conversation.
+  - name: is_conversation_opening
+    description: boolean, whether this is the conversation's first kept turn.
+  - name: occurred_at
+    description: str, ISO8601 source event time. The contract's required timestamp.
+    tests:
+    - not_null
+  - name: created_at
+    description: str, ISO8601 source lifecycle creation timestamp.
+  - name: updated_at
+    description: str, ISO8601 source lifecycle update timestamp.
+  - name: text
+    description: str, raw free text. Redacted downstream, not here.
+  - name: title
+    description: str, raw title or subject. Redacted downstream, not here.
+  - name: channel_slug
+    description: str, conformed channel the feedback arrived through.
+  - name: subject_user_ref
+    description: str, the author's identity reference - a global or openedx user id
+      where the source has one, an email as a last resort.
+  - name: source_url
+    description: str, deep link back to the record in its source system.
+  - name: subject_type
+    description: str, discriminator for the polymorphic subject reference.
+  - name: subject_ref
+    description: str, source-native id of the subject.
+  - name: subject_url
+    description: str, canonical deep link to the subject.
+  - name: courserun_readable_id
+    description: str, course run the feedback concerns, for course-scoped sources.
+  - name: platform
+    description: str, platform the feedback concerns, for course-scoped sources.
+  - name: explicit_rating
+    description: str, the source's own explicit rating signal, where it has one.
+  - name: source_tags
+    description: array, source-scoped tags carried through for bridge_feedback_tag.
+  - name: source_metadata
+    description: str, JSON of everything the conformance rule has not promoted to
+      a column.
+  - name: feedback_text_chars
+    description: int, length of the text measured BEFORE masking, so the sizing metric
+      survives redaction. An integer carries no PII.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source_slug", "source_record_ref"]
+
+- name: int__feedback__conversation
+  description: >
+    One row per conversation with its kept turns assembled in turn_index order. This
+    is
+    what the summarization and embedding assets read, so the ML batch never re-derives
+    conversation assembly in Python and the assembly logic stays testable in dbt.
+
+    conversation_text is null until the feedback_redacted asset lands, because the
+    text
+    assembled here must be the redacted text. turn_count and conversation_text_chars
+    are
+    populated from the first build.
+  columns:
+  - name: source_slug
+    description: str, which source the conversation came from.
+    tests:
+    - not_null
+  - name: conversation_ref
+    description: str, the source-native thread id.
+    tests:
+    - not_null
+  - name: turn_count
+    description: int, number of kept turns in the conversation. At least 1 -- a conversation
+      with no kept turns does not appear here at all.
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_between:
+        arguments:
+          min_value: 1
+  - name: conversation_text_chars
+    description: int, summed pre-redaction length of the kept turns.
+  - name: conversation_text
+    description: str, the conversation's redacted turns concatenated in order with
+      a turn delimiter. Null until the feedback_redacted asset populates the fact.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source_slug", "conversation_ref"]
