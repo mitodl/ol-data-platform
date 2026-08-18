@@ -396,6 +396,23 @@ part of the Airbyte-as-code story that needs to run on a timer.
 | Dagster sync cadence | `ol-dbt inventory render dagster-intervals` | Replaces the hand-maintained `group_name_to_interval` literal (`definitions.py:219-254`) |
 | dlt source specs | `ol-dbt inventory render dlt` | Phase 2 only; emits `DatabaseSourceSpec`/`DatabaseTable` inputs (`src/ol_dlt/ol_dlt/database.py`) |
 
+`render airbyte` and `render dagster-intervals` are built. Two things they settle that the table
+above leaves open:
+
+- **`primary_key` round-trips through a dotted string.** `configurations.streams[].primaryKey` is
+  a list of *paths*, and a path is itself a list; the inventory stores one dotted string per
+  column, and the renderer splits it back out. Getting this wrong is invisible in the YAML and
+  fatal to §6.4's empty preview.
+- **`excluded_columns` is rendered as the exclusion, not as `selected_fields`.** Airbyte wants
+  the complement, and computing it needs the source's discovered schema — which the inventory
+  deliberately does not hold (§2). The consumer complements it against the catalog it already
+  reads.
+
+`render dagster-intervals` keys on the *derived* group name, reproducing `OLAirbyteTranslator`'s
+derivation character for character, and keeps paused connections: Dagster selects on the
+connection name alone, so a paused connection still produces a group, and omitting its interval
+hands it the silent 24-hour default the moment somebody re-enables it (§1.3, §3.6).
+
 ### Where this lives: `ol-dbt inventory`, not a new package
 
 The commands go under the existing CLI as an `inventory` sub-app, and the schema, loader and
@@ -566,6 +583,33 @@ Mechanism, following the ratchet pattern this repo already runs for dimensional 
 Renames are the subtle half: a rename looks like a delete plus an add, and without
 `renamed_from:` it passes an add-only check while silently orphaning every downstream model.
 
+**As built** (`ol-dbt inventory check-removals`, `schema/retired.schema.json`):
+
+```yaml
+schema_version: 1
+retired:
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:                       # a list, so retiring a whole unit is one
+  - raw__bootcamps__app__postgres__applications_bootcampapplication   # dated, reasoned entry
+  retired_on: 2026-08-14            # when loading stopped, not when this was written
+  reason: The Bootcamps application is no longer deployed.            # ≥20 chars; "not needed" is not a reason
+```
+
+Three details the mechanism above does not spell out, each of which is a rule in the checker:
+
+- `renamed_from:` is **scoped to the unit**. A table moving between units is a removal from one
+  and an addition to the other, and the removal side still has to be stated — otherwise moving a
+  table is a way to launder a deletion past the check.
+- A `renamed_from:` matching nothing that disappeared is a `WARNING`, not silence. Left alone it
+  is inert, but it pre-authorises a future removal of the name it holds.
+- The graveyard is ratcheted too: deleting a `retired.yml` entry is itself an `ERROR`, and
+  `validate` rejects a retired `(unit, raw_table)` that some unit still declares — the file and
+  the units are not allowed to contradict each other.
+
+Deployment and layer in `retired.yml` are deliberately **not** checked against `vocabulary.yml`:
+a deployment can be retired out of the vocabulary too, and the graveyard has to outlive it.
+
 ---
 
 ## 8. Steps and acceptance criteria
@@ -577,8 +621,8 @@ ol-infrastructure; 7 closes the loop.
 |---|---|---|
 | 1 | `ol-dbt inventory` sub-app (§5): JSON Schema, dbt-free loader, `validate` | `ol-dbt inventory validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
-| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
-| 4 | CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes |
+| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. The generation half (`render airbyte`, `render dagster-intervals`) is built; `reconcile` and the data itself remain | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
+| 4 | **DONE.** CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI |
 | 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection — plus `airbyte_source_definition`/`airbyte_destination_definition`, so the deployed `docker_image_tag` is a reviewed diff rather than a UI click (§6.2) | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
 | 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |
 | 7 | Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5) | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2) |
@@ -590,6 +634,12 @@ for step 6.
 
 Step 8 is the one piece that runs on a timer, and it is deliberately last: it compares live
 Airbyte against the inventory, so it only means something once the inventory is real.
+
+**Step 4 deliberately lands before step 3.** The sequencing in this table is a dependency order,
+not a merge order, and the removal gate has no dependency on the data: it is a diff against the
+merge base, so an empty inventory is a valid starting point. Landing the gate first means the
+27-unit reconciled inventory arrives *under* the ratchet rather than beside it — every table it
+declares is protected from the first commit, instead of from whenever CI caught up.
 
 ### Step 2 is already runnable: `bin/airbyte-inventory.py`
 

@@ -16,14 +16,24 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
-from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, validate_inventory
-from ol_dbt_cli.lib.validation import Severity, ValidationReport
+from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
+from ol_dbt_cli.lib.inventory import (
+    DEFAULT_INVENTORY_DIR,
+    check_removals,
+    load_snapshot,
+    load_snapshot_at_ref,
+    load_units,
+    render_airbyte,
+    render_dagster_intervals,
+    validate_inventory,
+)
+from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
 
 console = Console()
 err_console = Console(stderr=True)
@@ -71,29 +81,9 @@ def validate(
         sys.exit(1)
 
     if output_format == "json":
-        print(  # noqa: T201
-            json.dumps(
-                [
-                    {
-                        "check": issue.check,
-                        "severity": issue.severity.value,
-                        "model": issue.model,
-                        "message": issue.message,
-                        "detail": issue.detail,
-                    }
-                    for issue in report.issues
-                ],
-                indent=2,
-            )
-        )
+        _emit_json(report.issues)
     else:
-        for issue in report.issues:
-            style = SEVERITY_STYLE[issue.severity]
-            # Messages quote JSON Schema patterns like `^[a-z][a-z0-9_]*$`, which
-            # rich would read as markup and swallow.
-            console.print(f"[{style}]{issue.severity.value}[/] {escape(issue.model)}: {escape(issue.message)}")
-            if issue.detail:
-                console.print(f"    [dim]{escape(issue.detail)}[/]")
+        _emit_text(report.issues)
         tables = sum(len(unit.tables) for unit in units)
         console.print(
             f"\n[bold]Summary:[/] {len(units)} unit(s), {tables} table(s), "
@@ -102,3 +92,136 @@ def validate(
 
     if report.errors:
         sys.exit(1)
+
+
+@inventory_app.command(name="check-removals")
+def check_removals_command(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(
+            name=["--inventory-dir", "-i"],
+            help="Directory holding vocabulary.yml, schema/, units/ and retired.yml.",
+        ),
+    ] = DEFAULT_INVENTORY_DIR,
+    base_ref: Annotated[
+        str,
+        Parameter(
+            name=["--base-ref", "-b"],
+            help="Branch to compare against; the diff runs from its merge base with HEAD.",
+        ),
+    ] = "origin/main",
+    output_format: Annotated[
+        str,
+        Parameter(name=["--format", "-f"], help="Output format: text (default) or json."),
+    ] = "text",
+) -> None:
+    """Fail on any table this change dropped from the inventory without saying so.
+
+    A dropped entry means the loader simply stops loading — no error anywhere,
+    and a dbt model that quietly goes stale (§7.2). Acknowledge a removal in
+    `retired.yml` with a date and a reason, or, for a rename, with `renamed_from:`
+    on the entry that replaced it.
+
+    Exits non-zero if anything is an ERROR. These findings are not baselineable:
+    they are always fixable by editing text in the same pull request.
+    """
+    report = ValidationReport()
+    try:
+        repo_root = get_repo_root(inventory_dir if inventory_dir.exists() else Path.cwd())
+        merge_base = resolve_merge_base(base_ref, repo_root=repo_root)
+    except RuntimeError as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        sys.exit(1)
+
+    previous = load_snapshot_at_ref(inventory_dir, merge_base, repo_root=repo_root)
+    current = load_snapshot(inventory_dir)
+    check_removals(previous, current, report)
+
+    if output_format == "json":
+        _emit_json(report.issues)
+    else:
+        _emit_text(report.issues)
+        console.print(
+            f"\n[bold]Summary:[/] compared {len(previous.units)} unit(s) at "
+            f"{merge_base[:12]} against {len(current.units)} on disk — "
+            f"{len(report.errors)} error(s), {len(report.warnings)} warning(s)."
+        )
+
+    if report.errors:
+        sys.exit(1)
+
+
+RENDER_TARGETS = ("airbyte", "dagster-intervals")
+
+
+@inventory_app.command
+def render(
+    target: Annotated[
+        str,
+        Parameter(help=f"What to render: {', '.join(RENDER_TARGETS)}."),
+    ],
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/."),
+    ] = DEFAULT_INVENTORY_DIR,
+    output: Annotated[
+        Path | None,
+        Parameter(name=["--output", "-o"], help="Write here instead of stdout."),
+    ] = None,
+) -> None:
+    """Generate a downstream artifact from the inventory.
+
+    `airbyte` emits the narrow JSON that is committed into ol-infrastructure
+    beside the Pulumi stack that consumes it (§4) — it is not fetched, and no
+    pipeline renders it. `dagster-intervals` emits the sync-cadence map that
+    replaces the hand-maintained 32-entry literal in `definitions.py`, whose
+    silent 24-hour default for a mistyped key is its own class of stale-source
+    incident (§1.3).
+
+    Deliberately does not validate first: a render of an invalid inventory is a
+    thing you sometimes want to look at. CI runs `validate` on the same PR.
+    """
+    if target not in RENDER_TARGETS:
+        err_console.print(f"[bold red]Unknown render target {escape(target)!r}. Expected one of: {RENDER_TARGETS}")
+        sys.exit(1)
+
+    units = load_units(inventory_dir)
+    document: Any = render_airbyte(units) if target == "airbyte" else render_dagster_intervals(units)
+    text = json.dumps(document, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text)
+        console.print(f"Wrote {escape(str(output))}")
+    else:
+        print(text, end="")  # noqa: T201
+
+
+def _emit_json(issues: list[ValidationIssue]) -> None:
+    print(  # noqa: T201
+        json.dumps(
+            [
+                {
+                    "check": issue.check,
+                    "severity": issue.severity.value,
+                    "model": issue.model,
+                    "message": issue.message,
+                    "detail": issue.detail,
+                }
+                for issue in issues
+            ],
+            indent=2,
+        )
+    )
+
+
+def _emit_text(issues: list[ValidationIssue]) -> None:
+    for issue in issues:
+        style = SEVERITY_STYLE[issue.severity]
+        # Messages quote JSON Schema patterns like `^[a-z][a-z0-9_]*$`, which
+        # rich would read as markup and swallow.
+        console.print(f"[{style}]{issue.severity.value}[/] {escape(issue.model)}: {escape(issue.message)}")
+        if issue.detail:
+            console.print(f"    [dim]{escape(issue.detail)}[/]")

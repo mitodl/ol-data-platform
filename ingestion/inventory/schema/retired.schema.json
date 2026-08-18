@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mitodl/ol-data-platform/ingestion/inventory/schema/retired.schema.json",
+  "title": "Ingestion inventory graveyard",
+  "description": "Tables we used to load and deliberately stopped loading. See docs/specs/INGESTION_INVENTORY_SPEC.md §7.2. Entries are never deleted: this file is what makes \"when did this table stop arriving\" answerable, and `ol-dbt inventory check-removals` fails a PR that drops one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "retired"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "retired": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["deployment", "layer", "raw_tables", "retired_on", "reason"],
+        "properties": {
+          "deployment": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "The unit's deployment. Vocabulary membership is deliberately NOT checked: a deployment can be retired out of vocabulary.yml too, and the graveyard has to outlive it."
+          },
+          "layer": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "raw_tables": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^raw__[A-Za-z0-9_]+$"
+            },
+            "description": "A list, so retiring a whole unit is one dated, reasoned entry rather than sixty copies of the same sentence."
+          },
+          "retired_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "The date loading stopped, as best it is known — not the date the entry was written, when those differ."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 20,
+            "description": "Why it stopped. `no longer needed` is not a reason; name the thing that went away."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,75 @@
+---
+name: Ingestion inventory CI
+
+# Credential-free PR gate for the ingestion inventory — the human source of truth
+# for what we load (docs/specs/INGESTION_INVENTORY_SPEC.md, step 4).
+#
+# Two checks, and the second is the one that matters:
+#   validate         — schema, controlled vocabulary, and the §3.3 cross-unit rules.
+#   check-removals   — §7.2. Every (unit, raw_table) that disappears must be
+#                      acknowledged in retired.yml with a date and a reason, or
+#                      carry `renamed_from:` on the entry that replaced it.
+#
+# A dropped table entry is the one failure mode with no symptom: the loader simply
+# stops loading, nothing errors, and a dbt model quietly goes stale. Renames are
+# the subtle half — a rename reads as a delete plus an add, so an add-only check
+# waves it through while orphaning every downstream model.
+#
+# Reads only checked-in files. No Airbyte, no warehouse, no secrets.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+    - "ingestion/inventory/**"
+    - "src/ol_dbt_cli/**"
+    - ".github/workflows/ingestion_inventory_ci.yaml"
+  workflow_dispatch:
+
+jobs:
+  inventory:
+    name: inventory validate + removal check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0   # check-removals diffs against the merge base
+        persist-credentials: false
+
+    - name: Fetch base ref
+      if: github.event_name == 'pull_request'
+      run: git fetch --no-tags origin "${GITHUB_BASE_REF}"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.12.3"
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install ol-dbt CLI
+      run: uv sync --all-extras
+
+    - name: Validate the inventory
+      run: uv run ol-dbt inventory validate
+
+    # Deliberately not baselineable: unlike a warehouse-shaped finding, an
+    # unacknowledged removal is always fixable by editing text in this same PR,
+    # and it has no legitimate upstream cause.
+    - name: Check for unacknowledged removals and renames
+      if: github.event_name == 'pull_request'
+      run: uv run ol-dbt inventory check-removals --base-ref "origin/${GITHUB_BASE_REF}"
+
+    # The rendered JSON is committed into ol-infrastructure by hand (§4 — there is
+    # deliberately no cross-repo pipeline). Rendering here proves the inventory can
+    # still produce it, so a change that breaks the consumer fails in this repo
+    # rather than halfway through a Pulumi apply against production Airbyte.
+    - name: Render the downstream artifacts
+      run: |
+        uv run ol-dbt inventory render airbyte > /dev/null
+        uv run ol-dbt inventory render dagster-intervals > /dev/null
