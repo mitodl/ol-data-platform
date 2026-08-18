@@ -10,20 +10,28 @@ into something you can actually go and look up.
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 import sentry_sdk
 from dagster import (
     AssetCheckSeverity,
+    BoolMetadataValue,
     DagsterEventType,
     DagsterRun,
     DefaultSensorStatus,
     Definitions,
     EventRecordsFilter,
+    FloatMetadataValue,
+    IntMetadataValue,
+    MarkdownMetadataValue,
+    MetadataValue,
     RunFailureSensorContext,
     SensorEvaluationContext,
+    TextMetadataValue,
+    TimestampMetadataValue,
+    UrlMetadataValue,
     run_failure_sensor,
     sensor,
 )
@@ -579,23 +587,93 @@ def is_reported_by_the_run_failure_sensor(evaluation: Any) -> bool:
     return set(evaluation.metadata or {}) >= DBT_PROVENANCE_KEYS
 
 
+# Bounds on the substance appended to each failure's detail block. Kept small
+# on purpose: this appends to the block's existing text rather than adding a
+# block per failure, which is what keeps the 1-header-plus-1-block-per-failure
+# arithmetic behind MAX_CHECK_EVALUATIONS_PER_TICK intact.
+MAX_METADATA_ENTRIES_PER_FAILURE = 3
+MAX_METADATA_VALUE_LENGTH = 200
+MAX_DESCRIPTION_LENGTH = 300
+
+# Metadata types rendered inline. All are scalars a human can read at a
+# glance -- JSON, tables and other structured metadata are left for the
+# Dagster UI, which is one click away via the "View run" button, rather than
+# dumped into the notification unbounded.
+_RENDERABLE_METADATA_TYPES = (
+    BoolMetadataValue,
+    FloatMetadataValue,
+    IntMetadataValue,
+    MarkdownMetadataValue,
+    TextMetadataValue,
+    TimestampMetadataValue,
+    UrlMetadataValue,
+)
+
+
+def _render_metadata_value(value: MetadataValue) -> str:
+    if isinstance(value, TimestampMetadataValue):
+        return datetime.fromtimestamp(value.value, tz=UTC).isoformat(timespec="seconds")
+    return str(value.value)
+
+
+def format_check_metadata(metadata: Mapping[str, Any] | None) -> str:
+    """Render a bounded, human-readable subset of a check's metadata.
+
+    Only the first MAX_METADATA_ENTRIES_PER_FAILURE scalar-valued keys render,
+    in metadata's own (insertion) order -- a check author who wants something
+    seen puts it first. Everything else, structured or overflow, stays in the
+    UI rather than turning the notification into a dump of the mapping.
+    """
+    lines = []
+    for key, value in (metadata or {}).items():
+        if not isinstance(value, _RENDERABLE_METADATA_TYPES):
+            continue
+        rendered = truncate_text(
+            _render_metadata_value(value), MAX_METADATA_VALUE_LENGTH
+        )
+        lines.append(f"• *{key}:* {rendered}")
+        if len(lines) == MAX_METADATA_ENTRIES_PER_FAILURE:
+            break
+    return "\n".join(lines)
+
+
 def asset_check_failure_message(
     failures: Sequence[tuple[str, Any]],
 ) -> list[dict[str, Any]]:
     """Format a batch of failed asset check evaluations for Slack.
 
     Each failure links to the run that produced it rather than a shared link,
-    since a single batch can span multiple runs.
+    since a single batch can span multiple runs. Beneath the check name, each
+    detail block also carries the check's own description (freshness checks
+    write one) and a bounded slice of its metadata -- see
+    format_check_metadata -- so the substance a check computed does not
+    require a click into the UI to see.
     """
+
+    def _detail_text(evaluation: Any) -> str:
+        lines = [
+            f"*{evaluation.asset_key.to_user_string()}* -- `{evaluation.check_name}`"
+        ]
+        description = getattr(evaluation, "description", None)
+        if description:
+            lines.append(truncate_text(description, MAX_DESCRIPTION_LENGTH))
+        metadata_text = format_check_metadata(getattr(evaluation, "metadata", None))
+        if metadata_text:
+            lines.append(metadata_text)
+        # Per-field limits (MAX_DESCRIPTION_LENGTH, MAX_METADATA_VALUE_LENGTH)
+        # bound each piece, but not an unbounded metadata *key* or the sum of
+        # several fields together. A section block over Slack's 3000-character
+        # text limit fails the whole chat.postMessage call -- and by then the
+        # sensor has already advanced its cursor past this batch, permanently
+        # dropping it. This is the backstop for that.
+        return truncate_text("\n".join(lines))
+
     detail_blocks = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": (
-                    f"*{evaluation.asset_key.to_user_string()}* -- "
-                    f"`{evaluation.check_name}`"
-                ),
+                "text": _detail_text(evaluation),
             },
             "accessory": {
                 "type": "button",
