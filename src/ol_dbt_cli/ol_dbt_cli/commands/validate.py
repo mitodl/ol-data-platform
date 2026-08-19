@@ -17,8 +17,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from dataclasses import dataclass, field
-from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -49,56 +47,17 @@ from ol_dbt_cli.lib.sql_parser import (
     parse_model_file,
     resolve_star_columns,
 )
+from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
 console = Console()
 err_console = Console(stderr=True)
 
 
-class Severity(StrEnum):
-    ERROR = "ERROR"
-    WARNING = "WARNING"
-    INFO = "INFO"
-
-
-@dataclass
-class ValidationIssue:
-    check: str
-    severity: Severity
-    model: str
-    message: str
-    detail: str = ""
-
-
-@dataclass
-class ValidationReport:
-    issues: list[ValidationIssue] = field(default_factory=list)
-
-    def add(
-        self,
-        check: str,
-        severity: Severity,
-        model: str,
-        message: str,
-        detail: str = "",
-    ) -> None:
-        self.issues.append(
-            ValidationIssue(
-                check=check,
-                severity=severity,
-                model=model,
-                message=message,
-                detail=detail,
-            )
-        )
-
-    @property
-    def errors(self) -> list[ValidationIssue]:
-        return [i for i in self.issues if i.severity == Severity.ERROR]
-
-    @property
-    def warnings(self) -> list[ValidationIssue]:
-        return [i for i in self.issues if i.severity == Severity.WARNING]
+# Severity/ValidationIssue/ValidationReport moved to ol_dbt_cli.lib.validation so
+# checks that are not about the dbt manifest can reuse them; re-exported here
+# because callers and tests import them from this module.
+__all__ = ["Severity", "ValidationIssue", "ValidationReport", "validate"]
 
 
 # ---------------------------------------------------------------------------

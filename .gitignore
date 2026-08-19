@@ -23,3 +23,7 @@ progress.log
 src/ol_dbt/.user.yml
 # Superset
 .sup/
+
+# Airbyte inventory working files — regenerate with bin/airbyte-inventory.py
+airbyte-snapshot.json
+airbyte-findings.md
