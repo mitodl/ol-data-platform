@@ -1,6 +1,5 @@
--- Bootstrapped, not cold-start: seeded from Zendesk ticket tags plus group_name, then
--- LLM-labeled cluster rows upsert alongside these with category_source='llm_discovered'.
--- SCD-lite -- relabeling changes category_label, never category_slug (design 4a).
+-- Seeded from Zendesk ticket tags plus group_name; LLM-labeled cluster rows upsert
+-- alongside these later. Relabeling changes category_label, never category_slug.
 with ticket as (
     select * from {{ ref('int__zendesk__ticket') }}
 )

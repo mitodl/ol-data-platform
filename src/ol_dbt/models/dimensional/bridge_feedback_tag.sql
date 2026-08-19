@@ -2,9 +2,9 @@
     materialized='table'
 ) }}
 
--- Tags are a ticket attribute applied to every turn of that ticket. That is deliberate:
--- a tag describes the conversation, and a per-turn bridge lets you filter turns by their
--- conversation's tags without joining back to the conversation fact (design 4e).
+-- A tag describes the conversation, so it applies to every turn of that ticket. The
+-- per-turn grain lets you filter turns by their conversation's tags without joining back
+-- to the conversation fact.
 with unioned as (
     select
         source_slug

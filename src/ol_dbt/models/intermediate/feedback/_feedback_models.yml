@@ -12,8 +12,8 @@ models:
     tests:
     - not_null
   - name: source_record_ref
-    description: str, the Zendesk comment_id. The stable source business key for the
-      turn, and what feedback_pk is minted from.
+    description: str, the Zendesk comment_id - the turn's stable business key, and
+      what feedback_pk is minted from.
     tests:
     - not_null
     - unique
@@ -40,23 +40,23 @@ models:
   - name: updated_at
     description: str, ISO8601 timestamp the parent ticket was last updated.
   - name: text
-    description: str, the raw comment body. NOT redacted here -- masking happens in
-      the feedback_redacted Dagster asset downstream of int__feedback__unioned.
+    description: str, the raw comment body. Masking happens downstream, in the feedback_redacted
+      Dagster asset.
   - name: title
     description: str, the ticket subject. Constant across a ticket's turns.
   - name: channel_slug
     description: str, how the feedback arrived, mapped onto the conformed channel
-      value set. Null where a Zendesk channel has no mapping, which fails loudly at
-      the fact rather than bucketing into a catch-all.
+      value set. Null where a Zendesk channel has no mapping, which then fails the
+      fact's relationships test.
   - name: subject_user_ref
     description: str, the comment author's email. Zendesk exposes no openedx user
       id, so this is the last-resort identity path.
   - name: source_url
-    description: str, the ticket API url, used as the deep link back to the origin.
-      Per-comment deep links are not exposed by the connector.
+    description: str, the ticket API url. Per-comment deep links are not exposed by
+      the connector.
   - name: subject_type
     description: str, discriminator for what the feedback is about. Always 'unspecified'
-      at MVP -- the Appzi URL decode is not yet implemented.
+      until the Appzi URL decode is implemented.
   - name: subject_ref
     description: str, source-native id of the thing the feedback is about. Null at
       MVP.
@@ -75,7 +75,7 @@ models:
       to explode. Not part of the event contract.
   - name: source_metadata
     description: str, JSON of the attributes that have not earned a conformed column
-      -- ticket status, priority, due date, brand, group and organization. Excludes
+      - ticket status, priority, due date, brand, group and organization. Excludes
       the satisfaction rating comment and custom fields, which carry unredacted free
       text.
   tests:
@@ -85,15 +85,12 @@ models:
 
 - name: int__feedback__unioned
   description: >
-    Every per-source feedback adapter unioned into the common event contract. One
-    source
-    at MVP; adding forum, tutor or ORA is a new CTE plus one `union all`.
+    Every per-source feedback adapter unioned into the common event contract. Adding
+    forum, tutor or ORA is a new CTE plus one `union all`.
 
-    PII: this model carries RAW, unredacted feedback text. Presidio masking happens
-    in
-    the feedback_redacted Dagster asset between this model and tfact_feedback, so
-    raw
-    text exists here under the intermediate schema's grants. Treat access accordingly.
+    PII: this model carries raw, unredacted feedback text under the intermediate
+    schema's grants. Presidio masking happens in the feedback_redacted Dagster asset
+    between here and tfact_feedback.
   columns:
   - name: source_slug
     description: str, which source the row came from.
@@ -149,8 +146,8 @@ models:
     description: str, JSON of everything the conformance rule has not promoted to
       a column.
   - name: feedback_text_chars
-    description: int, length of the text measured BEFORE masking, so the sizing metric
-      survives redaction. An integer carries no PII.
+    description: int, length of the text measured before masking, so the metric survives
+      redaction.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -158,15 +155,12 @@ models:
 
 - name: int__feedback__conversation
   description: >
-    One row per conversation with its kept turns assembled in turn_index order. This
-    is
-    what the summarization and embedding assets read, so the ML batch never re-derives
-    conversation assembly in Python and the assembly logic stays testable in dbt.
+    One row per conversation with its kept turns assembled in turn_index order. The
+    summarization and embedding assets read this, so assembly stays testable in dbt
+    instead of being re-derived in Python.
 
     conversation_text is null until the feedback_redacted asset lands, because the
-    text
-    assembled here must be the redacted text. turn_count and conversation_text_chars
-    are
+    assembled text must be redacted. turn_count and conversation_text_chars are
     populated from the first build.
   columns:
   - name: source_slug
@@ -178,8 +172,8 @@ models:
     tests:
     - not_null
   - name: turn_count
-    description: int, number of kept turns in the conversation. At least 1 -- a conversation
-      with no kept turns does not appear here at all.
+    description: int, number of kept turns. At least 1 - a conversation with no kept
+      turns does not appear here.
     tests:
     - not_null
     - dbt_expectations.expect_column_values_to_be_between:

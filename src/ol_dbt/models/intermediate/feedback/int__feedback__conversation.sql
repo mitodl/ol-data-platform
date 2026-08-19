@@ -1,10 +1,8 @@
--- The ML batch's input: one row per conversation with its kept turns assembled in
--- turn_index order. It exists so the summarizer and embedder never re-derive conversation
--- assembly in Python, and so the assembly logic is testable in dbt.
+-- The ML batch's input: one row per conversation, kept turns assembled in turn_index
+-- order, so assembly stays testable in dbt instead of being re-derived in Python.
 --
--- Reads the fact rather than int__feedback__unioned because the text must be the REDACTED
--- text (design 7), which the feedback_redacted asset supplies to tfact_feedback. Until
--- that asset lands conversation_text is null while the counts and lengths are real.
+-- Reads the fact rather than int__feedback__unioned because the text must be REDACTED,
+-- which only tfact_feedback carries. conversation_text is null until that asset lands.
 with feedback as (
     select * from {{ ref('tfact_feedback') }}
 )

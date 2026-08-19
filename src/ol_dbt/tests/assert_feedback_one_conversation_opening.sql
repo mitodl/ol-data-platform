@@ -1,5 +1,5 @@
--- Exactly one opening turn per conversation. This is the guard that the previous
--- first-comment-only view is faithfully recoverable as `where is_conversation_opening`.
+-- Exactly one opening turn per conversation, which is what makes the first-comment-only
+-- view faithfully recoverable as `where is_conversation_opening`.
 select
     feedback_source_fk
     , conversation_id

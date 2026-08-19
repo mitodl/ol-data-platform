@@ -1,5 +1,5 @@
--- Tags are source-scoped, not conformed: a Zendesk tag and a forum role that happen to
--- share a string are not the same thing (design 4e).
+-- Tags are source-scoped, not conformed: a Zendesk tag and a forum role that share a
+-- string are not the same thing.
 with ticket as (
     select * from {{ ref('int__zendesk__ticket') }}
 )
@@ -15,8 +15,8 @@ with ticket as (
         and tag.tag_label != ''
 )
 
--- grouped on the slug, not the label: two source labels that slugify identically are one
--- tag, and the dimension must stay unique on (source_slug, tag_slug)
+-- grouped on the slug, not the label: two labels that slugify identically are one tag,
+-- and the dimension must stay unique on (source_slug, tag_slug)
 select
     {{ dbt_utils.generate_surrogate_key(['source_slug', 'tag_slug']) }} as feedback_tag_pk
     , tag_slug

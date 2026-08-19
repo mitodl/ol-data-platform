@@ -1,6 +1,6 @@
--- The reverse of afact_feedback_conversation's relationships test: every turn's
--- conversation must resolve to a conversation row, so a conversation cannot go missing
--- from the analysis fact and quietly drop its turns out of every cluster.
+-- Every turn's conversation must resolve to a conversation row, so a conversation cannot
+-- go missing from the analysis fact and quietly drop its turns out of every cluster.
+-- Compound because conversation_id is source-native and can collide across sources.
 select
     feedback.feedback_source_fk
     , feedback.conversation_id

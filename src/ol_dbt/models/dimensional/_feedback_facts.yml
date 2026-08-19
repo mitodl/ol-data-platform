@@ -4,24 +4,19 @@ version: 2
 models:
 - name: tfact_feedback
   description: >
-    Transactional fact at turn grain - one row per atomic free-text feedback utterance,
-    where an utterance is one turn of a conversation.
+    Transactional fact at turn grain - one row per free-text feedback utterance, where
+    an utterance is one turn of a conversation.
 
-    INSERT-ONLY. Nothing writes to a row after it lands: every model-generated attribute
-    lives on afact_feedback_conversation instead, so the whole inferred layer can
-    be
-    rebuilt without touching the record of what people actually wrote.
-
-    Sparse-nullable conformed FKs are the source-flexibility mechanism - Zendesk has
+    INSERT-ONLY. Every model-generated attribute lives on afact_feedback_conversation,
+    so the inferred layer can be rebuilt without touching this fact. Conformed FKs
+    are
+    sparsely populated by design - Zendesk has no course run, forum and tutor have
     no
-    course run, forum and tutor have no organization, anonymous feedback has no user.
+    organization, anonymous feedback has no user.
   columns:
   - name: feedback_pk
-    description: >
-      str, surrogate key generated from source_slug and source_record_id. Minted
-      explicitly rather than left to a compound-uniqueness test, because the interim
-      to
-      data-bus migration requires the same key to regenerate identically across the
+    description: str, surrogate key generated from source_slug and source_record_id.
+      Minted explicitly so the same key regenerates across the interim to data-bus
       source swap.
     tests:
     - not_null
@@ -35,11 +30,9 @@ models:
           to: ref('dim_feedback_source')
           field: feedback_source_pk
   - name: feedback_channel_fk
-    description: >
-      str, foreign key to dim_feedback_channel. Required - every source has a channel.
-      An unmapped source channel does not surface as a null here (the surrogate key
-      hashes the null input); it surfaces as an orphan key that fails the relationships
-      test below, which is the loud failure this dimension depends on.
+    description: str, foreign key to dim_feedback_channel. An unmapped source channel
+      surfaces as an orphan key that fails the relationships test below, rather than
+      as a null.
     tests:
     - not_null
     - relationships:
@@ -47,20 +40,19 @@ models:
           to: ref('dim_feedback_channel')
           field: feedback_channel_pk
   - name: user_fk
-    description: >
-      str, foreign key to dim_user. NULLABLE, and deliberately not coalesced to a
-      sentinel - Zendesk resolves identity by email alone, so an unresolved author
-      is a
-      null rather than a wrong join. Measure the null rate on first build and treat
-      a
-      high one as a finding.
+    description: str, foreign key to dim_user. Nullable, and deliberately not coalesced
+      to a sentinel - Zendesk resolves identity by email alone, so an unresolved author
+      is a null rather than a wrong join.
     tests:
+    # warn, not error: dim_user coverage gaps are a finding about identity resolution,
+    # not a reason to fail the build. Matches the other facts' dim_user tests.
     - relationships:
         arguments:
           to: ref('dim_user')
           field: user_pk
         config:
           where: "user_fk is not null"
+          severity: warn
   - name: courserun_fk
     description: str, foreign key to dim_course_run. Null for Zendesk, which is not
       course-scoped.
@@ -68,14 +60,11 @@ models:
     description: str, foreign key to dim_course_content, resolving subject_ref. Null
       until the edX feedback plugin source arrives.
   - name: platform_fk
-    description: str, foreign key to dim_platform. Null for Zendesk at MVP; re-evaluate
-      once brand_name is assessed against dim_platform.
+    description: str, foreign key to dim_platform. Null for Zendesk at MVP.
   - name: organization_fk
-    description: >
-      str, foreign key to dim_organization. Structurally null for Zendesk -
-      organization_pk is keyed on platform and source_id and Zendesk supplies neither,
-      so the Zendesk organization rides in source_metadata instead. An explicit
-      decision, not an oversight.
+    description: str, foreign key to dim_organization. Null for Zendesk, which supplies
+      neither of the platform and source_id that key organization_pk; the Zendesk
+      organization rides in source_metadata instead.
   - name: occurred_date_fk
     description: int, foreign key to dim_date for when the utterance occurred. The
       grain's own timestamp.
@@ -108,18 +97,15 @@ models:
     tests:
     - not_null
   - name: source_record_id
-    description: str, the source-native TURN business key - a Zendesk comment_id,
+    description: str, the source-native turn business key - a Zendesk comment_id,
       a forum post_id, a tutor checkpoint_id. Never a warehouse or Airbyte row id.
     tests:
     - not_null
   - name: source_url
     description: str, deep link back to the record in its source system.
   - name: subject_type
-    description: >
-      str, the discriminator for the polymorphic subject reference. Constrained because
-      every consumer switches on it, so an unconstrained value silently breaks all
-      of
-      them.
+    description: str, discriminator for the polymorphic subject reference. Constrained
+      because every consumer switches on it.
     tests:
     - not_null
     - accepted_values:
@@ -131,30 +117,24 @@ models:
   - name: subject_url
     description: str, canonical deep link to the subject.
   - name: subject_user_ref
-    description: >
-      str, the raw identity reference the user_fk join was resolved from. Retained
-      rather than consumed and dropped: this fact is insert-only, so an author unmatched
-      at load time stays unmatched forever unless the raw ref survives for a later
-      re-match. Not for downstream consumption.
+    description: str, the raw identity reference user_fk was resolved from. Retained
+      so user_fk can be recomputed later without rebuilding this insert-only fact.
+      Not for downstream consumption.
   - name: feedback_title
-    description: >
-      str, the REDACTED title. Populated by the feedback_redacted Dagster asset; null
-      until it lands. The fact deliberately carries no text at all rather than carrying
-      unredacted text into a broadly-granted schema.
+    description: str, the redacted title. Null until the feedback_redacted Dagster
+      asset lands and this fact left-joins it in on (source_slug, source_record_id).
   - name: feedback_text
-    description: str, the REDACTED body text. Populated by the feedback_redacted Dagster
-      asset; null until it lands.
+    description: str, the redacted body text. Null until the feedback_redacted Dagster
+      asset lands and this fact left-joins it in on (source_slug, source_record_id).
   - name: feedback_text_chars
-    description: int, length of the text measured before masking, so the sizing metric
-      survives redaction.
+    description: int, length of the text measured before masking, so the metric survives
+      redaction.
   - name: explicit_rating
-    description: str, the source's explicit rating signal. For Zendesk this is the
-      satisfaction rating score - 'good', 'bad' or 'offered' - and is non-numeric.
+    description: str, the source's explicit rating signal. For Zendesk the satisfaction
+      rating score - 'good', 'bad' or 'offered' - which is non-numeric.
   - name: source_metadata
-    description: >
-      str, JSON of every attribute that has not earned a conformed column under the
-      two-or-more-sources rule. This is what makes a new source additive: its unfamiliar
-      attributes land here rather than forcing a schema change.
+    description: str, JSON of every attribute that has not earned a conformed column
+      under the two-or-more-sources rule. This is what makes a new source additive.
   - name: feedback_occurred_at
     description: str, ISO8601 source event time.
     tests:
@@ -178,21 +158,14 @@ models:
 - name: afact_feedback_conversation
   description: >
     Aggregate fact at conversation grain - one row per conversation, carrying lifecycle
-    attributes and everything a model generated. This is the analysis unit: a complaint
-    usually emerges over several turns, so embedding turns independently would split
-    one
-    issue into several weak cluster members and score sentiment off a fragment.
+    attributes and everything a model generated. The conversation is the analysis
+    unit
+    because a complaint usually emerges over several turns.
 
-    Restricted to conversations that have at least one kept turn in tfact_feedback.
-    Tickets whose only public comments are agent-authored contribute no turns and
-    do not
-    appear here, which is what keeps the bidirectional relationship with the turn
-    fact
-    honest.
-
-    Every generated column is nullable and the table is queryable before any of them
-    are
-    populated.
+    Restricted to conversations with at least one kept turn in tfact_feedback, so
+    a
+    ticket whose only public comments are agent-authored does not appear. Every
+    generated column is nullable and the table is queryable before any are populated.
   columns:
   - name: feedback_conversation_pk
     description: str, surrogate key generated from source_slug and conversation_ref.
@@ -200,14 +173,11 @@ models:
     - not_null
     - unique
   - name: conversation_id
-    description: str, degenerate key - the source-native thread or ticket id. Joins
-      tfact_feedback.
+    description: str, degenerate key - the source-native thread or ticket id. Join
+      tfact_feedback on (feedback_source_fk, conversation_id) together, never on conversation_id
+      alone, which can collide across sources.
     tests:
     - not_null
-    - relationships:
-        arguments:
-          to: ref('tfact_feedback')
-          field: conversation_id
   - name: feedback_source_fk
     description: str, foreign key to dim_feedback_source.
     tests:
@@ -217,7 +187,7 @@ models:
           to: ref('dim_feedback_source')
           field: feedback_source_pk
   - name: opened_by_user_fk
-    description: str, foreign key to dim_user for whoever opened the conversation.
+    description: str, foreign key to dim_user for the author of the opening turn.
       Nullable on the same terms as tfact_feedback.user_fk.
   - name: opened_date_fk
     description: int, foreign key to dim_date for the conversation's first turn.
@@ -235,28 +205,21 @@ models:
         arguments:
           min_value: 1
   - name: participant_count
-    description: >
-      int, distinct authors across the ticket's FULL comment history - requester,
-      agents
-      and CC'd participants. Sourced from the unfiltered history rather than the kept
-      turns, which are single-author by construction and would always yield 1.
+    description: int, distinct authors across the ticket's full comment history -
+      requester, agents and CC'd participants. Counted from the unfiltered history,
+      because the kept turns are single-author by construction.
   - name: conversation_text_chars
     description: int, summed pre-redaction length of the kept turns.
   - name: final_status
-    description: str, current-state snapshot of the conversation's status. A snapshot,
-      not history - Zendesk status history is not synced.
+    description: str, current-state snapshot of the conversation's status. Zendesk
+      status history is not synced.
   - name: explicit_rating
     description: str, the conversation-level explicit rating. Non-numeric for Zendesk
       ('good', 'bad', 'offered'), so it does not average.
   - name: sentiment_fk
-    description: >
-      str, foreign key to dim_sentiment. Populated at MVP from the explicit rating
-      alone
-      - no model required. An 'offered' or absent rating leaves this null, because
-      that
-      is an absence of signal rather than a neutral one, and mapping it to neutral
-      would
-      manufacture a false label for the ~94% of tickets that are unrated.
+    description: str, foreign key to dim_sentiment. Populated at MVP from the explicit
+      rating alone. Only 'good' and 'bad' are verdicts; an unoffered or unanswered
+      survey leaves this null, because it is an absence of signal, not a neutral one.
     tests:
     - relationships:
         arguments:
@@ -284,19 +247,20 @@ models:
   - name: embedding_dim
     description: int, dimensionality of the embedding vector.
   - name: embedding_model_version
-    description: str, which embedding model produced the vector. Makes the model choice
-      reversible without touching tfact_feedback.
+    description: str, which embedding model produced the vector.
   - name: embedding_input
     description: str, what was actually embedded - 'summary' or 'concatenated_turns'.
   - name: embedded_at
     description: str, ISO8601 timestamp the vector was generated.
   - name: category_fk
-    description: str, foreign key to dim_feedback_category. Null until assigned.
+    description: str, foreign key to dim_feedback_category. Assigned at MVP from the
+      conversation's dominant tag - the tag with the highest corpus frequency, tie-broken
+      on tag_slug. Null for a conversation with no tags.
   - name: cluster_run_id
     description: str, which clustering run produced the assignment below.
   - name: cluster_id
-    description: int, cluster membership. -1 is the noise class, which IS the one-off
-      bucket - a conversation nothing else resembles.
+    description: int, cluster membership. -1 is the noise class - a conversation nothing
+      else resembles.
   - name: cluster_probability
     description: double, cohesion signal for ranking systemic issues.
   - name: conversation_ingested_at

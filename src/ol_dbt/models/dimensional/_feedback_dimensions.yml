@@ -42,12 +42,8 @@ models:
 
 - name: dim_feedback_channel
   description: >
-    Conformed dimension for HOW feedback arrived, normalized across sources. This
-    is the
-    one facet that survived the two-or-more-sources conformance rule, which makes
-    it the
-    only attribute available for cross-source comparison of arrival mode -- and is
-    why an
+    Conformed dimension for how feedback arrived, normalized across sources. The only
+    arrival-mode attribute available for cross-source comparison, which is why an
     unmapped source value must fail loudly rather than bucket into a catch-all.
   columns:
   - name: feedback_channel_pk
@@ -63,15 +59,14 @@ models:
     - accepted_values:
         arguments:
           values: ['email', 'web_form', 'in_product_widget', 'chat', 'forum_post',
-            'assessment', 'api']
+            'assessment', 'api', 'mobile']
   - name: channel_name
     description: str, display name for the channel.
     tests:
     - not_null
   - name: is_solicited
     description: boolean, whether we asked for this feedback or the user volunteered
-      it. Volunteered and solicited feedback have different selection biases and should
-      rarely be pooled without saying so.
+      it. The two have different selection biases and should rarely be pooled.
     tests:
     - not_null
 
@@ -95,9 +90,8 @@ models:
         arguments:
           values: ['positive', 'neutral', 'negative']
   - name: polarity_score_bucket
-    description: str, optional coarser grouping for trend rollups. Left null at MVP
-      -- it is degenerate with sentiment_slug while the vocabulary is only three values,
-      and earns its place when the sentiment task introduces a finer label set.
+    description: str, optional coarser grouping for trend rollups. Null while the
+      vocabulary is only three values, which makes it degenerate with sentiment_slug.
 
 - name: dim_feedback_tag
   description: Source-scoped tags. Deliberately NOT conformed - a Zendesk tag and
@@ -131,10 +125,8 @@ models:
 
 - name: dim_feedback_category
   description: >
-    Feedback categories. Bootstrapped rather than cold-start: seeded from Zendesk
-    ticket
-    tags plus group_name, then extended by LLM-labeled clusters that upsert rows with
-    category_source='llm_discovered' for a human to approve.
+    Feedback categories, seeded from Zendesk ticket tags plus group_name and later
+    extended by LLM-labeled clusters for a human to approve.
 
     SCD-lite - relabeling changes category_label, never category_slug.
   columns:
@@ -149,15 +141,14 @@ models:
     - not_null
     - unique
   - name: category_label
-    description: str, the human-readable label. LLM-proposed, human-approved.
+    description: str, the human-readable label.
     tests:
     - not_null
   - name: category_parent_slug
     description: str, optional hierarchy parent for cluster to category to theme rollups.
       Null at MVP.
   - name: category_status
-    description: str, curation state - proposed, approved, merged or deprecated. Every
-      seeded row starts as proposed.
+    description: str, curation state. Every seeded row starts as proposed.
     tests:
     - not_null
     - accepted_values:
