@@ -19,10 +19,13 @@ select
     , feedback.conversation_id as conversation_ref
     , count(*) as turn_count
     , sum(feedback.feedback_text_chars) as conversation_text_chars
-    , {{ array_join(
+    -- nullif because array_join drops null elements: with the redaction stub in place
+    -- every turn's text is null, and the join yields '' rather than null. An empty
+    -- string reads as real content to the summarizer's skip rule.
+    , nullif({{ array_join(
         "array_agg(feedback.feedback_text order by feedback.turn_index)",
         "\n---\n"
-    ) }} as conversation_text
+    ) }}, '') as conversation_text
 from feedback
 inner join feedback_source
     on feedback.feedback_source_fk = feedback_source.feedback_source_pk
