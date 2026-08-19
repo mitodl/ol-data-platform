@@ -45,7 +45,8 @@ with conversation as (
 -- author by construction, so aggregating the kept turns would always return 1.
 , participants as (
     select
-        cast(ticket_id as varchar) as conversation_ref
+        'zendesk' as source_slug
+        , cast(ticket_id as varchar) as conversation_ref
         , count(distinct comment_author_user_id) as participant_count
     from ticket_comment
     group by ticket_id
@@ -147,8 +148,10 @@ inner join turn_aggregates
 -- turn coverage tests
 inner join ticket
     on conversation.conversation_ref = cast(ticket.ticket_id as varchar)
+    and conversation.source_slug = 'zendesk'
 left join participants
     on conversation.conversation_ref = participants.conversation_ref
+    and conversation.source_slug = participants.source_slug
 left join dominant_tag
     on conversation.conversation_ref = dominant_tag.conversation_id
     and turn_aggregates.feedback_source_fk = dominant_tag.feedback_source_fk

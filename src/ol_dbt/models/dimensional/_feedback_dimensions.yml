@@ -3,8 +3,7 @@ version: 2
 
 models:
 - name: dim_feedback_source
-  description: Conformed dimension of feedback source systems. One row per source;
-    MVP seeds Zendesk only.
+  description: The systems feedback comes from. One row per source.
   columns:
   - name: feedback_source_pk
     description: str, surrogate key generated from source_slug.
@@ -41,10 +40,8 @@ models:
     - not_null
 
 - name: dim_feedback_channel
-  description: >
-    Conformed dimension for how feedback arrived, normalized across sources. The only
-    arrival-mode attribute available for cross-source comparison, which is why an
-    unmapped source value must fail loudly rather than bucket into a catch-all.
+  description: The channels feedback arrives through, normalized across sources. One
+    row per channel.
   columns:
   - name: feedback_channel_pk
     description: str, surrogate key generated from channel_slug.
@@ -71,8 +68,7 @@ models:
     - not_null
 
 - name: dim_sentiment
-  description: Small conformed dimension of sentiment buckets. sentiment_fk is assigned
-    on afact_feedback_conversation, not on the turn fact.
+  description: The sentiment values. One row per sentiment.
   columns:
   - name: sentiment_pk
     description: str, surrogate key generated from sentiment_slug.
@@ -94,8 +90,8 @@ models:
       vocabulary is only three values, which makes it degenerate with sentiment_slug.
 
 - name: dim_feedback_tag
-  description: Source-scoped tags. Deliberately NOT conformed - a Zendesk tag and
-    a forum role that share a string are not the same thing, so the key carries source_slug.
+  description: The tags each source applies to its feedback. One row per source and
+    tag.
   columns:
   - name: feedback_tag_pk
     description: str, surrogate key generated from source_slug and tag_slug.
@@ -124,11 +120,8 @@ models:
         column_list: ["source_slug", "tag_slug"]
 
 - name: dim_feedback_category
-  description: >
-    Feedback categories, seeded from Zendesk ticket tags plus group_name and later
-    extended by LLM-labeled clusters for a human to approve.
-
-    SCD-lite - relabeling changes category_label, never category_slug.
+  description: The categories feedback is grouped into. One row per category, seeded
+    from Zendesk ticket tags and group names.
   columns:
   - name: feedback_category_pk
     description: str, surrogate key generated from category_slug.

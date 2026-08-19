@@ -3,16 +3,8 @@ version: 2
 
 models:
 - name: tfact_feedback
-  description: >
-    Transactional fact at turn grain - one row per free-text feedback utterance, where
-    an utterance is one turn of a conversation.
-
-    INSERT-ONLY. Every model-generated attribute lives on afact_feedback_conversation,
-    so the inferred layer can be rebuilt without touching this fact. Conformed FKs
-    are
-    sparsely populated by design - Zendesk has no course run, forum and tutor have
-    no
-    organization, anonymous feedback has no user.
+  description: One row per feedback turn. At MVP a turn is a single public Zendesk
+    comment written by the ticket requester.
   columns:
   - name: feedback_pk
     description: str, surrogate key generated from source_slug and source_record_id.
@@ -156,16 +148,8 @@ models:
         column_list: ["feedback_source_fk", "conversation_id", "turn_index"]
 
 - name: afact_feedback_conversation
-  description: >
-    Aggregate fact at conversation grain - one row per conversation, carrying lifecycle
-    attributes and everything a model generated. The conversation is the analysis
-    unit
-    because a complaint usually emerges over several turns.
-
-    Restricted to conversations with at least one kept turn in tfact_feedback, so
-    a
-    ticket whose only public comments are agent-authored does not appear. Every
-    generated column is nullable and the table is queryable before any are populated.
+  description: One row per conversation - a whole Zendesk ticket or thread, rather
+    than a single turn.
   columns:
   - name: feedback_conversation_pk
     description: str, surrogate key generated from source_slug and conversation_ref.

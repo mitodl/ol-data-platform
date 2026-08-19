@@ -3,14 +3,7 @@ version: 2
 
 models:
 - name: bridge_feedback_tag
-  description: >
-    Many-to-many bridge from feedback turns to source-scoped tags, replacing a
-    multi-valued array column on the fact.
-
-    A tag describes the conversation, so it applies to every turn of that ticket.
-    The
-    per-turn grain lets you filter turns by their conversation's tags without joining
-    back to the conversation fact.
+  description: The tags on each feedback turn. One row per turn and tag.
   columns:
   - name: feedback_pk
     description: str, foreign key to tfact_feedback.
