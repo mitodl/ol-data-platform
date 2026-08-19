@@ -36,14 +36,15 @@ When it lands, ``DAGSTER_ENV`` gains the value and every map below needs an
 entry -- plus ``_ENVS`` in ``ol_dbt_cli/commands/starrocks.py``, which mirrors
 these. Until then ``resolve_for_environment`` raises on it, which is the point:
 the failure is a missing declaration, not a silently inherited warehouse.
-``DBT_AUTOMATION_MAP`` is the one to think hardest about for a new environment,
-since it decides whether that environment materializes dbt models unattended.
+Automation is the exception to that rule and deliberately so: a new environment
+is simply absent from ``DBT_AUTOMATION_ENVIRONMENTS`` and therefore does not
+materialize dbt models unattended. Deciding it should is a separate, later act.
 """
 
 import os
 from collections.abc import Mapping
 
-from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
 # Trino. "qa" resolves to the QA warehouse, which is what the rest of the QA
 # code location was already configured for -- trino_host_map/trino_catalog_map
@@ -102,9 +103,20 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
 # AutomationCondition: with automation off, the assets carry no condition and a
 # sensor someone starts by hand evaluates to nothing.
 #
-# ``qa`` is off because a QA dbt build is empty or partial until RFC 12711 step 8
-# lands the QA app_postgres layer -- an automated partial build of a union model
-# emits data that looks fine and silently drops rows. Flip it to "on" there.
+# ``qa`` is absent because a QA dbt build is empty or partial until RFC 12711
+# step 8 lands the QA app_postgres layer -- an automated partial build of a union
+# model emits data that looks fine and silently drops rows. Adding it belongs to
+# that step.
+#
+# WHY OPT-IN, when the maps above are exhaustive and raise on a missing
+# environment: because the two axes fail in opposite directions. A missing entry
+# in DBT_TARGET_MAP means "write whichever warehouse the default names" -- there
+# is no safe answer, so it has to raise, and that fall-through is precisely how
+# QA came to build production. A missing entry here means "do not run", which is
+# both safe and what a new environment wants on its first day. Making someone
+# type ``off`` to get the behaviour they would get anyway is ceremony, not a
+# guard -- and they are already in this file, because the three maps above will
+# raise until they add entries there.
 #
 # SCOPE, so the name is not read for more than it does: this covers the
 # AutomationCondition path only. The cron ScheduleDefinitions in definitions.py
@@ -112,20 +124,29 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
 # dbt_docs_artifacts_daily, and the two iceberg maintenance schedules -- are
 # registered in every environment and gated only by
 # ``default_status=DefaultScheduleStatus.STOPPED``, which is the same
-# seed-once-then-the-instance-wins setting this map replaces for sensors. Whether
-# any of them is running in QA is instance state the repo cannot see -- the same
-# blind spot, one layer over.
+# seed-once-then-the-instance-wins setting this declaration replaces for
+# sensors. Whether any of them is running in QA is instance state the repo
+# cannot see -- the same blind spot, one layer over.
 # Left open for RFC 12711 (https://github.com/mitodl/hq/discussions/12711):
 # whether those schedules join this declaration, and
 # whether production's synthesized default_automation_condition_sensor over
 # staging (see dbt_automation_sensor's target in definitions.py) should be closed
 # by dropping staging's condition rather than only excluding it from the target.
-DBT_AUTOMATION_MAP: Mapping[str, str] = {
-    "dev": "off",
-    "ci": "off",
-    "qa": "off",
-    "production": "on",
-}
+DBT_AUTOMATION_ENVIRONMENTS: frozenset[str] = frozenset({"production"})
+
+if not set(VALID_DAGSTER_ENVS) >= DBT_AUTOMATION_ENVIRONMENTS:
+    # The one direction opt-in does fail badly: a typo reads as "off
+    # everywhere", so production would quietly stop materializing and nothing
+    # downstream would report it -- the assets would just stop carrying a
+    # condition. Cheap to rule out here.
+    msg = (
+        f"DBT_AUTOMATION_ENVIRONMENTS names environments that do not exist: "
+        f"{sorted(DBT_AUTOMATION_ENVIRONMENTS - set(VALID_DAGSTER_ENVS))}. "
+        f"Known environments: {sorted(VALID_DAGSTER_ENVS)}."
+    )
+    raise ValueError(msg)
+
+DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 
 # Which lake each environment READS. Mirrors trino_catalog_map in
 # definitions.py (which cannot be imported here -- it imports the modules that
@@ -175,24 +196,6 @@ STARROCKS_DBT_TARGET = resolve_for_environment(
     override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
     what="StarRocks dbt target",
 )
-
-_AUTOMATION_VALUES = frozenset({"on", "off"})
-_automation = resolve_for_environment(
-    DBT_AUTOMATION_MAP,
-    override_env_var="DAGSTER_DBT_AUTOMATION",
-    what="dbt automation mode",
-)
-if _automation not in _AUTOMATION_VALUES:
-    # Checked rather than assumed: `== "on"` alone would read a typo, or an
-    # operator's DAGSTER_DBT_AUTOMATION=true, as "off" -- quietly disabling
-    # production automation instead of failing the import.
-    msg = (
-        f"dbt automation mode is {_automation!r}; expected one of "
-        f"{sorted(_AUTOMATION_VALUES)}."
-    )
-    raise ValueError(msg)
-
-DBT_AUTOMATION_ENABLED = _automation == "on"
 
 DATA_LAKE_ENV = resolve_for_environment(
     DATA_LAKE_ENV_MAP,

@@ -7,17 +7,16 @@ answer at all. So the assertions here are mostly about agreement and
 exhaustiveness rather than about specific target names.
 """
 
-import importlib
-
 import pytest
 from lakehouse.lib import dbt_environment
 from lakehouse.lib.dbt_environment import (
     DATA_LAKE_ENV_MAP,
-    DBT_AUTOMATION_MAP,
+    DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
     STARROCKS_DBT_TARGET_MAP,
     resolve_for_environment,
 )
+from ol_orchestrate.lib.constants import VALID_DAGSTER_ENVS
 
 ENVIRONMENTS = ("dev", "ci", "qa", "production")
 
@@ -27,7 +26,6 @@ ALL_MAPS = pytest.mark.parametrize(
         ("DBT_TARGET_MAP", DBT_TARGET_MAP),
         ("STARROCKS_DBT_TARGET_MAP", STARROCKS_DBT_TARGET_MAP),
         ("DATA_LAKE_ENV_MAP", DATA_LAKE_ENV_MAP),
-        ("DBT_AUTOMATION_MAP", DBT_AUTOMATION_MAP),
     ],
 )
 
@@ -112,9 +110,15 @@ def test_override_env_var_wins(name, value_map, monkeypatch):
     )
 
 
-def test_automation_values_are_legal():
-    """`== "on"` reads anything else as off, so the vocabulary is closed."""
-    assert set(DBT_AUTOMATION_MAP.values()) <= {"on", "off"}
+def test_automation_environments_exist():
+    """A typo here fails in the expensive direction.
+
+    Opt-in means an unrecognized name reads as "automation off everywhere", so
+    production would quietly stop materializing and nothing downstream would
+    report it -- the assets would just stop carrying a condition. The module
+    raises at import; this asserts the shipped set is clean.
+    """
+    assert set(VALID_DAGSTER_ENVS) >= DBT_AUTOMATION_ENVIRONMENTS
 
 
 def test_only_production_automates():
@@ -127,9 +131,7 @@ def test_only_production_automates():
     starts unasked. Flipping `qa` to "on" belongs to RFC 12711 step 8, once the
     QA lake can actually fill the models.
     """
-    assert {env for env, mode in DBT_AUTOMATION_MAP.items() if mode == "on"} == {
-        "production"
-    }
+    assert frozenset({"production"}) == DBT_AUTOMATION_ENVIRONMENTS
 
 
 def test_automation_is_off_in_this_test_environment():
@@ -145,17 +147,13 @@ def test_automation_is_off_in_this_test_environment():
     assert dbt_environment.DBT_AUTOMATION_ENABLED is False
 
 
-def test_illegal_automation_value_fails_the_import(monkeypatch):
-    """An operator's DAGSTER_DBT_AUTOMATION=true must not read as "off".
+def test_a_new_environment_does_not_automate_by_default(monkeypatch):
+    """The whole argument for opt-in, asserted rather than assumed.
 
-    Silently disabling production automation is the expensive direction of a
-    typo here, and nothing downstream would report it -- the assets would just
-    stop carrying a condition.
+    An environment nobody has thought about yet must not materialize dbt models
+    unattended. That is the safe direction, which is why this axis does not
+    borrow the no-fallback rule the target maps need -- there, a missing entry
+    would mean writing some other environment's warehouse.
     """
-    monkeypatch.setenv("DAGSTER_DBT_AUTOMATION", "true")
-    try:
-        with pytest.raises(ValueError, match="expected one of"):
-            importlib.reload(dbt_environment)
-    finally:
-        monkeypatch.delenv("DAGSTER_DBT_AUTOMATION")
-        importlib.reload(dbt_environment)
+    monkeypatch.setattr(dbt_environment, "DAGSTER_ENV", "staging")
+    assert "staging" not in dbt_environment.DBT_AUTOMATION_ENVIRONMENTS
