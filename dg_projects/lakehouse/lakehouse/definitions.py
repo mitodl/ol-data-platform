@@ -53,6 +53,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 )
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
+from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
@@ -484,7 +485,30 @@ defs = Definitions(
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour
+            # Declared rather than left to the instance, which is how a QA code
+            # location came to build the production warehouse unattended. This
+            # only seeds the state on first deploy -- what enforces it is that
+            # outside DBT_AUTOMATION_ENVIRONMENTS the assets carry no
+            # AutomationCondition at all.
+            default_status=(
+                DefaultSensorStatus.RUNNING
+                if DBT_AUTOMATION_ENABLED
+                else DefaultSensorStatus.STOPPED
+            ),
             # exclude staging as they are already handled by "sync_and_stage_" job
+            #
+            # Note what that exclusion costs in production, where staging models
+            # DO carry a condition: get_default_automation_condition_sensor_target
+            # takes every conditioned key this selection does not cover and
+            # synthesizes `default_automation_condition_sensor` over
+            # AssetSelection.all() minus this one. So staging is automatable there
+            # via a sensor no one declared. Pre-existing and STOPPED unless
+            # started by hand, but the same invisible instance state
+            # DBT_AUTOMATION_ENVIRONMENTS exists to remove -- see the open
+            # question recorded beside it.
+            #
+            # Where automation is off the question does not arise: no asset
+            # carries a condition, so there is nothing to synthesize over.
             target=(
                 AssetSelection.assets(full_dbt_project)
                 - AssetSelection.groups("staging")

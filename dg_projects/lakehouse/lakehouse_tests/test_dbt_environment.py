@@ -7,13 +7,19 @@ answer at all. So the assertions here are mostly about agreement and
 exhaustiveness rather than about specific target names.
 """
 
+import importlib
+
 import pytest
+from lakehouse.lib import dbt_environment
 from lakehouse.lib.dbt_environment import (
     DATA_LAKE_ENV_MAP,
+    DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
     STARROCKS_DBT_TARGET_MAP,
     resolve_for_environment,
 )
+from ol_orchestrate.lib import constants
+from ol_orchestrate.lib.constants import VALID_DAGSTER_ENVS
 
 ENVIRONMENTS = ("dev", "ci", "qa", "production")
 
@@ -105,3 +111,80 @@ def test_override_env_var_wins(name, value_map, monkeypatch):
         )
         == "an_explicit_override"
     )
+
+
+def test_automation_environments_exist():
+    """A typo here fails in the expensive direction.
+
+    Opt-in means an unrecognized name reads as "automation off everywhere", so
+    production would quietly stop materializing and nothing downstream would
+    report it -- the assets would just stop carrying a condition. The module
+    raises at import; this asserts the shipped set is clean.
+    """
+    assert set(VALID_DAGSTER_ENVS) >= DBT_AUTOMATION_ENVIRONMENTS
+
+
+def test_only_production_automates():
+    """No environment builds unattended against a warehouse it isn't for.
+
+    `qa` in particular: with DBT_TARGET_MAP missing a `qa` entry, every dbt run
+    from the QA code location hit the production warehouse -- all 18 pre-fix
+    run_results.json objects in s3://dagster-data-qa/ read `"target":
+    "production"`. Step 1 fixed where a QA build lands; this fixes whether one
+    starts unasked. Adding `qa` belongs to RFC 12711 step 8, once the
+    QA lake can actually fill the models.
+    """
+    assert frozenset({"production"}) == DBT_AUTOMATION_ENVIRONMENTS
+
+
+@pytest.mark.parametrize(
+    ("environment", "expected"),
+    [(env, env == "production") for env in VALID_DAGSTER_ENVS],
+)
+def test_the_boolean_the_assets_read_follows_the_declaration(
+    environment, expected, monkeypatch
+):
+    """The gate has to survive someone starting the sensor in the UI.
+
+    `default_status` seeds the instance state once and is overridden forever
+    after by a manual toggle -- exactly the invisible instance setting this
+    replaces. So the enforcing half is that an environment outside the
+    declaration produces assets with NO AutomationCondition, which a
+    hand-started sensor evaluates to nothing. This asserts the boolean those
+    assets read; the translator itself cannot be imported here without a parsed
+    dbt manifest.
+
+    Named environments rather than whichever one the test process happens to be
+    running as. DBT_AUTOMATION_ENABLED is computed at import, so asserting it
+    bare passes or fails on the developer's shell -- with
+    DAGSTER_ENVIRONMENT=production set, this file used to fail here and nowhere
+    else.
+
+    Setting the variable is not enough on its own to move it: DAGSTER_ENV is
+    resolved when `ol_orchestrate.lib.constants` is imported, so that module has
+    to be reloaded before this one or the reload silently re-reads the old
+    value. `monkeypatch.undo()` puts the real environment back before the
+    restoring reload, so the module is left as the rest of the suite found it
+    whatever the shell was set to.
+    """
+    monkeypatch.setenv("DAGSTER_ENVIRONMENT", environment)
+    importlib.reload(constants)
+    importlib.reload(dbt_environment)
+    try:
+        assert dbt_environment.DBT_AUTOMATION_ENABLED is expected
+    finally:
+        monkeypatch.undo()
+        importlib.reload(constants)
+        importlib.reload(dbt_environment)
+
+
+def test_a_new_environment_does_not_automate_by_default(monkeypatch):
+    """The whole argument for opt-in, asserted rather than assumed.
+
+    An environment nobody has thought about yet must not materialize dbt models
+    unattended. That is the safe direction, which is why this axis does not
+    borrow the no-fallback rule the target maps need -- there, a missing entry
+    would mean writing some other environment's warehouse.
+    """
+    monkeypatch.setattr(dbt_environment, "DAGSTER_ENV", "staging")
+    assert "staging" not in dbt_environment.DBT_AUTOMATION_ENVIRONMENTS
