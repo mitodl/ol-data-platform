@@ -79,12 +79,14 @@ def test_only_ingestion_is_allowed_in_qa():
 
 
 def test_qa_cannot_run_dbt_docs_generate_on_a_timer():
-    """The one that measurably fired the wrong way.
+    """The nearest thing to a measured incident, and what it does not show.
 
     A 2026-07-01 `docs generate` ran from the QA code location against the
     production warehouse and filed production's catalog under QA's artifacts
-    prefix, which QA's OpenMetadata ingests. #2508 fixed the target; this is
-    what stops the schedule.
+    prefix, which QA's OpenMetadata ingests. It was a launch of the JOB, not a
+    tick of this schedule -- the hours fit no daily cron. #2508 fixed the
+    target it ran against; this only stops the timer, which is the half that
+    could have run unattended.
     """
     assert "qa" not in SCHEDULE_ENVIRONMENTS["dbt_docs_artifacts_daily"]
 

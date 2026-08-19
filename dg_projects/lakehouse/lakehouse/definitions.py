@@ -532,10 +532,12 @@ defs = Definitions(
     ],
     # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
     # on each of these only seeds the instance's instigator state on first
-    # deploy; a UI toggle overrides it forever after, which is how a QA code
-    # location came to run `dbt docs generate` against the production warehouse
-    # without anything in this file saying it could. A schedule this filter
-    # drops is not stopped, it is absent -- there is nothing left to toggle.
+    # deploy; a UI toggle overrides it forever after, so whether one of these
+    # ticked in QA was instance state nothing in this file had a say in. A
+    # schedule this filter drops is not stopped, it is absent -- there is
+    # nothing left to toggle. Note it also drops the job for the four that
+    # build one inline; see scheduled_automation for what that does and does
+    # not cost.
     schedules=schedules_for_environment(
         [
             *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),

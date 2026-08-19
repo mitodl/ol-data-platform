@@ -22,16 +22,40 @@ rewrites Iceberg metadata, and instructor onboarding pushes a commit to a GitHub
 repository. "May dbt materialize itself here" is the wrong question to ask of
 those, and answering it for them would have hidden the more interesting one.
 
+What is and is not known to have fired
+-------------------------------------
+No schedule is. QA's artifacts bucket holds 13 ``docs generate`` results, every
+one ``args.target = "production"`` (the newest, 2026-07-01, is 5.2 MB over 4370
+nodes, filed under the prefix QA's OpenMetadata reads -- so QA metadata was
+describing production). Those are launches of ``dbt_docs_artifacts_job``, NOT
+ticks of ``dbt_docs_artifacts_daily``: they land between 18:56 and 23:47 UTC,
+and twice in a day on 2026-05-11 and 2026-05-21, which fits neither its
+``0 4 * * *`` cron nor any daily one. The job stays registered in every
+environment, so this module does not close that path -- #2508 already did, by
+fixing the target it ran against.
+
+What this closes is the path nobody can see. A schedule toggled on in the UI
+ticks by itself, indefinitely, and until now the repo had no say in whether it
+could. Same argument ``DBT_AUTOMATION_MAP`` makes about the sensor: nothing said
+these were allowed to run in QA, and that they apparently did not was luck.
+
 Why it is per schedule rather than per environment
 --------------------------------------------------
 Because the schedules disagree. ``daily_sync_and_stage_*`` is the ingestion path
-QA needs *more* of -- RFC 12711 step 8 revives it -- while
-``dbt_docs_artifacts_daily`` is the schedule measurably observed running from the
-QA code location against the PRODUCTION warehouse (a 5.2 MB ``docs generate``
-artifact, ``args.target = "production"``, 4370 nodes, filed under QA's prefix on
-2026-07-01, which is where QA's OpenMetadata reads from -- so QA metadata was
-describing production). A single per-environment switch would have to be wrong
-about one of them.
+QA needs *more* of -- RFC 12711 step 8 revives it -- while a QA tick of
+``b2b_analytics_starrocks_nightly`` would publish silently partial B2B data. A
+single per-environment switch would have to be wrong about one of them.
+
+What omission also takes with it
+--------------------------------
+Four of these six build their job inline with ``define_asset_job`` inside the
+``ScheduleDefinition``, so dropping the schedule drops that job from the code
+location too -- ``iceberg_dbt_maintenance_job``, ``iceberg_raw_maintenance_job``,
+``b2b_analytics_starrocks_job`` and ``instructor_onboarding_daily_job`` are not
+manually launchable outside production. Their ASSETS stay registered everywhere
+and can still be materialized by hand from the asset graph, so nothing becomes
+unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
+the exception -- its job is registered separately in ``jobs`` and is unaffected.
 
 Adding a schedule
 -----------------
@@ -77,10 +101,12 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # tidiness here.
     "iceberg_dbt_maintenance_nightly": frozenset({"production"}),
     "iceberg_raw_maintenance_nightly": frozenset({"production"}),
-    # `dbt docs generate` for OpenMetadata. The one that demonstrably fired from
-    # QA against production (see the module docstring). Production-only; the job
-    # stays registered everywhere, so a deliberate, attended QA run is still one
-    # click away, which is what step 8 needs.
+    # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
+    # ran from QA against production -- by hand, not on this cron (see above).
+    # Production-only here, but note that leaves the path that actually fired
+    # open: dbt_docs_artifacts_job is registered in `jobs` in every environment
+    # and stays one click away, which is also what a deliberate QA run under
+    # step 8 needs.
     "dbt_docs_artifacts_daily": frozenset({"production"}),
     # Builds the tag:starrocks models, then refreshes their downstream MVs.
     # Always target-correct via STARROCKS_DBT_TARGET, but a QA run reads the
