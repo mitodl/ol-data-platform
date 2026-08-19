@@ -494,9 +494,24 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     Non-XML files (e.g. SRT subtitles, HTML content, PDFs) are collected and returned
     as a CourseStaticAssetsBundle containing the raw files, a content-addressed
     data_version (SHA-256 of all file contents sorted by path), and a manifest JSON
-    describing each file's path, MIME type, and size. Files under structural directories
-    (drafts/, assets/, static/) are excluded from both XML block parsing and static
-    asset collection.
+    describing each file's path, MIME type, and size.
+
+    Structural directories are handled by intent rather than uniformly:
+
+    - ``drafts/`` is skipped entirely. It is the Studio draft workspace, so its
+      contents are unpublished and must not reach the catalogue.
+    - ``assets/`` and ``static/`` are never parsed as blocks, but their non-XML
+      contents ARE collected. Per the OLX reference, ``static/`` "contains the
+      files used in a course, such as images or PDFs"
+      (https://docs.openedx.org/en/latest/educators/olx/directory-structure.html),
+      which makes it the source of the documents ContentFile text extraction
+      consumes. Excluding it left the bundle structurally unable to carry course
+      content. ``assets/`` is not in the documented export layout but appears in
+      real archives; it is treated the same way on the same reasoning.
+
+    XML inside those two directories is skipped rather than collected: the block
+    parser handles real course XML from the block directories, and a document
+    extractor has nothing to do with an XML manifest.
 
     The root course.xml file is skipped because it is already processed by
     process_course_xml() to extract course-level metadata. The course/{run_tag}.xml
@@ -556,13 +571,20 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
             if block_type == "course":
                 continue
 
-            # Skip archive structural directories that are not course block types:
-            # - drafts/: Studio draft workspace, not published content
-            # - assets/ and static/: Static file storage directories, not blocks
-            # NOTE: This check must come before the non-XML branch so that non-XML
-            # files in these directories (e.g. draft images, PDFs) are also excluded.
-            if block_type in {"drafts", "assets", "static"}:
+            # drafts/ is the Studio draft workspace. Its contents are unpublished
+            # by definition, so they are skipped outright -- neither parsed as
+            # blocks nor collected as files. Publishing draft content downstream
+            # would put unreviewed material into the catalogue.
+            if block_type == "drafts":
                 continue
+
+            # assets/ and static/ are file storage, not block types. Their NON-XML
+            # payload is the course's actual content files -- the OLX reference
+            # describes static/ as holding "the files used in a course, such as
+            # images or PDFs" -- which is exactly what ContentFile extraction
+            # consumes. So they fall through to the collection branch rather than
+            # being excluded from it.
+            is_file_storage = block_type in {"assets", "static"}
 
             if not member.path.endswith(".xml"):
                 # Collect non-XML files as (relative_path, bytes) for S3 materialization
@@ -571,6 +593,11 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
                     # Strip archive root prefix to get a clean relative path
                     relative_path = "/".join(path_parts[1:])
                     static_assets.append((relative_path, file_data.read()))
+                continue
+
+            # XML under file storage is not a course block -- the block
+            # directories carry those -- and is not a document to extract either.
+            if is_file_storage:
                 continue
 
             xml_data = tf.extractfile(member)
