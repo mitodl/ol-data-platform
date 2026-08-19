@@ -1,13 +1,16 @@
--- INSERT-ONLY: every model-generated attribute lives on afact_feedback_conversation,
--- so the inferred layer can be rebuilt without touching this fact.
+{{ config(
+    materialized='incremental',
+    unique_key='feedback_pk',
+    incremental_strategy='delete+insert',
+    on_schema_change='append_new_columns'
+) }}
+
 with unioned as (
     select * from {{ ref('int__feedback__unioned') }}
 )
 
--- Joined on the email COLUMN, not on dim_user's pk formula, so a requester who also has
--- an openedx account resolves to their real identity rather than an email-keyed
--- duplicate. dim_user is unique on email but has no test enforcing it; if that changes
--- this join fans out and feedback_pk's unique test fails, which is the failure we want.
+-- dim_user is unique on email but has no test enforcing it; if that changes, this join
+-- fans out and feedback_pk's unique test fails, which is the failure we want.
 , users as (
     select
         user_pk
@@ -41,21 +44,10 @@ select
     , unioned.subject_type
     , unioned.subject_ref
     , unioned.subject_url
-    -- kept, not consumed-and-dropped: the fact is insert-only, so user_fk can only be
-    -- re-resolved later if the raw ref survives
+    -- kept so user_fk can be re-resolved later without a rebuild
     , unioned.subject_user_ref
-    -- Null rather than raw text: this schema is broadly granted and the text is unmasked
-    -- upstream. These two nulls STUB the join the spec asks for, because the Presidio
-    -- Dagster asset that produces the redacted text does not exist yet.
-    --
-    -- To remove the stub when feedback_redacted lands: declare it as a dbt source (as
-    -- models/reporting/_reporting__sources.yml does for the Dagster-materialized
-    -- student_risk_probability table), select redacted.title_redacted and
-    -- redacted.text_redacted here, and add
-    --     left join the feedback_redacted source as redacted
-    --         on unioned.source_slug = redacted.source_slug
-    --         and unioned.source_record_ref = redacted.source_record_ref
-    -- Nothing downstream changes: int__feedback__conversation already reads this column.
+    -- Stubs the redacted text. When the feedback_redacted Dagster asset lands, declare
+    -- it as a source and left join it on (source_slug, source_record_ref).
     , cast(null as varchar) as feedback_title
     , cast(null as varchar) as feedback_text
     , unioned.feedback_text_chars
@@ -68,3 +60,10 @@ select
 from unioned
 left join users
     on lower(unioned.subject_user_ref) = users.email
+{% if is_incremental() %}
+    -- Watermark on the CONVERSATION's updated_at, not the turn's: a ticket that gains a
+    -- rating, a status change or a late-syncing comment re-enters with all of its turns,
+    -- so delete+insert replaces them together. Filtering to unseen turns instead would
+    -- freeze the ticket-level columns and leave turn_index inconsistent.
+    where unioned.updated_at > (select max(feedback_updated_at) from {{ this }})
+{% endif %}

@@ -652,3 +652,14 @@
         else false
     end
 {%- endmacro %}
+
+
+{% macro null_double_array() -%}
+    {{ adapter.dispatch('null_double_array', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__null_double_array() -%}cast(null as array(double)){%- endmacro %}
+
+{% macro duckdb__null_double_array() -%}cast(null as double[]){%- endmacro %}
+
+{% macro starrocks__null_double_array() -%}cast(null as array<double>){%- endmacro %}

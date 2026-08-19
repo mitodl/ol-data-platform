@@ -116,6 +116,7 @@ select
     , participants.participant_count
     , conversation.conversation_text_chars
     , ticket.ticket_status as final_status
+    , ticket.ticket_priority as final_priority
     , ticket.ticket_satisfaction_rating_score as explicit_rating
     -- Tier 1 of the sentiment ladder. Only 'good' and 'bad' are verdicts; 'unoffered'
     -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence rather than
@@ -128,7 +129,7 @@ select
     , cast(null as varchar) as conversation_summary
     , cast(null as varchar) as summary_model_version
     , cast(null as varchar) as summarized_at
-    , cast(null as array(double)) as embedding_vector
+    , {{ null_double_array() }} as embedding_vector
     , cast(null as integer) as embedding_dim
     , cast(null as varchar) as embedding_model_version
     , cast(null as varchar) as embedding_input

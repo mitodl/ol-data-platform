@@ -52,7 +52,8 @@ models:
     description: str, foreign key to dim_course_content, resolving subject_ref. Null
       until the edX feedback plugin source arrives.
   - name: platform_fk
-    description: str, foreign key to dim_platform. Null for Zendesk at MVP.
+    description: str, foreign key to dim_platform. Null for Zendesk; whether brands
+      map onto dim_platform is unresolved.
   - name: organization_fk
     description: str, foreign key to dim_organization. Null for Zendesk, which supplies
       neither of the platform and source_id that key organization_pk; the Zendesk
@@ -197,6 +198,8 @@ models:
   - name: final_status
     description: str, current-state snapshot of the conversation's status. Zendesk
       status history is not synced.
+  - name: final_priority
+    description: str, current-state snapshot of the conversation's priority.
   - name: explicit_rating
     description: str, the conversation-level explicit rating. Non-numeric for Zendesk
       ('good', 'bad', 'offered'), so it does not average.
