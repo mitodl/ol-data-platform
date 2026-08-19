@@ -58,7 +58,7 @@ Each source may add additional columns following its needs. Common patterns incl
 | `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
 | `published` | boolean | Whether the resource is published/live |
 
-### Program Sources (MITxOnline, xPRO, MicroMasters)
+### Program Sources (MITxOnline, xPRO, MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|

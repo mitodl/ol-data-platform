@@ -99,8 +99,8 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
     description=(
         "Read active MIT-authored edX.org programs from the "
         "integrations__learn__mit_edx_programs Iceberg table and POST as a "
-        "signed webhook batch to MIT Learn. Excludes MicroMasters (handled via "
-        "the Cohort 1 Trino-pull path)."
+        "signed webhook batch to MIT Learn. Excludes MicroMasters, which MIT "
+        "Learn deleted and which has no delivery path."
     ),
     deps=[AssetKey(["integrations", "learn", "integrations__learn__mit_edx_programs"])],
     retry_policy=RetryPolicy(max_retries=3, delay=10.0),
