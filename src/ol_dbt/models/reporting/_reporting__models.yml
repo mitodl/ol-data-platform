@@ -1414,3 +1414,166 @@ models:
     - unique:
         config:
           severity: warn
+
+- name: orders_with_product_report
+  description: Combined orders mart table with product name added
+  columns:
+  - name: combined_orders_hash_id
+    description: int, primary key for this table. At the grain of order id, line id,
+      and platform.
+  - name: platform
+    description: string, describes platform associated with the order (edX.org, mitxonline,
+      mitxpro, or bootcamps).
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign key for order table. For edX.org, it refers to order
+      table in MicroMasters application.
+  - name: line_id
+    description: int, foreign key for line table. For edX.org, it refers to line table
+      in MicroMasters application.
+  - name: coupon_code
+    description: string, discount code for the redeemed coupon if applicable
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table.
+      For edX.org, it refers to ecommerce_coupon table in MicroMasters application.
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: coupon_name
+    description: string, human readable name for the coupon payment
+  - name: coupon_redeemed_on
+    description: timestamp, specifying when the coupon was redeemed by the user for
+      for fulfilled or refunded orders
+  - name: coupon_type
+    description: string, type of the coupon which describes what circumstances the
+      coupon can be redeemed.
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
+  - name: courserun_id
+    description: int, foreign key in courses_courserun. Null for edX.org.
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: discount
+    description: str, discount applied to the order in a readable format. The value
+      is always an amount taken off the list price of the order, e.g., "$100" means
+      $100 was taken off the price. "30%" means the price was reduced by 30%.
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created. If this
+      is a b2b order it will be the timestamp that order was created otherwise it
+      will be when the regular order was created. For edX.org, it is the timestamp
+      that order was created in MicroMasters application.
+    tests:
+    - not_null
+  - name: order_reference_number
+    description: string, order reference number to identify an order in the corresponding
+      application database, e.g., mitxonline-production-20. For edX.org, it refers
+      to the order in MicroMasters application.
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "cancelled", "created", "declined",
+      "errored", "failed", "fulfilled", "refunded", "partially_refunded",  "pending",
+      "review".
+    tests:
+    - not_null
+  - name: order_tax_amount
+    description: numeric, the amount of tax paid. Only applicable for xPro for now.
+  - name: order_tax_country_code
+    description: str, the country code where the tax was applied. Only applicable
+      for xPro for now.
+  - name: order_tax_rate
+    description: numeric, the tax rate to apply. Only applicable for xPro for now.
+  - name: order_tax_rate_name
+    description: string, name of the tax rate assessed. Only applicable for xPro for
+      now.
+  - name: order_total_price_paid_plus_tax
+    description: numeric, total order amount plus the amount of tax paid. For xPro,
+      this is calculated order_total_price_paid+order_tax_amount. For other platform,
+      this is the same as order_total_price_paid
+  - name: order_total_price_paid
+    description: number, total order amount
+  - name: order_type
+    description: str, type of order for example- B2B, B2C, staff, or Boeing
+  - name: product_id
+    description: int, foreign key for product table. May be null for bootcamps and
+      edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: product_readable_id
+    description: string, the product identifier either referring to courserun_readable_id,
+      programrun_readable_id, or program_readable_id. May be null for bootcamps and
+      edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: product_type
+    description: string, readable product type - either course run or program. May
+      be null for bootcamps and edX.org
+  - name: receipt_authorization_code
+    description: str, either the authorization code from cybersource payment transaction,
+      or approvalCode from cybersource refund transaction (MITx Online only).
+  - name: receipt_bill_to_address_country
+    description: string, address country from cybersource payment
+  - name: receipt_bill_to_address_state
+    description: string, address state from cybersource payment
+  - name: receipt_payment_amount
+    description: numeric, total amount for the order - req_amount from cybersource
+      payment
+  - name: receipt_payment_currency
+    description: str, currency used for the order - req_currency from cybersource
+      payment transaction
+  - name: receipt_payment_card_number
+    description: str, last 4 digits credit card number from cybersource payment transaction
+  - name: receipt_payment_card_type
+    description: str, name of the card type, card_type_name from cybersource payment
+      transaction, e.g., Visa
+  - name: receipt_payment_method
+    description: string, payment method from cybersource payment transaction. Value
+      could be 'paypal' or 'card'.
+  - name: receipt_payment_timestamp
+    description: string, the signed_date_time from cybersource payment transaction
+  - name: receipt_payment_transaction_type
+    description: string, type of transaction - req_transaction_type from cybersource
+      payment transaction, e.g., sale
+  - name: receipt_payment_transaction_uuid
+    description: string, unique merchant-generated identifier - req_transaction_uuid
+      from cybersource payment transaction, e.g., 02815b4f08e56882751a043839b7b481
+  - name: receipt_payer_name
+    description: string, payer name from cybersource payment transaction
+  - name: receipt_payer_email
+    description: string, payer email address from cybersource payment transaction
+  - name: receipt_payer_ip_address
+    description: string, payer IP address from cybersource payment transaction
+  - name: receipt_transaction_id
+    description: string, unique identifier - either transaction_id from cybersource
+      payment or refund transaction, e.g., 3735553783662130706689, OR unique UUID
+      if no payment required.
+  - name: redeemed_email
+    description: string, email of MITxPRO purchaser
+  - name: req_reference_number
+    description: string, cybersource req_reference_number from cybersource payment
+      transaction, e.g., mitxonline-production-1
+  - name: unit_price
+    description: numeric, price for the order line item before discount
+  - name: user_email
+    description: str, user email associated with their account on the corresponding
+      platform
+  - name: user_id
+    description: int, foreign key to the user table on the corresponding platform
+  - name: user_hashed_id
+    description: str, foreign key to combined_users
+  - name: product_name
+    description: string, name of the product associated with the order line item. May
+      be null for bootcamps and edX.org.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["order_id", "line_id", "platform"]
+
