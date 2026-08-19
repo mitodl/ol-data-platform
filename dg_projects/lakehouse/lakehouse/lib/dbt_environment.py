@@ -121,8 +121,9 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
 # SCOPE, so the name is not read for more than it does: this covers the
 # AutomationCondition path only. The cron ScheduleDefinitions in definitions.py
 # are the other way this code location starts work unattended, and they are
-# declared separately in ``lakehouse.lib.scheduled_automation`` -- per schedule
-# rather than per environment, because they disagree with each other about QA
+# declared separately in ``lakehouse.lib.scheduled_automation`` -- each with its
+# own environment set rather than one answer covering all of them, because they
+# disagree with each other about QA
 # (the ingestion family belongs there, the dbt and GitHub-writing ones do not).
 # Read the two together for the whole answer to "what may run here on its own".
 # Still open for RFC 12711 (https://github.com/mitodl/hq/discussions/12711):

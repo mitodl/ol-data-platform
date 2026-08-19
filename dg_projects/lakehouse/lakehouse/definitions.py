@@ -221,12 +221,12 @@ except Exception as e:  # noqa: BLE001
 # those tables. The eager auto materialize policy will then take effect for any
 # downstream dbt models that are dependent on those staging models being completed.
 #
-# That last sentence now holds only where DBT_AUTOMATION_MAP says "on". Where it
-# does not, nothing downstream carries an AutomationCondition, so one of these
+# That last sentence now holds only in DBT_AUTOMATION_ENVIRONMENTS. Outside it,
+# nothing downstream carries an AutomationCondition, so one of these
 # runs builds its staging models and stops -- deliberately, since a QA build of a
 # union model emits data that looks fine while silently dropping rows. It also
 # means starting one of these in QA cannot walk the graph to a full build; RFC
-# 12711 step 8 is what flips `qa` to "on".
+# 12711 step 8 is what adds `qa` to DBT_AUTOMATION_ENVIRONMENTS.
 group_names: set[str] = set()
 for assets_def in airbyte_assets:
     group_names.update(g for g in assets_def.group_names_by_key.values())

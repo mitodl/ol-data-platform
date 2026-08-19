@@ -1,13 +1,16 @@
 """Which environments may register each cron schedule in this code location.
 
-The companion to ``DBT_AUTOMATION_MAP`` in :mod:`lakehouse.lib.dbt_environment`,
-covering the path that map deliberately excluded. Between them, every unattended
-run this code location can start is now declared in the repo.
+The companion to ``DBT_AUTOMATION_ENVIRONMENTS`` in
+:mod:`lakehouse.lib.dbt_environment`, covering the path that declaration
+deliberately excluded. Between them, every unattended run this code location can
+start is now declared in the repo, and both are opt-in for the same reason: the
+omitted answer is "does not run", which is the safe one.
 
 Why a second mechanism rather than one flag
 -------------------------------------------
-``DBT_AUTOMATION_MAP`` enforces itself by withholding the ``AutomationCondition``
-from the assets, so a sensor someone starts by hand evaluates to nothing. A
+``DBT_AUTOMATION_ENVIRONMENTS`` enforces itself by withholding the
+``AutomationCondition`` from the assets, so a sensor someone starts by hand
+evaluates to nothing. A
 ``ScheduleDefinition`` has no equivalent inner switch: ``default_status`` only
 seeds the instance's instigator state on first deploy, and any later UI toggle
 wins forever. So the enforcing move here is *registration* -- a schedule left out
@@ -36,8 +39,9 @@ fixing the target it ran against.
 
 What this closes is the path nobody can see. A schedule toggled on in the UI
 ticks by itself, indefinitely, and until now the repo had no say in whether it
-could. Same argument ``DBT_AUTOMATION_MAP`` makes about the sensor: nothing said
-these were allowed to run in QA, and that they apparently did not was luck.
+could. Same argument ``DBT_AUTOMATION_ENVIRONMENTS`` makes about the sensor:
+nothing said these were allowed to run in QA, and that they apparently did not
+was luck.
 
 Why it is per schedule rather than per environment
 --------------------------------------------------
@@ -86,10 +90,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # dev/ci, where SKIP_AIRBYTE leaves the workspace empty and the loop that
     # builds these produces nothing to register.
     #
-    # Note this reaches less far than it did before DBT_AUTOMATION_MAP: the
-    # downstream handoff it was written for is severed where automation is off,
-    # so a QA run of one of these builds staging and stops. Intended -- step 8
-    # flips `qa` to "on" once the QA lake can actually fill the models.
+    # Note this reaches less far than it did before the automation declaration:
+    # the downstream handoff it was written for is severed outside
+    # DBT_AUTOMATION_ENVIRONMENTS, so a QA run of one of these builds staging
+    # and stops. Intended -- step 8 adds `qa` to DBT_AUTOMATION_ENVIRONMENTS
+    # once the QA lake can actually fill the models.
     "daily_sync_and_stage": frozenset({"qa", "production"}),
     # Both rewrite Iceberg metadata -- expire snapshots, compact manifests.
     # They resolve through trino_host_map/trino_catalog_map, which have always
