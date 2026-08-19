@@ -3,10 +3,41 @@
   Exposes MIT podcast channels for MIT Learn's ETL (webhook delivery).
   Contract: docs/learn_marts_contract.md
   Episodes live in integrations__learn__podcast_episodes, joined on readable_id.
+
+  STALENESS: raw__podcast__rss__channels is loaded with write_disposition=
+  "merge", so a podcast removed from mitodl/open-podcast-data is never deleted
+  -- it is left un-upserted, and its _dlt_load_id stays behind at the last load
+  that saw it. A plain full-table read would therefore keep delivering removed
+  podcasts forever, and MIT Learn (which unpublishes only what is ABSENT from
+  the batch) could never retire one.
+
+  Rows are filtered to those seen in the last {{ var('podcast_absence_grace_loads', 3) }}
+  loads rather than only the most recent one. The grace period exists because
+  the dlt source SKIPS a feed it cannot fetch or parse: with a strict
+  most-recent-load filter, one transient RSS outage would drop that podcast
+  from the batch and unpublish a live podcast and all its episodes. At a daily
+  ingest cadence a podcast must be missing three consecutive days before it is
+  treated as removed.
 #}
 
 with channels as (
     select * from {{ ref('stg__podcast__rss__channels') }}
+)
+
+-- Rank the distinct load ids so recency can be expressed in "loads ago"
+-- rather than by comparing opaque load-id strings. rank 1 = most recent load.
+, loads as (
+    select
+        podcast_dlt_load_id
+        , row_number() over (order by podcast_dlt_load_id desc) as loads_ago
+    from (select distinct podcast_dlt_load_id from channels)
+)
+
+, current_channels as (
+    select channels.*
+    from channels
+    inner join loads on channels.podcast_dlt_load_id = loads.podcast_dlt_load_id
+    where loads.loads_ago <= {{ var('podcast_absence_grace_loads', 3) }}
 )
 
 select
@@ -34,5 +65,5 @@ select
     , 'podcast'                                              as resource_type
     , 'anytime'                                              as availability
     , true                                                   as published
-from channels
+from current_channels
 where podcast_rss_url is not null and podcast_title is not null

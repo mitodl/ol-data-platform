@@ -20,7 +20,7 @@ Dagster UI can start it. Dagster synthesizes sensors it was not given
 final in a way that stopping is not.
 
 That difference is also why this is not one boolean shared with the dbt map.
-Only three of these six schedules run dbt at all; the iceberg maintenance pair
+Only four of these seven schedules run dbt at all; the iceberg maintenance pair
 rewrites Iceberg metadata, and instructor onboarding pushes a commit to a GitHub
 repository. "May dbt materialize itself here" is the wrong question to ask of
 those, and answering it for them would have hidden the more interesting one.
@@ -52,12 +52,13 @@ single per-environment switch would have to be wrong about one of them.
 
 What omission also takes with it
 --------------------------------
-Four of these six build their job inline with ``define_asset_job`` inside the
+Five of these seven build their job inline with ``define_asset_job`` inside the
 ``ScheduleDefinition``, so dropping the schedule drops that job from the code
 location too -- ``iceberg_dbt_maintenance_job``, ``iceberg_raw_maintenance_job``,
-``b2b_analytics_starrocks_job`` and ``instructor_onboarding_daily_job`` are not
-manually launchable outside production. Their ASSETS stay registered everywhere
-and can still be materialized by hand from the asset graph, so nothing becomes
+``b2b_analytics_starrocks_job``, ``instructor_onboarding_daily_job`` and
+``learn_delivery_models_job`` are not manually launchable outside production.
+Their ASSETS stay registered everywhere and can still be materialized by hand
+from the asset graph, so nothing becomes
 unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
 the exception -- its job is registered separately in ``jobs`` and is unaffected.
 
@@ -124,6 +125,13 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # `ScheduleDefinition`'s implicit STOPPED default -- it passed no
     # default_status at all.
     "instructor_onboarding_daily_schedule": frozenset({"production"}),
+    # Builds the integrations__learn__* models the MIT Learn delivery assets
+    # POST from. A dbt build, so it takes the same answer as the other dbt
+    # entries rather than the ingestion one: QA gets fed, it does not build.
+    # Its job is defined inline and therefore absent outside production too;
+    # the Cohort 3 QA validation this schedule was written for materializes the
+    # models from the asset graph, which stays available everywhere.
+    "learn_delivery_models_daily": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {
