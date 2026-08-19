@@ -10,14 +10,27 @@
   could never retire it. Episodes are filtered on their OWN load recency, not
   their channel's: a feed can drop a single old episode while the channel
   itself keeps being refreshed every day.
+
+  Channel attributes come from integrations__learn__podcasts rather than from
+  stg__podcast__rss__channels, and that is deliberate. Joining the filtered
+  episodes to the UNFILTERED staging table would let an episode still inside
+  its grace window attach to a channel that had already aged out of the
+  podcasts model -- producing rows whose podcast_readable_id matches no
+  delivered podcast. The delivery asset drops those, so the payload stayed
+  correct, but the row count did not: MIN_EPISODES counts rows in this model,
+  so orphans would inflate the very number that guards against a short read.
+  The two tables also rank recency over independent _dlt_load_id universes, so
+  "3 loads ago" does not necessarily mean the same instant in each. Reading the
+  parent from the podcasts model makes referential integrity structural instead
+  of coincidental -- an episode can only exist here if its podcast ships.
 #}
 
 with episodes as (
     select * from {{ ref('stg__podcast__rss__episodes') }}
 )
 
-, channels as (
-    select * from {{ ref('stg__podcast__rss__channels') }}
+, podcasts as (
+    select * from {{ ref('integrations__learn__podcasts') }}
 )
 
 -- rank 1 = most recent load; see integrations__learn__podcasts for why a
@@ -41,9 +54,7 @@ select
     -- does (<guid>, else the link/audio URL with the scheme stripped), so this
     -- one passes through unchanged -- unlike the channel identifier.
     current_episodes.episode_readable_id                     as readable_id
-    -- Recomputed from the channel's rss_url for the same reason as in
-    -- integrations__learn__podcasts: MIT Learn keeps the trailing slash.
-    , regexp_replace(channels.podcast_rss_url, '^.*//', '')  as podcast_readable_id
+    , podcasts.readable_id                                   as podcast_readable_id
     , current_episodes.episode_title                         as title
     , current_episodes.episode_description                   as description
     , current_episodes.episode_url                           as url
@@ -55,16 +66,19 @@ select
     , current_episodes.episode_duration_raw                  as duration_raw
     -- RFC 2822 <pubDate>; parsed by the delivery asset into last_modified.
     , current_episodes.episode_published_on_raw              as published_on_raw
-    -- Topics and offered_by are inherited from the parent channel, matching
+    -- Topics and offered_by are inherited from the parent podcast, matching
     -- transform_episode() in learning_resources/etl/podcast.py.
-    , channels.podcast_topics_raw                            as topics
-    , channels.podcast_offered_by                            as offered_by
+    , podcasts.topics                                        as topics
+    , podcasts.offered_by                                    as offered_by
     , 'podcast'                                              as etl_source
     , 'podcast'                                              as platform
     , 'podcast_episode'                                      as resource_type
     , 'anytime'                                              as availability
     , true                                                   as published
 from current_episodes
-inner join channels
-    on current_episodes.podcast_dlt_readable_id = channels.podcast_dlt_readable_id
-where channels.podcast_rss_url is not null
+-- The episode carries its channel's feed URL, so the parent is resolved the
+-- same way integrations__learn__podcasts derives its own readable_id, keeping
+-- the two in lockstep by construction.
+inner join podcasts
+    on regexp_replace(current_episodes.podcast_rss_url, '^.*//', '')
+    = podcasts.readable_id
