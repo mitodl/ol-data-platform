@@ -120,15 +120,12 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
 #
 # SCOPE, so the name is not read for more than it does: this covers the
 # AutomationCondition path only. The cron ScheduleDefinitions in definitions.py
-# -- b2b_analytics_starrocks_nightly (which builds the tag:starrocks models),
-# dbt_docs_artifacts_daily, and the two iceberg maintenance schedules -- are
-# registered in every environment and gated only by
-# ``default_status=DefaultScheduleStatus.STOPPED``, which is the same
-# seed-once-then-the-instance-wins setting this declaration replaces for
-# sensors. Whether any of them is running in QA is instance state the repo
-# cannot see -- the same blind spot, one layer over.
-# Left open for RFC 12711 (https://github.com/mitodl/hq/discussions/12711):
-# whether those schedules join this declaration, and
+# are the other way this code location starts work unattended, and they are
+# declared separately in ``lakehouse.lib.scheduled_automation`` -- per schedule
+# rather than per environment, because they disagree with each other about QA
+# (the ingestion family belongs there, the dbt and GitHub-writing ones do not).
+# Read the two together for the whole answer to "what may run here on its own".
+# Still open for RFC 12711 (https://github.com/mitodl/hq/discussions/12711):
 # whether production's synthesized default_automation_condition_sensor over
 # staging (see dbt_automation_sensor's target in definitions.py) should be closed
 # by dropping staging's condition rather than only excluding it from the target.

@@ -54,6 +54,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
+from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
@@ -219,6 +220,13 @@ except Exception as e:  # noqa: BLE001
 # materialize the tables for that connection and any associated dbt staging models for
 # those tables. The eager auto materialize policy will then take effect for any
 # downstream dbt models that are dependent on those staging models being completed.
+#
+# That last sentence now holds only where DBT_AUTOMATION_MAP says "on". Where it
+# does not, nothing downstream carries an AutomationCondition, so one of these
+# runs builds its staging models and stops -- deliberately, since a QA build of a
+# union model emits data that looks fine while silently dropping rows. It also
+# means starting one of these in QA cannot walk the graph to a full build; RFC
+# 12711 step 8 is what flips `qa` to "on".
 group_names: set[str] = set()
 for assets_def in airbyte_assets:
     group_names.update(g for g in assets_def.group_names_by_key.values())
@@ -522,12 +530,20 @@ defs = Definitions(
         iceberg_snapshot_pointer_repair_job,
         dbt_docs_artifacts_job,
     ],
-    schedules=[
-        *airbyte_update_schedules,
-        instructor_onboarding_schedule,
-        iceberg_dbt_maintenance_schedule,
-        iceberg_raw_maintenance_schedule,
-        dbt_docs_artifacts_schedule,
-        b2b_analytics_starrocks_schedule,
-    ],
+    # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
+    # on each of these only seeds the instance's instigator state on first
+    # deploy; a UI toggle overrides it forever after, which is how a QA code
+    # location came to run `dbt docs generate` against the production warehouse
+    # without anything in this file saying it could. A schedule this filter
+    # drops is not stopped, it is absent -- there is nothing left to toggle.
+    schedules=schedules_for_environment(
+        [
+            *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),
+            ("instructor_onboarding_daily_schedule", instructor_onboarding_schedule),
+            ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
+            ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
+            ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
+            ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
+        ]
+    ),
 )
