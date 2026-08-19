@@ -245,10 +245,14 @@ def test_sanitization_keeps_show_note_links(podcast_row, episode_row):
 
 @pytest.mark.parametrize("empty", ["", None])
 def test_sanitization_preserves_absent_descriptions(podcast_row, episode_row, empty):
-    """An absent description stays absent rather than becoming "".
+    """A falsy description is delivered as-is rather than coerced to "".
 
-    mit-learn's clean_data returns "" for falsy input; delivering "" would
-    overwrite a populated description on the resource.
+    mit-learn's clean_data returns "" for falsy input. Preserving the value is
+    about payload fidelity, not about protecting an existing description: the
+    key is always present and description is nullable, so update_or_create
+    writes whatever we send either way. Coercing None to "" would flip a NULL
+    description to an empty string on every delivery — a diff the Celery ETL
+    never produces, and therefore noise during parallel validation.
     """
     podcast_row["description"] = empty
     [podcast] = build_podcast_resources([podcast_row], [episode_row])

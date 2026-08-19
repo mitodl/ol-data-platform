@@ -204,9 +204,18 @@ _ALLOWED_HTML_ATTRIBUTES = {"a": {"href", "title"}}
 def _clean(value: str | None) -> str | None:
     """Strip disallowed HTML, mirroring mit-learn's clean_data().
 
-    mit-learn's clean_data returns "" for a falsy input; None is preserved here
-    instead, so an absent field stays absent in the payload rather than being
-    delivered as an empty string that would overwrite a populated value.
+    mit-learn's clean_data returns "" for a falsy input; the falsy value is
+    preserved here instead, so the delivered payload matches the source row
+    exactly.
+
+    Note this is NOT protection against clobbering an existing description.
+    The "description" key is always present in the payload and
+    ``LearningResource.description`` is ``TextField(null=True, blank=True)``,
+    so ``update_or_create(defaults=...)`` writes whatever we send -- None
+    replaces a populated value just as "" would. The reason to preserve it is
+    fidelity: coercing None to "" would flip a NULL description to an empty
+    string on every delivery, which is a diff the Celery ETL would not produce
+    and therefore noise during parallel validation.
     """
     if not value:
         return value
