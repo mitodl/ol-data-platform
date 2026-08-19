@@ -26,8 +26,7 @@ with ticket_comment as (
     where
         ticket_comment.comment_is_public = true
         and ticket_comment.comment_author_user_id = ticket.ticket_requester_user_id
-        -- Zendesk's own demo content, not feedback anyone gave us. Excluded by
-        -- decision: it is not an arrival mode, so no conformed channel describes it.
+        -- Zendesk's own demo content, not feedback anyone gave us.
         and coalesce(ticket_comment.comment_source_channel, '') != 'sample_ticket'
 )
 

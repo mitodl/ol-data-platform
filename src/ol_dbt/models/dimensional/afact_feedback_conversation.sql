@@ -21,13 +21,6 @@ with conversation as (
     select * from {{ ref('int__zendesk__ticket_comment') }}
 )
 
-, sentiment as (
-    select
-        sentiment_pk
-        , sentiment_slug
-    from {{ ref('dim_sentiment') }}
-)
-
 , turn_aggregates as (
     select
         conversation_id
@@ -121,7 +114,10 @@ select
     -- Tier 1 of the sentiment ladder. Only 'good' and 'bad' are verdicts; 'unoffered'
     -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence rather than
     -- neutral ratings, so both stay null for the model tier to fill.
-    , sentiment.sentiment_pk as sentiment_fk
+    , case ticket.ticket_satisfaction_rating_score
+        when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
+        when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+    end as sentiment_fk
     , case
         when ticket.ticket_satisfaction_rating_score in ('good', 'bad') then 'explicit_rating'
     end as sentiment_source
@@ -158,8 +154,3 @@ left join dominant_tag
     and turn_aggregates.feedback_source_fk = dominant_tag.feedback_source_fk
 left join feedback_category
     on dominant_tag.tag_slug = feedback_category.category_slug
-left join sentiment
-    on sentiment.sentiment_slug = case ticket.ticket_satisfaction_rating_score
-        when 'good' then 'positive'
-        when 'bad' then 'negative'
-    end
