@@ -10,9 +10,12 @@ assertions below are exact.
 
 import pytest
 from learning_resources.assets.podcasts import (
+    MIN_EPISODES,
+    MIN_PODCASTS,
     _iso8601_duration,
     _parse_pub_date,
     _topics,
+    assert_deliverable,
     build_podcast_resources,
 )
 
@@ -82,22 +85,54 @@ def episode_row():
     }
 
 
+# Ported VERBATIM from mit-learn's learning_resources/etl/utils_test.py
+# ::test_parse_duration. This is the parity contract: the webhook path and the
+# Celery ETL must agree on every one of these, or a cutover diff shows a
+# difference that is ours rather than the data's. Do not edit a case here to
+# make this implementation pass -- fix the implementation, or change both
+# repos together.
+MIT_LEARN_DURATION_CASES = [
+    ("1:00:00", "PT1H"),
+    ("1:30:04", "PT1H30M4S"),
+    ("00:00", "PT0S"),
+    ("00:00:00", "PT0S"),
+    ("00:01:00", "PT1M"),
+    ("01:00:00", "PT1H"),
+    ("00:00:01", "PT1S"),
+    ("02:59", "PT2M59S"),
+    ("72:59", "PT1H12M59S"),
+    ("3675", "PT1H1M15S"),
+    ("5", "PT5S"),
+    ("PT1H30M4S", "PT1H30M4S"),
+    ("", None),
+    (None, None),
+    ("bad_duration", None),
+    ("PTBarnum", None),
+]
+
+
+@pytest.mark.parametrize(("raw", "expected"), MIT_LEARN_DURATION_CASES)
+def test_iso8601_duration_matches_mit_learn(raw, expected):
+    """Durations normalize exactly as mit-learn's iso8601_duration does."""
+    assert _iso8601_duration(raw) == expected
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
         ("1:02:03", "PT1H2M3S"),
-        ("02:03", "PT2M3S"),
         ("3600", "PT1H"),
         ("0", "PT0S"),
-        ("0:00:00", "PT0S"),
-        ("PT1H30M", "PT1H30M"),
-        ("", None),
-        (None, None),
+        # Overflow in the minutes field is summed, not passed through.
+        ("90:00", "PT1H30M"),
+        # A malformed ISO value is rejected rather than forwarded verbatim to
+        # PodcastEpisode.duration.
+        ("PT", None),
+        ("PTnonsense", None),
         ("not a duration", None),
     ],
 )
 def test_iso8601_duration(raw, expected):
-    """Durations normalize the way mit-learn's iso8601_duration does."""
     assert _iso8601_duration(raw) == expected
 
 
@@ -149,6 +184,75 @@ def test_parse_pub_date(raw, expected):
 )
 def test_topics(raw, expected):
     assert _topics(raw) == expected
+
+
+def test_assert_deliverable_accepts_a_healthy_batch():
+    """A batch exactly at both floors passes -- the floors are inclusive."""
+    assert_deliverable(MIN_PODCASTS, MIN_EPISODES)
+
+
+def test_assert_deliverable_rejects_a_short_podcast_read():
+    with pytest.raises(RuntimeError, match="Refusing to deliver"):
+        assert_deliverable(MIN_PODCASTS - 1, MIN_EPISODES)
+
+
+def test_assert_deliverable_rejects_a_short_episode_read():
+    """Healthy channels + an empty episode table is the dangerous combination.
+
+    It empties every delivered podcast while the podcasts themselves survive,
+    so nothing about the run looks wrong.
+    """
+    with pytest.raises(RuntimeError, match="episodes"):
+        assert_deliverable(38, 0)
+
+
+def test_assert_deliverable_rejects_a_truncated_episode_read():
+    with pytest.raises(RuntimeError, match="episodes"):
+        assert_deliverable(38, MIN_EPISODES - 1)
+
+
+def test_descriptions_are_sanitized(podcast_row, episode_row):
+    """Third-party RSS HTML is stripped the way mit-learn's clean_data does.
+
+    The loader passes description straight to LearningResource, so an unstripped
+    <script> from a feed would be persisted verbatim.
+    """
+    hostile = '<p>Real text</p><script>alert("xss")</script><img src=x onerror=1>'
+    podcast_row["description"] = hostile
+    episode_row["description"] = hostile
+
+    [podcast] = build_podcast_resources([podcast_row], [episode_row])
+
+    for description in (podcast["description"], podcast["episodes"][0]["description"]):
+        assert "<script>" not in description
+        assert "onerror" not in description
+        assert "<img" not in description
+        assert "<p>Real text</p>" in description
+
+
+def test_sanitization_keeps_show_note_links(podcast_row, episode_row):
+    """<a href> survives — podcast show notes are mostly resource links.
+
+    mit-learn uses ALLOWED_HTML_TAGS_WITH_LINKS for exactly this reason.
+    """
+    episode_row["description"] = '<a href="https://mit.edu" title="MIT">MIT</a>'
+    [podcast] = build_podcast_resources([podcast_row], [episode_row])
+
+    description = podcast["episodes"][0]["description"]
+    assert 'href="https://mit.edu"' in description
+    assert 'title="MIT"' in description
+
+
+@pytest.mark.parametrize("empty", ["", None])
+def test_sanitization_preserves_absent_descriptions(podcast_row, episode_row, empty):
+    """An absent description stays absent rather than becoming "".
+
+    mit-learn's clean_data returns "" for falsy input; delivering "" would
+    overwrite a populated description on the resource.
+    """
+    podcast_row["description"] = empty
+    [podcast] = build_podcast_resources([podcast_row], [episode_row])
+    assert podcast["description"] == empty
 
 
 def test_podcast_payload_shape(podcast_row, episode_row):

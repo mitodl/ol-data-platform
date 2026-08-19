@@ -21,8 +21,12 @@ model fields -- an unexpected key is a hard error, not an ignored extra.
 FULL-SYNC HAZARD: ``load_podcasts()`` unpublishes every podcast and every
 episode that is absent from the delivered batch. A partial read -- an empty
 Iceberg table, a half-written dbt run -- would therefore unpublish the live
-catalog. ``MIN_PODCASTS`` below is the floor that guards against that; the
-asset raises rather than delivering a suspiciously small batch.
+catalog. ``assert_deliverable`` guards both tables against that, raising
+rather than delivering a suspiciously small batch. The two floors are
+separate because the two models materialize independently: healthy channels
+plus an empty episode table empties every delivered podcast while leaving the
+podcasts themselves published, which is the failure that looks most like a
+success.
 
 Scheduling: daily at 07:00 UTC. Configured in definitions.py.
 """
@@ -34,6 +38,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any, cast
 
 import httpx2 as httpx
+import nh3
 import polars as pl
 from dagster import (
     AssetExecutionContext,
@@ -63,43 +68,77 @@ _EPISODES_TABLE = "integrations__learn__podcast_episodes"
 # individual feed that fails to fetch or parse, and a handful of dead feeds is
 # normal. Single digits, though, means the read is wrong -- not the catalog.
 MIN_PODCASTS = 5
+# Companion floor for the episode table, which materializes independently of
+# the channel table. Deliberately far below the real episode count (thousands
+# across 38 feeds) for the same reason MIN_PODCASTS is loose -- this catches an
+# empty or truncated read, not natural variation. A per-podcast coverage
+# assertion would be stricter, but a podcast whose feed legitimately yields no
+# usable <item> (all entries missing <enclosure>) is a real, non-broken state,
+# so a coverage rule would block valid deliveries.
+MIN_EPISODES = 50
 
-_HHMMSS = re.compile(r"^(?:(\d+):)?(\d{1,2}):(\d{2})$")
+# "HH:MM:SS" or "MM:SS". The minute and hour groups are deliberately unbounded:
+# mit-learn accepts "72:59" and normalizes it to PT1H12M59S rather than
+# rejecting it or emitting PT72M59S, so every clock form is summed to seconds
+# below and re-split, instead of being mapped component-for-component.
+_CLOCK = re.compile(r"^(?:(\d+):)?(\d+):(\d{1,2})$")
+# Strict ISO-8601 duration. Django's parse_duration -- which mit-learn's
+# iso8601_duration delegates to -- REJECTS a malformed value like "PTBarnum"
+# and returns None. A `startswith("PT")` passthrough would forward that string
+# to PodcastEpisode.duration unvalidated, so the shape is matched properly.
+_ISO = re.compile(r"^P(?!$)(?:(\d+)D)?(?:T(?!$)(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
+
+
+def _duration_seconds(raw: str) -> int | None:
+    """Reduce any accepted duration spelling to a total number of seconds."""
+    clock = _CLOCK.match(raw)
+    if clock:
+        hours, minutes, seconds = (int(g or 0) for g in clock.groups())
+        return hours * 3600 + minutes * 60 + seconds
+
+    iso = _ISO.match(raw)
+    if iso and any(group is not None for group in iso.groups()):
+        days, hours, minutes, seconds = (int(g or 0) for g in iso.groups())
+        return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+    if raw.isdigit():
+        return int(raw)
+
+    return None
 
 
 def _iso8601_duration(duration: str | None) -> str | None:
     """Normalize a raw itunes:duration to an ISO-8601 duration string.
 
-    Mirrors ``learning_resources/etl/utils.py:iso8601_duration`` in mit-learn.
-    Accepts "HH:MM:SS", "MM:SS", or a bare seconds count; returns None when the
-    value is absent or unparseable, matching the Celery ETL's behaviour.
+    Mirrors ``learning_resources/etl/utils.py:iso8601_duration`` in mit-learn,
+    whose behaviour is pinned by the parametrized table in
+    ``learning_resources/etl/utils_test.py`` -- that table is ported verbatim
+    into this project's tests, so parity is proven rather than asserted.
 
-    Parity with that function is deliberate down to its rough edge: zero
-    components are omitted, so most values stay short, but an episode of 10+
-    hours with non-zero minutes and seconds yields 11 characters
-    ("PT10H30M15S") and overflows ``PodcastEpisode.duration``'s 10-character
-    column. The Celery ETL has the same latent failure, so this is not a new
-    divergence -- keeping the two byte-identical matters more during parallel
-    validation than papering over it here would.
+    Accepts "HH:MM:SS", "MM:SS", a bare seconds count, or an ISO-8601 duration;
+    returns None (and warns) when a non-empty value cannot be parsed.
+
+    Everything is reduced to total seconds and re-split, because mit-learn
+    normalizes overflow: "72:59" is 1h12m59s, not 72 minutes.
+
+    Parity is deliberate down to one rough edge: zero components are omitted,
+    so most values stay short, but an episode of 10+ hours with non-zero
+    minutes and seconds yields 11 characters ("PT10H30M15S") and overflows
+    ``PodcastEpisode.duration``'s 10-character column. The Celery ETL has the
+    same latent failure, so this is not a new divergence -- keeping the two
+    byte-identical matters more during parallel validation than papering over
+    it here would.
     """
     if not duration:
         return None
-    raw = duration.strip()
-    if raw.startswith("PT"):
-        return raw
 
-    match = _HHMMSS.match(raw)
-    if match:
-        hours = int(match.group(1) or 0)
-        minutes = int(match.group(2))
-        seconds = int(match.group(3))
-    elif raw.isdigit():
-        total = int(raw)
-        hours, remainder = divmod(total, 3600)
-        minutes, seconds = divmod(remainder, 60)
-    else:
-        log.warning("Could not parse duration string %s", raw)
+    total = _duration_seconds(duration.strip())
+    if total is None:
+        log.warning("Could not parse duration string %s", duration)
         return None
+
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
 
     if not (hours or minutes or seconds):
         return "PT0S"
@@ -120,6 +159,60 @@ def _parse_pub_date(pub_date: str | None) -> str | None:
     except (TypeError, ValueError):
         log.warning("Could not parse pubDate %s", pub_date)
         return None
+
+
+# Mirrors main/constants.py in mit-learn: ALLOWED_HTML_TAGS plus "a", and
+# ALLOWED_HTML_ATTRIBUTES_WITH_LINKS. The Celery ETL sanitizes podcast titles
+# and descriptions with exactly this allowlist before they reach the database;
+# the webhook path has to do the same, because the loader passes these fields
+# straight to LearningResource and would otherwise persist raw third-party RSS
+# HTML unchanged.
+#
+# Duplicated rather than imported -- there is no shared package between the two
+# repos. If MIT Learn changes its allowlist, this must change with it; a drift
+# here is a sanitization difference, not a formatting one.
+_ALLOWED_HTML_TAGS = {
+    "a",
+    "b",
+    "blockquote",
+    "br",
+    "caption",
+    "center",
+    "cite",
+    "code",
+    "div",
+    "em",
+    "hr",
+    "i",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "q",
+    "small",
+    "span",
+    "strike",
+    "strong",
+    "sub",
+    "sup",
+    "u",
+    "ul",
+}
+_ALLOWED_HTML_ATTRIBUTES = {"a": {"href", "title"}}
+
+
+def _clean(value: str | None) -> str | None:
+    """Strip disallowed HTML, mirroring mit-learn's clean_data().
+
+    mit-learn's clean_data returns "" for a falsy input; None is preserved here
+    instead, so an absent field stays absent in the payload rather than being
+    delivered as an empty string that would overwrite a populated value.
+    """
+    if not value:
+        return value
+    return nh3.clean(
+        value, tags=_ALLOWED_HTML_TAGS, attributes=_ALLOWED_HTML_ATTRIBUTES
+    )
 
 
 def _topics(raw: str | None) -> list[dict[str, str]]:
@@ -159,7 +252,7 @@ def _episode_to_resource(
         "resource_type": "podcast_episode",
         "title": row.get("title"),
         "offered_by": offered_by,
-        "description": row.get("description"),
+        "description": _clean(row.get("description")),
         "url": row.get("url"),
         "image": _image(row.get("image_url")) or parent_image,
         "last_modified": _parse_pub_date(row.get("published_on_raw")),
@@ -188,7 +281,7 @@ def _podcast_to_resource(
         "etl_source": "podcast",
         "resource_type": "podcast",
         "offered_by": offered_by,
-        "description": row.get("description"),
+        "description": _clean(row.get("description")),
         "image": image,
         "published": True,
         "url": row.get("url"),
@@ -204,6 +297,35 @@ def _podcast_to_resource(
         },
         "availability": "anytime",
     }
+
+
+def assert_deliverable(podcast_count: int, episode_count: int) -> None:
+    """Refuse to deliver a batch too small to be a real full sync.
+
+    MIT Learn unpublishes every podcast and every episode absent from the
+    delivered batch, so a short read is a catalog-wide outage rather than a
+    small delivery. Both tables are checked independently: they materialize
+    separately, so the episode table can be empty or half-written while the
+    channel table looks entirely healthy. That combination empties every
+    delivered podcast while the podcasts themselves survive -- the failure
+    mode that looks most like a success.
+    """
+    if podcast_count < MIN_PODCASTS:
+        msg = (
+            f"Refusing to deliver {podcast_count} podcasts (floor is "
+            f"{MIN_PODCASTS}): MIT Learn full-syncs this batch and would "
+            "unpublish every podcast and episode not included."
+        )
+        raise RuntimeError(msg)
+
+    if episode_count < MIN_EPISODES:
+        msg = (
+            f"Refusing to deliver {episode_count} episodes across "
+            f"{podcast_count} podcasts (floor is {MIN_EPISODES}): MIT Learn "
+            "unpublishes every episode absent from this batch, so a short "
+            "episode read silently empties the podcasts it does deliver."
+        )
+        raise RuntimeError(msg)
 
 
 def build_podcast_resources(
@@ -261,16 +383,7 @@ def podcast_webhook(
         len(episodes_df),
     )
 
-    # Full-sync guard -- see the module docstring. MIT Learn unpublishes every
-    # podcast and episode missing from this batch, so a short read is a
-    # catalog-wide outage, not a small delivery.
-    if len(podcasts_df) < MIN_PODCASTS:
-        msg = (
-            f"Refusing to deliver {len(podcasts_df)} podcasts (floor is "
-            f"{MIN_PODCASTS}): MIT Learn full-syncs this batch and would "
-            "unpublish every podcast and episode not included."
-        )
-        raise RuntimeError(msg)
+    assert_deliverable(len(podcasts_df), len(episodes_df))
 
     resources = build_podcast_resources(
         list(podcasts_df.iter_rows(named=True)),
