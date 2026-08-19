@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from dagster import (
     AssetCheckSeverity,
+    AssetKey,
     AssetSelection,
     AssetSpec,
     AutomationConditionSensorDefinition,
@@ -390,6 +391,60 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# MIT Learn delivery chain: refresh the dbt models the mit_learn_delivery
+# webhook assets read, between the dlt ingests and the delivery POSTs.
+#
+# Without this the delivery assets POST whatever was last materialized. The gap
+# is not obvious from any one file, so, concretely: the dlt ingest schedules in
+# the data_loading location materialize ONLY the raw tables (03:00-04:00 UTC);
+# `dbt_automation_sensor` below covers the integrations models but explicitly
+# excludes the `staging` group; and the `sync_and_stage_*` jobs that are meant
+# to cover staging are built from the Airbyte source groups, so they never touch
+# these dlt-sourced staging models. That leaves stg__mit_climate__*,
+# stg__mitpe__*, stg__oll__*, stg__edxorg__discovery__api__programs and
+# stg__podcast__rss__* with no scheduled materialization at all, and the
+# integrations models above them reading yesterday's staging.
+#
+# These live in the lakehouse location because a Dagster job cannot span code
+# locations -- the delivery assets are in `learning_resources` and cannot
+# materialize dbt assets defined here, so the refresh has to be driven from
+# this side rather than by widening the delivery schedules.
+#
+# Keys are listed explicitly rather than selected by group: `integrations` and
+# `staging` both hold many models unrelated to MIT Learn, and `.upstream()`
+# from the integrations models would pull in the whole edxorg lineage.
+LEARN_DELIVERY_MODEL_KEYS = [
+    # staging
+    AssetKey(["staging", "mit_climate", "stg__mit_climate__api__articles"]),
+    AssetKey(["staging", "mitpe", "stg__mitpe__api__courses"]),
+    AssetKey(["staging", "oll", "stg__oll__google_sheets__courses"]),
+    AssetKey(["staging", "edxorg", "stg__edxorg__discovery__api__programs"]),
+    AssetKey(["staging", "podcast", "stg__podcast__rss__channels"]),
+    AssetKey(["staging", "podcast", "stg__podcast__rss__episodes"]),
+    # integrations
+    AssetKey(["integrations", "learn", "integrations__learn__mit_climate_articles"]),
+    AssetKey(["integrations", "learn", "integrations__learn__mitpe_courses"]),
+    AssetKey(["integrations", "learn", "integrations__learn__oll_courses"]),
+    AssetKey(["integrations", "learn", "integrations__learn__mit_edx_programs"]),
+    AssetKey(["integrations", "learn", "integrations__learn__podcasts"]),
+    AssetKey(["integrations", "learn", "integrations__learn__podcast_episodes"]),
+]
+
+# 05:00 UTC sits after the last dlt ingest (podcast_rss at 04:00) and before the
+# first delivery POST (mit_climate at 06:00). STOPPED by default, matching the
+# delivery schedules it feeds -- enabling this without enabling those is safe
+# and is the right order to turn them on.
+learn_delivery_models_schedule = ScheduleDefinition(
+    name="learn_delivery_models_daily",
+    job=define_asset_job(
+        name="learn_delivery_models_job",
+        selection=AssetSelection.assets(*LEARN_DELIVERY_MODEL_KEYS),
+    ),
+    cron_schedule="0 5 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -505,5 +560,6 @@ defs = Definitions(
         iceberg_raw_maintenance_schedule,
         dbt_docs_artifacts_schedule,
         b2b_analytics_starrocks_schedule,
+        learn_delivery_models_schedule,
     ],
 )
