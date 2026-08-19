@@ -1,0 +1,94 @@
+---
+version: 2
+
+models:
+- name: stg__podcast__rss__channels
+  description: >
+    One row per podcast channel configured in mitodl/open-podcast-data, as
+    parsed from that podcast's RSS <channel> element by the podcast_rss dlt
+    pipeline. Rows with no rss_url are dropped -- the feed URL is the podcast's
+    identity, and the ingest cannot have produced a channel without one.
+  columns:
+  - name: podcast_dlt_readable_id
+    description: >
+      str, the dlt-side channel identifier (rss_url with the scheme stripped
+      and any trailing slash removed). Used only to join episodes to channels.
+      NOT the identifier delivered to MIT Learn -- see
+      integrations__learn__podcasts, which recomputes it from rss_url because
+      MIT Learn's convention preserves the trailing slash.
+    tests: [not_null, unique]
+  - name: podcast_rss_url
+    description: str, the podcast's RSS feed URL, from its YAML config
+    tests: [not_null]
+  - name: podcast_website
+    description: str, the podcast's website URL, from its YAML config
+  - name: podcast_title
+    description: >
+      str, podcast title -- the YAML config's podcast_title when set, otherwise
+      the RSS channel title
+  - name: podcast_description
+    description: str, podcast description from the RSS channel
+  - name: podcast_language
+    description: str, RSS <channel><language>
+  - name: podcast_last_build_date_raw
+    description: >
+      str, RSS <channel><lastBuildDate> as an unparsed RFC 2822 timestamp.
+      Left raw because the format varies by feed and Trino has no RFC 2822
+      parser; no downstream model currently consumes it.
+  - name: podcast_image_url
+    description: >
+      str, cover art URL -- itunes:image/@href when present, otherwise
+      <image><url>
+  - name: podcast_offered_by
+    description: str, offering department name from the YAML config
+  - name: podcast_topics_raw
+    description: str, comma-separated topic labels from the YAML config
+  - name: podcast_apple_podcasts_url
+    description: str, Apple Podcasts listing URL from the YAML config
+  - name: podcast_google_podcasts_url
+    description: str, Google Podcasts listing URL from the YAML config
+
+- name: stg__podcast__rss__episodes
+  description: >
+    One row per episode across all configured podcasts, as parsed from each
+    feed's RSS <item> elements by the podcast_rss dlt pipeline. Items with no
+    <enclosure> are already dropped at ingest; the audio_url filter here is a
+    second guard, because MIT Learn's PodcastEpisode.audio_url is NOT NULL.
+  columns:
+  - name: episode_readable_id
+    description: >
+      str, the episode <guid> when present, otherwise the episode link (or
+      audio URL) with the scheme stripped. Matches MIT Learn's convention and
+      passes through to the integrations layer unchanged.
+    tests: [not_null, unique]
+  - name: podcast_dlt_readable_id
+    description: >
+      str, the dlt-side readable_id of the parent channel. Joins to
+      stg__podcast__rss__channels.
+    tests: [not_null]
+  - name: podcast_rss_url
+    description: str, the parent channel's RSS feed URL
+  - name: episode_title
+    description: str, RSS <item><title>
+  - name: episode_description
+    description: str, RSS <item><description>
+  - name: episode_url
+    description: str, the episode link when present, otherwise the audio URL
+  - name: episode_audio_url
+    description: str, RSS <item><enclosure>/@url -- the audio file
+    tests: [not_null]
+  - name: episode_link
+    description: str, RSS <item><link>
+  - name: episode_duration_raw
+    description: >
+      str, raw itunes:duration text. Free-form -- may be "HH:MM:SS", "MM:SS",
+      or a plain seconds count. Normalized to ISO-8601 by the delivery asset
+      rather than in SQL, to mirror mit-learn's iso8601_duration() exactly.
+  - name: episode_published_on_raw
+    description: >
+      str, RSS <item><pubDate> as an unparsed RFC 2822 timestamp. Parsed by the
+      delivery asset, for the same reason as episode_duration_raw.
+  - name: episode_image_url
+    description: >
+      str, episode cover art -- the episode's own itunes:image when present,
+      otherwise the parent channel's image URL
