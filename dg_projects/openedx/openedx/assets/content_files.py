@@ -22,6 +22,7 @@ import logging
 import mimetypes
 import tarfile
 from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -74,6 +75,53 @@ def is_transcript(relative_path: str) -> bool:
     suggests.
     """
     return Path(relative_path).suffix.lower() in TRANSCRIPT_SUFFIXES
+
+
+@contextmanager
+def open_bundle_members(
+    bundle_location: UPath, temp_files: list[Path]
+) -> Iterator[Iterator[tuple[str, Callable[[], bytes]]]]:
+    """Download the static-asset tarball and walk it without loading it all.
+
+    Yields an iterator of ``(relative_path, read_bytes)``. ``read_bytes`` is a
+    callable, so a member's bytes are only pulled into memory if the caller
+    actually wants that member -- both callers decide from the path alone
+    whether a file is theirs to handle.
+
+    That laziness is the point. A real 14.310x export is 152 MiB and is mostly
+    images and archives that neither asset touches: reading every member up
+    front held all of it resident alongside the downloaded tarball and the
+    extracted text, which is what could exhaust a worker on a media-heavy
+    course. Members are streamed one at a time rather than materialised as a
+    list, so a completed member's bytes become collectable immediately.
+
+    ``temp_files`` accumulates paths for the caller to clean up, so the download
+    is removed even when extraction raises.
+
+    Shared with the transcript asset: both read the same bundle, and each pays
+    its own download rather than one depending on the other's output. That is
+    deliberate -- it keeps a Tika outage from also stopping transcripts.
+    """
+    bundle_path = Path(
+        NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
+    )
+    temp_files.append(bundle_path)
+    bundle_location.fs.get_file(str(bundle_location), str(bundle_path))
+
+    with tarfile.open(bundle_path, "r:gz") as bundle:
+
+        def _members() -> Iterator[tuple[str, Callable[[], bytes]]]:
+            for member in bundle:
+                if not member.isfile():
+                    continue
+
+                def _read(member: tarfile.TarInfo = member) -> bytes:
+                    extracted = bundle.extractfile(member)
+                    return extracted.read() if extracted else b""
+
+                yield member.name, _read
+
+        yield _members()
 
 
 def _content_type(relative_path: str) -> str:
@@ -349,37 +397,12 @@ def extract_course_document_text(
 
     temp_files: list[Path] = []
     try:
-        bundle_path = Path(
-            NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
-        )
-        temp_files.append(bundle_path)
         context.log.info(
             "Downloading static asset bundle from %s", course_static_assets
         )
-        course_static_assets.fs.get_file(str(course_static_assets), str(bundle_path))
-
-        # Members are walked lazily and their bytes pulled only for the ones
-        # that survive filtering. A real 14.310x export is 152 MiB and is mostly
-        # images and archives that get skipped; reading every member up front
-        # held all of that resident alongside the tarball and the extracted
-        # text, which is what could exhaust a worker on a media-heavy course.
-        with tarfile.open(bundle_path, "r:gz") as bundle:
-
-            def _members(
-                bundle: tarfile.TarFile = bundle,
-            ) -> Iterator[tuple[str, Callable[[], bytes]]]:
-                for member in bundle:
-                    if not member.isfile():
-                        continue
-
-                    def _read(member: tarfile.TarInfo = member) -> bytes:
-                        extracted = bundle.extractfile(member)
-                        return extracted.read() if extracted else b""
-
-                    yield member.name, _read
-
+        with open_bundle_members(course_static_assets, temp_files) as members:
             rows, counters = build_document_rows(
-                _members(),
+                members,
                 course_id=course_id,
                 source_system=source_system,
                 extract=tika.extract_text,
