@@ -1,0 +1,527 @@
+# Feedback Aggregation — Entity-Relationship Diagrams
+
+Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
+Date: 2026-08-13 (rev. 4 — fixes from [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422);
+rev. 3 conversation-grain analysis fact) · Companion to
+[`feedback_dimensional_model.md`](./feedback_dimensional_model.md),
+[`feedback_event_contract_spec.md`](./feedback_event_contract_spec.md) and
+[`feedback_ml_approach.md`](./feedback_ml_approach.md).
+
+Visual counterpart to the column lists in the specs above, so the schema is reviewable as a shape rather
+than as prose. Also posted as an addendum on
+[RFC mitodl/hq#12210](https://github.com/mitodl/hq/discussions/12210#discussioncomment-17935060).
+
+**Reading the diagrams:** `||--o{` = required FK (never null). `|o--o{` = **nullable** FK — sparse
+conformance is the flexibility mechanism, so most of the star is deliberately optional.
+
+**Two facts.** `tfact_feedback` (§1) is the *ingested* record — one row per turn, insert-only.
+`afact_feedback_conversation` (§4) is the *inferred* layer — one row per conversation, carrying the summary,
+the embedding, the sentiment, the category and the cluster. Read §4 to see where the models write; nothing
+writes to §1 after insert.
+
+---
+
+## 0. The conformance rule
+
+Everything below follows from one rule, adopted after review feedback on
+[#2422](https://github.com/mitodl/ol-data-platform/pull/2422) and
+[RFC #12210](https://github.com/mitodl/hq/discussions/12210#discussioncomment-17937328):
+
+> **An attribute earns a column on the fact, or a conformed dimension, only if two or more sources can
+> populate it.** Everything else lives in the `source_metadata` variant column, and is promoted to a real
+> column if and when a second source starts supplying it.
+
+`tfact_feedback` exists to aggregate Zendesk *plus* edX forum, Learn AI tutor, ORA and the edX feedback
+plugin. Shaping the core tables around what Zendesk happens to expose makes every later source pay for it.
+Applying the rule is what produced the attribute placement in §1 and the withdrawals in §6.
+
+**Promotion path** (so the variant does not become a dumping ground): when a second source begins populating
+a key inside `source_metadata`, promote it to a real column or a conformed dimension **in the same change
+that onboards that source** — not later, and not speculatively in advance.
+
+---
+
+## 1. Target star schema — `tfact_feedback` and its dimensions
+
+```mermaid
+erDiagram
+    dim_feedback_source   ||--o{ tfact_feedback : "feedback_source_fk"
+    dim_feedback_channel  ||--o{ tfact_feedback : "feedback_channel_fk"
+    dim_date              ||--o{ tfact_feedback : "occurred / created / updated (role-playing)"
+    dim_time              ||--o{ tfact_feedback : "occurred / created / updated (role-playing)"
+    dim_user              |o--o{ tfact_feedback : "user_fk (identity: highest-risk join)"
+    dim_platform          |o--o{ tfact_feedback : "platform_fk"
+    dim_course_run        |o--o{ tfact_feedback : "courserun_fk (course-scoped sources)"
+    dim_course_content    |o--o{ tfact_feedback : "content_block_fk (what it is about)"
+    dim_organization      |o--o{ tfact_feedback : "organization_fk"
+    tfact_feedback        ||--o{ bridge_feedback_tag : "feedback_pk"
+    dim_feedback_tag      ||--o{ bridge_feedback_tag : "feedback_tag_pk"
+    afact_feedback_conversation ||--o{ tfact_feedback : "(feedback_source_fk, conversation_id) - turns roll up"
+
+    tfact_feedback {
+        varchar feedback_pk PK "surrogate_key(source_slug, source_record_ref) - ref is the TURN id"
+        varchar feedback_source_fk FK "required"
+        varchar feedback_channel_fk FK "required - conformed; every source has a channel"
+        varchar user_fk FK "nullable - anonymous or unresolved author"
+        varchar platform_fk FK "nullable"
+        varchar courserun_fk FK "nullable - Zendesk is not course-scoped"
+        varchar content_block_fk FK "nullable - resolves subject_ref for edX blocks"
+        varchar organization_fk FK "nullable"
+        integer occurred_date_fk FK "required - role-playing on the utterance timestamp"
+        integer occurred_time_fk FK "required"
+        integer created_date_fk FK "role-playing"
+        integer created_time_fk FK "role-playing"
+        integer updated_date_fk FK "role-playing"
+        integer updated_time_fk FK "role-playing"
+        varchar conversation_id "degenerate - ticket_id, chatsession_thread_id, forum thread"
+        integer turn_index "ordinal of this turn within the conversation"
+        boolean is_conversation_opening "first-turn-only becomes a filter, not a grain"
+        varchar source_record_id "degenerate - the TURN business key (comment_id, checkpoint_id)"
+        varchar source_url "degenerate - unique per row, deep link back to origin"
+        varchar subject_type "courseware_block, course_run, course, program, page_url, resource, unspecified"
+        varchar subject_ref "source-native id of the thing the feedback is about"
+        varchar subject_url "canonical or decoded deep link to that thing"
+        varchar feedback_title "REDACTED"
+        varchar feedback_text "REDACTED - raw text never lands in the fact"
+        integer feedback_text_chars "pre-redaction length metric"
+        varchar explicit_rating "conformed - Zendesk CSAT, tutor rating, ORA score"
+        varchar source_metadata "VARIANT - JSON string; status, priority, brand, group, due, custom fields"
+        timestamp feedback_occurred_at "the utterance itself"
+        timestamp feedback_created_at
+        timestamp feedback_updated_at
+        timestamp feedback_ingested_at
+    }
+
+    dim_feedback_source {
+        varchar feedback_source_pk PK "surrogate_key(source_slug)"
+        varchar source_slug UK "zendesk, edx_forum, learn_ai_tutor, ora, edx_feedback_plugin"
+        varchar source_name
+        varchar source_medium "support_ticket, forum_post, chat, assessment, in_product"
+        varchar source_audience_scope "operational, course, strategic"
+        boolean is_course_scoped
+        boolean is_conversational "does this source have multi-turn conversations"
+    }
+
+    dim_feedback_channel {
+        varchar feedback_channel_pk PK "surrogate_key(channel_slug)"
+        varchar channel_slug UK "email, web_form, in_product_widget, chat, forum_post, assessment, api"
+        varchar channel_name
+        boolean is_solicited "did we ask for it, or did they volunteer it"
+    }
+
+    dim_feedback_category {
+        varchar feedback_category_pk PK "surrogate_key(category_slug)"
+        varchar category_slug UK "stable machine key - survives relabelling"
+        varchar category_label "LLM-proposed, human-approved"
+        varchar category_parent_slug "optional hierarchy: cluster to category to theme"
+        varchar category_status "proposed, approved, merged, deprecated"
+        varchar category_source "seed, llm_discovered, manual"
+        varchar cluster_run_id "provenance: which run proposed this category"
+        timestamp first_seen_at
+        timestamp updated_at
+    }
+
+    dim_sentiment {
+        varchar sentiment_pk PK "surrogate_key(sentiment_slug)"
+        varchar sentiment_slug UK "positive, neutral, negative"
+        varchar polarity_score_bucket "coarse bucket for trend rollups"
+    }
+
+    dim_feedback_tag {
+        varchar feedback_tag_pk PK "surrogate_key(source_slug, tag_slug)"
+        varchar tag_slug "tags are source-scoped, not global"
+        varchar tag_label
+        varchar source_slug FK "which source system uses this tag"
+    }
+
+    bridge_feedback_tag {
+        varchar feedback_pk PK "part of compound key"
+        varchar feedback_tag_pk PK "part of compound key"
+    }
+```
+
+Two dimensions are conformed-by-construction (`dim_feedback_source`, `dim_feedback_channel`), two are
+derived and source-agnostic (`dim_feedback_category`, `dim_sentiment` — which attach to the **conversation**
+fact in §4, not here), one is explicitly source-scoped (`dim_feedback_tag`). `dim_user`, `dim_platform`,
+`dim_course_run`, `dim_organization`, `dim_course_content` and `dim_date`/`dim_time` are reused as-is.
+
+**`tfact_feedback` is insert-only (rev. 3).** `category_fk` and `sentiment_fk` used to hang off this fact as
+late-arriving updates; they moved to `afact_feedback_conversation` (§4) along with the rest of the generated
+layer, so nothing writes to a row of this fact after it lands.
+
+### Why these attributes and not others
+
+Every attribute was audited against all five sources before being given a home:
+
+| Attribute | Zendesk | forum | tutor | ORA | plugin | Home |
+|---|:-:|:-:|:-:|:-:|:-:|---|
+| channel / medium | ✓ | ✓ | ✓ | ✓ | ✓ | **`dim_feedback_channel`** |
+| explicit rating | ✓ | ✗ | ✓ | ✓ | ✓ | **`explicit_rating`** measure on the fact |
+| turn index | ✓ | ✓ | ✓ | ✗ | ✗ | **`turn_index`** degenerate |
+| conversation ref | ✓ | ✓ | ✓ | ✗ | ✗ | **`conversation_id`** degenerate |
+| subject (what it is about) | ~ | ✓ | ✓ | ✓ | ✓ | **`subject_*`** + `content_block_fk` |
+| created / updated | ✓ | ✓ | ✓ | ✓ | ✓ | **role-playing date/time FKs** |
+| tags | ✓ | ~ | ✗ | ✗ | ? | **`bridge_feedback_tag`** (source-scoped) |
+| status | ✓ | ✗ | ✗ | ✗ | ✗ | `source_metadata` |
+| priority | ✓ | ✗ | ✗ | ✗ | ✗ | `source_metadata` |
+| brand | ✓ | ✗ | ✗ | ✗ | ✗ | `source_metadata` |
+| group | ✓ | ✗ | ✗ | ✗ | ✗ | `source_metadata` |
+| due date | ✓ | ✗ | ✗ | ✗ | ✗ | `source_metadata` |
+
+### `source_metadata` — how the variant is actually stored
+
+Iceberg v2 has **no native JSON type**, so the repo's established pattern is to persist JSON as a
+**varchar containing a JSON string** — written with `json_format(...)`, read with the cross-db
+`json_query_string` / `json_extract_value` macros in `src/ol_dbt/macros/cross_db_functions.sql`, which
+already dispatch across Trino / DuckDB / StarRocks. In-repo precedent: `dim_course_content.block_metadata`
+("a JSON string representing the metadata field… different block types may have different member fields").
+
+StarRocks has a native JSON type and the read macros already target it, so the eventual migration is a
+column-type change, not a redesign.
+
+---
+
+## 2. Grain — one row per turn
+
+**`tfact_feedback` = one row per atomic free-text utterance, where an utterance is one *turn* of a
+conversation** — not one conversation.
+
+| Source | One row = | Text column | `source_record_ref` | `conversation_ref` |
+|---|---|---|---|---|
+| Zendesk | one **public, requester-authored comment** | `comment_plain_body` | `comment_id` | `ticket_id` |
+| edX forum | one `*.created` post / response / comment | `post_content` | `post_id` | thread id |
+| Learn AI tutor | one human turn | `human_message` | `checkpoint_id` | `chatsession_thread_id` |
+| ORA | one feedback submission | `feedback_text` | `submission_uuid` | n/a |
+| edX plugin | one feedback event | `feedback_text` | plugin event id | n/a |
+
+Turn grain is what the other sources already do: `int__learn_ai__chatbot` is one row per
+`djangocheckpoint` (ordered by `checkpoint_step`), and the forum sources are one row per tracking-log
+event. Zendesk at ticket grain was the only outlier, and it was an outlier in the Zendesk-shaped direction
+the §0 rule exists to prevent.
+
+**Exclusions are stated per source as one consistent rule — the author must be the person giving feedback,
+not the platform answering:** Zendesk keeps `comment_is_public = true` and author = requester (drops
+internal notes and agent replies); tutor keeps `human_message` and drops `agent_message`; forum keeps
+`*.created` and drops view/vote/follow events.
+
+`is_conversation_opening` recovers the previous first-comment-only view as a `WHERE` clause, so nothing is
+lost by widening the grain.
+
+---
+
+## 3. Common event contract → the fact
+
+```mermaid
+erDiagram
+    feedback_event_contract ||--|| int__feedback__unioned : "union all"
+    int__feedback__unioned  ||--|| feedback_redacted : "Presidio redaction (own Phase-1 asset, rev. 4)"
+    feedback_redacted       ||--|| tfact_feedback : "resolve conformed FKs, mint feedback_pk"
+
+    feedback_event_contract {
+        varchar source_slug "REQUIRED - maps to dim_feedback_source"
+        timestamp occurred_at "REQUIRED - ISO8601 source event time"
+        varchar source_record_ref "REQUIRED - stable source-native TURN id, idempotency + business key"
+        varchar text "REQUIRED - raw free text, redacted in-warehouse"
+        varchar channel_slug "REQUIRED - maps to dim_feedback_channel"
+        varchar title "subject or heading"
+        varchar conversation_ref "REQUIRED (rev. 4) - thread/ticket id; non-conversational sources set this to source_record_ref"
+        integer turn_index "ordinal within the conversation"
+        varchar subject_user_ref "global or openedx user id - NEVER a source row PK"
+        varchar courserun_readable_id "course scope"
+        varchar platform "platform readable id"
+        varchar subject_type "what the feedback is ABOUT"
+        varchar subject_ref "source-native id of that thing"
+        varchar subject_url "canonical or decoded deep link to the SUBJECT"
+        varchar source_url "NEW (rev. 4) - deep link to the record ITSELF, e.g. ticket API URL"
+        varchar explicit_rating "CSAT, tutor rating, ORA score - conformed"
+        varchar created_at "source lifecycle timestamp"
+        varchar updated_at "source lifecycle timestamp"
+        json source_metadata "everything not yet conformed - survives into the fact as a variant"
+    }
+```
+
+`source_metadata` is no longer flattened into Zendesk-shaped facet columns at the fact boundary — it is
+carried through **as a variant**, which is what makes a new source additive rather than a schema change.
+
+---
+
+## 4. The analysis fact — `afact_feedback_conversation`
+
+**One row per conversation**, keyed on the source's own thread id. It holds two things: the conversation
+lifecycle attributes that would otherwise repeat across every turn, **and everything a model generated** —
+the summary, the embedding, the sentiment, the category and the cluster (rev. 3).
+
+The conversation is the analysis unit because a complaint usually emerges across several turns. Embedding
+turns independently splits one issue into several weak cluster members and scores sentiment off a fragment.
+This is *not* a return to ticket grain: `tfact_feedback` still records every turn (§2), and the assembled
+conversation is built from all of them.
+
+```mermaid
+erDiagram
+    afact_feedback_conversation ||--o{ tfact_feedback : "(feedback_source_fk, conversation_id) - turns roll up"
+    dim_feedback_source   ||--o{ afact_feedback_conversation : "feedback_source_fk"
+    dim_date              ||--o{ afact_feedback_conversation : "opened / last_turn / resolved / closed"
+    dim_user              |o--o{ afact_feedback_conversation : "opened_by_user_fk"
+    dim_feedback_category |o--o{ afact_feedback_conversation : "category_fk (generated)"
+    dim_sentiment         |o--o{ afact_feedback_conversation : "sentiment_fk (generated)"
+    feedback_cluster_run  |o--o{ afact_feedback_conversation : "cluster_run_id (which run assigned it)"
+
+    afact_feedback_conversation {
+        varchar feedback_conversation_pk PK "surrogate_key(source_slug, conversation_ref)"
+        varchar conversation_id "degenerate - joins tfact_feedback on (feedback_source_fk, conversation_id) TOGETHER, never alone (rev. 4)"
+        varchar feedback_source_fk FK
+        varchar opened_by_user_fk FK "nullable"
+        integer opened_date_fk FK "available today"
+        integer last_turn_date_fk FK "available today"
+        integer first_response_date_fk FK "BLOCKED - needs ticket_metrics"
+        integer resolved_date_fk FK "BLOCKED - needs ticket_metrics"
+        integer closed_date_fk FK "BLOCKED - needs ticket_metrics"
+        integer turn_count "available today"
+        integer participant_count "available today"
+        integer conversation_text_chars "summed pre-redaction length of kept turns"
+        integer resolution_duration_seconds "BLOCKED - the how-long-was-it-open measure"
+        varchar final_status "available today - current-state snapshot"
+        varchar explicit_rating "available today - and now grain-matched to sentiment_fk"
+        varchar conversation_summary "GENERATED - LLM abstract of the exchange, from redacted text only"
+        varchar summary_model_version "null = not summarized (single-turn or under the length threshold)"
+        timestamp summarized_at
+        array embedding_vector "GENERATED - Iceberg ARRAY of float; StarRocks HNSW indexes it later"
+        integer embedding_dim "Matryoshka sweep: 256, 512, 1024"
+        varchar embedding_model_version "makes the model choice reversible without touching tfact_feedback"
+        varchar embedding_input "summary or concatenated_turns - what was actually embedded"
+        timestamp embedded_at
+        varchar category_fk FK "GENERATED - nullable, a valid queryable state"
+        varchar sentiment_fk FK "GENERATED - nullable"
+        varchar sentiment_source "explicit_rating or model - which tier produced it"
+        varchar cluster_run_id FK "GENERATED - the approved run"
+        integer cluster_id "-1 = noise = one-off complaint, not systemic"
+        float cluster_probability "cohesion signal for ranking systemic issues"
+        timestamp conversation_ingested_at
+    }
+```
+
+**The summary is the one per-record LLM cost in the design.** It is skipped for single-turn conversations and
+conversations under a length threshold — where the raw text already *is* the summary — which makes ORA and
+the edX plugin free by construction. Cost is sized in `feedback_dimensional_model.md` §5b and must be
+sample-measured before the backfill.
+
+**Partially blocked on ingestion.** The Zendesk streams landed in the lake
+(`src/ol_dbt/models/staging/zendesk/_zendesk__sources.yml`) are exactly seven:
+
+```
+tickets · ticket_comments · ticket_fields · brands · groups · organizations · users
+```
+
+`solved_at`, `closed_at`, `initially_assigned_at`, `first_resolution_time` and `full_resolution_time` live
+in Zendesk's **`ticket_metrics`** endpoint; full state history lives in **`ticket_audits`**. Neither is
+synced. In the `tickets` stream, "solved"/"closed" appear only as *values of `ticket_status`* — a snapshot
+with no history.
+
+So this table ships with `turn_count`, `participant_count`, `opened_date_fk`, `final_status` and
+`explicit_rating` now, the generated columns fill in as the ML asset lands, and the duration measures arrive
+once `ticket_metrics` is added to the connector — an ingestion ticket, tracked separately. The grain does not
+move when any of them arrive.
+
+---
+
+## 5. Run provenance and the strategic rollup
+
+The per-turn ML sidecar from rev. 2 (`feedback_embeddings`, `feedback_cluster_assignment`) is **withdrawn** —
+its contents live on `afact_feedback_conversation` (§4). Two tables remain, both genuinely different grains
+from the conversation fact:
+
+```mermaid
+erDiagram
+    feedback_cluster_run        ||--o{ feedback_cluster_candidate : "cluster_run_id"
+    feedback_cluster_run        |o--o{ dim_feedback_category : "cluster_run_id (provenance)"
+    afact_feedback_conversation ||--o{ feedback_cluster_candidate : "feedback_conversation_pk"
+    afact_feedback_conversation ||--o{ afact_feedback_cluster_daily : "aggregated"
+
+    feedback_cluster_run {
+        varchar cluster_run_id PK
+        varchar embedding_model_version "which generation of vectors this run consumed"
+        varchar algorithm "umap+hdbscan"
+        json run_params "min_cluster_size, n_neighbors - config not hardcoded"
+        integer cluster_count
+        integer noise_count "the one-off bucket"
+        float silhouette "only if the algorithm produces it"
+        varchar run_status "candidate, approved"
+        timestamp run_at
+    }
+
+    feedback_cluster_candidate {
+        varchar feedback_conversation_pk PK "part of compound key"
+        varchar cluster_run_id PK "part of compound key"
+        integer cluster_id
+        float cluster_probability
+    }
+
+    afact_feedback_cluster_daily {
+        varchar date_fk FK
+        varchar feedback_source_fk FK
+        varchar feedback_channel_fk FK
+        varchar category_fk FK
+        varchar sentiment_fk FK
+        integer cluster_id
+        integer conversation_count "at conversation grain this IS the cluster size"
+        integer distinct_user_count
+        integer rated_conversation_count "coverage only - count with a non-null explicit_rating; replaces avg_explicit_rating (rev. 4, see note below)"
+    }
+```
+
+`feedback_cluster_candidate` holds **only runs that have not been promoted**. Promoting a run copies its
+assignment onto `afact_feedback_conversation` and drops the candidate rows; it exists so a proposed run can
+be compared against the live one during the embedding-model bake-off, and nothing outside the ML pipeline
+should read it.
+
+`dim_feedback_category` remains the *curated, stable* projection — only an approved run advances it, which is
+what still lets clustering re-run freely.
+
+**Conversation grain simplifies the rollup.** Rev. 2 had to carry both `feedback_count` and
+`distinct_conversation_count`, and had to warn that `min_cluster_size` counted turns rather than tickets so
+one talkative reporter could manufacture a systemic issue. At conversation grain a cluster's size *is* its
+conversation count, and that whole caveat disappears.
+
+**`rated_conversation_count` replaces `avg_explicit_rating` (fixed rev. 4, @copilot).**
+`explicit_rating` is a heterogeneous *string* across sources — Zendesk `'good'`/`'bad'`, tutor and ORA
+numeric-looking scores that are not on a shared scale — so averaging it as a float requires a conformed
+numeric mapping this design does not define. `sentiment_fk` is already the conformed signal on this rollup
+(derived from `explicit_rating` at MVP, per `feedback_zendesk_mvp_spec.md` §6), so a positive/neutral/
+negative breakdown is available via `sentiment_fk` without inventing a second normalization. The rollup
+keeps only `rated_conversation_count` — coverage, not an average — rather than defining a rating-to-number
+mapping speculatively ahead of a second source needing one.
+
+---
+
+## 6. What Phase 1 (Zendesk MVP) builds
+
+```mermaid
+erDiagram
+    dim_feedback_source   ||--o{ tfact_feedback : "feedback_source_fk = zendesk"
+    dim_feedback_channel  ||--o{ tfact_feedback : "feedback_channel_fk - from comment_source_channel"
+    dim_date              ||--o{ tfact_feedback : "occurred / created / updated"
+    dim_time              ||--o{ tfact_feedback : "occurred / created / updated"
+    dim_user              |o--o{ tfact_feedback : "user_fk - comment author, email path"
+    tfact_feedback        ||--o{ bridge_feedback_tag : "feedback_pk"
+    dim_feedback_tag      ||--o{ bridge_feedback_tag : "feedback_tag_pk"
+    afact_feedback_conversation ||--o{ tfact_feedback : "(feedback_source_fk, conversation_id) = (zendesk, ticket_id)"
+    dim_feedback_category |o--o{ afact_feedback_conversation : "category_fk - seeded from ticket_tags"
+    dim_sentiment         |o--o{ afact_feedback_conversation : "sentiment_fk - from satisfaction_rating_score"
+
+    tfact_feedback {
+        varchar feedback_pk PK "surrogate_key(zendesk, comment_id)"
+        varchar conversation_id "ticket_id"
+        varchar courserun_fk "NULL at MVP - Zendesk is not course-scoped"
+        varchar platform_fk "NULL at MVP - re-evaluate once brand is landed"
+        varchar organization_fk "NULL at MVP - see the dim_organization key note below"
+        varchar content_block_fk "NULL at MVP - arrives with the edX plugin source"
+        varchar source_metadata "status, priority, brand, group, due, custom fields"
+    }
+```
+
+Build path:
+
+```mermaid
+flowchart TD
+    A["raw__thirdparty__zendesk_support__tickets<br/>raw__thirdparty__zendesk_support__ticket_comments"] --> B["stg__zendesk__ticket<br/>stg__zendesk__ticket_comment<br/>(existing)"]
+    B --> C["int__zendesk__ticket_comment<br/>(existing - GRAIN SOURCE; needs comment_author_user_id added)"]
+    B --> C2["int__zendesk__ticket<br/>(existing - conversation attributes; needs ticket_requester_user_id added, rev. 4)"]
+    C --> D["int__feedback__zendesk<br/>(NEW - conform to the event contract, filter to public requester turns)"]
+    C2 --> D
+    D --> E["int__feedback__unioned<br/>(NEW - union all sources)"]
+    E --> R["feedback_redacted<br/>(NEW, rev. 4 - Dagster Python asset, Presidio masking; Phase-1, upstream of the fact, NOT the ML asset)"]
+    R --> F["tfact_feedback<br/>(NEW - resolve FKs, mint feedback_pk; INSERT-ONLY)"]
+    F --> G["bridge_feedback_tag"]
+    F --> M["int__feedback__conversation<br/>(NEW - assemble kept turns per conversation, ordered)"]
+    C2 --> H["afact_feedback_conversation<br/>(NEW - lifecycle + generated columns)"]
+    M --> H
+    M -.->|Fenic / sklearn, engine-external| N["summarize -> embed -> cluster -> sentiment"]
+    N -.->|writes generated columns| H
+    N -.-> J["feedback_cluster_run<br/>feedback_cluster_candidate"]
+    N -.->|LLM label, human approve| K["dim_feedback_category"]
+    K -.->|category_fk| H
+    H --> I["afact_feedback_cluster_daily<br/>(Phase 2)"]
+    L["forum / tutor / ORA / edX plugin<br/>(Phase 2 - additive CTEs)"] --> E
+```
+
+**MVP cost check.** Phase 1 is **4 dimensions + 1 bridge + 2 facts**. The dimension additions are `select
+distinct` cheap and the conversation fact is a straight aggregation, so the dbt build cost is small. Rev. 3
+adds no tables — it withdraws the two per-turn sidecar tables and widens the conversation fact — but it does
+add the per-conversation LLM summary, which is the one cost worth confirming on a sample before the backfill
+(`feedback_dimensional_model.md` §5b). The argument for paying the reshaping now: reshaping a fact after it
+has consumers is the expensive version, and the grain change in §2 has to land before the fact ships
+regardless, because it moves the business key.
+
+---
+
+## 7. Prerequisites and open items
+
+| Item | Kind | Blocks |
+|---|---|---|
+| Carry `comment_author_user_id` through `int__zendesk__ticket_comment` (it is in `stg__zendesk__ticket_comment`, not in the int model) | small dbt change | classifying requester-vs-agent turns; `user_fk` resolution |
+| Carry `ticket_requester_user_id` through `int__zendesk__ticket` (NEW, rev. 4 — the join to `stg__zendesk__user` already exists at `int__zendesk__ticket.sql:117-118`, only `requester.user_name` is selected today) | small dbt change | the §2 filter compares ids, not names — it cannot compile without this |
+| Measure public-requester comment volume per ticket | measurement | sizing the fact and the embedding budget |
+| Add the `ticket_metrics` stream to the Zendesk Airbyte connector | ingestion, separate ticket | resolution/closure durations in `afact_feedback_conversation` |
+| Confirm the conformed `channel_slug` value set against each source's actual channel values | modeling | `dim_feedback_channel` seed |
+| `dim_organization.organization_pk = generate_surrogate_key(['platform','source_id'])` (`dim_organization.sql:38`) — Zendesk supplies neither | known-null, explicit decision | `organization_fk` for Zendesk stays null; org rides in `source_metadata` |
+| Measure the multi-turn share of tickets and sample-price the summary step | measurement | the summarization budget and the skip threshold (§4) |
+| Decide `embedding_input`: summary vs. concatenated turns vs. both as eval arms | modeling | the bake-off in `feedback_ml_approach.md` §B.1 |
+
+---
+
+## 8. Change log
+
+**rev. 4 (2026-08-13)** — implementation-blocking fixes from
+[#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422), no grain/key/shape changes:
+
+- **`feedback_redacted` is its own node** (§3/§6) — redaction sits between `int__feedback__unioned` and
+  `tfact_feedback` as a distinct Phase-1 Dagster asset, not folded into the same union step or the ML
+  pipeline (detail: `feedback_zendesk_mvp_spec.md` §3).
+- **`conversation_ref` is required** in the contract (§3), with non-conversational sources setting it to
+  `source_record_ref`; **`source_url` added** to the contract (§3) — both were fact/adapter requirements
+  with no contract field to source them from.
+- **`(feedback_source_fk, conversation_id)` replaces bare `conversation_id`** everywhere the turn fact joins
+  the conversation fact (§1/§4/§6) — `conversation_id` is source-native and can collide across sources.
+- **`rated_conversation_count` replaces `avg_explicit_rating`** (§5) — `explicit_rating` is a heterogeneous
+  string, not a number, so it cannot be averaged without a normalization this design doesn't define.
+- **`ticket_requester_user_id` added to the prerequisites** (§7) — the same class of gap as
+  `comment_author_user_id`: the §2 filter needs the id, and `int__zendesk__ticket` today exposes only the
+  requester's name.
+
+**rev. 3 (2026-08-10)** — the analysis unit moves from the turn to the conversation
+([RFC #12210](https://github.com/mitodl/hq/discussions/12210)):
+
+- **`afact_feedback_conversation` is now the analysis fact** (§4) — summary, embedding vector, `category_fk`,
+  `sentiment_fk` and cluster membership join the lifecycle columns it already had.
+- **`category_fk`/`sentiment_fk` removed from `tfact_feedback`** (§1), which makes that fact **insert-only**.
+- **Withdrawn:** `feedback_embeddings` and `feedback_cluster_assignment` (§5). `feedback_cluster_run` stays;
+  a small `feedback_cluster_candidate` replaces the assignment table for unpromoted runs only.
+- **Added `conversation_summary`** with an explicit skip rule and a stated per-record LLM cost.
+- `afact_feedback_cluster_daily` aggregates the conversation fact, so `feedback_count` /
+  `distinct_conversation_count` collapse to one measure and the `min_cluster_size` caveat disappears.
+- **Unchanged:** turn grain, the Zendesk comment sourcing, business keys, the conformance rule, the contract.
+
+**rev. 2 (2026-08-07)** — from [@KatelynGit's RFC
+review](https://github.com/mitodl/hq/discussions/12210#discussioncomment-17937328) and the conformance rule
+in §0:
+
+- **Grain moved from ticket to turn.** Zendesk `source_record_ref` is now `comment_id`, `conversation_ref`
+  is `ticket_id`. Added `turn_index` and `is_conversation_opening`.
+- **Adopted the ≥2-sources conformance rule** (§0) and re-audited every attribute against it.
+- **Added `dim_feedback_channel`** — the one attribute in the withdrawn junk dimension that is genuinely
+  conformed.
+- **Added `afact_feedback_conversation`** — conversation-grain lifecycle, partially blocked on ingestion.
+- **Added `dim_feedback_tag` + `bridge_feedback_tag`** — replaces the multi-valued `source_tags` array.
+- **Renamed** `date_fk`/`time_fk` → `occurred_date_fk`/`occurred_time_fk`; **added** created/updated
+  role-playing FKs and timestamps.
+- **`source_metadata` is now persisted as a variant on the fact** rather than flattened into facet columns.
+- **Withdrawn:** the `dim_feedback_context` junk dimension proposed in rev. 1 — it was Zendesk-shaped and
+  fails the §0 rule. **Withdrawn:** the `source_brand` / `source_group` facet columns added for
+  [hq#12607](https://github.com/mitodl/hq/issues/12607) — same reason; both fields remain available and
+  filterable from `source_metadata`. **Withdrawn:** `due_date_fk` — Zendesk-only, so it lives in the variant.
+
+**rev. 1 (2026-08-07)** — initial ERDs; subject reference (`subject_type`/`subject_ref`/`subject_url` +
+`content_block_fk`) from [@pdpinch's
+review](https://github.com/mitodl/ol-data-platform/pull/2422#issuecomment-5169778966); ML sidecar grain
+split into `feedback_embeddings` / `feedback_cluster_run` / `feedback_cluster_assignment`, dropping
+`embedding_id` from the fact.
