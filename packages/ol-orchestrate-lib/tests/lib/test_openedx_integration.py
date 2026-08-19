@@ -291,10 +291,9 @@ def test_real_archive_static_assets_bundle_version_and_manifest(
         assert "size_bytes" in entry
         assert isinstance(entry["size_bytes"], int)
 
-    # no files from excluded structural directories are present
-    excluded = {"drafts", "assets", "static"}
+    # Unpublished draft content is never collected. static/ and assets/ ARE
+    # collected -- that is where a real export keeps the course's content files.
     for path, _ in bundle.files:
-        top_dir = path.split("/")[0]
-        assert top_dir not in excluded, (
-            f"File from excluded directory '{top_dir}' found in static_assets: {path}"
+        assert path.split("/")[0] != "drafts", (
+            f"Unpublished draft file found in static_assets: {path}"
         )

@@ -102,11 +102,24 @@ def sample_course_archive():
         '<lti_v2 display_name="Custom LTI" url_name="lti_block"/>\n'
     )
 
-    # static non-XML assets — in the excluded `static/` directory;
-    # these should NOT appear in the bundle (excluded by directory filter)
+    # static/ holds "the files used in a course, such as images or PDFs" per the
+    # OLX reference. Non-XML contents ARE collected; XML here is neither a block
+    # nor a document to extract.
     static_dir = course_root / "static"
     static_dir.mkdir()
     (static_dir / "logo.png").write_text("fake png data")
+    (static_dir / "syllabus.pdf").write_text("fake pdf bytes")
+    (static_dir / "subs_video1.srt.sjson").write_text('{"start": [0], "text": ["hi"]}')
+    (static_dir / "manifest.xml").write_text(
+        '<assets><asset name="logo.png"/></assets>'
+    )
+
+    # drafts/ is the Studio draft workspace — unpublished, so nothing in it is
+    # collected or parsed, XML or otherwise.
+    drafts_dir = course_root / "drafts"
+    drafts_dir.mkdir()
+    (drafts_dir / "unpublished.pdf").write_text("draft pdf that must not ship")
+    (drafts_dir / "draft_block.xml").write_text('<html display_name="Draft"/>')
 
     # non-XML content files in non-excluded directories — these SHOULD be collected
     subtitles_dir = course_root / "subtitles"
@@ -256,13 +269,63 @@ def test_process_course_xml_blocks_static_assets(sample_course_archive):
     assert any("subtitle.srt" in p for p in paths), "Should include SRT file"
     assert any("content.html" in p for p in paths), "Should include HTML file"
 
-    # Files from excluded structural directories must not appear in the bundle
-    excluded_dirs = {"drafts", "assets", "static"}
+    # Only drafts/ is withheld. Its contents are unpublished by definition, so a
+    # draft PDF reaching the bundle would put unreviewed material in the catalogue.
     for path in paths:
-        top_dir = path.split("/")[0]
-        assert top_dir not in excluded_dirs, (
-            f"File from excluded directory '{top_dir}' should not be in bundle: {path}"
+        assert path.split("/")[0] != "drafts", (
+            f"Unpublished draft file must not be in bundle: {path}"
         )
+
+
+def test_process_course_xml_blocks_collects_static_content_files(sample_course_archive):
+    """static/ holds the course's real content files, so its payload is collected.
+
+    This is the input ContentFile text extraction consumes: uploaded PDFs and
+    subs_*.srt.sjson subtitles live in static/, and excluding them would make the
+    bundle structurally unable to carry course content.
+    """
+    archive_path, _ = sample_course_archive
+    _, bundle = process_course_xml_blocks(archive_path, "prod")
+    paths = [p for p, _ in bundle.files]
+
+    assert "static/syllabus.pdf" in paths, "Uploaded PDFs must be collected"
+    assert "static/subs_video1.srt.sjson" in paths, "Subtitles must be collected"
+    assert "static/logo.png" in paths, "Uploaded images must be collected"
+
+
+def test_process_course_xml_blocks_file_storage_xml_is_neither(sample_course_archive):
+    """XML under static/ is neither a course block nor a collected content file.
+
+    Course XML comes from the block directories, and a document extractor has
+    nothing to do with an XML manifest, so it falls through both paths.
+    """
+    archive_path, _ = sample_course_archive
+    blocks, bundle = process_course_xml_blocks(archive_path, "prod")
+
+    assert "static" not in {b.block_type for b in blocks}
+    assert "static/manifest.xml" not in [p for p, _ in bundle.files]
+
+
+def test_process_course_xml_blocks_drafts_never_collected(sample_course_archive):
+    """drafts/ is withheld from BOTH block parsing and file collection."""
+    archive_path, _ = sample_course_archive
+    blocks, bundle = process_course_xml_blocks(archive_path, "prod")
+
+    assert "drafts" not in {b.block_type for b in blocks}
+    assert not any(p.startswith("drafts/") for p, _ in bundle.files), (
+        "Unpublished draft content must never be collected"
+    )
+
+
+def test_process_course_xml_blocks_manifest_types_content_files(sample_course_archive):
+    """The manifest carries the MIME type extraction dispatches on."""
+    archive_path, _ = sample_course_archive
+    _, bundle = process_course_xml_blocks(archive_path, "prod")
+
+    by_path = {entry["path"]: entry for entry in bundle.manifest["files"]}
+    assert by_path["static/syllabus.pdf"]["mime_type"] == "application/pdf"
+    assert by_path["static/logo.png"]["mime_type"] == "image/png"
+    assert bundle.manifest["file_count"] == len(bundle.files)
 
 
 def test_process_course_xml_blocks_model_dump_serializable(sample_course_archive):
