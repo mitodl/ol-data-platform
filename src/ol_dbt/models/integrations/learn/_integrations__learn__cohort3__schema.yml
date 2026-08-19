@@ -77,11 +77,23 @@ models:
   description: >
     MIT podcast episodes exposed for MIT Learn's ETL. One row per episode
     across all configured podcasts. Sourced from stg__podcast__rss__episodes,
-    joined to its channel for the inherited topics/offered_by values.
+    joined to integrations__learn__podcasts for the inherited topics and
+    offered_by values.
     Episodes with no <enclosure> (no audio file) are dropped at ingest.
     NOTE: duration_raw and published_on_raw are deliberately un-normalized —
     both are free-form/RFC 2822 strings that the delivery asset parses in
     Python, mirroring the Celery ETL's iso8601_duration() and dateutil parse.
+    NOTE: filtered by the same dlt-load grace window as
+    integrations__learn__podcasts, but on each episode's OWN load recency — a
+    feed can drop one old episode while the channel keeps refreshing daily.
+    NOTE: the parent is read from integrations__learn__podcasts rather than
+    from staging. Joining grace-filtered episodes to the UNFILTERED staging
+    channels would let an episode still inside its window attach to a channel
+    that had already aged out, producing rows no delivered podcast claims.
+    The delivery asset drops those, so the payload stayed correct — but they
+    would inflate the row count MIN_EPISODES uses to detect a short read, and
+    the two tables rank recency over independent _dlt_load_id universes, so
+    "3 loads ago" need not mean the same instant in each.
   columns:
   - name: readable_id
     description: >
@@ -91,8 +103,14 @@ models:
   - name: podcast_readable_id
     description: >
       readable_id of the parent podcast in integrations__learn__podcasts.
-      The delivery asset groups episodes by this column.
-    tests: [not_null]
+      The delivery asset groups episodes by this column. Read from that model
+      directly, so an episode cannot reference a podcast that does not ship —
+      the relationships test below pins that guarantee.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('integrations__learn__podcasts')
+        field: readable_id
   - name: title
     description: Episode title.
   - name: description
