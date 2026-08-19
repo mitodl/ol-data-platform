@@ -120,11 +120,12 @@ def test_automation_values_are_legal():
 def test_only_production_automates():
     """No environment builds unattended against a warehouse it isn't for.
 
-    `qa` in particular: with DBT_TARGET_MAP missing a `qa` entry, an automated
-    QA build wrote the production warehouse, and the last such run_results.json
-    in s3://dagster-data-qa/ is dated 2026-08-11. Step 1 fixed where a QA build
-    writes; this fixes whether one starts on its own. Flipping `qa` to "on"
-    belongs to RFC 12711 step 8, once the QA lake can actually fill the models.
+    `qa` in particular: with DBT_TARGET_MAP missing a `qa` entry, every dbt run
+    from the QA code location hit the production warehouse -- all 18 pre-fix
+    run_results.json objects in s3://dagster-data-qa/ read `"target":
+    "production"`. Step 1 fixed where a QA build lands; this fixes whether one
+    starts unasked. Flipping `qa` to "on" belongs to RFC 12711 step 8, once the
+    QA lake can actually fill the models.
     """
     assert {env for env, mode in DBT_AUTOMATION_MAP.items() if mode == "on"} == {
         "production"

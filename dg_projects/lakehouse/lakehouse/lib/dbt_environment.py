@@ -78,11 +78,23 @@ STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
 # ``dbt_automation_sensor`` starts running.
 #
 # Until RFC 12711 step 1, DBT_TARGET_MAP had no ``qa`` entry and fell through to
-# production, so this sensor firing in the QA code location built the PRODUCTION
-# warehouse. It did: the newest dbt run_results.json in s3://dagster-data-qa/
-# before that fix is 2026-08-11 and reads ``"target": "production"``. Nothing in
-# the repo said whether the sensor was allowed to run there -- it was a hand-made
-# instance setting, which is how the misrouting stayed invisible for months.
+# production, so anything running dbt from the QA code location hit the
+# PRODUCTION warehouse. Things did. All 18 run_results.json objects in
+# s3://dagster-data-qa/openmetadata/dbt-artifacts/runs/ predate that fix and
+# every one reads ``"target": "production"``: 13 ``docs generate`` runs between
+# 2026-05-11 and 2026-07-01, then 5 ``build`` runs to 2026-08-11. The generates
+# filed production's catalog under QA's artifacts prefix, which is where QA's
+# OpenMetadata reads from -- so QA metadata described production.
+#
+# None of that was this sensor, and saying so matters. The timestamps fit
+# neither its four-hour interval nor any cron (two on some days), and it is
+# stopped in QA. What triggered them is in the Dagster run history, not in S3;
+# ``dbt_docs_artifacts_job`` is the only thing here that runs ``docs generate``.
+# So this map does not retroactively fix those runs -- it closes a path that
+# happened never to be taken. Nothing in the repo said the sensor was allowed to
+# run in QA; that it did not was luck, and luck is what a declaration replaces.
+#
+# The paths that WERE taken are still ungated -- see SCOPE below.
 #
 # ``default_status`` alone would not have prevented it. It only seeds the
 # instance state on first deploy; once a sensor has been toggled in the UI, the
