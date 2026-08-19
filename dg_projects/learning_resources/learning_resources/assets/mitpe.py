@@ -33,6 +33,8 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
+from learning_resources.lib.sanitize import clean_html
+
 log = logging.getLogger(__name__)
 
 _GLUE_DB = (
@@ -54,7 +56,10 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "readable_id": row["readable_id"],
         "title": row["title"],
         "url": row.get("url"),
-        "description": row.get("description"),
+        # The legacy Celery ETL ran this field through clean_data() before it
+        # reached the database; nothing on the webhook path does, so sanitize
+        # here to keep the migration behaviour-preserving.
+        "description": clean_html(row.get("description")),
         "image": {"url": image_url, "alt": image_alt} if image_url else None,
         "topics": topics,
         "published": True,
