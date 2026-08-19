@@ -487,8 +487,9 @@ defs = Definitions(
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour
             # Declared rather than left to the instance, which is how a QA code
             # location came to build the production warehouse unattended. This
-            # only seeds the state on first deploy -- DBT_AUTOMATION_MAP's
-            # effect on the assets' AutomationCondition is what enforces it.
+            # only seeds the state on first deploy -- what enforces it is that
+            # outside DBT_AUTOMATION_ENVIRONMENTS the assets carry no
+            # AutomationCondition at all.
             default_status=(
                 DefaultSensorStatus.RUNNING
                 if DBT_AUTOMATION_ENABLED
@@ -503,7 +504,8 @@ defs = Definitions(
             # AssetSelection.all() minus this one. So staging is automatable there
             # via a sensor no one declared. Pre-existing and STOPPED unless
             # started by hand, but the same invisible instance state
-            # DBT_AUTOMATION_MAP exists to remove -- see the open question on that map.
+            # DBT_AUTOMATION_ENVIRONMENTS exists to remove -- see the open
+            # question recorded beside it.
             #
             # Where automation is off the question does not arise: no asset
             # carries a condition, so there is nothing to synthesize over.

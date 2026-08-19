@@ -128,7 +128,7 @@ def test_only_production_automates():
     from the QA code location hit the production warehouse -- all 18 pre-fix
     run_results.json objects in s3://dagster-data-qa/ read `"target":
     "production"`. Step 1 fixed where a QA build lands; this fixes whether one
-    starts unasked. Flipping `qa` to "on" belongs to RFC 12711 step 8, once the
+    starts unasked. Adding `qa` belongs to RFC 12711 step 8, once the
     QA lake can actually fill the models.
     """
     assert frozenset({"production"}) == DBT_AUTOMATION_ENVIRONMENTS

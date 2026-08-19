@@ -32,8 +32,8 @@ DBT_REPO_DIR = (
 dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
 
-# Built once and reused rather than reconstructed for every dbt node. None in
-# environments DBT_AUTOMATION_MAP declares off -- see that map for why the
+# Built once and reused rather than reconstructed for every dbt node. None
+# outside DBT_AUTOMATION_ENVIRONMENTS -- see that declaration for why the
 # condition, and not dbt_automation_sensor's default_status, is what actually
 # holds an environment closed.
 _DBT_AUTOMATION_CONDITION = (
