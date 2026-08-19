@@ -47,6 +47,14 @@ models:
     description: str, Apple Podcasts listing URL from the YAML config
   - name: podcast_google_podcasts_url
     description: str, Google Podcasts listing URL from the YAML config
+  - name: podcast_dlt_load_id
+    description: >
+      str, the dlt load that most recently upserted this row. The raw table is
+      merge-loaded, so a podcast dropped from the config is left behind rather
+      than deleted and this value stops advancing.
+      integrations__learn__podcasts uses it to distinguish "still configured"
+      from "merge left this behind".
+    tests: [not_null]
 
 - name: stg__podcast__rss__episodes
   description: >
@@ -92,3 +100,10 @@ models:
     description: >
       str, episode cover art -- the episode's own itunes:image when present,
       otherwise the parent channel's image URL
+  - name: episode_dlt_load_id
+    description: >
+      str, the dlt load that most recently upserted this episode. Merge-loaded
+      like the channels table, so a dropped episode stops advancing rather than
+      disappearing. Used by integrations__learn__podcast_episodes to retire
+      episodes a feed no longer lists.
+    tests: [not_null]

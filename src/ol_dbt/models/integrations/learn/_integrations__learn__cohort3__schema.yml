@@ -19,6 +19,11 @@ models:
     stg__podcast__rss__channels via the podcast_rss dlt pipeline.
     NOTE: RSS exposes only <lastBuildDate> (RFC 2822, not Trino-parseable
     without a per-feed format string), so last_modified is current_timestamp.
+    NOTE: the raw table is merge-loaded, so a podcast removed from the config
+    is never deleted. Rows are filtered to those seen in the last N dlt loads
+    (var podcast_absence_grace_loads, default 3) so removals eventually reach
+    MIT Learn, while a transient RSS fetch failure -- which makes the dlt
+    source skip that feed for one run -- does not unpublish a live podcast.
   columns:
   - name: readable_id
     description: >
