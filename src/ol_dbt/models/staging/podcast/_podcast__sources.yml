@@ -1,0 +1,86 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__podcast__rss__channels
+    description: >
+      One row per podcast channel configured in mitodl/open-podcast-data,
+      parsed from that podcast's RSS <channel> element by the podcast_rss dlt
+      pipeline. Merged on readable_id.
+    columns:
+    - name: readable_id
+      description: >
+        str, dlt-side channel identifier (rss_url with the scheme stripped and
+        any trailing slash removed). NOTE: MIT Learn's own convention does NOT
+        strip the trailing slash, so downstream integrations models recompute
+        the identifier from rss_url rather than reusing this column.
+    - name: rss_url
+      description: str, the podcast's RSS feed URL (from the YAML config)
+    - name: website
+      description: str, the podcast's website URL (from the YAML config)
+    - name: title
+      description: >
+        str, podcast title — the YAML config's podcast_title when set,
+        otherwise the RSS <channel><title>
+    - name: description
+      description: str, RSS <channel><description>
+    - name: language
+      description: str, RSS <channel><language>
+    - name: last_build_date
+      description: str, RSS <channel><lastBuildDate>, an RFC 2822 timestamp
+    - name: image_url
+      description: >
+        str, cover art URL — itunes:image/@href when present, otherwise
+        <image><url>
+    - name: offered_by
+      description: str, offering department name from the YAML config
+    - name: topics
+      description: str, comma-separated topic labels from the YAML config
+    - name: apple_podcasts_url
+      description: str, Apple Podcasts listing URL from the YAML config
+    - name: google_podcasts_url
+      description: str, Google Podcasts listing URL from the YAML config
+    - name: etl_source
+      description: str, always 'podcast'
+
+  - name: raw__podcast__rss__episodes
+    description: >
+      One row per episode across all configured podcasts, parsed from each
+      feed's RSS <item> elements by the podcast_rss dlt pipeline. Items with no
+      <enclosure> (no audio file) are dropped at ingest. Merged on readable_id.
+    columns:
+    - name: readable_id
+      description: >
+        str, the episode <guid> when present, otherwise the episode link (or
+        audio URL) with the scheme stripped. Matches MIT Learn's convention.
+    - name: channel_readable_id
+      description: str, the dlt-side readable_id of the parent channel
+    - name: channel_rss_url
+      description: str, the parent channel's RSS feed URL
+    - name: title
+      description: str, RSS <item><title>
+    - name: description
+      description: str, RSS <item><description>
+    - name: url
+      description: str, the episode link when present, otherwise the audio URL
+    - name: audio_url
+      description: str, RSS <item><enclosure>/@url — the audio file
+    - name: episode_link
+      description: str, RSS <item><link>
+    - name: duration
+      description: >
+        str, raw itunes:duration text. Free-form — may be "HH:MM:SS", "MM:SS",
+        or a plain seconds count. Normalized to ISO-8601 downstream.
+    - name: pub_date
+      description: str, RSS <item><pubDate>, an RFC 2822 timestamp
+    - name: image_url
+      description: >
+        str, episode cover art — itunes:image/@href when present, otherwise the
+        parent channel's image URL
+    - name: etl_source
+      description: str, always 'podcast'
