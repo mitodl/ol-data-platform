@@ -3,9 +3,9 @@ version: 2
 
 models:
 - name: int__feedback__zendesk
-  description: Zendesk comments conformed to the common feedback event contract. Grain
-    is one public, requester-authored comment -- one turn of a conversation. Agent
-    replies, internal notes and Zendesk sample tickets are filtered out.
+  description: One row per public, requester-authored Zendesk comment, conformed to
+    the common feedback event contract. Agent replies, internal notes and Zendesk
+    sample tickets are dropped.
   columns:
   - name: source_slug
     description: str, the feedback source this row came from. Always 'zendesk' here.
@@ -85,8 +85,7 @@ models:
 
 - name: int__feedback__unioned
   description: >
-    Every per-source feedback adapter unioned into the common event contract. Adding
-    forum, tutor or ORA is a new CTE plus one `union all`.
+    One row per feedback turn, from every source. Zendesk only at MVP.
 
     PII: this model carries raw, unredacted feedback text under the intermediate
     schema's grants. Presidio masking happens in the feedback_redacted Dagster asset
@@ -154,14 +153,8 @@ models:
         column_list: ["source_slug", "source_record_ref"]
 
 - name: int__feedback__conversation
-  description: >
-    One row per conversation with its kept turns assembled in turn_index order. The
-    summarization and embedding assets read this, so assembly stays testable in dbt
-    instead of being re-derived in Python.
-
-    conversation_text is null until the feedback_redacted asset lands, because the
-    assembled text must be redacted. turn_count and conversation_text_chars are
-    populated from the first build.
+  description: One row per conversation, its kept turns assembled in turn_index order.
+    This is the text the summarization and embedding assets send to the LLM.
   columns:
   - name: source_slug
     description: str, which source the conversation came from.
