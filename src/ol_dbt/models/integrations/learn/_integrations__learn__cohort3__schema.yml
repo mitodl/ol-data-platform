@@ -1,0 +1,131 @@
+---
+# MIT Learn integration layer — Cohort 3 media & feed sources
+# Sits above marts, exposes stable application-level contracts for ETL consumption.
+# Naming: integrations__learn__<entity>
+# See: docs/learn_marts_contract.md for the full schema contract.
+#
+# Unlike the Cohort 2 sources, podcasts deliver as a NESTED payload: MIT Learn's
+# load_podcasts() expects each podcast to carry its episodes inline under an
+# "episodes" key. The two models here stay flat and relational; the
+# mit_learn_delivery/podcast_webhook asset joins them into that nested shape.
+
+version: 2
+
+models:
+- name: integrations__learn__podcasts
+  description: >
+    MIT podcast channels exposed for MIT Learn's ETL. One row per podcast
+    configured in mitodl/open-podcast-data. Sourced from
+    stg__podcast__rss__channels via the podcast_rss dlt pipeline.
+    NOTE: RSS exposes only <lastBuildDate> (RFC 2822, not Trino-parseable
+    without a per-feed format string), so last_modified is current_timestamp.
+  columns:
+  - name: readable_id
+    description: >
+      The RSS feed URL with the scheme stripped, recomputed from rss_url to
+      match MIT Learn's parse_readable_id_from_url (which, unlike the dlt
+      source, preserves a trailing slash). Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: >
+      Podcast title — the YAML config's podcast_title when set, otherwise the
+      RSS channel title.
+    tests: [not_null]
+  - name: description
+    description: Podcast description from the RSS channel.
+  - name: url
+    description: The podcast's website URL from its YAML config.
+  - name: image_url
+    description: Cover art URL, or NULL if the feed exposes none.
+  - name: topics
+    description: Comma-separated topic labels from the YAML config.
+  - name: offered_by
+    description: Offering department name from the YAML config, or NULL.
+  - name: rss_url
+    description: >
+      The podcast's RSS feed URL. Delivered to MIT Learn inside the nested
+      "podcast" detail object, not as a top-level resource field.
+    tests: [not_null]
+  - name: apple_podcasts_url
+    description: Apple Podcasts listing URL from the YAML config, or NULL.
+  - name: google_podcasts_url
+    description: Google Podcasts listing URL from the YAML config, or NULL.
+  - name: last_modified
+    description: >
+      current_timestamp — see the model-level note on <lastBuildDate>.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'podcast'.
+    tests: [not_null]
+  - name: platform
+    description: Always 'podcast', matches etl_source.
+  - name: resource_type
+    description: Always 'podcast'.
+  - name: availability
+    description: Always 'anytime'.
+  - name: published
+    description: >
+      Always true; a podcast that stops being configured simply stops
+      appearing, and MIT Learn's load_podcasts() unpublishes it.
+
+- name: integrations__learn__podcast_episodes
+  description: >
+    MIT podcast episodes exposed for MIT Learn's ETL. One row per episode
+    across all configured podcasts. Sourced from stg__podcast__rss__episodes,
+    joined to its channel for the inherited topics/offered_by values.
+    Episodes with no <enclosure> (no audio file) are dropped at ingest.
+    NOTE: duration_raw and published_on_raw are deliberately un-normalized —
+    both are free-form/RFC 2822 strings that the delivery asset parses in
+    Python, mirroring the Celery ETL's iso8601_duration() and dateutil parse.
+  columns:
+  - name: readable_id
+    description: >
+      The episode <guid> when present, otherwise the episode link (or audio
+      URL) with the scheme stripped. Used for upsert matching.
+    tests: [not_null, unique]
+  - name: podcast_readable_id
+    description: >
+      readable_id of the parent podcast in integrations__learn__podcasts.
+      The delivery asset groups episodes by this column.
+    tests: [not_null]
+  - name: title
+    description: Episode title.
+  - name: description
+    description: Episode description from the RSS item.
+  - name: url
+    description: The episode link when present, otherwise the audio URL.
+  - name: audio_url
+    description: >
+      The audio file URL from the RSS <enclosure>. Required — MIT Learn's
+      PodcastEpisode.audio_url is NOT NULL.
+    tests: [not_null]
+  - name: episode_link
+    description: The RSS <link> for the episode, or NULL.
+  - name: image_url
+    description: >
+      Episode cover art — the episode's own itunes:image when present,
+      otherwise the parent channel's image URL.
+  - name: duration_raw
+    description: >
+      Raw itunes:duration text ("HH:MM:SS", "MM:SS", or a seconds count).
+      Normalized to an ISO-8601 duration by the delivery asset.
+  - name: published_on_raw
+    description: >
+      Raw RFC 2822 <pubDate>. Parsed into the resource's last_modified by the
+      delivery asset.
+  - name: topics
+    description: >
+      Comma-separated topic labels inherited from the parent podcast.
+  - name: offered_by
+    description: Offering department name inherited from the parent podcast.
+  - name: etl_source
+    description: Always 'podcast'.
+    tests: [not_null]
+  - name: platform
+    description: Always 'podcast', matches etl_source.
+  - name: resource_type
+    description: Always 'podcast_episode'.
+  - name: availability
+    description: Always 'anytime'.
+  - name: published
+    description: Always true.
