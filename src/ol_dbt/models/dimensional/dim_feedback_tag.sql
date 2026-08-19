@@ -8,7 +8,7 @@ with ticket as (
     select
         'zendesk' as source_slug
         , tag.tag_label
-        , lower(regexp_replace(regexp_replace(tag.tag_label, '[^a-zA-Z0-9]+', '_'), '^_+|_+$', '')) as tag_slug
+        , {{ slugify('tag.tag_label') }} as tag_slug
     from ticket
     cross join unnest(ticket.ticket_tags) as tag (tag_label)
     where tag.tag_label is not null

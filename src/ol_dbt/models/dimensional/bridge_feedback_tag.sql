@@ -23,7 +23,7 @@ with unioned as (
         {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
             as feedback_pk
         , unioned.source_slug
-        , lower(regexp_replace(regexp_replace(tag.tag_label, '[^a-zA-Z0-9]+', '_'), '^_+|_+$', ''))
+        , {{ slugify('tag.tag_label') }}
             as tag_slug
     from unioned
     cross join unnest(unioned.source_tags) as tag (tag_label)
