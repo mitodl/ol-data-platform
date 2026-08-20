@@ -11,6 +11,7 @@ from openedx.assets.content_files import (
     TikaUnavailableError,
     assert_extraction_healthy,
     build_document_rows,
+    output_digest,
 )
 
 SUPPORTED = {"application/pdf", "text/html", "text/plain"}
@@ -368,3 +369,32 @@ def test_filtered_out_members_are_never_read():
     )
 
     assert reads == ["static/syllabus.pdf"]
+
+
+# --- data_version ----------------------------------------------------------
+
+
+def test_output_digest_changes_when_the_extracted_text_changes(tmp_path):
+    """The version must track the output, not the input bundle.
+
+    Versioning on the bundle hash meant a Tika upgrade, a parser change, or a
+    partial-failure run later succeeding all produced different text under the
+    same DataVersion and the same S3 key: the corrected output overwrote the
+    old one and no downstream data_version_changed() check fired.
+    """
+    partial = tmp_path / "partial.jsonl"
+    partial.write_text('{"content": null}\n')
+    complete = tmp_path / "complete.jsonl"
+    complete.write_text('{"content": "the real text"}\n')
+
+    assert output_digest(partial) != output_digest(complete)
+
+
+def test_output_digest_is_stable_for_identical_output(tmp_path):
+    """Identical extraction must hash identically, or nothing ever caches."""
+    one = tmp_path / "one.jsonl"
+    one.write_text('{"content": "same"}\n')
+    two = tmp_path / "two.jsonl"
+    two.write_text('{"content": "same"}\n')
+
+    assert output_digest(one) == output_digest(two)
