@@ -14,17 +14,34 @@
 
 | Symbol | Meaning |
 |--------|---------|
-| ✅ Done | Code committed to `feature/dimensional-model-expansion`; compile passes |
+| ✅ Done | Verified present on `main` |
+| 🔶 Partial | Some tasks in the phase are done, others are not |
 | ⏳ Pending | Not yet started |
 
-**Last updated:** 2026-04-01
+**Last updated:** 2026-08-20
 **Phase A:** 8/8 complete ✅
-**Phase B:** 0/4 complete ⏳
-**Phase C:** 0/3 complete ⏳
+**Phase B:** 3/4 complete 🔶 — B4 pending
+**Phase C:** 2/3 complete 🔶 — C2 pending (and may be dropped, see below)
 **Phase D:** 7/7 complete ✅
 **Phase E:** 6/6 complete ✅
 **Phase F:** 4/4 complete ✅
 **Phase G:** 6/6 complete ✅
+
+> Statuses re-verified against `src/ol_dbt/models/dimensional/` on `main` (2026-08-20).
+> The previous revision of this table claimed Phase G was 6/6 complete while every G
+> section below was still marked pending, and reported B and C as 0/x when five of
+> their seven tasks had already shipped. Remaining work is tracked in GH #2073.
+
+### Remaining work
+
+| Task | Status | Note |
+|------|--------|------|
+| B4 · `dim_user` `user_global_id` backfill | ⏳ | Re-check the design first: B4 was written against the email-based `user_pk`, which PR #2497 replaced with a durable-id surrogate. |
+| C2 · `tfact_program_certificate` | ⏳ | Build-or-drop decision needed. Program certificates currently live in `tfact_certificate`; several mart-migration issues cite `tfact_program_certificate` as a target for a model that does not exist. |
+
+Two successors were added by the 2026-07 warehouse audit (GH #2375) and belong to this
+backlog but are not yet written up as tasks here: `tfact_exam_grade` (or a `grade_type`
+discriminator on `tfact_grade`), and a flexible-pricing income attribute keyed to `dim_user`.
 
 ---
 
@@ -408,13 +425,17 @@ GROUP BY p.platform_code ORDER BY p.platform_code;
 
 ---
 
-## Phase B — Complete Platform Coverage ⏳
+## Phase B — Complete Platform Coverage 🔶 Partially complete
 
 Run after all Phase A tasks are merged and the dimensional schema is promoted to production.
 
 ---
 
-### B1 · Add Bootcamps to Dimensional Layer ⏳
+### B1 · Add Bootcamps to Dimensional Layer ✅
+
+> **Implemented.** `bootcamps_courseruns` CTE at `dim_course_run.sql:133`; bootcamps branches in
+> `dim_course.sql`, `tfact_enrollment.sql`, `tfact_certificate.sql`, `tfact_order.sql`;
+> `bootcamps_application_user_id` in `dim_user.sql`.
 
 **Files to modify:**
 - `src/ol_dbt/models/dimensional/dim_course.sql`
@@ -453,7 +474,9 @@ WHERE platform = 'bootcamps';
 
 ---
 
-### B2 · Add OCW to `dim_course` ⏳
+### B2 · Add OCW to `dim_course` ✅
+
+> **Implemented.** `ocw_courses` CTE at `dim_course.sql:77-86`.
 
 **File:** `src/ol_dbt/models/dimensional/dim_course.sql`
 
@@ -500,7 +523,10 @@ dimensional layer, dropping its `int__ocw__courses` ref
 
 ---
 
-### B3 · Fix `tfact_enrollment` Incremental Watermark ⏳
+### B3 · Fix `tfact_enrollment` Incremental Watermark ✅
+
+> **Implemented.** `on_schema_change='append_new_columns'` (line 5), per-platform
+> `max(coalesce(enrollment_updated_on, enrollment_created_on))` (line 304), 7-day lookback (line 348).
 
 **File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
 
@@ -596,13 +622,15 @@ FROM ol_warehouse_production_dimensional.dim_user;
 
 ---
 
-## Phase C — New Models and Refinements ⏳
+## Phase C — New Models and Refinements 🔶 Partially complete
 
 Run after Phase B. These add analytical depth and reduce maintenance burden.
 
 ---
 
-### C1 · Create `tfact_grade` — Course Run Grade Fact Table ⏳
+### C1 · Create `tfact_grade` — Course Run Grade Fact Table ✅
+
+> **Implemented.** Landed 2026-06-02, commit `53d421ef` (PR #2259).
 
 **New file:** `src/ol_dbt/models/dimensional/tfact_grade.sql`
 **New YAML:** Add entry to `src/ol_dbt/models/dimensional/_fact_tables.yml`
@@ -707,7 +735,12 @@ GROUP BY p.program_title ORDER BY certs_issued DESC LIMIT 20;
 
 ---
 
-### C3 · Enrich `dim_organization` with B2B Contract Metadata ⏳
+### C3 · Enrich `dim_organization` with B2B Contract Metadata ✅
+
+> **Implemented as Option B** (separate `dim_contract` rather than enriching `dim_organization`):
+> `dim_contract.sql` refs `stg__mitxonline__app__postgres__b2b_contractpage` and `dim_organization`,
+> documented in `_dim_contract.yml`. Last touched `a4380481`.
+> Note: MITx Pro `b2becommerce` contracts are still uncovered — tracked in GH #2297.
 
 **File:** `src/ol_dbt/models/dimensional/dim_organization.sql`
 
@@ -1326,7 +1359,7 @@ so edxorg/mitxonline enrollment rows gain MicroMasters program context where app
 
 ---
 
-## Phase G — Grain Audit Findings ⏳
+## Phase G — Grain Audit Findings ✅ Complete
 
 > Added 2026-04-01 after a comprehensive grain audit of all dimensional models.
 > Each issue was identified by analyzing the declared grain of every intermediate model
@@ -1334,7 +1367,10 @@ so edxorg/mitxonline enrollment rows gain MicroMasters program context where app
 
 ---
 
-### G1 · Fix `bridge_program_course` MicroMasters Elective-Set Fan-Out ⏳
+### G1 · Fix `bridge_program_course` MicroMasters Elective-Set Fan-Out ✅
+
+> **Implemented.** `select distinct` plus an explicit `(program_id, course_id, electiveset_id)`
+> grain comment at `bridge_program_course.sql:37-52`.
 
 **File:** `src/ol_dbt/models/dimensional/bridge_program_course.sql`
 
@@ -1374,7 +1410,11 @@ dbt test --select bridge_program_course -t dev_local
 
 ---
 
-### G2 · Add Defensive QUALIFY Guard to `tfact_enrollment` ⏳
+### G2 · Add Defensive QUALIFY Guard to `tfact_enrollment` ✅
+
+> **Implemented.** `final_deduped` CTE at `tfact_enrollment.sql:359-401`, partitioning on
+> `enrollment_key`.
+> Note: GH #2382 proposes removing this guard now that the upstream pre-dedupe from #2378 has landed.
 
 **File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
 
@@ -1411,7 +1451,11 @@ dbt test --select tfact_enrollment -t dev_local
 
 ---
 
-### G3 · Add Defensive QUALIFY Guard to `tfact_certificate` + Verify edxorg Enrollment Join ⏳
+### G3 · Add Defensive QUALIFY Guard to `tfact_certificate` + Verify edxorg Enrollment Join ✅
+
+> **Implemented.** Cross-source pre-dedupe at `tfact_certificate.sql:276` and the
+> `certificate_key` guard in the `final_deduped` CTE at `:351-391`, landed `74b47914` (PR #2413).
+> Also in scope for the #2382 guard removal.
 
 **File:** `src/ol_dbt/models/dimensional/tfact_certificate.sql`
 **File (investigate):** `src/ol_dbt/models/intermediate/edxorg/int__edxorg__mitx_courserun_certificates.sql`
@@ -1460,7 +1504,10 @@ dbt test --select tfact_certificate -t dev_local
 
 ---
 
-### G4 · Harden `int__mitxonline__courserunenrollments` DEDP Fan-Out Guard ⏳
+### G4 · Harden `int__mitxonline__courserunenrollments` DEDP Fan-Out Guard ✅
+
+> **Implemented.** The "IMPORTANT / must be preserved" comment is in place at
+> `int__mitxonline__courserunenrollments.sql:23-26`.
 
 **File:** `src/ol_dbt/models/intermediate/mitxonline/int__mitxonline__courserunenrollments.sql`
 
@@ -1492,7 +1539,10 @@ intermediate entirely. Keep `select distinct` as a deliberate safety measure.
 
 ---
 
-### G5 · Verify `int__edxorg__mitx_courserun_certificates` Enrollment Join Grain ⏳
+### G5 · Verify `int__edxorg__mitx_courserun_certificates` Enrollment Join Grain ✅
+
+> **Verified.** `int__edxorg__mitx_courserun_certificates.sql:3` declares the
+> `(user_id, courserun_readable_id)` grain; the DEDP CTE uses `select distinct`.
 
 **Files:**
 - `src/ol_dbt/models/intermediate/edxorg/int__edxorg__mitx_courserun_certificates.sql`
@@ -1519,7 +1569,9 @@ uniquely grained on this pair, the join fans out each certificate row.
 
 ---
 
-### G6 · Document `dim_course` edxorg QUALIFY Collapse in YAML ⏳
+### G6 · Document `dim_course` edxorg QUALIFY Collapse in YAML ✅
+
+> **Implemented.** `_dim_course.yml:10-14` and the `source_id` column description.
 
 **File:** `src/ol_dbt/models/dimensional/_dim_course.yml`
 **File:** `src/ol_dbt/models/dimensional/dim_course.sql` (comment only)
