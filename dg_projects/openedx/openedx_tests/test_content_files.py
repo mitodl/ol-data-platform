@@ -44,6 +44,47 @@ def test_supported_documents_are_extracted():
     assert rows[0]["source_system"] == "mitx"
 
 
+def test_subtitles_are_not_treated_as_documents():
+    """Subtitles belong to the transcript asset, not Tika.
+
+    This is not hypothetical. `mimetypes` maps `.srt` to `text/plain`, which is
+    in Tika's supported set, and Tika returns the file verbatim -- timestamps,
+    sequence numbers and all. Without this exclusion every `.srt` in a course
+    would be extracted twice: once as unusable noise here, and once properly by
+    the transcript parser. Filenames below are taken from a real
+    course-v1:MITx+14.310x+3T2021 export, which carries 302 `.srt` and 720
+    `.srt.sjson` files.
+    """
+    rows, counters = rows_for(
+        [
+            ("course/static/subs_-GQxFdhr_qU.srt.sjson", b'{"text": ["hi"]}'),
+            ("course/static/00508b03-8131-41de-b383-6732c625a82a-en.srt", b"1\n"),
+            ("course/static/14.310_Lecture_15_Segment_03-_Part1.srt", b"1\n"),
+        ]
+    )
+
+    assert rows == []
+    assert counters["transcripts"] == 3
+    assert counters["candidates"] == 0
+
+
+def test_real_archive_documents_are_still_extracted():
+    """The exclusion must not swallow the documents that share that directory.
+
+    Filenames taken from the same real export -- note the dots in the names,
+    which is why suffix detection has to be last-suffix rather than split-on-dot.
+    """
+    rows, counters = rows_for(
+        [
+            ("course/static/14.310x Syllabus.pdf", b"%PDF-fake"),
+            ("course/static/14.310x_3T2018.pdf", b"%PDF-fake"),
+        ]
+    )
+
+    assert counters["candidates"] == 2
+    assert {r["content_type"] for r in rows} == {"application/pdf"}
+
+
 def test_unsupported_files_are_skipped_not_failed():
     """Images and archives are normal course content, not extraction errors."""
     rows, counters = rows_for(
