@@ -195,7 +195,7 @@ tables:
     primary_key: [id]
     modeled: true                         # §1.4; default false
     # excluded_columns: [password]        # optional; enforced by both backends
-    # renamed_from: ecommerce_basket_discount   # §7.2
+    # renamed_from: raw__mitxonline__app__postgres__ecommerce_basket_discount   # full previous raw_table, §7.2
 ```
 
 ### 3.3 Rules the validator enforces
@@ -592,12 +592,16 @@ retired:
   layer: app_postgres
   raw_tables:                       # a list, so retiring a whole unit is one
   - raw__bootcamps__app__postgres__applications_bootcampapplication   # dated, reasoned entry
-  retired_on: 2026-08-14            # when loading stopped, not when this was written
+  retired_on: "2026-08-14"          # when loading stopped, not when this was written
   reason: The Bootcamps application is no longer deployed.            # ≥20 chars; "not needed" is not a reason
 ```
 
 Three details the mechanism above does not spell out, each of which is a rule in the checker:
 
+- `renamed_from:` holds the full previous `raw_table` — e.g.
+  `raw__mitxonline__app__postgres__ecommerce_basket_discount` — not the bare stream name. The
+  removal check diffs `raw_table` strings, so a bare stream name matches nothing and produces
+  both an unacknowledged-removal error and an unmatched-rename warning.
 - `renamed_from:` is **scoped to the unit**. A table moving between units is a removal from one
   and an addition to the other, and the removal side still has to be stated — otherwise moving a
   table is a way to launder a deletion past the check.

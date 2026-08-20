@@ -169,7 +169,7 @@
           },
           "renamed_from": {
             "type": "string",
-            "description": "Acknowledges a rename so the removal check does not fire (§7.2)."
+            "description": "The full previous raw_table this table replaces, so the removal check does not fire (§7.2). Not the bare stream name."
           }
         }
       }
