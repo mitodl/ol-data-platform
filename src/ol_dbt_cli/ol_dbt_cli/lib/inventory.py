@@ -612,11 +612,11 @@ def _render_stream(table: dict[str, Any]) -> dict[str, Any]:
     if table.get("cursor_field"):
         stream["cursor_field"] = list(table["cursor_field"])
     if table.get("primary_key"):
-        # The inventory stores a composite key as one dotted string per column,
-        # because `configurations.streams[].primaryKey` is a list of paths and a
-        # path is itself a list. Splitting it back out here is what makes the
-        # rendered config comparable with the imported one (§6.4).
-        stream["primary_key"] = [str(column).split(".") for column in table["primary_key"]]
+        # The inventory stores this exactly as `configurations.streams[].primaryKey`
+        # does — a list of paths, each path a list of segments — so it round-trips
+        # without ambiguity, which is what makes the rendered config comparable
+        # with the imported one (§6.4).
+        stream["primary_key"] = [list(path) for path in table["primary_key"]]
     if table.get("excluded_columns"):
         # Emitted as the exclusion, not as `selected_fields`. Airbyte wants the
         # complement, and computing it needs the source's discovered schema —

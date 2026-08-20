@@ -192,7 +192,7 @@ tables:
     raw_table: raw__mitxonline__app__postgres__ecommerce_basketdiscount
     sync_mode: incremental_append         # provider enum, §6.2
     cursor_field: [updated_on]            # required iff sync_mode starts with `incremental`
-    primary_key: [id]
+    primary_key: [[id]]                   # one entry per key column, each a path (list of segments)
     modeled: true                         # §1.4; default false
     # excluded_columns: [password]        # optional; enforced by both backends
     # renamed_from: raw__mitxonline__app__postgres__ecommerce_basket_discount   # full previous raw_table, §7.2
@@ -399,10 +399,11 @@ part of the Airbyte-as-code story that needs to run on a timer.
 `render airbyte` and `render dagster-intervals` are built. Two things they settle that the table
 above leaves open:
 
-- **`primary_key` round-trips through a dotted string.** `configurations.streams[].primaryKey` is
-  a list of *paths*, and a path is itself a list; the inventory stores one dotted string per
-  column, and the renderer splits it back out. Getting this wrong is invisible in the YAML and
-  fatal to §6.4's empty preview.
+- **`primary_key` is stored exactly as Airbyte spells it.** `configurations.streams[].primaryKey`
+  is a list of *paths*, and a path is itself a list of segments — so the inventory stores it as a
+  list of lists too, rather than joining each path into one dotted string. A single segment
+  containing a literal `.` is indistinguishable from two nested segments once joined, and that
+  loss is invisible in the YAML and fatal to §6.4's empty preview.
 - **`excluded_columns` is rendered as the exclusion, not as `selected_fields`.** Airbyte wants
   the complement, and computing it needs the source's discovered schema — which the inventory
   deliberately does not hold (§2). The consumer complements it against the catalog it already

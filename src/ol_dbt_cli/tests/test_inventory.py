@@ -56,7 +56,7 @@ APP_UNIT: dict[str, Any] = {
             "raw_table": "raw__mitxonline__openedx__mysql__auth_user",
             "sync_mode": "incremental_append",
             "cursor_field": ["id"],
-            "primary_key": ["id"],
+            "primary_key": [["id"]],
             "modeled": True,
         },
         {

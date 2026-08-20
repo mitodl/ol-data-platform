@@ -60,7 +60,7 @@ UNIT: dict[str, Any] = {
             "raw_table": "raw__mitxonline__openedx__mysql__auth_user",
             "sync_mode": "incremental_append",
             "cursor_field": ["id"],
-            "primary_key": ["id"],
+            "primary_key": [["id"]],
             "modeled": True,
         },
         {
@@ -68,7 +68,7 @@ UNIT: dict[str, Any] = {
             "namespace": "edxapp",
             "raw_table": "raw__mitxonline__openedx__mysql__courseware_studentmodule",
             "sync_mode": "full_refresh_overwrite",
-            "primary_key": ["course_id.id"],
+            "primary_key": [["course_id", "id"], ["revision.with.dots"]],
             "excluded_columns": ["state"],
             "modeled": False,
         },
@@ -270,10 +270,13 @@ class TestRenderAirbyte:
         # reproduce the imported connection, so §6.4's empty preview never lands.
         assert all(stream["namespace"] == "edxapp" for stream in rendered["units"][0]["connections"][0]["streams"])
 
-    def test_a_composite_primary_key_is_split_back_into_paths(self, rendered: dict[str, Any]) -> None:
+    def test_a_composite_primary_key_round_trips_without_ambiguity(self, rendered: dict[str, Any]) -> None:
         streams = rendered["units"][0]["connections"][0]["streams"]
         assert streams[0]["primary_key"] == [["id"]]
-        assert streams[1]["primary_key"] == [["course_id", "id"]]
+        # A two-segment nested path and a single segment containing a literal
+        # "." are stored and rendered as distinct shapes — neither collapses
+        # into the other, unlike the old dotted-string encoding.
+        assert streams[1]["primary_key"] == [["course_id", "id"], ["revision.with.dots"]]
 
     def test_excluded_columns_are_emitted_as_the_exclusion(self, rendered: dict[str, Any]) -> None:
         # Not as `selected_fields`: the complement needs the discovered schema,
