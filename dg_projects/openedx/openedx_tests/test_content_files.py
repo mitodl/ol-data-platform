@@ -85,6 +85,48 @@ def test_real_archive_documents_are_still_extracted():
     assert {r["content_type"] for r in rows} == {"application/pdf"}
 
 
+def test_empty_files_are_empty_not_failed():
+    """A zero-byte file has no text; that is a fact, not an extraction failure.
+
+    Tika answers 422 for an empty body. Counting that as a failure would both
+    waste a round trip and pollute the denominator the health guard divides by.
+    A real course-v1:MITx+14.310x+3T2021 export ships nine empty about/
+    placeholders like these, which was 15% of a 60-file sample -- enough to drag
+    a sparse course toward the guard's floor for no reason.
+    """
+
+    def must_not_be_called(_file_bytes, _content_type):
+        msg = "Tika must not be called for a zero-byte file"
+        raise AssertionError(msg)
+
+    rows, counters = rows_for(
+        [
+            ("about/short_description.html", b""),
+            ("about/entrance_exam_enabled.html", b""),
+        ],
+        extract=must_not_be_called,
+    )
+
+    assert counters["failed"] == 0
+    assert counters["empty"] == 2
+    assert counters["candidates"] == 2
+    assert [r["extraction_status"] for r in rows] == ["empty", "empty"]
+    assert all(r["content"] is None for r in rows)
+
+
+def test_empty_files_do_not_drag_the_health_guard():
+    """Empty placeholders count as success, so they cannot trip the floor."""
+    counters = {
+        "candidates": 20,
+        "extracted": 11,
+        "empty": 9,
+        "failed": 0,
+        "skipped": 0,
+        "transcripts": 0,
+    }
+    assert_extraction_healthy(counters, "course-v1:MITx+14.310x+3T2021")
+
+
 def test_unsupported_files_are_skipped_not_failed():
     """Images and archives are normal course content, not extraction errors."""
     rows, counters = rows_for(
