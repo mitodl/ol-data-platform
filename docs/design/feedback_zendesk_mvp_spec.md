@@ -504,16 +504,16 @@ Per repo convention (`ol-dbt` CLI, DuckDB-over-Iceberg local): after writing mod
 `local register` + a targeted `dbt build --select +tfact_feedback` to validate the fact and
 its upstreams compile and pass tests against live Iceberg data.
 
-**Two different volumes now.** `afact_feedback_conversation` is ~198K rows (one per ticket — a known figure).
-`tfact_feedback` is public, requester-authored *comments*, whose multiplier over tickets is still unmeasured;
-that measurement is a §0 prerequisite. Rev. 3 lowers its stakes — the embedding budget is now driven by the
-conversation count, not the turn count — but it still sizes the turn fact and, via the multi-turn share, the
-summarization budget.
+**Two different volumes, both measured** (2026-08-14, #2536). 200,485 Zendesk tickets reconcile to
+**190,826** `afact_feedback_conversation` rows and **282,470** `tfact_feedback` rows — 1.5 turns per
+conversation. The 9,659 tickets (4.8%) that reconcile away have no public, requester-authored comment, so
+they never enter the turn fact. 52,218 conversations (27.4%) are multi-turn, which sets the summarization
+budget (`feedback_ml_approach.md` §A.1).
 
 Validate: `feedback_pk` uniqueness; the three turn-grain tests (§8); null-`user_fk` rate (sanity-check
 identity resolution isn't silently collapsing); distinct `conversation_id` count vs. `int__zendesk__ticket`
-row count (these *should* match — a mismatch means the filter dropped whole tickets, e.g. tickets whose only
-public comment is from an agent, which is worth knowing rather than discovering later); the
+row count (expect the measured **4.8% shortfall**, not a match — tickets whose only public comment is from an
+agent drop out by design, so compare against 190,826 of 200,485 and investigate only a *larger* gap); the
 `is_conversation_opening` count vs. the same; and that `afact_feedback_conversation` has exactly one row per
 distinct `conversation_id` in the turn fact.
 

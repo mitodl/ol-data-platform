@@ -176,7 +176,9 @@ the ~1.18M turn-level corpus. Embedding cost returns to the original $2–16 ord
 | Conversations — the embedding input | **190,826** |
 | Turn-grain rows in `tfact_feedback` | **282,470** (1.5 turns/conversation) |
 | Multi-turn (≥2 turns) — the summarizer input | **52,218 (27.4%)** |
-| Assembled characters, multi-turn conversations | p50 1,040 · p90 4,016 · p99 11,691 · max 553,230 · mean 1,847 |
+| Assembled characters, multi-turn conversations | p25 601 · p50 1,040 · p90 4,016 · p99 11,691 · max 553,230 · mean 1,847 |
+| Multi-turn conversations under 500 characters (skipped by §A.1) | 9,680 (18.5%) |
+| Multi-turn conversations under 1,000 characters (skipped at the rejected cutoff) | 25,326 (48.5%) |
 
 `tfact_feedback` carries 282,470 rows at 1.5 turns per conversation — immaterial for storage or batch
 runtime. `distinct conversation_id` is **190,826**: agent-only tickets carry no requester text and never enter
