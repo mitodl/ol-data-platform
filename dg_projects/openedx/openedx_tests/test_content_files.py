@@ -4,9 +4,11 @@ These cover the pure half of assets/content_files.py -- the dispatch decision
 and the failure accounting -- without a Dagster context or a live Tika service.
 """
 
+import httpx2 as httpx
 import pytest
 from openedx.assets.content_files import (
     MIN_DOCUMENTS_FOR_RATE_CHECK,
+    TikaUnavailableError,
     assert_extraction_healthy,
     build_document_rows,
 )
@@ -23,8 +25,14 @@ def fake_extract(_file_bytes, _content_type):
 
 
 def rows_for(members, extract=fake_extract):
+    """Run build_document_rows over (path, bytes) pairs.
+
+    The real caller hands over a reader per member so unwanted files are never
+    read; tests state the bytes directly and this wraps them.
+    """
+    lazy = [(path, (lambda data=data: data)) for path, data in members]
     return build_document_rows(
-        members,
+        lazy,
         course_id="course-v1:MITx+6.00.1x+2T2024",
         source_system="mitx",
         extract=extract,
@@ -205,12 +213,18 @@ def test_no_documents_is_not_a_failure():
 
 
 def test_small_document_sets_skip_the_rate_check():
-    """One bad PDF out of one is 0%, which must not trip the guard."""
+    """A bad PDF in a small course is below the floor, so the rate is ignored.
+
+    The exemption is about the *rate* being meaningless on small samples, not
+    about small courses being unguarded: one success is enough to show the
+    extractor works. A small course where nothing succeeded is covered by
+    test_total_failure_raises_below_the_rate_check_floor instead.
+    """
     counters = {
         "candidates": MIN_DOCUMENTS_FOR_RATE_CHECK - 1,
-        "extracted": 0,
+        "extracted": 1,
         "empty": 0,
-        "failed": MIN_DOCUMENTS_FOR_RATE_CHECK - 1,
+        "failed": MIN_DOCUMENTS_FOR_RATE_CHECK - 2,
         "skipped": 0,
     }
     assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
@@ -230,3 +244,127 @@ def test_empty_counts_toward_health():
         "skipped": 0,
     }
     assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+# --- a broken service must not look like a course with nothing to read ------
+
+
+def _http_error(status):
+    request = httpx.Request("PUT", "https://tika.example/tika")
+    response = httpx.Response(status, request=request)
+    message = f"HTTP {status}"
+    return httpx.HTTPStatusError(message, request=request, response=response)
+
+
+@pytest.mark.parametrize("status", [401, 403, 500, 502, 503])
+def test_service_level_failures_abort_instead_of_counting_as_documents(status):
+    """A dead or unauthorised Tika is not N unparseable documents.
+
+    The concrete path: a Vault read failure leaves an empty access token, every
+    call 401s, and a course with fewer than MIN_DOCUMENTS_FOR_RATE_CHECK
+    candidates skipped the health guard entirely and published an empty JSONL
+    as a success.
+    """
+
+    def failing_extract(_file_bytes, _content_type):
+        raise _http_error(status)
+
+    with pytest.raises(TikaUnavailableError):
+        rows_for([("static/syllabus.pdf", b"%PDF-fake")], extract=failing_extract)
+
+
+def test_transport_errors_abort_but_timeouts_stay_per_document():
+    """A connection that never landed is a service fact; a slow file is not.
+
+    One oversized PDF times out on a perfectly healthy Tika, so a timeout is
+    still counted per document -- a genuinely dead service produces enough of
+    them to trip the all-candidates-failed guard.
+    """
+
+    def unreachable(_file_bytes, _content_type):
+        message = "no route to host"
+        raise httpx.ConnectError(message)
+
+    with pytest.raises(TikaUnavailableError):
+        rows_for([("static/a.pdf", b"%PDF-fake")], extract=unreachable)
+
+    def slow(_file_bytes, _content_type):
+        message = "too slow"
+        raise httpx.ReadTimeout(message)
+
+    rows, counters = rows_for(
+        [("static/a.pdf", b"%PDF-fake"), ("static/b.pdf", b"%PDF-fake")], extract=slow
+    )
+    assert counters["failed"] == 2
+    assert rows == []
+
+
+def test_document_level_failures_still_count_as_failures():
+    """A 422 really is about this file, so it must not abort the course."""
+
+    def unprocessable(_file_bytes, _content_type):
+        raise _http_error(422)
+
+    _, counters = rows_for([("static/a.pdf", b"%PDF-fake")], extract=unprocessable)
+    assert counters["failed"] == 1
+
+
+def test_total_failure_raises_below_the_rate_check_floor():
+    """The small-course exemption must not exempt a course that wholly failed."""
+    counters = {
+        "candidates": 2,
+        "extracted": 0,
+        "empty": 0,
+        "failed": 2,
+        "skipped": 0,
+    }
+    with pytest.raises(RuntimeError, match="all 2 candidate documents failed"):
+        assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_no_candidates_is_still_not_a_failure():
+    """Zero documents and zero successes is a quiet course, not a broken one."""
+    counters = {
+        "candidates": 0,
+        "extracted": 0,
+        "empty": 0,
+        "failed": 0,
+        "skipped": 7,
+    }
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+# --- laziness ---------------------------------------------------------------
+
+
+def test_filtered_out_members_are_never_read():
+    """Skipped files must not be pulled into memory just to be discarded.
+
+    A real export is mostly images and archives; reading them to skip them is
+    what put the whole 152 MiB archive in the worker's heap at once.
+    """
+    reads = []
+
+    def _reader(path, data):
+        def _read():
+            reads.append(path)
+            return data
+
+        return _read
+
+    members = [
+        ("static/logo.png", _reader("static/logo.png", b"fake png")),
+        ("static/data.zip", _reader("static/data.zip", b"fake zip")),
+        ("static/subs_a.srt.sjson", _reader("static/subs_a.srt.sjson", b"{}")),
+        ("static/syllabus.pdf", _reader("static/syllabus.pdf", b"%PDF-fake")),
+    ]
+
+    build_document_rows(
+        members,
+        course_id="course-v1:MITx+6.00.1x+2T2024",
+        source_system="mitx",
+        extract=fake_extract,
+        is_supported=fake_is_supported,
+    )
+
+    assert reads == ["static/syllabus.pdf"]

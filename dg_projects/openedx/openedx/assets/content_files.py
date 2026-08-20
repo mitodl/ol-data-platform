@@ -20,10 +20,12 @@ import json
 import logging
 import mimetypes
 import tarfile
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
+import httpx2 as httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,
@@ -83,8 +85,51 @@ def _content_type(relative_path: str) -> str:
     return mime_type or "application/octet-stream"
 
 
+# Statuses that mean the caller is not allowed to use Tika at all, rather than
+# that this particular document is unparseable. An empty access token -- what a
+# Vault read failure leaves behind -- produces exactly this.
+_TIKA_AUTH_STATUSES = frozenset({401, 403})
+_SERVER_ERROR_FLOOR = 500
+
+
+class TikaUnavailableError(RuntimeError):
+    """Tika is unusable, so a per-document failure count would be misleading."""
+
+
+def raise_if_service_failure(error: Exception, relative_path: str) -> None:
+    """Re-raise as a service failure when the error is not about this document.
+
+    Counting a dead or misconfigured Tika as N document-level failures reads
+    downstream as "this course has unparseable documents" when it actually
+    means "no document in any course could have been extracted". Worse, a
+    course with fewer candidates than MIN_DOCUMENTS_FOR_RATE_CHECK skips the
+    health guard entirely and publishes an empty JSONL as a success.
+
+    Only unambiguous service-level signals are promoted: an auth rejection, a
+    5xx, or a transport error that means the request never got an answer. A
+    timeout stays a document-level failure because one oversized PDF times out
+    on a perfectly healthy service; a genuinely dead service produces enough of
+    them to trip the guard, which now also fires when every candidate failed.
+    """
+    status: int | None = None
+    if isinstance(error, httpx.HTTPStatusError):
+        status = error.response.status_code
+    elif not isinstance(error, httpx.TransportError):
+        return
+    if isinstance(error, httpx.TimeoutException):
+        return
+
+    if status is None or status in _TIKA_AUTH_STATUSES or status >= _SERVER_ERROR_FLOOR:
+        msg = (
+            f"Tika is unavailable (failed on {relative_path}): {error}. "
+            "Refusing to record this as a document-level extraction failure, "
+            "which would publish as 'this course has no readable documents'."
+        )
+        raise TikaUnavailableError(msg) from error
+
+
 def build_document_rows(
-    members: list[tuple[str, bytes]],
+    members: Iterable[tuple[str, Callable[[], bytes]]],
     *,
     course_id: str,
     source_system: str,
@@ -95,6 +140,11 @@ def build_document_rows(
 
     Split out from the asset body so the dispatch and failure accounting can be
     tested without a Dagster context or a live Tika service.
+
+    ``members`` yields ``(relative_path, read_bytes)``. The bytes are behind a
+    callable so a member that fails the path-based filters below never gets
+    read at all -- in a real export the skipped images and archives are the
+    bulk of the archive.
 
     A file Tika cannot parse is skipped silently -- images and archives are
     normal course content, not errors. A file Tika *should* parse but does not
@@ -113,7 +163,7 @@ def build_document_rows(
         "transcripts": 0,
     }
 
-    for relative_path, file_bytes in members:
+    for relative_path, read_bytes in members:
         if is_transcript(relative_path):
             counters["transcripts"] += 1
             continue
@@ -123,6 +173,8 @@ def build_document_rows(
         if not is_supported(content_type):
             counters["skipped"] += 1
             continue
+
+        file_bytes = read_bytes()
 
         # A zero-byte file has no text, which is a fact rather than a failure.
         # Tika answers 422 for an empty body, and counting that as a failed
@@ -148,7 +200,8 @@ def build_document_rows(
         counters["candidates"] += 1
         try:
             text = extract(file_bytes, content_type)
-        except Exception:
+        except Exception as error:
+            raise_if_service_failure(error, relative_path)
             counters["failed"] += 1
             log.exception("Tika extraction failed for %s", relative_path)
             continue
@@ -184,10 +237,23 @@ def assert_extraction_healthy(counters: dict[str, int], course_id: str) -> None:
     result is indistinguishable from "this course has no documents".
     """
     candidates = counters["candidates"]
+    succeeded = counters["extracted"] + counters["empty"]
+
+    # Total failure is loud at any size. The rate floor below exists so one bad
+    # PDF in a two-document course does not trip the guard, but that same floor
+    # let a course whose every document failed publish an empty JSONL as a
+    # success -- which is precisely the case worth refusing.
+    if candidates and not succeeded:
+        msg = (
+            f"Refusing to publish document text for {course_id}: all "
+            f"{candidates} candidate documents failed extraction. Publishing "
+            "would be indistinguishable from 'this course has no documents'."
+        )
+        raise RuntimeError(msg)
+
     if candidates < MIN_DOCUMENTS_FOR_RATE_CHECK:
         return
 
-    succeeded = counters["extracted"] + counters["empty"]
     success_rate = succeeded / candidates
     if success_rate < MIN_EXTRACTION_SUCCESS_RATE:
         msg = (
@@ -211,6 +277,16 @@ def assert_extraction_healthy(counters: dict[str, int], course_id: str) -> None:
     io_manager_key="s3file_io_manager",
     automation_condition=upstream_or_code_changes(),
     required_resource_keys={"openedx", "tika"},
+    # Every changed course in every deployment can trigger a run here, and each
+    # run makes hundreds of long-running requests to a single shared Tika. A
+    # backfill or a bulk republication therefore points the whole fan-out at one
+    # service at once.
+    #
+    # As with `openedx_course_export`, naming the pool only makes the limit
+    # *settable*: until a slot limit is configured for
+    # `openedx_document_extraction` on the instance (Deployment -> Concurrency),
+    # these runs are still unbounded.
+    pool="openedx_document_extraction",
     description=(
         "Plain text extracted via Apache Tika from the documents in a course "
         "archive (PDFs, HTML, Office files). One JSONL row per document."
@@ -235,22 +311,33 @@ def extract_course_document_text(
         )
         course_static_assets.fs.get_file(str(course_static_assets), str(bundle_path))
 
+        # Members are walked lazily and their bytes pulled only for the ones
+        # that survive filtering. A real 14.310x export is 152 MiB and is mostly
+        # images and archives that get skipped; reading every member up front
+        # held all of that resident alongside the tarball and the extracted
+        # text, which is what could exhaust a worker on a media-heavy course.
         with tarfile.open(bundle_path, "r:gz") as bundle:
-            members = [
-                (member.name, extracted.read())
-                for member in bundle.getmembers()
-                if member.isfile() and (extracted := bundle.extractfile(member))
-            ]
 
-        context.log.info("Bundle for %s holds %d files", course_id, len(members))
+            def _members(
+                bundle: tarfile.TarFile = bundle,
+            ) -> Iterator[tuple[str, Callable[[], bytes]]]:
+                for member in bundle:
+                    if not member.isfile():
+                        continue
 
-        rows, counters = build_document_rows(
-            members,
-            course_id=course_id,
-            source_system=source_system,
-            extract=tika.extract_text,
-            is_supported=tika.is_supported,
-        )
+                    def _read(member: tarfile.TarInfo = member) -> bytes:
+                        extracted = bundle.extractfile(member)
+                        return extracted.read() if extracted else b""
+
+                    yield member.name, _read
+
+            rows, counters = build_document_rows(
+                _members(),
+                course_id=course_id,
+                source_system=source_system,
+                extract=tika.extract_text,
+                is_supported=tika.is_supported,
+            )
         assert_extraction_healthy(counters, course_id)
 
         output_file = Path(
