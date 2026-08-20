@@ -197,6 +197,16 @@ class TestGraveyardIsNeverEmptied:
         validate_inventory(root, report)
         assert "'reason' is a required property" in _messages(report)
 
+    def test_a_missing_retired_schema_fails_loudly_rather_than_skipping_validation(self, tmp_path: Path) -> None:
+        # An optional schema means deleting retired.schema.json silently waives
+        # every date/reason requirement, letting a malformed entry acknowledge a
+        # removal and pass check-removals. The schema is mandatory, like the
+        # unit schema already is.
+        root = _materialize(tmp_path, _without_second_table(), [RETIRED_ENTRY])
+        (root / "schema" / "retired.schema.json").unlink()
+        with pytest.raises(FileNotFoundError):
+            validate_inventory(root, ValidationReport())
+
 
 def _materialize(tmp_path: Path, unit: dict[str, Any], retired: list[dict[str, Any]]) -> Path:
     """Write a one-unit inventory on disk, carrying the real schemas and vocabulary."""
@@ -314,3 +324,29 @@ class TestRenderDagsterIntervals:
         paused = copy.deepcopy(UNIT)
         paused["airbyte"]["connections"][0]["status"] = "inactive"
         assert render_dagster_intervals([_unit(paused)]) == {"mitx_online_open_edx_db__s3_data_lake": 12}
+
+    def test_two_connection_names_colliding_on_the_same_interval_is_fine(self) -> None:
+        # Dashes and spaces both collapse to "_", so distinct connection names
+        # legitimately derive the same group when they agree on cadence.
+        collided = copy.deepcopy(UNIT)
+        collided["airbyte"]["connections"][0]["name"] = "MITx Online-Open edX DB S3 Data Lake"
+        second = copy.deepcopy(collided["airbyte"]["connections"][0])
+        second["name"] = "MITx Online Open edX DB S3 Data Lake"
+        collided["airbyte"]["connections"].append(second)
+        assert render_dagster_intervals([_unit(collided)]) == {"mitx_online_open_edx_db_s3_data_lake": 12}
+
+    def test_two_connection_names_colliding_on_different_intervals_stops_the_render(
+        self,
+    ) -> None:
+        # A group name is only unique modulo dashes/whitespace, so two distinct
+        # connections that disagree on cadence would otherwise have one silently
+        # overwrite the other based on sort order — recreating the wrong-schedule
+        # failure this renderer exists to prevent.
+        collided = copy.deepcopy(UNIT)
+        collided["airbyte"]["connections"][0]["name"] = "MITx Online-Open edX DB S3 Data Lake"
+        second = copy.deepcopy(collided["airbyte"]["connections"][0])
+        second["name"] = "MITx Online Open edX DB S3 Data Lake"
+        second["sync_interval_hours"] = 6
+        collided["airbyte"]["connections"].append(second)
+        with pytest.raises(RenderError, match="mitx_online_open_edx_db_s3_data_lake"):
+            render_dagster_intervals([_unit(collided)])

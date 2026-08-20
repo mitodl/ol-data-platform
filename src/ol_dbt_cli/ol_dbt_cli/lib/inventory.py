@@ -404,15 +404,14 @@ def _check_retired(inventory_dir: Path, units: list[Unit], report: ValidationRep
     if not path.exists():
         return
     schema_path = inventory_dir / RETIRED_SCHEMA_PATH
-    if schema_path.exists():
-        raw = yaml.safe_load(path.read_text())
-        validator = Draft202012Validator(json.loads(schema_path.read_text()))
-        for error in sorted(
-            validator.iter_errors(raw),
-            key=lambda e: [str(part) for part in e.absolute_path],
-        ):
-            location = "/".join(str(part) for part in error.absolute_path) or "(root)"
-            report.add(CHECK, Severity.ERROR, RETIRED_FILENAME, f"{location} {error.message}")
+    raw = yaml.safe_load(path.read_text())
+    validator = Draft202012Validator(json.loads(schema_path.read_text()))
+    for error in sorted(
+        validator.iter_errors(raw),
+        key=lambda e: [str(part) for part in e.absolute_path],
+    ):
+        location = "/".join(str(part) for part in error.absolute_path) or "(root)"
+        report.add(CHECK, Severity.ERROR, RETIRED_FILENAME, f"{location} {error.message}")
 
     live = declared_pairs(units)
     for key, raw_table in sorted(retired_pairs(load_retired(inventory_dir)) & live):
@@ -686,6 +685,7 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
     the 24-hour default the moment somebody re-enables it.
     """
     intervals: dict[str, int] = {}
+    sources: dict[str, str] = {}
     for unit in sorted(units, key=lambda u: u.key):
         if not unit.data.get("dagster_visible", True):
             continue
@@ -694,6 +694,17 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
             if not name.lower().endswith(DAGSTER_SELECTOR_SUFFIX):
                 continue
             hours = connection.get("sync_interval_hours")
-            if isinstance(hours, int):
-                intervals[dagster_group_name(name)] = hours
+            if not isinstance(hours, int):
+                continue
+            group = dagster_group_name(name)
+            if group in intervals and intervals[group] != hours:
+                msg = (
+                    f"connections {sources[group]!r} and {name!r} both derive the Dagster "
+                    f"group {group!r} but disagree on sync_interval_hours "
+                    f"({intervals[group]} vs {hours}) — rendering one would silently drop "
+                    f"the other's cadence."
+                )
+                raise RenderError(msg)
+            intervals[group] = hours
+            sources[group] = name
     return dict(sorted(intervals.items()))
