@@ -662,9 +662,22 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     # Build the static assets bundle: compute a content-addressed version hash
     # and a manifest describing each file so downstream consumers can detect
     # changes and inspect available content without extracting the full archive.
+    # The path is hashed alongside the bytes, length-prefixed so the two fields
+    # cannot run together: without it, renaming static/a.pdf to static/b.pdf
+    # leaves the hash unchanged even though both the tar and the manifest
+    # differ, so the S3 object key is reused and every downstream
+    # data_version_changed() check misses the update. Length-prefixing rather
+    # than a separator keeps a path that contains the separator from colliding
+    # with a different path/content split.
     hasher = hashlib.sha256()
     manifest_files: list[dict[str, Any]] = []
     for relative_path, content in sorted(static_assets, key=lambda x: x[0]):
+        path_bytes = relative_path.encode("utf-8")
+        hasher.update(str(len(path_bytes)).encode("ascii"))
+        hasher.update(b":")
+        hasher.update(path_bytes)
+        hasher.update(str(len(content)).encode("ascii"))
+        hasher.update(b":")
         hasher.update(content)
         mime_type, _ = mimetypes.guess_type(relative_path)
         manifest_files.append(

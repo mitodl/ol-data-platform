@@ -632,3 +632,68 @@ def test_un_nest_course_structure_survives_a_library_reference():
     blocks = un_nest_course_structure("course-v1:Org+Num+Run", structure, None)
 
     assert {block["block_id"] for block in blocks} == {"course", "chapter_1"}
+
+
+def _archive_with_static(tmp_path: Path, name: str, static: dict[str, bytes]) -> Path:
+    """Build a minimal course archive carrying the given static files."""
+    root = tmp_path / name
+    (root / "course").mkdir(parents=True)
+    (root / "course.xml").write_bytes(
+        b'<course url_name="2024_Spring" org="TestX" course="TEST101"/>\n'
+    )
+    (root / "course" / "2024_Spring.xml").write_bytes(b'<course display_name="T"/>\n')
+    static_dir = root / "static"
+    static_dir.mkdir()
+    for filename, content in static.items():
+        (static_dir / filename).write_bytes(content)
+
+    archive_path = tmp_path / f"{name}.tar.gz"
+    with tarfile.open(archive_path, "w:gz") as tf:
+        tf.add(root, arcname=name)
+    return archive_path
+
+
+def test_data_version_changes_when_a_static_file_is_renamed(tmp_path):
+    """Renaming a static file must change the bundle's data_version.
+
+    The relative paths are part of the bundle's observable content -- they go
+    into the tar and the manifest, and downstream extraction keys rows by
+    file_path. Hashing only the bytes meant a rename produced an identical
+    data_version, so the S3 object key was reused and every
+    data_version_changed() check downstream missed the update.
+    """
+    before = _archive_with_static(tmp_path, "before", {"a.pdf": b"%PDF-identical"})
+    after = _archive_with_static(tmp_path, "after", {"b.pdf": b"%PDF-identical"})
+
+    _, bundle_before = process_course_xml_blocks(before, "prod")
+    _, bundle_after = process_course_xml_blocks(after, "prod")
+
+    assert [p for p, _ in bundle_before.files] == ["static/a.pdf"]
+    assert [p for p, _ in bundle_after.files] == ["static/b.pdf"]
+    assert bundle_before.data_version != bundle_after.data_version
+
+
+def test_data_version_is_stable_for_identical_content(tmp_path):
+    """The same paths and bytes must still hash the same, or nothing caches."""
+    one = _archive_with_static(tmp_path, "one", {"a.pdf": b"%PDF-x", "b.txt": b"hi"})
+    two = _archive_with_static(tmp_path, "two", {"a.pdf": b"%PDF-x", "b.txt": b"hi"})
+
+    _, bundle_one = process_course_xml_blocks(one, "prod")
+    _, bundle_two = process_course_xml_blocks(two, "prod")
+
+    assert bundle_one.data_version == bundle_two.data_version
+
+
+def test_data_version_distinguishes_a_shifted_path_content_boundary(tmp_path):
+    """Length-prefixing keeps a path/content split from being ambiguous.
+
+    Without it, concatenating path and bytes lets two different bundles hash
+    identically when the boundary moves -- "ab" + "c" and "a" + "bc".
+    """
+    one = _archive_with_static(tmp_path, "one", {"ab.txt": b"c"})
+    two = _archive_with_static(tmp_path, "two", {"a.txt": b"bc"})
+
+    _, bundle_one = process_course_xml_blocks(one, "prod")
+    _, bundle_two = process_course_xml_blocks(two, "prod")
+
+    assert bundle_one.data_version != bundle_two.data_version
