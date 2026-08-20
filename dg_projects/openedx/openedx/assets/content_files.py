@@ -124,6 +124,27 @@ def build_document_rows(
             counters["skipped"] += 1
             continue
 
+        # A zero-byte file has no text, which is a fact rather than a failure.
+        # Tika answers 422 for an empty body, and counting that as a failed
+        # extraction would both waste a round trip and pollute the denominator
+        # the health guard divides by -- an Open edX export ships a stack of
+        # empty about/ placeholders, so this is common enough to matter.
+        if not file_bytes:
+            counters["candidates"] += 1
+            counters["empty"] += 1
+            rows.append(
+                {
+                    "course_id": course_id,
+                    "source_system": source_system,
+                    "file_path": relative_path,
+                    "content_type": content_type,
+                    "size_bytes": 0,
+                    "content": None,
+                    "extraction_status": "empty",
+                }
+            )
+            continue
+
         counters["candidates"] += 1
         try:
             text = extract(file_bytes, content_type)
