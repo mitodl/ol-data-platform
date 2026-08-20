@@ -51,6 +51,27 @@ MIN_EXTRACTION_SUCCESS_RATE = 0.5
 # out of one is 0% and would trip the guard on a course with a single bad PDF.
 MIN_DOCUMENTS_FOR_RATE_CHECK = 5
 
+# Subtitle suffixes. These are NOT documents, even though a real archive makes
+# them look like one: `mimetypes` maps `.srt` to `text/plain`, which Tika
+# happily accepts and returns verbatim -- timestamps, sequence numbers and all.
+# A 14.310x export carries 302 `.srt` and 720 `.srt.sjson` files, so without
+# this exclusion every one of the `.srt` would be extracted twice: once as
+# unusable timestamp-laden "text" here, and once properly by the transcript
+# asset. The transcript parser owns them.
+SRT_SUFFIX = ".srt"
+SJSON_SUFFIX = ".sjson"
+TRANSCRIPT_SUFFIXES = frozenset({SRT_SUFFIX, SJSON_SUFFIX})
+
+
+def is_transcript(relative_path: str) -> bool:
+    """Report whether a bundle member is a subtitle file rather than a document.
+
+    Dispatch is on the FINAL suffix: Open edX writes subtitles as
+    `subs_<id>.srt.sjson`, which is SJSON despite what the middle of the name
+    suggests.
+    """
+    return Path(relative_path).suffix.lower() in TRANSCRIPT_SUFFIXES
+
 
 def _content_type(relative_path: str) -> str:
     """Guess a document's MIME type from its path.
@@ -78,11 +99,25 @@ def build_document_rows(
     A file Tika cannot parse is skipped silently -- images and archives are
     normal course content, not errors. A file Tika *should* parse but does not
     is counted as a failure and feeds the success-rate guard.
+
+    Subtitles are skipped even though Tika would accept them, because the
+    transcript asset owns those and Tika's output for one is unusable.
     """
     rows: list[dict[str, Any]] = []
-    counters = {"candidates": 0, "extracted": 0, "empty": 0, "failed": 0, "skipped": 0}
+    counters = {
+        "candidates": 0,
+        "extracted": 0,
+        "empty": 0,
+        "failed": 0,
+        "skipped": 0,
+        "transcripts": 0,
+    }
 
     for relative_path, file_bytes in members:
+        if is_transcript(relative_path):
+            counters["transcripts"] += 1
+            continue
+
         content_type = _content_type(relative_path)
 
         if not is_supported(content_type):
@@ -234,6 +269,7 @@ def extract_course_document_text(
                 "empty": counters["empty"],
                 "failed": counters["failed"],
                 "skipped_unsupported": counters["skipped"],
+                "skipped_transcripts": counters["transcripts"],
                 "counters": json.dumps(counters),
             },
         )
