@@ -16,6 +16,7 @@ separate asset: they need no external service, and pairing them with Tika would
 mean a Tika outage also stopped transcript extraction.
 """
 
+import hashlib
 import json
 import logging
 import mimetypes
@@ -126,6 +127,31 @@ def raise_if_service_failure(error: Exception, relative_path: str) -> None:
             "which would publish as 'this course has no readable documents'."
         )
         raise TikaUnavailableError(msg) from error
+
+
+def output_digest(output_file: Path) -> str:
+    """Return the SHA-256 of the emitted JSONL, as the asset's data version.
+
+    Versioning on the *input* bundle hash was wrong: extracted text is a
+    function of the archive AND the extractor, and the extractor is not fixed.
+    A Tika upgrade, a parser change, or a run whose partial failures later
+    succeed all produce different text from the same bundle -- and all reused
+    the same DataVersion and the same S3 object key, so the corrected output
+    silently overwrote the old one while every downstream
+    `data_version_changed()` check saw nothing move.
+
+    Hashing what was actually written closes that: any difference in the output
+    is a different version, with no constant for anyone to forget to bump.
+    `hashlib.file_digest` reads in chunks, so this does not undo the streaming
+    the extraction itself does.
+
+    The tradeoff is that the version is only known after the work is done, so
+    it cannot be used to skip extraction up front. That is acceptable here --
+    the upstream bundle asset is already content-addressed, so an unchanged
+    course does not re-materialise this asset in the first place.
+    """
+    with output_file.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def build_document_rows(
@@ -347,10 +373,7 @@ def extract_course_document_text(
         with jsonlines.open(output_file, "w") as writer:
             writer.write_all(rows)
 
-        # Version on the bundle this was extracted from: the text is a pure
-        # function of the archive plus the extractor, so re-extracting an
-        # unchanged bundle would produce an identical result.
-        data_version = str(course_static_assets).rsplit("/", 1)[-1].split(".")[0]
+        data_version = output_digest(output_file)
         object_key = (
             f"{'/'.join(context.asset_key.path)}/{source_system}/"
             f"{course_id}/{data_version}.jsonl"
