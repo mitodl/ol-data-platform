@@ -14,6 +14,17 @@ Data flow:
 Only documents Tika can parse are handled here. Video transcripts are a
 separate asset: they need no external service, and pairing them with Tika would
 mean a Tika outage also stopped transcript extraction.
+
+What counts as a document here is aligned to MIT Learn's VALID_TEXT_FILE_TYPES,
+but the two systems reach that set differently -- MIT Learn filters by file
+extension, this asset by MIME type -- so agreement is a property that has to be
+asserted rather than assumed. The tests parametrize over MIT Learn's list to
+enforce it.
+
+Note that Open edX course *problems* do not arrive here at all. `problem/` is a
+first-class OLX block-type directory, so problem documents are carried by the
+block path with their XML intact; a real 14.310x export has 782 of them. This
+asset covers the file-storage side of the archive, not the block side.
 """
 
 import hashlib
@@ -62,9 +73,18 @@ MIN_DOCUMENTS_FOR_RATE_CHECK = 5
 # this exclusion every one of the `.srt` would be extracted twice: once as
 # unusable timestamp-laden "text" here, and once properly by the transcript
 # asset. The transcript parser owns them.
+#
+# `.vtt` joins them for a different reason. `mimetypes` maps it to `text/vtt`,
+# which Tika would also accept and return verbatim -- which is exactly what MIT
+# Learn stores today, since its `_transform_content_by_type` has transformers
+# only for `.srt` and `.sjson`. WebVTT cue timings and speaker tags are noise to
+# every consumer of this text (search indexing, embedding, summarisation), so it
+# is routed to the transcript parser instead of being published as "document
+# text" that happens to be two-thirds timestamps.
 SRT_SUFFIX = ".srt"
 SJSON_SUFFIX = ".sjson"
-TRANSCRIPT_SUFFIXES = frozenset({SRT_SUFFIX, SJSON_SUFFIX})
+VTT_SUFFIX = ".vtt"
+TRANSCRIPT_SUFFIXES = frozenset({SRT_SUFFIX, SJSON_SUFFIX, VTT_SUFFIX})
 
 
 def is_transcript(relative_path: str) -> bool:
@@ -122,6 +142,19 @@ def open_bundle_members(
                 yield member.name, _read
 
         yield _members()
+
+
+def file_extension(relative_path: str) -> str:
+    """Return a bundle member's lowercased final suffix, or "" if it has none.
+
+    Published on every row for two reasons. It is a `ContentFile` field on MIT
+    Learn's side, carried through `documents_from_olx` metadata, so publishing it
+    saves the consumer re-deriving what this asset already knows. And MIT Learn
+    selects files by EXTENSION where this asset gates by MIME type, so a consumer
+    that needs to apply its own allowlist can do so directly rather than mapping
+    back from a MIME string.
+    """
+    return Path(relative_path).suffix.lower()
 
 
 def _content_type(relative_path: str) -> str:
@@ -263,6 +296,7 @@ def build_document_rows(
                     "course_id": course_id,
                     "source_system": source_system,
                     "file_path": relative_path,
+                    "file_extension": file_extension(relative_path),
                     "content_type": content_type,
                     "size_bytes": 0,
                     "content": None,
@@ -293,6 +327,7 @@ def build_document_rows(
                 "course_id": course_id,
                 "source_system": source_system,
                 "file_path": relative_path,
+                "file_extension": file_extension(relative_path),
                 "content_type": content_type,
                 "size_bytes": len(file_bytes),
                 "content": text or None,
