@@ -30,16 +30,16 @@
 > Statuses re-verified against `src/ol_dbt/models/dimensional/` on `main` (2026-08-20).
 > The previous revision of this table claimed Phase G was 6/6 complete while every G
 > section below was still marked pending, and reported B and C as 0/x when five of
-> their seven tasks had already shipped. Remaining work is tracked in GH #2073.
+> their seven tasks had already shipped. Remaining work is tracked in #2073.
 
 ### Remaining work
 
 | Task | Status | Note |
 |------|--------|------|
-| B4 · `dim_user` `user_global_id` backfill | ⏳ | Re-check the design first: B4 was written against the email-based `user_pk`, which PR #2497 replaced with a durable-id surrogate. |
+| B4 · `dim_user` `user_global_id` backfill | ⏳ | Re-check the design first: B4 was written against the email-based `user_pk`, which #2497 replaced with a durable-id surrogate. |
 | C2 · `tfact_program_certificate` | ⏳ | Build-or-drop decision needed. Program certificates currently live in `tfact_certificate`; several mart-migration issues cite `tfact_program_certificate` as a target for a model that does not exist. |
 
-Two successors were added by the 2026-07 warehouse audit (GH #2375) and belong to this
+Two successors were added by the 2026-07 warehouse audit (#2375) and belong to this
 backlog but are not yet written up as tasks here: `tfact_exam_grade` (or a `grade_type`
 discriminator on `tfact_grade`), and a flexible-pricing income attribute keyed to `dim_user`.
 
@@ -433,7 +433,7 @@ Run after all Phase A tasks are merged and the dimensional schema is promoted to
 
 ### B1 · Add Bootcamps to Dimensional Layer ✅
 
-> **Implemented.** `bootcamps_courseruns` CTE at `dim_course_run.sql:133`; bootcamps branches in
+> **Implemented.** `bootcamps_courseruns` CTE in `dim_course_run.sql`; bootcamps branches in
 > `dim_course.sql`, `tfact_enrollment.sql`, `tfact_certificate.sql`, `tfact_order.sql`;
 > `bootcamps_application_user_id` in `dim_user.sql`.
 
@@ -476,7 +476,7 @@ WHERE platform = 'bootcamps';
 
 ### B2 · Add OCW to `dim_course` ✅
 
-> **Implemented.** `ocw_courses` CTE at `dim_course.sql:77-86`.
+> **Implemented.** `ocw_courses` CTE in `dim_course.sql`.
 
 **File:** `src/ol_dbt/models/dimensional/dim_course.sql`
 
@@ -525,8 +525,9 @@ dimensional layer, dropping its `int__ocw__courses` ref
 
 ### B3 · Fix `tfact_enrollment` Incremental Watermark ✅
 
-> **Implemented.** `on_schema_change='append_new_columns'` (line 5), per-platform
-> `max(coalesce(enrollment_updated_on, enrollment_created_on))` (line 304), 7-day lookback (line 348).
+> **Implemented.** `on_schema_change='append_new_columns'` in the `config()` block, a per-platform
+> `max(coalesce(enrollment_updated_on, enrollment_created_on))` watermark CTE, and a 7-day lookback
+> in the incremental filter — all in `tfact_enrollment.sql`.
 
 **File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
 
@@ -630,7 +631,7 @@ Run after Phase B. These add analytical depth and reduce maintenance burden.
 
 ### C1 · Create `tfact_grade` — Course Run Grade Fact Table ✅
 
-> **Implemented.** Landed 2026-06-02, commit `53d421ef` (PR #2259).
+> **Implemented.** Landed 2026-06-02, commit `53d421ef` (#2259).
 
 **New file:** `src/ol_dbt/models/dimensional/tfact_grade.sql`
 **New YAML:** Add entry to `src/ol_dbt/models/dimensional/_fact_tables.yml`
@@ -740,7 +741,7 @@ GROUP BY p.program_title ORDER BY certs_issued DESC LIMIT 20;
 > **Implemented as Option B** (separate `dim_contract` rather than enriching `dim_organization`):
 > `dim_contract.sql` refs `stg__mitxonline__app__postgres__b2b_contractpage` and `dim_organization`,
 > documented in `_dim_contract.yml`. Last touched `a4380481`.
-> Note: MITx Pro `b2becommerce` contracts are still uncovered — tracked in GH #2297.
+> Note: MITx Pro `b2becommerce` contracts are still uncovered — tracked in #2297.
 
 **File:** `src/ol_dbt/models/dimensional/dim_organization.sql`
 
@@ -1370,7 +1371,7 @@ so edxorg/mitxonline enrollment rows gain MicroMasters program context where app
 ### G1 · Fix `bridge_program_course` MicroMasters Elective-Set Fan-Out ✅
 
 > **Implemented.** `select distinct` plus an explicit `(program_id, course_id, electiveset_id)`
-> grain comment at `bridge_program_course.sql:37-52`.
+> grain comment on the `micromasters_requirements` CTE in `bridge_program_course.sql`.
 
 **File:** `src/ol_dbt/models/dimensional/bridge_program_course.sql`
 
@@ -1412,9 +1413,8 @@ dbt test --select bridge_program_course -t dev_local
 
 ### G2 · Add Defensive QUALIFY Guard to `tfact_enrollment` ✅
 
-> **Implemented.** `final_deduped` CTE at `tfact_enrollment.sql:359-401`, partitioning on
-> `enrollment_key`.
-> Note: GH #2382 proposes removing this guard now that the upstream pre-dedupe from #2378 has landed.
+> **Implemented.** `final_deduped` CTE in `tfact_enrollment.sql`, partitioning on `enrollment_key`.
+> Note: #2382 proposes removing this guard now that the upstream pre-dedupe from #2378 has landed.
 
 **File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
 
@@ -1453,8 +1453,9 @@ dbt test --select tfact_enrollment -t dev_local
 
 ### G3 · Add Defensive QUALIFY Guard to `tfact_certificate` + Verify edxorg Enrollment Join ✅
 
-> **Implemented.** Cross-source pre-dedupe at `tfact_certificate.sql:276` and the
-> `certificate_key` guard in the `final_deduped` CTE at `:351-391`, landed `74b47914` (PR #2413).
+> **Implemented.** Cross-source pre-dedupe in the `cross_source_deduped` CTE and the
+> `certificate_key` guard in the `final_deduped` CTE, both in `tfact_certificate.sql`;
+> landed `74b47914` (#2413).
 > Also in scope for the #2382 guard removal.
 
 **File:** `src/ol_dbt/models/dimensional/tfact_certificate.sql`
@@ -1506,8 +1507,11 @@ dbt test --select tfact_certificate -t dev_local
 
 ### G4 · Harden `int__mitxonline__courserunenrollments` DEDP Fan-Out Guard ✅
 
-> **Implemented.** The "IMPORTANT / must be preserved" comment is in place at
-> `int__mitxonline__courserunenrollments.sql:23-26`.
+> DEDP = MITx's Data, Economics, and Design of Policy MicroMasters program.
+
+> **Implemented.** The "MUST be preserved" note on the
+> `dedp_enrollments_verified_in_mitxonline` CTE is in place in
+> `int__mitxonline__courserunenrollments.sql`.
 
 **File:** `src/ol_dbt/models/intermediate/mitxonline/int__mitxonline__courserunenrollments.sql`
 
@@ -1541,8 +1545,8 @@ intermediate entirely. Keep `select distinct` as a deliberate safety measure.
 
 ### G5 · Verify `int__edxorg__mitx_courserun_certificates` Enrollment Join Grain ✅
 
-> **Verified.** `int__edxorg__mitx_courserun_certificates.sql:3` declares the
-> `(user_id, courserun_readable_id)` grain; the DEDP CTE uses `select distinct`.
+> **Verified.** `int__edxorg__mitx_courserun_certificates.sql` declares the
+> `(user_id, courserun_readable_id)` grain in its header comment; the DEDP CTE uses `select distinct`.
 
 **Files:**
 - `src/ol_dbt/models/intermediate/edxorg/int__edxorg__mitx_courserun_certificates.sql`
@@ -1571,7 +1575,8 @@ uniquely grained on this pair, the join fans out each certificate row.
 
 ### G6 · Document `dim_course` edxorg QUALIFY Collapse in YAML ✅
 
-> **Implemented.** `_dim_course.yml:10-14` and the `source_id` column description.
+> **Implemented.** The model-level `description` in `_dim_course.yml` and the `source_id`
+> column description.
 
 **File:** `src/ol_dbt/models/dimensional/_dim_course.yml`
 **File:** `src/ol_dbt/models/dimensional/dim_course.sql` (comment only)
