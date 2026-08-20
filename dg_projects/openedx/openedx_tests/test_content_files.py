@@ -10,21 +10,27 @@ from pathlib import Path
 
 import httpx2 as httpx
 import pytest
+from ol_orchestrate.resources.tika import SUPPORTED_CONTENT_TYPES
 from openedx.assets.content_files import (
     MIN_DOCUMENTS_FOR_RATE_CHECK,
     TikaUnavailableError,
+    _content_type,
     assert_extraction_healthy,
     build_document_rows,
+    file_extension,
     open_bundle_members,
     output_digest,
 )
 from upath import UPath
 
-SUPPORTED = {"application/pdf", "text/html", "text/plain"}
-
 
 def fake_is_supported(content_type):
-    return content_type in SUPPORTED
+    """Gate on the real supported set rather than a hand-picked subset.
+
+    A local subset would keep passing while the real one drifted, which is the
+    exact failure these tests exist to catch.
+    """
+    return content_type in SUPPORTED_CONTENT_TYPES
 
 
 def fake_extract(_file_bytes, _content_type):
@@ -464,3 +470,118 @@ def test_open_bundle_members_reads_a_real_tarball(tmp_path):
     assert len(temp_files) == 1, "the download must be registered for cleanup"
     for temp_file in temp_files:
         temp_file.unlink(missing_ok=True)
+
+
+# Verbatim from mit-learn learning_resources/constants.py. Reproduced rather
+# than imported because mit-learn is a separate deployment with no shared
+# package; these tests are what catches the two drifting apart.
+VALID_TEXT_FILE_TYPES = frozenset(
+    {
+        ".doc",
+        ".docx",
+        ".htm",
+        ".html",
+        ".json",
+        ".md",
+        ".pdf",
+        ".tex",
+        ".ppt",
+        ".pptx",
+        ".rtf",
+        ".sjson",
+        ".srt",
+        ".txt",
+        ".vtt",
+        ".xml",
+    }
+)
+
+# Subtitles belong to the sibling transcript asset, so they are expected NOT to
+# be Tika-supported here. `.vtt` is in that set deliberately: MIT Learn sends it
+# to Tika and stores the cue timings, and routing it to the parser instead is a
+# considered divergence rather than an oversight.
+_HANDLED_ELSEWHERE = {".srt", ".sjson", ".vtt"}
+
+
+@pytest.mark.parametrize(
+    "extension", sorted(VALID_TEXT_FILE_TYPES - _HANDLED_ELSEWHERE)
+)
+def test_every_extension_mit_learn_extracts_is_supported(extension):
+    """Nothing MIT Learn extracts today may be silently dropped by this asset.
+
+    The two systems filter by different mechanisms -- MIT Learn by extension,
+    this asset by MIME type -- so agreement between them is a coincidence
+    unless it is asserted. `.json` was genuinely lost before this check
+    existed: four files in a real course-v1:MITx+14.310x+3T2021 export. `.tex`
+    did not appear in the archives sampled, but maps to `application/x-tex`,
+    which was missing from the supported set for the same reason.
+    """
+    content_type = _content_type("problem_set" + extension)
+    assert content_type in SUPPORTED_CONTENT_TYPES, (
+        f"{extension} maps to {content_type}, which Tika will refuse; "
+        "MIT Learn extracts this extension, so the file would be lost"
+    )
+
+
+def test_csv_stays_out_of_the_document_set():
+    """`.csv` is excluded from VALID_TEXT_FILE_TYPES and must stay excluded.
+
+    It appears only in VALID_TUTOR_PROBLEM_FILE_TYPES, which exists because
+    Canvas needs an explicit mapping of which assets to process for tutor -- its
+    export is structurally different. Open edX problems are a first-class OLX
+    block type and are already carried as blocks, so nothing here needs `.csv`,
+    and extracting it would publish course data files as course text.
+    """
+    rows, counters = rows_for(
+        [("course/static/gradebook.csv", b"student,score\nalice,90\n")]
+    )
+
+    assert rows == []
+    assert counters["skipped"] == 1
+    assert counters["candidates"] == 0
+
+
+def test_vtt_stays_out_of_the_document_set():
+    """`.vtt` is a subtitle track; the transcript parser owns it.
+
+    MIT Learn sends it to Tika and stores the result verbatim, cue timings and
+    all, because it has no VTT transformer. Routing it to the parser is the
+    divergence this asset makes on purpose.
+    """
+    rows, counters = rows_for(
+        [
+            (
+                "course/static/lecture01.vtt",
+                b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhi",
+            )
+        ]
+    )
+
+    assert rows == []
+    assert counters["transcripts"] == 1
+    assert counters["candidates"] == 0
+
+
+def test_rows_carry_the_extension_consumers_filter_on():
+    """The extension is what lets one extraction serve both MIT Learn allowlists."""
+    rows, _ = rows_for(
+        [
+            ("course/static/syllabus.pdf", b"%PDF-fake"),
+            ("course/static/notes.tex", b"\\documentclass{article}"),
+            ("course/tabs/overview.html", b"<p>hi</p>"),
+        ]
+    )
+
+    by_path = {row["file_path"]: row["file_extension"] for row in rows}
+    assert by_path == {
+        "course/static/syllabus.pdf": ".pdf",
+        "course/static/notes.tex": ".tex",
+        "course/tabs/overview.html": ".html",
+    }
+    assert all(row["file_extension"] in VALID_TEXT_FILE_TYPES for row in rows)
+
+
+def test_extensionless_files_report_an_empty_extension():
+    """A bare `LICENSE` has no suffix; it must not become the whole filename."""
+    assert file_extension("course/static/LICENSE") == ""
+    assert file_extension("course/static/subs_abc.srt.sjson") == ".sjson"

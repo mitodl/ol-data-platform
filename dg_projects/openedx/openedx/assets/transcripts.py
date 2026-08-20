@@ -10,18 +10,26 @@ Data flow:
             -> openedx/processed_data/course_transcript_text  (JSONL in S3)
                 -> integrations__learn__content_files         (dbt)
 
-The two parsers below reproduce mit-learn's
+The SRT and SJSON parsers below reproduce mit-learn's
 ``learning_resources/etl/utils.py:text_from_srt_content`` and
 ``text_from_sjson_content`` exactly, including their quirks. Their test table is
 ported verbatim into this project's tests so the parity is enforced rather than
 asserted -- a cutover diff should show a difference in the data, never in how
 the two sides parse it.
+
+The WebVTT parser is the one deliberate exception. MIT Learn has no VTT
+transformer, so it stores whatever Tika returns for a `.vtt`: the `WEBVTT`
+header, every cue timing, and the speaker tags. That is not text anyone wants
+indexed, and no consumer reads the timings, so `.vtt` is routed here and parsed
+properly rather than published as document text. See `text_from_vtt_content` for
+the evidence behind that call.
 """
 
 import json
 import logging
 import re
 from collections.abc import Callable, Iterable
+from html import unescape
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -41,6 +49,8 @@ from upath import UPath
 from openedx.assets.content_files import (
     SJSON_SUFFIX,
     SRT_SUFFIX,
+    VTT_SUFFIX,
+    file_extension,
     is_transcript,
     open_bundle_members,
     output_digest,
@@ -105,6 +115,58 @@ def text_from_sjson_content(content: str) -> str | None:
     return " ".join(caption for caption in captions if isinstance(caption, str))
 
 
+_VTT_BLOCK_SEPARATOR = re.compile(r"\r?\n[ \t]*\r?\n")
+_VTT_TAG = re.compile(r"</?[^>]*>")
+
+
+def text_from_vtt_content(content: str) -> str:
+    """Extract the spoken text from WebVTT subtitle content.
+
+    Unlike the two parsers above, this one has no mit-learn counterpart to
+    reproduce. MIT Learn's ``_transform_content_by_type`` registers transformers
+    only for ``.srt`` and ``.sjson``, so a ``.vtt`` is handed to Tika and stored
+    exactly as it came out -- ``WEBVTT`` header, cue timings, speaker tags and
+    all. This is therefore a deliberate divergence, not a parity gap.
+
+    It is safe because no consumer reads the timings. Searching the mit-learn
+    codebase, the only occurrence of ``-->`` is the SRT stripping regex itself;
+    the three things that consume transcript text are OpenSearch indexing (as
+    an English-analysed text field), embedding (a plain recursive character
+    splitter, markdown-aware only), and LLM summarisation. None of them is
+    cue-aware, and MIT Learn already strips timings from SRT and SJSON, which is
+    100% of the transcripts in the archives sampled. A consumer that depended on
+    cue timings would already be broken for those.
+
+    Structure is handled by one rule: a block is a cue if and only if it
+    contains a ``-->`` line, and its text is the lines after that. The WebVTT
+    spec forbids ``-->`` in ``NOTE`` bodies, so headers, comments, ``STYLE`` and
+    ``REGION`` blocks are all excluded by the same rule rather than by matching
+    each keyword. Cue identifiers sit above the timing line and are dropped with
+    it. Inline tags (``<v Speaker>``, ``<i>``, ``<c.loud>``, and mid-cue
+    ``<00:00:01.000>`` timestamps) are stripped, then HTML entities are
+    unescaped -- in that order, so an escaped ``&lt;b&gt;`` in the caption text
+    survives as literal text rather than being re-read as a tag.
+    """
+    cues = []
+    for raw_block in _VTT_BLOCK_SEPARATOR.split(content.lstrip("﻿")):
+        block = raw_block.strip()
+        if not block:
+            continue
+        lines = block.splitlines()
+        timing_index = next(
+            (index for index, line in enumerate(lines) if "-->" in line), None
+        )
+        if timing_index is None:
+            continue
+        spoken = " ".join(
+            _VTT_TAG.sub("", line).strip() for line in lines[timing_index + 1 :]
+        )
+        spoken = unescape(spoken).strip()
+        if spoken:
+            cues.append(spoken)
+    return " ".join(cues)
+
+
 def transcript_text(relative_path: str, raw: bytes) -> str | None:
     """Parse one transcript file, dispatching on its suffix.
 
@@ -126,6 +188,8 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
         return text_from_sjson_content(content)
     if suffix == SRT_SUFFIX:
         return text_from_srt_content(content)
+    if suffix == VTT_SUFFIX:
+        return text_from_vtt_content(content)
     return None
 
 
@@ -200,6 +264,11 @@ def build_transcript_rows(
                 "course_id": course_id,
                 "source_system": source_system,
                 "file_path": relative_path,
+                # Both row sources are unioned into one model downstream, so a
+                # field present on document rows and absent here is a schema
+                # inconsistency, not a harmless omission -- every
+                # transcript-derived row would read as a null extension.
+                "file_extension": file_extension(relative_path),
                 "content_type": (
                     "application/json"
                     if relative_path.lower().endswith(SJSON_SUFFIX)
