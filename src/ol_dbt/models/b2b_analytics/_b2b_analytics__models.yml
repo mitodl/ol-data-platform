@@ -277,7 +277,12 @@ models:
   - name: certificates_earned
     description: >
       Certificates earned, all-time -- an EVENT count (learner x course run), so
-      it is not a learner cohort and cannot floor itself.
+      it is not a learner cohort. Floor it via certified_learners.
+  - name: certified_learners
+    description: >
+      Distinct learners who earned at least one certificate -- the cohort
+      certificates_earned is attributable to, and a strict subset of
+      engaged_learners.
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -495,6 +500,10 @@ models:
     description: chatbot_users as a percentage of total_enrolled_learners.
   - name: certificates_earned
     description: >
-      Certificates earned in this course run -- an EVENT count. This view emits
-      no certified-learner cohort, so ol-analytics-api floors it as a count of
-      itself, which is weaker than flooring a cohort.
+      Certificates earned in this course run -- an EVENT count. Floor it via
+      certified_learners.
+  - name: certified_learners
+    description: >
+      Distinct learners who earned at least one certificate in this course run
+      -- the cohort certificates_earned is attributable to, and a strict subset
+      of engaged_learners.

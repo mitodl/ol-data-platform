@@ -27,8 +27,9 @@
 -- (active_count is 1 on ANY activity -- see organization_administration_report).
 -- ol-analytics-api can only apply its k-anonymity floor to a cohort this view
 -- emits, so each such sum publishes its own contributing cohort count
--- (video_watchers, problem_attempters, chatbot_users) alongside it. Do not add
--- an activity aggregate without also emitting the cohort it is attributable to.
+-- (video_watchers, problem_attempters, chatbot_users, certified_learners)
+-- alongside it. Do not add an activity aggregate without also emitting the
+-- cohort it is attributable to.
 with contract_courseruns as (
     select
         cr.courserun_readable_id,
@@ -82,7 +83,8 @@ select
     round(100.0 * count(distinct case when oar.chatbot_used_count > 0
         then oar.user_email end)
         / nullif(count(distinct oar.user_email), 0), 1)                         as chatbot_adoption_pct,
-    sum(oar.certificate_count)                                                  as certificates_earned
+    sum(oar.certificate_count)                                                  as certificates_earned,
+    count(distinct case when oar.certificate_count > 0 then oar.user_email end) as certified_learners
 from {{ source('reporting', 'organization_administration_report') }} oar
 -- Inner join for the same reason as the contract-scoped trend view: a report
 -- row whose course run resolves to no contract has no row to sit under.
