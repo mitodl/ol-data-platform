@@ -331,10 +331,32 @@ models:
     tests: [not_null]
   - name: user_edxorg_id
     description: Certificate recipient's edX.org user id, when resolvable.
+  - name: user_edxorg_username
+    description: Certificate recipient's edX.org username, when resolvable.
+  - name: user_mitxonline_username
+    description: Certificate recipient's MITx Online username, when resolvable.
   - name: micromasters_program_id
     description: MicroMasters program id for the completed program, when applicable.
   - name: mitxonline_program_id
     description: MITx Online program id for the completed program, when applicable.
+  - name: user_first_name
+    description: Certificate recipient's first name.
+  - name: user_last_name
+    description: Certificate recipient's last name.
+  - name: user_gender
+    description: Certificate recipient's self-reported gender, when available.
+  - name: user_year_of_birth
+    description: Certificate recipient's self-reported birth year, when available.
+  - name: user_country
+    description: Certificate recipient's self-reported country, when available.
+  - name: user_address_state_or_territory
+    description: Certificate recipient's self-reported state/territory, when available.
+  - name: user_address_city
+    description: Certificate recipient's self-reported city, when available.
+  - name: user_address_postal_code
+    description: Certificate recipient's self-reported postal code, when available.
+  - name: user_street_address
+    description: Certificate recipient's self-reported street address, when available.
   - name: program_completion_timestamp
     description: When the recipient completed the program's certificate requirements.
   - name: last_modified
