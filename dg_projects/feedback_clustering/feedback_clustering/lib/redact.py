@@ -4,8 +4,13 @@ import polars as pl
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 
+JOIN_COLS = ["source_slug", "source_record_ref"]
+
+EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
+
 _analyzer: AnalyzerEngine | None = None
 _anonymizer: AnonymizerEngine | None = None
+_redact_entities: list[str] | None = None
 
 
 def _get_analyzer() -> AnalyzerEngine:
@@ -25,11 +30,33 @@ def _get_anonymizer() -> AnonymizerEngine:
     return _anonymizer
 
 
+def _get_redact_entities() -> list[str]:
+    global _redact_entities  # noqa: PLW0603
+    if _redact_entities is None:
+        _redact_entities = [
+            entity
+            for entity in _get_analyzer().get_supported_entities("en")
+            if entity not in EXCLUDED_ENTITIES
+        ]
+    return _redact_entities
+
+
 def _redact_text(value: str | None) -> str | None:
     if value is None:
         return None
-    results = _get_analyzer().analyze(text=value, language="en")
+    results = _get_analyzer().analyze(
+        text=value, language="en", entities=_get_redact_entities()
+    )
     return _get_anonymizer().anonymize(text=value, analyzer_results=results).text
+
+
+def filter_unredacted(
+    source_df: pl.DataFrame, already_redacted_df: pl.DataFrame
+) -> pl.DataFrame:
+    """Drop rows already present in the feedback_redacted output."""
+    return source_df.join(
+        already_redacted_df.select(JOIN_COLS), on=JOIN_COLS, how="anti"
+    )
 
 
 def redact_titles_and_text(df: pl.DataFrame) -> pl.DataFrame:
