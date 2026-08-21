@@ -140,6 +140,7 @@ select
 from conversation
 inner join turn_aggregates
     on conversation.conversation_ref = turn_aggregates.conversation_id
+    and {{ dbt_utils.generate_surrogate_key(['conversation.source_slug']) }} = turn_aggregates.feedback_source_fk
 -- inner join, not left: a ticket whose only public comments are agent-authored
 -- contributes no turns, and a conversation row with no turns fails the bidirectional
 -- turn coverage tests
