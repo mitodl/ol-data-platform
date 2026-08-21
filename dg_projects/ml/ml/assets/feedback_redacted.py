@@ -35,6 +35,10 @@ class FeedbackRedactedConfig(Config):
             "Re-redact every row instead of only rows missing from the table "
         ),
     )
+    sample_limit: int | None = Field(
+        default=None,
+        description="Cap the number of upstream rows read, for fast local testing.",
+    )
 
 
 @asset(
@@ -58,10 +62,13 @@ def feedback_redacted(
     Mask PII in raw feedback title/text via Presidio.
 
     """
-    source_df = get_dbt_model_as_dataframe(
+    source_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__unioned",
-    ).collect()
+    )
+    if config.sample_limit is not None:
+        source_lazy = source_lazy.limit(config.sample_limit)
+    source_df = source_lazy.collect()
 
     already_redacted_df = pl.DataFrame(schema=dict.fromkeys(JOIN_COLS, pl.String))
     if not config.full_refresh:
