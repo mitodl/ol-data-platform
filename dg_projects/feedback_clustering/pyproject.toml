@@ -1,0 +1,72 @@
+[project]
+name = "feedback_clustering"
+requires-python = ">=3.14,<3.15"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.12.10",
+    "dagster-dbt ~=0.29.0",
+    "dagster-aws ~=0.29.0",
+    "dagster-k8s>=0.27.15",
+    "dagster-postgres>=0.27.13",
+    "dagster-iceberg>=0.3.8",
+    "httpx2 >= 2.2.0",
+    "scikit-learn>=1.3",
+    "ol-orchestrate-lib",
+    "polars<1.44",
+    # Embedding / LLM framework (feedback_embeddings, #2543)
+    "fenic",
+    # Dim-reduction + clustering (feedback_clusters, #2543)
+    "umap-learn",
+    # Summarization + cluster labeling (feedback_summaries / feedback_category_proposals, #2542/#2543)
+    "anthropic",
+    # PII redaction (feedback_redacted, this project)
+    "presidio-analyzer",
+    "presidio-anonymizer",
+    "spacy>=3.7",
+]
+
+[project.entry-points]
+"dagster.components" = { feedback_clustering = "feedback_clustering.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.12.10",
+    "dagster-webserver",
+    "pytest>=9.0.1,<10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["feedback_clustering_tests"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "feedback_clustering.definitions"
+project_name = "feedback_clustering"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "feedback_clustering"
+
+[tool.setuptools.packages.find]
+exclude=["feedback_clustering_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
+
+# Override dagster-iceberg's <0.11 upper bound until upstream loosens it.
+# See https://github.com/dagster-io/community-integrations/pull/289
+#
+# Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py
+# pre-generated with protobuf 7.35.0 gencode while declaring protobuf>=6.33.5,
+# so it crashes at import time under dagster's required protobuf<7 (upstream
+# metadata/gencode mismatch in the 1.82.0 release).
+[tool.uv]
+override-dependencies = [
+    "pyiceberg>=0.11.1",
+    "grpcio-health-checking<1.82.0",
+]
