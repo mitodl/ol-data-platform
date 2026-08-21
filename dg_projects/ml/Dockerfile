@@ -19,10 +19,10 @@ WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
-COPY dg_projects/feedback_clustering dg_projects/feedback_clustering
+COPY dg_projects/ml dg_projects/ml
 
-# Install dependencies from the feedback_clustering project
-WORKDIR /app/dg_projects/feedback_clustering
+# Install dependencies from the ml project
+WORKDIR /app/dg_projects/ml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
     uv sync --frozen --no-install-project --no-dev --no-editable
@@ -31,9 +31,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-# Download the spaCy model used by Presidio's NLP engine
-RUN /app/dg_projects/feedback_clustering/.venv/bin/python -m spacy download en_core_web_lg
-
 
 # Then, use a final image without uv
 FROM python:3.14-slim-bookworm
@@ -41,7 +38,7 @@ FROM python:3.14-slim-bookworm
 # Python executable must be the same.
 
 # Copy the application from the builder
-COPY --from=builder /app/dg_projects/feedback_clustering /app
+COPY --from=builder /app/dg_projects/ml /app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

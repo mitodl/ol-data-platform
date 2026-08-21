@@ -1,6 +1,6 @@
-"""Tests for feedback_clustering.resources.llm.LLMClientFactory."""
+"""Tests for ml.resources.llm.LLMClientFactory."""
 
-from feedback_clustering.resources.llm import LLMClientFactory
+from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
 

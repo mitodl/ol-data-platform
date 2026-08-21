@@ -1,6 +1,0 @@
----
-# Build context is set to repository root to access packages/ol-orchestrate-lib
-directory: ../..
-# The Dockerfile is located in the feedback_clustering directory
-dockerfile: dg_projects/feedback_clustering/Dockerfile
-registry: mitodl/dagster-feedback_clustering

@@ -8,7 +8,7 @@ from dagster import (
     Config,
     asset,
 )
-from feedback_clustering.lib.redact import (
+from ml.lib.redact import (
     JOIN_COLS,
     filter_unredacted,
     redact_titles_and_text,
@@ -20,6 +20,12 @@ from ol_orchestrate.lib.glue_helper import (
 )
 from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
+
+if DAGSTER_ENV == "dev":
+    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
+    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
+else:
+    database_name = "ol_warehouse_production_intermediate"
 
 
 class FeedbackRedactedConfig(Config):
@@ -40,6 +46,7 @@ class FeedbackRedactedConfig(Config):
     io_manager_key="io_manager",
     pool="feedback_redacted",
     metadata={
+        "schema": database_name,
         "write_mode": "upsert",
         "upsert_options": {"join_cols": JOIN_COLS},
     },
@@ -51,12 +58,6 @@ def feedback_redacted(
     Mask PII in raw feedback title/text via Presidio.
 
     """
-    if DAGSTER_ENV == "dev":
-        schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-        database_name = f"ol_warehouse_production_{schema_suffix}_intermediate"
-    else:
-        database_name = "ol_warehouse_production_intermediate"
-
     source_df = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__unioned",

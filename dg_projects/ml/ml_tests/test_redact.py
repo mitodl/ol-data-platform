@@ -1,4 +1,4 @@
-"""Tests for feedback_clustering.lib.redact.
+"""Tests for ml.lib.redact.
 
 Presidio's real AnalyzerEngine loads a spaCy model that is only present once the
 Dockerfile's `spacy download` step has run, not via a pip dependency, so these
@@ -7,7 +7,7 @@ stub the analyzer/anonymizer rather than exercising the real NLP pipeline.
 
 import polars as pl
 import pytest
-from feedback_clustering.lib import redact
+from ml.lib import redact
 
 
 class _Result:
