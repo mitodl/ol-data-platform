@@ -65,10 +65,14 @@ def feedback_redacted(
     already_redacted_df = pl.DataFrame(schema=dict.fromkeys(JOIN_COLS, pl.String))
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
-            already_redacted_df = get_dbt_model_as_dataframe(
-                database_name=database_name,
-                table_name="feedback_redacted",
-            ).collect()
+            already_redacted_df = (
+                get_dbt_model_as_dataframe(
+                    database_name=database_name,
+                    table_name="feedback_redacted",
+                )
+                .select(JOIN_COLS)
+                .collect()
+            )
 
     unredacted_df = filter_unredacted(source_df, already_redacted_df)
     redacted_df = redact_titles_and_text(unredacted_df)

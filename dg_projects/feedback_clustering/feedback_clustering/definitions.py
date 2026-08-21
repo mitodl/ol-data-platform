@@ -39,10 +39,10 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
 
 if DAGSTER_ENV == "dev":
     database_name = (
-        f"ol_warehouse_production_{os.environ.get('DBT_SCHEMA_SUFFIX')}_reporting"
+        f"ol_warehouse_production_{os.environ.get('DBT_SCHEMA_SUFFIX')}_intermediate"
     )
 else:
-    database_name = "ol_warehouse_production_reporting"
+    database_name = "ol_warehouse_production_intermediate"
 
 feedback_redacted_job = define_asset_job(
     name="feedback_redacted_job",
