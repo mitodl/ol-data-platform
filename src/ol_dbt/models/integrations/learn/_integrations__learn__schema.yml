@@ -358,7 +358,11 @@ models:
   - name: user_street_address
     description: Certificate recipient's self-reported street address, when available.
   - name: program_completion_timestamp
-    description: When the recipient completed the program's certificate requirements.
+    description: >
+      When the recipient completed the program's certificate requirements.
+      NULL for "override" certificates (a hardcoded list of recipients
+      granted a certificate outside the normal completion-tracking path,
+      with no completion time to report).
   - name: last_modified
     description: >
       No genuine last-modified signal exists in the source lineage (a
@@ -366,6 +370,10 @@ models:
       program_completion_timestamp as the closest available proxy so MIT
       Learn's generic incremental-pull machinery (which requires this
       column on every integrations__learn__* view) still functions.
+      Falls back to current_timestamp for override certificates (see
+      program_completion_timestamp), so that row is simply re-upserted
+      (a no-op) on every incremental run instead of never matching an
+      incremental `since` filter.
     tests: [not_null]
 
 - name: integrations__learn__mit_edx_courses

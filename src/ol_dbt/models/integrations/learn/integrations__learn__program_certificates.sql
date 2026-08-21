@@ -18,6 +18,19 @@
   exists in the source certificate lineage (a certificate is issued once
   and essentially never revised) — program_completion_timestamp is reused
   as the closest available proxy.
+
+  program_completion_timestamp is NULL for "override" certificates (see
+  __micromasters_program_certificates_non_dedp.sql's non_dedp_overides
+  CTE, sourced from a hardcoded override list with no timestamp column at
+  all) — those recipients earned a certificate outside the normal
+  completion-tracking path, so there's no real completion time to report.
+  last_modified falls back to current_timestamp for exactly those rows:
+  it must never be NULL (breaks the not_null test and makes
+  `since > last_modified` never match, so the row would never be picked
+  up by an incremental pull) — current_timestamp just means this rare
+  row gets re-upserted (a no-op) on every incremental run rather than
+  being incrementally skippable, which is a fine tradeoff for a
+  literally-one-row edge case.
 #}
 
 with certificates as (
@@ -44,6 +57,7 @@ select
     , certificates.user_address_postal_code
     , certificates.user_street_address
     , certificates.program_completion_timestamp
-    , certificates.program_completion_timestamp as last_modified
+    , coalesce(certificates.program_completion_timestamp, current_timestamp)
+        as last_modified
 from certificates
 where certificates.program_certificate_hashed_id is not null
