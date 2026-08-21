@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import dagster as dg
 import pytest
 import sentry_sdk
 from dagster import AssetSpec, Definitions, asset, materialize
@@ -189,6 +190,49 @@ def test_qa_and_production_do_not_share_an_issue(
     assert production[0] == "production"
     assert qa[0] == "qa"
     assert production != qa
+
+
+def test_a_partitioned_failure_names_its_partition(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Without this the issue names the job, the step and the run -- everything
+    except the one identifier you need to go and look at the failure.
+    """
+    partitions = dg.StaticPartitionsDefinition(["run-a", "run-b"])
+
+    @asset(partitions_def=partitions)
+    def exploding_partition() -> None:
+        message = "the partition is on fire"
+        raise ValueError(message)
+
+    dg.materialize(
+        sentry_lib.with_sentry_hooks([exploding_partition]),
+        partition_key="run-b",
+        raise_on_error=False,
+    )
+
+    (event,) = recorded_events.events()
+    assert event["tags"]["dagster_partition"] == "run-b"
+
+
+def test_an_unpartitioned_failure_says_so(
+    recorded_events: RecordingTransport,
+) -> None:
+    """`none` rather than an absent tag, so the two cases are distinguishable in
+    a Sentry search.
+    """
+
+    @asset
+    def exploding_unpartitioned() -> None:
+        message = "no partitions here"
+        raise ValueError(message)
+
+    dg.materialize(
+        sentry_lib.with_sentry_hooks([exploding_unpartitioned]), raise_on_error=False
+    )
+
+    (event,) = recorded_events.events()
+    assert event["tags"]["dagster_partition"] == "none"
 
 
 def test_a_terminated_run_worker_is_not_reported() -> None:
