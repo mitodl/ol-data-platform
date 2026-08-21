@@ -50,6 +50,8 @@ select
     , certificates.user_first_name
     , certificates.user_last_name
     , certificates.user_gender
+    -- Cast intentional: profiles.ProgramCertificate.user_year_of_birth is a
+    -- Django CharField (not an IntegerField) on the MIT Learn side.
     , cast(certificates.user_year_of_birth as varchar) as user_year_of_birth
     , certificates.user_country
     , certificates.user_address_state_or_territory
