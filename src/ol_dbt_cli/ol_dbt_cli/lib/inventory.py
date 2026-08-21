@@ -14,6 +14,7 @@ imports narrow now is what makes that a move rather than a rewrite.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,18 +23,23 @@ from typing import Any
 import yaml
 from jsonschema import Draft202012Validator
 
+from ol_dbt_cli.lib import git_utils
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 CHECK = "inventory"
+REMOVAL_CHECK = "inventory_removal"
 
 DEFAULT_INVENTORY_DIR = Path("ingestion/inventory")
 UNITS_SUBDIR = "units"
 SCHEMA_PATH = Path("schema") / "unit.schema.json"
+RETIRED_SCHEMA_PATH = Path("schema") / "retired.schema.json"
 VOCABULARY_FILENAME = "vocabulary.yml"
+RETIRED_FILENAME = "retired.yml"
 
 DAGSTER_SELECTOR_SUFFIX = "s3 data lake"
 INCREMENTAL_PREFIX = "incremental"
 MIRROR_STRATEGY = "mirror"
+AIRBYTE_LOADER = "airbyte"
 
 
 @dataclass
@@ -217,7 +223,7 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
 
 
 def _check_connections(unit: Unit, report: ValidationReport) -> None:
-    if unit.data.get("loader") != "airbyte":
+    if unit.data.get("loader") != AIRBYTE_LOADER:
         return
     dagster_visible = unit.data.get("dagster_visible", True)
     # Joined on the stream NAME, not on `table_prefix + name`: `raw_table` is
@@ -347,4 +353,358 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
     # Only well-formed units: two units missing `deployment` both key as `?/?`,
     # and reporting that as a duplicate key blames the wrong thing.
     _check_cross_unit(well_formed, report)
+    _check_retired(inventory_dir, well_formed, report)
     return units
+
+
+# ---------------------------------------------------------------------------
+# §7.2 — the graveyard, and the removal/rename check
+# ---------------------------------------------------------------------------
+
+
+def unit_key(data: dict[str, Any]) -> str:
+    """Spell the `deployment/layer` key exactly as `Unit.key` spells it."""
+    return f"{data.get('deployment', '?')}/{data.get('layer', '?')}"
+
+
+def load_retired(inventory_dir: Path) -> list[dict[str, Any]]:
+    """Read `retired.yml`. A missing file is an empty graveyard, not an error.
+
+    The file is optional so that a fresh checkout of the inventory — or a test
+    fixture that only cares about units — does not have to carry one.
+    """
+    path = inventory_dir / RETIRED_FILENAME
+    if not path.exists():
+        return []
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        return []
+    entries = raw.get("retired")
+    return [entry for entry in entries if isinstance(entry, dict)] if isinstance(entries, list) else []
+
+
+def retired_pairs(entries: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    """`(unit_key, raw_table)` for every table any graveyard entry accounts for."""
+    pairs: set[tuple[str, str]] = set()
+    for entry in entries:
+        key = unit_key(entry)
+        for raw_table in entry.get("raw_tables") or []:
+            pairs.add((key, str(raw_table)))
+    return pairs
+
+
+def declared_pairs(units: list[Unit]) -> set[tuple[str, str]]:
+    """`(unit_key, raw_table)` for every table the inventory currently declares."""
+    return {(unit.key, str(table.get("raw_table", ""))) for unit in units for table in unit.tables}
+
+
+def _check_retired(inventory_dir: Path, units: list[Unit], report: ValidationReport) -> None:
+    """Validate `retired.yml`'s shape, and that it does not contradict the units."""
+    path = inventory_dir / RETIRED_FILENAME
+    if not path.exists():
+        return
+    schema_path = inventory_dir / RETIRED_SCHEMA_PATH
+    raw = yaml.safe_load(path.read_text())
+    validator = Draft202012Validator(json.loads(schema_path.read_text()))
+    for error in sorted(
+        validator.iter_errors(raw),
+        key=lambda e: [str(part) for part in e.absolute_path],
+    ):
+        location = "/".join(str(part) for part in error.absolute_path) or "(root)"
+        report.add(CHECK, Severity.ERROR, RETIRED_FILENAME, f"{location} {error.message}")
+
+    live = declared_pairs(units)
+    for key, raw_table in sorted(retired_pairs(load_retired(inventory_dir)) & live):
+        report.add(
+            CHECK,
+            Severity.ERROR,
+            key,
+            f"{raw_table} is retired but the unit still declares it",
+            "The graveyard and the units contradict each other. Either the table "
+            "is still loaded — drop the retired.yml entry — or it is not, and the "
+            "unit entry is what should go.",
+        )
+
+
+@dataclass
+class Snapshot:
+    """The whole inventory as of one git ref: the units plus the graveyard.
+
+    They travel together because the §7.2 check reads both on both sides of the
+    diff — a table may disappear from `units/` in the same commit that adds its
+    `retired.yml` entry, and a deleted graveyard entry is itself a finding.
+    """
+
+    units: list[Unit] = field(default_factory=list)
+    retired: list[dict[str, Any]] = field(default_factory=list)
+
+
+def load_snapshot(inventory_dir: Path) -> Snapshot:
+    return Snapshot(units=load_units(inventory_dir), retired=load_retired(inventory_dir))
+
+
+def load_snapshot_at_ref(inventory_dir: Path, ref: str, repo_root: Path | None = None) -> Snapshot:
+    """Read the inventory as it stood at git *ref*, without touching the worktree.
+
+    Units the branch deleted only exist in the tree, so the file list comes from
+    `git ls-tree` rather than from disk. A unit that is unparseable at the base
+    ref is skipped rather than raising: the check's job is to report what this
+    change removed, and it should not be blocked by a mess somebody else merged.
+    """
+    units: list[Unit] = []
+    for path in sorted(git_utils.list_files_at_ref(inventory_dir / UNITS_SUBDIR, ref, repo_root)):
+        if path.suffix != ".yml":
+            continue
+        content = git_utils.get_file_at_ref(path, ref, repo_root)
+        if content is None:
+            continue
+        try:
+            parsed = yaml.safe_load(content)
+        except yaml.YAMLError:
+            continue
+        units.append(Unit(path=path, data=parsed if isinstance(parsed, dict) else {}))
+
+    retired: list[dict[str, Any]] = []
+    content = git_utils.get_file_at_ref(inventory_dir / RETIRED_FILENAME, ref, repo_root)
+    if content:
+        try:
+            raw = yaml.safe_load(content)
+        except yaml.YAMLError:
+            raw = None
+        if isinstance(raw, dict) and isinstance(raw.get("retired"), list):
+            retired = [entry for entry in raw["retired"] if isinstance(entry, dict)]
+    return Snapshot(units=units, retired=retired)
+
+
+def check_removals(
+    previous: Snapshot,
+    current: Snapshot,
+    report: ValidationReport,
+) -> None:
+    """Fail on any `(unit, raw_table)` that disappeared without being acknowledged.
+
+    The failure this catches is silent: a dropped entry means the loader simply
+    stops loading, with no error anywhere and a dbt model that quietly goes
+    stale. A rename is the subtle half — it looks like a delete plus an add, so
+    an add-only check waves it through while every downstream model is orphaned.
+
+    Acknowledgement is either a `retired.yml` entry (dated and reasoned) or
+    `renamed_from:` on another table in the same unit. Findings here are ERRORs
+    and are deliberately not baselineable: unlike a warehouse-shaped finding,
+    this one is always fixable by editing text in the same pull request.
+    """
+    before = declared_pairs(previous.units)
+    after = declared_pairs(current.units)
+
+    renames: dict[tuple[str, str], str] = {}
+    for unit in current.units:
+        for table in unit.tables:
+            old = table.get("renamed_from")
+            if old:
+                renames[unit.key, str(old)] = str(table.get("raw_table", ""))
+
+    graveyard = retired_pairs(current.retired)
+
+    for key, raw_table in sorted(before - after):
+        if (key, raw_table) in graveyard:
+            continue
+        if (key, raw_table) in renames:
+            report.add(
+                REMOVAL_CHECK,
+                Severity.INFO,
+                key,
+                f"{raw_table} was renamed to {renames[key, raw_table]}",
+            )
+            continue
+        report.add(
+            REMOVAL_CHECK,
+            Severity.ERROR,
+            key,
+            f"{raw_table} disappeared from the inventory without acknowledgement",
+            "Add it to ingestion/inventory/retired.yml with a date and a reason, "
+            "or set `renamed_from: " + raw_table + "` on the entry that replaced it.",
+        )
+
+    # A `renamed_from` pointing at a table that did not disappear is either a
+    # typo or a leftover from an earlier PR. Left alone it is inert, but it also
+    # silently pre-authorises a future removal of the name it holds.
+    for (key, old), new in sorted(renames.items()):
+        if (key, old) not in before - after:
+            report.add(
+                REMOVAL_CHECK,
+                Severity.WARNING,
+                key,
+                f"{new} claims `renamed_from: {old}`, but {old} did not disappear in this change",
+            )
+
+    # Deleting a graveyard entry is how the record of what we used to load gets
+    # lost, so the ratchet runs on retired.yml too.
+    for key, raw_table in sorted(retired_pairs(previous.retired) - graveyard):
+        report.add(
+            REMOVAL_CHECK,
+            Severity.ERROR,
+            key,
+            f"the retired.yml entry for {raw_table} was deleted",
+            "Graveyard entries are never removed — the record of what we used to load is the point of the file.",
+        )
+
+
+# ---------------------------------------------------------------------------
+# §5 — what the inventory generates
+# ---------------------------------------------------------------------------
+
+RENDER_SCHEMA_VERSION = 1
+
+
+def dagster_group_name(connection_name: str) -> str:
+    """Reproduce `OLAirbyteTranslator.get_asset_spec`'s group-name derivation exactly.
+
+    `dg_projects/lakehouse/lakehouse/definitions.py` collapses dashes and
+    whitespace to underscores, drops everything else — including Airbyte's
+    U+2192 arrow — strips, and lowercases. This has to match character for
+    character: the derived name is the key of the sync-interval map, and a miss
+    there falls back to 24 hours in silence (§1.3).
+    """
+    return re.sub(r"[^A-Za-z0-9_]", "", re.sub(r"[-\s]+", "_", connection_name)).strip("_").lower()
+
+
+class RenderError(Exception):
+    """The inventory cannot be rendered, and rendering it anyway would be a lie."""
+
+
+def _tables_by_stream(unit: Unit) -> dict[str, dict[str, Any]]:
+    """Index a unit's tables by stream name.
+
+    `validate` guarantees this is a bijection with the streams the unit's
+    connections carry — that is what the connection rules exist for — but
+    `render` deliberately does not validate first, so it cannot assume it.
+    """
+    return {str(table.get("name", "")): table for table in unit.tables}
+
+
+def _resolve_stream(unit: Unit, by_stream: dict[str, dict[str, Any]], stream: str) -> dict[str, Any]:
+    """Find the table a connection's stream refers to, or refuse to render.
+
+    Skipping the stream would be worse than failing. This render is applied to
+    production Airbyte: a dropped stream is a connection Pulumi reconfigures to
+    stop carrying a table, which is precisely the silent-omission failure the
+    inventory exists to end — and it would be silent in a committed JSON file
+    that a human reviewed. Better to name the missing declaration and stop.
+    """
+    table = by_stream.get(stream)
+    if table is None:
+        msg = (
+            f"{unit.path.name}: connection stream {stream!r} in unit {unit.key} matches no "
+            f"table in that unit, so there is nothing to render it from. "
+            f"Run `ol-dbt inventory validate` — it reports this and everything else wrong with the file."
+        )
+        raise RenderError(msg)
+    return table
+
+
+def _render_stream(table: dict[str, Any]) -> dict[str, Any]:
+    stream: dict[str, Any] = {
+        "name": table.get("name"),
+        "sync_mode": table.get("sync_mode"),
+    }
+    if table.get("namespace"):
+        stream["namespace"] = table["namespace"]
+    if table.get("cursor_field"):
+        stream["cursor_field"] = list(table["cursor_field"])
+    if table.get("primary_key"):
+        # The inventory stores this exactly as `configurations.streams[].primaryKey`
+        # does — a list of paths, each path a list of segments — so it round-trips
+        # without ambiguity, which is what makes the rendered config comparable
+        # with the imported one (§6.4).
+        stream["primary_key"] = [list(path) for path in table["primary_key"]]
+    if table.get("excluded_columns"):
+        # Emitted as the exclusion, not as `selected_fields`. Airbyte wants the
+        # complement, and computing it needs the source's discovered schema —
+        # which the inventory deliberately does not hold (§2). The consumer
+        # complements it against the catalog it already reads.
+        stream["excluded_columns"] = list(table["excluded_columns"])
+    return stream
+
+
+def render_airbyte(units: list[Unit]) -> dict[str, Any]:
+    """Render the narrow, stable JSON that crosses the boundary into ol-infrastructure.
+
+    Only the Airbyte-relevant fields, and only `loader: airbyte` units: as each
+    source migrates to dlt its unit flips `loader`, the renderer stops emitting
+    it, and Pulumi removes the connection (§6.5). `schema_version` is what lets
+    the YAML keep growing dlt-shaped fields without breaking the consumer (§4).
+    """
+    rendered = []
+    for unit in sorted(units, key=lambda u: u.key):
+        if unit.data.get("loader") != AIRBYTE_LOADER:
+            continue
+        airbyte = unit.data.get("airbyte") or {}
+        by_stream = _tables_by_stream(unit)
+        entry: dict[str, Any] = {
+            "deployment": unit.data.get("deployment"),
+            "layer": unit.data.get("layer"),
+            "table_prefix": unit.data.get("table_prefix"),
+            "source_kind": airbyte.get("source_kind"),
+            "connections": [
+                {
+                    "name": connection.get("name"),
+                    "status": connection.get("status"),
+                    "sync_interval_hours": connection.get("sync_interval_hours"),
+                    "dagster_group_name": dagster_group_name(str(connection.get("name", ""))),
+                    "streams": [
+                        _render_stream(_resolve_stream(unit, by_stream, str(stream)))
+                        for stream in connection.get("streams") or []
+                    ],
+                }
+                for connection in unit.connections
+            ],
+        }
+        if airbyte.get("replication_method"):
+            entry["replication_method"] = airbyte["replication_method"]
+        rendered.append(entry)
+    return {
+        "schema_version": RENDER_SCHEMA_VERSION,
+        "generated_by": "ol-dbt inventory render airbyte",
+        "source": "mitodl/ol-data-platform ingestion/inventory",
+        "units": rendered,
+    }
+
+
+def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
+    """`group_name -> sync interval in hours`, replacing the hand-maintained literal.
+
+    Keyed on the derived Dagster group name rather than the connection name,
+    because that is what `definitions.py` looks the interval up by. Units marked
+    `dagster_visible: false` are excluded: Dagster's `connection_selector_fn`
+    never sees their connections, so an entry for one is dead weight that reads
+    like coverage.
+
+    Paused connections are kept. Dagster builds its assets from the live
+    workspace and selects on the connection name alone, so a paused connection
+    still produces a group — and omitting its interval would silently hand it
+    the 24-hour default the moment somebody re-enables it.
+    """
+    intervals: dict[str, int] = {}
+    sources: dict[str, str] = {}
+    for unit in sorted(units, key=lambda u: u.key):
+        if not unit.data.get("dagster_visible", True):
+            continue
+        for connection in unit.connections:
+            name = str(connection.get("name", ""))
+            if not name.lower().endswith(DAGSTER_SELECTOR_SUFFIX):
+                continue
+            hours = connection.get("sync_interval_hours")
+            if not isinstance(hours, int):
+                continue
+            group = dagster_group_name(name)
+            if group in intervals and intervals[group] != hours:
+                msg = (
+                    f"connections {sources[group]!r} and {name!r} both derive the Dagster "
+                    f"group {group!r} but disagree on sync_interval_hours "
+                    f"({intervals[group]} vs {hours}) — rendering one would silently drop "
+                    f"the other's cadence."
+                )
+                raise RenderError(msg)
+            intervals[group] = hours
+            sources[group] = name
+    return dict(sorted(intervals.items()))

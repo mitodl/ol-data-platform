@@ -1,0 +1,17 @@
+---
+# The graveyard: (unit, raw_table) pairs we used to load and deliberately
+# stopped loading. See docs/specs/INGESTION_INVENTORY_SPEC.md §7.2.
+#
+# ENTRIES ARE NEVER DELETED. `ol-dbt inventory check-removals` fails a pull
+# request that drops one, because this file is the only record of what we used
+# to load — it is what makes "when did this table stop arriving" answerable
+# years later, when the dbt model that went stale is finally noticed.
+#
+# A table that disappears from ingestion/inventory/units/ must land here with a
+# date and a reason, or carry `renamed_from:` on its new entry in the same unit.
+# An unacknowledged disappearance is an ERROR and cannot be baselined: it is
+# always fixable by editing text, and it has no legitimate upstream cause.
+
+schema_version: 1
+
+retired: []

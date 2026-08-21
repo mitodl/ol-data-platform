@@ -156,7 +156,12 @@
           "primary_key": {
             "type": "array",
             "minItems": 1,
-            "items": {"type": "string"}
+            "description": "One entry per key column; each entry is the column's path as a list of segments, matching `configurations.streams[].primaryKey` — never a dotted string, which cannot tell a literal dot in a segment from a path boundary.",
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string"}
+            }
           },
           "excluded_columns": {
             "type": "array",
@@ -169,7 +174,7 @@
           },
           "renamed_from": {
             "type": "string",
-            "description": "Acknowledges a rename so the removal check does not fire (§7.2)."
+            "description": "The full previous raw_table this table replaces, so the removal check does not fire (§7.2). Not the bare stream name."
           }
         }
       }

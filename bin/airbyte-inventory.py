@@ -993,9 +993,11 @@ def render(  # noqa: C901, PLR0912, PLR0915
                 if stream.get("cursorField"):
                     entry["cursor_field"] = stream["cursorField"]
                 if stream.get("primaryKey"):
-                    entry["primary_key"] = [
-                        ".".join(part) for part in stream["primaryKey"]
-                    ]
+                    # Stored as Airbyte spells it: a list of paths, each path a
+                    # list of segments. Joining into one dotted string per column
+                    # would be lossy — a single segment containing a literal "."
+                    # is indistinguishable from two nested segments once joined.
+                    entry["primary_key"] = [list(part) for part in stream["primaryKey"]]
                 entry["modeled"] = raw_table.lower() in dbt_tables
                 if raw_table in tables and tables[raw_table] != entry:
                     todos.append(
