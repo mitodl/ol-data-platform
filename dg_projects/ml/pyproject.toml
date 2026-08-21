@@ -1,5 +1,5 @@
 [project]
-name = "student_risk_probability"
+name = "ml"
 requires-python = ">=3.14,<3.15"
 version = "0.1.0"
 dependencies = [
@@ -13,33 +13,44 @@ dependencies = [
     "scikit-learn>=1.2.2",
     "ol-orchestrate-lib",
     "polars<1.44",
+    "fenic",
+    "umap-learn",
+    "anthropic",
+    "presidio-analyzer",
+    "presidio-anonymizer",
+    "spacy>=3.7",
+    "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
 ]
 
 [project.entry-points]
-"dagster.components" = { student_risk_probability = "student_risk_probability.lib"}
+"dagster.components" = { ml = "ml.lib"}
 
 [dependency-groups]
 dev = [
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver",
+    "pytest>=9.0.1,<10",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["ml_tests"]
 
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "student_risk_probability.definitions"
-project_name = "student_risk_probability"
+module_name = "ml.definitions"
+project_name = "ml"
 
 [tool.dg]
 directory_type = "project"
 
 [tool.dg.project]
-root_module = "student_risk_probability"
+root_module = "ml"
 
 [tool.setuptools.packages.find]
-exclude=["student_risk_probability_tests"]
+exclude=["ml_tests"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -6,14 +7,21 @@ from dagster import (
     AssetKey,
     asset,
 )
-from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.glue_helper import (
-    get_dbt_model_as_dataframe,
-)
-from student_risk_probability.lib.helper import (
+from ml.lib.helper import (
     risk_probability,
     scaled_features,
 )
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.glue_helper import (
+    get_dbt_model_as_dataframe,
+)
+
+if DAGSTER_ENV == "dev":
+    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
+    write_database_name = f"ol_warehouse_production_{_schema_suffix}_reporting"
+else:
+    write_database_name = "ol_warehouse_production_reporting"
 
 
 @asset(
@@ -24,6 +32,7 @@ from student_risk_probability.lib.helper import (
     io_manager_key="io_manager",
     key=AssetKey(["reporting", "student_risk_probability"]),
     pool="student_risk_probability",
+    metadata={"schema": write_database_name},
 )
 def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     """
@@ -60,7 +69,7 @@ def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
 
     # Calculate risk probabilities using logistic regression weights
     probabilities = risk_probability(
-        weights_path="student_risk_probability/resources/weights.json",
+        weights_path="ml/resources/weights.json",
         features=scaled_df,
     )
 

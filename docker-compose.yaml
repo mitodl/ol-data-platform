@@ -314,19 +314,19 @@ services:
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/b2b_organization/b2b_organization:/app/b2b_organization
 
-    # Code location: student_risk_probability
-  dagster_student_risk_probability:
-    container_name: dagster_student_risk_probability
-    image: mitodl/dagster-student_risk_probability:dev
+    # Code location: ml (student_risk_probability + feedback_redacted)
+  dagster_ml:
+    container_name: dagster_ml
+    image: mitodl/dagster-ml:dev
     build:
       context: .
-      dockerfile: dg_projects/student_risk_probability/Dockerfile
+      dockerfile: dg_projects/ml/Dockerfile
     entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4008",
-      "--module-name", "student_risk_probability.definitions"]
+      "--module-name", "ml.definitions"]
     ports:
     - "4008:4008"
     environment:
-      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-student_risk_probability:dev"
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-ml:dev"
       VAULT_TOKEN_CACHE_DIR: /vault/token-cache
       VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
@@ -340,7 +340,7 @@ services:
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
-    - ./dg_projects/student_risk_probability/student_risk_probability:/app/student_risk_probability
+    - ./dg_projects/ml/ml:/app/ml
 
   postgres:
     image: postgres
