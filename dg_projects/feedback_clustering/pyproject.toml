@@ -13,13 +13,9 @@ dependencies = [
     "scikit-learn>=1.3",
     "ol-orchestrate-lib",
     "polars<1.44",
-    # Embedding / LLM framework (feedback_embeddings, #2543)
     "fenic",
-    # Dim-reduction + clustering (feedback_clusters, #2543)
     "umap-learn",
-    # Summarization + cluster labeling (feedback_summaries / feedback_category_proposals, #2542/#2543)
     "anthropic",
-    # PII redaction (feedback_redacted, this project)
     "presidio-analyzer",
     "presidio-anonymizer",
     "spacy>=3.7",

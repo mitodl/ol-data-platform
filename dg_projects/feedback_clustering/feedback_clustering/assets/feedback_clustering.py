@@ -1,3 +1,5 @@
+import os
+
 import polars as pl
 from dagster import (
     AssetExecutionContext,
@@ -6,6 +8,7 @@ from dagster import (
 )
 from feedback_clustering.lib.redact import redact_titles_and_text
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
@@ -29,9 +32,16 @@ def feedback_redacted(context: AssetExecutionContext) -> pl.DataFrame:
     Section 3): only title_redacted/text_redacted flow to the fact and, later,
     to embedding.
     """
+    if DAGSTER_ENV == "dev":
+        database_name = (
+            f"ol_warehouse_production_{os.environ.get('DBT_SCHEMA_SUFFIX')}_reporting"
+        )
+    else:
+        database_name = "ol_warehouse_production_reporting"
+
     # get_dbt_model_as_dataframe returns a LazyFrame; redact needs it eager
     df = get_dbt_model_as_dataframe(
-        database_name="ol_warehouse_production_reporting",
+        database_name=database_name,
         table_name="int__feedback__unioned",
     ).collect()
 
