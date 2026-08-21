@@ -1,0 +1,27 @@
+---
+version: 2
+
+models:
+- name: bridge_feedback_tag
+  description: The tags on each feedback turn. One row per turn and tag.
+  columns:
+  - name: feedback_pk
+    description: str, foreign key to tfact_feedback.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('tfact_feedback')
+          field: feedback_pk
+  - name: feedback_tag_pk
+    description: str, foreign key to dim_feedback_tag.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_feedback_tag')
+          field: feedback_tag_pk
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["feedback_pk", "feedback_tag_pk"]

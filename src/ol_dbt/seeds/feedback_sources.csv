@@ -1,0 +1,2 @@
+source_slug,source_name,source_medium,source_audience_scope,is_course_scoped,is_conversational
+zendesk,Zendesk Support,support_ticket,operational,false,true

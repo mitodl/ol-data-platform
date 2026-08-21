@@ -1,0 +1,40 @@
+{{ config(
+    materialized='table'
+) }}
+
+-- A tag describes the conversation, so it applies to every turn of that ticket. The
+-- per-turn grain lets you filter turns by their conversation's tags without joining back
+-- to the conversation fact.
+with unioned as (
+    select
+        source_slug
+        , source_record_ref
+        , source_tags
+    from {{ ref('int__feedback__unioned') }}
+    where source_tags is not null
+)
+
+, feedback_tag as (
+    select * from {{ ref('dim_feedback_tag') }}
+)
+
+, exploded as (
+    select
+        {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
+            as feedback_pk
+        , unioned.source_slug
+        , {{ slugify('tag.tag_label') }}
+            as tag_slug
+    from unioned
+    cross join unnest(unioned.source_tags) as tag (tag_label)
+    where tag.tag_label is not null
+        and tag.tag_label != ''
+)
+
+select distinct
+    exploded.feedback_pk
+    , feedback_tag.feedback_tag_pk
+from exploded
+inner join feedback_tag
+    on exploded.tag_slug = feedback_tag.tag_slug
+    and exploded.source_slug = feedback_tag.source_slug

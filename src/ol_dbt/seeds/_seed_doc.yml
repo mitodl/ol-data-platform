@@ -52,3 +52,66 @@ seeds:
     description: int, the certificate page ID in mitxonline application
   - name: certificate_page_revision_id
     description: int, the certificate page revision ID in mitxonline application
+
+- name: feedback_sources
+  description: The feedback source systems that tfact_feedback aggregates. Hand-curated
+    and near-static; seeds dim_feedback_source.
+  columns:
+  - name: source_slug
+    description: string, stable machine key for the source. e.g. zendesk
+    tests:
+    - not_null
+    - unique
+  - name: source_name
+    description: string, display name for the source
+    tests:
+    - not_null
+  - name: source_medium
+    description: string, the kind of artifact the source produces. e.g. support_ticket
+    tests:
+    - not_null
+  - name: source_audience_scope
+    description: string, the altitude the source serves - operational, course or strategic
+    tests:
+    - not_null
+  - name: is_course_scoped
+    description: boolean, whether courserun_fk applies to this source
+    tests:
+    - not_null
+  - name: is_conversational
+    description: boolean, whether conversation_id and turn_index are meaningful for
+      this source
+    tests:
+    - not_null
+
+- name: feedback_channels
+  description: The conformed channel value set - how feedback arrived, normalized
+    across sources. Seeds dim_feedback_channel.
+  columns:
+  - name: channel_slug
+    description: string, the conformed channel value. e.g. email, web_form
+    tests:
+    - not_null
+    - unique
+  - name: channel_name
+    description: string, display name for the channel
+    tests:
+    - not_null
+  - name: is_solicited
+    description: boolean, whether we asked for this feedback or the user volunteered
+      it
+    tests:
+    - not_null
+
+- name: sentiments
+  description: The static sentiment buckets. Seeds dim_sentiment. Deliberately has
+    no 'unknown' member - an unscored conversation carries a null sentiment_fk instead.
+  columns:
+  - name: sentiment_slug
+    description: string, the sentiment value - positive, neutral or negative
+    tests:
+    - not_null
+    - unique
+  - name: polarity_score_bucket
+    description: string, optional coarser grouping for trend rollups. Left empty until
+      the sentiment task introduces a finer label set for it to collapse.

@@ -1,0 +1,163 @@
+---
+version: 2
+
+models:
+- name: dim_feedback_source
+  description: The systems feedback comes from. One row per source.
+  columns:
+  - name: feedback_source_pk
+    description: str, surrogate key generated from source_slug.
+    tests:
+    - not_null
+    - unique
+  - name: source_slug
+    description: str, stable machine key for the source. e.g. zendesk, edx_forum.
+    tests:
+    - not_null
+    - unique
+  - name: source_name
+    description: str, display name for the source.
+    tests:
+    - not_null
+  - name: source_medium
+    description: str, the kind of artifact the source produces. e.g. support_ticket,
+      forum_post, chat, assessment, in_product.
+    tests:
+    - not_null
+  - name: source_audience_scope
+    description: str, the altitude the source primarily serves - operational, course
+      or strategic.
+    tests:
+    - not_null
+  - name: is_course_scoped
+    description: boolean, whether courserun_fk applies to feedback from this source.
+    tests:
+    - not_null
+  - name: is_conversational
+    description: boolean, whether conversation_id and turn_index are meaningful for
+      this source. False for single-utterance sources like ORA.
+    tests:
+    - not_null
+
+- name: dim_feedback_channel
+  description: The channels feedback arrives through, normalized across sources. One
+    row per channel.
+  columns:
+  - name: feedback_channel_pk
+    description: str, surrogate key generated from channel_slug.
+    tests:
+    - not_null
+    - unique
+  - name: channel_slug
+    description: str, the conformed channel value.
+    tests:
+    - not_null
+    - unique
+    - accepted_values:
+        arguments:
+          values: ['email', 'web_form', 'in_product_widget', 'chat', 'forum_post',
+            'assessment', 'api', 'mobile']
+  - name: channel_name
+    description: str, display name for the channel.
+    tests:
+    - not_null
+  - name: is_solicited
+    description: boolean, whether we asked for this feedback or the user volunteered
+      it. The two have different selection biases and should rarely be pooled.
+    tests:
+    - not_null
+
+- name: dim_sentiment
+  description: The sentiment values. One row per sentiment.
+  columns:
+  - name: sentiment_pk
+    description: str, surrogate key generated from sentiment_slug.
+    tests:
+    - not_null
+    - unique
+  - name: sentiment_slug
+    description: str, the sentiment value - positive, neutral or negative. There is
+      deliberately no 'unknown' member; an unscored conversation carries a null sentiment_fk
+      instead.
+    tests:
+    - not_null
+    - unique
+    - accepted_values:
+        arguments:
+          values: ['positive', 'neutral', 'negative']
+  - name: polarity_score_bucket
+    description: str, optional coarser grouping for trend rollups. Null while the
+      vocabulary is only three values, which makes it degenerate with sentiment_slug.
+
+- name: dim_feedback_tag
+  description: The tags each source applies to its feedback. One row per source and
+    tag.
+  columns:
+  - name: feedback_tag_pk
+    description: str, surrogate key generated from source_slug and tag_slug.
+    tests:
+    - not_null
+    - unique
+  - name: tag_slug
+    description: str, the slugified source tag. The stable machine key.
+    tests:
+    - not_null
+  - name: tag_label
+    description: str, the tag as it appears in the source system.
+    tests:
+    - not_null
+  - name: source_slug
+    description: str, which source system uses this tag.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_feedback_source')
+          field: source_slug
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source_slug", "tag_slug"]
+
+- name: dim_feedback_category
+  description: The categories feedback is grouped into. One row per category, seeded
+    from Zendesk ticket tags and group names.
+  columns:
+  - name: feedback_category_pk
+    description: str, surrogate key generated from category_slug.
+    tests:
+    - not_null
+    - unique
+  - name: category_slug
+    description: str, the stable machine key, which survives relabeling.
+    tests:
+    - not_null
+    - unique
+  - name: category_label
+    description: str, the human-readable label.
+    tests:
+    - not_null
+  - name: category_parent_slug
+    description: str, optional hierarchy parent for cluster to category to theme rollups.
+      Null at MVP.
+  - name: category_status
+    description: str, curation state. Every seeded row starts as proposed.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['proposed', 'approved', 'merged', 'deprecated']
+  - name: category_source
+    description: str, where the category came from - seed, llm_discovered or manual.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['seed', 'llm_discovered', 'manual']
+  - name: cluster_run_id
+    description: str, provenance - which clustering run proposed this category. Null
+      for seeded rows.
+  - name: first_seen_at
+    description: str, ISO8601 timestamp of the earliest ticket carrying this category.
+  - name: updated_at
+    description: str, ISO8601 timestamp of the latest ticket carrying this category.
