@@ -7,8 +7,11 @@ the mit_edx_programs dlt pipeline) and delivers them to MIT Learn via a single
 signed webhook POST.
 
 MicroMasters programs are excluded — the dlt pipeline filters them at ingest
-time and they are handled separately by the Cohort 1 Trino-pull path via
-integrations__learn__micromasters_programs.
+time, and that exclusion is now permanent rather than a hand-off: MIT Learn
+unpublished and then deleted its MicroMasters resources (migrations 0117/0118)
+and dropped ``micromasters`` from its ETLSource enum, so there is no longer any
+destination for them. The Cohort 1 Trino-pull model that used to carry them,
+integrations__learn__micromasters_programs, has been retired.
 
 Data flow:
     raw__edxorg__discovery__api__programs (Iceberg, via dlt)
@@ -96,8 +99,8 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
     description=(
         "Read active MIT-authored edX.org programs from the "
         "integrations__learn__mit_edx_programs Iceberg table and POST as a "
-        "signed webhook batch to MIT Learn. Excludes MicroMasters (handled via "
-        "the Cohort 1 Trino-pull path)."
+        "signed webhook batch to MIT Learn. Excludes MicroMasters, which MIT "
+        "Learn deleted and which has no delivery path."
     ),
     deps=[AssetKey(["integrations", "learn", "integrations__learn__mit_edx_programs"])],
     retry_policy=RetryPolicy(max_retries=3, delay=10.0),

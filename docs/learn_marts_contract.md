@@ -15,7 +15,7 @@ integrations__learn__<source>_<entity>
 ```
 
 Where:
-- `<source>` is the ETL source name (e.g., `ocw`, `mitxonline`, `xpro`, `mit_edx`, `micromasters`)
+- `<source>` is the ETL source name (e.g., `ocw`, `mitxonline`, `xpro`, `mit_edx`, `oll`)
 - `<entity>` is the entity type (e.g., `courses`, `programs`, `content_files`)
 
 Examples:
@@ -58,7 +58,7 @@ Each source may add additional columns following its needs. Common patterns incl
 | `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
 | `published` | boolean | Whether the resource is published/live |
 
-### Program Sources (MITxOnline, xPRO, MicroMasters)
+### Program Sources (MITxOnline, xPRO, MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -93,7 +93,6 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 - `mitxonline` - MITx Online courses
 - `xpro` - xPRO courses
 - `mit_edx` - MIT edX courses
-- `micromasters` - MicroMasters programs
 - `oll` - Open Learning Library
 - `canvas` - Canvas courses
 - `youtube` - YouTube videos
@@ -105,3 +104,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | Date | Author | Changes |
 |------|--------|---------|
 | 2026-05-27 | Initial draft | Foundation schema contract |
+| 2026-08-19 | Tobias Macey | Drop `micromasters`. MIT Learn unpublished and then deleted its MicroMasters resources (`learning_resources` migrations 0117/0118) and removed `micromasters` from its `ETLSource` enum, so the source has no destination. `integrations__learn__micromasters_programs` retired with it; Cohort 1 is 6 sources, not 7. |
