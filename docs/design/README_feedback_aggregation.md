@@ -47,9 +47,9 @@ signals for four audiences (support, engineering, instructors, leadership).
    Rationale: a complaint usually emerges across several turns, so embedding turns independently splits one
    issue into several weak cluster members and scores sentiment off a fragment. This is *not* a return to
    ticket grain — the fact still records every turn, and the assembled conversation is built from all of
-   them. Cost consequence: the summary is the one per-record LLM call in the design (low hundreds of dollars
-   one-time for Zendesk, skipped entirely for single-turn conversations) — measure it on a sample before the
-   backfill.
+   them. Cost consequence: the summary is the one per-record LLM call in the design. Measured 2026-08-14
+   (#2536): ~$37 one-time for Zendesk on Haiku 4.5 via the Batch API, skipped entirely for single-turn
+   conversations.
 2c. **Conformance rule — ≥2 sources or it's a variant** (revised 2026-08-07): an attribute earns a column
    on the fact or a conformed dimension only if two or more sources can populate it; everything else lives
    in the `source_metadata` variant (a varchar-held JSON string, since Iceberg v2 has no native JSON type)
@@ -99,8 +99,8 @@ signals for four audiences (support, engineering, instructors, leadership).
 
 - **MVP (Phase 1):** Zendesk-only fact at turn grain + 4 dims + `bridge_feedback_tag` +
   `int__feedback__conversation` + `afact_feedback_conversation` (lifecycle columns first, generated columns
-  as the ML asset lands) + support/eng cluster dashboards. Batch. The conversation fact is ~198K rows (one
-  per ticket, a known figure); the **turn fact's row count is unmeasured** — it is public requester comments.
+  as the ML asset lands) + support/eng cluster dashboards. Batch. Both volumes are measured (2026-08-14,
+  #2536): the conversation fact is **190,826 rows** and the turn fact **282,470 rows**.
 - **Phase 2:** add forum/tutor/ORA (additive CTEs); `afact_feedback_cluster_daily`; instructor course views;
   conversation duration measures once `ticket_metrics` is synced.
 - **Phase 3:** migrate ingress to the data bus (gated on the write path existing + sink-topology decision).
@@ -113,8 +113,9 @@ signals for four audiences (support, engineering, instructors, leadership).
 - Carry `ticket_requester_user_id` through `int__zendesk__ticket` (added 2026-08-13) — **blocking**, same
   reason: the requester-vs-agent filter compares ids, and the int model exposes only `ticket_requester`
   (a name), even though the join it needs already exists in the model.
-- Measure public, requester-authored comments per ticket **and the multi-turn share** — sizes the turn fact,
-  and the multi-turn share drives the summarization budget (2d).
+- ~~Measure public, requester-authored comments per ticket **and the multi-turn share**~~ — **done**
+  (2026-08-14, #2536): 200,485 tickets give 190,826 conversations and 282,470 turn-grain rows, of which
+  52,218 (27.4%) are multi-turn. This sizes the turn fact and sets the summarization budget (2d).
 - Add the `ticket_metrics` Airbyte stream — non-blocking; unblocks conversation duration measures.
 - Confirm the conformed `channel_slug` value set against each source's actual channel values.
 - Decide `embedding_input` (summary vs. concatenated turns) via the bake-off — non-blocking for the schema.
@@ -158,7 +159,6 @@ analysis fact (2d) and cut to a ~1,500-word read. Three rounds of feedback have 
   retained on `tfact_feedback` so identity can be re-matched later without a rebuild. Detail and rationale
   are in each doc's own rev. 4/5 changelog entry.
 
-Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the volume
-measurement and the `comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn
-grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts
+Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the
+`comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts
 first, ML asset additive).
