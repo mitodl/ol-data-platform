@@ -11,6 +11,7 @@ from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
     MAX_METADATA_ENTRIES_PER_FAILURE,
+    MAX_SENTRY_ERROR_LENGTH,
     MAX_SLACK_TEXT_LENGTH,
     RETRY_NUMBER_TAG,
     asset_check_failure_message,
@@ -27,6 +28,7 @@ from data_platform.definitions import (
     record_announcement,
     repeats_to_announce,
     sentry_fingerprint,
+    sentry_message,
     truncate_text,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -435,6 +437,111 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
         "raises_file_not_found",
         "FileNotFoundError",
     ]
+
+
+# ── What a sensor-reported issue says ─────────────────────────────────────────
+
+
+def test_the_issue_is_titled_after_the_defect() -> None:
+    """DAGSTER-2J reached 27,000 events titled "Dagster run failure: __ASSET_JOB".
+
+    Sentry titles a message event with its message. Everything the automation
+    sensor materializes runs as ``__ASSET_JOB``, so titling on the job name made
+    every such issue read identically -- the exception type existed only inside
+    the fingerprint, which the UI does not render.
+    """
+    context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+
+    assert sentry_message(context) == "ValueError: some_model"
+
+
+def test_the_title_names_the_exception_dagster_wrapped() -> None:
+    """Same unwrapping the fingerprint does, so title and grouping agree."""
+    context = _context(
+        [
+            _step_failure(
+                "some_model",
+                "boom",
+                cls_name="DagsterExecutionLoadInputError",
+                cause=SimpleNamespace(cls_name="FileNotFoundError", cause=None),
+            )
+        ]
+    )
+
+    assert sentry_message(context) == "FileNotFoundError: some_model"
+
+
+def test_a_run_with_no_step_failure_says_so_in_the_title() -> None:
+    """An OOM kill or a run-monitoring reap has no step and no exception."""
+    context = _context([])
+
+    assert sentry_message(context) == "Dagster run failed with no step failure: a_job"
+
+
+def test_the_sensor_tags_the_exception_type(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Searchable, which a fingerprint component is not.
+
+    The hook path carries the type in the event's own exception. This path has
+    no exception at all, so without the tag "which failures are NoSuchKey" is
+    unanswerable for every failure the hook did not report.
+    """
+    capture_run_failure_to_sentry(
+        _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+    )
+
+    (event,) = recorded_events.events()
+    assert event["tags"]["dagster_exception_type"] == "ValueError"
+
+
+def test_the_sensor_carries_the_step_error_text(
+    recorded_events: RecordingTransport,
+) -> None:
+    """The traceback the hook would have attached as real frames.
+
+    When the hook does not report -- a code location on an image that predates
+    the hook, a DSN it does not have, a worker killed before it ran -- this is
+    the only description of the failure that reaches Sentry.
+    """
+    capture_run_failure_to_sentry(
+        _context([_step_failure("some_model", "NoSuchKey: nope\n\nStack Trace:...")])
+    )
+
+    (event,) = recorded_events.events()
+    failure = event["contexts"]["dagster_step_failure"]
+    assert failure["step_key"] == "some_model"
+    assert "NoSuchKey: nope" in failure["error"]
+
+
+def test_the_step_error_text_is_bounded(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Sentry drops an oversized context silently, taking the detail with it."""
+    capture_run_failure_to_sentry(
+        _context([_step_failure("some_model", "x" * (MAX_SENTRY_ERROR_LENGTH * 2))])
+    )
+
+    (event,) = recorded_events.events()
+    error = event["contexts"]["dagster_step_failure"]["error"]
+    assert len(error) == MAX_SENTRY_ERROR_LENGTH
+    assert error.endswith("...")
+
+
+def test_a_run_with_no_step_failure_falls_back_to_the_run_message(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Same fallback the Slack message uses, for the same reason: without it the
+    event says nothing at all about a run that died between steps.
+    """
+    context = _context([], failure_message="Run worker exited unexpectedly")
+
+    capture_run_failure_to_sentry(context)
+
+    (event,) = recorded_events.events()
+    failure = event["contexts"]["dagster_step_failure"]
+    assert failure["exception_type"] == "run_failure"
+    assert failure["error"] == "Run worker exited unexpectedly"
 
 
 # ── Interrupted workers ───────────────────────────────────────────────────────

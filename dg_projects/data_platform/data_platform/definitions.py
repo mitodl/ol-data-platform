@@ -85,6 +85,12 @@ MAX_SLACK_TEXT_LENGTH = 3000
 # Leaves room for the surrounding header and step key within Slack's limit.
 MAX_SLACK_ERROR_LENGTH = 2900
 
+# How much of the serialized step error travels on a sensor-reported Sentry
+# event. That path reports through capture_message, which carries no exception
+# and therefore no traceback, so without this the issue names the job and
+# nothing else. Bounded because Sentry drops an oversized context silently.
+MAX_SENTRY_ERROR_LENGTH = 8192
+
 
 def truncate_text(text: str, max_length: int = MAX_SLACK_TEXT_LENGTH) -> str:
     """Truncate text to maximum length with ellipsis."""
@@ -213,6 +219,35 @@ def code_location_of(run: DagsterRun) -> str | None:
     return run.remote_job_origin.repository_origin.code_location_origin.location_name
 
 
+def first_step_failure(context: RunFailureSensorContext) -> Any | None:
+    """Return the step failure this run's report is built from, or None.
+
+    A run that died without any step failure event -- OOM, eviction, a run
+    monitoring timeout -- has none, and the in-process hook never ran for it
+    either.
+    """
+    step_failures = context.get_step_failure_events()
+    return step_failures[0] if step_failures else None
+
+
+def step_failure_error(context: RunFailureSensorContext) -> Any | None:
+    """Return the serialized error that step failure carried, or None."""
+    failure = first_step_failure(context)
+    if failure is None:
+        return None
+    return getattr(failure.event_specific_data, "error", None)
+
+
+def step_failure_error_type(context: RunFailureSensorContext) -> str | None:
+    """Name the exception the step raised, Dagster's wrapper unwrapped.
+
+    One reader for the three callers below, so the fingerprint, the interrupt
+    filter and the reported exception type cannot disagree about what broke.
+    """
+    error = step_failure_error(context)
+    return user_code_error_type(error) if error is not None else None
+
+
 def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
     """Build a fingerprint matching the one the in-process hook uses.
 
@@ -221,23 +256,54 @@ def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
     reporting paths raise two Sentry issues for every failure instead of
     collapsing into one.
 
-    A run that died without any step failure event -- OOM, eviction, a run
-    monitoring timeout -- has no exception class and no step, and the hook
+    A run with no step failure has no exception class and no step, and the hook
     never ran for it, so there is nothing to align with. Those get their own
     grouping instead.
     """
-    run = context.dagster_run
-    location = code_location_of(run)
-    step_failures = context.get_step_failure_events()
-    if not step_failures:
+    location = code_location_of(context.dagster_run)
+    failure = first_step_failure(context)
+    if failure is None:
         return failure_fingerprint(location, "run", "run_failure")
-
-    failure = step_failures[0]
-    error = getattr(failure.event_specific_data, "error", None)
-    error_type = (
-        user_code_error_type(error) if error is not None else None
-    ) or "run_failure"
+    error_type = step_failure_error_type(context) or "run_failure"
     return failure_fingerprint(location, failure.step_key, error_type)
+
+
+def sentry_message(context: RunFailureSensorContext) -> str:
+    """Title the issue after the defect rather than the launch path.
+
+    Sentry titles a message event with its message, and this one used to be
+    ``Dagster run failure: {job_name}``. Everything the automation sensor
+    materializes runs as ``__ASSET_JOB``, so every such issue in the list read
+    identically -- DAGSTER-2J reached 27,000 events without naming what broke.
+    The exception type lived only inside the fingerprint, which the UI does not
+    render.
+
+    Formatted like an exception issue's title so a failure reads the same
+    whichever path reported it.
+    """
+    failure = first_step_failure(context)
+    if failure is None:
+        return (
+            f"Dagster run failed with no step failure: {context.dagster_run.job_name}"
+        )
+    error_type = step_failure_error_type(context) or "run_failure"
+    return f"{error_type}: {failure.step_key}"
+
+
+def sentry_failure_detail(context: RunFailureSensorContext) -> str:
+    """Return the failure text a reader needs, trimmed to what Sentry will keep.
+
+    The serialized step error carries the traceback the hook path would have
+    attached as real frames. A run with no step failure has only the run's own
+    failure message, which is what the Slack path falls back to as well.
+    """
+    error = step_failure_error(context)
+    detail = (
+        error.to_string()
+        if error is not None
+        else (context.failure_event.message or "No detail available")
+    )
+    return truncate_text(detail, MAX_SENTRY_ERROR_LENGTH)
 
 
 def is_an_interrupted_worker(context: RunFailureSensorContext) -> bool:
@@ -252,13 +318,7 @@ def is_an_interrupted_worker(context: RunFailureSensorContext) -> bool:
     The serialized step error is where the type survives, so the check has to
     happen here rather than in the shared filter.
     """
-    step_failures = context.get_step_failure_events()
-    if not step_failures:
-        return False
-    error = getattr(step_failures[0].event_specific_data, "error", None)
-    if error is None:
-        return False
-    return user_code_error_type(error) in INTERRUPTION_ERRORS
+    return step_failure_error_type(context) in INTERRUPTION_ERRORS
 
 
 def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | None:
@@ -273,8 +333,9 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         return None
 
     run = context.dagster_run
-    step_failures = context.get_step_failure_events()
-    step_key = step_failures[0].step_key if step_failures else "run"
+    failure = first_step_failure(context)
+    step_key = failure.step_key if failure else "run"
+    error_type = step_failure_error_type(context) or "run_failure"
 
     with sentry_sdk.new_scope() as scope:
         scope.set_tag("dagster_job", run.job_name)
@@ -286,6 +347,20 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         # you need to go and look at the failure.
         scope.set_tag("dagster_partition", run.tags.get(PARTITION_NAME_TAG, "none"))
         scope.set_tag("captured_by", "sensor")
+        # The hook path puts the exception type in the event itself. This one
+        # reports through capture_message, which has no exception, so the type
+        # has to be carried explicitly or it exists only inside the fingerprint
+        # -- where nothing in the Sentry UI will show it, and no search can
+        # filter on it.
+        scope.set_tag("dagster_exception_type", error_type)
+        scope.set_context(
+            "dagster_step_failure",
+            {
+                "step_key": step_key,
+                "exception_type": error_type,
+                "error": sentry_failure_detail(context),
+            },
+        )
         scope.set_context(
             "dagster_run",
             {
@@ -297,7 +372,7 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         )
         scope.fingerprint = sentry_fingerprint(context)
         event_id = sentry_sdk.capture_message(
-            f"Dagster run failure: {run.job_name}",
+            sentry_message(context),
             level="error",
         )
 
