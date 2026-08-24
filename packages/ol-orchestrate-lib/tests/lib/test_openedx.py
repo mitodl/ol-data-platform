@@ -476,8 +476,12 @@ def test_course_export_task_id_surfaces_studios_queue_failure() -> None:
     with pytest.raises(CourseExportNotQueuedError) as exc_info:
         course_export_task_id(COURSE_KEY, response)
 
-    assert COURSE_KEY in str(exc_info.value)
+    # Studio's explanation describes the defect and stays in the message; the
+    # course key identifies the instance and moves to an attribute, so every
+    # occurrence groups under one Sentry title.
     assert "Course not found" in str(exc_info.value)
+    assert COURSE_KEY not in str(exc_info.value)
+    assert exc_info.value.course_key == COURSE_KEY
 
 
 @pytest.mark.parametrize(
@@ -498,7 +502,9 @@ def test_course_export_task_id_rejects_a_response_with_no_task(
     with pytest.raises(CourseExportNotQueuedError) as exc_info:
         course_export_task_id(COURSE_KEY, response)
 
-    assert COURSE_KEY in str(exc_info.value)
+    assert COURSE_KEY not in str(exc_info.value)
+    assert exc_info.value.course_key == COURSE_KEY
+    assert exc_info.value.response == response
 
 
 def _block(category: str, children: list[str], display_name: str = "Block"):

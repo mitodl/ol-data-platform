@@ -24,10 +24,17 @@ class UpstreamObjectUnavailable(PermanentFailure):
 
     A distinct class rather than a bare ``PermanentFailure`` so the three ways
     this happens -- no materialization, no path in its metadata, a path whose
-    object is gone -- group as one Sentry issue naming the key, instead of
-    dissolving into whatever the reader raised downstream. Nothing a rerun does
-    changes any of them, which is why they carry ``allow_retries=False`` and
-    stop ``run_retries`` via the ``stop_run_retries`` hook.
+    object is gone -- group as one Sentry issue, instead of dissolving into
+    whatever the reader raised downstream. Nothing a rerun does changes any of
+    them, which is why they carry ``allow_retries=False`` and stop
+    ``run_retries`` via the ``stop_run_retries`` hook.
+
+    Which asset and partition broke goes in ``metadata``, never in the
+    description. Sentry titles an event from the exception message, so an
+    interpolated partition key or S3 path gives every occurrence a different
+    title and the issue shows whichever one arrived last -- the asset key and
+    partition are already on the event as ``dagster_step`` and
+    ``dagster_partition`` tags.
     """
 
 
@@ -58,15 +65,18 @@ class FileObjectIOManager(ConfigurableIOManager):
             ),
             limit=1,
         )
-        target = f"{context.asset_key.to_user_string()} / {context.partition_key}"
+        location = {
+            "asset_key": context.asset_key.to_user_string(),
+            "partition": context.partition_key,
+        }
         if not asset_dep:
             raise UpstreamObjectUnavailable(
                 description=(
-                    f"No materialization recorded for {target}, so there is no "
-                    "path to load. The upstream needs to run before this asset "
-                    "can."
+                    "No materialization recorded for the upstream partition, so "
+                    "there is no path to load. The upstream needs to run before "
+                    "this asset can."
                 ),
-                metadata={"asset_key": context.asset_key.to_user_string()},
+                metadata=location,
                 allow_retries=False,
             )
 
@@ -74,11 +84,11 @@ class FileObjectIOManager(ConfigurableIOManager):
         if path_metadata is None:
             raise UpstreamObjectUnavailable(
                 description=(
-                    f"The latest materialization of {target} recorded no 'path' "
-                    "metadata. Whatever wrote it did not go through this IO "
-                    "manager's handle_output."
+                    "The latest materialization of the upstream partition "
+                    "recorded no 'path' metadata. Whatever wrote it did not go "
+                    "through this IO manager's handle_output."
                 ),
-                metadata={"asset_key": context.asset_key.to_user_string()},
+                metadata=location,
                 allow_retries=False,
             )
 
@@ -90,13 +100,13 @@ class FileObjectIOManager(ConfigurableIOManager):
         if not resolved_path.exists():
             raise UpstreamObjectUnavailable(
                 description=(
-                    f"{target} recorded a path to an object that is not there: "
-                    f"{resolved_path}. The materialization outlived the object -- "
+                    "The upstream partition recorded a path to an object that is "
+                    "not there. The materialization outlived the object -- "
                     "expired by a lifecycle rule, deleted, or written to a "
                     "different bucket than the one recorded."
                 ),
                 metadata={
-                    "asset_key": context.asset_key.to_user_string(),
+                    **location,
                     "missing_path": MetadataValue.text(str(resolved_path)),
                 },
                 allow_retries=False,

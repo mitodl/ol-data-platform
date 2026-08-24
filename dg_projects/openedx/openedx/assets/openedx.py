@@ -399,10 +399,21 @@ def course_xml(context: AssetExecutionContext):
                 datetime.now(tz=UTC) - start_time
                 > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
             ):
+                # Which course timed out and what Studio last said are logged
+                # rather than interpolated into the message: Sentry titles the
+                # event from the message, so a course key in there gives every
+                # timeout a different title. The course key is already on the
+                # event as the dagster_partition tag.
+                context.log.error(
+                    "Course export timed out for %s after %s. Last status "
+                    "reported by Studio: %s",
+                    course_key,
+                    COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT,
+                    last_seen_status or "none",
+                )
                 err_msg = (
-                    f"Course export timed out for {course_key} after "
-                    f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}. Last status "
-                    f"reported by Studio: {last_seen_status or 'none'}"
+                    "Course export timed out waiting for Studio after "
+                    f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}."
                 )
                 raise TimeoutError(err_msg)
             time.sleep(timedelta(seconds=20).seconds)
@@ -440,10 +451,13 @@ def course_xml(context: AssetExecutionContext):
             # the course itself changes. Raised as a bare Exception it was never
             # classified at all, so run_retries and the automation condition both
             # kept re-running it: 2,587 events on DAGSTER-6.
+            # The course key stays out of the message and in the metadata
+            # below, so every occurrence of this defect carries the same Sentry
+            # title instead of one title per course.
             errmsg = (
-                f"Studio could not export the course XML for {course_key}, and "
-                "reported a terminal failure state. Rerunning will not change "
-                "that; the course itself has to be fixed or republished."
+                "Studio could not export the course XML, and reported a "
+                "terminal failure state. Rerunning will not change that; the "
+                "course itself has to be fixed or republished."
             )
             raise permanent_failure(
                 errmsg,
@@ -747,6 +761,6 @@ def openedx_course_content_webhook(
         )
         raise http_failure(
             error,
-            f"Learn API webhook notification failed for course_id={course_id}",
+            "Learn API webhook notification failed",
             metadata={"course_id": course_id, "source": source},
         ) from error
