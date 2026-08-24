@@ -443,6 +443,16 @@ reported in three buckets — *in inventory, missing from warehouse* (ingestion 
 precisely because it is an independent observation; making it the source of truth is the
 current defect.
 
+`reconcile` is built, and takes its warehouse side from either the local DuckDB registry
+(`--duckdb-path`) or a dumped table list (`--warehouse-tables`) — the dbt side needs no
+credentials and always runs, so the command is useful before anyone has warehouse access.
+Only one finding is an ERROR: a dbt source table no unit declares, which is step 3's
+acceptance criterion. Both warehouse directions are warnings, because a declared table the
+warehouse lacks is also what a just-added entry looks like before its first sync, and an
+undeclared table is also what years-old drift looks like — neither is fixable by editing the
+pull request that trips it, which is the line §7.2 draws for what may be an ERROR. That is
+also why `reconcile` is not in the PR workflow: it needs an observation CI does not have.
+
 The Dagster interval map is worth calling out as the immediate win: it is a hand-maintained
 32-entry dict of strings that must match names Airbyte generates, with a silent 24-hour default
 for typos (§1.3). Generating it removes an entire class of "why did this source go stale"
@@ -626,7 +636,7 @@ ol-infrastructure; 7 closes the loop.
 |---|---|---|
 | 1 | `ol-dbt inventory` sub-app (§5): JSON Schema, dbt-free loader, `validate` | `ol-dbt inventory validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
-| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. The generation half (`render airbyte`, `render dagster-intervals`) is built; `reconcile` and the data itself remain | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
+| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **The command is built**, along with the generation half (`render airbyte`, `render dagster-intervals`); the data itself remains, and is what step 2 produces | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
 | 4 | **DONE.** CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI |
 | 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection — plus `airbyte_source_definition`/`airbyte_destination_definition`, so the deployed `docker_image_tag` is a reviewed diff rather than a UI click (§6.2) | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
 | 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |

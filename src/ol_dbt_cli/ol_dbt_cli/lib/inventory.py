@@ -28,6 +28,7 @@ from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 CHECK = "inventory"
 REMOVAL_CHECK = "inventory_removal"
+RECONCILE_CHECK = "inventory_reconcile"
 
 DEFAULT_INVENTORY_DIR = Path("ingestion/inventory")
 UNITS_SUBDIR = "units"
@@ -708,3 +709,165 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
             intervals[group] = hours
             sources[group] = name
     return dict(sorted(intervals.items()))
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation (§5): the inventory against independent observations
+# ---------------------------------------------------------------------------
+#
+# The warehouse and the dbt sources are observations, not authorities. Warehouse
+# introspection used to *be* the source of truth for `ol-dbt generate sources`,
+# and that is the defect this inventory exists to correct — so reconcile reports
+# disagreement and never edits either side. Its worth is precisely that it is an
+# independent observation: a check that agrees by construction checks nothing.
+
+
+@dataclass
+class Reconciliation:
+    """One comparison of declared tables against observed ones, in three buckets."""
+
+    both: set[str] = field(default_factory=set)
+    declared_not_observed: set[str] = field(default_factory=set)
+    observed_not_declared: set[str] = field(default_factory=set)
+
+
+def reconcile_tables(declared: set[str], observed: set[str]) -> Reconciliation:
+    return Reconciliation(
+        both=declared & observed,
+        declared_not_observed=declared - observed,
+        observed_not_declared=observed - declared,
+    )
+
+
+def tables_by_raw_name(units: list[Unit]) -> dict[str, str]:
+    """Map every declared raw table to the unit declaring it.
+
+    A dict rather than a multimap because rule 8 forbids two units declaring the
+    same raw table. Reconcile deliberately does not validate first, so a broken
+    inventory can violate that — the last unit read then wins here, and
+    `validate` is what names the collision.
+    """
+    return {str(table.get("raw_table", "")): unit.key for unit in units for table in unit.tables}
+
+
+def modeled_tables(units: list[Unit]) -> set[str]:
+    """Raw tables the inventory claims dbt declares as sources (§1.4)."""
+    return {str(table.get("raw_table", "")) for unit in units for table in unit.tables if table.get("modeled")}
+
+
+def unit_for_table(units: list[Unit], raw_table: str) -> str | None:
+    """Return the unit whose `table_prefix` covers an undeclared raw table, if any.
+
+    Longest prefix wins. Rule 5 forbids one prefix being a prefix of another, so
+    at most one unit matches a valid inventory; ordering by length keeps the
+    answer deterministic when it does not.
+    """
+    matches = [
+        unit for unit in units if (prefix := unit.data.get("table_prefix")) and raw_table.startswith(str(prefix))
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda unit: len(str(unit.data["table_prefix"]))).key
+
+
+def reconcile_warehouse(
+    units: list[Unit],
+    warehouse_tables: set[str],
+    report: ValidationReport,
+) -> Reconciliation:
+    """Report the inventory against the tables the warehouse actually holds.
+
+    Both directions are warnings rather than errors. A declared table the
+    warehouse lacks is usually broken ingestion, but is also what a just-added
+    entry looks like before its first sync; an undeclared table in the warehouse
+    is usually drift, but is also what a table loaded for years and never
+    declared looks like. Neither is fixable by editing the pull request in front
+    of you, which is the line §7.2 draws for what may be an ERROR.
+    """
+    owners = tables_by_raw_name(units)
+    result = reconcile_tables(set(owners), warehouse_tables)
+
+    for raw_table in sorted(result.declared_not_observed):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owners[raw_table],
+            f"{raw_table} is declared but the warehouse does not hold it",
+            "Either the loader is failing for this table or it has never run. "
+            "If we deliberately stopped loading it, retire it in retired.yml so "
+            "the graveyard records when — dropping the entry instead is exactly "
+            "the silent disappearance §7.2 exists to prevent.",
+        )
+
+    for raw_table in sorted(result.observed_not_declared):
+        owner = unit_for_table(units, raw_table)
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owner or "(unclaimed)",
+            f"{raw_table} is in the warehouse but no unit declares it",
+            f"It falls under {owner}'s table_prefix, so its entry belongs in that unit."
+            if owner
+            else "No unit's table_prefix covers it, so it needs a new unit — or it is "
+            "a leftover from an ingestion we have already stopped.",
+        )
+
+    return result
+
+
+def reconcile_dbt(
+    units: list[Unit],
+    dbt_tables: set[str],
+    inventory_dir: Path,
+    report: ValidationReport,
+) -> Reconciliation:
+    """Report the inventory against the raw tables dbt declares as sources.
+
+    dbt is a strict subset of what we load — 372 of ~2,090 tables (§1.4) — so a
+    loaded table carrying no dbt source is normal and is not reported. The two
+    directions that do mean something:
+
+    * a dbt source table no unit loads: dbt reads something the inventory says
+      does not arrive, so either the inventory is incomplete or the model is
+      stale. This is step 3's acceptance criterion, and the one ERROR here.
+    * a `modeled: true` table dbt does not declare: that flag is what step 7
+      generates the sources YAML from, so a wrong one silently drops a table
+      from the generation.
+    """
+    owners = tables_by_raw_name(units)
+    result = reconcile_tables(set(owners), dbt_tables)
+    retired = {raw_table for _, raw_table in retired_pairs(load_retired(inventory_dir))}
+
+    for raw_table in sorted(result.observed_not_declared):
+        if raw_table in retired:
+            report.add(
+                RECONCILE_CHECK,
+                Severity.WARNING,
+                "(dbt sources)",
+                f"{raw_table} is a dbt source but the inventory retired it",
+                "We stopped loading this table, so the model reading it is going "
+                "stale on whatever it last held. That is the failure retired.yml "
+                "makes findable — the fix belongs in the model, not the graveyard.",
+            )
+        else:
+            report.add(
+                RECONCILE_CHECK,
+                Severity.ERROR,
+                "(dbt sources)",
+                f"{raw_table} is a dbt source but no unit declares it",
+                "Every dbt-declared raw table has to map to exactly one unit. Add "
+                "it to the unit whose table_prefix covers it — do not delete the "
+                "dbt source to make this pass.",
+            )
+
+    for raw_table in sorted(modeled_tables(units) - dbt_tables):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owners[raw_table],
+            f"{raw_table} is marked modeled but dbt declares no source for it",
+            "`modeled:` is what step 7 generates the sources YAML from, so the "
+            "flag is either stale or the dbt source has gone missing.",
+        )
+
+    return result
