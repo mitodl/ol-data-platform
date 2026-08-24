@@ -88,7 +88,10 @@ MAX_SLACK_ERROR_LENGTH = 2900
 # How much of the serialized step error travels on a sensor-reported Sentry
 # event. That path reports through capture_message, which carries no exception
 # and therefore no traceback, so without this the issue names the job and
-# nothing else. Bounded because Sentry drops an oversized context silently.
+# nothing else. Bounded because the SDK trims only transaction span
+# descriptions against MAX_EVENT_BYTES (10**6, sentry_sdk/serializer.py) and
+# never an error event's contexts, while an event over that size is discarded
+# whole at ingest. An unbounded traceback would cost the event, not the field.
 MAX_SENTRY_ERROR_LENGTH = 8192
 
 
