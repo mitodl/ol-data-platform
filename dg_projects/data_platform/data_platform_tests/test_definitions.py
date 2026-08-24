@@ -11,6 +11,7 @@ from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
 from data_platform.definitions import (
     MAX_CHECK_EVALUATIONS_PER_TICK,
     MAX_METADATA_ENTRIES_PER_FAILURE,
+    MAX_SENTRY_ERROR_LENGTH,
     MAX_SLACK_TEXT_LENGTH,
     RETRY_NUMBER_TAG,
     asset_check_failure_message,
@@ -27,6 +28,8 @@ from data_platform.definitions import (
     record_announcement,
     repeats_to_announce,
     sentry_fingerprint,
+    sentry_message,
+    step_failure_of,
     truncate_text,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -124,6 +127,16 @@ def _step_failure(
     )
 
 
+def _failure_of(context: Any) -> Any:
+    """Build the snapshot the sensor threads through its reporting helpers.
+
+    The production sensor reads the step failure events once per evaluation and
+    passes the reduction around; these tests do the same rather than letting
+    each helper read for itself, which is the behaviour under test.
+    """
+    return step_failure_of(context.get_step_failure_events())
+
+
 def _block_text(blocks: list[dict[str, Any]]) -> str:
     return "\n".join(
         block.get("text", {}).get("text", "")
@@ -167,7 +180,7 @@ def test_error_message_falls_back_when_no_step_failures() -> None:
     """OOM kills and run-monitoring reaps produce no step failure events."""
     context = _context([], failure_message="Run worker terminated unexpectedly")
 
-    blocks = error_message(context)
+    blocks = error_message(context, context.get_step_failure_events())
 
     text = _block_text(blocks)
     assert "No step failure recorded" in text
@@ -177,7 +190,7 @@ def test_error_message_falls_back_when_no_step_failures() -> None:
 def test_error_message_includes_step_detail_when_present() -> None:
     context = _context([_step_failure("some_model", "boom")])
 
-    text = _block_text(error_message(context))
+    text = _block_text(error_message(context, context.get_step_failure_events()))
 
     assert "some_model" in text
     assert "boom" in text
@@ -186,7 +199,9 @@ def test_error_message_includes_step_detail_when_present() -> None:
 def test_error_message_includes_sentry_event_id_when_given() -> None:
     context = _context([_step_failure("some_model", "boom")])
 
-    blocks = error_message(context, sentry_event_id="cafebabe")
+    blocks = error_message(
+        context, context.get_step_failure_events(), sentry_event_id="cafebabe"
+    )
 
     context_blocks = [b for b in blocks if b["type"] == "context"]
     assert "cafebabe" in context_blocks[0]["elements"][0]["text"]
@@ -195,13 +210,15 @@ def test_error_message_includes_sentry_event_id_when_given() -> None:
 def test_error_message_omits_sentry_block_when_sentry_disabled() -> None:
     context = _context([_step_failure("some_model", "boom")])
 
-    blocks = error_message(context, sentry_event_id=None)
+    blocks = error_message(
+        context, context.get_step_failure_events(), sentry_event_id=None
+    )
 
     assert not [b for b in blocks if b["type"] == "context"]
 
 
 def test_error_message_always_links_back_to_the_run() -> None:
-    blocks = error_message(_context([]))
+    blocks = error_message(_context([]), [])
 
     actions = [b for b in blocks if b["type"] == "actions"]
     assert actions, "message carries no link back to Dagster"
@@ -219,7 +236,7 @@ def test_sensor_fingerprint_matches_the_in_process_hook() -> None:
     """
     context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
 
-    assert sentry_fingerprint(context) == [
+    assert sentry_fingerprint(context, _failure_of(context)) == [
         DAGSTER_ENV,
         CODE_LOCATION,
         "some_model",
@@ -237,14 +254,16 @@ def test_sensor_fingerprint_does_not_group_on_the_launch_path() -> None:
     """
     context = _context([_step_failure("ovs_videos", "boom")])
 
-    assert context.dagster_run.job_name not in sentry_fingerprint(context)
+    assert context.dagster_run.job_name not in sentry_fingerprint(
+        context, _failure_of(context)
+    )
 
 
 def test_sensor_fingerprint_names_the_location_that_broke() -> None:
     """The location tag was hardcoded to this sensor's own code location."""
     context = _context([_step_failure("some_model", "boom")], location="lakehouse")
 
-    assert sentry_fingerprint(context)[1] == "lakehouse"
+    assert sentry_fingerprint(context, _failure_of(context))[1] == "lakehouse"
 
 
 def test_the_sensor_tags_the_partition_like_the_hook_does(
@@ -261,7 +280,7 @@ def test_the_sensor_tags_the_partition_like_the_hook_does(
     context = _context([_step_failure("some_model", "boom")])
     context.dagster_run.tags[PARTITION_NAME_TAG] = "course-v1:MITx+6.002x+2T2024"
 
-    capture_run_failure_to_sentry(context)
+    capture_run_failure_to_sentry(context, _failure_of(context))
 
     (event,) = recorded_events.events()
     assert event["tags"]["dagster_partition"] == "course-v1:MITx+6.002x+2T2024"
@@ -271,7 +290,8 @@ def test_an_unpartitioned_run_is_tagged_none(
     recorded_events: RecordingTransport,
 ) -> None:
     """Matches the hook's fallback, so the two are one Sentry search."""
-    capture_run_failure_to_sentry(_context([_step_failure("some_model", "boom")]))
+    context = _context([_step_failure("some_model", "boom")])
+    capture_run_failure_to_sentry(context, _failure_of(context))
 
     (event,) = recorded_events.events()
     assert event["tags"]["dagster_partition"] == "none"
@@ -281,14 +301,14 @@ def test_sensor_fingerprint_tolerates_a_run_with_no_origin() -> None:
     """A run submitted without a remote origin still has to group somewhere."""
     context = _context([_step_failure("some_model", "boom")], location=None)
 
-    assert sentry_fingerprint(context)[1] == "unknown"
+    assert sentry_fingerprint(context, _failure_of(context))[1] == "unknown"
 
 
 def test_sensor_fingerprint_groups_process_deaths_separately() -> None:
     """No step failure means the hook never ran, so there is nothing to match."""
     context = _context([])
 
-    assert sentry_fingerprint(context) == [
+    assert sentry_fingerprint(context, _failure_of(context)) == [
         DAGSTER_ENV,
         CODE_LOCATION,
         "run",
@@ -302,7 +322,7 @@ def test_sensor_fingerprint_survives_a_missing_error_payload() -> None:
     )
     context = _context([failure])
 
-    assert sentry_fingerprint(context) == [
+    assert sentry_fingerprint(context, _failure_of(context)) == [
         DAGSTER_ENV,
         CODE_LOCATION,
         "some_model",
@@ -331,7 +351,7 @@ def test_sensor_fingerprint_unwraps_dagsters_user_code_wrapper() -> None:
         ]
     )
 
-    assert sentry_fingerprint(context) == [
+    assert sentry_fingerprint(context, _failure_of(context)) == [
         DAGSTER_ENV,
         CODE_LOCATION,
         "extract_edxorg_courserun_metadata",
@@ -360,7 +380,7 @@ def test_sensor_fingerprint_unwraps_only_the_dagster_layer() -> None:
         ]
     )
 
-    assert sentry_fingerprint(context)[3] == "FileNotFoundError"
+    assert sentry_fingerprint(context, _failure_of(context))[3] == "FileNotFoundError"
 
 
 def test_sensor_fingerprint_keeps_a_wrapper_with_no_cause() -> None:
@@ -373,7 +393,10 @@ def test_sensor_fingerprint_keeps_a_wrapper_with_no_cause() -> None:
         ]
     )
 
-    assert sentry_fingerprint(context)[3] == "DagsterExecutionStepExecutionError"
+    assert (
+        sentry_fingerprint(context, _failure_of(context))[3]
+        == "DagsterExecutionStepExecutionError"
+    )
 
 
 @pytest.mark.parametrize(
@@ -426,7 +449,9 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
         for event in result.all_events
         if event.event_type == DagsterEventType.STEP_FAILURE
     ]
-    fingerprint = sentry_fingerprint(_context(step_failures))
+    fingerprint = sentry_fingerprint(
+        _context(step_failures), step_failure_of(step_failures)
+    )
 
     assert fingerprint[3] == hook_recorded["raises_file_not_found"]
     assert fingerprint == [
@@ -435,6 +460,162 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
         "raises_file_not_found",
         "FileNotFoundError",
     ]
+
+
+# ── Event-log reads ───────────────────────────────────────────────────────────
+
+
+def _counting_context(step_failure_events: list[Any]) -> tuple[Any, list[int]]:
+    """Build a context that counts how often its step failure events are read."""
+    reads = [0]
+
+    def get_step_failure_events() -> list[Any]:
+        reads[0] += 1
+        return step_failure_events
+
+    context = _context(step_failure_events)
+    context.get_step_failure_events = get_step_failure_events
+    return context, reads
+
+
+@pytest.mark.usefixtures("recorded_events")
+def test_one_evaluation_costs_one_event_log_read() -> None:
+    """RunFailureSensorContext.get_step_failure_events is a database query.
+
+    Dagster implements it as instance.get_records_for_run(of_type=STEP_FAILURE)
+    and caches nothing, so a helper that reads it for itself is another round
+    trip. This sensor fires once per failed run across every code location, and
+    an earlier revision of this module reached ten reads per evaluation by
+    letting the fingerprint, the interrupt filter, the title and the detail
+    each read independently.
+
+    Counts the whole reporting path a real evaluation takes, so the assertion
+    fails on the next helper that starts reading for itself.
+    """
+    context, reads = _counting_context([_step_failure("some_model", "boom")])
+
+    step_failure_events = context.get_step_failure_events()
+    failure = step_failure_of(step_failure_events)
+    is_an_interrupted_worker(failure)
+    sentry_fingerprint(context, failure)
+    capture_run_failure_to_sentry(context, failure)
+    error_message(context, step_failure_events, sentry_event_id="cafebabe")
+
+    assert reads == [1]
+
+
+# ── What a sensor-reported issue says ─────────────────────────────────────────
+
+
+def test_the_issue_is_titled_after_the_defect() -> None:
+    """DAGSTER-2J reached 27,000 events titled "Dagster run failure: __ASSET_JOB".
+
+    Sentry titles a message event with its message. Everything the automation
+    sensor materializes runs as ``__ASSET_JOB``, so titling on the job name made
+    every such issue read identically -- the exception type existed only inside
+    the fingerprint, which the UI does not render.
+    """
+    context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+
+    assert sentry_message(context, _failure_of(context)) == "ValueError: some_model"
+
+
+def test_the_title_names_the_exception_dagster_wrapped() -> None:
+    """Same unwrapping the fingerprint does, so title and grouping agree."""
+    context = _context(
+        [
+            _step_failure(
+                "some_model",
+                "boom",
+                cls_name="DagsterExecutionLoadInputError",
+                cause=SimpleNamespace(cls_name="FileNotFoundError", cause=None),
+            )
+        ]
+    )
+
+    assert (
+        sentry_message(context, _failure_of(context)) == "FileNotFoundError: some_model"
+    )
+
+
+def test_a_run_with_no_step_failure_says_so_in_the_title() -> None:
+    """An OOM kill or a run-monitoring reap has no step and no exception."""
+    context = _context([])
+
+    assert (
+        sentry_message(context, _failure_of(context))
+        == "Dagster run failed with no step failure: a_job"
+    )
+
+
+def test_the_sensor_tags_the_exception_type(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Searchable, which a fingerprint component is not.
+
+    The hook path carries the type in the event's own exception. This path has
+    no exception at all, so without the tag "which failures are NoSuchKey" is
+    unanswerable for every failure the hook did not report.
+    """
+    context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+
+    capture_run_failure_to_sentry(context, _failure_of(context))
+
+    (event,) = recorded_events.events()
+    assert event["tags"]["dagster_exception_type"] == "ValueError"
+
+
+def test_the_sensor_carries_the_step_error_text(
+    recorded_events: RecordingTransport,
+) -> None:
+    """The traceback the hook would have attached as real frames.
+
+    When the hook does not report -- a code location on an image that predates
+    the hook, a DSN it does not have, a worker killed before it ran -- this is
+    the only description of the failure that reaches Sentry.
+    """
+    context = _context(
+        [_step_failure("some_model", "NoSuchKey: nope\n\nStack Trace:...")]
+    )
+
+    capture_run_failure_to_sentry(context, _failure_of(context))
+
+    (event,) = recorded_events.events()
+    failure = event["contexts"]["dagster_step_failure"]
+    assert failure["step_key"] == "some_model"
+    assert "NoSuchKey: nope" in failure["error"]
+
+
+def test_the_step_error_text_is_bounded(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Sentry drops an oversized context silently, taking the detail with it."""
+    context = _context(
+        [_step_failure("some_model", "x" * (MAX_SENTRY_ERROR_LENGTH * 2))]
+    )
+
+    capture_run_failure_to_sentry(context, _failure_of(context))
+
+    (event,) = recorded_events.events()
+    error = event["contexts"]["dagster_step_failure"]["error"]
+    assert len(error) == MAX_SENTRY_ERROR_LENGTH
+    assert error.endswith("...")
+
+
+def test_a_run_with_no_step_failure_falls_back_to_the_run_message(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Same fallback the Slack message uses, for the same reason: without it the
+    event says nothing at all about a run that died between steps.
+    """
+    context = _context([], failure_message="Run worker exited unexpectedly")
+
+    capture_run_failure_to_sentry(context, _failure_of(context))
+
+    (event,) = recorded_events.events()
+    failure = event["contexts"]["dagster_step_failure"]
+    assert failure["exception_type"] == "run_failure"
+    assert failure["error"] == "Run worker exited unexpectedly"
 
 
 # ── Interrupted workers ───────────────────────────────────────────────────────
@@ -453,7 +634,7 @@ def test_a_terminated_worker_is_not_reported_by_the_sensor(cls_name: str) -> Non
     """
     context = _context([_step_failure("some_model", "boom", cls_name=cls_name)])
 
-    assert is_an_interrupted_worker(context) is True
+    assert is_an_interrupted_worker(_failure_of(context)) is True
 
 
 def test_an_interruption_wrapped_by_dagster_is_still_caught() -> None:
@@ -471,20 +652,20 @@ def test_an_interruption_wrapped_by_dagster_is_still_caught() -> None:
         ]
     )
 
-    assert is_an_interrupted_worker(context) is True
+    assert is_an_interrupted_worker(_failure_of(context)) is True
 
 
 def test_an_ordinary_failure_is_still_reported() -> None:
     context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
 
-    assert is_an_interrupted_worker(context) is False
+    assert is_an_interrupted_worker(_failure_of(context)) is False
 
 
 def test_a_run_with_no_step_failure_is_still_reported() -> None:
     """An OOM kill or a run-monitoring reap has no step error to inspect, and is
     exactly the case this sensor exists to catch.
     """
-    assert is_an_interrupted_worker(_context([])) is False
+    assert is_an_interrupted_worker(step_failure_of([])) is False
 
 
 def test_a_step_failure_with_no_error_payload_is_still_reported() -> None:
@@ -492,7 +673,7 @@ def test_a_step_failure_with_no_error_payload_is_still_reported() -> None:
         step_key="some_model", event_specific_data=SimpleNamespace()
     )
 
-    assert is_an_interrupted_worker(_context([failure])) is False
+    assert is_an_interrupted_worker(step_failure_of([failure])) is False
 
 
 # ── Slack rate limiting ───────────────────────────────────────────────────────
@@ -608,14 +789,19 @@ def test_suppressions_are_recorded_even_though_announcements_are_not() -> None:
 
 def test_a_suppressed_repeat_is_named_in_the_next_message() -> None:
     blocks = error_message(
-        _context([_step_failure("some_model", "boom")]), None, suppressed_repeats=4_000
+        _context([_step_failure("some_model", "boom")]),
+        [_step_failure("some_model", "boom")],
+        suppressed_repeats=4_000,
     )
 
     assert "4000 further failures" in _block_text(blocks)
 
 
 def test_no_repeat_block_when_there_was_nothing_to_suppress() -> None:
-    blocks = error_message(_context([_step_failure("some_model", "boom")]))
+    blocks = error_message(
+        _context([_step_failure("some_model", "boom")]),
+        [_step_failure("some_model", "boom")],
+    )
 
     assert "further failures" not in _block_text(blocks)
 

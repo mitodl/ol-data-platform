@@ -11,6 +11,7 @@ into something you can actually go and look up.
 
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -84,6 +85,15 @@ DBT_PROVENANCE_KEYS = frozenset({"unique_id", "invocation_id", "status"})
 MAX_SLACK_TEXT_LENGTH = 3000
 # Leaves room for the surrounding header and step key within Slack's limit.
 MAX_SLACK_ERROR_LENGTH = 2900
+
+# How much of the serialized step error travels on a sensor-reported Sentry
+# event. That path reports through capture_message, which carries no exception
+# and therefore no traceback, so without this the issue names the job and
+# nothing else. Bounded because the SDK trims only transaction span
+# descriptions against MAX_EVENT_BYTES (10**6, sentry_sdk/serializer.py) and
+# never an error event's contexts, while an event over that size is discarded
+# whole at ingest. An unbounded traceback would cost the event, not the field.
+MAX_SENTRY_ERROR_LENGTH = 8192
 
 
 def truncate_text(text: str, max_length: int = MAX_SLACK_TEXT_LENGTH) -> str:
@@ -213,7 +223,48 @@ def code_location_of(run: DagsterRun) -> str | None:
     return run.remote_job_origin.repository_origin.code_location_origin.location_name
 
 
-def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
+@dataclass(frozen=True)
+class StepFailure:
+    """What every reporting path needs to know about the failure, read once.
+
+    ``RunFailureSensorContext.get_step_failure_events`` is a query against
+    ``instance.get_records_for_run``, not an in-memory accessor, and it caches
+    nothing. Each helper below calling it for itself cost ten event-log reads
+    per evaluation of a sensor that fires once per failed run across every code
+    location. The snapshot is built once and threaded through instead.
+
+    ``error`` is the serialized error rather than its rendered text so an
+    evaluation that never reports -- an interrupted worker, a suppressed
+    repeat -- does not pay to build a traceback string it discards.
+    """
+
+    step_key: str
+    error_type: str
+    error: Any
+
+
+def step_failure_of(step_failure_events: Sequence[Any]) -> StepFailure | None:
+    """Reduce a run's step failure events to the one its report is built from.
+
+    Pure: the caller does the single read and passes the result in. A run that
+    died without any step failure event -- OOM, eviction, a run monitoring
+    timeout -- has none, and the in-process hook never ran for it either.
+    """
+    if not step_failure_events:
+        return None
+    event = step_failure_events[0]
+    error = getattr(event.event_specific_data, "error", None)
+    return StepFailure(
+        step_key=event.step_key,
+        error_type=(user_code_error_type(error) if error is not None else None)
+        or "run_failure",
+        error=error,
+    )
+
+
+def sentry_fingerprint(
+    context: RunFailureSensorContext, failure: StepFailure | None
+) -> list[str]:
     """Build a fingerprint matching the one the in-process hook uses.
 
     Both paths delegate to ol_orchestrate.lib.sentry.failure_fingerprint. They
@@ -221,26 +272,57 @@ def sentry_fingerprint(context: RunFailureSensorContext) -> list[str]:
     reporting paths raise two Sentry issues for every failure instead of
     collapsing into one.
 
-    A run that died without any step failure event -- OOM, eviction, a run
-    monitoring timeout -- has no exception class and no step, and the hook
+    A run with no step failure has no exception class and no step, and the hook
     never ran for it, so there is nothing to align with. Those get their own
     grouping instead.
     """
-    run = context.dagster_run
-    location = code_location_of(run)
-    step_failures = context.get_step_failure_events()
-    if not step_failures:
+    location = code_location_of(context.dagster_run)
+    if failure is None:
         return failure_fingerprint(location, "run", "run_failure")
-
-    failure = step_failures[0]
-    error = getattr(failure.event_specific_data, "error", None)
-    error_type = (
-        user_code_error_type(error) if error is not None else None
-    ) or "run_failure"
-    return failure_fingerprint(location, failure.step_key, error_type)
+    return failure_fingerprint(location, failure.step_key, failure.error_type)
 
 
-def is_an_interrupted_worker(context: RunFailureSensorContext) -> bool:
+def sentry_message(
+    context: RunFailureSensorContext, failure: StepFailure | None
+) -> str:
+    """Title the issue after the defect rather than the launch path.
+
+    Sentry titles a message event with its message, and this one used to be
+    ``Dagster run failure: {job_name}``. Everything the automation sensor
+    materializes runs as ``__ASSET_JOB``, so every such issue in the list read
+    identically -- DAGSTER-2J reached 27,000 events without naming what broke.
+    The exception type lived only inside the fingerprint, which the UI does not
+    render.
+
+    Formatted like an exception issue's title so a failure reads the same
+    whichever path reported it.
+    """
+    if failure is None:
+        return (
+            f"Dagster run failed with no step failure: {context.dagster_run.job_name}"
+        )
+    return f"{failure.error_type}: {failure.step_key}"
+
+
+def sentry_failure_detail(
+    context: RunFailureSensorContext, failure: StepFailure | None
+) -> str:
+    """Return the failure text a reader needs, trimmed to what Sentry will keep.
+
+    The serialized step error carries the traceback the hook path would have
+    attached as real frames. A run with no step failure has only the run's own
+    failure message, which is what the Slack path falls back to as well.
+    """
+    error = failure.error if failure is not None else None
+    detail = (
+        error.to_string()
+        if error is not None
+        else (context.failure_event.message or "No detail available")
+    )
+    return truncate_text(detail, MAX_SENTRY_ERROR_LENGTH)
+
+
+def is_an_interrupted_worker(failure: StepFailure | None) -> bool:
     """Whether this run died because its process was taken away.
 
     The ``drop_interruptions`` before_send in ol_orchestrate.lib.sentry reads
@@ -252,16 +334,12 @@ def is_an_interrupted_worker(context: RunFailureSensorContext) -> bool:
     The serialized step error is where the type survives, so the check has to
     happen here rather than in the shared filter.
     """
-    step_failures = context.get_step_failure_events()
-    if not step_failures:
-        return False
-    error = getattr(step_failures[0].event_specific_data, "error", None)
-    if error is None:
-        return False
-    return user_code_error_type(error) in INTERRUPTION_ERRORS
+    return failure is not None and failure.error_type in INTERRUPTION_ERRORS
 
 
-def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | None:
+def capture_run_failure_to_sentry(
+    context: RunFailureSensorContext, failure: StepFailure | None
+) -> str | None:
     """Report a run failure to Sentry and return the event ID.
 
     Complements the in-process hook in ol_orchestrate.lib.sentry. That hook has
@@ -273,8 +351,8 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         return None
 
     run = context.dagster_run
-    step_failures = context.get_step_failure_events()
-    step_key = step_failures[0].step_key if step_failures else "run"
+    step_key = failure.step_key if failure else "run"
+    error_type = failure.error_type if failure else "run_failure"
 
     with sentry_sdk.new_scope() as scope:
         scope.set_tag("dagster_job", run.job_name)
@@ -286,6 +364,20 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
         # you need to go and look at the failure.
         scope.set_tag("dagster_partition", run.tags.get(PARTITION_NAME_TAG, "none"))
         scope.set_tag("captured_by", "sensor")
+        # The hook path puts the exception type in the event itself. This one
+        # reports through capture_message, which has no exception, so the type
+        # has to be carried explicitly or it exists only inside the fingerprint
+        # -- where nothing in the Sentry UI will show it, and no search can
+        # filter on it.
+        scope.set_tag("dagster_exception_type", error_type)
+        scope.set_context(
+            "dagster_step_failure",
+            {
+                "step_key": step_key,
+                "exception_type": error_type,
+                "error": sentry_failure_detail(context, failure),
+            },
+        )
         scope.set_context(
             "dagster_run",
             {
@@ -295,9 +387,9 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
                 "tags": dict(run.tags),
             },
         )
-        scope.fingerprint = sentry_fingerprint(context)
+        scope.fingerprint = sentry_fingerprint(context, failure)
         event_id = sentry_sdk.capture_message(
-            f"Dagster run failure: {run.job_name}",
+            sentry_message(context, failure),
             level="error",
         )
 
@@ -307,10 +399,16 @@ def capture_run_failure_to_sentry(context: RunFailureSensorContext) -> str | Non
 
 def error_message(
     context: RunFailureSensorContext,
+    step_failure_events: Sequence[Any],
+    *,
     sentry_event_id: str | None = None,
     suppressed_repeats: int = 0,
 ) -> list[dict[str, Any]]:
-    """Format error message for Slack notification."""
+    """Format error message for Slack notification.
+
+    Takes the step failure events rather than re-reading them: the sensor has
+    already paid for that query once by the time it gets here.
+    """
 
     def format_error(error_event):
         return (
@@ -320,7 +418,6 @@ def error_message(
             else "Unknown error"
         )
 
-    step_failure_events = context.get_step_failure_events()
     error_details = [
         {
             "type": "section",
@@ -523,7 +620,15 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
         )
         return
 
-    if is_an_interrupted_worker(context):
+    # The single event-log read for this evaluation.
+    # RunFailureSensorContext.get_step_failure_events queries
+    # instance.get_records_for_run and caches nothing, so every helper that
+    # called it for itself was another round trip on a sensor that fires once
+    # per failed run across every code location.
+    step_failure_events = context.get_step_failure_events()
+    failure = step_failure_of(step_failure_events)
+
+    if is_an_interrupted_worker(failure):
         context.log.info(
             "Skipping notification for run %s: its worker was terminated "
             "(deploy, eviction or drain) rather than failing.",
@@ -531,8 +636,8 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
         )
         return
 
-    fingerprint = sentry_fingerprint(context)
-    sentry_event_id = capture_run_failure_to_sentry(context)
+    fingerprint = sentry_fingerprint(context, failure)
+    sentry_event_id = capture_run_failure_to_sentry(context, failure)
 
     # Sentry still receives every failure -- it aggregates, and the count is the
     # signal. Slack does not aggregate, so the same failure repeating is rate
@@ -563,7 +668,12 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
     client = WebClient(token=get_slack_token())
     client.chat_postMessage(
         channel=slack_channel,
-        blocks=error_message(context, sentry_event_id, repeats),
+        blocks=error_message(
+            context,
+            step_failure_events,
+            sentry_event_id=sentry_event_id,
+            suppressed_repeats=repeats,
+        ),
         text=f"Dagster {DAGSTER_ENV} run failure: {run.job_name}",
     )
     record_announcement(context.instance, announcement_key, announced_at)
