@@ -16,6 +16,7 @@ dependencies = [
     "fenic",
     "umap-learn",
     "anthropic",
+    "openai",
     "presidio-analyzer",
     "presidio-anonymizer",
     "spacy>=3.7",
