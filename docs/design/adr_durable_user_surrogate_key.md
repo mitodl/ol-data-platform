@@ -65,17 +65,20 @@ where one exists. That fixed the id *half*. It did not make the key durable, bec
 orphans against the project-wide `+error_if: ">10"` (`dbt_project.yml:220`), failing a
 1058-node Dagster dbt build.
 
-The contrast confirms the mechanism rather than a data-load problem:
-`tfact_enrollment`, `tfact_grade`, `tfact_certificate` and `tfact_order` carry the identical
-relationships test at error severity, were co-built with `dim_user` in that run, and all
-passed. Only `bridge_user_courserun_role`, which was *not* in the selection and therefore
-kept keys from an earlier build, failed.
+**Why only that test failed is a severity artefact, not evidence that the facts were
+clean.** Counted from the manifest: eleven models carry a relationships test to
+`dim_user.user_pk`, and **eight of them are at `severity: warn`** (`tfact_certificate`,
+`tfact_enrollment`, `tfact_feedback`, `tfact_grade`, `tfact_order`, `tfact_payment`,
+`tfact_problem_events`, `tfact_studentmodule_problems`). Only the three bridges
+(`bridge_user_courserun_role`, `bridge_user_organization`, and the new
+`bridge_user_key_alias`) are at error.
 
-Three relationships tests are already held at `severity: warn` purely to absorb this class of
-failure, each with a comment saying "warn until the post-cutover full refresh":
-`_fact_tables.yml:338` (`tfact_payment.user_fk`), `_dim__models.yml:610`
-(`tfact_problem_events.user_fk`), `_dim__models.yml:693`
-(`tfact_studentmodule_problems.user_fk`).
+So `bridge_user_courserun_role` is simply the model whose orphans were configured to fail
+the build. Whether the fact tables also had orphans in that run is **not known** and cannot
+be recovered from the run result, because a warn does not stop the build. Three of the eight
+warns carry an explicit "warn until the post-cutover full refresh" comment
+(`_fact_tables.yml:338`, `_dim__models.yml:610`, `_dim__models.yml:693`); the rest predate
+it. Treat the eight warns as suppressed signal rather than as passing tests.
 
 ## Constraints
 
@@ -329,7 +332,7 @@ permanently unstable, and leaves the three `severity: warn` overrides in place i
 - **The no-op was proven on a fixture, not on production rows.** `dim_user` cannot be built
   on the `dev_local` DuckDB target, for two reasons that pre-date this change and that fail
   the old model identically: `raw__bootcamps__app__postgres__profiles_profile` no longer
-  exists in Glue (the Bootcamps app is gone; its dbt models are not), and
+  exists in Glue (the Bootcamps app is gone; 28 bootcamps dbt models are not), and
   `stg__edxorg__bigquery__mitx_user_info_combo` uses a lambda DuckDB cannot bind. Run the
   production-data diff on a Trino dev schema before merge if that assurance is wanted.
 - **No unit test guards the mint expression.** dbt unit tests do not currently run in this
