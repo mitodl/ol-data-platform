@@ -180,9 +180,14 @@ class TestSqlBuilders:
         assert "exclude_columns=['_loaded_at']" in sql
         assert "summarize=true" in sql
 
-    def test_compare_relations_composite_pk(self) -> None:
+    def test_compare_relations_composite_pk_is_comma_joined_not_a_jinja_list(self) -> None:
+        # audit_helper interpolates primary_key straight into the summarize=false
+        # `order by`, so a Jinja list reaches the database as the literal text
+        # `['k1', 'k2']` and fails to parse. A comma-joined column list is the
+        # only form that renders to valid SQL there.
         sql = _compare_relations_sql("a", "b", ["k1", "k2"], [], summarize=False)
-        assert "primary_key=['k1', 'k2']" in sql
+        assert "primary_key='k1, k2'" in sql
+        assert "['k1', 'k2']" not in sql
         assert "summarize=false" in sql
 
     def test_compare_relations_no_pk(self) -> None:
@@ -250,6 +255,31 @@ class TestRelationJinja:
         sql = _compare_column_sql("old_m", "new_m", ["id"], "some_col")
         assert "select id, some_col from" in sql
         assert "select *" not in sql
+
+    def test_compare_column_sql_composite_pk_uses_a_surrogate_join_key(self) -> None:
+        # compare_column_values only supports a scalar primary key -- it emits
+        # `a_query.{{ primary_key }} = b_query.{{ primary_key }}`. A composite key
+        # is collapsed into one hashed column inside a_query/b_query instead, so no
+        # Jinja list (or comma-joined list) ever lands in the emitted SQL.
+        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
+        assert "primary_key='ol_dbt_diff_surrogate_key'" in sql
+        assert "{{ dbt_utils.generate_surrogate_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key" in sql
+        assert "primary_key=['k1', 'k2']" not in sql
+        assert "primary_key='k1, k2'" not in sql
+
+    def test_compare_column_sql_composite_pk_selects_key_on_both_sides(self) -> None:
+        # The surrogate must exist in a_query AND b_query for the join to resolve.
+        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
+        select_clause = (
+            "select {{ dbt_utils.generate_surrogate_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key, some_col from"
+        )
+        assert sql.count(select_clause) == 2
+
+    def test_compare_column_sql_single_pk_keeps_the_real_column(self) -> None:
+        # No surrogate for a single key -- the real column joins directly.
+        sql = _compare_column_sql("old_m", "new_m", ["id"], "some_col")
+        assert "primary_key='id'" in sql
+        assert "surrogate_key" not in sql
 
 
 class TestCompareSingleColumn:

@@ -332,6 +332,25 @@ def _jinja_list(values: list[str]) -> str:
     return f"[{inner}]"
 
 
+# Alias for the synthetic single-column join key that stands in for a composite
+# primary key in the per-column comparison (see `_compare_column_sql`). Named to
+# be collision-proof against real warehouse columns.
+_SURROGATE_PK = "ol_dbt_diff_surrogate_key"
+
+
+def _pk_string(values: list[str]) -> str:
+    """Render primary key columns as a single quoted, comma-joined SQL fragment.
+
+    audit_helper takes ``primary_key`` as an opaque string it interpolates
+    straight into SQL, never as a list -- a Jinja list literal reaches the
+    database as the text ``['k1', 'k2']`` and fails to parse. For
+    ``compare_relations``/``compare_queries`` the only use is the ``order by``
+    of the ``summarize=false`` branch, where a comma-joined column list is
+    exactly right.
+    """
+    return f"'{', '.join(values)}'"
+
+
 def _relation_jinja(
     name: str,
     *,
@@ -374,10 +393,7 @@ def _compare_relations_sql(
     ``percent_of_total`` grouping; with ``summarize=False`` it returns the actual
     differing rows (used to sample mismatches).
     """
-    pk_arg = ""
-    if primary_key:
-        pk_repr = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
-        pk_arg = f", primary_key={pk_repr}"
+    pk_arg = f", primary_key={_pk_string(primary_key)}" if primary_key else ""
     exclude_arg = f", exclude_columns={_jinja_list(exclude_columns)}" if exclude_columns else ""
     a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
     b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
@@ -403,8 +419,21 @@ def _compare_column_sql(
     old_database: str | None = None,
     new_database: str | None = None,
 ) -> str:
-    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column."""
-    pk = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
+    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column.
+
+    ``compare_column_values`` supports only a *scalar* primary key: it emits
+    ``a_query.{{ primary_key }} = b_query.{{ primary_key }}`` (plus a coalesce
+    and several null checks), so the key has to be one column name that exists
+    in both queries. A composite key therefore cannot be passed through --
+    neither as a Jinja list (which reaches the database as the literal text
+    ``['k1', 'k2']``) nor comma-joined (``a.k1, k2 = b.k1, k2``).
+
+    For a composite key we instead synthesize a single hashed join column with
+    ``dbt_utils.generate_surrogate_key`` inside a_query/b_query and hand
+    audit_helper *that* column name. One side effect is better than the scalar
+    path: generate_surrogate_key coalesces nulls to a sentinel, so rows whose
+    key components are null still pair up, where a plain equi-join drops them.
+    """
     a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
     b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
     # Only the primary key(s) + the one column being compared are needed here --
@@ -412,7 +441,13 @@ def _compare_column_sql(
     # selecting every column (as this used to) forces that join to carry the
     # whole row width for a single-column comparison, which is needless I/O on
     # wide tables.
-    select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
+    if len(primary_key) > 1:
+        pk = f"'{_SURROGATE_PK}'"
+        key_expr = f"{{{{ dbt_utils.generate_surrogate_key({_jinja_list(primary_key)}) }}}}"
+        select_cols = f"{key_expr} as {_SURROGATE_PK}, {column}"
+    else:
+        pk = f"'{primary_key[0]}'"
+        select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
     # a_query/b_query are built with {% set %}/{% endset %} so `a_expr`/`b_expr`
     # (a ref()/api.Relation.create() call) are rendered by Jinja BEFORE
     # compare_column_values ever sees the string. Embedding `{{ ... }}` directly
