@@ -10,7 +10,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # for an example.
 ENV UV_PYTHON_DOWNLOADS=0
 
-# Install build dependencies required for compiling C extensions (e.g., pyroaring)
+# Install build dependencies required for compiling C extensions (e.g., presidio/spaCy)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -19,10 +19,10 @@ WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
-COPY dg_projects/student_risk_probability dg_projects/student_risk_probability
+COPY dg_projects/ml dg_projects/ml
 
-# Install dependencies from the student_risk_probability project
-WORKDIR /app/dg_projects/student_risk_probability
+# Install dependencies from the ml project
+WORKDIR /app/dg_projects/ml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
     uv sync --frozen --no-install-project --no-dev --no-editable
@@ -38,7 +38,7 @@ FROM python:3.14-slim-bookworm
 # Python executable must be the same.
 
 # Copy the application from the builder
-COPY --from=builder /app/dg_projects/student_risk_probability /app
+COPY --from=builder /app/dg_projects/ml /app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

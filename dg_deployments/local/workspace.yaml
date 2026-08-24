@@ -35,6 +35,6 @@ load_from:
     port: 4007
     location_name: 'b2b_organization'
 - grpc_server:
-    host: dagster_student_risk_probability
+    host: dagster_ml
     port: 4008
-    location_name: 'student_risk_probability'
+    location_name: 'ml'

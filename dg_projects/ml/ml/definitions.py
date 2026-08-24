@@ -1,5 +1,3 @@
-import os
-
 from dagster import (
     Definitions,
     define_asset_job,
@@ -7,6 +5,9 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.feedback_redacted import feedback_redacted
+from ml.assets.risk_probability import student_risk_probability
+from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -18,9 +19,8 @@ from ol_orchestrate.lib.utils import (
     s3_uploads_bucket,
     unauthenticated_vault,
 )
-from student_risk_probability.assets.risk_probability import student_risk_probability
 
-init_sentry("student_risk_probability")
+init_sentry("ml")
 
 # Initialize vault with resilient loading
 try:
@@ -36,21 +36,28 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
-if DAGSTER_ENV == "dev":
-    database_name = (
-        f"ol_warehouse_production_{os.environ.get('DBT_SCHEMA_SUFFIX')}_reporting"
-    )
-else:
-    database_name = "ol_warehouse_production_reporting"
-
 data_export_job = define_asset_job(
     name="student_risk_probability_data_export_job",
     selection=[student_risk_probability],
 )
 
+feedback_redacted_job = define_asset_job(
+    name="feedback_redacted_job",
+    selection=[feedback_redacted],
+)
+
 # Create unified definitions
 defs = Definitions(
     resources={
+        # namespace intentionally omitted here: dagster's DbIOManager schema
+        # precedence is output metadata > io_manager namespace > asset key
+        # prefix > "public", and the AssetKey prefix (["reporting", ...] /
+        # ["intermediate", ...]) is a literal Glue database name, not env-aware
+        # -- it does not expand to ol_warehouse_production_<suffix>_reporting.
+        # Each asset sets its own env-aware `metadata={"schema": ...}` instead
+        # (see risk_probability.py / feedback_redacted.py), which is what
+        # actually determines its write target; a shared namespace here would
+        # force both assets to the same schema.
         "io_manager": PolarsIcebergIOManager(
             name="iceberg_io_manager",
             config=IcebergCatalogConfig(
@@ -67,7 +74,6 @@ defs = Definitions(
                     "s3.request-timeout": "120",
                 }
             ),
-            namespace=database_name,
             reader_override="pyiceberg",
         ),
         "s3file_io_manager": default_file_object_io_manager(
@@ -77,7 +83,8 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
+        "llm": LLMClientFactory(vault=vault),
     },
-    assets=with_failure_hooks([student_risk_probability]),
-    jobs=[data_export_job],
+    assets=with_failure_hooks([student_risk_probability, feedback_redacted]),
+    jobs=[data_export_job, feedback_redacted_job],
 )
