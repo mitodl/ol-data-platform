@@ -482,3 +482,152 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [courserun_readable_id, coursestructure_xml_block_id, coursestructure_xml_block_type,
         coursestructure_xml_retrieved_at]
+
+- name: int__combined__user_accounts
+  description: >
+    One row per source-system account across every platform, before any identity
+    resolution. Extracted from dim_user's former `combined_accounts` CTE so that
+    int__combined__user_key_map and dim_user resolve identity from the same account
+    list.
+
+
+    NOT int__combined__users, which implements a competing per-platform identity rule
+    and
+    feeds the marts layer. Grain: one row per (id_source, id_source_user_id), or per
+    email
+    for rows carrying no source id.
+  columns:
+  - name: id_source
+    description: >
+      str, the ID NAMESPACE the account's id belongs to, not a platform: mitlearn,
+      mitxonline, edxorg, micromasters, mitxonline_openedx, mitxpro, residential,
+      bootcamps, emeritus, global_alumni. mitxonline and mitxonline_openedx are separate
+      namespaces because the same integer means different people in each.
+  - name: id_source_user_id
+    description: >
+      str, the account's primary key in id_source's namespace. Null for Emeritus and
+      Global Alumni rows that pre-date stable ids; those key on email instead.
+  - name: user_global_id
+    description: str, Keycloak sub. The durable cross-platform identity where present.
+  - name: email
+    description: str, lower-cased account email. Never null; every branch filters
+      nulls.
+    tests:
+    - not_null
+  - name: mitlearn_user_id
+    description: int, MIT Learn application user ID
+  - name: mitlearn_openedx_user_id
+    description: int, open edX user ID for the MIT Learn deployment
+  - name: mitxonline_openedx_user_id
+    description: int, open edX user ID on MITx Online
+  - name: mitxonline_application_user_id
+    description: int, MITx Online application user ID
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: mitxpro_openedx_user_id
+    description: int, open edX user ID on xPro
+  - name: mitxpro_application_user_id
+    description: int, xPro application user ID
+  - name: user_mitxpro_username
+    description: str, username on xPro
+  - name: residential_openedx_user_id
+    description: int, open edX user ID on Residential MITx
+  - name: user_residential_username
+    description: str, username on Residential MITx
+  - name: edxorg_openedx_user_id
+    description: int, open edX user ID on edX.org
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: emeritus_user_id
+    description: str, Emeritus learner ID. Varchar, unlike the integer id spaces.
+  - name: global_alumni_user_id
+    description: str, Global Alumni learner ID. Varchar, unlike the integer id spaces.
+  - name: micromasters_user_id
+    description: int, MicroMasters user ID
+  - name: full_name
+    description: str, full name as collected by the source platform
+  - name: address_country
+    description: str, country code from the source platform profile
+  - name: address_state
+    description: str, state/region from the source platform profile
+  - name: highest_education
+    description: str, self-reported level of education
+  - name: gender
+    description: str, self-reported gender
+  - name: birth_year
+    description: int, self-reported year of birth
+  - name: company
+    description: str, self-reported employer
+  - name: job_title
+    description: str, self-reported job title
+  - name: industry
+    description: str, self-reported industry
+  - name: user_is_active_on_mitlearn
+    description: boolean, account is active on MIT Learn
+  - name: user_joined_on_mitlearn
+    description: timestamp, ISO8601 join date on MIT Learn
+  - name: user_is_active_on_mitxonline
+    description: boolean, account is active on MITx Online
+  - name: user_joined_on_mitxonline
+    description: timestamp, ISO8601 join date on MITx Online
+  - name: user_is_active_on_edxorg
+    description: boolean, account is active on edX.org
+  - name: user_joined_on_edxorg
+    description: timestamp, ISO8601 join date on edX.org
+  - name: user_is_active_on_mitxpro
+    description: boolean, account is active on xPro
+  - name: user_joined_on_mitxpro
+    description: timestamp, ISO8601 join date on xPro
+  - name: user_is_active_on_residential
+    description: boolean, account is active on Residential MITx
+  - name: user_joined_on_residential
+    description: timestamp, ISO8601 join date on Residential MITx
+  - name: bootcamps_application_user_id
+    description: int, Bootcamps application user ID
+  - name: user_is_active_on_bootcamps
+    description: boolean, account is active on Bootcamps
+  - name: user_joined_on_bootcamps
+    description: timestamp, ISO8601 join date on Bootcamps
+
+- name: int__combined__user_key_map
+  description: >
+    The durable user_pk. Append-only: an account natural key is assigned a person
+    key once
+    and never reassigned, so a person's key cannot move when the platform ranking
+    shifts
+    underneath it. See docs/design/adr_durable_user_surrogate_key.md.
+
+
+    This model is STATE. `full_refresh=false` makes `dbt build --full-refresh` a no-op
+    for
+    it on purpose, and the assignment ORDER it holds cannot be reconstructed from
+    the
+    sources. Do not drop or rebuild it without an export to restore from.
+
+
+    Grain: one row per account natural key.
+  columns:
+  - name: account_nk
+    description: >
+      str, the durable account identity: `<id_source>:<id_source_user_id>`, or
+      `email:<email>` for accounts with no source id (Emeritus and Global Alumni rows
+      pre-dating stable ids, which are therefore NOT durable across an email edit).
+    tests:
+    - not_null
+    - unique
+  - name: user_pk
+    description: >
+      str, the person key assigned to this account, permanently. Several accounts
+      share
+      one when they resolve to the same person. dim_user reports the group's survivor;
+      bridge_user_key_alias names any keys that survivorship retired.
+    tests:
+    - not_null
+  - name: assigned_at
+    description: >
+      timestamp, ISO8601 assignment time. This is the survivorship ordering: the oldest
+      assignment in a group wins, which is why it must never be rewritten.
+    tests:
+    - not_null
+  - name: assigned_invocation_id
+    description: str, dbt invocation_id of the run that assigned the key, for forensics

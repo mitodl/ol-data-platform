@@ -1,7 +1,9 @@
 # ADR: Durable surrogate key for `dim_user`
 
-Status: **proposed** · Project: `wp-dbt-warehouse-audit-semantic-accuracy-consolidat-b4244e` ·
-Witan task: `tk-design-durable-user-surrogate-key-replace-email--04b0a2` ·
+Status: **accepted, implemented in the same PR** ·
+Project: `wp-dbt-warehouse-audit-semantic-accuracy-consolidat-b4244e` ·
+Witan tasks: `tk-design-durable-user-surrogate-key-replace-email--04b0a2` (design),
+`tk-implement-the-durable-user-pk-key-map-adr-adr-du-b2c576` (implementation) ·
 Supersedes the "Plan/Design" section of
 [mitodl/ol-data-platform#2383](https://github.com/mitodl/ol-data-platform/issues/2383) ·
 Date: 2026-08-24
@@ -97,12 +99,26 @@ Persist the account-to-person assignment in an **append-only key map**. Never re
 existing account. Derive person-level survivorship from assignment order, which is immutable,
 instead of from the platform ranking, which is volatile.
 
-Three pieces:
+Four files:
+
+| file | role |
+|---|---|
+| `models/intermediate/combined/int__combined__user_accounts.sql` | the account list, extracted from `dim_user`'s former `combined_accounts` CTE |
+| `models/intermediate/combined/int__combined__user_key_map.sql` | the append-only key map |
+| `models/dimensional/bridge_user_key_alias.sql` | retired-to-surviving key map |
+| `macros/user_identity.sql` | `account_nk` and the ranking, shared so the three cannot drift |
+
+The macros are not incidental. `account_nk` is the join key between the map and its
+consumers, and the ranking decides both which account a new group mints from and which
+account's attributes `dim_user` reports. Three literal copies of either would drift, and the
+drift would be silent.
 
 ### 1. `int__combined__user_key_map` (new, append-only state)
 
-Grain: one row per **account natural key**. An account is a row of `combined_accounts`
-(`dim_user.sql:330`). Its natural key is durable by construction, because it is a source
+Grain: one row per **account natural key**. An account is a row of
+`int__combined__user_accounts`, which is `dim_user`'s former `combined_accounts` CTE
+extracted so that the map and `dim_user` resolve identity from the same account list rather
+than each rebuilding it. Its natural key is durable by construction, because it is a source
 system's own primary key:
 
 ```
@@ -137,12 +153,22 @@ Assignment rule for accounts not yet in the map:
 
 1. If another account in the same person group already has a map row, adopt that group's
    incumbent `user_pk` (the one with the oldest `assigned_at`).
-2. Otherwise mint `generate_surrogate_key(['account_nk'])`, where `account_nk` is the
-   *group winner's* natural key under the existing `ranked_accounts` ordering.
+2. Otherwise mint
+   `generate_surrogate_key(['winner_identity_source', 'winner_identity_id'])`, taking both
+   from the group winner under the existing `ranked_accounts` ordering, exactly as
+   `account_identity` computes them today.
 
-Rule 2 deliberately reproduces today's key value. Minting is a pure function of the winning
-account's natural key, so it is also deterministic and reproducible, which matters for
-disaster recovery (see Operability).
+Rule 2 must be *today's expression verbatim*, not a hash of `account_nk`. Those are not the
+same value: today's key is a two-argument hash whose first argument is the literal
+`'global'` when the winner carries a `user_global_id`, which `account_nk` does not encode.
+Minting from `account_nk` would re-key every person on the cutover run and destroy the
+no-op property below. `account_nk` is the map's *lookup* key only.
+
+One detail the implementation had to add: `account_nk` is unique for id-bearing rows but not
+for the id-less ones, which key on email, and two Emeritus rows can share an address. The
+map dedupes to one row per `account_nk` so the join in `dim_user` cannot fan out. Only the
+*map* is deduped; `dim_user` still sees every account row, so `agg_view`'s `max()` merge of
+platform ids is unaffected.
 
 ### 2. `dim_user` resolves through the map
 
@@ -231,11 +257,11 @@ permanently unstable, and leaves the three `severity: warn` overrides in place i
 
 - **Recovery.** The map is state that cannot be rebuilt reproducibly from sources alone: the
   assignment *order* is not recoverable. Recovery paths, in order: Iceberg time travel
-  (dimensional retains 14 days, `dbt_project.yml:109-115`); a periodic export of the map to
-  a seed or S3 prefix; and, as a partial last resort, re-minting, which is deterministic per
-  `account_nk` and so restores the key for every group whose winner has not changed.
-  **Add the export before enabling the model in production.** 14 days of Iceberg retention is
-  not a backup for a table whose loss re-keys the warehouse.
+  (the model sets 30 days of its own, above the 14 the `dimensional` folder uses); a
+  periodic export of the map to a seed or S3 prefix; and, as a partial last resort,
+  re-minting, which is deterministic per group and so restores the key for every group whose
+  winner has not changed. **Add the export before enabling the model in production.**
+  Iceberg snapshot retention is not a backup for a table whose loss re-keys the warehouse.
 - **Growth.** One row per account, insert-only, no updates. Bounded by total accounts across
   all platforms.
 - **Maintenance.** Inherits the `intermediate` folder config. It will need its own
