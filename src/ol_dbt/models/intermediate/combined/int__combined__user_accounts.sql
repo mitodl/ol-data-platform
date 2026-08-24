@@ -627,4 +627,49 @@ with mitx_users as (
 
 )
 
-select * from combined_accounts
+-- Explicit rather than `select *`: the column list is this model's contract with
+-- int__combined__user_key_map and dim_user, and it is what lets dbt resolve columns
+-- from the manifest alone (unit tests and ol-dbt validate both need that).
+select
+    id_source
+    , id_source_user_id
+    , user_global_id
+    , mitlearn_user_id
+    , mitlearn_openedx_user_id
+    , mitxonline_openedx_user_id
+    , mitxonline_application_user_id
+    , user_mitxonline_username
+    , mitxpro_openedx_user_id
+    , mitxpro_application_user_id
+    , user_mitxpro_username
+    , residential_openedx_user_id
+    , user_residential_username
+    , edxorg_openedx_user_id
+    , user_edxorg_username
+    , emeritus_user_id
+    , global_alumni_user_id
+    , email
+    , full_name
+    , address_country
+    , highest_education
+    , gender
+    , birth_year
+    , company
+    , job_title
+    , industry
+    , address_state
+    , user_is_active_on_mitlearn
+    , user_joined_on_mitlearn
+    , user_is_active_on_mitxonline
+    , user_joined_on_mitxonline
+    , user_is_active_on_edxorg
+    , user_joined_on_edxorg
+    , user_is_active_on_mitxpro
+    , user_joined_on_mitxpro
+    , user_is_active_on_residential
+    , user_joined_on_residential
+    , micromasters_user_id
+    , bootcamps_application_user_id
+    , user_is_active_on_bootcamps
+    , user_joined_on_bootcamps
+from combined_accounts

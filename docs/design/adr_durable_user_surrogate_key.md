@@ -209,11 +209,44 @@ rule 2 is exactly today's computation. Every person's `user_pk` on cutover day e
 value they already have. No downstream churn, no coordinated re-key, no reverse-ETL outage.
 The change buys stability going forward without paying a migration cost.
 
-This is the property that makes the change shippable. Verify it before merge by materializing
-old and new `dim_user` side by side and asserting a full outer join on `user_pk` produces
-zero non-matched rows on either side. `ol-dbt local` + `ol-dbt diff` does this against real
-production data on DuckDB without warehouse credentials (`src/ol_dbt/README.md`,
-`skills/data/ol-dbt-local-dev/SKILL.md`).
+This is the property that makes the change shippable, so it was verified rather than
+asserted. Both the old and new key expressions were run on DuckDB over a fixture covering
+every ranking path (two accounts sharing an email, an account with a `user_global_id`, an
+xPro-only account, an id-less account keyed on email):
+
+```
+=== build 1: per-person old key vs new key ===
+               email                      old_user_pk                      new_user_pk verdict
+  joiner@example.com e82719d98dd31b1e1e2ade0acf8d82d2 e82719d98dd31b1e1e2ade0acf8d82d2    SAME
+keycloak@example.com 8b490ac03c54ed06b2e6a183a5277fe6 8b490ac03c54ed06b2e6a183a5277fe6    SAME
+  shared@example.com bae78f912c4d6f2e82015abefd2e4978 bae78f912c4d6f2e82015abefd2e4978    SAME
+    solo@example.com 5e6b569de16c9d0bcc9300e32c3a2de7 5e6b569de16c9d0bcc9300e32c3a2de7    SAME
+
+=== key-set full outer join ===
+ in_old_not_new  in_new_not_old
+              0               0
+```
+
+The durability property was verified the same way, by running a second build in which a
+MITx Online account (rank 2) joins an xPro-only learner (rank 6). This is re-key trigger 1,
+and it is what failed in production:
+
+```
+               email                 key_after_build1     OLD_after_build2      old_verdict new_verdict
+  joiner@example.com e82719d98dd31b1e1e2ade0acf8d82d2 4a22a493c769200bd... *** RE-KEYED *** stable
+keycloak@example.com 8b490ac03c54ed06b2e6a183a5277fe6 8b490ac03c54ed06b2... stable          stable
+  shared@example.com bae78f912c4d6f2e82015abefd2e4978 bae78f912c4d6f2e82... stable          stable
+    solo@example.com 5e6b569de16c9d0bcc9300e32c3a2de7 5e6b569de16c9d0bcc... stable          stable
+```
+
+The old key moves; the new key does not. The map shows `mitxonline:501` adopting the
+incumbent `mitxpro:42` key rather than minting its own.
+
+**This is a fixture, not a production row count.** The stronger check (materialize old and
+new `dim_user` side by side on production data via `ol-dbt local` + `ol-dbt diff`, full outer
+join on `user_pk`, zero non-matched rows either side) could not be run: `dim_user` does not
+build on the local DuckDB target for two reasons that pre-date this change, both of which
+fail the *old* model identically. See Not verified.
 
 ## Residual instability, and the endgame
 
@@ -293,3 +326,15 @@ permanently unstable, and leaves the three `severity: warn` overrides in place i
   Hightouch configuration exists here. Enumerate them before item 2 above.
 - **Historical churn rate.** No measurement of how often `user_pk` has actually changed
   per build. The 2026-08-18 failure is a single observed instance, not a trend.
+- **The no-op was proven on a fixture, not on production rows.** `dim_user` cannot be built
+  on the `dev_local` DuckDB target, for two reasons that pre-date this change and that fail
+  the old model identically: `raw__bootcamps__app__postgres__profiles_profile` no longer
+  exists in Glue (the Bootcamps app is gone; its dbt models are not), and
+  `stg__edxorg__bigquery__mitx_user_info_combo` uses a lambda DuckDB cannot bind. Run the
+  production-data diff on a Trino dev schema before merge if that assurance is wanted.
+- **No unit test guards the mint expression.** dbt unit tests do not currently run in this
+  project: `macros/override_ref.sql` returns a bare string on its Glue-fallback path, which
+  the unit-test machinery cannot consume, and on the credential-free `dev` target the
+  upstream relations do not exist for column resolution. Until that is fixed, a change to
+  the mint expression will not fail CI, and it would silently re-key the warehouse. This is
+  the single most valuable follow-up in this list.
