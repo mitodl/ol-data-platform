@@ -41,9 +41,9 @@ with source as (
         , {{ json_query_string('context', "'$.org_id'") }} as org_id
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         --- use regex here to preserve the nanoseconds as date_parse truncates the fraction of second to milliseconds
-        , to_iso8601(from_iso8601_timestamp_nanos(
-            regexp_replace("time", '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3')
-        )) as useractivity_timestamp
+        , {{ cast_timestamp_to_iso8601(from_iso8601_timestamp_nanos(
+            "regexp_replace(\"time\", '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3')"
+        )) }} as useractivity_timestamp
     from most_recent_source
 )
 

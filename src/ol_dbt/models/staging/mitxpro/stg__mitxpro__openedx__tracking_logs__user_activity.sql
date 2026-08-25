@@ -45,9 +45,9 @@ with source as (
         , {{ json_query_string('context', "'$.org_id'") }} as org_id
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         --- due to log collector changes, values of time field come with different formats
-        , to_iso8601(from_iso8601_timestamp_nanos(
-            regexp_replace(time, '(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3') -- noqa
-        )) as useractivity_timestamp
+        , {{ cast_timestamp_to_iso8601(from_iso8601_timestamp_nanos(
+            "regexp_replace(time, '(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3')"
+        )) }} as useractivity_timestamp -- noqa
     from most_recent_source
 )
 

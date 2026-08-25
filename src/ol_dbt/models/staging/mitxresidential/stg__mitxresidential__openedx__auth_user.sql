@@ -20,8 +20,8 @@ with source as (
                 ), '><', ''
             ), '<>', ' '
         ) as user_full_name
-        , to_iso8601(date_joined) as user_joined_on
-        , to_iso8601(last_login) as user_last_login
+        , {{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
+        , {{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
     from source
 )
 
