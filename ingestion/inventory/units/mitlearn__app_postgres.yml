@@ -1,0 +1,805 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitlearn
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitlearn__app__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - name: MIT Learn Production → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - articles_article
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - authentication_blockedemailregex
+    - authentication_blockediprange
+    - channels_channel
+    - channels_channeldepartmentdetail
+    - channels_channelgrouprole
+    - channels_channellist
+    - channels_channelpathwaydetail
+    - channels_channeltopicdetail
+    - channels_channelunitdetail
+    - channels_fields_fieldchannel
+    - channels_fields_fieldchannelgrouprole
+    - channels_fields_fieldlist
+    - channels_fields_subfield
+    - channels_subchannel
+    - discussions_channel
+    - django_admin_log
+    - django_content_type
+    - django_migrations
+    - django_session
+    - django_site
+    - durable_cache
+    - external_asset_cache
+    - guardian_groupobjectpermission
+    - guardian_userobjectpermission
+    - imagekit_cache
+    - interactions_contenttypeinteraction
+    - learning_resources_contentfile
+    - learning_resources_contentfile_content_tags
+    - learning_resources_contentsummarizerconfiguration
+    - learning_resources_course
+    - learning_resources_learningpath
+    - learning_resources_learningresource
+    - learning_resources_learningresource_content_tags
+    - learning_resources_learningresource_departments
+    - learning_resources_learningresource_resource_prices
+    - learning_resources_learningresource_topics
+    - learning_resources_learningresourcecontenttag
+    - learning_resources_learningresourcedepartment
+    - learning_resources_learningresourceimage
+    - learning_resources_learningresourceinstructor
+    - learning_resources_learningresourceofferor
+    - learning_resources_learningresourceplatform
+    - learning_resources_learningresourceprice
+    - learning_resources_learningresourcerelationship
+    - learning_resources_learningresourcerun
+    - learning_resources_learningresourcerun_resource_prices
+    - learning_resources_learningresourceschool
+    - learning_resources_learningresourcetopic
+    - learning_resources_learningresourcetopicmapping
+    - learning_resources_learningresourceviewevent
+    - learning_resources_podcast
+    - learning_resources_podcastepisode
+    - learning_resources_program
+    - learning_resources_runinstructorrelationship
+    - learning_resources_search_percolatequery
+    - learning_resources_search_percolatequery_users
+    - learning_resources_userlist
+    - learning_resources_userlist_topics
+    - learning_resources_userlistrelationship
+    - learning_resources_video
+    - learning_resources_videochannel
+    - learning_resources_videoplaylist
+    - news_events_feedeventdetail
+    - news_events_feedimage
+    - news_events_feeditem
+    - news_events_feednewsdetail
+    - news_events_feedsource
+    - oauth2_provider_accesstoken
+    - oauth2_provider_application
+    - oauth2_provider_grant
+    - oauth2_provider_idtoken
+    - oauth2_provider_refreshtoken
+    - profiles_profile
+    - profiles_profile_topic_interests
+    - profiles_programletter
+    - profiles_userwebsite
+    - silk_profile
+    - silk_profile_queries
+    - silk_request
+    - silk_response
+    - silk_sqlquery
+    - social_auth_association
+    - social_auth_code
+    - social_auth_nonce
+    - social_auth_partial
+    - social_auth_usersocialauth
+    - testimonials_attestation
+    - testimonials_attestation_channels
+    - testimonials_attestation_offerors
+    - users_user
+    - users_user_groups
+    - users_user_user_permissions
+    - widgets_widgetinstance
+    - widgets_widgetlist
+tables:
+- name: articles_article
+  raw_table: raw__mitlearn__app__postgres__articles_article
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group
+  raw_table: raw__mitlearn__app__postgres__auth_group
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__mitlearn__app__postgres__auth_group_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__mitlearn__app__postgres__auth_permission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: authentication_blockedemailregex
+  raw_table: raw__mitlearn__app__postgres__authentication_blockedemailregex
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: authentication_blockediprange
+  raw_table: raw__mitlearn__app__postgres__authentication_blockediprange
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channel
+  raw_table: raw__mitlearn__app__postgres__channels_channel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channeldepartmentdetail
+  raw_table: raw__mitlearn__app__postgres__channels_channeldepartmentdetail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - channel_id
+  modeled: false
+- name: channels_channelgrouprole
+  raw_table: raw__mitlearn__app__postgres__channels_channelgrouprole
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channellist
+  raw_table: raw__mitlearn__app__postgres__channels_channellist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channelpathwaydetail
+  raw_table: raw__mitlearn__app__postgres__channels_channelpathwaydetail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - channel_id
+  modeled: false
+- name: channels_channeltopicdetail
+  raw_table: raw__mitlearn__app__postgres__channels_channeltopicdetail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - channel_id
+  modeled: false
+- name: channels_channelunitdetail
+  raw_table: raw__mitlearn__app__postgres__channels_channelunitdetail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - channel_id
+  modeled: false
+- name: channels_fields_fieldchannel
+  raw_table: raw__mitlearn__app__postgres__channels_fields_fieldchannel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_fieldchannelgrouprole
+  raw_table: raw__mitlearn__app__postgres__channels_fields_fieldchannelgrouprole
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_fieldlist
+  raw_table: raw__mitlearn__app__postgres__channels_fields_fieldlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_subfield
+  raw_table: raw__mitlearn__app__postgres__channels_fields_subfield
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_subchannel
+  raw_table: raw__mitlearn__app__postgres__channels_subchannel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: discussions_channel
+  raw_table: raw__mitlearn__app__postgres__discussions_channel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_admin_log
+  raw_table: raw__mitlearn__app__postgres__django_admin_log
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__mitlearn__app__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_migrations
+  raw_table: raw__mitlearn__app__postgres__django_migrations
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_session
+  raw_table: raw__mitlearn__app__postgres__django_session
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - session_key
+  modeled: false
+- name: django_site
+  raw_table: raw__mitlearn__app__postgres__django_site
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: durable_cache
+  raw_table: raw__mitlearn__app__postgres__durable_cache
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: external_asset_cache
+  raw_table: raw__mitlearn__app__postgres__external_asset_cache
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: guardian_groupobjectpermission
+  raw_table: raw__mitlearn__app__postgres__guardian_groupobjectpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: guardian_userobjectpermission
+  raw_table: raw__mitlearn__app__postgres__guardian_userobjectpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: imagekit_cache
+  raw_table: raw__mitlearn__app__postgres__imagekit_cache
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: interactions_contenttypeinteraction
+  raw_table: raw__mitlearn__app__postgres__interactions_contenttypeinteraction
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_contentfile
+  raw_table: raw__mitlearn__app__postgres__learning_resources_contentfile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_contentfile_content_tags
+  raw_table: raw__mitlearn__app__postgres__learning_resources_contentfile_content_tags
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_contentsummarizerconfiguration
+  raw_table: raw__mitlearn__app__postgres__learning_resources_contentsummarizerconfiguration
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_course
+  raw_table: raw__mitlearn__app__postgres__learning_resources_course
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - learning_resource_id
+  modeled: false
+- name: learning_resources_learningpath
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningpath
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresource
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresource_content_tags
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource_content_tags
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresource_departments
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource_departments
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresource_resource_prices
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource_resource_prices
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresource_topics
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourcecontenttag
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcecontenttag
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourcedepartment
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcedepartment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - department_id
+  modeled: false
+- name: learning_resources_learningresourceimage
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceimage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourceinstructor
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceinstructor
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourceofferor
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceofferor
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - code
+  modeled: false
+- name: learning_resources_learningresourceplatform
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceplatform
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - code
+  modeled: false
+- name: learning_resources_learningresourceprice
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceprice
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourcerelationship
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcerelationship
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourcerun
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcerun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourcerun_resource_prices
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcerun_resource_prices
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourceschool
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceschool
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourcetopic
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcetopic
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: learning_resources_learningresourcetopicmapping
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_learningresourceviewevent
+  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceviewevent
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_podcast
+  raw_table: raw__mitlearn__app__postgres__learning_resources_podcast
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_podcastepisode
+  raw_table: raw__mitlearn__app__postgres__learning_resources_podcastepisode
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_program
+  raw_table: raw__mitlearn__app__postgres__learning_resources_program
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - learning_resource_id
+  modeled: false
+- name: learning_resources_runinstructorrelationship
+  raw_table: raw__mitlearn__app__postgres__learning_resources_runinstructorrelationship
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_search_percolatequery
+  raw_table: raw__mitlearn__app__postgres__learning_resources_search_percolatequery
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: learning_resources_search_percolatequery_users
+  raw_table: raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: learning_resources_userlist
+  raw_table: raw__mitlearn__app__postgres__learning_resources_userlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: learning_resources_userlist_topics
+  raw_table: raw__mitlearn__app__postgres__learning_resources_userlist_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: learning_resources_userlistrelationship
+  raw_table: raw__mitlearn__app__postgres__learning_resources_userlistrelationship
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: learning_resources_video
+  raw_table: raw__mitlearn__app__postgres__learning_resources_video
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: learning_resources_videochannel
+  raw_table: raw__mitlearn__app__postgres__learning_resources_videochannel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - channel_id
+  modeled: false
+- name: learning_resources_videoplaylist
+  raw_table: raw__mitlearn__app__postgres__learning_resources_videoplaylist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: news_events_feedeventdetail
+  raw_table: raw__mitlearn__app__postgres__news_events_feedeventdetail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: news_events_feedimage
+  raw_table: raw__mitlearn__app__postgres__news_events_feedimage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: news_events_feeditem
+  raw_table: raw__mitlearn__app__postgres__news_events_feeditem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: news_events_feednewsdetail
+  raw_table: raw__mitlearn__app__postgres__news_events_feednewsdetail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: news_events_feedsource
+  raw_table: raw__mitlearn__app__postgres__news_events_feedsource
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_accesstoken
+  raw_table: raw__mitlearn__app__postgres__oauth2_provider_accesstoken
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_application
+  raw_table: raw__mitlearn__app__postgres__oauth2_provider_application
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_grant
+  raw_table: raw__mitlearn__app__postgres__oauth2_provider_grant
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_idtoken
+  raw_table: raw__mitlearn__app__postgres__oauth2_provider_idtoken
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_refreshtoken
+  raw_table: raw__mitlearn__app__postgres__oauth2_provider_refreshtoken
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: profiles_profile
+  raw_table: raw__mitlearn__app__postgres__profiles_profile
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: profiles_profile_topic_interests
+  raw_table: raw__mitlearn__app__postgres__profiles_profile_topic_interests
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: profiles_programletter
+  raw_table: raw__mitlearn__app__postgres__profiles_programletter
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: profiles_userwebsite
+  raw_table: raw__mitlearn__app__postgres__profiles_userwebsite
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: silk_profile
+  raw_table: raw__mitlearn__app__postgres__silk_profile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: silk_profile_queries
+  raw_table: raw__mitlearn__app__postgres__silk_profile_queries
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: silk_request
+  raw_table: raw__mitlearn__app__postgres__silk_request
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: silk_response
+  raw_table: raw__mitlearn__app__postgres__silk_response
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: silk_sqlquery
+  raw_table: raw__mitlearn__app__postgres__silk_sqlquery
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_association
+  raw_table: raw__mitlearn__app__postgres__social_auth_association
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_code
+  raw_table: raw__mitlearn__app__postgres__social_auth_code
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_nonce
+  raw_table: raw__mitlearn__app__postgres__social_auth_nonce
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_partial
+  raw_table: raw__mitlearn__app__postgres__social_auth_partial
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_usersocialauth
+  raw_table: raw__mitlearn__app__postgres__social_auth_usersocialauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: testimonials_attestation
+  raw_table: raw__mitlearn__app__postgres__testimonials_attestation
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: testimonials_attestation_channels
+  raw_table: raw__mitlearn__app__postgres__testimonials_attestation_channels
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: testimonials_attestation_offerors
+  raw_table: raw__mitlearn__app__postgres__testimonials_attestation_offerors
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user
+  raw_table: raw__mitlearn__app__postgres__users_user
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_user_groups
+  raw_table: raw__mitlearn__app__postgres__users_user_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user_user_permissions
+  raw_table: raw__mitlearn__app__postgres__users_user_user_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: widgets_widgetinstance
+  raw_table: raw__mitlearn__app__postgres__widgets_widgetinstance
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: widgets_widgetlist
+  raw_table: raw__mitlearn__app__postgres__widgets_widgetlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false

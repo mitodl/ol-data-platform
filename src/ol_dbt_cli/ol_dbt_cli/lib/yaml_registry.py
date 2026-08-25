@@ -233,3 +233,20 @@ def build_yaml_registry(models_dir: Path) -> YamlRegistry:
         for source in sources:
             registry.sources[source.name] = source
     return registry
+
+
+def collect_source_tables(models_dir: Path, source_name: str) -> set[str]:
+    """Every table declared under *source_name*, unioned across all schema files.
+
+    :func:`build_yaml_registry` keys sources by name, so the last file declaring
+    a given source wins. That is harmless for its callers, which resolve one
+    model's source reference at a time, but wrong for enumeration:
+    ``ol_warehouse_raw_data`` is re-declared in each staging directory's sources
+    file, so reading its tables off the registry yields the last directory's
+    handful instead of all 374.
+    """
+    tables: set[str] = set()
+    for yaml_path in sorted({*models_dir.rglob("*.yml"), *models_dir.rglob("*.yaml")}):
+        _, sources = _parse_yaml_file(yaml_path)
+        tables.update(*(source.tables for source in sources if source.name == source_name), set())
+    return tables

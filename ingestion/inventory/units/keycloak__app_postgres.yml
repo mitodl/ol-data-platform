@@ -1,0 +1,110 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: keycloak
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__keycloak__app__postgres__
+dlt:
+  source_module: ol_dlt.sources.keycloak
+  write_disposition: replace
+tables:
+- name: raw__keycloak__app__postgres__user_entity
+  raw_table: raw__keycloak__app__postgres__user_entity
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__user_attribute
+  raw_table: raw__keycloak__app__postgres__user_attribute
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__federated_identity
+  raw_table: raw__keycloak__app__postgres__federated_identity
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - identity_provider
+  - - user_id
+  excluded_columns:
+  - token
+  modeled: false
+- name: raw__keycloak__app__postgres__user_required_action
+  raw_table: raw__keycloak__app__postgres__user_required_action
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - required_action
+  - - user_id
+  modeled: false
+- name: raw__keycloak__app__postgres__keycloak_group
+  raw_table: raw__keycloak__app__postgres__keycloak_group
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__group_attribute
+  raw_table: raw__keycloak__app__postgres__group_attribute
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__user_group_membership
+  raw_table: raw__keycloak__app__postgres__user_group_membership
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - group_id
+  - - user_id
+  modeled: false
+- name: raw__keycloak__app__postgres__keycloak_role
+  raw_table: raw__keycloak__app__postgres__keycloak_role
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__user_role_mapping
+  raw_table: raw__keycloak__app__postgres__user_role_mapping
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - role_id
+  - - user_id
+  modeled: false
+- name: raw__keycloak__app__postgres__org
+  raw_table: raw__keycloak__app__postgres__org
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__org_domain
+  raw_table: raw__keycloak__app__postgres__org_domain
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  - - name
+  modeled: false
+- name: raw__keycloak__app__postgres__realm
+  raw_table: raw__keycloak__app__postgres__realm
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: raw__keycloak__app__postgres__client
+  raw_table: raw__keycloak__app__postgres__client
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  excluded_columns:
+  - secret
+  - registration_token
+  modeled: false
+- name: raw__keycloak__app__postgres__identity_provider
+  raw_table: raw__keycloak__app__postgres__identity_provider
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - internal_id
+  modeled: false

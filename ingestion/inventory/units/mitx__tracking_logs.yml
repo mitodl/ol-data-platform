@@ -1,0 +1,28 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitx
+layer: tracking_logs
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitx__openedx__tracking_logs
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - name: MITx Tracking Logs → S3 Data Lake
+    status: active
+    sync_interval_hours: 12
+    streams:
+    - raw__mitx__openedx__tracking_logs
+tables:
+- name: raw__mitx__openedx__tracking_logs
+  raw_table: raw__mitx__openedx__tracking_logs
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true

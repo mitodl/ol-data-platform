@@ -1,0 +1,21 @@
+---
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: api
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__edxorg__discovery__api__
+dlt:
+  source_module: ol_dlt.sources.mit_edx_programs
+  write_disposition: replace
+tables:
+- name: raw__edxorg__discovery__api__programs
+  raw_table: raw__edxorg__discovery__api__programs
+  sync_mode: full_refresh_overwrite
+  modeled: true

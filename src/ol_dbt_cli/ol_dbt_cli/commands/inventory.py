@@ -30,11 +30,14 @@ from ol_dbt_cli.lib.inventory import (
     load_snapshot,
     load_snapshot_at_ref,
     load_units,
+    reconcile_dbt,
+    reconcile_warehouse,
     render_airbyte,
     render_dagster_intervals,
     validate_inventory,
 )
 from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
+from ol_dbt_cli.lib.yaml_registry import collect_source_tables
 
 console = Console()
 err_console = Console(stderr=True)
@@ -207,6 +210,164 @@ def render(
         console.print(f"Wrote {escape(str(output))}")
     else:
         print(text, end="")  # noqa: T201
+
+
+RAW_SOURCE_NAME = "ol_warehouse_raw_data"
+
+
+@inventory_app.command
+def reconcile(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/ and retired.yml."),
+    ] = DEFAULT_INVENTORY_DIR,
+    dbt_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--dbt-dir", "-d"],
+            help="Path to the dbt project root. Defaults to src/ol_dbt relative to repo root.",
+        ),
+    ] = None,
+    warehouse_tables_path: Annotated[
+        Path | None,
+        Parameter(
+            name=["--warehouse-tables"],
+            help="File of raw table names the warehouse holds — a JSON array or one name per line.",
+        ),
+    ] = None,
+    duckdb_path: Annotated[
+        Path | None,
+        Parameter(
+            name=["--duckdb-path"],
+            help="Read the warehouse side from a local `ol-dbt local register` DuckDB instead.",
+        ),
+    ] = None,
+    glue_database: Annotated[
+        str | None,
+        Parameter(name=["--glue-database"], help="Restrict the DuckDB registry read to one Glue database."),
+    ] = None,
+    output_format: Annotated[
+        str,
+        Parameter(name=["--format", "-f"], help="Output format: text (default) or json."),
+    ] = "text",
+) -> None:
+    """Three-way diff: the inventory against the warehouse and against dbt sources.
+
+    The inventory is the source of truth; these two are independent observations
+    of it, and reconcile only ever reports their disagreement. Warehouse
+    introspection used to *be* the truth for `ol-dbt generate sources`, which is
+    the defect the inventory corrects — so nothing here writes to either side.
+
+    The dbt half needs no credentials and always runs. The warehouse half needs
+    an observation to compare against and is skipped without one, because a
+    silent empty set would report every declared table as missing.
+    """
+    units = load_units(inventory_dir)
+    report = ValidationReport()
+
+    try:
+        dbt_dir = Path(dbt_dir_path) if dbt_dir_path else get_repo_root() / "src" / "ol_dbt"
+    except RuntimeError:
+        dbt_dir = Path("src/ol_dbt").resolve()
+    if not (dbt_dir / "dbt_project.yml").exists():
+        err_console.print(f"[bold red]dbt project not found at {escape(str(dbt_dir))}. Use --dbt-dir.")
+        sys.exit(1)
+
+    dbt_tables = collect_source_tables(dbt_dir / "models", RAW_SOURCE_NAME)
+    dbt_result = reconcile_dbt(units, dbt_tables, inventory_dir, report)
+
+    if warehouse_tables_path and duckdb_path:
+        err_console.print("[bold red]Pass either --warehouse-tables or --duckdb-path, not both.")
+        sys.exit(1)
+    if glue_database and not duckdb_path:
+        err_console.print("[bold red]--glue-database only applies to --duckdb-path.")
+        sys.exit(1)
+
+    warehouse_result = None
+    if warehouse_tables_path or duckdb_path:
+        try:
+            warehouse = (
+                _read_table_list(warehouse_tables_path)
+                if warehouse_tables_path
+                else _warehouse_tables_from_duckdb(duckdb_path, glue_database)  # type: ignore[arg-type]
+            )
+        except (OSError, ValueError) as error:
+            err_console.print(f"[bold red]{escape(str(error))}")
+            sys.exit(1)
+        # The same reason the half is skipped without a flag: an observation
+        # holding no raw table at all is not evidence that every declared table
+        # is missing. It is a registry pointed at a non-raw Glue database, or a
+        # dump taken before the raw schema existed.
+        if not warehouse:
+            err_console.print(
+                "[bold red]The warehouse observation holds no `raw__` table, so comparing it "
+                "would report all "
+                f"{len(units)} unit(s)' tables as missing. Check --glue-database, or that the "
+                "table list is not empty."
+            )
+            sys.exit(1)
+        warehouse_result = reconcile_warehouse(units, warehouse, report)
+
+    if output_format == "json":
+        _emit_json(report.issues)
+    else:
+        _emit_text(report.issues)
+        console.print(
+            f"\n[bold]dbt sources:[/] {len(dbt_result.both)} of {len(dbt_tables)} declared raw table(s) map to a unit."
+        )
+        if warehouse_result is None:
+            console.print(
+                "[dim]Warehouse not compared — pass --warehouse-tables or --duckdb-path "
+                "to get the other two buckets.[/]"
+            )
+        else:
+            console.print(
+                f"[bold]Warehouse:[/] {len(warehouse_result.both)} in both, "
+                f"{len(warehouse_result.declared_not_observed)} declared but absent, "
+                f"{len(warehouse_result.observed_not_declared)} present but undeclared."
+            )
+        console.print(f"[bold]Summary:[/] {len(report.errors)} error(s), {len(report.warnings)} warning(s).")
+
+    if report.errors:
+        sys.exit(1)
+
+
+def _read_table_list(path: Path) -> set[str]:
+    """Read raw table names from a JSON array or a newline-delimited list."""
+    text = path.read_text()
+    stripped = text.lstrip()
+    if stripped.startswith("["):
+        return {str(name) for name in json.loads(text)}
+    lines = (line.strip() for line in text.splitlines())
+    return {line for line in lines if line and not line.startswith("#")}
+
+
+def _warehouse_tables_from_duckdb(duckdb_path: Path, glue_database: str | None) -> set[str]:
+    """Read the registered Glue tables from a local `ol-dbt local register` DuckDB.
+
+    Imported here rather than at module scope so that `validate`, `check-removals`
+    and `render` — the three that CI runs — stay free of duckdb.
+    """
+    import duckdb  # noqa: PLC0415
+
+    if not duckdb_path.exists():
+        msg = f"No DuckDB database at {duckdb_path}. Run `ol-dbt local register` first."
+        raise OSError(msg)
+    query = "SELECT glue_table FROM _glue_source_registry"
+    params: tuple[str, ...] = ()
+    if glue_database:
+        query += " WHERE glue_database = ?"
+        params = (glue_database,)
+    with duckdb.connect(str(duckdb_path), read_only=True) as conn:
+        tables = {str(row[0]) for row in conn.execute(query, params).fetchall()}
+    # `ol-dbt local register --all-layers` puts staging, intermediate and mart
+    # tables in the same registry. Comparing those against the inventory would
+    # report every modelled table as undeclared warehouse drift, burying the
+    # real finding. The schema constrains every inventory raw table to `raw__`,
+    # so that prefix is the layer boundary. Filtered here rather than in SQL
+    # because `_` is a LIKE wildcard and the escaping earns nothing.
+    return {table for table in tables if table.startswith("raw__")}
 
 
 def _emit_json(issues: list[ValidationIssue]) -> None:

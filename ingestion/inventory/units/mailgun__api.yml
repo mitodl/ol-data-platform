@@ -1,0 +1,37 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mailgun
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__thirdparty__mailgun__destination_v2__
+airbyte:
+  source_kind: source-mailgun
+  replication_method: n/a
+  connections:
+  - name: Mailgun → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - domains
+    - events
+tables:
+- name: domains
+  raw_table: raw__thirdparty__mailgun__destination_v2__domains
+  sync_mode: full_refresh_overwrite
+  primary_key:
+  - - id
+  modeled: false
+- name: events
+  raw_table: raw__thirdparty__mailgun__destination_v2__events
+  sync_mode: incremental_append
+  cursor_field:
+  - timestamp
+  primary_key:
+  - - id
+  modeled: false

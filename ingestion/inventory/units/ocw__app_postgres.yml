@@ -1,0 +1,293 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: ocw
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__ocw__studio__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - name: OCW Studio App DB → S3 Data Lake
+    status: active
+    sync_interval_hours: 6
+    streams:
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - content_sync_contentsyncstate
+    - django_admin_log
+    - django_content_type
+    - django_migrations
+    - django_session
+    - django_site
+    - external_resources_externalresourcestate
+    - gdrive_sync_driveapiquerytracker
+    - gdrive_sync_drivefile
+    - guardian_groupobjectpermission
+    - guardian_userobjectpermission
+    - robots_rule
+    - robots_rule_allowed
+    - robots_rule_disallowed
+    - robots_rule_sites
+    - robots_url
+    - social_auth_association
+    - social_auth_code
+    - social_auth_nonce
+    - social_auth_partial
+    - social_auth_usersocialauth
+    - users_user
+    - users_user_groups
+    - users_user_user_permissions
+    - videos_video
+    - videos_videofile
+    - videos_videojob
+    - websites_website
+    - websites_websitecontent
+    - websites_websitecontent_referencing_content
+    - websites_websitestarter
+tables:
+- name: auth_group
+  raw_table: raw__ocw__studio__postgres__auth_group
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__ocw__studio__postgres__auth_group_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__ocw__studio__postgres__auth_permission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: content_sync_contentsyncstate
+  raw_table: raw__ocw__studio__postgres__content_sync_contentsyncstate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_admin_log
+  raw_table: raw__ocw__studio__postgres__django_admin_log
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__ocw__studio__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_migrations
+  raw_table: raw__ocw__studio__postgres__django_migrations
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_session
+  raw_table: raw__ocw__studio__postgres__django_session
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - session_key
+  modeled: false
+- name: django_site
+  raw_table: raw__ocw__studio__postgres__django_site
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: external_resources_externalresourcestate
+  raw_table: raw__ocw__studio__postgres__external_resources_externalresourcestate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: gdrive_sync_driveapiquerytracker
+  raw_table: raw__ocw__studio__postgres__gdrive_sync_driveapiquerytracker
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: gdrive_sync_drivefile
+  raw_table: raw__ocw__studio__postgres__gdrive_sync_drivefile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - file_id
+  modeled: false
+- name: guardian_groupobjectpermission
+  raw_table: raw__ocw__studio__postgres__guardian_groupobjectpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: guardian_userobjectpermission
+  raw_table: raw__ocw__studio__postgres__guardian_userobjectpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule
+  raw_table: raw__ocw__studio__postgres__robots_rule
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule_allowed
+  raw_table: raw__ocw__studio__postgres__robots_rule_allowed
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule_disallowed
+  raw_table: raw__ocw__studio__postgres__robots_rule_disallowed
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule_sites
+  raw_table: raw__ocw__studio__postgres__robots_rule_sites
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_url
+  raw_table: raw__ocw__studio__postgres__robots_url
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_association
+  raw_table: raw__ocw__studio__postgres__social_auth_association
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_code
+  raw_table: raw__ocw__studio__postgres__social_auth_code
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_nonce
+  raw_table: raw__ocw__studio__postgres__social_auth_nonce
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_partial
+  raw_table: raw__ocw__studio__postgres__social_auth_partial
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_usersocialauth
+  raw_table: raw__ocw__studio__postgres__social_auth_usersocialauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user
+  raw_table: raw__ocw__studio__postgres__users_user
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user_groups
+  raw_table: raw__ocw__studio__postgres__users_user_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user_user_permissions
+  raw_table: raw__ocw__studio__postgres__users_user_user_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: videos_video
+  raw_table: raw__ocw__studio__postgres__videos_video
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: videos_videofile
+  raw_table: raw__ocw__studio__postgres__videos_videofile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: videos_videojob
+  raw_table: raw__ocw__studio__postgres__videos_videojob
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - job_id
+  modeled: false
+- name: websites_website
+  raw_table: raw__ocw__studio__postgres__websites_website
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - uuid
+  modeled: true
+- name: websites_websitecontent
+  raw_table: raw__ocw__studio__postgres__websites_websitecontent
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: websites_websitecontent_referencing_content
+  raw_table: raw__ocw__studio__postgres__websites_websitecontent_referencing_content
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: websites_websitestarter
+  raw_table: raw__ocw__studio__postgres__websites_websitestarter
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
