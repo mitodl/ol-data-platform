@@ -12,7 +12,12 @@
 -- no source id at all (Emeritus and Global Alumni pre-date stable ids). `id_source` is an
 -- ID NAMESPACE, not a platform: the same integer means different people in mitxonline's
 -- application and open edX id spaces, which is why they rank separately downstream.
-{{ config(materialized='view') }}
+--
+-- Materialized as a table (the intermediate folder default, hence no config here) and NOT
+-- as a view. It has three consumers -- int__combined__user_key_map, dim_user and
+-- bridge_user_key_alias -- and as a view the eight-branch platform union would re-execute
+-- for each of them. Before the extraction the union ran exactly once, inside dim_user;
+-- a view would have made that three times.
 
 with mitx_users as (
     select

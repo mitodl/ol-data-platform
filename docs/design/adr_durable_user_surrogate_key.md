@@ -212,44 +212,45 @@ rule 2 is exactly today's computation. Every person's `user_pk` on cutover day e
 value they already have. No downstream churn, no coordinated re-key, no reverse-ETL outage.
 The change buys stability going forward without paying a migration cost.
 
-This is the property that makes the change shippable, so it was verified rather than
-asserted. Both the old and new key expressions were run on DuckDB over a fixture covering
-every ranking path (two accounts sharing an email, an account with a `user_global_id`, an
-xPro-only account, an id-less account keyed on email):
+This is the property that makes the change shippable, so it was verified at production
+scale rather than asserted.
+
+**Method.** Comparing the two `dim_user` models directly does not work: the old model
+inlines the platform union and reads staging live, the new one reads the frozen
+`int__combined__user_accounts` table, and production rebuilds staging often enough that the
+two see different data minutes apart. Runs done that way showed 23-25 differing people out
+of 7.57M, all of it input drift rather than design difference.
+
+The drift-immune test recomputes the **pre-change key expression** directly over the same
+frozen `int__combined__user_accounts` snapshot the new pipeline read, so both sides read one
+table:
 
 ```
-=== build 1: per-person old key vs new key ===
-               email                      old_user_pk                      new_user_pk verdict
-  joiner@example.com e82719d98dd31b1e1e2ade0acf8d82d2 e82719d98dd31b1e1e2ade0acf8d82d2    SAME
-keycloak@example.com 8b490ac03c54ed06b2e6a183a5277fe6 8b490ac03c54ed06b2e6a183a5277fe6    SAME
-  shared@example.com bae78f912c4d6f2e82015abefd2e4978 bae78f912c4d6f2e82015abefd2e4978    SAME
-    solo@example.com 5e6b569de16c9d0bcc9300e32c3a2de7 5e6b569de16c9d0bcc9300e32c3a2de7    SAME
+=== distinct keys: old formula on the snapshot vs new pipeline ===
+ old_formula_keys  new_keys
+          7574335   7574335
 
-=== key-set full outer join ===
- in_old_not_new  in_new_not_old
-              0               0
+=== key-set FULL OUTER JOIN on identical input ===
+ in_old_formula_not_new  in_new_not_old_formula
+                      0                       0
+
+=== per-email key equality on identical input ===
+ emails_where_key_differs
+                        0
 ```
 
-The durability property was verified the same way, by running a second build in which a
-MITx Online account (rank 2) joins an xPro-only learner (rank 6). This is re-key trigger 1,
-and it is what failed in production:
+**7,574,335 keys, zero differences in either direction, zero emails whose key changed.** The
+two designs are equivalent on identical input, so the cutover re-keys nobody.
 
-```
-               email                 key_after_build1     OLD_after_build2      old_verdict new_verdict
-  joiner@example.com e82719d98dd31b1e1e2ade0acf8d82d2 4a22a493c769200bd... *** RE-KEYED *** stable
-keycloak@example.com 8b490ac03c54ed06b2e6a183a5277fe6 8b490ac03c54ed06b2... stable          stable
-  shared@example.com bae78f912c4d6f2e82015abefd2e4978 bae78f912c4d6f2e82... stable          stable
-    solo@example.com 5e6b569de16c9d0bcc9300e32c3a2de7 5e6b569de16c9d0bcc... stable          stable
-```
+Supporting integrity checks on the same build: `dim_user` has 0 null and 0 duplicate
+`user_pk`; the key map holds 7,684,472 account keys mapping to 7,574,335 person keys with
+`distinct account_nk = row count` (the dedup holds); and no email resolves to more than one
+key under the old formula.
 
-The old key moves; the new key does not. The map shows `mitxonline:501` adopting the
-incumbent `mitxpro:42` key rather than minting its own.
-
-**This is a fixture, not a production row count.** The stronger check (materialize old and
-new `dim_user` side by side on production data via `ol-dbt local` + `ol-dbt diff`, full outer
-join on `user_pk`, zero non-matched rows either side) could not be run: `dim_user` does not
-build on the local DuckDB target for two reasons that pre-date this change, both of which
-fail the *old* model identically. See Not verified.
+**The `full_refresh=false` guard was verified too, by accident.** A run with
+`--full-refresh` left the map's earlier `assigned_invocation_id` values intact (three
+distinct invocations, 7,684,447 + 333 + 12 rows) instead of rebuilding it. Forcing a true
+first build required dropping the relation out of band.
 
 ## Residual instability, and the endgame
 
@@ -329,23 +330,12 @@ permanently unstable, and leaves the three `severity: warn` overrides in place i
   Hightouch configuration exists here. Enumerate them before item 2 above.
 - **Historical churn rate.** No measurement of how often `user_pk` has actually changed
   per build. The 2026-08-18 failure is a single observed instance, not a trend.
-- **The no-op was proven on a fixture, not on production rows.** `dim_user` cannot be built
-  on the `dev_local` DuckDB target, for two reasons that pre-date this change and that fail
-  the old model identically. Run the production-data diff on a Trino dev schema before merge
-  if that assurance is wanted.
-
-  1. `raw__bootcamps__app__postgres__profiles_profile` is a **legacy non-Iceberg Glue
-     table** (`classification: json`, `TextInputFormat`), so `ol-dbt local register` skips
-     it and no DuckDB view exists. Its 20 bootcamps siblings were migrated to Iceberg; this
-     one was not. Separately tracked, because it points at a live data-quality problem
-     rather than a local-dev inconvenience.
-  2. `stg__edxorg__bigquery__mitx_user_info_combo.sql:40-42` (and
-     `stg__edxorg__bigquery__mitx_person_course.sql:53-55`) capitalise the first letter of
-     the gender value with Trino's lambda form of `regexp_replace`:
-     `regexp_replace(<expr>, '(^[a-z])(.)', x -> upper(x[1]) || x[2])`. DuckDB has no lambda
-     overload of `regexp_replace`, and neither does StarRocks, so this also blocks the
-     StarRocks migration. It wants a `capitalize_first()` dispatch macro alongside
-     `macros/cross_db_functions.sql`.
+- **The no-op is proven; a direct old-vs-new table diff is not.** The equivalence above is
+  established on identical input, which is the claim that matters. A naive diff of the two
+  materialised models is NOT a clean test, because the old model reads staging live while
+  the new one reads a frozen snapshot, and production rebuilds staging every few minutes.
+  Do not treat a small delta from that comparison as a defect without first checking it is
+  not drift.
 - **No unit test guards the mint expression.** dbt unit tests do not currently run in this
   project: `macros/override_ref.sql` returns a bare string on its Glue-fallback path, which
   the unit-test machinery cannot consume, and on the credential-free `dev` target the
