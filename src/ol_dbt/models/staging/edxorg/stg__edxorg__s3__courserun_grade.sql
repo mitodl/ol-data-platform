@@ -14,15 +14,15 @@ with source as (
         , case
             when passed_timestamp = 'NULL' then null
             else {{ cast_timestamp_to_iso8601(from_iso8601_timestamp_nanos(
-                "regexp_replace(passed_timestamp, '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)', '$1T$2$3')"
+                regexp_replace_with_backreferences('passed_timestamp', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
             )) }}
         end as courserungrade_first_passed_on
         --- use regex here to preserve the faction of second if value uses nanosecond
         , {{ cast_timestamp_to_iso8601(from_iso8601_timestamp_nanos(
-            "regexp_replace(created, '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)', '$1T$2$3')"
+            regexp_replace_with_backreferences('created', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
         )) }} as courserungrade_created_on
         , {{ cast_timestamp_to_iso8601(from_iso8601_timestamp_nanos(
-            "regexp_replace(modified, '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)', '$1T$2$3')"
+            regexp_replace_with_backreferences('modified', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)'", "'$1T$2$3'")
         )) }} as courserungrade_updated_on
     from most_recent_source
 )
