@@ -608,7 +608,28 @@ def get_slack_token() -> str:
     ),
 )
 def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
-    """Report a failed run to Sentry, then announce it in Slack."""
+    """Report a failed run to Sentry, then announce it in Slack.
+
+    THROUGHPUT CEILING -- read this before trusting any timestamp this sensor
+    produces. A run status sensor processes at most
+    ``DAGSTER_RUN_STATUS_SENSOR_PROCESS_LIMIT`` runs per tick, which defaults to
+    5, and ``monitor_all_code_locations=True`` pins the fetch limit to the same
+    number (dagster ``_core/definitions/run_status_sensor_definition.py``,
+    ``_get_run_status_sensor_fetch_limit``). At the default 30 second tick
+    (``DEFAULT_SENSOR_DAEMON_INTERVAL``) that is 5 * 2880 = 14,400 runs per day,
+    for every code location combined.
+
+    Production failures have run at ~12,000/day, 84% of that ceiling, so the
+    sensor has no room to recover from a backlog: on 2026-08-25 it was reporting
+    runs that had executed on 2026-08-13, a twelve day lag. An event's timestamp
+    is when this sensor reached the run, never when the run failed, and an issue
+    that looks live may describe something already fixed.
+
+    Raising the ceiling is a daemon environment change, not a code change --
+    there is no argument here that moves it. Draining a large backlog also
+    replays every one of those failures into Sentry and Slack, so fast-forwarding
+    the cursor is usually the better answer than turning the limit up and waiting.
+    """
     run = context.dagster_run
 
     if is_retry_of_a_reported_failure(run):
