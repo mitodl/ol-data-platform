@@ -1,0 +1,245 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: learn_ai
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__learn_ai__app__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - name: Learn AI Production → S3 Data Lake
+    status: active
+    sync_interval_hours: 6
+    streams:
+    - ai_chatbots_chatresponserating
+    - ai_chatbots_djangocheckpoint
+    - ai_chatbots_djangocheckpointwrite
+    - ai_chatbots_llmmodel
+    - ai_chatbots_tutorbotoutput
+    - ai_chatbots_userchatsession
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - django_admin_log
+    - django_content_type
+    - django_migrations
+    - django_session
+    - django_site
+    - durable_cache
+    - external_asset_cache
+    - guardian_groupobjectpermission
+    - guardian_userobjectpermission
+    - main_consumerthrottlelimit
+    - oauth2_provider_accesstoken
+    - oauth2_provider_application
+    - oauth2_provider_grant
+    - oauth2_provider_idtoken
+    - oauth2_provider_refreshtoken
+    - users_user
+    - users_user_groups
+    - users_user_user_permissions
+    - users_userprofile
+tables:
+- name: ai_chatbots_chatresponserating
+  raw_table: raw__learn_ai__app__postgres__ai_chatbots_chatresponserating
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - checkpoint_id
+  modeled: true
+- name: ai_chatbots_djangocheckpoint
+  raw_table: raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ai_chatbots_djangocheckpointwrite
+  raw_table: raw__learn_ai__app__postgres__ai_chatbots_djangocheckpointwrite
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ai_chatbots_llmmodel
+  raw_table: raw__learn_ai__app__postgres__ai_chatbots_llmmodel
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - litellm_id
+  modeled: false
+- name: ai_chatbots_tutorbotoutput
+  raw_table: raw__learn_ai__app__postgres__ai_chatbots_tutorbotoutput
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ai_chatbots_userchatsession
+  raw_table: raw__learn_ai__app__postgres__ai_chatbots_userchatsession
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: auth_group
+  raw_table: raw__learn_ai__app__postgres__auth_group
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__learn_ai__app__postgres__auth_group_permissions
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__learn_ai__app__postgres__auth_permission
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_admin_log
+  raw_table: raw__learn_ai__app__postgres__django_admin_log
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__learn_ai__app__postgres__django_content_type
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_migrations
+  raw_table: raw__learn_ai__app__postgres__django_migrations
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_session
+  raw_table: raw__learn_ai__app__postgres__django_session
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - session_key
+  modeled: false
+- name: django_site
+  raw_table: raw__learn_ai__app__postgres__django_site
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: durable_cache
+  raw_table: raw__learn_ai__app__postgres__durable_cache
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: external_asset_cache
+  raw_table: raw__learn_ai__app__postgres__external_asset_cache
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: guardian_groupobjectpermission
+  raw_table: raw__learn_ai__app__postgres__guardian_groupobjectpermission
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: guardian_userobjectpermission
+  raw_table: raw__learn_ai__app__postgres__guardian_userobjectpermission
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: main_consumerthrottlelimit
+  raw_table: raw__learn_ai__app__postgres__main_consumerthrottlelimit
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - throttle_key
+  modeled: false
+- name: oauth2_provider_accesstoken
+  raw_table: raw__learn_ai__app__postgres__oauth2_provider_accesstoken
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_application
+  raw_table: raw__learn_ai__app__postgres__oauth2_provider_application
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_grant
+  raw_table: raw__learn_ai__app__postgres__oauth2_provider_grant
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_idtoken
+  raw_table: raw__learn_ai__app__postgres__oauth2_provider_idtoken
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_refreshtoken
+  raw_table: raw__learn_ai__app__postgres__oauth2_provider_refreshtoken
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user
+  raw_table: raw__learn_ai__app__postgres__users_user
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_user_groups
+  raw_table: raw__learn_ai__app__postgres__users_user_groups
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user_user_permissions
+  raw_table: raw__learn_ai__app__postgres__users_user_user_permissions
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_userprofile
+  raw_table: raw__learn_ai__app__postgres__users_userprofile
+  sync_mode: incremental_append
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false

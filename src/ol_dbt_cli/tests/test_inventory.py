@@ -212,6 +212,42 @@ class TestRules:
         report = _run(inventory)
         assert "declares no cursor_field" in _messages(report)
 
+    def test_xmin_explains_a_missing_cursor_once_per_unit(self, inventory: Path) -> None:
+        # `replication_method: xmin` already says these ride the source-defined
+        # cursor (§3.4), so the per-table error would be the same fact repeated —
+        # 514 times over the real inventory, which is what made it unlandable.
+        # Writing a cursor_field to silence it would invent config Airbyte does
+        # not hold, breaking step 5's empty-preview import.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["replication_method"] = "xmin"
+        for table in unit["tables"]:
+            table.pop("cursor_field", None)
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+
+        assert "declares no cursor_field" not in _messages(report)
+        riders = [issue for issue in report.warnings if "ride xmin" in issue.message]
+        assert len(riders) == 1
+        assert "2 incremental stream(s)" in riders[0].message
+
+    def test_a_single_table_unit_may_use_the_full_table_name_as_its_prefix(self, inventory: Path) -> None:
+        # A deployment's tracking logs are one table, not a `__`-terminated
+        # family: the only such prefix is the whole Open edX namespace, which
+        # swallows that deployment's mysql, api and mongodb units.
+        unit = copy.deepcopy(DLT_UNIT)
+        unit.update(deployment="mitx", layer="tracking_logs", table_prefix="raw__mitx__openedx__tracking_logs")
+        unit["tables"] = [
+            {
+                "name": "tracking_logs",
+                "raw_table": "raw__mitx__openedx__tracking_logs",
+                "sync_mode": "full_refresh_overwrite",
+                "modeled": True,
+            }
+        ]
+        _write(inventory, "mitx__tracking_logs", unit)
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
     def test_connection_name_must_survive_the_dagster_selector(self, inventory: Path) -> None:
         unit = copy.deepcopy(APP_UNIT)
         unit["airbyte"]["connections"][0]["name"] = "MITx Online Open edX DB → Somewhere"

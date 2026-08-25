@@ -39,6 +39,7 @@ RETIRED_FILENAME = "retired.yml"
 
 DAGSTER_SELECTOR_SUFFIX = "s3 data lake"
 INCREMENTAL_PREFIX = "incremental"
+XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
 AIRBYTE_LOADER = "airbyte"
 
@@ -202,6 +203,8 @@ def _check_loader_block(unit: Unit, report: ValidationReport) -> None:
 
 def _check_tables(unit: Unit, report: ValidationReport) -> None:
     prefix = unit.data.get("table_prefix", "")
+    airbyte = unit.data.get("airbyte")
+    rides_xmin = isinstance(airbyte, dict) and airbyte.get("replication_method") == XMIN_REPLICATION
     for table in unit.tables:
         raw_table = table.get("raw_table", "")
         if prefix and not raw_table.startswith(prefix):
@@ -212,15 +215,36 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
                 f"{raw_table} does not start with the unit's table_prefix {prefix!r}",
             )
         sync_mode = table.get("sync_mode", "")
-        if sync_mode.startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field"):
+        if sync_mode.startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field") and not rides_xmin:
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
                 f"{raw_table} is {sync_mode} but declares no cursor_field",
-                "An incremental stream with no cursor rides the source-defined one; "
-                "for Postgres that is xmin, which dlt cannot reproduce.",
+                "An incremental stream with no cursor rides the source-defined one, "
+                "and nothing on this unit says what that is.",
             )
+
+    if rides_xmin and (riders := [t for t in unit.tables if _is_cursorless_incremental(t)]):
+        # Reported once per unit, not once per table. `replication_method: xmin`
+        # already says these ride the source-defined cursor (§3.4), so a
+        # per-table error would be the same fact 514 times over — and writing a
+        # cursor_field to silence it would invent config Airbyte does not hold,
+        # which is exactly what breaks step 5's empty-preview import.
+        report.add(
+            CHECK,
+            Severity.WARNING,
+            unit.key,
+            f"{len(riders)} incremental stream(s) ride xmin, which dlt cannot reproduce",
+            "Each needs a replacement cursor column chosen before dlt can take "
+            "over this unit, and source-postgres 3.8+ refuses xmin outright on any "
+            "database that has ever wrapped around. See "
+            "tk-determine-per-source-incremental-cursor-viabilit-51f299.",
+        )
+
+
+def _is_cursorless_incremental(table: dict[str, Any]) -> bool:
+    return str(table.get("sync_mode", "")).startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field")
 
 
 def _check_connections(unit: Unit, report: ValidationReport) -> None:

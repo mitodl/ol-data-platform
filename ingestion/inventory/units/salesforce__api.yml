@@ -1,0 +1,48 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: salesforce
+layer: api
+scope: singleton
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__thirdparty__salesforce___destination_v2__
+airbyte:
+  source_kind: source-salesforce
+  replication_method: n/a
+  connections:
+  - name: OL Salesforce → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - Account
+    - Opportunity
+    - OpportunityLineItem
+tables:
+- name: Account
+  raw_table: raw__thirdparty__salesforce___destination_v2__Account
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - SystemModstamp
+  primary_key:
+  - - Id
+  modeled: false
+- name: Opportunity
+  raw_table: raw__thirdparty__salesforce___destination_v2__Opportunity
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - SystemModstamp
+  primary_key:
+  - - Id
+  modeled: true
+- name: OpportunityLineItem
+  raw_table: raw__thirdparty__salesforce___destination_v2__OpportunityLineItem
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - SystemModstamp
+  primary_key:
+  - - Id
+  modeled: true

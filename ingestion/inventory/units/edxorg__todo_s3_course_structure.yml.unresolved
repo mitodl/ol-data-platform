@@ -1,0 +1,35 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+layer: TODO_s3_course_structure
+scope: singleton
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__edxorg__s3__course_structure__
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - name: edx.org Production Course Metadata → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__course_structure__course_certificate_signatory
+    - raw__edxorg__s3__course_structure__course_video
+tables:
+- name: raw__edxorg__s3__course_structure__course_certificate_signatory
+  raw_table: raw__edxorg__s3__course_structure__course_certificate_signatory
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+- name: raw__edxorg__s3__course_structure__course_video
+  raw_table: raw__edxorg__s3__course_structure__course_video
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true

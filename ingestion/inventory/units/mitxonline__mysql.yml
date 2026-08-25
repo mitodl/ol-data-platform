@@ -1,0 +1,573 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitxonline
+layer: mysql
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitxonline__openedx__mysql__
+airbyte:
+  source_kind: source-mysql
+  replication_method: cursor
+  connections:
+  - name: MITx Online Open edX DB → S3 Data Lake
+    status: active
+    sync_interval_hours: 12
+    streams:
+    - assessment_assessment
+    - assessment_assessmentfeedback
+    - assessment_assessmentfeedback_assessments
+    - assessment_assessmentfeedback_options
+    - assessment_assessmentfeedbackoption
+    - assessment_assessmentpart
+    - assessment_criterion
+    - assessment_criterionoption
+    - assessment_peerworkflow
+    - assessment_peerworkflowitem
+    - assessment_rubric
+    - assessment_studenttrainingworkflow
+    - assessment_studenttrainingworkflowitem
+    - assessment_trainingexample
+    - assessment_trainingexample_options_selected
+    - auth_user
+    - auth_userprofile
+    - bulk_email_optout
+    - certificates_generatedcertificate
+    - completion_blockcompletion
+    - course_groups_cohortmembership
+    - course_groups_coursecohort
+    - course_groups_courseusergroup
+    - course_groups_courseusergroup_users
+    - course_overviews_courseoverview
+    - courseware_studentmodule
+    - courseware_studentmodulehistory
+    - credit_creditcourse
+    - credit_crediteligibility
+    - django_comment_client_role
+    - django_comment_client_role_users
+    - edxval_coursevideo
+    - edxval_video
+    - forum_abuseflagger
+    - forum_comment
+    - forum_commentthread
+    - forum_coursestat
+    - forum_edithistory
+    - forum_forumuser
+    - forum_historicalabuseflagger
+    - forum_lastreadtime
+    - forum_mongocontent
+    - forum_readstate
+    - forum_subscription
+    - forum_uservote
+    - grades_persistentcoursegrade
+    - grades_persistentsubsectiongrade
+    - grades_persistentsubsectiongradeoverride
+    - grades_visibleblocks
+    - student_anonymoususerid
+    - student_courseaccessrole
+    - student_courseenrollment
+    - student_languageproficiency
+    - submissions_score
+    - submissions_scoresummary
+    - submissions_studentitem
+    - submissions_submission
+    - teams_courseteam
+    - teams_courseteammembership
+    - user_api_usercoursetag
+    - user_api_userorgtag
+    - workflow_assessmentworkflow
+    - workflow_assessmentworkflowstep
+    - workflow_teamassessmentworkflow
+  - name: MITx Online Production Open edX Student Module History → S3 Data Lake
+    status: active
+    sync_interval_hours: 12
+    streams:
+    - coursewarehistoryextended_studentmodulehistoryextended
+tables:
+- name: assessment_assessment
+  raw_table: raw__mitxonline__openedx__mysql__assessment_assessment
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  cursor_field:
+  - id
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_assessmentfeedback
+  raw_table: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_assessmentfeedback_assessments
+  raw_table: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_assessments
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_assessmentfeedback_options
+  raw_table: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_options
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_assessmentfeedbackoption
+  raw_table: raw__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_assessmentpart
+  raw_table: raw__mitxonline__openedx__mysql__assessment_assessmentpart
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_criterion
+  raw_table: raw__mitxonline__openedx__mysql__assessment_criterion
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_criterionoption
+  raw_table: raw__mitxonline__openedx__mysql__assessment_criterionoption
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_peerworkflow
+  raw_table: raw__mitxonline__openedx__mysql__assessment_peerworkflow
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_peerworkflowitem
+  raw_table: raw__mitxonline__openedx__mysql__assessment_peerworkflowitem
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_rubric
+  raw_table: raw__mitxonline__openedx__mysql__assessment_rubric
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_studenttrainingworkflow
+  raw_table: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflow
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_studenttrainingworkflowitem
+  raw_table: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_trainingexample
+  raw_table: raw__mitxonline__openedx__mysql__assessment_trainingexample
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: assessment_trainingexample_options_selected
+  raw_table: raw__mitxonline__openedx__mysql__assessment_trainingexample_options_selected
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: auth_user
+  raw_table: raw__mitxonline__openedx__mysql__auth_user
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: auth_userprofile
+  raw_table: raw__mitxonline__openedx__mysql__auth_userprofile
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: bulk_email_optout
+  raw_table: raw__mitxonline__openedx__mysql__bulk_email_optout
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: certificates_generatedcertificate
+  raw_table: raw__mitxonline__openedx__mysql__certificates_generatedcertificate
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  cursor_field:
+  - modified_date
+  primary_key:
+  - - id
+  modeled: true
+- name: completion_blockcompletion
+  raw_table: raw__mitxonline__openedx__mysql__completion_blockcompletion
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: true
+- name: course_groups_cohortmembership
+  raw_table: raw__mitxonline__openedx__mysql__course_groups_cohortmembership
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: course_groups_coursecohort
+  raw_table: raw__mitxonline__openedx__mysql__course_groups_coursecohort
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: course_groups_courseusergroup
+  raw_table: raw__mitxonline__openedx__mysql__course_groups_courseusergroup
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: course_groups_courseusergroup_users
+  raw_table: raw__mitxonline__openedx__mysql__course_groups_courseusergroup_users
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: course_overviews_courseoverview
+  raw_table: raw__mitxonline__openedx__mysql__course_overviews_courseoverview
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: false
+- name: courseware_studentmodule
+  raw_table: raw__mitxonline__openedx__mysql__courseware_studentmodule
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: true
+- name: courseware_studentmodulehistory
+  raw_table: raw__mitxonline__openedx__mysql__courseware_studentmodulehistory
+  sync_mode: incremental_append
+  namespace: edxapp
+  cursor_field:
+  - id
+  primary_key:
+  - - id
+  modeled: false
+- name: coursewarehistoryextended_studentmodulehistoryextended
+  raw_table: raw__mitxonline__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
+  sync_mode: incremental_append
+  namespace: edxapp_csmh
+  cursor_field:
+  - id
+  primary_key:
+  - - id
+  modeled: true
+- name: credit_creditcourse
+  raw_table: raw__mitxonline__openedx__mysql__credit_creditcourse
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: credit_crediteligibility
+  raw_table: raw__mitxonline__openedx__mysql__credit_crediteligibility
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: django_comment_client_role
+  raw_table: raw__mitxonline__openedx__mysql__django_comment_client_role
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: django_comment_client_role_users
+  raw_table: raw__mitxonline__openedx__mysql__django_comment_client_role_users
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: edxval_coursevideo
+  raw_table: raw__mitxonline__openedx__mysql__edxval_coursevideo
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: edxval_video
+  raw_table: raw__mitxonline__openedx__mysql__edxval_video
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: forum_abuseflagger
+  raw_table: raw__mitxonline__openedx__mysql__forum_abuseflagger
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_comment
+  raw_table: raw__mitxonline__openedx__mysql__forum_comment
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_commentthread
+  raw_table: raw__mitxonline__openedx__mysql__forum_commentthread
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_coursestat
+  raw_table: raw__mitxonline__openedx__mysql__forum_coursestat
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_edithistory
+  raw_table: raw__mitxonline__openedx__mysql__forum_edithistory
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_forumuser
+  raw_table: raw__mitxonline__openedx__mysql__forum_forumuser
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_historicalabuseflagger
+  raw_table: raw__mitxonline__openedx__mysql__forum_historicalabuseflagger
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_lastreadtime
+  raw_table: raw__mitxonline__openedx__mysql__forum_lastreadtime
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_mongocontent
+  raw_table: raw__mitxonline__openedx__mysql__forum_mongocontent
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_readstate
+  raw_table: raw__mitxonline__openedx__mysql__forum_readstate
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_subscription
+  raw_table: raw__mitxonline__openedx__mysql__forum_subscription
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: forum_uservote
+  raw_table: raw__mitxonline__openedx__mysql__forum_uservote
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: grades_persistentcoursegrade
+  raw_table: raw__mitxonline__openedx__mysql__grades_persistentcoursegrade
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_persistentsubsectiongrade
+  raw_table: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_persistentsubsectiongradeoverride
+  raw_table: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_visibleblocks
+  raw_table: raw__mitxonline__openedx__mysql__grades_visibleblocks
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: student_anonymoususerid
+  raw_table: raw__mitxonline__openedx__mysql__student_anonymoususerid
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - id
+  primary_key:
+  - - id
+  modeled: true
+- name: student_courseaccessrole
+  raw_table: raw__mitxonline__openedx__mysql__student_courseaccessrole
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: student_courseenrollment
+  raw_table: raw__mitxonline__openedx__mysql__student_courseenrollment
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  cursor_field:
+  - id
+  primary_key:
+  - - id
+  modeled: true
+- name: student_languageproficiency
+  raw_table: raw__mitxonline__openedx__mysql__student_languageproficiency
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: submissions_score
+  raw_table: raw__mitxonline__openedx__mysql__submissions_score
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: submissions_scoresummary
+  raw_table: raw__mitxonline__openedx__mysql__submissions_scoresummary
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: submissions_studentitem
+  raw_table: raw__mitxonline__openedx__mysql__submissions_studentitem
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: submissions_submission
+  raw_table: raw__mitxonline__openedx__mysql__submissions_submission
+  sync_mode: incremental_deduped_history
+  namespace: edxapp
+  cursor_field:
+  - id
+  primary_key:
+  - - id
+  modeled: true
+- name: teams_courseteam
+  raw_table: raw__mitxonline__openedx__mysql__teams_courseteam
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: teams_courseteammembership
+  raw_table: raw__mitxonline__openedx__mysql__teams_courseteammembership
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: user_api_usercoursetag
+  raw_table: raw__mitxonline__openedx__mysql__user_api_usercoursetag
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: user_api_userorgtag
+  raw_table: raw__mitxonline__openedx__mysql__user_api_userorgtag
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: false
+- name: workflow_assessmentworkflow
+  raw_table: raw__mitxonline__openedx__mysql__workflow_assessmentworkflow
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  cursor_field:
+  - modified
+  primary_key:
+  - - id
+  modeled: true
+- name: workflow_assessmentworkflowstep
+  raw_table: raw__mitxonline__openedx__mysql__workflow_assessmentworkflowstep
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: workflow_teamassessmentworkflow
+  raw_table: raw__mitxonline__openedx__mysql__workflow_teamassessmentworkflow
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - assessmentworkflow_ptr_id
+  modeled: false

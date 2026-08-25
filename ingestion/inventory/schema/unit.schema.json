@@ -47,8 +47,8 @@
     },
     "table_prefix": {
       "type": "string",
-      "pattern": "^raw__[a-z0-9_]+__$",
-      "description": "Declared, never parsed from table names (§1.1)."
+      "pattern": "^raw__[a-z0-9_]+$",
+      "description": "Declared, never parsed from table names (§1.1). Conventionally ends in `__` to name a family, but a single-table unit whose one table is not a `__`-terminated family — a deployment's tracking logs, say — declares that table's full name instead. Requiring the trailing `__` made those units unexpressible: their only `__`-terminated prefix is the deployment's whole Open edX namespace, which swallows its mysql, api and mongodb units. The partition is guaranteed by the pairwise-overlap rule, not by this pattern."
     },
     "dagster_visible": {
       "type": "boolean",

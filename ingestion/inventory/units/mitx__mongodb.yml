@@ -1,0 +1,91 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitx
+layer: mongodb
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitx__openedx__mongodb__
+airbyte:
+  source_kind: source-mongodb-v2
+  replication_method: n/a
+  connections:
+  - name: mitx-forum-production → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 12
+    streams:
+    - activities
+    - contents
+    - contents_tags_aggregation
+    - delayed_backend_mongoid_jobs
+    - notifications
+    - subscriptions
+    - users
+tables:
+- name: activities
+  raw_table: raw__mitx__openedx__mongodb__forum_activities
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
+- name: contents
+  raw_table: raw__mitx__openedx__mongodb__forum_contents
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
+- name: contents_tags_aggregation
+  raw_table: raw__mitx__openedx__mongodb__forum_contents_tags_aggregation
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
+- name: delayed_backend_mongoid_jobs
+  raw_table: raw__mitx__openedx__mongodb__forum_delayed_backend_mongoid_jobs
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
+- name: notifications
+  raw_table: raw__mitx__openedx__mongodb__forum_notifications
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
+- name: subscriptions
+  raw_table: raw__mitx__openedx__mongodb__forum_subscriptions
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
+- name: users
+  raw_table: raw__mitx__openedx__mongodb__forum_users
+  sync_mode: incremental_deduped_history
+  namespace: forum
+  cursor_field:
+  - _ab_cdc_cursor
+  primary_key:
+  - - _id
+  modeled: false
