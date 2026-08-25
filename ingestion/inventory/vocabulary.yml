@@ -29,6 +29,15 @@ deployments:
 - xpro
 - mit_climate
 - mitpe
+  # Not an instance we run, but the shared Open edX pipeline whose output is not
+  # owned by one: `raw__openedx__s3__course_xml_blocks` covers mitx, mitxonline
+  # and xpro together and separates them with a `source_system` column. The
+  # vocabulary anticipated a layer that no single deployment owns; this is the
+  # same thing one level up, and naming it `openedx` keeps both halves of the
+  # key populated and matches the raw table name. Include it in the RFC 12711
+  # amendment (tk-extend-rfc-12711-s-layer-enum-it-cannot-express--4a3ac9),
+  # because per-deployment QA scoping cannot apply to a unit like this.
+- openedx
   # Partner / affiliate data sets
 - emeritus
 - global_alumni
