@@ -71,4 +71,17 @@ left join redacted
     -- so delete+insert replaces them together. Filtering to unseen turns instead would
     -- freeze the ticket-level columns and leave turn_index inconsistent.
     where unioned.updated_at > (select max(feedback_updated_at) from {{ this }})
+    -- Backfill: a row inserted before feedback_redacted existed carries the old
+    -- feedback_text = null stub forever under the watermark above alone, because
+    -- redaction landing does not bump the source ticket's updated_at. Reselect any
+    -- row still null in the fact where redaction has since produced real text.
+    or exists (
+        select 1
+        from {{ this }} as stale
+        inner join redacted
+            on stale.source_record_id = redacted.source_record_ref
+        where stale.source_record_id = unioned.source_record_ref
+            and stale.feedback_text is null
+            and redacted.text_redacted is not null
+    )
 {% endif %}

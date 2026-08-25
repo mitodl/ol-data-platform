@@ -2,6 +2,10 @@
 version: 2
 
 sources:
+# database/schema are target-derived, not literals, so they must keep resolving to
+# the same relation feedback_redacted.py's DAGSTER_ENV branch actually writes to
+# (dev -> production catalog + personal suffix, qa -> qa catalog, else -> production).
+# Verify both sides agree before changing either.
 - name: feedback_intermediate
   loader: dagster
   database: '{{ target.database | default(none) }}'
