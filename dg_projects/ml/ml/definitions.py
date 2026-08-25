@@ -6,6 +6,7 @@ from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
 from ml.assets.feedback_redacted import feedback_redacted
+from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
@@ -44,6 +45,11 @@ data_export_job = define_asset_job(
 feedback_redacted_job = define_asset_job(
     name="feedback_redacted_job",
     selection=[feedback_redacted],
+)
+
+feedback_summaries_job = define_asset_job(
+    name="feedback_summaries_job",
+    selection=[feedback_summaries],
 )
 
 # Create unified definitions
@@ -85,6 +91,8 @@ defs = Definitions(
         "s3": S3Resource(),
         "llm": LLMClientFactory(vault=vault),
     },
-    assets=with_failure_hooks([student_risk_probability, feedback_redacted]),
-    jobs=[data_export_job, feedback_redacted_job],
+    assets=with_failure_hooks(
+        [student_risk_probability, feedback_redacted, feedback_summaries]
+    ),
+    jobs=[data_export_job, feedback_redacted_job, feedback_summaries_job],
 )
