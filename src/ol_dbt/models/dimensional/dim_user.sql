@@ -64,6 +64,7 @@ with learn_profile as (
     select
         identifiers.email
         , user_key_map.user_pk
+        , user_key_map.user_pk_source
         , user_key_map.assigned_at
     from identifiers
     left join {{ ref('int__combined__user_key_map') }} as user_key_map
@@ -82,10 +83,12 @@ with learn_profile as (
     select
         email
         , user_pk
+        , user_pk_source
     from (
         select
             email
             , user_pk
+            , user_pk_source
             , row_number() over (
                 partition by email
                 order by assigned_at nulls last, user_pk
@@ -98,6 +101,7 @@ with learn_profile as (
 , combined_users as (
     select
         group_survivor.user_pk
+        , group_survivor.user_pk_source
         , account_identity.*
     from account_identity
     inner join group_survivor on account_identity.email = group_survivor.email
@@ -203,8 +207,8 @@ select
     -- Reported as the platform. The key still hashes the two mitxonline id namespaces
     -- separately, or an application id and an open edX id of equal value would collide.
     , case
-        when base.user_identity_source = 'mitxonline_openedx' then 'mitxonline'
-        else base.user_identity_source
+        when base.user_pk_source = 'mitxonline_openedx' then 'mitxonline'
+        else base.user_pk_source
     end as user_pk_source
     , agg.user_global_id
     , agg.mitlearn_user_id

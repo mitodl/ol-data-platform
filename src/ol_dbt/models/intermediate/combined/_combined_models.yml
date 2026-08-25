@@ -631,10 +631,19 @@ models:
           error_if: ">0"
   - name: user_pk
     description: >
-      str, the person key assigned to this account, permanently. Several accounts
-      share
-      one when they resolve to the same person. dim_user reports the group's survivor;
-      bridge_user_key_alias names any keys that survivorship retired.
+      str, the person key assigned to this identifier, permanently. Several identifiers
+      share one when they belong to the same person. dim_user reports the group's
+      survivor; bridge_user_key_alias names any keys that survivorship retired.
+    tests:
+    - not_null
+  - name: user_pk_source
+    description: >
+      str, which identifier namespace user_pk was minted from. Travels WITH the key
+      rather than being recomputed, so dim_user.user_pk_source describes the key it
+      is
+      actually reporting. Recomputing it from the current ranking makes it disagree
+      with
+      the key whenever the ranking has moved since assignment.
     tests:
     - not_null
   - name: assigned_at

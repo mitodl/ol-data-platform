@@ -103,6 +103,7 @@ with ranked_accounts as (
     select
         identifier
         , user_pk
+        , user_pk_source
         , assigned_at
     from {{ this }}
 )
@@ -116,10 +117,12 @@ with ranked_accounts as (
     select
         email
         , user_pk
+        , user_pk_source
     from (
         select
             identifiers_deduped.email
             , existing_map.user_pk
+            , existing_map.user_pk_source
             , row_number() over (
                 partition by identifiers_deduped.email
                 order by existing_map.assigned_at, existing_map.user_pk
@@ -151,6 +154,12 @@ select
             'group_winner.winner_identity_id'
         ]) }}
     ) as user_pk
+    -- Travels WITH the key, not recomputed. dim_user reports this rather than the current
+    -- ranking winner, which would otherwise disagree with the key it is describing.
+    , coalesce(
+        group_incumbent.user_pk_source
+        , group_winner.winner_identity_source
+    ) as user_pk_source
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as assigned_at
     , '{{ invocation_id }}' as assigned_invocation_id
 from unmapped_identifiers
@@ -168,6 +177,7 @@ select
         'group_winner.winner_identity_source',
         'group_winner.winner_identity_id'
     ]) }} as user_pk
+    , group_winner.winner_identity_source as user_pk_source
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as assigned_at
     , '{{ invocation_id }}' as assigned_invocation_id
 from identifiers_deduped
