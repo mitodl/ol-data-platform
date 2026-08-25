@@ -219,11 +219,19 @@ New here:
    documents a unit rather than routing to it. Populating the inventory proved the proxy too
    strong — edxorg's namespace nests three loaders, with dlt's `raw__edxorg__s3__tables__`
    database dumps sitting inside Airbyte's `raw__edxorg__s3__` catalog files (§8.2).
-5. `cursor_field` is required iff `sync_mode` is incremental **and the unit's
+5. `cursor_field` is required when `sync_mode` is incremental **and the unit's
    `replication_method` does not already explain its absence**. `xmin` does explain it (§3.4),
    and is then reported once per unit rather than once per table: all 514 cursorless
    incrementals sit in the eight xmin Postgres units, and writing a `cursor_field` to silence
    them would invent config Airbyte does not hold — precisely what breaks §6.4's empty preview.
+
+   The converse does **not** hold, and this rule deliberately no longer says "iff". A
+   full-refresh stream may carry a cursor, and 45 in the live workspace do — 42
+   `full_refresh_overwrite`, 2 `full_refresh_overwrite_deduped`, 1 `full_refresh_append`
+   (measured 2026-08-25). Airbyte keeps the cursor when a stream is switched off incremental,
+   so the pairing is untidy but true. Deleting it to satisfy a neater rule is the same
+   mistake in the other direction: `render airbyte` would then disagree with the live config
+   on 45 streams, and §6.4's empty preview is what that breaks.
 6. Every `airbyte.connections[].name` ends with `s3 data lake` (case-insensitive) — the
    Dagster selector's precondition (§1.3) — or the unit is marked `dagster_visible: false`,
    which is an assertion that no dbt model depends on it (§8.1 finding C).
