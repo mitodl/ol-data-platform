@@ -19,6 +19,8 @@ from ol_dbt_cli.commands.diff import (
     _resolve_raw_columns,
     _split_columns,
     _summarize_relations,
+    _surrogate_alias,
+    _validate_identifiers,
     diff,
     reconcile_columns,
 )
@@ -207,6 +209,43 @@ class TestSplitColumns:
         assert _split_columns(()) == []
 
 
+class TestSurrogateAlias:
+    """The synthetic join-key alias must never collide with a real column."""
+
+    def test_default_alias_when_nothing_collides(self) -> None:
+        assert _surrogate_alias(["k1", "k2", "some_col"]) == "ol_dbt_diff_surrogate_key"
+
+    def test_collision_with_compared_column_is_avoided(self) -> None:
+        # A model column actually named ol_dbt_diff_surrogate_key would otherwise
+        # be emitted twice; audit_helper would bind primary_key and
+        # column_to_compare to the same identifier and DuckDB silently resolves
+        # to the FIRST match -- comparing the generated key against itself and
+        # reporting a perfect match however much the real values differ.
+        alias = _surrogate_alias(["k1", "k2", "ol_dbt_diff_surrogate_key"])
+        assert alias != "ol_dbt_diff_surrogate_key"
+
+    def test_collision_check_is_case_insensitive(self) -> None:
+        # Warehouse identifiers are case-insensitive, so an upper/mixed-case
+        # column still collides.
+        for name in ("OL_DBT_DIFF_SURROGATE_KEY", "Ol_Dbt_Diff_Surrogate_Key"):
+            assert _surrogate_alias(["k1", name]).lower() != name.lower()
+
+    def test_collision_with_a_key_column_is_avoided(self) -> None:
+        alias = _surrogate_alias(["ol_dbt_diff_surrogate_key", "k2", "some_col"])
+        assert alias != "ol_dbt_diff_surrogate_key"
+
+    def test_escalates_until_free(self) -> None:
+        # Pathological but must terminate on a distinct, still-valid identifier.
+        taken = ["ol_dbt_diff_surrogate_key", "ol_dbt_diff_surrogate_key_x"]
+        alias = _surrogate_alias(taken)
+        assert alias == "ol_dbt_diff_surrogate_key_x_x"
+
+    def test_result_is_always_a_plain_identifier(self) -> None:
+        # Must keep satisfying _validate_identifiers' pattern.
+        taken = ["ol_dbt_diff_surrogate_key", "ol_dbt_diff_surrogate_key_x"]
+        _validate_identifiers("primary key", [_surrogate_alias(taken)])
+
+
 class TestSqlBuilders:
     def test_jinja_list(self) -> None:
         assert _jinja_list(["a", "b"]) == "['a', 'b']"
@@ -315,6 +354,16 @@ class TestRelationJinja:
         sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
         select_clause = "select {{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key, some_col from"
         assert sql.count(select_clause) == 2
+
+    def test_compare_column_sql_alias_does_not_shadow_the_compared_column(self) -> None:
+        # Regression for the silent false negative: comparing a column that is
+        # itself named ol_dbt_diff_surrogate_key must not emit that identifier
+        # twice in one select.
+        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "ol_dbt_diff_surrogate_key")
+        assert "as ol_dbt_diff_surrogate_key," not in sql
+        assert "as ol_dbt_diff_surrogate_key_x, ol_dbt_diff_surrogate_key" in sql
+        assert "primary_key='ol_dbt_diff_surrogate_key_x'" in sql
+        assert "column_to_compare='ol_dbt_diff_surrogate_key'" in sql
 
     def test_compare_column_sql_single_pk_keeps_the_real_column(self) -> None:
         # No surrogate for a single key -- the real column joins directly.

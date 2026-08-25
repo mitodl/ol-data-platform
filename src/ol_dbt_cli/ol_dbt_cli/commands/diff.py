@@ -355,10 +355,35 @@ def _jinja_list(values: list[str]) -> str:
     return f"[{inner}]"
 
 
-# Alias for the synthetic single-column join key that stands in for a composite
-# primary key in the per-column comparison (see `_compare_column_sql`). Named to
-# be collision-proof against real warehouse columns.
+# Base alias for the synthetic single-column join key that stands in for a
+# composite primary key in the per-column comparison (see `_compare_column_sql`).
+# Deliberately tool-namespaced, but see `_surrogate_alias` -- "unlikely to
+# collide" is not the same as "cannot", and the collision failed silently.
 _SURROGATE_PK = "ol_dbt_diff_surrogate_key"
+
+
+def _surrogate_alias(taken: list[str]) -> str:
+    """Pick a surrogate-key alias that cannot collide with a real column name.
+
+    If the compared column is itself called ``ol_dbt_diff_surrogate_key``, the
+    emitted select would carry that identifier twice -- once for the generated
+    key, once for the real column -- and audit_helper would then use the same
+    name as both ``primary_key`` and ``column_to_compare``. DuckDB does not
+    reject that: it binds to the *first* match, so the comparison compares the
+    generated key against itself and reports a perfect match no matter how much
+    the real values differ. A silent false negative is the worst outcome for a
+    tool whose job is detecting differences, so the alias is derived rather than
+    assumed safe.
+
+    Matching is case-insensitive because warehouse identifiers are. The ``_x``
+    suffix keeps the result a plain identifier, so it still satisfies
+    :data:`_IDENTIFIER_RE`.
+    """
+    taken_lower = {t.lower() for t in taken}
+    alias = _SURROGATE_PK
+    while alias.lower() in taken_lower:
+        alias += "_x"
+    return alias
 
 
 def _pk_string(values: list[str]) -> str:
@@ -472,9 +497,13 @@ def _compare_column_sql(
     # whole row width for a single-column comparison, which is needless I/O on
     # wide tables.
     if len(primary_key) > 1:
-        pk = f"'{_SURROGATE_PK}'"
+        # Guard against every identifier that could appear alongside the alias --
+        # `column` is the only other one emitted today, but including the key
+        # columns keeps this correct if they are ever selected again.
+        alias = _surrogate_alias([*primary_key, column])
+        pk = f"'{alias}'"
         key_expr = f"{{{{ diff_composite_key({_jinja_list(primary_key)}) }}}}"
-        select_cols = f"{key_expr} as {_SURROGATE_PK}, {column}"
+        select_cols = f"{key_expr} as {alias}, {column}"
     else:
         pk = f"'{primary_key[0]}'"
         select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
