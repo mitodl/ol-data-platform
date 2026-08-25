@@ -18,8 +18,10 @@
 {% endmacro %}
 
 {% macro duckdb__format_timestamp_as_iso8601(timestamp_expr) %}
-  {# Format the already-typed timestamp/timestamptz directly -- no intermediate cast #}
-  strftime({{ timestamp_expr }}, '%Y-%m-%dT%H:%M:%S.%fZ')
+  {# DuckDB formats a TIMESTAMPTZ in the connection's session time zone, not UTC, and the
+     dev/dev_local profiles don't pin one -- normalize to UTC first so the literal Z suffix
+     below is actually correct instead of a session-local wall-clock time mislabeled as UTC. #}
+  strftime(({{ timestamp_expr }}) at time zone 'UTC', '%Y-%m-%dT%H:%M:%S.%fZ')
 {% endmacro %}
 
 {% macro starrocks__format_timestamp_as_iso8601(timestamp_expr) %}
