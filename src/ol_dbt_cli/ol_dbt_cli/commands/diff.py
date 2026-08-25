@@ -80,17 +80,43 @@ def _split_columns(values: tuple[str, ...]) -> list[str]:
     first for a composite key.
 
     Order is preserved and duplicates are dropped -- a repeated key column would
-    otherwise be emitted twice into the surrogate-key expression. Empty segments
-    (a trailing comma, ``-k ""``) are discarded rather than passed on to
-    :func:`_validate_identifiers` as a confusing empty-identifier error.
+    otherwise be emitted twice into the surrogate-key expression, and would
+    needlessly push a single-column key onto the composite path. Matching is
+    case-INSENSITIVE, because unquoted warehouse identifiers are and the rest of
+    this path already treats them that way (see ``_validate_identifiers`` and the
+    ``pk_lower`` filter in :func:`diff`); the first spelling seen is the one kept,
+    since that is what the user wrote and what the emitted SQL should say.
+
+    Empty segments (a trailing comma, ``-k ""``, ``-k ","``) are dropped here
+    rather than reaching :func:`_validate_identifiers` as a confusing
+    empty-identifier error. Dropping them means an all-empty value flattens to
+    ``[]``, which is indistinguishable from the option never being passed -- so
+    the caller must reject that case explicitly rather than silently treating it
+    as "no key given". See :func:`_require_non_empty`.
     """
     out: list[str] = []
+    seen: set[str] = set()
     for value in values:
         for part in value.split(","):
             cleaned = part.strip()
-            if cleaned and cleaned not in out:
+            if cleaned and cleaned.lower() not in seen:
+                seen.add(cleaned.lower())
                 out.append(cleaned)
     return out
+
+
+def _require_non_empty(kind: str, flag: str, given: tuple[str, ...], flattened: list[str]) -> None:
+    """Reject a column-list option that was supplied but held no usable names.
+
+    ``-k ""`` and ``-k ","`` flatten to nothing. Treating that as "not supplied"
+    would silently skip the per-column comparison the user explicitly asked for
+    (or silently exclude nothing), where before comma-splitting existed the empty
+    string simply failed identifier validation. Silent degradation is worse than a
+    loud error for a tool whose output is meant to be trusted, so this fails.
+    """
+    if given and not flattened:
+        msg = f"{flag} was given but contains no column names (values: {', '.join(repr(g) for g in given)})."
+        raise InvalidIdentifierError(msg)
 
 
 def _validate_identifiers(kind: str, names: list[str]) -> None:
@@ -867,6 +893,8 @@ def diff(
 
     # Validate every value interpolated into inline Jinja SQL before use.
     try:
+        _require_non_empty("primary key", "--primary-key", primary_key, primary_key_list)
+        _require_non_empty("excluded column", "--exclude-columns", exclude_columns, exclude_list)
         _validate_identifiers("model name", [old, new])
         _validate_identifiers("primary key", primary_key_list)
         _validate_identifiers("excluded column", exclude_list)
@@ -964,6 +992,23 @@ def diff(
             else unresolved_note.format(new)
         )
     recon = reconcile_columns(old_cols, new_cols, set(exclude_list))
+
+    # A mistyped --primary-key is a valid identifier, so identifier validation
+    # cannot catch it; without this it reaches the warehouse and comes back as a
+    # raw "column not found" SQL error with no hint that the key is at fault.
+    # Composite keys multiply the typo surface, so name the offenders here. Only
+    # meaningful when the column set actually resolved -- an unresolved set is
+    # "unknown", not "empty", and must not be read as "the key does not exist".
+    if primary_key_list and old_cols and new_cols:
+        known = {c.lower() for c in old_cols} & {c.lower() for c in new_cols}
+        unknown = [k for k in primary_key_list if k.lower() not in known]
+        if unknown:
+            err_console.print(
+                f"[red]Error:[/] --primary-key column(s) not present in both relations: "
+                f"{', '.join(repr(u) for u in unknown)}."
+            )
+            err_console.print(f"[dim]Columns common to both: {', '.join(sorted(known))}[/]")
+            sys.exit(1)
 
     # When a column set can't be resolved statically, the schema-divergence gate
     # cannot run — an empty reconciliation is "unverified", NOT "verified equal".

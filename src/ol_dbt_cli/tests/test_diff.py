@@ -9,6 +9,7 @@ import pytest
 
 from ol_dbt_cli.commands import diff as diff_mod
 from ol_dbt_cli.commands.diff import (
+    InvalidIdentifierError,
     Verdict,
     _compare_column_sql,
     _compare_relations_sql,
@@ -16,6 +17,7 @@ from ol_dbt_cli.commands.diff import (
     _format_sample_mismatches,
     _jinja_list,
     _relation_jinja,
+    _require_non_empty,
     _resolve_raw_columns,
     _split_columns,
     _summarize_relations,
@@ -207,6 +209,51 @@ class TestSplitColumns:
 
     def test_no_arguments(self) -> None:
         assert _split_columns(()) == []
+
+
+class TestSplitColumnsCaseInsensitivity:
+    """Warehouse identifiers are case-insensitive; dedup must match that."""
+
+    def test_case_differing_duplicates_are_collapsed(self) -> None:
+        # `-k id,ID` previously emitted the column twice AND pushed a single-column
+        # key onto the composite path.
+        assert _split_columns(("id,ID",)) == ["id"]
+
+    def test_first_spelling_is_the_one_kept(self) -> None:
+        # The user's spelling is what should reach the emitted SQL.
+        assert _split_columns(("ID,id",)) == ["ID"]
+        assert _split_columns(("Id", "iD")) == ["Id"]
+
+    def test_case_dedup_across_separate_flags(self) -> None:
+        assert _split_columns(("id", "ID")) == ["id"]
+
+    def test_a_case_duplicate_collapses_to_the_single_key_path(self) -> None:
+        # Consequence of the above: one real column must not take the composite path.
+        sql = _compare_column_sql("old_m", "new_m", _split_columns(("id,ID",)), "some_col")
+        assert "primary_key='id'" in sql
+        assert "diff_composite_key" not in sql
+
+    def test_distinct_names_are_not_collapsed(self) -> None:
+        assert _split_columns(("k1,K2",)) == ["k1", "K2"]
+
+
+class TestRequireNonEmpty:
+    """An option supplied but empty must fail, not silently mean "not supplied"."""
+
+    @pytest.mark.parametrize("given", [("",), (",",), (" ",), ("", ""), (" , ",)])
+    def test_supplied_but_empty_is_rejected(self, given: tuple[str, ...]) -> None:
+        with pytest.raises(InvalidIdentifierError):
+            _require_non_empty("primary key", "--primary-key", given, _split_columns(given))
+
+    def test_not_supplied_is_fine(self) -> None:
+        _require_non_empty("primary key", "--primary-key", (), [])
+
+    def test_supplied_and_usable_is_fine(self) -> None:
+        _require_non_empty("primary key", "--primary-key", ("a,b",), _split_columns(("a,b",)))
+
+    def test_error_names_the_flag_and_the_offending_values(self) -> None:
+        with pytest.raises(InvalidIdentifierError, match="--primary-key"):
+            _require_non_empty("primary key", "--primary-key", ("",), [])
 
 
 class TestSurrogateAlias:
@@ -610,6 +657,52 @@ class TestDiffCommand:
         assert "exclude_columns=['a', 'b']" in relations[0]
         # Both excluded, so nothing is left to compare per-column.
         assert not [q for q in seen if "compare_column_values" in q]
+
+    def test_empty_primary_key_exits_1_instead_of_silently_skipping(self, tmp_path: Path) -> None:
+        # `-k ""` must not degrade into "no --primary-key given", which would
+        # silently skip the per-column comparison the user asked for.
+        dbt_dir = _make_project(tmp_path, "select 1 as id", "select 1 as id")
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", primary_key=("",), dbt_dir_path=str(dbt_dir))
+        assert exc.value.code == 1
+
+    def test_empty_exclude_columns_exits_1(self, tmp_path: Path) -> None:
+        dbt_dir = _make_project(tmp_path, "select 1 as id", "select 1 as id")
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", exclude_columns=(",",), dbt_dir_path=str(dbt_dir))
+        assert exc.value.code == 1
+
+    def test_unknown_primary_key_column_exits_1_before_any_warehouse_call(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A typo is a valid identifier, so identifier validation cannot catch it;
+        # without this guard it reaches the warehouse as a raw column-not-found error.
+        dbt_dir = _make_project(tmp_path, "select 1 as id, 'x' as name", "select 1 as id, 'x' as name")
+        called: list[str] = []
+
+        def fake_show(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            called.append("ran")
+            return []
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", primary_key=("idd",), dbt_dir_path=str(dbt_dir))
+        assert exc.value.code == 1
+        assert called == []
+
+    def test_known_primary_key_accepted_case_insensitively(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The guard must not reject a correct key spelled in a different case.
+        dbt_dir = _make_project(tmp_path, "select 1 as id, 'x' as name", "select 1 as id, 'x' as name")
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            if "compare_column_values" in inline_sql:
+                return [{"match_status": "✅: perfect match", "count_records": 1}]
+            return [{"in_a": True, "in_b": True, "count": 1}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(old="m_old", new="m_new", primary_key=("ID",), dbt_dir_path=str(dbt_dir))
 
     def test_row_mismatch_exits_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         dbt_dir = _make_project(

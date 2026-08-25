@@ -170,6 +170,13 @@ Note that `-k a b c` does **not** work. Only the first token is consumed as a ke
 the rest are read as positional arguments, so you get a confusing error about
 `--dbt-dir` rather than anything mentioning primary keys.
 
+Repeated spellings of one column collapse (`-k id,ID` is just `id`), and the tool
+fails fast rather than degrading quietly in two cases: passing the flag with
+nothing usable in it (`-k ""`, `-k ","`) is an error rather than being read as "no
+key given", and a key column that is not present in both relations is reported by
+name — with the common column list — instead of surfacing later as a raw SQL
+"column not found".
+
 Getting the grain right matters more than it looks. A key that is not unique pairs
 rows many-to-many, and the resulting mismatch counts are an artifact of the join
 rather than a real difference. For example, on a 20,908-row mart whose real grain is
