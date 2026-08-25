@@ -114,11 +114,13 @@ models:
       so user_fk can be recomputed later without rebuilding this insert-only fact.
       Not for downstream consumption.
   - name: feedback_title
-    description: str, the redacted title. Null until the feedback_redacted Dagster
-      asset lands and this fact left-joins it in on (source_slug, source_record_id).
+    description: str, the redacted title, left-joined from the feedback_redacted Dagster
+      asset on (source_slug, source_record_id). Null where the asset has not yet processed
+      the row, or the source turn's title was null.
   - name: feedback_text
-    description: str, the redacted body text. Null until the feedback_redacted Dagster
-      asset lands and this fact left-joins it in on (source_slug, source_record_id).
+    description: str, the redacted body text, left-joined from the feedback_redacted
+      Dagster asset on (source_slug, source_record_id). Null where the asset has not
+      yet processed the row, or the source turn's text was null.
   - name: feedback_text_chars
     description: int, length of the text measured before masking, so the metric survives
       redaction.
