@@ -151,14 +151,19 @@ def _check_strategies(unit: Unit, report: ValidationReport) -> None:
     loader = unit.data.get("loader")
 
     # `local: mirror` is rejected by the JSON Schema enum; this catches the
-    # second rule, which the schema cannot express.
+    # second rule, which the schema cannot express. dlt is the only supported
+    # local ingest target, so this stays keyed on `loader != dlt` rather than
+    # on Airbyte alone: adding `dagster` (rule 7) did not add a second way to
+    # ingest locally, and reading the rule as "bans Airbyte" would let a unit
+    # declare a local path that nothing supports.
     if strategies.get("local") == "ingest" and loader != "dlt":
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
             "strategies.local is `ingest` but the unit is not dlt-backed",
-            "Airbyte cannot run in k3d, so `local: ingest` on an Airbyte unit is false on its face (RFC 12711 §3).",
+            "dlt is the only supported local ingest target: Airbyte cannot run in k3d, "
+            "and no other loader has a local path (RFC 12711 §3).",
         )
 
     mirrors = MIRROR_STRATEGY in strategies.values()
@@ -315,7 +320,7 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
 
 
 def _check_cross_unit(units: list[Unit], report: ValidationReport) -> None:
-    """Check the invariants that make prefix → unit a function (§3.3 rules 4 and 8)."""
+    """Check the invariants that give every raw table exactly one owner (§3.3 rule 8)."""
     # Nested prefixes are allowed. The rule that used to forbid them was a proxy
     # for "a raw table maps to two units", which `seen_tables` below enforces
     # directly — and §1.1 fixed that raw tables are declared, never parsed, so a

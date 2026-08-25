@@ -205,7 +205,10 @@ tables:
 Carried over from RFC 12711 §3, unchanged:
 
 1. `local: mirror` is rejected by the schema (the enum omits the value).
-2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d.
+2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d. Adding `dagster`
+   (rule 7) does not widen this: dlt is the only supported local ingest target, so the rule
+   stays "requires dlt" rather than becoming "bans Airbyte". A `dagster` unit declaring
+   `local: ingest` would name a local path nothing implements.
 3. `mirror_max_age_days` is required iff any strategy is `mirror`, with no default.
 
 New here:
@@ -743,14 +746,15 @@ Findings that are work items rather than schema changes:
 
 ### 8.2 What populating it changed, 2026-08-25
 
-41 units, 966 tables, validating clean — 37 units from the Airbyte snapshot plus four the
-snapshot structurally cannot see: three dlt sources (`mit_climate`, `mitpe`, `oll`) and one
-Dagster asset pipeline (`openedx`). Four things the schema did not survive contact with, each
-fixed above rather than worked around:
+43 units, 982 tables, validating clean — 34 `loader: airbyte` units from the snapshot plus
+nine the snapshot structurally cannot see: seven dlt sources (`mit_climate`, `mitpe`, `oll`,
+`keycloak`, `podcast`, `edxorg/api`, `edxorg/mysql`) and two Dagster asset pipelines
+(`openedx/s3`, `edxorg/course_structure`). Four things the schema did not survive contact
+with, each fixed above rather than worked around:
 
 - **A raw namespace can hold more than one loader.** `raw__edxorg__*` is served by three:
   Airbyte (4 connections), dlt (`edxorg_s3`, `mit_edx_programs`), and a bespoke Dagster asset
-  pipeline (`dg_projects/edxorg/assets/openedx_course_archives.py`). Their prefixes nest, and
+  pipeline (`dg_projects/edxorg/edxorg/assets/openedx_course_archives.py`). Their prefixes nest, and
   `loader` had no value for the third. Hence rule 4's relaxation and rule 7's `dagster`.
 - **`xmin` made the file unlandable.** 514 cursorless incremental streams, every one in an
   xmin Postgres unit — see rule 5.
@@ -773,6 +777,15 @@ sources under mitxonline and xpro that those deployments have never synced
 nothing yet explains them, so a clean checkout exits 1. That is the honest state rather than
 a baseline to be silenced, and it is why `reconcile` is not a CI gate yet: it becomes one
 when that task closes.
+
+**`reconcile` cannot tell you the inventory is incomplete.** The `keycloak` and `podcast`
+units were missing from the first populated draft, and both are actively scheduled daily in
+`dg_projects/data_loading`. Neither half of the three-way diff could see it: no dbt model
+reads either source, so the dbt half compares against nothing, and the warehouse half needs
+an observation CI does not have. They were found by reading
+`dg_projects/data_loading/data_loading/defs/ingestion/schedules.py` against the unit list.
+Until step 8's scheduled drift check runs, **adding a loader means adding its unit by hand**,
+and the only reliable check is that every scheduled ingestion asset maps to one.
 
 One finding needs an action outside this repo: the paused Airbyte connection
 `edx.org Production Course Metadata → S3 Data Lake` writes two raw tables that

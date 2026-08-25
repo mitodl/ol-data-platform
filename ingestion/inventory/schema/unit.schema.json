@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mitodl/ol-data-platform/ingestion/inventory/schema/unit.schema.json",
   "title": "Ingestion inventory unit",
-  "description": "One (deployment, layer) ingestion unit. See docs/specs/INGESTION_INVENTORY_SPEC.md §3. Shape only — cross-unit invariants (prefix overlap, global raw_table uniqueness, vocabulary membership) are checked by `ol-dbt inventory validate`, which JSON Schema cannot express.",
+  "description": "One (deployment, layer) ingestion unit. See docs/specs/INGESTION_INVENTORY_SPEC.md §3. Shape only — cross-unit invariants (global raw_table uniqueness, unique (deployment, layer) key, vocabulary membership) are checked by `ol-dbt inventory validate`, which JSON Schema cannot express. Prefix overlap is deliberately not among them: prefixes may nest (§3.3 rule 4).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "deployment", "layer", "scope", "strategies", "loader", "table_prefix", "tables"],

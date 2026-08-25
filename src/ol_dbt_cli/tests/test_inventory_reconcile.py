@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 import yaml
 
+from ol_dbt_cli.commands.inventory import _read_table_list
 from ol_dbt_cli.lib.inventory import (
     load_units,
     reconcile_dbt,
@@ -285,6 +286,23 @@ class TestSourceTableCollection:
         _write_source(models / "_dim__sources.yml", ["dim_user"], source_name="dimensional")
 
         assert collect_source_tables(models, "ol_warehouse_raw_data") == {"raw__a__one"}
+
+
+class TestWarehouseTableList:
+    def test_comments_and_blank_lines_are_dropped_whatever_their_indent(self, tmp_path: Path) -> None:
+        # The comment test has to run on the stripped line: an indented `#` line
+        # is still a comment, and letting it through invents a raw table name
+        # that then reports as undeclared warehouse drift.
+        path = tmp_path / "warehouse.txt"
+        path.write_text("# leading\n  # indented\n\n  raw__a__one  \nraw__b__two\n")
+
+        assert _read_table_list(path) == {"raw__a__one", "raw__b__two"}
+
+    def test_a_json_array_is_read_as_one(self, tmp_path: Path) -> None:
+        path = tmp_path / "warehouse.json"
+        path.write_text('\n  ["raw__a__one", "raw__b__two"]\n')
+
+        assert _read_table_list(path) == {"raw__a__one", "raw__b__two"}
 
 
 def _write_source(path: Path, tables: list[str], source_name: str = "ol_warehouse_raw_data") -> None:

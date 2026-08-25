@@ -16,9 +16,7 @@ dlt:
 tables:
 - name: raw__mit_climate__api__articles
   raw_table: raw__mit_climate__api__articles
-  sync_mode: incremental_deduped_history
-  cursor_field:
-  - uuid
+  sync_mode: full_refresh_overwrite_deduped
   primary_key:
   - - uuid
   modeled: true

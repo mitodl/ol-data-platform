@@ -16,5 +16,8 @@ dlt:
 tables:
 - name: raw__mitpe__api__courses
   raw_table: raw__mitpe__api__courses
-  sync_mode: full_refresh_overwrite
+  sync_mode: full_refresh_overwrite_deduped
   modeled: true
+  primary_key:
+  - - title
+  - - url

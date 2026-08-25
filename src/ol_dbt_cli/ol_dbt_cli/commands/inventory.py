@@ -277,6 +277,13 @@ def reconcile(
     dbt_tables = collect_source_tables(dbt_dir / "models", RAW_SOURCE_NAME)
     dbt_result = reconcile_dbt(units, dbt_tables, inventory_dir, report)
 
+    if warehouse_tables_path and duckdb_path:
+        err_console.print("[bold red]Pass either --warehouse-tables or --duckdb-path, not both.")
+        sys.exit(1)
+    if glue_database and not duckdb_path:
+        err_console.print("[bold red]--glue-database only applies to --duckdb-path.")
+        sys.exit(1)
+
     warehouse_result = None
     if warehouse_tables_path or duckdb_path:
         try:
@@ -287,6 +294,18 @@ def reconcile(
             )
         except (OSError, ValueError) as error:
             err_console.print(f"[bold red]{escape(str(error))}")
+            sys.exit(1)
+        # The same reason the half is skipped without a flag: an observation
+        # holding no raw table at all is not evidence that every declared table
+        # is missing. It is a registry pointed at a non-raw Glue database, or a
+        # dump taken before the raw schema existed.
+        if not warehouse:
+            err_console.print(
+                "[bold red]The warehouse observation holds no `raw__` table, so comparing it "
+                "would report all "
+                f"{len(units)} unit(s)' tables as missing. Check --glue-database, or that the "
+                "table list is not empty."
+            )
             sys.exit(1)
         warehouse_result = reconcile_warehouse(units, warehouse, report)
 
@@ -320,7 +339,8 @@ def _read_table_list(path: Path) -> set[str]:
     stripped = text.lstrip()
     if stripped.startswith("["):
         return {str(name) for name in json.loads(text)}
-    return {line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")}
+    lines = (line.strip() for line in text.splitlines())
+    return {line for line in lines if line and not line.startswith("#")}
 
 
 def _warehouse_tables_from_duckdb(duckdb_path: Path, glue_database: str | None) -> set[str]:

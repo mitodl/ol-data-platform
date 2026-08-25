@@ -29,6 +29,14 @@ deployments:
 - xpro
 - mit_climate
 - mitpe
+  # Infrastructure we run rather than a learning platform, but the definition
+  # above is "a thing we run", and its user/group/role tables are identity
+  # facts the warehouse models against. Loaded by ol_dlt.sources.keycloak.
+- keycloak
+  # The podcast feeds we publish, read from their RSS. Not one deployment's
+  # data — the channel set is configured per run — so `podcast` names the
+  # collection, the same shape as `openedx` below.
+- podcast
   # We run three Open edX instances — mitx, mitxonline and xpro, each its own
   # deployment above. `openedx` is not a fourth: it names the shared pipeline
   # that reads all three, whose output lands in one table rather than three.
@@ -68,6 +76,7 @@ layers:
 - bigquery              # a BigQuery dataset shared with us
 - google_sheets         # a maintained spreadsheet
 - fastly                # Fastly access logs
+- rss                   # A published RSS feed, read as the source of record
 - course_structure      # Open edX course archives (course.xml bundles), parsed
                         # into tables by a Dagster asset pipeline rather than
                         # pulled by a loader. edxorg's are the only ones today.

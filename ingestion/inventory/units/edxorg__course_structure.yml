@@ -1,6 +1,8 @@
 ---
-# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
-# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+# Hand-written: this unit is a Dagster asset pipeline
+# (dg_projects/edxorg/edxorg/assets/openedx_course_archives.py), not an Airbyte
+# connection, so bin/airbyte-inventory.py cannot produce it. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
 schema_version: 1
 deployment: edxorg
 scope: singleton

@@ -163,13 +163,37 @@ class TestSchemaShape:
 
 
 class TestRules:
-    def test_local_ingest_requires_dlt(self, inventory: Path) -> None:
+    def test_local_ingest_requires_a_dlt_unit(self, inventory: Path) -> None:
         _mutate(
             inventory,
             "mitxonline__mysql",
             APP_UNIT,
             strategies={"qa": "ingest", "local": "ingest"},
         )
+        report = _run(inventory)
+        assert "not dlt-backed" in _messages(report)
+
+    def test_local_ingest_is_rejected_on_a_dagster_unit_too(self, inventory: Path) -> None:
+        # dlt is the only supported local ingest target. Adding `dagster`
+        # (rule 7) did not add a second one, so reading the rule as "bans
+        # Airbyte" would let a unit declare a local path nothing implements.
+        unit = copy.deepcopy(DLT_UNIT)
+        unit.pop("dlt")
+        unit.update(
+            deployment="openedx",
+            layer="s3",
+            loader="dagster",
+            table_prefix="raw__openedx__s3__",
+            strategies={"qa": "omit", "local": "ingest"},
+        )
+        unit["tables"] = [
+            {
+                "name": "raw__openedx__s3__course_xml_blocks",
+                "raw_table": "raw__openedx__s3__course_xml_blocks",
+                "sync_mode": "full_refresh_overwrite",
+            }
+        ]
+        _write(inventory, "openedx__s3", unit)
         report = _run(inventory)
         assert "not dlt-backed" in _messages(report)
 

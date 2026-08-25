@@ -1,6 +1,7 @@
 ---
-# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
-# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
 schema_version: 1
 deployment: edxorg
 scope: singleton
