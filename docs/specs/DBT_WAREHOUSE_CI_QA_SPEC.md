@@ -159,8 +159,21 @@ loudly instead of silently falling to text.
    - `compare_column_values` (the per-column mismatch path) emits
      `a_query.{{ primary_key }} = b_query.{{ primary_key }}`, so it requires a **scalar** column
      name present in both sides. A composite key is therefore collapsed into a single hashed
-     join column via `dbt_utils.generate_surrogate_key([...])` inside the `a_query`/`b_query`
-     blocks, and that column's name is what gets passed.
+     join column inside the `a_query`/`b_query` blocks, and that column's name is what gets
+     passed. Build that column with the project's `diff_composite_key` macro
+     (`src/ol_dbt/macros/diff_composite_key.sql`) — **not**
+     `dbt_utils.generate_surrogate_key`, which joins components with a literal `-` without
+     encoding component boundaries, so `('a-b', 'c')` and `('a', 'b-c')` hash identically
+     (verified on dbt_utils 1.3.3). Two distinct keys would then pair as one row, reintroducing
+     the same many-to-many mispairing a composite key exists to prevent.
+     `diff_composite_key` length-prefixes each component (`<len>:<value>`, NULL as `~`) so no
+     character inside a value can shift a boundary.
+
+     This caveat is specific to using a hash as a **row-pairing join key across two
+     relations**. It is not a claim about the `*_pk` surrogates in the dimensional models,
+     which legitimately use `generate_surrogate_key`: there both sides of a join compute the
+     hash identically, and a boundary collision would make two rows share a `*_pk` and fail
+     that column's `unique` test rather than silently mispair.
 
    Accept a composite key both comma-separated (`-k a,b,c`) and as a repeated flag
    (`-k a -k b -k c`); cyclopts consumes one token per flag occurrence, so `-k a b c` would
