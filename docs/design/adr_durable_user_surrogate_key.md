@@ -109,27 +109,46 @@ Four files:
 | `models/intermediate/combined/int__combined__user_accounts.sql` | the account list, extracted from `dim_user`'s former `combined_accounts` CTE |
 | `models/intermediate/combined/int__combined__user_key_map.sql` | the append-only key map |
 | `models/dimensional/bridge_user_key_alias.sql` | retired-to-surviving key map |
-| `macros/user_identity.sql` | `account_nk` and the ranking, shared so the three cannot drift |
+| `macros/user_identity.sql` | the identifier set and the ranking, shared so the three cannot drift |
 
-The macros are not incidental. `account_nk` is the join key between the map and its
+The macros are not incidental. The identifier set is the join key between the map and its
 consumers, and the ranking decides both which account a new group mints from and which
 account's attributes `dim_user` reports. Three literal copies of either would drift, and the
 drift would be silent.
 
 ### 1. `int__combined__user_key_map` (new, append-only state)
 
-Grain: one row per **account natural key**. An account is a row of
-`int__combined__user_accounts`, which is `dim_user`'s former `combined_accounts` CTE
-extracted so that the map and `dim_user` resolve identity from the same account list rather
-than each rebuilding it. Its natural key is durable by construction, because it is a source
-system's own primary key:
+Grain: one row per **identifier**, not per account.
+
+An account is a row of `int__combined__user_accounts`. The obvious move is to key it on its
+own primary key, and it is wrong: a combined MITx/Learn row holds several platform ids at
+once, so any single-key scheme has to pick one by priority, and whichever it picks moves the
+moment a higher-priority id appears. Measured on the 7.68M-account production snapshot:
+
+| keyed on | people re-keyed over the MIT Learn rollout |
+|---|---|
+| `(id_source, id_source_user_id)`, priority-picked | **795,312** |
+| `coalesce(user_global_id, ...)` | **796,593** |
+| the whole identifier set | **0** |
+
+The Keycloak global id looks like the fix and is not: it and the mitlearn id arrive in the
+*same* event (866,750 accounts carry both, 19 carry mitlearn alone), so keying on it
+relocates the flip rather than removing it.
+
+Keying on the whole set removes the choice. Each account contributes one row per id it
+holds, all carrying the same `user_pk`:
 
 ```
-account_nk = case
-    when id_source_user_id is not null then id_source || ':' || id_source_user_id
-    else 'email:' || email
-end
+global:<keycloak sub>   mitlearn:<id>   mitxonline:<id>   edxorg:<id>   …
+email:<email>           -- only for accounts with no source id anywhere
 ```
+
+A newly appearing id is an *additional* identifier, so the account's older identifiers still
+resolve and the map adopts rather than mints. Verified before building on it: 9,718,753
+identifiers across the snapshot with **zero collisions** between account rows.
+
+`account_nk` survives only as a within-run row id. It is still priority-picked and still
+unstable, and nothing durable keys on it — the macro says so.
 
 ```sql
 {{ config(
@@ -142,8 +161,8 @@ end
 
 | column | notes |
 |---|---|
-| `account_nk` | unique; the durable account identity |
-| `user_pk` | the person key assigned to this account, forever |
+| `identifier` | unique; `<namespace>:<id>` |
+| `user_pk` | the person key assigned to this identifier, forever |
 | `assigned_at` | assignment timestamp; the survivorship ordering |
 | `assigned_invocation_id` | dbt `invocation_id`, for forensics |
 
@@ -152,26 +171,27 @@ end
 flag, so `dbt build --full-refresh` becomes a no-op for this model specifically. Without it,
 one `--full-refresh` re-keys the warehouse.
 
-Assignment rule for accounts not yet in the map:
+The `unique` test on `identifier` overrides the project-wide `+error_if: ">10"` to `">0"`.
+A duplicate identifier can assign conflicting person keys, and an append-only table cannot
+repair that with a rebuild, so it must fail on the first one rather than the eleventh.
 
-1. If another account in the same person group already has a map row, adopt that group's
-   incumbent `user_pk` (the one with the oldest `assigned_at`).
+Assignment rule for identifiers not yet in the map:
+
+1. If any identifier anywhere in the same person group already has a map row, adopt that
+   group's incumbent `user_pk` (the one with the oldest `assigned_at`). Reaching through the
+   whole set is what makes a newly appearing id adopt instead of mint.
 2. Otherwise mint
    `generate_surrogate_key(['winner_identity_source', 'winner_identity_id'])`, taking both
    from the group winner under the existing `ranked_accounts` ordering, exactly as
    `account_identity` computes them today.
 
-Rule 2 must be *today's expression verbatim*, not a hash of `account_nk`. Those are not the
-same value: today's key is a two-argument hash whose first argument is the literal
-`'global'` when the winner carries a `user_global_id`, which `account_nk` does not encode.
-Minting from `account_nk` would re-key every person on the cutover run and destroy the
-no-op property below. `account_nk` is the map's *lookup* key only.
+Rule 2 must be *today's expression verbatim*. Today's key is a two-argument hash whose first
+argument is the literal `'global'` when the winner carries a `user_global_id`; minting from
+anything else would re-key every person on the cutover run.
 
-One detail the implementation had to add: `account_nk` is unique for id-bearing rows but not
-for the id-less ones, which key on email, and two Emeritus rows can share an address. The
-map dedupes to one row per `account_nk` so the join in `dim_user` cannot fan out. Only the
-*map* is deduped; `dim_user` still sees every account row, so `agg_view`'s `max()` merge of
-platform ids is unaffected.
+Identifiers are unique across account rows for every id-bearing namespace, but the email
+fallback is not — two id-less Emeritus rows can share an address — so the map dedupes to one
+row per identifier and the join in `dim_user` cannot fan out.
 
 ### 2. `dim_user` resolves through the map
 
@@ -217,40 +237,50 @@ scale rather than asserted.
 
 **Method.** Comparing the two `dim_user` models directly does not work: the old model
 inlines the platform union and reads staging live, the new one reads the frozen
-`int__combined__user_accounts` table, and production rebuilds staging often enough that the
-two see different data minutes apart. Runs done that way showed 23-25 differing people out
-of 7.57M, all of it input drift rather than design difference.
-
-The drift-immune test recomputes the **pre-change key expression** directly over the same
-frozen `int__combined__user_accounts` snapshot the new pipeline read, so both sides read one
-table:
+`int__combined__user_accounts` table, and production rebuilds staging every few minutes, so
+the two see different data minutes apart. The drift-immune test recomputes the **pre-change
+key expression** over the same frozen snapshot the new pipeline read.
 
 ```
-=== distinct keys: old formula on the snapshot vs new pipeline ===
- old_formula_keys  new_keys
-          7574335   7574335
-
-=== key-set FULL OUTER JOIN on identical input ===
+=== cutover: key sets on identical input ===
  in_old_formula_not_new  in_new_not_old_formula
-                      0                       0
+                      2                       0
 
-=== per-email key equality on identical input ===
+=== per-email key equality ===
  emails_where_key_differs
-                        0
+                        1
 ```
 
-**7,574,335 keys, zero differences in either direction, zero emails whose key changed.** The
-two designs are equivalent on identical input, so the cutover re-keys nobody.
+**Not zero, and the two rows are the design working rather than failing.** The identifier
+set links account rows that share a real platform id, and the snapshot contains 5 such
+identifiers spanning two email addresses each (3 `mitxpro_openedx`, 2 `global_alumni`) —
+one open edX account behind two application accounts with different emails. Those people
+were two identities under the old expression and are one now, which is what identity
+resolution is for. Both retired keys are published:
+
+```
+=== keys in the map but not in dim_user, vs the alias table ===
+ keys_merged_away  alias_rows  published_as_retired
+                2           2                    2
+```
+
+So no key vanishes silently; downstream FKs get a remapping. Every other one of the
+7,574,333 keys is unchanged.
+
+**The property the previous design failed**, tested directly against the map — every account
+that would flip namespace when MIT Learn linkage lands:
+
+```
+ at_risk_people  keep_their_key_through_linkage  would_lose_their_key
+        6493461                         6493461                     0
+```
 
 Supporting integrity checks on the same build: `dim_user` has 0 null and 0 duplicate
-`user_pk`; the key map holds 7,684,472 account keys mapping to 7,574,335 person keys with
-`distinct account_nk = row count` (the dedup holds); and no email resolves to more than one
-key under the old formula.
+`user_pk`; the map holds 11,546,537 identifiers with `distinct identifier = row count`.
 
 **The `full_refresh=false` guard was verified too, by accident.** A run with
-`--full-refresh` left the map's earlier `assigned_invocation_id` values intact (three
-distinct invocations, 7,684,447 + 333 + 12 rows) instead of rebuilding it. Forcing a true
-first build required dropping the relation out of band.
+`--full-refresh` left the map's earlier `assigned_invocation_id` values intact instead of
+rebuilding it. Forcing a true first build required dropping the relation out of band.
 
 ## Residual instability, and the endgame
 

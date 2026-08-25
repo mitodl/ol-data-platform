@@ -60,7 +60,7 @@ def _run(monkeypatch, frame: pl.DataFrame, latest: dict[str, Any] | None):
 def _frame(n: int) -> pl.DataFrame:
     return pl.DataFrame(
         {
-            "account_nk": [f"mitxonline:{i}" for i in range(n)],
+            "identifier": [f"mitxonline:{i}" for i in range(n)],
             "user_pk": [f"key{i}" for i in range(n)],
             "assigned_at": ["2026-01-01T00:00:00.000Z"] * n,
             "assigned_invocation_id": ["run-1"] * n,

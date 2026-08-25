@@ -7,9 +7,9 @@ first if you have not; this runbook assumes you know what the map is for.
 ## Why this is an incident and not a rebuild
 
 Every other model in the dbt project is a pure function of its sources: drop it, rebuild
-it, get the same thing back. This one is not. It records **when** each account natural key
-was first assigned a person key, and survivorship depends on that ordering. Assignment
-order is a fact about the history of builds, not about the source data.
+it, get the same thing back. This one is not. It records **when** each identifier was first
+assigned a person key, and survivorship depends on that ordering. Assignment order is a
+fact about the history of builds, not about the source data.
 
 If you rebuild the map from scratch instead of restoring it, dbt will succeed, the tests
 will pass, and the warehouse will be silently re-keyed for every person whose group winner
@@ -69,12 +69,12 @@ sha256sum /tmp/keymap.parquet          # must equal .sha256 from latest.json
 import polars as pl
 df = pl.read_parquet("/tmp/keymap.parquet")
 assert df.height == MANIFEST_ROW_COUNT
-assert df["account_nk"].n_unique() == df.height     # one row per account key
+assert df["identifier"].n_unique() == df.height     # one row per identifier
 assert df["user_pk"].null_count() == 0
 assert df["assigned_at"].null_count() == 0
 ```
 
-The `account_nk` uniqueness check is the important one: it is what stops the join in
+The `identifier` uniqueness check is the important one: it is what stops the join in
 `dim_user` fanning out.
 
 ## 3. Restore
@@ -97,17 +97,17 @@ table.overwrite(df.to_arrow())     # full replace, not append
 ```
 
 Use `overwrite`, not `append`: if any rows survived the incident, appending would duplicate
-them and break `account_nk` uniqueness.
+them and break `identifier` uniqueness.
 
 ## 4. Prove the restore before unpausing
 
 Run the map, then `dim_user`, then compare against a known-good reference.
 
 ```sql
--- Must be 0. A duplicate account_nk fans out the dim_user join.
+-- Must be 0. A duplicate identifier fans out the dim_user join.
 select count(*) from (
-  select account_nk from ol_warehouse_production_intermediate.int__combined__user_key_map
-  group by account_nk having count(*) > 1
+  select identifier from ol_warehouse_production_intermediate.int__combined__user_key_map
+  group by identifier having count(*) > 1
 );
 
 -- Must be 0.
@@ -141,7 +141,7 @@ In order of preference:
 1. **Iceberg time travel**, if the incident is inside the model's 30-day snapshot
    retention. Cheapest and exact.
 2. **Reconstruct from `dim_user` itself**, if a pre-incident copy exists: it carries
-   `user_pk` and enough identity columns to rebuild `(account_nk, user_pk)` pairs. You
+   `user_pk` and enough identity columns to rebuild `(identifier, user_pk)` pairs. You
    lose true `assigned_at` values — synthesize a single early timestamp for all of them so
    the relative order of everything assigned *after* the restore is still correct.
 3. **Re-mint** (`dbt run` with an empty map) — accept that this re-keys everyone whose

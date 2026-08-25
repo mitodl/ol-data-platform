@@ -1,5 +1,5 @@
--- THE DURABLE user_pk. Append-only: an account natural key is assigned a person key once
--- and never reassigned. See docs/design/adr_durable_user_surrogate_key.md.
+-- THE DURABLE user_pk. Append-only: an identifier is assigned a person key once and never
+-- reassigned. See docs/design/adr_durable_user_surrogate_key.md.
 --
 -- Why this exists: dim_user used to compute user_pk as a first_value() over
 -- `partition by email` on a table-materialized model, so the key was an attribute
@@ -7,6 +7,12 @@
 -- higher-ranked account joining the email group, a user_global_id appearing, an email
 -- edit, an activity-flag toggle), orphaning user_fk across 27 downstream models and every
 -- reverse-ETL consumer holding the value.
+--
+-- The grain is one row per IDENTIFIER, not per account. An account holding several
+-- platform ids contributes one row per id, all carrying the same user_pk, so a newly
+-- appearing id resolves through the account's existing identifiers and ADOPTS its key
+-- instead of minting a new one. Keying on any single id instead would re-key ~795k people
+-- over the MIT Learn rollout; see user_account_identifier_rows() for the measurements.
 --
 -- `full_refresh=false` is load-bearing. dbt-core's should_full_refresh() reads the model
 -- config BEFORE the CLI flag, so `dbt build --full-refresh` is a no-op here specifically.
@@ -29,9 +35,8 @@
     }
 ) }}
 
--- Ranking identical to dim_user's, and it must stay identical: it decides which account a
--- NEW group mints its key from, and dim_user independently uses it to decide which
--- account's attributes surface. Both call the same macros so they cannot drift.
+-- The ranking decides which account a NEW group mints its key from. dim_user applies the
+-- identical ranking (same macros) to decide which account's attributes surface.
 with ranked_accounts as (
     select
         {{ user_account_rank_columns() }}
@@ -40,9 +45,8 @@ with ranked_accounts as (
     from {{ ref('int__combined__user_accounts') }} as accounts
 )
 
--- The winner's identity, per email group. This reproduces dim_user's account_identity
--- exactly, because the minted key below must equal the key dim_user produces today --
--- that is what makes cutover a no-op.
+-- The winner's identity, per email group. This reproduces the expression dim_user used
+-- before the map existed, which is what makes cutover a no-op.
 , account_identity as (
     select
         first_value(case
@@ -60,76 +64,98 @@ with ranked_accounts as (
     )
 )
 
--- account_nk is unique for id-bearing rows but not for the id-less ones, which key on
--- email: two Emeritus rows can share an address. Collapsing them here keeps the map one
--- row per key, so the join in dim_user cannot fan out.
-, accounts_deduped as (
-    select *
+-- winner_identity_* is a first_value over the whole email group, so it is constant within
+-- an email and one row per email is enough to mint from.
+, group_winner as (
+    select distinct
+        email
+        , winner_identity_source
+        , winner_identity_id
+    from account_identity
+)
+
+, identifiers as (
+    {{ user_account_identifier_rows('account_identity') }}
+)
+
+-- Identifiers are unique across account rows for every id-bearing namespace, but the
+-- email fallback is not: two id-less Emeritus rows can share an address. Collapsing keeps
+-- the map one row per identifier, so the join in dim_user cannot fan out.
+, identifiers_deduped as (
+    select
+        account_nk
+        , email
+        , identifier
     from (
         select
-            *
+            identifiers.*
             , row_number() over (
-                partition by account_nk
-                order by has_no_source_id, id_source_rank, sort_id desc nulls last
-            ) as account_row_num
-        from account_identity
+                partition by identifier order by account_nk
+            ) as identifier_row_num
+        from identifiers
     )
-    where account_row_num = 1
+    where identifier_row_num = 1
 )
 
 {% if is_incremental() %}
 
 , existing_map as (
     select
-        account_nk
+        identifier
         , user_pk
         , assigned_at
     from {{ this }}
 )
 
--- The group's incumbent key: whichever of its already-mapped accounts was assigned first.
--- Survivorship is decided by ASSIGNMENT ORDER, which is immutable, rather than by the
--- platform ranking, which is exactly what used to move underneath the key.
+-- The person's incumbent key: the oldest key reachable from ANY identifier anywhere in
+-- their email group. Reaching through the whole identifier set is what makes a newly
+-- appearing id adopt rather than mint. Survivorship is decided by ASSIGNMENT ORDER, which
+-- is immutable, rather than by the platform ranking, which is what used to move underneath
+-- the key.
 , group_incumbent as (
     select
         email
         , user_pk
     from (
         select
-            accounts_deduped.email
+            identifiers_deduped.email
             , existing_map.user_pk
             , row_number() over (
-                partition by accounts_deduped.email
+                partition by identifiers_deduped.email
                 order by existing_map.assigned_at, existing_map.user_pk
             ) as incumbent_row_num
-        from accounts_deduped
-        inner join existing_map on accounts_deduped.account_nk = existing_map.account_nk
+        from identifiers_deduped
+        inner join existing_map
+            on identifiers_deduped.identifier = existing_map.identifier
     )
     where incumbent_row_num = 1
 )
 
-, unmapped_accounts as (
-    select accounts_deduped.*
-    from accounts_deduped
-    left join existing_map on accounts_deduped.account_nk = existing_map.account_nk
-    where existing_map.account_nk is null
+, unmapped_identifiers as (
+    select identifiers_deduped.*
+    from identifiers_deduped
+    left join existing_map
+        on identifiers_deduped.identifier = existing_map.identifier
+    where existing_map.identifier is null
 )
 
 select
-    unmapped_accounts.account_nk
-    -- Rule 1: adopt the group's incumbent if it has one. Rule 2: mint. A group that gains
-    -- a member adopts; only a genuinely new group mints.
+    unmapped_identifiers.identifier
+    -- Rule 1: adopt the group's incumbent if it has one -- which now includes the case of
+    -- an account acquiring a new id, because its older identifiers are still mapped.
+    -- Rule 2: mint. Only a genuinely new person mints.
     , coalesce(
         group_incumbent.user_pk
         , {{ dbt_utils.generate_surrogate_key([
-            'unmapped_accounts.winner_identity_source',
-            'unmapped_accounts.winner_identity_id'
+            'group_winner.winner_identity_source',
+            'group_winner.winner_identity_id'
         ]) }}
     ) as user_pk
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as assigned_at
     , '{{ invocation_id }}' as assigned_invocation_id
-from unmapped_accounts
-left join group_incumbent on unmapped_accounts.email = group_incumbent.email
+from unmapped_identifiers
+left join group_incumbent on unmapped_identifiers.email = group_incumbent.email
+inner join group_winner on unmapped_identifiers.email = group_winner.email
 
 {% else %}
 
@@ -137,13 +163,14 @@ left join group_incumbent on unmapped_accounts.email = group_incumbent.email
 -- dim_user used before this model existed, so every person's user_pk on cutover day is
 -- the value they already have. No downstream re-key, no reverse-ETL coordination.
 select
-    account_nk
+    identifiers_deduped.identifier
     , {{ dbt_utils.generate_surrogate_key([
-        'winner_identity_source',
-        'winner_identity_id'
+        'group_winner.winner_identity_source',
+        'group_winner.winner_identity_id'
     ]) }} as user_pk
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as assigned_at
     , '{{ invocation_id }}' as assigned_invocation_id
-from accounts_deduped
+from identifiers_deduped
+inner join group_winner on identifiers_deduped.email = group_winner.email
 
 {% endif %}

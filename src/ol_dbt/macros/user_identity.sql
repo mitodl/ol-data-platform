@@ -10,16 +10,71 @@
 #}
 
 {#
-    The durable account identity: a source system's own primary key, which does not change.
-    Rows with no source id (Emeritus and Global Alumni pre-date stable ids) fall back to
-    email and are therefore NOT durable across an email edit. Nothing else identifies those
-    accounts; see docs/design/adr_durable_user_surrogate_key.md.
+    A WITHIN-RUN row identifier for an account. Priority-picked, so it is NOT stable across
+    runs -- an account that gains a higher-priority id changes it. That is fine here and
+    only here: nothing durable keys on it. Durability lives in
+    user_account_identifier_rows() below. Do not reintroduce this as the key map's key.
 #}
 {% macro user_account_nk() %}
 case
     when id_source_user_id is not null then id_source || ':' || id_source_user_id
     else 'email:' || email
 end
+{% endmacro %}
+
+{#
+    EVERY identifier an account carries, one row each -- the durable lookup the key map is
+    built on.
+
+    Why a set rather than one key. A combined MITx/Learn row holds several platform ids at
+    once, and any single-key scheme has to pick one of them by priority. Whichever it picks
+    moves the moment a higher-priority id appears: measured on 7.68M production accounts,
+    keying on (id_source, id_source_user_id) would re-key 795,312 people over the MIT Learn
+    rollout, and keying on coalesce(user_global_id, ...) 796,593 -- the global id and the
+    mitlearn id arrive in the same event, so it relocates the flip rather than fixing it.
+
+    Keying on the whole set removes the choice. A new id is an ADDITIONAL identifier, so the
+    account's earlier identifiers still resolve to its existing key and the map adopts
+    rather than mints. Verified unique: 9,718,753 identifiers across the snapshot, zero
+    collisions between account rows.
+
+    `source` is a relation carrying int__combined__user_accounts' columns. Emits
+    (account_nk, email, identifier).
+#}
+{% macro user_account_identifier_rows(source) %}
+{%- set namespaces = [
+    ('global', 'user_global_id'),
+    ('mitlearn', 'mitlearn_user_id'),
+    ('mitlearn_openedx', 'mitlearn_openedx_user_id'),
+    ('mitxonline', 'mitxonline_application_user_id'),
+    ('mitxonline_openedx', 'mitxonline_openedx_user_id'),
+    ('edxorg', 'edxorg_openedx_user_id'),
+    ('micromasters', 'micromasters_user_id'),
+    ('mitxpro', 'mitxpro_application_user_id'),
+    ('mitxpro_openedx', 'mitxpro_openedx_user_id'),
+    ('residential', 'residential_openedx_user_id'),
+    ('bootcamps', 'bootcamps_application_user_id'),
+    ('emeritus', 'emeritus_user_id'),
+    ('global_alumni', 'global_alumni_user_id')
+] -%}
+{% for namespace, column in namespaces %}
+select
+    {{ user_account_nk() }} as account_nk
+    , email
+    , '{{ namespace }}:' || cast({{ column }} as varchar) as identifier
+from {{ source }}
+where {{ column }} is not null
+union all
+{% endfor %}
+-- Accounts with no source id anywhere (Emeritus and Global Alumni rows that pre-date
+-- stable ids) have nothing but their email. Still not durable across an email edit, and
+-- nothing else identifies them.
+select
+    {{ user_account_nk() }} as account_nk
+    , email
+    , 'email:' || email as identifier
+from {{ source }}
+where id_source_user_id is null and user_global_id is null
 {% endmacro %}
 
 {#

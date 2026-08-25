@@ -14,14 +14,18 @@
 -- consumers holding user_pk need to act on it.
 {{ config(materialized='table') }}
 
-with account_keys as (
+with identifiers as (
+    {{ user_account_identifier_rows(ref('int__combined__user_accounts')) }}
+)
+
+, account_keys as (
     select
-        accounts.email
+        identifiers.email
         , user_key_map.user_pk
         , user_key_map.assigned_at
-    from {{ ref('int__combined__user_accounts') }} as accounts
+    from identifiers
     inner join {{ ref('int__combined__user_key_map') }} as user_key_map
-        on {{ user_account_nk() }} = user_key_map.account_nk
+        on identifiers.identifier = user_key_map.identifier
 )
 
 -- Same survivorship rule as dim_user: oldest assignment wins.
@@ -42,9 +46,21 @@ with account_keys as (
     where survivor_row_num = 1
 )
 
+-- A key is only RETIRED if it survives nowhere. The same key can be a non-survivor in one
+-- email group and the survivor of another -- two accounts once shared it, and one of them
+-- moved to a group with an older incumbent. Publishing that as retired would tell
+-- consumers to remap a key that is still the live identity of a different person, so the
+-- `not exists` is load-bearing rather than defensive.
+, live_keys as (
+    select distinct user_pk from group_survivor
+)
+
 select distinct
     account_keys.user_pk as retired_user_pk
     , group_survivor.user_pk as surviving_user_pk
 from account_keys
 inner join group_survivor on account_keys.email = group_survivor.email
 where account_keys.user_pk != group_survivor.user_pk
+    and not exists (
+        select 1 from live_keys where live_keys.user_pk = account_keys.user_pk
+    )

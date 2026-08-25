@@ -591,30 +591,44 @@ models:
 
 - name: int__combined__user_key_map
   description: >
-    The durable user_pk. Append-only: an account natural key is assigned a person
-    key once
-    and never reassigned, so a person's key cannot move when the platform ranking
-    shifts
+    The durable user_pk. Append-only: an identifier is assigned a person key once
+    and
+    never reassigned, so a person's key cannot move when the platform ranking shifts
     underneath it. See docs/design/adr_durable_user_surrogate_key.md.
 
 
+    Grain: one row per IDENTIFIER, not per account. An account holding several platform
+    ids contributes one row per id, all carrying the same user_pk, so an id that appears
+    later resolves through the account's existing identifiers and adopts its key instead
+    of minting a new one. Keying on any single id would re-key ~795k people over the
+    MIT
+    Learn rollout.
+
+
     This model is STATE. `full_refresh=false` makes `dbt build --full-refresh` a no-op
-    for
-    it on purpose, and the assignment ORDER it holds cannot be reconstructed from
+    for it on purpose, and the assignment ORDER it holds cannot be reconstructed from
     the
-    sources. Do not drop or rebuild it without an export to restore from.
-
-
-    Grain: one row per account natural key.
+    sources. Do not drop or rebuild it without an export to restore from; the backup
+    is
+    docs/runbooks/restore_user_key_map.md.
   columns:
-  - name: account_nk
+  - name: identifier
     description: >
-      str, the durable account identity: `<id_source>:<id_source_user_id>`, or
-      `email:<email>` for accounts with no source id (Emeritus and Global Alumni rows
-      pre-dating stable ids, which are therefore NOT durable across an email edit).
+      str, one identifier belonging to an account, as `<namespace>:<id>` -- e.g.
+      `global:<keycloak sub>`, `edxorg:<openedx id>`, `mitlearn:<user id>`. Accounts
+      with
+      no source id anywhere (Emeritus and Global Alumni rows pre-dating stable ids)
+      fall
+      back to `email:<email>` and are therefore NOT durable across an email edit.
     tests:
     - not_null
-    - unique
+    # error_if 0: this must fail on the FIRST duplicate, not the eleventh. The project
+    # default of ">10" would let one to ten duplicate identifiers pass as a warning, and
+    # a duplicate can assign conflicting person keys to the same identifier -- which an
+    # append-only table cannot repair with a rebuild.
+    - unique:
+        config:
+          error_if: ">0"
   - name: user_pk
     description: >
       str, the person key assigned to this account, permanently. Several accounts

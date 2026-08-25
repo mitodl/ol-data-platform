@@ -51,35 +51,46 @@ with learn_profile as (
     )
 )
 
--- left join, not inner: an account missing from the map means the map is stale (it can
--- only happen when dim_user is built without it), and a null user_pk fails the not_null
--- test loudly. An inner join would silently drop those users instead.
-, account_keys as (
-    select
-        account_identity.*
-        , user_key_map.user_pk as account_user_pk
-        , user_key_map.assigned_at
-    from account_identity
-    left join {{ ref('int__combined__user_key_map') }} as user_key_map
-        on account_identity.account_nk = user_key_map.account_nk
+-- Resolve through the whole identifier set, not one key per account: an account that has
+-- just acquired a new platform id still resolves through the identifiers it already had.
+, identifiers as (
+    {{ user_account_identifier_rows('account_identity') }}
 )
 
--- The person's key is the group's SURVIVOR: whichever of its accounts was assigned a key
--- first. Assignment order is immutable, so a group's key cannot move when the ranking
+-- left join, not inner: an identifier missing from the map means the map is stale (it can
+-- only happen when dim_user is built without it), and the resulting null propagates to
+-- user_pk, which fails the not_null test. An inner join would silently drop those users.
+, identifier_keys as (
+    select
+        identifiers.email
+        , user_key_map.user_pk
+        , user_key_map.assigned_at
+    from identifiers
+    left join {{ ref('int__combined__user_key_map') }} as user_key_map
+        on identifiers.identifier = user_key_map.identifier
+)
+
+-- The person's key is the group's SURVIVOR: the oldest key assigned to any identifier in
+-- the group. Assignment order is immutable, so a group's key cannot move when the ranking
 -- shifts underneath it -- which is precisely what used to re-key people mid-build.
+--
+-- `nulls last` deliberately does NOT hide a stale map: an unmapped identifier in a group
+-- that has any mapped identifier is a normal mid-adoption state, not an error. A group
+-- with NO mapped identifier yields a null user_pk, which the not_null test catches. The
+-- mapping-completeness test on the map itself is what catches the partial case.
 , group_survivor as (
     select
         email
-        , account_user_pk as user_pk
+        , user_pk
     from (
         select
             email
-            , account_user_pk
+            , user_pk
             , row_number() over (
                 partition by email
-                order by assigned_at nulls last, account_user_pk
+                order by assigned_at nulls last, user_pk
             ) as survivor_row_num
-        from account_keys
+        from identifier_keys
     )
     where survivor_row_num = 1
 )
@@ -87,9 +98,9 @@ with learn_profile as (
 , combined_users as (
     select
         group_survivor.user_pk
-        , account_keys.*
-    from account_keys
-    inner join group_survivor on account_keys.email = group_survivor.email
+        , account_identity.*
+    from account_identity
+    inner join group_survivor on account_identity.email = group_survivor.email
 )
 
 -- The base row is the one whose latest join date is newest. Each row nulls the join dates
