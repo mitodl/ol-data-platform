@@ -331,10 +331,21 @@ permanently unstable, and leaves the three `severity: warn` overrides in place i
   per build. The 2026-08-18 failure is a single observed instance, not a trend.
 - **The no-op was proven on a fixture, not on production rows.** `dim_user` cannot be built
   on the `dev_local` DuckDB target, for two reasons that pre-date this change and that fail
-  the old model identically: `raw__bootcamps__app__postgres__profiles_profile` no longer
-  exists in Glue (the Bootcamps app is gone; 28 bootcamps dbt models are not), and
-  `stg__edxorg__bigquery__mitx_user_info_combo` uses a lambda DuckDB cannot bind. Run the
-  production-data diff on a Trino dev schema before merge if that assurance is wanted.
+  the old model identically. Run the production-data diff on a Trino dev schema before merge
+  if that assurance is wanted.
+
+  1. `raw__bootcamps__app__postgres__profiles_profile` is a **legacy non-Iceberg Glue
+     table** (`classification: json`, `TextInputFormat`), so `ol-dbt local register` skips
+     it and no DuckDB view exists. Its 20 bootcamps siblings were migrated to Iceberg; this
+     one was not. Separately tracked, because it points at a live data-quality problem
+     rather than a local-dev inconvenience.
+  2. `stg__edxorg__bigquery__mitx_user_info_combo.sql:40-42` (and
+     `stg__edxorg__bigquery__mitx_person_course.sql:53-55`) capitalise the first letter of
+     the gender value with Trino's lambda form of `regexp_replace`:
+     `regexp_replace(<expr>, '(^[a-z])(.)', x -> upper(x[1]) || x[2])`. DuckDB has no lambda
+     overload of `regexp_replace`, and neither does StarRocks, so this also blocks the
+     StarRocks migration. It wants a `capitalize_first()` dispatch macro alongside
+     `macros/cross_db_functions.sql`.
 - **No unit test guards the mint expression.** dbt unit tests do not currently run in this
   project: `macros/override_ref.sql` returns a bare string on its Glue-fallback path, which
   the unit-test machinery cannot consume, and on the credential-free `dev` target the
