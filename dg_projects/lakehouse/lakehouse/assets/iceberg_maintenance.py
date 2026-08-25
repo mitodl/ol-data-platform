@@ -58,6 +58,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     load_raw_layer_maintenance_work,
     maintenance_failure_threshold,
     non_dbt_singleton_tables,
+    partition_by_catalog_presence,
     raw_config_for_table,
     remove_orphan_files,
     warehouse_env_for,
@@ -225,6 +226,62 @@ def _run_table_maintenance(
     return summary
 
 
+def _maintainable_dbt_layer_configs(
+    context: AssetExecutionContext,
+    trino_maintenance: TrinoMaintenanceResource,
+) -> tuple[list[TableMaintenanceConfig], list[str]]:
+    """Return the configs this environment can actually maintain, and the rest.
+
+    The manifest states what production builds; the engine states what this
+    environment holds. Where they disagree the relation is a view or missing,
+    and every maintenance operation on it fails -- 401 of 628 configs in one QA
+    run, on ``ALTER TABLE EXECUTE is not supported for views`` and
+    ``TABLE_NOT_FOUND``. Asking the engine first is what keeps the failure
+    ratio measuring engine failures rather than this asset's own assumptions
+    about a manifest compiled somewhere else.
+    """
+    configs = load_maintenance_configs_from_manifest(
+        manifest_path=dbt_project.manifest_path,
+        warehouse_env=WAREHOUSE_ENV,
+    )
+    singletons = non_dbt_singleton_tables(WAREHOUSE_ENV)
+    manifest_configs = [*configs, *singletons]
+    context.log.info(
+        "Loaded %d table configs (%d dbt, %d singleton) for the %s warehouse",
+        len(manifest_configs),
+        len(configs),
+        len(singletons),
+        WAREHOUSE_ENV,
+    )
+
+    base_tables = trino_maintenance.base_tables_in_schemas(
+        {cfg.schema_name for cfg in manifest_configs}
+    )
+    maintainable, unbacked = partition_by_catalog_presence(
+        manifest_configs, base_tables
+    )
+    if unbacked:
+        context.log.warning(
+            "Skipping %d of %d configs with no table in %s (view or absent): %s",
+            len(unbacked),
+            len(manifest_configs),
+            WAREHOUSE_ENV,
+            unbacked[:20],
+        )
+    # Filtering to nothing is not "no work to do" -- it means the manifest and
+    # the catalog share no name at all, which is a scoping or deployment fault.
+    # Left to run, the maintenance loop would do nothing, find no failures and
+    # report SUCCESS, the silent-staleness mode the threshold exists to stop.
+    if manifest_configs and not maintainable:
+        msg = (
+            f"No table in the {WAREHOUSE_ENV} catalog matches any of the "
+            f"{len(manifest_configs)} maintenance configs. Refusing to report "
+            "success for zero work."
+        )
+        raise RuntimeError(msg)
+    return maintainable, unbacked
+
+
 # ── Assets ────────────────────────────────────────────────────────────────────
 
 
@@ -242,19 +299,7 @@ def iceberg_dbt_layer_maintenance(
     trino_maintenance: TrinoMaintenanceResource,
 ) -> Output[None]:
     """Run Iceberg maintenance for all dbt-managed tables and non-dbt singletons."""
-    configs = load_maintenance_configs_from_manifest(
-        manifest_path=dbt_project.manifest_path,
-        warehouse_env=WAREHOUSE_ENV,
-    )
-    singletons = non_dbt_singleton_tables(WAREHOUSE_ENV)
-    all_configs = [*configs, *singletons]
-    context.log.info(
-        "Loaded %d table configs (%d dbt, %d singleton) for the %s warehouse",
-        len(all_configs),
-        len(configs),
-        len(singletons),
-        WAREHOUSE_ENV,
-    )
+    all_configs, unbacked = _maintainable_dbt_layer_configs(context, trino_maintenance)
 
     # Cursor of the previous maintenance run — used to count dbt materializations
     # that occurred since the last time this asset ran.
@@ -353,6 +398,8 @@ def iceberg_dbt_layer_maintenance(
             "tables_analyzed": MetadataValue.int(tables_analyzed),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
             "orphans_removed": MetadataValue.int(orphans_removed),
+            "tables_unbacked": MetadataValue.int(len(unbacked)),
+            "unbacked_details": MetadataValue.json(unbacked[:20]),
             "failed_tables": MetadataValue.int(len(failed_tables)),
             "failure_count": MetadataValue.int(len(failures)),
             # Cap at 20 entries so the Dagster UI doesn't time out rendering
