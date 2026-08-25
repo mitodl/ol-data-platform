@@ -80,7 +80,9 @@ left join redacted
         from {{ this }} as stale
         inner join redacted
             on stale.source_record_id = redacted.source_record_ref
+            and stale.feedback_source_fk = {{ dbt_utils.generate_surrogate_key(['redacted.source_slug']) }}
         where stale.source_record_id = unioned.source_record_ref
+            and stale.feedback_source_fk = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }}
             and stale.feedback_text is null
             and redacted.text_redacted is not null
     )
