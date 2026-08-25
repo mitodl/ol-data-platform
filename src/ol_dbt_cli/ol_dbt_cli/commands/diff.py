@@ -70,6 +70,29 @@ class InvalidIdentifierError(ValueError):
     """Raised when a user-supplied name is not a safe dbt identifier."""
 
 
+def _split_columns(values: tuple[str, ...]) -> list[str]:
+    """Flatten repeated and comma-separated column arguments into one list.
+
+    Cyclopts consumes exactly one token per flag occurrence, so the repeatable
+    form (``-k a -k b``) is the only one it understands natively; ``-k a b`` puts
+    ``b`` in the next positional parameter instead. Accepting commas as well means
+    ``-k a,b`` and ``-k a -k b`` are equivalent, which is what most people try
+    first for a composite key.
+
+    Order is preserved and duplicates are dropped -- a repeated key column would
+    otherwise be emitted twice into the surrogate-key expression. Empty segments
+    (a trailing comma, ``-k ""``) are discarded rather than passed on to
+    :func:`_validate_identifiers` as a confusing empty-identifier error.
+    """
+    out: list[str] = []
+    for value in values:
+        for part in value.split(","):
+            cleaned = part.strip()
+            if cleaned and cleaned not in out:
+                out.append(cleaned)
+    return out
+
+
 def _validate_identifiers(kind: str, names: list[str]) -> None:
     """Reject any *names* that are not plain dbt identifiers.
 
@@ -681,8 +704,10 @@ def diff(
             name=["--primary-key", "-k"],
             help=(
                 "Column(s) uniquely identifying a row, used as the comparison join key. "
-                "Repeatable. Required for per-column mismatch rates. Use this for models with "
-                "known surrogate-key non-determinism (e.g. dim_user.user_pk email-keyed collapse)."
+                "For a composite key pass a comma-separated list (-k a,b,c) or repeat the flag "
+                "(-k a -k b -k c); note that '-k a b c' does NOT work, since only the first "
+                "token is consumed. Required for per-column mismatch rates. Use this for models "
+                "with known surrogate-key non-determinism (e.g. dim_user.user_pk email-keyed collapse)."
             ),
         ),
     ] = (),
@@ -690,7 +715,8 @@ def diff(
         tuple[str, ...],
         Parameter(
             name=["--exclude-columns"],
-            help="Column(s) to exclude from the comparison (e.g. non-deterministic load timestamps). Repeatable.",
+            help="Column(s) to exclude from the comparison (e.g. non-deterministic load timestamps). "
+            "Comma-separated (--exclude-columns a,b) or repeatable, same as --primary-key.",
         ),
     ] = (),
     output_format: Annotated[
@@ -763,6 +789,13 @@ def diff(
         Compare an old mart against its migrated replacement on local DuckDB:
             ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 
+        Use the model's real grain when no single column is unique. A composite key is
+        comma-separated, or the flag repeated -- these two are equivalent, and getting it
+        right matters: a single non-unique key pairs rows many-to-many and reports
+        mismatches that are an artifact of the join rather than a real difference.
+            ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on
+            ol-dbt diff --old m_old --new m_new -k user_email -k exam_created_on
+
         Exclude a non-deterministic column and emit JSON for CI:
             ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at --format json
 
@@ -785,8 +818,8 @@ def diff(
 
     """
     new = new or old
-    primary_key_list = list(primary_key)
-    exclude_list = list(exclude_columns)
+    primary_key_list = _split_columns(primary_key)
+    exclude_list = _split_columns(exclude_columns)
     notes: list[str] = []
 
     if (old_schema or old_database) and not old_raw:

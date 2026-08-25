@@ -148,6 +148,25 @@ loudly instead of silently falling to text.
    email-keyed surrogate that collapses NULL emails — a naive full-row compare shows spurious
    mismatches; callers should pass `--primary-key` and/or `--exclude-columns` for known
    unstable columns.
+
+   **Correction (implementation reality).** `audit_helper` takes `primary_key` as an *opaque
+   string it interpolates directly into SQL*, never as a list, so a composite key cannot simply
+   be handed over as a Jinja list — doing so emits the literal text `['k1', 'k2']` into the
+   query. The two consumers need different forms:
+   - `compare_relations` → `compare_queries` uses `primary_key` **only** in the `order by` of
+     the `summarize=false` branch (it is unused when `summarize=true`). A comma-joined column
+     list (`'k1, k2'`) is the correct form there.
+   - `compare_column_values` (the per-column mismatch path) emits
+     `a_query.{{ primary_key }} = b_query.{{ primary_key }}`, so it requires a **scalar** column
+     name present in both sides. A composite key is therefore collapsed into a single hashed
+     join column via `dbt_utils.generate_surrogate_key([...])` inside the `a_query`/`b_query`
+     blocks, and that column's name is what gets passed.
+
+   Accept a composite key both comma-separated (`-k a,b,c`) and as a repeated flag
+   (`-k a -k b -k c`); cyclopts consumes one token per flag occurrence, so `-k a b c` would
+   otherwise silently truncate the key and spill the remaining tokens into `--dbt-dir`. Same
+   handling for `--exclude-columns`. Using the model's true grain is not cosmetic: a non-unique
+   key pairs rows many-to-many and reports join artifacts as mismatches.
 4. **Run the comparison.** Render an `audit_helper` operation via a small analysis/macro
    invocation and execute it with `dbt`. On `dev_local`, unbuilt sides resolve to the Glue
    DuckDB views through `override_ref`/`override_source` (zero-copy). `--auto-build` may first
@@ -193,7 +212,8 @@ loudly instead of silently falling to text.
 ### 3.8 Acceptance criteria
 - [ ] `ol-dbt diff --old A --new B` runs on `dev_local` with zero cloud creds and prints a
       capped human summary.
-- [ ] `--format json` emits the schema in §3.5; `--primary-key`/`--exclude-columns` respected.
+- [ ] `--format json` emits the schema in §3.5; `--primary-key`/`--exclude-columns` respected,
+      in both their comma-separated and repeated-flag forms, single and composite.
 - [ ] Schema mismatch yields a structured message, not a raw SQL error.
 - [ ] Exit code 1 on any mismatch (CI-gateable).
 - [ ] `dbt_audit_helper` added to `packages.yml`; `test_diff.py` added; `cli.py` registers it.

@@ -132,11 +132,18 @@ the rebuild only reflects your code change), any reported mismatch can only come
 from your change — never from production data changing in the background.
 
 ```bash
-# Per-column mismatch rates require --primary-key (repeatable for a composite key)
+# Per-column mismatch rates require --primary-key
 ol-dbt diff --old m_old --new m_new --primary-key id
+
+# Composite key: comma-separated, or repeat the flag. These are equivalent.
+ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on
+ol-dbt diff --old m_old --new m_new -k user_email -k exam_created_on
 
 # Exclude a known non-deterministic column (e.g. a load timestamp)
 ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at
+
+# --exclude-columns takes the same two forms
+ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at,_synced_at
 
 # Build both sides first, then compare
 ol-dbt diff --old m_old --new m_new --auto-build
@@ -151,6 +158,29 @@ ol-dbt diff --target dev_production \
 # Emit JSON (e.g. for CI); exits non-zero on any divergence
 ol-dbt diff --old m_old --new m_new -k id --format json
 ```
+
+#### Choosing the primary key
+
+`--primary-key` is how rows get paired across the two sides, so it has to be the
+model's **actual grain**. Pass every column of a composite key — either
+comma-separated (`-k a,b,c`) or by repeating the flag (`-k a -k b -k c`). The two
+forms are interchangeable.
+
+Note that `-k a b c` does **not** work. Only the first token is consumed as a key;
+the rest are read as positional arguments, so you get a confusing error about
+`--dbt-dir` rather than anything mentioning primary keys.
+
+Getting the grain right matters more than it looks. A key that is not unique pairs
+rows many-to-many, and the resulting mismatch counts are an artifact of the join
+rather than a real difference. For example, on a 20,908-row mart whose real grain is
+three columns, keying on just one of them reported 65,000+ mismatches across eight
+columns and 7,826 rows as "missing" — all noise. The correct composite key reported
+the truth: one genuinely differing column, 8,891 rows, nothing missing on either
+side.
+
+If you are unsure of the grain, look for a `dbt_expectations_expect_compound_columns_to_be_unique`
+test on the model — its column list is the key you want. Failing that, a passing
+`unique` test on a single column means that column is safe to use alone.
 
 `--old-raw`/`--new-raw` treat that side as a literal existing table rather than a
 dbt model — required for a snapshot table (`ol-dbt local snapshot` output) or any

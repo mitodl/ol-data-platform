@@ -17,6 +17,7 @@ from ol_dbt_cli.commands.diff import (
     _jinja_list,
     _relation_jinja,
     _resolve_raw_columns,
+    _split_columns,
     _summarize_relations,
     diff,
     reconcile_columns,
@@ -166,6 +167,44 @@ class TestFormatSampleMismatches:
         ]
         lines = _format_sample_mismatches(rows, ["id"], "old_side", "new_side")
         assert lines == ["id=3: only in old_side (+1 more rows in this key group, not shown)"]
+
+
+class TestSplitColumns:
+    """Comma-separated and repeated column arguments must be equivalent."""
+
+    def test_repeated_flags(self) -> None:
+        assert _split_columns(("a", "b", "c")) == ["a", "b", "c"]
+
+    def test_comma_separated_single_token(self) -> None:
+        assert _split_columns(("a,b,c",)) == ["a", "b", "c"]
+
+    def test_comma_and_repeat_are_equivalent(self) -> None:
+        assert _split_columns(("a,b,c",)) == _split_columns(("a", "b", "c"))
+
+    def test_mixed_forms(self) -> None:
+        assert _split_columns(("a,b", "c")) == ["a", "b", "c"]
+
+    def test_surrounding_whitespace_is_stripped(self) -> None:
+        # `-k "a, b"` is a single shell token; the space must not become part of
+        # the identifier, or _validate_identifiers rejects a legitimate key.
+        assert _split_columns(("a, b",)) == ["a", "b"]
+
+    def test_order_is_preserved(self) -> None:
+        assert _split_columns(("z,a,m",)) == ["z", "a", "m"]
+
+    def test_duplicates_dropped_so_a_key_is_not_emitted_twice(self) -> None:
+        assert _split_columns(("a,b,a",)) == ["a", "b"]
+        assert _split_columns(("a", "a")) == ["a"]
+
+    def test_empty_segments_discarded(self) -> None:
+        # A trailing comma or an empty value must not reach _validate_identifiers
+        # as an empty-string identifier.
+        assert _split_columns(("a,",)) == ["a"]
+        assert _split_columns(("a,,b",)) == ["a", "b"]
+        assert _split_columns(("",)) == []
+
+    def test_no_arguments(self) -> None:
+        assert _split_columns(()) == []
 
 
 class TestSqlBuilders:
@@ -440,6 +479,86 @@ class TestDiffCommand:
         diff(old="m_old", new="m_new", primary_key=("id",), dbt_dir_path=str(dbt_dir))
         assert len(compared) == 1
         assert "column_to_compare='name'" in compared[0]
+
+    def test_comma_separated_primary_key_reaches_comparison_as_composite(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # End-to-end through the CLI entrypoint: `-k a,b` must behave exactly like
+        # `-k a -k b`, i.e. produce the composite surrogate-key join rather than a
+        # single key named "a,b" (which _validate_identifiers would reject).
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as k1, 2 as k2, 'x' as name",
+            "select 1 as k1, 2 as k2, 'x' as name",
+        )
+        seen: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            if "compare_column_values" in inline_sql:
+                seen.append(inline_sql)
+                return [{"match_status": "✅: perfect match", "count_records": 10}]
+            return [{"in_a": True, "in_b": True, "count": 10}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(old="m_old", new="m_new", primary_key=("k1,k2",), dbt_dir_path=str(dbt_dir))
+
+        # Only `name` is compared -- both key columns were recognised as keys.
+        assert len(seen) == 1
+        assert "column_to_compare='name'" in seen[0]
+        assert "generate_surrogate_key(['k1', 'k2'])" in seen[0]
+
+    def test_comma_and_repeated_primary_key_produce_identical_sql(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as k1, 2 as k2, 'x' as name",
+            "select 1 as k1, 2 as k2, 'x' as name",
+        )
+
+        def run(pk: tuple[str, ...]) -> list[str]:
+            captured: list[str] = []
+
+            def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+                captured.append(inline_sql)
+                if "compare_column_values" in inline_sql:
+                    return [{"match_status": "✅: perfect match", "count_records": 10}]
+                return [{"in_a": True, "in_b": True, "count": 10}]
+
+            monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+            diff(old="m_old", new="m_new", primary_key=pk, dbt_dir_path=str(dbt_dir))
+            return captured
+
+        assert run(("k1,k2",)) == run(("k1", "k2"))
+
+    def test_comma_separated_exclude_columns_are_all_excluded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as id, 'x' as a, 'y' as b",
+            "select 1 as id, 'x' as a, 'y' as b",
+        )
+        seen: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            seen.append(inline_sql)
+            if "compare_column_values" in inline_sql:
+                return [{"match_status": "✅: perfect match", "count_records": 10}]
+            return [{"in_a": True, "in_b": True, "count": 10}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(
+            old="m_old",
+            new="m_new",
+            primary_key=("id",),
+            exclude_columns=("a,b",),
+            dbt_dir_path=str(dbt_dir),
+        )
+        relations = [q for q in seen if "compare_relations" in q]
+        assert "exclude_columns=['a', 'b']" in relations[0]
+        # Both excluded, so nothing is left to compare per-column.
+        assert not [q for q in seen if "compare_column_values" in q]
 
     def test_row_mismatch_exits_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         dbt_dir = _make_project(
