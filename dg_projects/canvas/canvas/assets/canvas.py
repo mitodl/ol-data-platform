@@ -315,6 +315,6 @@ def course_content_metadata(
         )
         raise http_failure(
             error,
-            f"Learn API webhook notification failed for course_id={course_id}",
+            "Learn API webhook notification failed",
             metadata={"course_id": course_id},
         ) from error

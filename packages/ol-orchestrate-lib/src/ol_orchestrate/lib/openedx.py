@@ -50,7 +50,25 @@ def classify_course_export_state(state: str | None) -> CourseExportOutcome:
 
 
 class CourseExportNotQueuedError(Exception):
-    """Studio accepted the export request but queued no task for the course."""
+    """Studio accepted the export request but queued no task for the course.
+
+    ``course_key`` and Studio's raw ``response`` are attributes rather than
+    parts of the message. Sentry titles an event from the message, so a course
+    key interpolated into it gives every occurrence its own title and the issue
+    shows whichever arrived last; the caller is partitioned by course, so the
+    key is already on the event as the ``dagster_partition`` tag.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        course_key: str,
+        response: dict[str, Any] | None = None,
+    ) -> None:
+        """Record which course failed alongside the stable ``message``."""
+        super().__init__(message)
+        self.course_key = course_key
+        self.response = response
 
 
 def course_export_task_id(course_key: str, export_response: dict[str, Any]) -> str:
@@ -68,18 +86,15 @@ def course_export_task_id(course_key: str, export_response: dict[str, Any]) -> s
     failed_uploads = export_response.get("failed_uploads") or {}
     if course_key in failed_uploads:
         msg = (
-            f"Studio declined to queue an export for {course_key}: "
+            "Studio declined to queue an export for the course: "
             f"{failed_uploads[course_key]}"
         )
-        raise CourseExportNotQueuedError(msg)
+        raise CourseExportNotQueuedError(msg, course_key, export_response)
 
     task_id = (export_response.get("upload_task_ids") or {}).get(course_key)
     if not task_id:
-        msg = (
-            f"Studio returned no export task for {course_key} and did not say "
-            f"why. Full response: {export_response}"
-        )
-        raise CourseExportNotQueuedError(msg)
+        msg = "Studio returned no export task for the course and did not say why."
+        raise CourseExportNotQueuedError(msg, course_key, export_response)
     return task_id
 
 

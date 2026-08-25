@@ -22,6 +22,7 @@ from dagster import (
     asset,
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.utils import fetch_all_drf_pages
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
@@ -167,12 +168,16 @@ def video_webhook(
             response_data,
         )
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"OVS webhook failed for video_id={video_id} "
-            f"with status code {error.response.status_code}: {error}"
+        context.log.exception(
+            "OVS webhook failed for video_id=%s with status code %s",
+            video_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise RuntimeError(error_message) from error
+        raise http_failure(
+            error,
+            "OVS video webhook notification failed",
+            metadata={"video_id": video_id},
+        ) from error
     else:
         context.add_output_metadata(
             {
@@ -217,12 +222,16 @@ def video_delete_webhook(
         response_data = learn_api.client.notify_ovs_video(payload)
         context.log.info("OVS delete webhook sent for partition: %s", video_id)
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"OVS delete webhook failed for video_id={video_id} "
-            f"with status code {error.response.status_code}: {error}"
+        context.log.exception(
+            "OVS delete webhook failed for video_id=%s with status code %s",
+            video_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise RuntimeError(error_message) from error
+        raise http_failure(
+            error,
+            "OVS video delete webhook notification failed",
+            metadata={"video_id": video_id},
+        ) from error
     else:
         context.add_output_metadata({"video_id": video_id, "webhook_status": "success"})
         return {

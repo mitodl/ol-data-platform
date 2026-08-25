@@ -70,6 +70,10 @@ def test_a_missing_object_fails_permanently_and_names_the_key(
 
     Handing this path back left the NoSuchKey to surface deep inside whichever
     library opened it, with nothing in the error saying which object was gone.
+
+    The path is named in metadata, not in the description: Sentry titles an
+    event from the exception message, and an S3 key with a content hash in it
+    gave DAGSTER-2H a different title for every occurrence.
     """
     missing = tmp_path / "never-written.tar.gz"
     context = context_for({"path": MetadataValue.path(f"file://{missing}")})
@@ -77,7 +81,9 @@ def test_a_missing_object_fails_permanently_and_names_the_key(
     with pytest.raises(UpstreamObjectUnavailable) as raised:
         FileObjectIOManager().load_input(context)
 
-    assert str(missing) in raised.value.description
+    assert str(missing) in raised.value.metadata["missing_path"].value
+    assert raised.value.metadata["partition"].value == PARTITION
+    assert str(missing) not in raised.value.description
     assert raised.value.allow_retries is False
 
 
@@ -99,5 +105,6 @@ def test_no_materialization_at_all_fails_permanently() -> None:
     with pytest.raises(UpstreamObjectUnavailable) as raised:
         FileObjectIOManager().load_input(context)
 
-    assert ASSET_KEY.to_user_string() in raised.value.description
+    assert raised.value.metadata["asset_key"].value == ASSET_KEY.to_user_string()
+    assert ASSET_KEY.to_user_string() not in raised.value.description
     assert raised.value.allow_retries is False
