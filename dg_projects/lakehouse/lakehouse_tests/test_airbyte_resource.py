@@ -104,7 +104,7 @@ class TestConcurrentInFlightJobsAreCollapsed:
     That distinction does not survive contact with a connection that two
     schedulers launch into. Nine connections failed nightly on `Found multiple
     running jobs`, each amplified fourfold by run retries that cannot change
-    the condition (DAGSTER-2R, 3A, 3C, 3E, 3F, 3N, 3R, 33, 39).
+    the condition (DAGSTER-2Q, 33, 39, 3A, 3C, 3E, 3F, 3N, 3R).
     """
 
     def test_the_newest_in_flight_job_is_the_one_kept(
