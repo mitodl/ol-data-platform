@@ -708,7 +708,7 @@ ol-infrastructure; 7 closes the loop.
 | ~~5~~ | ~~Pulumi `applications/airbyte_connections` + `sdks/airbyte`, import every source/destination/connection~~ | **STRUCK 2026-08-25 — §6.0** |
 | ~~6~~ | ~~Commit the rendered JSON into ol-infrastructure, register the stack in `simple_pulumi`~~ | **STRUCK 2026-08-25 — §6.0** |
 | 7 | Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5) | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2) |
-| 8 | Scheduled drift check: dump the live workspace, diff against the inventory, report differences (§4) | A connection edited in the UI is reported within a day |
+| 8 | Scheduled drift check: dump the live workspace, diff against the inventory, report differences (§4). **`ol-dbt inventory drift` is built**; what remains is scheduling it and choosing how it reports. Promoted to the load-bearing check by §6.0 — with the config hand-managed it is the only thing that notices a UI edit | A connection edited in the UI is reported within a day. Baseline 2026-08-25: **0 errors, 5 warnings**, all five deliberate — 3 connections pending deletion, 2 paused ones carrying an Airbyte schedule |
 
 Steps 1–4 unblock `tk-step-2-extend-the-rfc-12319-ingestion-inventory--5a2841` (RFC 12711's
 critical path) — that step needs the schema and the file, not the Pulumi half. Do not hold it
@@ -770,7 +770,7 @@ reproduce, and several of them changed this spec (§1.1, §3.4–§3.7).
 | Sources on `xmin` | 11, covering 560 streams |
 | Incremental streams with no explicit cursor | 514 — i.e. riding xmin |
 | Distinct explicit cursor fields | 22, dominated by Salesforce's `SystemModstamp` (1,176) |
-| Connections carrying their own Airbyte cron | **0** — Dagster is the sole trigger, as assumed |
+| Connections carrying their own Airbyte cron | **0 active** — Dagster is the sole trigger, as assumed. **Corrected 2026-08-25:** three *paused* connections do carry `scheduleType: basic` (Mailgun legacy, GitHub, HubSpot Bootcamps). Nothing runs twice while they are paused, but resuming one double-schedules it. Step 8's drift check reports them, at warning rather than error, for that reason. |
 
 Findings that are work items rather than schema changes:
 

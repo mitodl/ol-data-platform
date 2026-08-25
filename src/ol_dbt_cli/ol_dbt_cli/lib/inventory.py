@@ -926,3 +926,199 @@ def reconcile_dbt(
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Drift (§4, step 8): the inventory against the live Airbyte workspace
+# ---------------------------------------------------------------------------
+#
+# The failure this project exists to end is a static file that quietly stops
+# describing reality, and the divergence nothing else can catch is somebody
+# editing a connection in the Airbyte UI. Steps 5-6 were struck (§6.0), so
+# Airbyte's configuration is hand-managed and this check is the only thing that
+# notices. It compares against `render_airbyte`, which is already the inventory
+# expressed in Airbyte's own shape.
+
+DRIFT_CHECK = "inventory_drift"
+
+MANUAL_SCHEDULE = "manual"
+
+
+def _live_connections(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {str(c.get("name", "")): c for c in snapshot.get("connections") or []}
+
+
+def _declared_connections(rendered: dict[str, Any]) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
+    """Map connection name to (connection, its unit), as the render emits them."""
+    return {
+        str(connection.get("name", "")): (connection, unit)
+        for unit in rendered.get("units") or []
+        for connection in unit.get("connections") or []
+    }
+
+
+def _live_streams(connection: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    configurations = connection.get("configurations") or {}
+    return {str(s.get("name", "")): s for s in configurations.get("streams") or []}
+
+
+def _normalise_live_stream(stream: dict[str, Any]) -> dict[str, Any]:
+    """Put a live stream in the render's vocabulary, dropping empty values.
+
+    The render omits a field it has nothing to say about; Airbyte returns `[]`.
+    Comparing those raw would report drift on every stream that simply has no
+    cursor, which is most of them.
+    """
+    normalised: dict[str, Any] = {"sync_mode": stream.get("syncMode")}
+    if stream.get("namespace"):
+        normalised["namespace"] = stream["namespace"]
+    if stream.get("cursorField"):
+        normalised["cursor_field"] = list(stream["cursorField"])
+    if stream.get("primaryKey"):
+        normalised["primary_key"] = [list(path) for path in stream["primaryKey"]]
+    return normalised
+
+
+def _normalise_declared_stream(stream: dict[str, Any]) -> dict[str, Any]:
+    """Take the same view of a rendered stream, minus what Airbyte cannot be asked for.
+
+    `excluded_columns` is dropped rather than compared: Airbyte holds the
+    complement (`selectedFields`), and computing it needs the source's
+    discovered schema, which the inventory deliberately does not hold (§2).
+    Comparing an exclusion against a selection would report drift on every
+    stream that has one.
+    """
+    return {key: value for key, value in stream.items() if key not in {"name", "excluded_columns"}}
+
+
+def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationReport) -> None:
+    """Report every way the live workspace differs from what the inventory declares.
+
+    Severity follows what the finding says about the inventory. A declaration
+    the workspace does not honour means the inventory is *wrong* — a model may
+    be reading a table nothing loads — and is an ERROR. Something live the
+    inventory does not cover is a WARNING: it is usually config that should
+    have been deleted, and it costs nothing until somebody depends on it.
+    """
+    rendered = render_airbyte(units)
+    live = _live_connections(snapshot)
+    declared = _declared_connections(rendered)
+
+    for name in sorted(set(declared) - set(live)):
+        _, unit = declared[name]
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            f"{unit['deployment']}/{unit['layer']}",
+            f"connection {name!r} is declared but no longer exists in Airbyte",
+            "Either it was deleted in the UI and the tables it loaded have "
+            "stopped arriving, or it was renamed — and a rename also breaks "
+            "Dagster's selector and its interval map, which key on this exact "
+            "string (§1.3).",
+        )
+
+    for name in sorted(set(live) - set(declared)):
+        report.add(
+            DRIFT_CHECK,
+            Severity.WARNING,
+            "(undeclared)",
+            f"connection {name!r} exists in Airbyte but no unit declares it",
+            "Either it was created in the UI, or it is config we meant to "
+            "delete and did not. Retiring a connection means deleting it in "
+            "Airbyte as well as recording its tables in retired.yml.",
+        )
+
+    for name in sorted(set(live) & set(declared)):
+        _compare_connection(name, live[name], *declared[name], report)
+
+
+def _compare_connection(  # noqa: PLR0913
+    name: str,
+    live: dict[str, Any],
+    declared: dict[str, Any],
+    unit: dict[str, Any],
+    report: ValidationReport,
+) -> None:
+    key = f"{unit['deployment']}/{unit['layer']}"
+
+    if (live_status := live.get("status")) != declared.get("status"):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} is {live_status!r} in Airbyte but declared {declared.get('status')!r}",
+            "A connection paused in the UI stops loading silently; one resumed "
+            "without the inventory saying so is loading tables nothing declares.",
+        )
+
+    schedule_type = (live.get("schedule") or {}).get("scheduleType")
+    if schedule_type and schedule_type != MANUAL_SCHEDULE:
+        # A paused connection cannot double-schedule anything, so this is a
+        # warning until somebody resumes it — at which point it runs on both
+        # Airbyte's timer and Dagster's.
+        running = live_status == "active"
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR if running else Severity.WARNING,
+            key,
+            f"connection {name!r} carries its own Airbyte schedule ({schedule_type!r})",
+            "Dagster is meant to be the sole trigger, so this is double-scheduled "
+            "and `sync_interval_hours` describes only half of what runs (§6.4)."
+            if running
+            else "It is paused, so nothing runs twice today — but resuming it "
+            "would double-schedule it against Dagster (§6.4).",
+        )
+
+    # `startswith`, not equality: `table_prefix` is declared documentation that
+    # covers a unit's tables (§1.1), not a copy of the literal string Airbyte
+    # prepends. The mongodb units legitimately declare
+    # `raw__<dep>__openedx__mongodb__` while Airbyte writes `…mongodb__forum_`.
+    # What would be drift is a live prefix the declared one no longer covers,
+    # because then the unit's raw_table values name tables that stop arriving.
+    live_prefix = live.get("prefix")
+    declared_prefix = unit.get("table_prefix") or ""
+    if live_prefix and not live_prefix.startswith(declared_prefix):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} writes prefix {live_prefix!r}, outside the unit's declared {declared_prefix!r}",
+            "Every raw table this connection lands is named from the live "
+            "prefix, so the unit's tables are describing names that no longer "
+            "arrive.",
+        )
+
+    live_streams = _live_streams(live)
+    declared_streams = {str(s.get("name", "")): s for s in declared.get("streams") or []}
+
+    for stream in sorted(set(declared_streams) - set(live_streams)):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} no longer carries declared stream {stream!r}",
+            "The unit still declares a table for it, so anything modelling that "
+            "table is going stale. Retire it, or re-select the stream.",
+        )
+
+    for stream in sorted(set(live_streams) - set(declared_streams)):
+        report.add(
+            DRIFT_CHECK,
+            Severity.WARNING,
+            key,
+            f"connection {name!r} carries stream {stream!r}, which the unit does not declare",
+            "It is being loaded and nothing records that it is.",
+        )
+
+    for stream in sorted(set(live_streams) & set(declared_streams)):
+        want = _normalise_declared_stream(declared_streams[stream])
+        got = _normalise_live_stream(live_streams[stream])
+        for attribute in sorted(set(want) | set(got)):
+            if want.get(attribute) != got.get(attribute):
+                report.add(
+                    DRIFT_CHECK,
+                    Severity.ERROR,
+                    key,
+                    f"{name!r} stream {stream!r}: {attribute} is {got.get(attribute)!r} in Airbyte, "
+                    f"declared {want.get(attribute)!r}",
+                )

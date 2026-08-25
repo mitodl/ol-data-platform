@@ -35,25 +35,37 @@ airbyte:
 tables:
 - name: raw__edxorg__s3__course_blocks
   raw_table: raw__edxorg__s3__course_blocks
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true
 - name: raw__edxorg__s3__mitx_course
   raw_table: raw__edxorg__s3__mitx_course
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true
 - name: raw__edxorg__s3__mitx_course_run
   raw_table: raw__edxorg__s3__mitx_course_run
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true
 - name: raw__edxorg__s3__program
   raw_table: raw__edxorg__s3__program
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true
 - name: raw__edxorg__s3__program_course
   raw_table: raw__edxorg__s3__program_course
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true
 - name: raw__edxorg__program_learner_report
   raw_table: raw__edxorg__program_learner_report
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true
