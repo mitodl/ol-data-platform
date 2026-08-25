@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 import yaml
 
-from ol_dbt_cli.lib.inventory import check_drift, load_units
+from ol_dbt_cli.lib.inventory import Unit, check_drift, load_units
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 PREFIX = "raw__mitxonline__openedx__mysql__"
@@ -76,6 +76,11 @@ def live(**overrides: Any) -> dict[str, Any]:
     }
     connection.update(overrides)
     return {"connections": [connection]}
+
+
+def _unit(data: dict[str, Any]) -> Unit:
+    """Build a Unit in memory, so a case can vary one field without a fixture file."""
+    return Unit(path=Path("unit.yml"), data=data)
 
 
 @pytest.fixture
@@ -144,17 +149,96 @@ class TestScheduleDrift:
         assert schedule, _messages(report, Severity.WARNING)
 
 
-class TestPrefixDrift:
-    def test_a_narrower_live_prefix_is_not_drift(self, units: list[Any]) -> None:
-        # Real case: the mongodb units declare `…__mongodb__` while Airbyte
-        # writes `…__mongodb__forum_`. `table_prefix` is declared documentation
-        # covering a unit's tables (§1.1), not a copy of Airbyte's literal.
-        report = _run(live(prefix=f"{PREFIX}forum_"), units)
-        assert [m for m in _messages(report, Severity.ERROR) if "prefix" in m] == []
+class TestWhereTablesLand:
+    """`prefix + stream` against the declared `raw_table`, not prefix against prefix.
 
-    def test_a_live_prefix_outside_the_declared_one_is_an_error(self, units: list[Any]) -> None:
+    Comparing `table_prefix` to Airbyte's `prefix` cannot work in either
+    direction: the mongodb units declare `…__mongodb__` while Airbyte writes
+    `…__mongodb__forum_`, and twelve connections carry no prefix at all. What
+    matters is the table a stream lands in, which reproduces all 949 declared
+    raw tables exactly across the real workspace.
+    """
+
+    def test_a_prefix_the_declared_raw_table_already_accounts_for_is_not_drift(self) -> None:
+        # The real mongodb shape: the unit's raw_table already contains
+        # `forum_`, so the longer live prefix lands exactly where declared.
+        unit = copy.deepcopy(UNIT)
+        unit["tables"][0]["raw_table"] = f"{PREFIX}forum_auth_user"
+        units = [_unit(unit)]
+        report = _run(live(prefix=f"{PREFIX}forum_"), units)
+        assert report.errors == [], _messages(report, Severity.ERROR)
+
+    def test_a_moved_table_is_an_error(self, units: list[Any]) -> None:
         report = _run(live(prefix="raw__somewhere__else__"), units)
-        assert "outside the unit's declared" in [m for m in _messages(report, Severity.ERROR) if "prefix" in m][0]
+        assert "now lands in 'raw__somewhere__else__auth_user'" in _messages(report, Severity.ERROR)[0]
+
+    def test_a_cleared_prefix_is_caught(self, units: list[Any]) -> None:
+        # The earlier check skipped a falsey prefix, so clearing one on a
+        # database connection — which moves every table it lands — was silent.
+        report = _run(live(prefix=""), units)
+        assert "now lands in 'auth_user'" in _messages(report, Severity.ERROR)[0]
+
+    def test_a_prefixless_connection_matching_its_declaration_is_fine(self) -> None:
+        # The S3 shape: no prefix, because the stream name is already the whole
+        # raw table name.
+        unit = copy.deepcopy(UNIT)
+        unit["tables"][0].update(name="raw__edxorg__s3__tracking_logs", raw_table="raw__edxorg__s3__tracking_logs")
+        unit["airbyte"]["connections"][0]["streams"] = ["raw__edxorg__s3__tracking_logs"]
+        snapshot = live(prefix="")
+        snapshot["connections"][0]["configurations"]["streams"][0]["name"] = "raw__edxorg__s3__tracking_logs"
+        report = _run(snapshot, [_unit(unit)])
+        assert report.errors == [], _messages(report, Severity.ERROR)
+
+
+class TestSourceDrift:
+    """Source-level state, which no stream describes."""
+
+    def test_a_changed_replication_method_is_an_error(self, units: list[Any]) -> None:
+        # §3.4 records this so `rg replication_method: xmin` answers which
+        # connections need a replacement cursor before dlt. Flipping a source
+        # from xmin to a cursor column changes no stream at all.
+        snapshot = live(sourceId="src-1")
+        snapshot["sources"] = [
+            {"sourceId": "src-1", "sourceType": "mysql", "configuration": {"replication_method": {"method": "Xmin"}}}
+        ]
+        report = _run(snapshot, units)
+        assert "replicates by 'xmin', unit declares 'cursor'" in _messages(report, Severity.ERROR)[0]
+
+    def test_a_changed_connector_is_an_error(self, units: list[Any]) -> None:
+        snapshot = live(sourceId="src-1")
+        snapshot["sources"] = [{"sourceId": "src-1", "sourceType": "postgres", "configuration": {}}]
+        report = _run(snapshot, units)
+        assert "now uses connector 'source-postgres'" in _messages(report, Severity.ERROR)[0]
+
+    def test_a_matching_source_is_silent(self, units: list[Any]) -> None:
+        snapshot = live(sourceId="src-1")
+        snapshot["sources"] = [
+            {
+                "sourceId": "src-1",
+                "sourceType": "mysql",
+                "configuration": {"replication_method": {"method": "STANDARD"}},
+            }
+        ]
+        assert _run(snapshot, units).issues == []
+
+
+class TestIncompleteSnapshot:
+    def test_missing_stream_configuration_is_not_read_as_zero_streams(self, units: list[Any]) -> None:
+        # The dumper re-fetches a connection whose list response omitted its
+        # streams, but leaves the key absent if that GET also fails. Collapsing
+        # that to `[]` would turn one transient API failure into "every declared
+        # stream has been dropped" across the workspace.
+        snapshot = live()
+        del snapshot["connections"][0]["configurations"]
+        report = _run(snapshot, units)
+        assert "holds no stream configuration" in _messages(report, Severity.ERROR)[0]
+        assert not [m for m in _messages(report, Severity.ERROR) if "no longer carries" in m]
+
+    def test_an_explicitly_empty_stream_list_is_still_drift(self, units: list[Any]) -> None:
+        snapshot = live()
+        snapshot["connections"][0]["configurations"]["streams"] = []
+        report = _run(snapshot, units)
+        assert "no longer carries declared stream" in _messages(report, Severity.ERROR)[0]
 
 
 class TestStreamDrift:

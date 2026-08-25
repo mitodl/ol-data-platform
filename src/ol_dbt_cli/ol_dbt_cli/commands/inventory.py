@@ -377,7 +377,8 @@ def drift(
 
     report = ValidationReport()
     try:
-        check_drift(json.loads(snapshot.read_text()), units, report)
+        workspace = json.loads(snapshot.read_text())
+        check_drift(workspace, units, report)
     except (json.JSONDecodeError, RenderError) as error:
         err_console.print(f"[bold red]{escape(str(error))}")
         sys.exit(1)
@@ -386,10 +387,14 @@ def drift(
         _emit_json(report.issues)
     else:
         _emit_text(report.issues)
-        live = len(json.loads(snapshot.read_text()).get("connections") or [])
+        live = len(workspace.get("connections") or [])
+        # Connections, not units: `render airbyte` skips the dlt and Dagster
+        # units, so counting all 43 would put 43 against 43 and read as
+        # agreement while three live connections went undeclared.
+        rendered = sum(len(unit.get("connections") or []) for unit in render_airbyte(units).get("units") or [])
         console.print(
             f"\n[bold]Summary:[/] compared {live} live connection(s) against "
-            f"{len(units)} unit(s) — {len(report.errors)} error(s), "
+            f"{rendered} declared — {len(report.errors)} error(s), "
             f"{len(report.warnings)} warning(s)."
         )
 

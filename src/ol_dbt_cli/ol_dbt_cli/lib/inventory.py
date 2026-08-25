@@ -943,6 +943,25 @@ DRIFT_CHECK = "inventory_drift"
 
 MANUAL_SCHEDULE = "manual"
 
+# How Airbyte spells a Postgres replication method, mapped to the inventory's
+# vocabulary. Mirrors `bin/airbyte-inventory.py`, which cannot be imported from
+# here — it is a script, not a package.
+REPLICATION_METHODS = {"xmin": "xmin", "standard": "cursor", "cursor": "cursor", "cdc": "cdc"}
+
+
+def _live_replication_method(configuration: dict[str, Any] | None) -> str:
+    """Read a source's replication method out of its configuration, whatever shape it takes."""
+    if not isinstance(configuration, dict):
+        return "n/a"
+    method = configuration.get("replication_method")
+    if isinstance(method, dict):
+        raw = str(method.get("method") or method.get("replication_slot") or "unknown")
+    elif isinstance(method, str):
+        raw = method
+    else:
+        return "n/a"
+    return REPLICATION_METHODS.get(raw.lower(), "n/a")
+
 
 def _live_connections(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(c.get("name", "")): c for c in snapshot.get("connections") or []}
@@ -957,8 +976,19 @@ def _declared_connections(rendered: dict[str, Any]) -> dict[str, tuple[dict[str,
     }
 
 
-def _live_streams(connection: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    configurations = connection.get("configurations") or {}
+def _live_streams(connection: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+    """Index a connection's live streams, or None if the snapshot never captured them.
+
+    An explicitly empty list means every stream really was deselected, which is
+    drift worth shouting about. A *missing* `configurations.streams` means the
+    dump failed to read them: the dumper re-fetches a connection whose list
+    response omitted its streams, but leaves the key absent when that GET also
+    fails. Collapsing the two into `[]` would turn one transient API failure
+    into "every declared stream has been dropped" across the whole workspace.
+    """
+    configurations = connection.get("configurations")
+    if not isinstance(configurations, dict) or "streams" not in configurations:
+        return None
     return {str(s.get("name", "")): s for s in configurations.get("streams") or []}
 
 
@@ -1003,6 +1033,18 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
     rendered = render_airbyte(units)
     live = _live_connections(snapshot)
     declared = _declared_connections(rendered)
+    # The render carries stream names, not the raw tables they land in — that
+    # stays on the unit (§2). Keyed per connection, never globally: a stream
+    # name is only unique within its unit, and `users` alone belongs to three
+    # Mongo forums and to Zendesk.
+    raw_tables = {
+        str(connection.get("name", "")): {
+            str(table.get("name", "")): str(table.get("raw_table", "")) for table in unit.tables
+        }
+        for unit in units
+        for connection in unit.connections
+    }
+    live_sources = {str(s.get("sourceId", "")): s for s in snapshot.get("sources") or []}
 
     for name in sorted(set(declared) - set(live)):
         _, unit = declared[name]
@@ -1029,7 +1071,64 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
         )
 
     for name in sorted(set(live) & set(declared)):
-        _compare_connection(name, live[name], *declared[name], report)
+        connection, unit = declared[name]
+        _compare_connection(
+            name,
+            live[name],
+            connection,
+            unit,
+            raw_tables.get(name, {}),
+            live_sources,
+            report,
+        )
+
+
+def _compare_source(  # noqa: PLR0913
+    name: str,
+    live: dict[str, Any],
+    unit: dict[str, Any],
+    live_sources: dict[str, dict[str, Any]],
+    report: ValidationReport,
+    key: str,
+) -> None:
+    """Compare the source behind a connection, which the streams do not describe.
+
+    `replication_method` is recorded deliberately and is not decorative (§3.4):
+    it is what `tk-determine-per-source-incremental-cursor-viabilit-51f299`
+    reads to decide which connections need a replacement cursor before dlt can
+    take over. A source flipped from xmin to a cursor column changes nothing
+    about the streams, so comparing streams alone would report no drift while
+    that answer silently went wrong.
+    """
+    source = live_sources.get(str(live.get("sourceId", "")))
+    if source is None:
+        return
+
+    # The inventory spells a connector `source-postgres`; the API says
+    # `postgres`.
+    live_kind = f"source-{source.get('sourceType')}" if source.get("sourceType") else None
+    if live_kind and live_kind != unit.get("source_kind"):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} now uses connector {live_kind!r}, unit declares {unit.get('source_kind')!r}",
+            "A different connector reads the source differently, so the unit's "
+            "sync modes and cursors describe a pipeline that no longer exists.",
+        )
+
+    live_method = _live_replication_method(source.get("configuration"))
+    declared_method = unit.get("replication_method")
+    if declared_method and live_method != declared_method:
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} replicates by {live_method!r}, unit declares {declared_method!r}",
+            "§3.4 records this so `rg replication_method: xmin` answers which "
+            "connections need a replacement cursor before dlt can take them. A "
+            "stale value makes that answer wrong without changing any stream.",
+        )
 
 
 def _compare_connection(  # noqa: PLR0913
@@ -1037,9 +1136,12 @@ def _compare_connection(  # noqa: PLR0913
     live: dict[str, Any],
     declared: dict[str, Any],
     unit: dict[str, Any],
+    raw_tables: dict[str, str],
+    live_sources: dict[str, dict[str, Any]],
     report: ValidationReport,
 ) -> None:
     key = f"{unit['deployment']}/{unit['layer']}"
+    _compare_source(name, live, unit, live_sources, report, key)
 
     if (live_status := live.get("status")) != declared.get("status"):
         report.add(
@@ -1069,27 +1171,21 @@ def _compare_connection(  # noqa: PLR0913
             "would double-schedule it against Dagster (§6.4).",
         )
 
-    # `startswith`, not equality: `table_prefix` is declared documentation that
-    # covers a unit's tables (§1.1), not a copy of the literal string Airbyte
-    # prepends. The mongodb units legitimately declare
-    # `raw__<dep>__openedx__mongodb__` while Airbyte writes `…mongodb__forum_`.
-    # What would be drift is a live prefix the declared one no longer covers,
-    # because then the unit's raw_table values name tables that stop arriving.
-    live_prefix = live.get("prefix")
-    declared_prefix = unit.get("table_prefix") or ""
-    if live_prefix and not live_prefix.startswith(declared_prefix):
+    live_streams = _live_streams(live)
+    declared_streams = {str(s.get("name", "")): s for s in declared.get("streams") or []}
+
+    if live_streams is None:
         report.add(
             DRIFT_CHECK,
             Severity.ERROR,
             key,
-            f"connection {name!r} writes prefix {live_prefix!r}, outside the unit's declared {declared_prefix!r}",
-            "Every raw table this connection lands is named from the live "
-            "prefix, so the unit's tables are describing names that no longer "
-            "arrive.",
+            f"the snapshot holds no stream configuration for connection {name!r}",
+            "The dump could not read them, so this says nothing about drift. "
+            "Re-dump before trusting the report — an absent configuration is "
+            "not an empty one, and treating it as empty would claim every "
+            "declared stream had been dropped.",
         )
-
-    live_streams = _live_streams(live)
-    declared_streams = {str(s.get("name", "")): s for s in declared.get("streams") or []}
+        return
 
     for stream in sorted(set(declared_streams) - set(live_streams)):
         report.add(
@@ -1110,7 +1206,30 @@ def _compare_connection(  # noqa: PLR0913
             "It is being loaded and nothing records that it is.",
         )
 
+    # Where a raw table actually lands, rather than whether the unit's
+    # documentation prefix still looks plausible. Comparing `table_prefix`
+    # against Airbyte's `prefix` cannot work in either direction: the mongodb
+    # units legitimately declare `…__mongodb__` while Airbyte writes
+    # `…__mongodb__forum_`, and 12 connections carry no prefix at all because
+    # their stream names are already whole raw table names. `prefix + stream`
+    # is what Airbyte lands, and it reproduces all 949 declared raw tables
+    # exactly — so clearing a prefix, which the earlier check skipped as
+    # falsey, now shows up as every table in that connection moving.
+    live_prefix = live.get("prefix") or ""
     for stream in sorted(set(live_streams) & set(declared_streams)):
+        landed = f"{live_prefix}{stream}"
+        expected = raw_tables.get(stream)
+        if expected and landed != expected:
+            report.add(
+                DRIFT_CHECK,
+                Severity.ERROR,
+                key,
+                f"{name!r} stream {stream!r} now lands in {landed!r}, not the declared {expected!r}",
+                "The connection's prefix changed, so the table the unit "
+                "declares stops being written and anything modelling it goes "
+                "stale against whatever it last held.",
+            )
+
         want = _normalise_declared_stream(declared_streams[stream])
         got = _normalise_live_stream(live_streams[stream])
         for attribute in sorted(set(want) | set(got)):
