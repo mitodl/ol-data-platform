@@ -33,6 +33,7 @@ from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
+from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
@@ -399,6 +400,34 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Airbyte inventory drift. Daily, which is exactly step 8's acceptance
+# criterion — "a connection edited in the UI is reported within a day". Runs
+# ahead of the ingestion schedules, so a report describes the workspace as it
+# was configured for the day's syncs.
+#
+# Gated on SKIP_AIRBYTE with the assets above: the asset requires the `airbyte`
+# resource, which is not registered when that flag is set, and a definition
+# asking for an absent resource fails the whole code location at load.
+airbyte_drift_assets = [] if SKIP_AIRBYTE else [airbyte_inventory_drift]
+airbyte_drift_schedules = (
+    []
+    if SKIP_AIRBYTE
+    else [
+        (
+            "airbyte_inventory_drift_daily",
+            ScheduleDefinition(
+                name="airbyte_inventory_drift_daily_schedule",
+                job=define_asset_job(
+                    name="airbyte_inventory_drift_daily_job",
+                    selection=AssetSelection.assets(airbyte_inventory_drift),
+                ),
+                cron_schedule="0 3 * * *",
+                execution_timezone="UTC",
+            ),
+        )
+    ]
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -483,6 +512,7 @@ defs = Definitions(
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             refresh_starrocks_analytics_mvs,
+            *airbyte_drift_assets,
         ]
     ),
     asset_checks=dbt_layer_freshness_checks,
@@ -546,6 +576,7 @@ defs = Definitions(
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
+            *airbyte_drift_schedules,
         ]
     ),
 )
