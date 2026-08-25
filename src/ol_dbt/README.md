@@ -178,9 +178,18 @@ columns and 7,826 rows as "missing" — all noise. The correct composite key rep
 the truth: one genuinely differing column, 8,891 rows, nothing missing on either
 side.
 
-If you are unsure of the grain, look for a `dbt_expectations_expect_compound_columns_to_be_unique`
-test on the model — its column list is the key you want. Failing that, a passing
-`unique` test on a single column means that column is safe to use alone.
+If you are unsure of the grain, look for a
+`dbt_expectations.expect_compound_columns_to_be_unique` test on the model — its
+column list is the key you want. (That dotted spelling is what appears in the model
+YAML; the underscored form only shows up in compiled test names, so grep for the
+dotted one.)
+
+Failing that, a single column is safe to use alone only if it has **both** a passing
+`unique` **and** a passing `not_null` test. `unique` on its own is not enough: dbt's
+`unique` test ignores NULLs, so a nullable column can pass it and still have NULL
+values — and the single-column comparison path joins with a plain `a.k = b.k`, which
+never matches NULL to NULL. Those rows land in the "missing from" buckets on both
+sides rather than pairing up.
 
 `--old-raw`/`--new-raw` treat that side as a literal existing table rather than a
 dbt model — required for a snapshot table (`ol-dbt local snapshot` output) or any

@@ -90,9 +90,12 @@ ol-dbt diff --target dev_local \
   error. A non-unique key pairs rows many-to-many and inflates the mismatch and
   "missing" counts with join artifacts rather than real differences, so a
   single-column key on a composite-grain model actively misleads. If you don't know
-  the grain, check the model for a
-  `dbt_expectations_expect_compound_columns_to_be_unique` test — its column list is
-  the key.
+  the grain, check the model YAML for a
+  `dbt_expectations.expect_compound_columns_to_be_unique` test — its column list is
+  the key. (Grep the dotted spelling; the underscored form appears only in compiled
+  test names.) A single column is safe alone only with **both** `unique` and
+  `not_null` passing — `unique` ignores NULLs, and the single-column join cannot
+  pair NULL keys.
 - Use `--exclude-columns` for non-deterministic columns (load timestamps, etc.).
 - Column sets are reconciled first: a schema mismatch is reported as
   `schema_divergence`, not a raw SQL error.

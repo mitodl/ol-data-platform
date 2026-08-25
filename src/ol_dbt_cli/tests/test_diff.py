@@ -302,16 +302,18 @@ class TestRelationJinja:
         # Jinja list (or comma-joined list) ever lands in the emitted SQL.
         sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
         assert "primary_key='ol_dbt_diff_surrogate_key'" in sql
-        assert "{{ dbt_utils.generate_surrogate_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key" in sql
+        # Must NOT be dbt_utils.generate_surrogate_key -- it joins components with
+        # a literal '-' without encoding boundaries, so ('a-b','c') and ('a','b-c')
+        # collide and would pair two distinct keys as one row.
+        assert "generate_surrogate_key" not in sql
+        assert "{{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key" in sql
         assert "primary_key=['k1', 'k2']" not in sql
         assert "primary_key='k1, k2'" not in sql
 
     def test_compare_column_sql_composite_pk_selects_key_on_both_sides(self) -> None:
         # The surrogate must exist in a_query AND b_query for the join to resolve.
         sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
-        select_clause = (
-            "select {{ dbt_utils.generate_surrogate_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key, some_col from"
-        )
+        select_clause = "select {{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key, some_col from"
         assert sql.count(select_clause) == 2
 
     def test_compare_column_sql_single_pk_keeps_the_real_column(self) -> None:
@@ -505,7 +507,7 @@ class TestDiffCommand:
         # Only `name` is compared -- both key columns were recognised as keys.
         assert len(seen) == 1
         assert "column_to_compare='name'" in seen[0]
-        assert "generate_surrogate_key(['k1', 'k2'])" in seen[0]
+        assert "diff_composite_key(['k1', 'k2'])" in seen[0]
 
     def test_comma_and_repeated_primary_key_produce_identical_sql(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

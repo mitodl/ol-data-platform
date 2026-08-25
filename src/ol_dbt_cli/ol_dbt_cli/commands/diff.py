@@ -451,11 +451,18 @@ def _compare_column_sql(
     neither as a Jinja list (which reaches the database as the literal text
     ``['k1', 'k2']``) nor comma-joined (``a.k1, k2 = b.k1, k2``).
 
-    For a composite key we instead synthesize a single hashed join column with
-    ``dbt_utils.generate_surrogate_key`` inside a_query/b_query and hand
+    For a composite key we instead synthesize a single hashed join column with the
+    project's ``diff_composite_key`` macro inside a_query/b_query and hand
     audit_helper *that* column name. One side effect is better than the scalar
-    path: generate_surrogate_key coalesces nulls to a sentinel, so rows whose
-    key components are null still pair up, where a plain equi-join drops them.
+    path: the macro encodes nulls rather than dropping them, so rows whose key
+    components are null still pair up, where a plain equi-join drops them.
+
+    ``dbt_utils.generate_surrogate_key`` is deliberately NOT used here: it joins
+    components with a literal ``-`` before hashing, without encoding component
+    boundaries, so ``('a-b', 'c')`` and ``('a', 'b-c')`` hash identically
+    (verified on dbt_utils 1.3.3). That would pair two distinct keys as one row
+    and reintroduce the very mispairing a composite key exists to prevent.
+    ``diff_composite_key`` length-prefixes each component instead.
     """
     a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
     b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
@@ -466,7 +473,7 @@ def _compare_column_sql(
     # wide tables.
     if len(primary_key) > 1:
         pk = f"'{_SURROGATE_PK}'"
-        key_expr = f"{{{{ dbt_utils.generate_surrogate_key({_jinja_list(primary_key)}) }}}}"
+        key_expr = f"{{{{ diff_composite_key({_jinja_list(primary_key)}) }}}}"
         select_cols = f"{key_expr} as {_SURROGATE_PK}, {column}"
     else:
         pk = f"'{primary_key[0]}'"
