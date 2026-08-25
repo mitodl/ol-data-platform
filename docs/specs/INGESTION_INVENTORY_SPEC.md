@@ -208,16 +208,24 @@ Carried over from RFC 12711 §3, unchanged:
 
 New here:
 
-4. `table_prefix` values are pairwise non-overlapping **across units**, and every
-   `tables[].raw_table` starts with its unit's prefix. This is what makes prefix → unit total
-   (§1.1). Note the direction: prefix → unit must be a function; connection → prefix need not
-   be injective, because a unit legitimately has several connections (§3.5).
-5. `cursor_field` is required iff `sync_mode` is incremental, and must name a column the
-   table actually has once §8's warehouse reconcile runs.
+4. Every `tables[].raw_table` starts with its unit's `table_prefix`. Prefixes **may nest**:
+   the rule that forbade it was a proxy for rule 8, which enforces the real invariant
+   directly. Since §1.1 fixed that raw tables are declared and never parsed, a prefix
+   documents a unit rather than routing to it. Populating the inventory proved the proxy too
+   strong — edxorg's namespace nests three loaders, with dlt's `raw__edxorg__s3__tables__`
+   database dumps sitting inside Airbyte's `raw__edxorg__s3__` catalog files (§8.2).
+5. `cursor_field` is required iff `sync_mode` is incremental **and the unit's
+   `replication_method` does not already explain its absence**. `xmin` does explain it (§3.4),
+   and is then reported once per unit rather than once per table: all 514 cursorless
+   incrementals sit in the eight xmin Postgres units, and writing a `cursor_field` to silence
+   them would invent config Airbyte does not hold — precisely what breaks §6.4's empty preview.
 6. Every `airbyte.connections[].name` ends with `s3 data lake` (case-insensitive) — the
    Dagster selector's precondition (§1.3) — or the unit is marked `dagster_visible: false`,
    which is an assertion that no dbt model depends on it (§8.1 finding C).
-7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`.
+7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`. A third
+   value, `loader: dagster`, carries neither block: some tables are produced by a bespoke
+   asset pipeline under `dg_projects/` rather than pulled by a loader, and the inventory
+   claims to record everything we load (§2), not everything a loader fetches.
 8. Every `raw_table` is globally unique across units, and appears in exactly one connection's
    `streams` within its unit.
 
@@ -730,6 +738,33 @@ Findings that are work items rather than schema changes:
   has a live interval-map entry, dbt models, and 568 configured streams, and all of that is
   correct and should stay, just not running.
 - **1,185 loaded-but-unmodeled tables** against 374 modelled — the §1.4 ratio, now measured.
+
+### 8.2 What populating it changed, 2026-08-25
+
+37 units, 962 tables, validating clean. Four things the schema did not survive contact with,
+each fixed above rather than worked around:
+
+- **A raw namespace can hold more than one loader.** `raw__edxorg__*` is served by three:
+  Airbyte (4 connections), dlt (`edxorg_s3`, `mit_edx_programs`), and a bespoke Dagster asset
+  pipeline (`dg_projects/edxorg/assets/openedx_course_archives.py`). Their prefixes nest, and
+  `loader` had no value for the third. Hence rule 4's relaxation and rule 7's `dagster`.
+- **`xmin` made the file unlandable.** 514 cursorless incremental streams, every one in an
+  xmin Postgres unit — see rule 5.
+- **`_destination_v2` is not a twin, it is a successor.** Both Salesforce connections carry
+  the same stream names to different prefixes, so no single unit can hold them. dbt reads only
+  the `_destination_v2` tables and no Mailgun table at all, and the legacy connections are
+  paused against an S3-Glue destination we no longer read — so the v2 connection is the unit
+  and 567 legacy tables are retired. This answers §9's first open question with measurement
+  rather than deferring it to cutover.
+- **A single-table unit has no `__`-terminated prefix.** A deployment's tracking logs are one
+  table; requiring the trailing `__` left only `raw__<dep>__openedx__`, which swallows that
+  deployment's mysql, api and mongodb units.
+
+One finding needs an action outside this repo: the paused Airbyte connection
+`edx.org Production Course Metadata → S3 Data Lake` writes two raw tables that
+`openedx_course_archives.py` also produces and that dbt reads. It is superseded dead config,
+and re-enabling it would have two pipelines writing one table. Delete it in Airbyte before
+step 5's import, or step 5 will faithfully import the hazard.
 
 ---
 

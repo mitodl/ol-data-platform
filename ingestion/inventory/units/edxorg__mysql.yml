@@ -1,0 +1,44 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: mysql
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__edxorg__s3__tables__
+dlt:
+  source_module: ol_dlt.sources.edxorg_s3
+  write_disposition: merge
+tables:
+- name: raw__edxorg__s3__tables__auth_user
+  raw_table: raw__edxorg__s3__tables__auth_user
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__tables__auth_userprofile
+  raw_table: raw__edxorg__s3__tables__auth_userprofile
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__tables__certificates_generatedcertificate
+  raw_table: raw__edxorg__s3__tables__certificates_generatedcertificate
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__tables__courseware_studentmodule
+  raw_table: raw__edxorg__s3__tables__courseware_studentmodule
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__tables__grades_persistentcoursegrade
+  raw_table: raw__edxorg__s3__tables__grades_persistentcoursegrade
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__tables__student_courseaccessrole
+  raw_table: raw__edxorg__s3__tables__student_courseaccessrole
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__tables__student_courseenrollment
+  raw_table: raw__edxorg__s3__tables__student_courseenrollment
+  sync_mode: full_refresh_overwrite
+  modeled: true

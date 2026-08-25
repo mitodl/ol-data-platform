@@ -305,22 +305,25 @@ class TestRules:
 
 
 class TestCrossUnit:
-    def test_overlapping_prefixes_are_rejected(self, inventory: Path) -> None:
-        # `raw__edxorg__s3__tables__` sits underneath `raw__edxorg__s3__`, so a
-        # raw table would map to two units.
-        overlapping = copy.deepcopy(DLT_UNIT)
-        overlapping["layer"] = "api"
-        overlapping["table_prefix"] = "raw__edxorg__s3__tables__"
-        overlapping["tables"] = [
+    def test_nested_prefixes_are_allowed(self, inventory: Path) -> None:
+        # This nesting is real: edxorg's `raw__edxorg__s3__` namespace holds
+        # Airbyte's catalog files and, underneath it, dlt's
+        # `raw__edxorg__s3__tables__` database dumps. Forbidding it made the
+        # deployment unexpressible, and it was only ever a proxy for the
+        # duplicate-table rule below, which catches the actual harm.
+        nested = copy.deepcopy(DLT_UNIT)
+        nested["layer"] = "api"
+        nested["table_prefix"] = "raw__edxorg__s3__tables__"
+        nested["tables"] = [
             {
                 "name": "auth_user",
                 "raw_table": "raw__edxorg__s3__tables__auth_user_two",
                 "sync_mode": "full_refresh_overwrite",
             }
         ]
-        _write(inventory, "edxorg__api", overlapping)
+        _write(inventory, "edxorg__api", nested)
         report = _run(inventory)
-        assert "overlaps" in _messages(report)
+        assert report.errors == [], _messages(report)
 
     def test_duplicate_raw_table_across_units_is_rejected(self, inventory: Path) -> None:
         duplicate = copy.deepcopy(DLT_UNIT)

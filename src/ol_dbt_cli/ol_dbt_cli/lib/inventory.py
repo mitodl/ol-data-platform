@@ -316,22 +316,13 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
 
 def _check_cross_unit(units: list[Unit], report: ValidationReport) -> None:
     """Check the invariants that make prefix → unit a function (§3.3 rules 4 and 8)."""
-    prefixes: list[tuple[str, Unit]] = [
-        (unit.data["table_prefix"], unit) for unit in units if unit.data.get("table_prefix")
-    ]
-    for prefix, unit in prefixes:
-        for other_prefix, other in prefixes:
-            if unit.path == other.path:
-                continue
-            if prefix.startswith(other_prefix):
-                report.add(
-                    CHECK,
-                    Severity.ERROR,
-                    unit.key,
-                    f"table_prefix {prefix!r} overlaps {other_prefix!r} from {other.key}",
-                    "Prefixes must be pairwise non-overlapping, or a raw table maps to two units.",
-                )
-
+    # Nested prefixes are allowed. The rule that used to forbid them was a proxy
+    # for "a raw table maps to two units", which `seen_tables` below enforces
+    # directly — and §1.1 fixed that raw tables are declared, never parsed, so a
+    # prefix documents a unit rather than routing to it. The proxy was strictly
+    # stronger than the invariant and made real deployments unexpressible:
+    # edxorg's raw namespace nests three loaders, with dlt's
+    # `raw__edxorg__s3__tables__` sitting inside Airbyte's `raw__edxorg__s3__`.
     seen_keys: dict[str, Path] = {}
     seen_tables: dict[str, str] = {}
     for unit in units:

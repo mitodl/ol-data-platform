@@ -43,7 +43,8 @@
       "description": "Required iff a strategy is `mirror`; no default, so it is a decision per unit."
     },
     "loader": {
-      "enum": ["airbyte", "dlt"]
+      "enum": ["airbyte", "dlt", "dagster"],
+      "description": "What actually loads these tables. `dagster` is a bespoke asset pipeline under dg_projects/ — neither an Airbyte connection nor a dlt source, so it carries neither block. It exists because the inventory claims to record everything we load (§2), and edxorg's course archives are loaded that way."
     },
     "table_prefix": {
       "type": "string",

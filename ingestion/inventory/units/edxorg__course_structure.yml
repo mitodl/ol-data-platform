@@ -1,0 +1,33 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: course_structure
+strategies:
+  qa: omit
+  local: fixture
+loader: dagster
+table_prefix: raw__edxorg__s3__course_
+tables:
+- name: raw__edxorg__s3__course_structure__course_certificate_signatory
+  raw_table: raw__edxorg__s3__course_structure__course_certificate_signatory
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__course_structure__course_metadata
+  raw_table: raw__edxorg__s3__course_structure__course_metadata
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__course_structure__course_policy
+  raw_table: raw__edxorg__s3__course_structure__course_policy
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__course_structure__course_video
+  raw_table: raw__edxorg__s3__course_structure__course_video
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__course_xml_blocks
+  raw_table: raw__edxorg__s3__course_xml_blocks
+  sync_mode: full_refresh_overwrite
+  modeled: true

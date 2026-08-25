@@ -2,14 +2,14 @@
 # Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
 # resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
 schema_version: 1
-deployment: TODO
-layer: TODO
-scope: scoped
+deployment: edxorg
+scope: singleton
+layer: google_sheets
 strategies:
   qa: omit
   local: fixture
 loader: airbyte
-table_prefix: raw__edxorg__
+table_prefix: raw__edxorg__program_entitlement
 airbyte:
   source_kind: source-google-sheets
   replication_method: n/a
@@ -19,22 +19,8 @@ airbyte:
     sync_interval_hours: 24
     streams:
     - raw__edxorg__program_entitlement
-  - name: S3 edX.org Program Credentials → S3 Data Lake
-    status: active
-    sync_interval_hours: 24
-    streams:
-    - raw__edxorg__program_learner_report
 tables:
 - name: raw__edxorg__program_entitlement
   raw_table: raw__edxorg__program_entitlement
   sync_mode: full_refresh_overwrite
-  primary_key:
-  - - Email
-  - - Program Title
-  modeled: true
-- name: raw__edxorg__program_learner_report
-  raw_table: raw__edxorg__program_learner_report
-  sync_mode: incremental_append
-  cursor_field:
-  - _ab_source_file_last_modified
   modeled: true
