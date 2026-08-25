@@ -9,7 +9,12 @@ import pytest
 
 from ol_dbt_cli.commands.local_dev import (
     PROTECTED_SCHEMAS,
+    REGISTRY_STALE_AFTER_DAYS,
+    _classify_registration,
+    _describe_registry_age,
     _register_single_table,
+    _registry_last_refreshed,
+    _stale_threshold_phrase,
     _validate_schema_safety,
     snapshot,
 )
@@ -170,8 +175,13 @@ class TestRegisterSingleTable:
         assert status == "success"
         assert extra == "updated"
 
-    def test_force_re_registers_unchanged_table(self, tmp_path: Path) -> None:
-        """force=True bypasses the skip check, re-registering even unchanged tables."""
+    def test_force_re_registers_unchanged_table_as_refreshed(self, tmp_path: Path) -> None:
+        """force=True re-registers an unchanged table, reported as 'refreshed' not 'updated'.
+
+        'updated' is reserved for a table whose Glue metadata location actually
+        moved. Reporting a forced no-op re-registration as 'updated' would let a
+        forced run claim upstream changes that never happened.
+        """
         table = self._make_table()
         existing = {"glue__my_db__users": "s3://bucket/users/v1.json"}
 
@@ -184,7 +194,22 @@ class TestRegisterSingleTable:
             )
 
         assert status == "success"
-        assert extra == "updated"  # it was in existing_registrations → "updated"
+        assert extra == "refreshed"
+
+    def test_force_still_reports_a_moved_pointer_as_updated(self, tmp_path: Path) -> None:
+        """Under force, a genuinely changed location is still 'updated', not 'refreshed'."""
+        table = self._make_table(location="s3://bucket/users/v2.json")
+        existing = {"glue__my_db__users": "s3://bucket/users/v1.json"}
+
+        with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
+            mock_conn = MagicMock()
+            self._mock_duckdb_connect(mock_connect, mock_conn)
+
+            _status, _view_name, extra = _register_single_table(
+                table, "my_db", tmp_path / "test.duckdb", existing, force=True
+            )
+
+        assert extra == "updated"
 
     def test_returns_error_on_duckdb_exception(self, tmp_path: Path) -> None:
         """DuckDB errors (e.g. bad Iceberg manifest) are caught and returned as 'error'."""
@@ -254,6 +279,98 @@ class TestRegisterSingleTable:
             assert "glue__my_db__users" in row
             assert "my_db" in row
             assert "users" in row
+
+
+class TestClassifyRegistration:
+    """Tests for _classify_registration — the shared new/updated/refreshed decision."""
+
+    def test_unregistered_table_is_new(self) -> None:
+        assert _classify_registration(None, "s3://bucket/v1.json") == "new"
+
+    def test_moved_pointer_is_updated(self) -> None:
+        assert _classify_registration("s3://bucket/v1.json", "s3://bucket/v2.json") == "updated"
+
+    def test_identical_pointer_is_refreshed(self) -> None:
+        assert _classify_registration("s3://bucket/v1.json", "s3://bucket/v1.json") == "refreshed"
+
+
+class TestRegistryAge:
+    """Tests for registry staleness reporting — the signal the incident lacked."""
+
+    def _make_registry(self, db_path: Path, registered_at_sql: str, glue_database: str = "my_db") -> None:
+        import duckdb
+
+        with duckdb.connect(str(db_path)) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS _glue_source_registry (
+                    view_name VARCHAR PRIMARY KEY,
+                    glue_database VARCHAR,
+                    glue_table VARCHAR,
+                    metadata_location VARCHAR,
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                f"INSERT INTO _glue_source_registry VALUES (?, ?, ?, ?, {registered_at_sql})",  # noqa: S608
+                (f"glue__{glue_database}__users", glue_database, "users", "s3://bucket/users/v1.json"),
+            )
+
+    def test_returns_none_when_no_database_file(self, tmp_path: Path) -> None:
+        assert _registry_last_refreshed(tmp_path / "missing.duckdb", ["my_db"]) is None
+
+    def test_returns_none_when_no_registry_table(self, tmp_path: Path) -> None:
+        """An existing DuckDB file with no registry table must not raise."""
+        import duckdb
+
+        db = tmp_path / "local.duckdb"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("CREATE TABLE unrelated (x INTEGER)")
+        assert _registry_last_refreshed(db, ["my_db"]) is None
+
+    def test_returns_none_for_unregistered_database(self, tmp_path: Path) -> None:
+        """max() over zero matching rows is NULL, which must surface as None."""
+        db = tmp_path / "local.duckdb"
+        self._make_registry(db, "CURRENT_TIMESTAMP", glue_database="my_db")
+        assert _registry_last_refreshed(db, ["some_other_db"]) is None
+
+    def test_reads_newest_timestamp_for_targeted_databases(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        self._make_registry(db, "CURRENT_TIMESTAMP")
+        assert _registry_last_refreshed(db, ["my_db"]) is not None
+
+    def test_unknown_age_is_not_reported_as_stale(self) -> None:
+        """No readable registration is 'unknown', not 'stale' — do not cry wolf on first run."""
+        phrase, is_stale = _describe_registry_age(None)
+        assert is_stale is False
+        assert "unknown" in phrase
+
+    def test_threshold_phrase_is_not_ungrammatical_at_one_day(self) -> None:
+        """The banner interpolates this; at the default of 1 it must not read '1 days'."""
+        assert "1 days" not in _stale_threshold_phrase()
+
+    def test_fresh_registry_is_not_stale(self) -> None:
+        import datetime
+
+        recent = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(hours=1)
+        phrase, is_stale = _describe_registry_age(recent)
+        assert is_stale is False
+        assert "hours ago" in phrase
+
+    def test_old_registry_is_stale(self) -> None:
+        import datetime
+
+        old = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(days=REGISTRY_STALE_AFTER_DAYS + 1)
+        phrase, is_stale = _describe_registry_age(old)
+        assert is_stale is True
+        assert "days ago" in phrase
+
+    def test_naive_timestamp_does_not_raise(self) -> None:
+        """DuckDB hands back naive datetimes; subtracting an aware 'now' would raise."""
+        import datetime
+
+        naive = datetime.datetime.now() - datetime.timedelta(days=1)  # noqa: DTZ005
+        phrase, _is_stale = _describe_registry_age(naive)
+        assert "ago" in phrase
 
 
 class TestRegisterTablesInDuckdbDryRun:
