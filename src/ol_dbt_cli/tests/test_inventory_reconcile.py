@@ -20,7 +20,7 @@ from ol_dbt_cli.lib.inventory import (
     load_units,
     reconcile_dbt,
     reconcile_warehouse,
-    unit_for_table,
+    units_for_table,
 )
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 from ol_dbt_cli.lib.yaml_registry import collect_source_tables
@@ -186,9 +186,9 @@ class TestDbtReconciliation:
         reconcile_dbt(units, DECLARED | {"raw__ovs__postgres__ui_collection"}, inventory, report)
 
         assert report.errors == []
-        assert _messages(report, Severity.WARNING) == [
-            "raw__ovs__postgres__ui_collection is a dbt source but the inventory retired it"
-        ]
+        assert ("raw__ovs__postgres__ui_collection is a dbt source but the inventory retired it") in _messages(
+            report, Severity.WARNING
+        )
 
     def test_modeled_flag_with_no_dbt_source_is_a_warning(self, inventory: Path) -> None:
         # `modeled:` is what step 7 generates the sources YAML from, so a stale
@@ -202,6 +202,19 @@ class TestDbtReconciliation:
             f"{EDX_PREFIX}tables__auth_user is marked modeled but dbt declares no source for it"
         ]
 
+    def test_modeled_false_but_dbt_declares_it_is_a_warning(self, inventory: Path) -> None:
+        # The damaging direction: this table lands in `both` and in neither
+        # subtraction, so it would go unreported — while step 7, generating the
+        # sources YAML from `modeled:` alone, would drop a source dbt reads.
+        units = load_units(inventory)
+        report = ValidationReport()
+        reconcile_dbt(units, DECLARED, inventory, report)
+
+        assert report.errors == []
+        assert _messages(report, Severity.WARNING) == [
+            f"{MITX_PREFIX}courseware_studentmodule is marked modeled: false but dbt declares a source for it"
+        ]
+
     def test_loaded_but_unmodeled_is_not_reported(self, inventory: Path) -> None:
         # dbt declares 372 of ~2,090 loaded tables (§1.4), so the gap is the
         # normal state — reporting it would bury every real finding.
@@ -213,17 +226,35 @@ class TestDbtReconciliation:
 
 
 class TestPrefixOwnership:
-    def test_longest_prefix_wins(self) -> None:
+    def test_every_covering_prefix_is_returned_longest_first(self) -> None:
+        # Both units cover the table and neither owns it — ownership comes from
+        # a declared raw_table, which an undeclared table does not have. Naming
+        # only the longest would assert a pipeline the inventory never claimed.
         units = load_units_from(
             {
-                "broad": {**MITX_UNIT, "table_prefix": "raw__mitxonline__"},
+                "broad": {**MITX_UNIT, "layer": "api", "table_prefix": "raw__mitxonline__"},
                 "narrow": MITX_UNIT,
             }
         )
-        assert unit_for_table(units, f"{MITX_PREFIX}auth_user") == "mitxonline/mysql"
+        assert units_for_table(units, f"{MITX_PREFIX}auth_user") == ["mitxonline/mysql", "mitxonline/api"]
 
-    def test_no_prefix_matches_returns_none(self, inventory: Path) -> None:
-        assert unit_for_table(load_units(inventory), "raw__ovs__postgres__ui_collection") is None
+    def test_no_prefix_matches_returns_empty(self, inventory: Path) -> None:
+        assert units_for_table(load_units(inventory), "raw__ovs__postgres__ui_collection") == []
+
+    def test_ambiguous_drift_names_the_candidates_not_a_winner(self, inventory: Path) -> None:
+        units = load_units_from(
+            {
+                "broad": {**MITX_UNIT, "layer": "api", "table_prefix": "raw__mitxonline__"},
+                "narrow": MITX_UNIT,
+            }
+        )
+        report = ValidationReport()
+        reconcile_warehouse(units, {f"{MITX_PREFIX}undeclared"}, report)
+
+        drift = next(issue for issue in report.warnings if "undeclared" in issue.message)
+        assert drift.model == "(ambiguous)"
+        assert "mitxonline/mysql" in drift.detail
+        assert "mitxonline/api" in drift.detail
 
 
 def load_units_from(units: dict[str, dict[str, Any]]) -> list[Any]:

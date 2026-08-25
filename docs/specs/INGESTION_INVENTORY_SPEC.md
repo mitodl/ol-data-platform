@@ -41,9 +41,11 @@ there are 23 distinct two-segment prefixes with at least four incompatible shape
 | `raw__thirdparty__salesforce___destination_v2__Opportunity` | vendor + Airbyte destination artifact, **mixed case**, triple underscore | 2 |
 | `raw__edxorg__s3__tables__auth_user` | deployment, system, sub-namespace, table | 18 |
 
-**Consequence:** each unit declares its `table_prefix` explicitly. The inventory maps
-prefix → unit; nothing parses names. A validator rule asserts prefixes are non-overlapping,
-which is what makes the mapping total and unambiguous.
+**Consequence:** each unit declares its `table_prefix` explicitly, and nothing parses names.
+A prefix documents a unit rather than routing to it: prefixes may nest, and what makes
+ownership total and unambiguous is that every `tables[].raw_table` is globally unique across
+units (rule 8). An *undeclared* table therefore has no owner to infer — several prefixes may
+cover it, and `reconcile` reports the candidates rather than picking the longest (§8.2).
 
 **Confirmed against the live workspace (2026-08-14, §8.1).** There are exactly two naming
 mechanisms, and neither is a positional parse:
@@ -644,7 +646,7 @@ ol-infrastructure; 7 closes the loop.
 |---|---|---|
 | 1 | `ol-dbt inventory` sub-app (§5): JSON Schema, dbt-free loader, `validate` | `ol-dbt inventory validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
-| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **The command is built**, along with the generation half (`render airbyte`, `render dagster-intervals`); the data itself remains, and is what step 2 produces | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
+| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **Command and data both landed** (§8.2); the acceptance criterion is not yet met — see below | The three buckets of §5 are reported ✅; unmapped tables are explained, not deleted ✅; every one of the 374 dbt-declared raw tables maps to exactly one unit — **348/374**, the remaining 26 explained and tracked, not resolved |
 | 4 | **DONE.** CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI |
 | 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection — plus `airbyte_source_definition`/`airbyte_destination_definition`, so the deployed `docker_image_tag` is a reviewed diff rather than a UI click (§6.2) | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
 | 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |
@@ -741,8 +743,10 @@ Findings that are work items rather than schema changes:
 
 ### 8.2 What populating it changed, 2026-08-25
 
-37 units, 962 tables, validating clean. Four things the schema did not survive contact with,
-each fixed above rather than worked around:
+41 units, 966 tables, validating clean — 37 units from the Airbyte snapshot plus four the
+snapshot structurally cannot see: three dlt sources (`mit_climate`, `mitpe`, `oll`) and one
+Dagster asset pipeline (`openedx`). Four things the schema did not survive contact with, each
+fixed above rather than worked around:
 
 - **A raw namespace can hold more than one loader.** `raw__edxorg__*` is served by three:
   Airbyte (4 connections), dlt (`edxorg_s3`, `mit_edx_programs`), and a bespoke Dagster asset
@@ -759,6 +763,16 @@ each fixed above rather than worked around:
 - **A single-table unit has no `__`-terminated prefix.** A deployment's tracking logs are one
   table; requiring the trailing `__` left only `raw__<dep>__openedx__`, which swallows that
   deployment's mysql, api and mongodb units.
+
+**Step 3's acceptance criterion is not yet met, and `reconcile` exits non-zero saying so.**
+348 of 374 dbt-declared raw tables map to a unit. Of the 26 that do not, 19 bootcamps tables
+are retired in `retired.yml` — reported as a warning, because the graveyard explains them and
+the stale reader is the dbt model, not the inventory. The remaining 7 are `assessment_ai*`
+sources under mitxonline and xpro that those deployments have never synced
+(`tk-7-assessment-ai-dbt-sources-under-mitxonline-and-e489de`); they stay ERROR because
+nothing yet explains them, so a clean checkout exits 1. That is the honest state rather than
+a baseline to be silenced, and it is why `reconcile` is not a CI gate yet: it becomes one
+when that task closes.
 
 One finding needs an action outside this repo: the paused Airbyte connection
 `edx.org Production Course Metadata → S3 Data Lake` writes two raw tables that

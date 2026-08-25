@@ -770,19 +770,22 @@ def modeled_tables(units: list[Unit]) -> set[str]:
     return {str(table.get("raw_table", "")) for unit in units for table in unit.tables if table.get("modeled")}
 
 
-def unit_for_table(units: list[Unit], raw_table: str) -> str | None:
-    """Return the unit whose `table_prefix` covers an undeclared raw table, if any.
+def units_for_table(units: list[Unit], raw_table: str) -> list[str]:
+    """Return every unit whose `table_prefix` covers an undeclared raw table.
 
-    Longest prefix wins. Rule 5 forbids one prefix being a prefix of another, so
-    at most one unit matches a valid inventory; ordering by length keeps the
-    answer deterministic when it does not.
+    Longest prefix first, but *all* of them: since rule 4 now permits nesting,
+    more than one unit can cover a table and none of them owns it. Naming only
+    the longest would assert an owner the inventory does not establish —
+    `raw__edxorg__s3__course_` and `raw__edxorg__` both cover a stray
+    `raw__edxorg__s3__course_*`, and they are different pipelines. Ownership
+    comes from a declared `raw_table`, which by definition an undeclared table
+    does not have.
     """
     matches = [
         unit for unit in units if (prefix := unit.data.get("table_prefix")) and raw_table.startswith(str(prefix))
     ]
-    if not matches:
-        return None
-    return max(matches, key=lambda unit: len(str(unit.data["table_prefix"]))).key
+    matches.sort(key=lambda unit: len(str(unit.data["table_prefix"])), reverse=True)
+    return [unit.key for unit in matches]
 
 
 def reconcile_warehouse(
@@ -815,16 +818,31 @@ def reconcile_warehouse(
         )
 
     for raw_table in sorted(result.observed_not_declared):
-        owner = unit_for_table(units, raw_table)
+        candidates = units_for_table(units, raw_table)
+        if not candidates:
+            model, detail = (
+                "(unclaimed)",
+                "No unit's table_prefix covers it, so it needs a new unit — or it is "
+                "a leftover from an ingestion we have already stopped.",
+            )
+        elif len(candidates) == 1:
+            model, detail = (
+                candidates[0],
+                f"It falls under {candidates[0]}'s table_prefix, so its entry belongs in that unit.",
+            )
+        else:
+            model, detail = (
+                "(ambiguous)",
+                f"Prefixes from {len(candidates)} units cover it — {', '.join(candidates)} — "
+                "so which one should declare it cannot be read off the name. Nesting is "
+                "allowed, so the longest match is not the owner.",
+            )
         report.add(
             RECONCILE_CHECK,
             Severity.WARNING,
-            owner or "(unclaimed)",
+            model,
             f"{raw_table} is in the warehouse but no unit declares it",
-            f"It falls under {owner}'s table_prefix, so its entry belongs in that unit."
-            if owner
-            else "No unit's table_prefix covers it, so it needs a new unit — or it is "
-            "a leftover from an ingestion we have already stopped.",
+            detail,
         )
 
     return result
@@ -875,7 +893,8 @@ def reconcile_dbt(
                 "dbt source to make this pass.",
             )
 
-    for raw_table in sorted(modeled_tables(units) - dbt_tables):
+    modeled = modeled_tables(units)
+    for raw_table in sorted(modeled - dbt_tables):
         report.add(
             RECONCILE_CHECK,
             Severity.WARNING,
@@ -883,6 +902,22 @@ def reconcile_dbt(
             f"{raw_table} is marked modeled but dbt declares no source for it",
             "`modeled:` is what step 7 generates the sources YAML from, so the "
             "flag is either stale or the dbt source has gone missing.",
+        )
+
+    # The mirror image, and the more damaging direction. A table dbt declares
+    # but the unit flags `modeled: false` lands in `result.both` and in neither
+    # subtraction above, so it would go unreported — while step 7, generating
+    # sources from `modeled:` alone, would silently drop a source dbt is
+    # actually reading.
+    for raw_table in sorted((dbt_tables & set(owners)) - modeled):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owners[raw_table],
+            f"{raw_table} is marked modeled: false but dbt declares a source for it",
+            "Step 7 generates the sources YAML from `modeled:`, so leaving this "
+            "flag false would delete a source dbt is reading. Set it true, or "
+            "remove the dbt source if it is the one that is wrong.",
         )
 
     return result

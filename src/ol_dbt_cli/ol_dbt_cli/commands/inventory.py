@@ -340,7 +340,14 @@ def _warehouse_tables_from_duckdb(duckdb_path: Path, glue_database: str | None) 
         query += " WHERE glue_database = ?"
         params = (glue_database,)
     with duckdb.connect(str(duckdb_path), read_only=True) as conn:
-        return {str(row[0]) for row in conn.execute(query, params).fetchall()}
+        tables = {str(row[0]) for row in conn.execute(query, params).fetchall()}
+    # `ol-dbt local register --all-layers` puts staging, intermediate and mart
+    # tables in the same registry. Comparing those against the inventory would
+    # report every modelled table as undeclared warehouse drift, burying the
+    # real finding. The schema constrains every inventory raw table to `raw__`,
+    # so that prefix is the layer boundary. Filtered here rather than in SQL
+    # because `_` is a LIKE wildcard and the escaping earns nothing.
+    return {table for table in tables if table.startswith("raw__")}
 
 
 def _emit_json(issues: list[ValidationIssue]) -> None:

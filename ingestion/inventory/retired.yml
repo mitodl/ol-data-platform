@@ -597,3 +597,37 @@ retired:
     writes to an S3-Glue destination we no longer read, is paused in Airbyte, and
     no dbt model declares any of these tables — confirmed against the sources YAML
     on 2026-08-25.
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:
+  - raw__bootcamps__app__postgres__applications_applicationstep
+  - raw__bootcamps__app__postgres__applications_applicationstepsubmission
+  - raw__bootcamps__app__postgres__applications_bootcampapplication
+  - raw__bootcamps__app__postgres__applications_bootcamprunapplicationstep
+  - raw__bootcamps__app__postgres__auth_user
+  - raw__bootcamps__app__postgres__django_content_type
+  - raw__bootcamps__app__postgres__ecommerce_line
+  - raw__bootcamps__app__postgres__ecommerce_order
+  - raw__bootcamps__app__postgres__ecommerce_orderaudit
+  - raw__bootcamps__app__postgres__ecommerce_receipt
+  - raw__bootcamps__app__postgres__ecommerce_wiretransferreceipt
+  - raw__bootcamps__app__postgres__klasses_bootcamp
+  - raw__bootcamps__app__postgres__klasses_bootcamprun
+  - raw__bootcamps__app__postgres__klasses_bootcampruncertificate
+  - raw__bootcamps__app__postgres__klasses_bootcamprunenrollment
+  - raw__bootcamps__app__postgres__klasses_installment
+  - raw__bootcamps__app__postgres__klasses_personalprice
+  - raw__bootcamps__app__postgres__profiles_legaladdress
+  - raw__bootcamps__app__postgres__profiles_profile
+  retired_on: '2026-08-25'
+  reason: The bootcamps application is no longer deployed (confirmed 2026-08-14, §8.1).
+    Its Airbyte source still exists but carries zero connections, and its Dagster
+    interval-map entry `bootcamps_production_app_db__s3_data_lake` matches nothing.
+    Nothing was lost when ingestion stopped, but nothing was written down either,
+    so these 19 tables read as current to anyone who does not already know — which
+    is exactly what this file exists to prevent. dbt still models all 19; retiring
+    them here does not remove those models, it makes them findable (tk-bootcamps-ingestion-has-disappeared-while-dbt-st-25d016).
+    Note that profiles_profile stopped earlier than the rest, on 2025-02-24, having
+    never been migrated to Iceberg (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a)
+    — so this date is when the retirement was recorded, not one date on which all
+    19 stopped arriving.
