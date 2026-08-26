@@ -59,7 +59,14 @@ select
     , certificates.user_address_postal_code
     , certificates.user_street_address
     , certificates.program_completion_timestamp
-    , coalesce(certificates.program_completion_timestamp, current_timestamp)
-        as last_modified
+    -- program_completion_timestamp is a varchar ISO8601 string for non-DEDP
+    -- certs (stg__edxorg__s3__program_learner_report's convention) but a real
+    -- timestamp for DEDP certs, so parse it before comparing against
+    -- current_timestamp -- coalescing the raw column raises a Trino
+    -- varchar/timestamp TYPE_MISMATCH.
+    , coalesce(
+        {{ from_iso8601_timestamp('certificates.program_completion_timestamp') }}
+        , current_timestamp
+    ) as last_modified
 from certificates
 where certificates.program_certificate_hashed_id is not null
