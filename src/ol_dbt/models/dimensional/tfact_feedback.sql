@@ -19,6 +19,10 @@ with unioned as (
     where email is not null
 )
 
+, redacted as (
+    select * from {{ source('feedback_intermediate', 'feedback_redacted') }}
+)
+
 select
     {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
         as feedback_pk
@@ -46,10 +50,8 @@ select
     , unioned.subject_url
     -- kept so user_fk can be re-resolved later without a rebuild
     , unioned.subject_user_ref
-    -- Stubs the redacted text. When the feedback_redacted Dagster asset lands, declare
-    -- it as a source and left join it on (source_slug, source_record_ref).
-    , cast(null as varchar) as feedback_title
-    , cast(null as varchar) as feedback_text
+    , redacted.title_redacted as feedback_title
+    , redacted.text_redacted as feedback_text
     , unioned.feedback_text_chars
     , unioned.explicit_rating
     , unioned.source_metadata
@@ -60,10 +62,28 @@ select
 from unioned
 left join users
     on lower(unioned.subject_user_ref) = users.email
+left join redacted
+    on unioned.source_slug = redacted.source_slug
+    and unioned.source_record_ref = redacted.source_record_ref
 {% if is_incremental() %}
     -- Watermark on the CONVERSATION's updated_at, not the turn's: a ticket that gains a
     -- rating, a status change or a late-syncing comment re-enters with all of its turns,
     -- so delete+insert replaces them together. Filtering to unseen turns instead would
     -- freeze the ticket-level columns and leave turn_index inconsistent.
     where unioned.updated_at > (select max(feedback_updated_at) from {{ this }})
+    -- Backfill: a row inserted before feedback_redacted existed carries the old
+    -- feedback_text = null stub forever under the watermark above alone, because
+    -- redaction landing does not bump the source ticket's updated_at. Reselect any
+    -- row still null in the fact where redaction has since produced real text.
+    or exists (
+        select 1
+        from {{ this }} as stale
+        inner join redacted
+            on stale.source_record_id = redacted.source_record_ref
+            and stale.feedback_source_fk = {{ dbt_utils.generate_surrogate_key(['redacted.source_slug']) }}
+        where stale.source_record_id = unioned.source_record_ref
+            and stale.feedback_source_fk = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }}
+            and stale.feedback_text is null
+            and redacted.text_redacted is not null
+    )
 {% endif %}
