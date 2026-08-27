@@ -1,0 +1,29 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: emeritus
+layer: bigquery
+scope: singleton
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__emeritus__bigquery__
+airbyte:
+  source_kind: source-bigquery
+  replication_method: n/a
+  connections:
+  - name: Emeritus BigQuery → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - api_enrollments
+tables:
+- name: api_enrollments
+  raw_table: raw__emeritus__bigquery__api_enrollments
+  sync_mode: full_refresh_append
+  namespace: mit_xpro_api
+  cursor_field:
+  - opportunity_last_modified_date
+  modeled: true

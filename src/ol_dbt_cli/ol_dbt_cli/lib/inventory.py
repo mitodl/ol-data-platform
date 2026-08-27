@@ -28,6 +28,7 @@ from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 CHECK = "inventory"
 REMOVAL_CHECK = "inventory_removal"
+RECONCILE_CHECK = "inventory_reconcile"
 
 DEFAULT_INVENTORY_DIR = Path("ingestion/inventory")
 UNITS_SUBDIR = "units"
@@ -38,6 +39,7 @@ RETIRED_FILENAME = "retired.yml"
 
 DAGSTER_SELECTOR_SUFFIX = "s3 data lake"
 INCREMENTAL_PREFIX = "incremental"
+XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
 AIRBYTE_LOADER = "airbyte"
 
@@ -149,14 +151,19 @@ def _check_strategies(unit: Unit, report: ValidationReport) -> None:
     loader = unit.data.get("loader")
 
     # `local: mirror` is rejected by the JSON Schema enum; this catches the
-    # second rule, which the schema cannot express.
+    # second rule, which the schema cannot express. dlt is the only supported
+    # local ingest target, so this stays keyed on `loader != dlt` rather than
+    # on Airbyte alone: adding `dagster` (rule 7) did not add a second way to
+    # ingest locally, and reading the rule as "bans Airbyte" would let a unit
+    # declare a local path that nothing supports.
     if strategies.get("local") == "ingest" and loader != "dlt":
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
             "strategies.local is `ingest` but the unit is not dlt-backed",
-            "Airbyte cannot run in k3d, so `local: ingest` on an Airbyte unit is false on its face (RFC 12711 §3).",
+            "dlt is the only supported local ingest target: Airbyte cannot run in k3d, "
+            "and no other loader has a local path (RFC 12711 §3).",
         )
 
     mirrors = MIRROR_STRATEGY in strategies.values()
@@ -201,6 +208,8 @@ def _check_loader_block(unit: Unit, report: ValidationReport) -> None:
 
 def _check_tables(unit: Unit, report: ValidationReport) -> None:
     prefix = unit.data.get("table_prefix", "")
+    airbyte = unit.data.get("airbyte")
+    rides_xmin = isinstance(airbyte, dict) and airbyte.get("replication_method") == XMIN_REPLICATION
     for table in unit.tables:
         raw_table = table.get("raw_table", "")
         if prefix and not raw_table.startswith(prefix):
@@ -211,15 +220,36 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
                 f"{raw_table} does not start with the unit's table_prefix {prefix!r}",
             )
         sync_mode = table.get("sync_mode", "")
-        if sync_mode.startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field"):
+        if sync_mode.startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field") and not rides_xmin:
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
                 f"{raw_table} is {sync_mode} but declares no cursor_field",
-                "An incremental stream with no cursor rides the source-defined one; "
-                "for Postgres that is xmin, which dlt cannot reproduce.",
+                "An incremental stream with no cursor rides the source-defined one, "
+                "and nothing on this unit says what that is.",
             )
+
+    if rides_xmin and (riders := [t for t in unit.tables if _is_cursorless_incremental(t)]):
+        # Reported once per unit, not once per table. `replication_method: xmin`
+        # already says these ride the source-defined cursor (§3.4), so a
+        # per-table error would be the same fact 514 times over — and writing a
+        # cursor_field to silence it would invent config Airbyte does not hold,
+        # which is exactly what breaks step 5's empty-preview import.
+        report.add(
+            CHECK,
+            Severity.WARNING,
+            unit.key,
+            f"{len(riders)} incremental stream(s) ride xmin, which dlt cannot reproduce",
+            "Each needs a replacement cursor column chosen before dlt can take "
+            "over this unit, and source-postgres 3.8+ refuses xmin outright on any "
+            "database that has ever wrapped around. See "
+            "tk-determine-per-source-incremental-cursor-viabilit-51f299.",
+        )
+
+
+def _is_cursorless_incremental(table: dict[str, Any]) -> bool:
+    return str(table.get("sync_mode", "")).startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field")
 
 
 def _check_connections(unit: Unit, report: ValidationReport) -> None:
@@ -290,23 +320,14 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
 
 
 def _check_cross_unit(units: list[Unit], report: ValidationReport) -> None:
-    """Check the invariants that make prefix → unit a function (§3.3 rules 4 and 8)."""
-    prefixes: list[tuple[str, Unit]] = [
-        (unit.data["table_prefix"], unit) for unit in units if unit.data.get("table_prefix")
-    ]
-    for prefix, unit in prefixes:
-        for other_prefix, other in prefixes:
-            if unit.path == other.path:
-                continue
-            if prefix.startswith(other_prefix):
-                report.add(
-                    CHECK,
-                    Severity.ERROR,
-                    unit.key,
-                    f"table_prefix {prefix!r} overlaps {other_prefix!r} from {other.key}",
-                    "Prefixes must be pairwise non-overlapping, or a raw table maps to two units.",
-                )
-
+    """Check the invariants that give every raw table exactly one owner (§3.3 rule 8)."""
+    # Nested prefixes are allowed. The rule that used to forbid them was a proxy
+    # for "a raw table maps to two units", which `seen_tables` below enforces
+    # directly — and §1.1 fixed that raw tables are declared, never parsed, so a
+    # prefix documents a unit rather than routing to it. The proxy was strictly
+    # stronger than the invariant and made real deployments unexpressible:
+    # edxorg's raw namespace nests three loaders, with dlt's
+    # `raw__edxorg__s3__tables__` sitting inside Airbyte's `raw__edxorg__s3__`.
     seen_keys: dict[str, Path] = {}
     seen_tables: dict[str, str] = {}
     for unit in units:
@@ -708,3 +729,200 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
             intervals[group] = hours
             sources[group] = name
     return dict(sorted(intervals.items()))
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation (§5): the inventory against independent observations
+# ---------------------------------------------------------------------------
+#
+# The warehouse and the dbt sources are observations, not authorities. Warehouse
+# introspection used to *be* the source of truth for `ol-dbt generate sources`,
+# and that is the defect this inventory exists to correct — so reconcile reports
+# disagreement and never edits either side. Its worth is precisely that it is an
+# independent observation: a check that agrees by construction checks nothing.
+
+
+@dataclass
+class Reconciliation:
+    """One comparison of declared tables against observed ones, in three buckets."""
+
+    both: set[str] = field(default_factory=set)
+    declared_not_observed: set[str] = field(default_factory=set)
+    observed_not_declared: set[str] = field(default_factory=set)
+
+
+def reconcile_tables(declared: set[str], observed: set[str]) -> Reconciliation:
+    return Reconciliation(
+        both=declared & observed,
+        declared_not_observed=declared - observed,
+        observed_not_declared=observed - declared,
+    )
+
+
+def tables_by_raw_name(units: list[Unit]) -> dict[str, str]:
+    """Map every declared raw table to the unit declaring it.
+
+    A dict rather than a multimap because rule 8 forbids two units declaring the
+    same raw table. Reconcile deliberately does not validate first, so a broken
+    inventory can violate that — the last unit read then wins here, and
+    `validate` is what names the collision.
+    """
+    return {str(table.get("raw_table", "")): unit.key for unit in units for table in unit.tables}
+
+
+def modeled_tables(units: list[Unit]) -> set[str]:
+    """Raw tables the inventory claims dbt declares as sources (§1.4)."""
+    return {str(table.get("raw_table", "")) for unit in units for table in unit.tables if table.get("modeled")}
+
+
+def units_for_table(units: list[Unit], raw_table: str) -> list[str]:
+    """Return every unit whose `table_prefix` covers an undeclared raw table.
+
+    Longest prefix first, but *all* of them: since rule 4 now permits nesting,
+    more than one unit can cover a table and none of them owns it. Naming only
+    the longest would assert an owner the inventory does not establish —
+    `raw__edxorg__s3__course_` and `raw__edxorg__` both cover a stray
+    `raw__edxorg__s3__course_*`, and they are different pipelines. Ownership
+    comes from a declared `raw_table`, which by definition an undeclared table
+    does not have.
+    """
+    matches = [
+        unit for unit in units if (prefix := unit.data.get("table_prefix")) and raw_table.startswith(str(prefix))
+    ]
+    matches.sort(key=lambda unit: len(str(unit.data["table_prefix"])), reverse=True)
+    return [unit.key for unit in matches]
+
+
+def reconcile_warehouse(
+    units: list[Unit],
+    warehouse_tables: set[str],
+    report: ValidationReport,
+) -> Reconciliation:
+    """Report the inventory against the tables the warehouse actually holds.
+
+    Both directions are warnings rather than errors. A declared table the
+    warehouse lacks is usually broken ingestion, but is also what a just-added
+    entry looks like before its first sync; an undeclared table in the warehouse
+    is usually drift, but is also what a table loaded for years and never
+    declared looks like. Neither is fixable by editing the pull request in front
+    of you, which is the line §7.2 draws for what may be an ERROR.
+    """
+    owners = tables_by_raw_name(units)
+    result = reconcile_tables(set(owners), warehouse_tables)
+
+    for raw_table in sorted(result.declared_not_observed):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owners[raw_table],
+            f"{raw_table} is declared but the warehouse does not hold it",
+            "Either the loader is failing for this table or it has never run. "
+            "If we deliberately stopped loading it, retire it in retired.yml so "
+            "the graveyard records when — dropping the entry instead is exactly "
+            "the silent disappearance §7.2 exists to prevent.",
+        )
+
+    for raw_table in sorted(result.observed_not_declared):
+        candidates = units_for_table(units, raw_table)
+        if not candidates:
+            model, detail = (
+                "(unclaimed)",
+                "No unit's table_prefix covers it, so it needs a new unit — or it is "
+                "a leftover from an ingestion we have already stopped.",
+            )
+        elif len(candidates) == 1:
+            model, detail = (
+                candidates[0],
+                f"It falls under {candidates[0]}'s table_prefix, so its entry belongs in that unit.",
+            )
+        else:
+            model, detail = (
+                "(ambiguous)",
+                f"Prefixes from {len(candidates)} units cover it — {', '.join(candidates)} — "
+                "so which one should declare it cannot be read off the name. Nesting is "
+                "allowed, so the longest match is not the owner.",
+            )
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            model,
+            f"{raw_table} is in the warehouse but no unit declares it",
+            detail,
+        )
+
+    return result
+
+
+def reconcile_dbt(
+    units: list[Unit],
+    dbt_tables: set[str],
+    inventory_dir: Path,
+    report: ValidationReport,
+) -> Reconciliation:
+    """Report the inventory against the raw tables dbt declares as sources.
+
+    dbt is a strict subset of what we load — 372 of ~2,090 tables (§1.4) — so a
+    loaded table carrying no dbt source is normal and is not reported. The two
+    directions that do mean something:
+
+    * a dbt source table no unit loads: dbt reads something the inventory says
+      does not arrive, so either the inventory is incomplete or the model is
+      stale. This is step 3's acceptance criterion, and the one ERROR here.
+    * a `modeled: true` table dbt does not declare: that flag is what step 7
+      generates the sources YAML from, so a wrong one silently drops a table
+      from the generation.
+    """
+    owners = tables_by_raw_name(units)
+    result = reconcile_tables(set(owners), dbt_tables)
+    retired = {raw_table for _, raw_table in retired_pairs(load_retired(inventory_dir))}
+
+    for raw_table in sorted(result.observed_not_declared):
+        if raw_table in retired:
+            report.add(
+                RECONCILE_CHECK,
+                Severity.WARNING,
+                "(dbt sources)",
+                f"{raw_table} is a dbt source but the inventory retired it",
+                "We stopped loading this table, so the model reading it is going "
+                "stale on whatever it last held. That is the failure retired.yml "
+                "makes findable — the fix belongs in the model, not the graveyard.",
+            )
+        else:
+            report.add(
+                RECONCILE_CHECK,
+                Severity.ERROR,
+                "(dbt sources)",
+                f"{raw_table} is a dbt source but no unit declares it",
+                "Every dbt-declared raw table has to map to exactly one unit. Add "
+                "it to the unit whose table_prefix covers it — do not delete the "
+                "dbt source to make this pass.",
+            )
+
+    modeled = modeled_tables(units)
+    for raw_table in sorted(modeled - dbt_tables):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owners[raw_table],
+            f"{raw_table} is marked modeled but dbt declares no source for it",
+            "`modeled:` is what step 7 generates the sources YAML from, so the "
+            "flag is either stale or the dbt source has gone missing.",
+        )
+
+    # The mirror image, and the more damaging direction. A table dbt declares
+    # but the unit flags `modeled: false` lands in `result.both` and in neither
+    # subtraction above, so it would go unreported — while step 7, generating
+    # sources from `modeled:` alone, would silently drop a source dbt is
+    # actually reading.
+    for raw_table in sorted((dbt_tables & set(owners)) - modeled):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            owners[raw_table],
+            f"{raw_table} is marked modeled: false but dbt declares a source for it",
+            "Step 7 generates the sources YAML from `modeled:`, so leaving this "
+            "flag false would delete a source dbt is reading. Set it true, or "
+            "remove the dbt source if it is the one that is wrong.",
+        )
+
+    return result

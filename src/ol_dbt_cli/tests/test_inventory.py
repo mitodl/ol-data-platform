@@ -163,13 +163,37 @@ class TestSchemaShape:
 
 
 class TestRules:
-    def test_local_ingest_requires_dlt(self, inventory: Path) -> None:
+    def test_local_ingest_requires_a_dlt_unit(self, inventory: Path) -> None:
         _mutate(
             inventory,
             "mitxonline__mysql",
             APP_UNIT,
             strategies={"qa": "ingest", "local": "ingest"},
         )
+        report = _run(inventory)
+        assert "not dlt-backed" in _messages(report)
+
+    def test_local_ingest_is_rejected_on_a_dagster_unit_too(self, inventory: Path) -> None:
+        # dlt is the only supported local ingest target. Adding `dagster`
+        # (rule 7) did not add a second one, so reading the rule as "bans
+        # Airbyte" would let a unit declare a local path nothing implements.
+        unit = copy.deepcopy(DLT_UNIT)
+        unit.pop("dlt")
+        unit.update(
+            deployment="openedx",
+            layer="s3",
+            loader="dagster",
+            table_prefix="raw__openedx__s3__",
+            strategies={"qa": "omit", "local": "ingest"},
+        )
+        unit["tables"] = [
+            {
+                "name": "raw__openedx__s3__course_xml_blocks",
+                "raw_table": "raw__openedx__s3__course_xml_blocks",
+                "sync_mode": "full_refresh_overwrite",
+            }
+        ]
+        _write(inventory, "openedx__s3", unit)
         report = _run(inventory)
         assert "not dlt-backed" in _messages(report)
 
@@ -211,6 +235,42 @@ class TestRules:
         _write(inventory, "mitxonline__mysql", unit)
         report = _run(inventory)
         assert "declares no cursor_field" in _messages(report)
+
+    def test_xmin_explains_a_missing_cursor_once_per_unit(self, inventory: Path) -> None:
+        # `replication_method: xmin` already says these ride the source-defined
+        # cursor (§3.4), so the per-table error would be the same fact repeated —
+        # 514 times over the real inventory, which is what made it unlandable.
+        # Writing a cursor_field to silence it would invent config Airbyte does
+        # not hold, breaking step 5's empty-preview import.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["replication_method"] = "xmin"
+        for table in unit["tables"]:
+            table.pop("cursor_field", None)
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+
+        assert "declares no cursor_field" not in _messages(report)
+        riders = [issue for issue in report.warnings if "ride xmin" in issue.message]
+        assert len(riders) == 1
+        assert "2 incremental stream(s)" in riders[0].message
+
+    def test_a_single_table_unit_may_use_the_full_table_name_as_its_prefix(self, inventory: Path) -> None:
+        # A deployment's tracking logs are one table, not a `__`-terminated
+        # family: the only such prefix is the whole Open edX namespace, which
+        # swallows that deployment's mysql, api and mongodb units.
+        unit = copy.deepcopy(DLT_UNIT)
+        unit.update(deployment="mitx", layer="tracking_logs", table_prefix="raw__mitx__openedx__tracking_logs")
+        unit["tables"] = [
+            {
+                "name": "tracking_logs",
+                "raw_table": "raw__mitx__openedx__tracking_logs",
+                "sync_mode": "full_refresh_overwrite",
+                "modeled": True,
+            }
+        ]
+        _write(inventory, "mitx__tracking_logs", unit)
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
 
     def test_connection_name_must_survive_the_dagster_selector(self, inventory: Path) -> None:
         unit = copy.deepcopy(APP_UNIT)
@@ -269,22 +329,25 @@ class TestRules:
 
 
 class TestCrossUnit:
-    def test_overlapping_prefixes_are_rejected(self, inventory: Path) -> None:
-        # `raw__edxorg__s3__tables__` sits underneath `raw__edxorg__s3__`, so a
-        # raw table would map to two units.
-        overlapping = copy.deepcopy(DLT_UNIT)
-        overlapping["layer"] = "api"
-        overlapping["table_prefix"] = "raw__edxorg__s3__tables__"
-        overlapping["tables"] = [
+    def test_nested_prefixes_are_allowed(self, inventory: Path) -> None:
+        # This nesting is real: edxorg's `raw__edxorg__s3__` namespace holds
+        # Airbyte's catalog files and, underneath it, dlt's
+        # `raw__edxorg__s3__tables__` database dumps. Forbidding it made the
+        # deployment unexpressible, and it was only ever a proxy for the
+        # duplicate-table rule below, which catches the actual harm.
+        nested = copy.deepcopy(DLT_UNIT)
+        nested["layer"] = "api"
+        nested["table_prefix"] = "raw__edxorg__s3__tables__"
+        nested["tables"] = [
             {
                 "name": "auth_user",
                 "raw_table": "raw__edxorg__s3__tables__auth_user_two",
                 "sync_mode": "full_refresh_overwrite",
             }
         ]
-        _write(inventory, "edxorg__api", overlapping)
+        _write(inventory, "edxorg__api", nested)
         report = _run(inventory)
-        assert "overlaps" in _messages(report)
+        assert report.errors == [], _messages(report)
 
     def test_duplicate_raw_table_across_units_is_rejected(self, inventory: Path) -> None:
         duplicate = copy.deepcopy(DLT_UNIT)

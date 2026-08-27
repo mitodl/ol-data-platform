@@ -8,6 +8,8 @@ poll_previous_running_sync on the workspace set a field the client never read.
 """
 
 import pytest
+from dagster_airbyte.resources import AirbyteClient
+from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 
 # Non-default values throughout, so a setting that fails to propagate shows up
@@ -80,3 +82,87 @@ def test_explicit_base_urls_win_over_the_derived_ones() -> None:
 
     assert client.rest_api_base_url == "https://proxy.example.invalid/public"
     assert client.configuration_api_base_url == "https://proxy.example.invalid/config"
+
+
+def _job(job_id: int, status: AirbyteJobStatusType | str) -> AirbyteJob:
+    status_value = status.value if isinstance(status, AirbyteJobStatusType) else status
+    return AirbyteJob(id=job_id, status=status_value, type="sync")
+
+
+def _stub_super_jobs(monkeypatch, jobs):
+    """Make AirbyteClient.get_jobs_for_connection return *jobs* without HTTP."""
+    monkeypatch.setattr(
+        AirbyteClient,
+        "get_jobs_for_connection",
+        lambda self, connection_id, created_after=None: jobs,  # noqa: ARG005
+    )
+
+
+class TestConcurrentInFlightJobsAreCollapsed:
+    """sync_and_poll fails outright on two in-flight jobs; one it attaches to.
+
+    That distinction does not survive contact with a connection that two
+    schedulers launch into. Nine connections failed nightly on `Found multiple
+    running jobs`, each amplified fourfold by run retries that cannot change
+    the condition (DAGSTER-2Q, 33, 39, 3A, 3C, 3E, 3F, 3N, 3R).
+    """
+
+    def test_the_newest_in_flight_job_is_the_one_kept(
+        self, client, monkeypatch
+    ) -> None:
+        _stub_super_jobs(
+            monkeypatch,
+            [
+                _job(10, AirbyteJobStatusType.RUNNING),
+                _job(12, AirbyteJobStatusType.PENDING),
+                _job(11, AirbyteJobStatusType.RUNNING),
+            ],
+        )
+        kept = client.get_jobs_for_connection(connection_id="c")
+        assert [job.id for job in kept] == [12]
+
+    def test_terminal_jobs_are_passed_through_untouched(
+        self, client, monkeypatch
+    ) -> None:
+        """Only the in-flight set is collapsed; history is not rewritten."""
+        _stub_super_jobs(
+            monkeypatch,
+            [
+                _job(1, AirbyteJobStatusType.SUCCEEDED),
+                _job(2, AirbyteJobStatusType.FAILED),
+                _job(3, AirbyteJobStatusType.RUNNING),
+                _job(4, AirbyteJobStatusType.RUNNING),
+                _job(5, AirbyteJobStatusType.CANCELLED),
+            ],
+        )
+        kept = client.get_jobs_for_connection(connection_id="c")
+        assert [job.id for job in kept] == [1, 2, 4, 5]
+
+    def test_incomplete_counts_as_in_flight(self, client, monkeypatch) -> None:
+        """sync_and_poll treats INCOMPLETE as in-flight, so this must agree.
+
+        Disagreeing would leave two jobs in the set sync_and_poll counts and
+        reproduce the failure this exists to remove.
+        """
+        _stub_super_jobs(
+            monkeypatch,
+            [
+                _job(7, AirbyteJobStatusType.INCOMPLETE),
+                _job(8, AirbyteJobStatusType.RUNNING),
+            ],
+        )
+        kept = client.get_jobs_for_connection(connection_id="c")
+        assert [job.id for job in kept] == [8]
+
+    def test_a_single_in_flight_job_is_left_alone(self, client, monkeypatch) -> None:
+        jobs = [
+            _job(1, AirbyteJobStatusType.SUCCEEDED),
+            _job(2, AirbyteJobStatusType.RUNNING),
+        ]
+        _stub_super_jobs(monkeypatch, jobs)
+        assert client.get_jobs_for_connection(connection_id="c") == jobs
+
+    def test_no_in_flight_job_is_left_alone(self, client, monkeypatch) -> None:
+        jobs = [_job(1, AirbyteJobStatusType.SUCCEEDED)]
+        _stub_super_jobs(monkeypatch, jobs)
+        assert client.get_jobs_for_connection(connection_id="c") == jobs
