@@ -1,8 +1,9 @@
 """LLM client resource for the feedback clustering pipeline."""
 
+import os
 from typing import ClassVar
 
-from anthropic import Anthropic
+from anthropic import Anthropic, AnthropicBedrockMantle
 from dagster import ConfigurableResource
 from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
@@ -37,16 +38,25 @@ class LLMClientFactory(ConfigurableResource):
             " on a GPU node); required when client_class='openai_compatible'"
         ),
     )
+    aws_region: str = Field(
+        default="us-east-1",
+        description=(
+            "AWS region for the Bedrock endpoint; used when client_class='bedrock'"
+        ),
+    )
 
-    _client: Anthropic | OpenAI | None = PrivateAttr(default=None)
+    _client: Anthropic | OpenAI | AnthropicBedrockMantle | None = PrivateAttr(
+        default=None
+    )
 
     supported_client_class: ClassVar[dict[str, type]] = {
         "anthropic": Anthropic,
         "openai": OpenAI,
         "openai_compatible": OpenAI,
+        "bedrock": AnthropicBedrockMantle,
     }
 
-    def get_client(self) -> Anthropic | OpenAI:
+    def get_client(self) -> Anthropic | OpenAI | AnthropicBedrockMantle:
         """Create and return an authenticated LLM client."""
         if self._client is not None:
             return self._client
@@ -61,6 +71,24 @@ class LLMClientFactory(ConfigurableResource):
                 base_url=self.base_url,
                 api_key="unused",  # pragma: allowlist secret
             )
+            return self._client
+
+        if self.client_class == "bedrock":
+            # Deployed environments: no API key at all, auth is the same IAM
+            # metadata credentials used for S3 access - AnthropicBedrockMantle
+            # picks these up from the standard AWS credential chain.
+            self._client = client_class(aws_region=self.aws_region)
+            return self._client
+
+        # Local dev convenience: ANTHROPIC_API_KEY/ANTHROPIC_BASE_URL let a
+        # developer run `dagster dev` with their own key instead of Vault.
+        # Anthropic()/OpenAI() read these (and their OPENAI_* equivalents)
+        # from the environment automatically when no api_key is passed.
+        env_key_var = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}[
+            self.client_class
+        ]
+        if os.environ.get(env_key_var):
+            self._client = client_class()
             return self._client
 
         # KV v1: secret_data["data"] contains the keys directly

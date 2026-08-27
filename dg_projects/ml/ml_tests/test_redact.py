@@ -15,28 +15,25 @@ class _Result:
         self.text = text
 
 
-_FAKE_SUPPORTED_ENTITIES = [
-    "PERSON",
-    "EMAIL_ADDRESS",
-    "LOCATION",
-    "PHONE_NUMBER",
-    "DATE_TIME",
-    "URL",
-]
+class _AnalyzerResult:
+    def __init__(self, entity_type: str, start: int, end: int) -> None:
+        self.entity_type = entity_type
+        self.start = start
+        self.end = end
 
 
 class _FakeAnalyzer:
-    """Flags any text containing 'PII' as a single entity."""
+    """Flags any text containing 'PII' as a PERSON entity."""
 
-    def get_supported_entities(self, language: str) -> list[str]:  # noqa: ARG002
-        return _FAKE_SUPPORTED_ENTITIES
-
-    def analyze(self, text: str, language: str, entities: list[str]) -> list[str]:  # noqa: ARG002
-        return ["PII"] if "PII" in text else []
+    def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+        if "PII" not in text:
+            return []
+        start = text.index("PII")
+        return [_AnalyzerResult("PERSON", start, start + len("PII"))]
 
 
 class _FakeAnonymizer:
-    def anonymize(self, text: str, analyzer_results: list[str]) -> _Result:
+    def anonymize(self, text: str, analyzer_results: list[_AnalyzerResult]) -> _Result:
         if analyzer_results:
             return _Result(text.replace("PII", "<REDACTED>"))
         return _Result(text)
@@ -47,7 +44,6 @@ def fake_analyzer(monkeypatch: pytest.MonkeyPatch) -> _FakeAnalyzer:
     analyzer = _FakeAnalyzer()
     monkeypatch.setattr(redact, "_get_analyzer", lambda: analyzer)
     monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
-    monkeypatch.setattr(redact, "_redact_entities", None)
     return analyzer
 
 
@@ -70,6 +66,32 @@ def test_redact_titles_and_text_masks_pii_and_keeps_the_join_key() -> None:
     assert row["source_record_ref"] == "123"
     assert row["title_redacted"] == "Contact me at <REDACTED>"
     assert row["text_redacted"] == "The video is broken"
+
+
+def test_redact_text_keeps_a_span_misclassified_as_person_when_also_a_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A URL a NER pass mistakes for a PERSON must not get redacted.
+
+    Regression for a real bug: excluding URL from analyze()'s entities list stopped
+    the URL recognizer from running at all, so an overlapping (and higher-confidence)
+    PERSON false-positive on the same span had nothing to compete with.
+    """
+    text = "See https://micromasters.mit.edu/dedp/learners/ for details"
+    url_start = text.index("https://")
+    url_end = url_start + len("https://micromasters.mit.edu/dedp/learners/")
+
+    class _OverlappingAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("PERSON", url_start, url_end),
+                _AnalyzerResult("URL", url_start, url_end),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _OverlappingAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert redact._redact_text(text) == text
 
 
 def test_filter_unredacted_drops_already_redacted_rows() -> None:

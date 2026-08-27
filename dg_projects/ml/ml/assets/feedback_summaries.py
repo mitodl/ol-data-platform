@@ -2,7 +2,6 @@ import contextlib
 import os
 
 import polars as pl
-from anthropic import Anthropic
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -11,8 +10,7 @@ from dagster import (
 )
 from ml.lib.summarize import (
     JOIN_COLS,
-    SUMMARY_MODEL_VERSION,
-    SUMMARY_PROMPT,
+    build_summary_client,
     filter_unsummarized,
     summarize_conversations,
 )
@@ -22,7 +20,6 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
-from openai import OpenAI
 from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 
@@ -33,59 +30,6 @@ else:
     database_name = "ol_warehouse_production_intermediate"
 
 
-class _AnthropicSummaryClient:
-    """Adapts an Anthropic client to the summarize.SummaryClient protocol."""
-
-    def __init__(self, client: Anthropic) -> None:
-        self._client = client
-
-    def summarize(self, conversation_text: str) -> str:
-        message = self._client.messages.create(
-            model=SUMMARY_MODEL_VERSION,
-            max_tokens=200,
-            messages=[
-                {
-                    "role": "user",
-                    "content": SUMMARY_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
-                }
-            ],
-        )
-        return message.content[0].text
-
-
-class _OpenAISummaryClient:
-    """Adapts an OpenAI-compatible client to the summarize.SummaryClient protocol."""
-
-    def __init__(self, client: OpenAI, model: str) -> None:
-        self._client = client
-        self._model = model
-
-    def summarize(self, conversation_text: str) -> str:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": SUMMARY_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
-                }
-            ],
-        )
-        return response.choices[0].message.content
-
-
-def _build_summary_client(
-    llm: LLMClientFactory,
-) -> _AnthropicSummaryClient | _OpenAISummaryClient:
-    client = llm.get_client()
-    if isinstance(client, Anthropic):
-        return _AnthropicSummaryClient(client)
-    return _OpenAISummaryClient(client, model=SUMMARY_MODEL_VERSION)
-
-
 class FeedbackSummariesConfig(Config):
     full_refresh: bool = Field(
         default=False,
@@ -93,7 +37,11 @@ class FeedbackSummariesConfig(Config):
     )
     sample_limit: int | None = Field(
         default=None,
-        description="Cap the number of upstream conversations read, for local tests.",
+        description=(
+            "Cap the number of conversations summarized, for local tests. Applied "
+            "after the incremental filter, so repeated runs keep finding new "
+            "candidates instead of re-hitting already-summarized rows."
+        ),
     )
 
 
@@ -122,15 +70,14 @@ def feedback_summaries(
     The one per-record LLM call in the design - see feedback_ml_approach.md §A.1 for
     the skip threshold and measured cost.
     """
-    source_lazy = get_dbt_model_as_dataframe(
+    source_df = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__conversation",
-    )
-    if config.sample_limit is not None:
-        source_lazy = source_lazy.limit(config.sample_limit)
-    source_df = source_lazy.collect()
+    ).collect()
 
-    already_summarized_df = pl.DataFrame(schema=dict.fromkeys(JOIN_COLS, pl.String))
+    already_summarized_df = pl.DataFrame(
+        schema={**dict.fromkeys(JOIN_COLS, pl.String), "turn_count": pl.Int64}
+    )
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
             already_summarized_df = (
@@ -138,12 +85,14 @@ def feedback_summaries(
                     database_name=database_name,
                     table_name="feedback_summaries",
                 )
-                .select(JOIN_COLS)
+                .select([*JOIN_COLS, "turn_count"])
                 .collect()
             )
 
     unsummarized_df = filter_unsummarized(source_df, already_summarized_df)
-    client = _build_summary_client(llm)
+    if config.sample_limit is not None:
+        unsummarized_df = unsummarized_df.head(config.sample_limit)
+    client = build_summary_client(llm)
     summaries_df = summarize_conversations(unsummarized_df, client)
 
     context.log.info(

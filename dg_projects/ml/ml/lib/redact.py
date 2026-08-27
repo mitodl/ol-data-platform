@@ -10,7 +10,6 @@ EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 
 _analyzer: AnalyzerEngine | None = None
 _anonymizer: AnonymizerEngine | None = None
-_redact_entities: list[str] | None = None
 
 
 def _get_analyzer() -> AnalyzerEngine:
@@ -30,24 +29,32 @@ def _get_anonymizer() -> AnonymizerEngine:
     return _anonymizer
 
 
-def _get_redact_entities() -> list[str]:
-    global _redact_entities  # noqa: PLW0603
-    if _redact_entities is None:
-        _redact_entities = [
-            entity
-            for entity in _get_analyzer().get_supported_entities("en")
-            if entity not in EXCLUDED_ENTITIES
-        ]
-    return _redact_entities
-
-
 def _redact_text(value: str | None) -> str | None:
     if value is None:
         return None
-    results = _get_analyzer().analyze(
-        text=value, language="en", entities=_get_redact_entities()
+    # Analyze with the full entity set rather than restricting `entities` to exclude
+    # EXCLUDED_ENTITIES: a URL recognizer that never runs can't protect its span from
+    # an overlapping NER false positive (e.g. spaCy tagging a URL path as PERSON,
+    # often with higher confidence than the URL match itself). So detect everything,
+    # then drop any result overlapping an excluded-entity span, not just that
+    # entity's own result.
+    results = _get_analyzer().analyze(text=value, language="en")
+    excluded_spans = [
+        (result.start, result.end)
+        for result in results
+        if result.entity_type in EXCLUDED_ENTITIES
+    ]
+    filtered_results = [
+        result
+        for result in results
+        if result.entity_type not in EXCLUDED_ENTITIES
+        and not any(
+            result.start < end and result.end > start for start, end in excluded_spans
+        )
+    ]
+    return (
+        _get_anonymizer().anonymize(text=value, analyzer_results=filtered_results).text
     )
-    return _get_anonymizer().anonymize(text=value, analyzer_results=results).text
 
 
 def filter_unredacted(

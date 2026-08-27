@@ -1,7 +1,7 @@
 """Tests for ml.resources.llm.LLMClientFactory."""
 
 import pytest
-from anthropic import Anthropic
+from anthropic import Anthropic, AnthropicBedrockMantle
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
@@ -87,3 +87,28 @@ def test_get_client_openai_compatible_requires_base_url() -> None:
 
     with pytest.raises(ValueError, match="base_url"):
         factory.get_client()
+
+
+def test_get_client_bedrock_skips_vault_and_uses_iam_auth() -> None:
+    """client_class="bedrock" hits AWS IAM auth, not Vault -- no API key at all."""
+    kv_v1 = _FakeKvV1({})  # no secrets configured -- a Vault read would KeyError
+    factory = LLMClientFactory(
+        vault=_build_vault(kv_v1), client_class="bedrock", aws_region="us-west-2"
+    )
+
+    client = factory.get_client()
+
+    assert isinstance(client, AnthropicBedrockMantle)
+    assert client.aws_region == "us-west-2"
+    assert kv_v1.reads == 0
+
+
+def test_get_client_bedrock_defaults_region_and_caches() -> None:
+    kv_v1 = _FakeKvV1({})
+    factory = LLMClientFactory(vault=_build_vault(kv_v1), client_class="bedrock")
+
+    first = factory.get_client()
+    second = factory.get_client()
+
+    assert first.aws_region == "us-east-1"
+    assert first is second
