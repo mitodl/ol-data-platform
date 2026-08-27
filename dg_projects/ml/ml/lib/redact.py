@@ -44,12 +44,17 @@ def _redact_text(value: str | None) -> str | None:
         for result in results
         if result.entity_type in EXCLUDED_ENTITIES
     ]
+    # Containment, not any overlap: a PII match that only partially overlaps an
+    # excluded span (e.g. a name immediately followed by a URL) extends beyond it
+    # and is still real PII outside that span -- a one-character overlap must not
+    # exempt the whole match. Only a result fully inside an excluded span is the
+    # "NER misread a URL/date" case this is meant to catch.
     filtered_results = [
         result
         for result in results
         if result.entity_type not in EXCLUDED_ENTITIES
         and not any(
-            result.start < end and result.end > start for start, end in excluded_spans
+            start <= result.start and result.end <= end for start, end in excluded_spans
         )
     ]
     return (

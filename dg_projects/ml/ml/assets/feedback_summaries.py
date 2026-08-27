@@ -76,7 +76,11 @@ def feedback_summaries(
     ).collect()
 
     already_summarized_df = pl.DataFrame(
-        schema={**dict.fromkeys(JOIN_COLS, pl.String), "turn_count": pl.Int64}
+        schema={
+            **dict.fromkeys(JOIN_COLS, pl.String),
+            "turn_count": pl.Int64,
+            "summary_model_version": pl.String,
+        }
     )
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
@@ -85,19 +89,30 @@ def feedback_summaries(
                     database_name=database_name,
                     table_name="feedback_summaries",
                 )
-                .select([*JOIN_COLS, "turn_count"])
+                .select([*JOIN_COLS, "turn_count", "summary_model_version"])
                 .collect()
             )
 
-    unsummarized_df = filter_unsummarized(source_df, already_summarized_df)
+    # Built before filtering: filter_unsummarized needs the model actually in use
+    # to re-submit a conversation whose stored summary_model_version has since
+    # gone stale (a model/prompt change), not just a turn_count change.
+    client = build_summary_client(llm)
+    unsummarized_df = filter_unsummarized(
+        source_df, already_summarized_df, current_model_version=client.model_version
+    )
     if config.sample_limit is not None:
         unsummarized_df = unsummarized_df.head(config.sample_limit)
-    client = build_summary_client(llm)
     summaries_df = summarize_conversations(unsummarized_df, client)
 
+    llm_call_count = summaries_df.filter(
+        pl.col("summary_model_version").is_not_null()
+    ).height
     context.log.info(
-        "Summarized %d new conversations (%d already summarized, %d total upstream)",
+        "Processed %d conversations (%d LLM calls, %d skipped by the length rule, "
+        "%d already summarized, %d total upstream)",
         summaries_df.height,
+        llm_call_count,
+        summaries_df.height - llm_call_count,
         already_summarized_df.height,
         source_df.height,
     )
