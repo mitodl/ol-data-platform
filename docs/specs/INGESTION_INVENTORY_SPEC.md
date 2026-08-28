@@ -176,12 +176,19 @@ loader: airbyte                   # airbyte | dlt
 table_prefix: raw__mitxonline__app__postgres__   # §1.1; must be unique across all units
 
 airbyte:                          # required iff loader == airbyte; dropped at cutover
-  connections:                    # a LIST — one unit can have several (§3.5)
-    - name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
+  connections:                    # a LIST — one unit can have several (§3.5),
+                                  # in one or more environments (§3.8)
+    - environment: production     # production | qa | ci — which Airbyte, §3.8
+      name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
       status: active              # active | inactive — §3.6
       sync_interval_hours: 12     # per connection (§3.5); drives the DAGSTER
                                   # schedule only — Airbyte renders as `manual`
       streams: [assessment_assessment, …]             # which tables this one carries
+    - environment: qa
+      name: "MITx Online QA App DB → S3 Data Lake"
+      status: inactive            # configured, then disabled — §3.8
+      sync_interval_hours: null   # null outside production — §3.8
+      streams: [assessment_assessment]
   source_kind: source-postgres
   replication_method: xmin        # xmin | cursor | cdc  — see §3.4
 
@@ -350,6 +357,53 @@ layers instead of deployments.
 
 **This is a change to RFC 12711's schema, not just this spec's**, since the key is shared.
 Raise it on 12711 before the inventory is populated (step 3), not after.
+
+### 3.8 Each environment runs its own Airbyte, so `environment` is on the connection
+
+The unit key is `(deployment, layer)` and stays environment-agnostic — a unit is the same
+analytics object wherever it runs. What differs per environment is the *wiring*: production
+and QA each run a separate Airbyte deployment (`api-airbyte.odl.mit.edu` and
+`api-airbyte-qa.odl.mit.edu`, from ol-infrastructure's `airbyte:api_host_domain`), each with
+its own connections against its own lake. So `environment` is a required field on each
+connection, and one unit's `airbyte.connections` list legitimately holds both.
+
+There is no `ci`. ol-infrastructure defines an `api-airbyte-ci.odl.mit.edu` host, but nothing
+runs behind it — the CI code location sets `SKIP_AIRBYTE` and loads an empty workspace. The
+enum omits the value rather than documenting it as always-empty, because an empty snapshot is
+indistinguishable from a workspace whose connections were all deleted.
+
+`bin/airbyte-inventory.py dump --environment <env>` writes `airbyte-snapshot-<env>.json`;
+`render` merges however many exist into one inventory. **One environment per run**: each
+deployment's basic-auth credential comes from its own Vault service, so no single invocation
+can authenticate to both. Run `all --environment <env>` once per environment; the render step
+reads whatever snapshots are on disk, so the merged inventory accumulates across runs rather
+than requiring one pass with universal credentials.
+
+Three consequences the validator and renderer encode:
+
+1. **The duplicate-stream rule counts per environment, not per unit.** It exists to catch two
+   connections writing one raw table; across environments the writes land in different lakes,
+   so the same stream in a production and a QA connection is the normal case for a unit
+   ingested in both.
+2. **`sync_interval_hours` is null outside production.** The cadence lives in
+   `group_name_to_interval` in `lakehouse/definitions.py`, which is guarded by
+   `DAGSTER_ENV == "production"` and therefore says nothing about any other environment.
+   Emitting a number there would invent one.
+3. **`environment` crosses the repo boundary** in `render airbyte` (§4), so a consumer —
+   Pulumi, or the drift check of §8 — can select one workspace's connections instead of
+   being handed the union of two as though it were one.
+
+Omission is the dangerous direction here, which is why the field is required rather than
+defaulted: an untagged QA connection reads as production, and a silent fall-through to
+production is precisely the class of bug RFC 12711 exists to end.
+
+This is also what makes `strategies.qa` decidable from evidence. Outside production most
+connections are `inactive` — configured once, then disabled as they fell out of use — and an
+inactive connection produces no Dagster asset, so reading the asset graph makes QA look nearly
+empty when it is merely switched off. A unit with **no** QA connection and a unit whose QA
+connection exists but is disabled are different situations calling for different work, and
+before this they looked identical here. The same distinction scopes the dlt migration: a
+disabled connection still records the streams someone once wanted in QA.
 
 ---
 
