@@ -22,7 +22,9 @@ from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
+from ol_dbt_cli.lib.cursor_audit import Verdict, audit
 from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
+from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, columns_by_table
 from ol_dbt_cli.lib.inventory import (
     DEFAULT_INVENTORY_DIR,
     RenderError,
@@ -396,3 +398,129 @@ def _emit_text(issues: list[ValidationIssue]) -> None:
         console.print(f"[{style}]{issue.severity.value}[/] {escape(issue.model)}: {escape(issue.message)}")
         if issue.detail:
             console.print(f"    [dim]{escape(issue.detail)}[/]")
+
+
+VERDICT_STYLE = {
+    Verdict.CURSOR_MISSING: "bold red",
+    Verdict.NOT_LANDED: "yellow",
+    Verdict.INSERT_ONLY: "yellow",
+    Verdict.REPLACE: "dim",
+    Verdict.SECONDARY_AVAILABLE: "cyan",
+    Verdict.CURSOR_AVAILABLE: "green",
+    Verdict.CURSOR_OK: "dim green",
+}
+
+
+@inventory_app.command
+def cursors(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(
+            name=["--inventory-dir", "-i"],
+            help="Directory holding vocabulary.yml, schema/ and units/.",
+        ),
+    ] = DEFAULT_INVENTORY_DIR,
+    glue_database: Annotated[
+        str,
+        Parameter(help="Glue database holding the landed raw tables."),
+    ] = DEFAULT_GLUE_DATABASE,
+    region: str = "us-east-1",
+    unit: Annotated[
+        list[str] | None,
+        Parameter(
+            help="Limit to these units, as deployment/layer. Repeatable.",
+            show_default=False,
+        ),
+    ] = None,
+    attention_only: Annotated[
+        bool,
+        Parameter(
+            help=(
+                "Show only findings a human needs to decide: a declared cursor "
+                "whose column vanished, an insert-only timestamp, or a wide "
+                "table with no time column. Hides join tables and settled rows."
+            ),
+        ),
+    ] = False,
+    output_format: Annotated[
+        str,
+        Parameter(name=["--format", "-f"], help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Report which column each table could drive an incremental load from.
+
+    Reads the LANDED schema from Glue, so it answers what a loader can actually
+    key on rather than what an ORM declares. Needs AWS credentials; every other
+    `inventory` subcommand is offline.
+
+    Run it when an app is added or an app's schema changes. Adding a unit is
+    enough to bring a new source into scope -- nothing here is hard-coded per
+    app. Exits non-zero if any declared cursor_field names a column that is no
+    longer in the landed schema, which is the failure worth gating on: the load
+    does not error, it just quietly stops advancing.
+
+    A `cursor_available` finding is a shortlist entry, NOT an approval. Whether
+    the column is stamped on every mutation path is not answerable from a
+    schema -- see the module docstring in lib/cursor_audit.py.
+
+    --glue-database must name the environment the units describe. Point a
+    production-rendered inventory at a QA catalogue (or the reverse) and every
+    table it has not loaded there reports `not_landed`, which reads like a
+    finding and is really a mismatched argument.
+    """
+    units = load_units(inventory_dir)
+    if unit:
+        wanted = set(unit)
+        units = [u for u in units if f"{u.data.get('deployment')}/{u.data.get('layer')}" in wanted]
+        if not units:
+            err_console.print(f"[bold red]No unit matched {sorted(wanted)}")
+            sys.exit(1)
+
+    prefixes = sorted({str(u.data["table_prefix"]) for u in units if u.data.get("table_prefix")})
+    columns = columns_by_table(glue_database, prefixes=prefixes, region=region)
+    result = audit(units, columns)
+
+    findings = [f for f in result.findings if not attention_only or f.needs_attention]
+
+    if output_format == "json":
+        print(  # noqa: T201
+            json.dumps(
+                [
+                    {
+                        "unit": f.unit_key,
+                        "raw_table": f.raw_table,
+                        "stream": f.stream,
+                        "verdict": f.verdict.value,
+                        "declared_cursor": f.declared_cursor,
+                        "candidate": f.candidate,
+                        "source_columns": f.source_columns,
+                        "time_like_columns": list(f.time_like_columns),
+                    }
+                    for f in findings
+                ],
+                indent=2,
+            )
+        )
+    else:
+        for finding in findings:
+            style = VERDICT_STYLE[finding.verdict]
+            candidate = f" -> {finding.candidate}" if finding.candidate else ""
+            console.print(
+                f"[{style}]{finding.verdict.value:<19}[/] "
+                f"{escape(finding.unit_key)}  {escape(finding.stream)}"
+                f"{escape(candidate)}"
+            )
+        console.print(
+            "\n[bold]Summary:[/] "
+            + ", ".join(f"{count} {verdict.value}" for verdict, count in result.counts.items() if count)
+        )
+        if result.broken:
+            console.print(
+                f"\n[bold red]{len(result.broken)} declared cursor_field(s) name a "
+                f"column that is no longer in the landed schema.[/] An incremental "
+                f"load on one of these does not fail - it stops advancing."
+            )
+
+    if result.broken:
+        sys.exit(1)

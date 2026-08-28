@@ -258,6 +258,15 @@ populated:
 - `tk-determine-per-source-incremental-cursor-viabilit-51f299` — which connections use xmin,
   and therefore which need a replacement cursor column chosen before dlt can take over. Today
   that answer requires crawling the Airbyte UI; after this lands it is `rg replication_method: xmin`.
+
+  Choosing the replacement is `ol-dbt inventory cursors`, which reads the LANDED column list
+  from Glue and reports, per table, whether a modification timestamp exists to key on. It is a
+  standing check rather than a one-off audit for two reasons: a new app is covered the moment
+  its unit exists, nothing is hard-coded per source; and a declared `cursor_field` whose column
+  is later dropped or renamed does not fail loudly — the load just stops advancing. That case
+  (`cursor_missing`) exits non-zero. Note what it cannot tell you: whether the column is stamped
+  on *every* mutation path. A write-once column yields a load that captures inserts and silently
+  never reflects an edit, so a `cursor_available` finding is a shortlist entry, not an approval.
 - The Airbyte-side deadline: source-postgres 3.8+ refuses xmin mode outright on any database
   that has ever exceeded 2^32 lifetime transactions
   (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent
