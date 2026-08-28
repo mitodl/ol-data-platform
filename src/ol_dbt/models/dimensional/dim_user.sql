@@ -631,29 +631,27 @@ with mitx_users as (
 
 -- Shared email still groups accounts into one person: for MITx Pro, Bootcamps, Residential,
 -- Emeritus and Global Alumni it is the only signal we have. But the key is named after one
--- account in the group - global id first, else the earliest-created account - so a user
--- editing their email, or signing up on a new platform later, no longer re-keys them.
--- (Ranking by a fixed platform priority instead of join date was tried first, but it
--- re-keyed a user every time they signed up on a higher-priority platform later.)
+-- account in the group - global id first, else the highest-ranked id source - so a user
+-- editing their email no longer re-keys them.
 -- Ranked so the key lands on the same account whose id agg_view's max() surfaces below.
 , ranked_accounts as (
     select
-        -- Outranks earliest_joined_on: an id-less emeritus/global_alumni row must still
-        -- lose to an id-bearing row, regardless of which joined earlier.
+        -- Outranks id_source_rank: an id-less emeritus row (9) must still lose to an
+        -- id-bearing global_alumni row (10).
         case when id_source_user_id is null then 1 else 0 end as has_no_source_id
-        -- A global id is the platform's own permanent cross-account identity, so it always
-        -- wins over picking by join date.
-        , case when user_global_id is not null then 0 else 1 end as has_no_global_id
-        -- Emeritus, Global Alumni and Micromasters have no join-date column, so they sort
-        -- after every dated account here and fall through to the sort_id tie-break below.
-        , least(
-            coalesce(user_joined_on_mitlearn, '9999-12-31T23:59:59')
-            , coalesce(user_joined_on_mitxonline, '9999-12-31T23:59:59')
-            , coalesce(user_joined_on_edxorg, '9999-12-31T23:59:59')
-            , coalesce(user_joined_on_mitxpro, '9999-12-31T23:59:59')
-            , coalesce(user_joined_on_residential, '9999-12-31T23:59:59')
-            , coalesce(user_joined_on_bootcamps, '9999-12-31T23:59:59')
-        ) as earliest_joined_on
+        , case
+            when user_global_id is not null then 0
+            when id_source = 'mitlearn' then 1
+            when id_source = 'mitxonline' then 2
+            when id_source = 'edxorg' then 3
+            when id_source = 'micromasters' then 4
+            when id_source = 'mitxonline_openedx' then 5
+            when id_source = 'mitxpro' then 6
+            when id_source = 'residential' then 7
+            when id_source = 'bootcamps' then 8
+            when id_source = 'emeritus' then 9
+            when id_source = 'global_alumni' then 10
+        end as id_source_rank
         -- Emeritus and Global Alumni ids are varchar, and agg_view surfaces them with a
         -- lexicographic max(). Nulling sort_id falls the ordering through to the
         -- lexicographic key below so the key names the account agg_view's ids come from.
@@ -680,8 +678,8 @@ with mitx_users as (
         partition by email
         order by
             has_no_source_id
-            , has_no_global_id
-            , earliest_joined_on
+            , id_source_rank
+            , user_global_id desc
             , sort_id desc nulls last
             , id_source_user_id desc
     )
