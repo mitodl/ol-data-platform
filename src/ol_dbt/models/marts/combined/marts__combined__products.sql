@@ -233,7 +233,7 @@ with mitxonline_product as (
         on edxorg_runs.courserun_readable_id = mitxonline_product_view.product_readable_id
     left join edxorg_product_view
         on edxorg_runs.courserun_readable_id = edxorg_product_view.product_readable_id
-    where 
+    where
         edxorg_product_view.product_readable_id is null
         and mitxonline_product_view.product_readable_id is null
 
