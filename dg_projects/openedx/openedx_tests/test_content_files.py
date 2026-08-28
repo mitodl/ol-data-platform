@@ -164,7 +164,31 @@ def test_extraction_error_does_not_lose_the_course():
 
     assert counters["failed"] == 1
     assert counters["extracted"] == 1
-    assert [r["file_path"] for r in rows] == ["static/page.html"]
+    assert [r["file_path"] for r in rows] == ["static/broken.pdf", "static/page.html"]
+
+
+def test_failed_extraction_is_recorded_not_dropped():
+    """A failed document gets a row, or downstream reads it as a deleted file.
+
+    MIT Learn unpublishes content files that disappear from a run's output. Its
+    own extractor gets away with recording nothing for a failure because it
+    passes the keys out through a `failed_keys` side channel that exempts them
+    from the stale pass; a JSONL snapshot has no side channel, so a transient
+    Tika failure would silently unpublish the last good text.
+    """
+
+    def always_fails(_file_bytes, _content_type):
+        msg = "Tika exploded"
+        raise ValueError(msg)
+
+    rows, _ = rows_for(
+        [("static/broken.pdf", b"junk"), ("static/page.html", b"<p>hi</p>")],
+        extract=always_fails,
+    )
+
+    assert [r["extraction_status"] for r in rows] == ["failed", "failed"]
+    assert all(r["content"] is None for r in rows)
+    assert [r["size_bytes"] for r in rows] == [4, 9]
 
 
 def test_empty_extraction_is_recorded_not_dropped():
@@ -297,7 +321,7 @@ def test_transport_errors_abort_but_timeouts_stay_per_document():
         [("static/a.pdf", b"%PDF-fake"), ("static/b.pdf", b"%PDF-fake")], extract=slow
     )
     assert counters["failed"] == 2
-    assert rows == []
+    assert [r["extraction_status"] for r in rows] == ["failed", "failed"]
 
 
 def test_document_level_failures_still_count_as_failures():

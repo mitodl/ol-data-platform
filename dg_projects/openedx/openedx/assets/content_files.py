@@ -174,7 +174,9 @@ def build_document_rows(
 
     A file Tika cannot parse is skipped silently -- images and archives are
     normal course content, not errors. A file Tika *should* parse but does not
-    is counted as a failure and feeds the success-rate guard.
+    is counted as a failure, feeds the success-rate guard, and still gets a row
+    carrying `extraction_status: "failed"` and null content -- an absent row
+    reads downstream as a deleted file.
 
     Subtitles are skipped even though Tika would accept them, because the
     transcript asset owns those and Tika's output for one is unusable.
@@ -230,6 +232,25 @@ def build_document_rows(
             raise_if_service_failure(error, relative_path)
             counters["failed"] += 1
             log.exception("Tika extraction failed for %s", relative_path)
+            # A failed document still gets a row. Emitting nothing makes a
+            # transient Tika failure indistinguishable, downstream, from the
+            # file having been deleted from the course -- and MIT Learn treats
+            # absence from the snapshot as a reason to unpublish. Learn only
+            # gets away with that today because its own extractor passes the
+            # failures out through a `failed_keys` side channel that exempts
+            # them from the stale pass; a JSONL snapshot has no side channel,
+            # so the status has to travel in the row itself.
+            rows.append(
+                {
+                    "course_id": course_id,
+                    "source_system": source_system,
+                    "file_path": relative_path,
+                    "content_type": content_type,
+                    "size_bytes": len(file_bytes),
+                    "content": None,
+                    "extraction_status": "failed",
+                }
+            )
             continue
 
         if text:
