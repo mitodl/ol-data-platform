@@ -137,6 +137,12 @@ def text_from_vtt_content(content: str) -> str:
     100% of the transcripts in the archives sampled. A consumer that depended on
     cue timings would already be broken for those.
 
+    One consequence worth naming: this parser has no failure return. A garbage
+    ``.vtt`` yields no cues and records as ``empty``, where a malformed sjson
+    records as ``failed``. That asymmetry is deliberate -- there is no cheap
+    validity check for WebVTT, and "no ``-->`` anywhere" is indistinguishable
+    from a file that legitimately holds only headers and comments.
+
     Structure is handled by one rule: a block is a cue if and only if it
     contains a ``-->`` line, and its text is the lines after that. The WebVTT
     spec forbids ``-->`` in ``NOTE`` bodies, so headers, comments, ``STYLE`` and
@@ -193,6 +199,20 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     return None
 
 
+def _transcript_content_type(relative_path: str) -> str:
+    """Return the MIME type a transcript row publishes.
+
+    These rows are unioned with the document rows downstream, which derive
+    content_type from mimetypes, so the two have to agree on the spelling.
+    """
+    lowered = relative_path.lower()
+    if lowered.endswith(SJSON_SUFFIX):
+        return "application/json"
+    if lowered.endswith(VTT_SUFFIX):
+        return "text/vtt"
+    return "text/plain"
+
+
 def build_transcript_rows(
     members: Iterable[tuple[str, Callable[[], bytes]]],
     *,
@@ -232,11 +252,7 @@ def build_transcript_rows(
                     "course_id": course_id,
                     "source_system": source_system,
                     "file_path": relative_path,
-                    "content_type": (
-                        "application/json"
-                        if relative_path.lower().endswith(SJSON_SUFFIX)
-                        else "text/plain"
-                    ),
+                    "content_type": _transcript_content_type(relative_path),
                     "size_bytes": len(raw),
                     "content": None,
                     "extraction_status": "failed",
@@ -269,11 +285,10 @@ def build_transcript_rows(
                 # inconsistency, not a harmless omission -- every
                 # transcript-derived row would read as a null extension.
                 "file_extension": file_extension(relative_path),
-                "content_type": (
-                    "application/json"
-                    if relative_path.lower().endswith(SJSON_SUFFIX)
-                    else "text/plain"
-                ),
+                # Mirrors what the document asset derives from mimetypes, so
+                # the two row sources agree once they are unioned: .vtt is
+                # text/vtt in both the host and the builtin table.
+                "content_type": _transcript_content_type(relative_path),
                 "size_bytes": len(raw),
                 "content": text if has_text else None,
                 "extraction_status": status,

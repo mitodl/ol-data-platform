@@ -157,13 +157,25 @@ def file_extension(relative_path: str) -> str:
     return Path(relative_path).suffix.lower()
 
 
+# Pinned to Python's builtin table rather than the module-level lookup, which
+# reads /etc/mime.types when the host has one. That file is present on a dev
+# machine and on ubuntu-latest but absent from the python:3.14-slim runtime
+# image, so the same file resolved to different MIME types in dev and in
+# production: `.rtf` was `application/rtf` locally and `text/rtf` in the
+# cluster, and only one of those was in SUPPORTED_CONTENT_TYPES. Every RTF MIT
+# Learn extracts today would have been skipped in production with no row and no
+# error, while the parity test passed in the one environment nobody runs
+# production in.
+_MIMETYPES = mimetypes.MimeTypes(filenames=())
+
+
 def _content_type(relative_path: str) -> str:
     """Guess a document's MIME type from its path.
 
     The bundle manifest carries the same value, but it is a sibling S3 object;
     deriving it here keeps this asset dependent on the archive alone.
     """
-    mime_type, _ = mimetypes.guess_type(relative_path)
+    mime_type, _ = _MIMETYPES.guess_type(relative_path)
     return mime_type or "application/octet-stream"
 
 

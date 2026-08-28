@@ -314,6 +314,25 @@ def test_transcript_rows_carry_file_extension_like_document_rows(path, expected)
     assert rows[0]["file_extension"] == expected
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("static/subs_x.srt.sjson", "application/json"),
+        ("static/captions.srt", "text/plain"),
+        ("static/captions.vtt", "text/vtt"),
+    ],
+)
+def test_transcript_rows_use_the_same_content_type_spelling(path, expected):
+    """The union has to agree on the MIME string, not just the field name.
+
+    The document asset derives content_type from mimetypes, which answers
+    `text/vtt` for a `.vtt` in both the host and the builtin table. Publishing
+    `text/plain` for the same file put two conventions in one column.
+    """
+    rows, _ = rows_for([(path, b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhi")])
+    assert rows[0]["content_type"] == expected
+
+
 def test_status_vocabulary_matches_the_document_asset():
     """Both row sources feed one model, so "parsed" vs "extracted" is a schema
     difference dressed up as a naming choice.

@@ -5,6 +5,7 @@ and the failure accounting -- without a Dagster context or a live Tika service.
 """
 
 import io
+import mimetypes
 import tarfile
 from pathlib import Path
 
@@ -502,9 +503,16 @@ VALID_TEXT_FILE_TYPES = frozenset(
 # considered divergence rather than an oversight.
 _HANDLED_ELSEWHERE = {".srt", ".sjson", ".vtt"}
 
+# `.xml` never reaches the MIME gate at all: process_course_xml_blocks collects
+# only non-XML members, so no XML file is in the bundle this asset reads. Course
+# XML travels as blocks with its raw_xml intact. Asserting a MIME type for it
+# here would be a check that cannot fail.
+_NEVER_IN_THE_BUNDLE = {".xml"}
+
 
 @pytest.mark.parametrize(
-    "extension", sorted(VALID_TEXT_FILE_TYPES - _HANDLED_ELSEWHERE)
+    "extension",
+    sorted(VALID_TEXT_FILE_TYPES - _HANDLED_ELSEWHERE - _NEVER_IN_THE_BUNDLE),
 )
 def test_every_extension_mit_learn_extracts_is_supported(extension):
     """Nothing MIT Learn extracts today may be silently dropped by this asset.
@@ -520,6 +528,22 @@ def test_every_extension_mit_learn_extracts_is_supported(extension):
     assert content_type in SUPPORTED_CONTENT_TYPES, (
         f"{extension} maps to {content_type}, which Tika will refuse; "
         "MIT Learn extracts this extension, so the file would be lost"
+    )
+
+
+def test_the_mime_lookup_does_not_depend_on_the_host():
+    """The parity check above is only worth anything if it runs prod's table.
+
+    `mimetypes.guess_type` reads /etc/mime.types when the host has one. A dev
+    machine and ubuntu-latest do; the python:3.14-slim runtime image does not.
+    `.rtf` is where that bit: the host table answers `application/rtf` and the
+    builtin answers `text/rtf`, so every RTF extracted in dev and was skipped in
+    production with no row and no error, while this test passed.
+    """
+    assert _content_type("notes.rtf") == "text/rtf"
+    assert (
+        _content_type("notes.rtf")
+        == mimetypes.MimeTypes(filenames=()).guess_type("notes.rtf")[0]
     )
 
 
