@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-s3
   replication_method: n/a
   connections:
-  - name: S3 MITx Open edX Extracts → S3 Data Lake
+  - environment: production
+    name: S3 MITx Open edX Extracts → S3 Data Lake
     status: active
     sync_interval_hours: 12
     streams:

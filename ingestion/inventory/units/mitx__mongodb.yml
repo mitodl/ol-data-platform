@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-mongodb-v2
   replication_method: n/a
   connections:
-  - name: mitx-forum-production → S3 Data Lake
+  - environment: production
+    name: mitx-forum-production → S3 Data Lake
     status: inactive
     sync_interval_hours: 12
     streams:
