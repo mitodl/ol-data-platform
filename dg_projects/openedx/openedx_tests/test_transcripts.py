@@ -11,6 +11,7 @@ together.
 
 import pytest
 from openedx.assets.transcripts import (
+    assert_parsing_healthy,
     build_transcript_rows,
     is_transcript,
     text_from_sjson_content,
@@ -133,10 +134,18 @@ def test_transcript_row_shape():
     assert rows[0]["source_system"] == "mitx"
 
 
-def test_malformed_transcript_counts_as_failed_and_is_not_a_row():
+def test_malformed_transcript_is_recorded_as_failed():
+    """A failed parse gets a row, or downstream reads it as a deleted file.
+
+    MIT Learn unpublishes content files that disappear from a run's output, so
+    an unparseable transcript that leaves no row would drop the last good text
+    for that file.
+    """
     rows, counters = rows_for([("static/subs_x.srt.sjson", b"{broken")])
     assert counters["failed"] == 1
-    assert rows == []
+    assert rows[0]["extraction_status"] == "failed"
+    assert rows[0]["content"] is None
+    assert rows[0]["content_type"] == "application/json"
 
 
 def test_empty_transcript_is_recorded_not_dropped():
@@ -159,7 +168,10 @@ def test_one_bad_transcript_does_not_lose_the_others():
 
     assert counters["failed"] == 1
     assert counters["extracted"] == 1
-    assert [r["file_path"] for r in rows] == ["static/subs_good.srt.sjson"]
+    assert [r["file_path"] for r in rows] == [
+        "static/subs_bad.srt.sjson",
+        "static/subs_good.srt.sjson",
+    ]
 
 
 def test_plain_srt_content_type():
@@ -213,7 +225,53 @@ def test_one_structurally_wrong_sjson_does_not_lose_the_others():
     )
 
     assert counters["extracted"] == 1
-    assert [r["file_path"] for r in rows] == ["static/subs_good.srt.sjson"]
+    assert [r["extraction_status"] for r in rows] == ["failed", "extracted"]
+
+
+# --- total failure ---------------------------------------------------------
+
+
+def test_all_transcripts_failing_refuses_to_publish():
+    """A course whose every transcript failed must not publish as "none"."""
+    _, counters = rows_for(
+        [
+            ("static/subs_a.srt.sjson", b"{broken"),
+            ("static/subs_b.srt.sjson", b"{also broken"),
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="all 2 transcripts failed to parse"):
+        assert_parsing_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_a_course_with_no_transcripts_publishes():
+    """Zero candidates is normal -- plenty of courses have no videos."""
+    _, counters = rows_for([("static/syllabus.pdf", b"%PDF")])
+    assert_parsing_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_a_partial_failure_still_publishes():
+    """Parsing is local, so a bad file means a bad file, not a sick service."""
+    _, counters = rows_for(
+        [
+            ("static/subs_bad.srt.sjson", b"{broken"),
+            ("static/subs_good.srt.sjson", b'{"text": ["fine"]}'),
+        ]
+    )
+    assert_parsing_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_a_bom_prefixed_transcript_still_parses():
+    """Learn hands these to Tika, which sniffs the charset before parsing.
+
+    None of the ~20k srt/sjson files sampled across 49 production exports
+    carried a BOM, so this is insurance against a file that would extract in
+    Learn today and fail here.
+    """
+    text = transcript_text(
+        "static/subs_x.srt.sjson", b'\xef\xbb\xbf{"text": ["hello"]}'
+    )
+    assert text == "hello"
 
 
 # --- status and content must agree -----------------------------------------

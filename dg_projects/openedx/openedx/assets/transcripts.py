@@ -112,7 +112,11 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     the caller distinguishes the two by checking the suffix itself.
     """
     try:
-        content = raw.decode("utf-8")
+        # utf-8-sig, not utf-8: MIT Learn runs these through Tika, which does
+        # charset detection first, so a BOM'd transcript extracts fine there and
+        # would fail here. No BOMs appeared in ~20k srt/sjson files sampled
+        # across 49 production exports, so this is insurance rather than a fix.
+        content = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         log.exception("Transcript is not valid UTF-8: %s", relative_path)
         return None
@@ -139,9 +143,9 @@ def build_transcript_rows(
     ``members`` yields ``(relative_path, read_bytes)``. The bytes stay behind a
     callable so the many non-transcript files in an export are never read.
 
-    A transcript that parses to empty text is still recorded. An empty caption
-    track and a file that was never seen are different facts, and only one of
-    them is worth investigating.
+    A transcript that parses to empty text is still recorded, and so is one that
+    fails to parse. An empty caption track, an unparseable file and a file that
+    was never seen are three different facts, and only the row carries which.
     """
     rows: list[dict[str, Any]] = []
     counters = {"candidates": 0, "extracted": 0, "empty": 0, "failed": 0}
@@ -156,6 +160,24 @@ def build_transcript_rows(
 
         if text is None:
             counters["failed"] += 1
+            # A failed parse still gets a row. Emitting nothing makes it
+            # indistinguishable downstream from the file having been deleted
+            # from the course, which is what MIT Learn unpublishes on.
+            rows.append(
+                {
+                    "course_id": course_id,
+                    "source_system": source_system,
+                    "file_path": relative_path,
+                    "content_type": (
+                        "application/json"
+                        if relative_path.lower().endswith(SJSON_SUFFIX)
+                        else "text/plain"
+                    ),
+                    "size_bytes": len(raw),
+                    "content": None,
+                    "extraction_status": "failed",
+                }
+            )
             continue
 
         # Status is decided on the stripped text, so the content must be
@@ -192,6 +214,26 @@ def build_transcript_rows(
     return rows, counters
 
 
+def assert_parsing_healthy(counters: dict[str, int], course_id: str) -> None:
+    """Refuse to publish a course whose every transcript failed to parse.
+
+    Without this the asset publishes a JSONL of nothing but failure rows, which
+    a consumer that filters on status reads as "this course has no transcripts"
+    -- the failure mode that looks like success. The document asset guards the
+    same case; this is the total-failure half of it, which is the part that is
+    not Tika-specific. There is no success-rate floor here because parsing is
+    local: a partial failure means malformed files, not a sick service.
+    """
+    candidates = counters["candidates"]
+    if candidates and not (counters["extracted"] + counters["empty"]):
+        msg = (
+            f"Refusing to publish transcript text for {course_id}: all "
+            f"{candidates} transcripts failed to parse. Publishing would be "
+            "indistinguishable from 'this course has no transcripts'."
+        )
+        raise RuntimeError(msg)
+
+
 @asset(
     key=AssetKey(("openedx", "processed_data", "course_transcript_text")),
     group_name="openedx",
@@ -221,6 +263,7 @@ def extract_course_transcript_text(
             rows, counters = build_transcript_rows(
                 members, course_id=course_id, source_system=source_system
             )
+        assert_parsing_healthy(counters, course_id)
 
         output_file = Path(
             NamedTemporaryFile(delete=False, suffix="_transcript_text.jsonl").name

@@ -4,6 +4,10 @@ These cover the pure half of assets/content_files.py -- the dispatch decision
 and the failure accounting -- without a Dagster context or a live Tika service.
 """
 
+import io
+import tarfile
+from pathlib import Path
+
 import httpx2 as httpx
 import pytest
 from openedx.assets.content_files import (
@@ -11,8 +15,10 @@ from openedx.assets.content_files import (
     TikaUnavailableError,
     assert_extraction_healthy,
     build_document_rows,
+    open_bundle_members,
     output_digest,
 )
+from upath import UPath
 
 SUPPORTED = {"application/pdf", "text/html", "text/plain"}
 
@@ -422,3 +428,39 @@ def test_output_digest_is_stable_for_identical_output(tmp_path):
     two.write_text('{"content": "same"}\n')
 
     assert output_digest(one) == output_digest(two)
+
+
+# --- reading the bundle ----------------------------------------------------
+
+
+def test_open_bundle_members_reads_a_real_tarball(tmp_path):
+    """The one path in this module that touches tarfile, exercised for real.
+
+    Everything above hands build_document_rows its members directly, so nothing
+    covered the download-and-walk step -- which is how the `tarfile` import
+    nearly got dropped without a test noticing.
+    """
+    bundle = tmp_path / "static_assets.tar.gz"
+    with tarfile.open(bundle, "w:gz") as tar:
+        for name, payload in [
+            ("static/syllabus.pdf", b"%PDF-fake"),
+            ("static/subs_x.srt.sjson", b'{"text": ["hi"]}'),
+        ]:
+            info = tarfile.TarInfo(name=name)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+        directory = tarfile.TarInfo(name="static/nested")
+        directory.type = tarfile.DIRTYPE
+        tar.addfile(directory)
+
+    temp_files: list[Path] = []
+    with open_bundle_members(UPath(bundle), temp_files) as members:
+        read_back = [(path, read_bytes()) for path, read_bytes in members]
+
+    assert read_back == [
+        ("static/syllabus.pdf", b"%PDF-fake"),
+        ("static/subs_x.srt.sjson", b'{"text": ["hi"]}'),
+    ]
+    assert len(temp_files) == 1, "the download must be registered for cleanup"
+    for temp_file in temp_files:
+        temp_file.unlink(missing_ok=True)
