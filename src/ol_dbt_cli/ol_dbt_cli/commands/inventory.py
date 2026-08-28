@@ -16,18 +16,19 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
 
-from ol_dbt_cli.lib.cursor_audit import Verdict, audit
+from ol_dbt_cli.lib.cursor_audit import Verdict, audit, select_units
 from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, columns_by_table
 from ol_dbt_cli.lib.inventory import (
     DEFAULT_INVENTORY_DIR,
     RenderError,
+    Unit,
     check_removals,
     load_snapshot,
     load_snapshot_at_ref,
@@ -471,11 +472,11 @@ def cursors(
     """
     units = load_units(inventory_dir)
     if unit:
-        wanted = set(unit)
-        units = [u for u in units if f"{u.data.get('deployment')}/{u.data.get('layer')}" in wanted]
-        if not units:
-            err_console.print(f"[bold red]No unit matched {sorted(wanted)}")
+        selected, missing = select_units(units, unit)
+        if missing:
+            err_console.print(f"[bold red]No unit matched: {', '.join(missing)}")
             sys.exit(1)
+        units = cast("list[Unit]", selected)
 
     prefixes = sorted({str(u.data["table_prefix"]) for u in units if u.data.get("table_prefix")})
     columns = columns_by_table(glue_database, prefixes=prefixes, region=region)

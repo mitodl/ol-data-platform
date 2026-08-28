@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ol_dbt_cli.lib.cursor_audit import Verdict, audit, classify_table
+from ol_dbt_cli.lib.cursor_audit import Verdict, audit, classify_table, select_units
 
 AIRBYTE_COLUMNS = [
     "_airbyte_raw_id",
@@ -15,7 +15,10 @@ AIRBYTE_COLUMNS = [
 ]
 
 
-def classify(columns: list[str] | None, declared: str | None = None) -> Any:
+def classify(columns: list[str] | None, declared: str | list[str] | None = None) -> Any:
+    """Classify one table, wrapping a bare `declared` string into a path."""
+    if isinstance(declared, str):
+        declared = [declared]
     return classify_table(
         unit_key="mitxonline/app_postgres",
         raw_table="raw__mitxonline__app__postgres__thing",
@@ -94,6 +97,23 @@ class TestDeclaredCursorIsCheckedAgainstReality:
         f = classify(None, declared="updated_on")
         assert f.verdict is Verdict.NOT_LANDED
 
+    def test_a_nested_cursor_path_is_reported_not_guessed(self) -> None:
+        # cursor_field is a PATH. Checking only the first segment would report
+        # cursor_ok whenever the struct still exists, even after the field
+        # inside it vanished — the failure this module exists to catch, but
+        # inverted into a false all-clear.
+        f = classify([*AIRBYTE_COLUMNS, "id", "payload"], declared=["payload", "updated_at"])
+        assert f.verdict is Verdict.CURSOR_NESTED
+        assert f.declared_cursor == "payload.updated_at"
+        assert f.needs_attention
+
+    def test_a_nested_path_is_not_rescued_by_a_present_first_segment(self) -> None:
+        f = classify([*AIRBYTE_COLUMNS, "payload"], declared=["payload", "gone_at"])
+        assert f.verdict is not Verdict.CURSOR_OK
+
+    def test_a_single_segment_path_is_checked_normally(self) -> None:
+        assert classify([*AIRBYTE_COLUMNS, "updated_on"], declared=["updated_on"]).verdict is Verdict.CURSOR_OK
+
 
 class TestNeedsAttention:
     def test_a_narrow_replace_table_is_not_worth_a_human(self) -> None:
@@ -124,6 +144,32 @@ class FakeUnit:
     @property
     def tables(self) -> list[dict[str, Any]]:
         return self.data.get("tables", [])
+
+
+class TestSelectUnits:
+    """A partial match must not read as success — the caller audits what it was asked for."""
+
+    def _units(self) -> list[FakeUnit]:
+        return [
+            FakeUnit({"deployment": "mitxonline", "layer": "app_postgres"}),
+            FakeUnit({"deployment": "xpro", "layer": "mysql"}),
+        ]
+
+    def test_selects_the_requested_units(self) -> None:
+        selected, missing = select_units(self._units(), ["xpro/mysql"])
+        assert not missing
+        assert [u.data["deployment"] for u in selected] == ["xpro"]
+
+    def test_a_typo_alongside_a_valid_key_is_reported(self) -> None:
+        # The regression: filtering and checking only for an empty result left
+        # this silent, so the command audited one unit and reported success.
+        selected, missing = select_units(self._units(), ["mitxonline/app_postgres", "xpro/mysqlx"])
+        assert missing == ["xpro/mysqlx"]
+        assert len(selected) == 1
+
+    def test_every_key_missing_is_reported_too(self) -> None:
+        _, missing = select_units(self._units(), ["nope/nothing"])
+        assert missing == ["nope/nothing"]
 
 
 class TestAudit:

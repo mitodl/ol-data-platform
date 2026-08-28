@@ -111,6 +111,19 @@ class Verdict(StrEnum):
     NOT_LANDED = "not_landed"
     """Declared in the inventory but absent from the warehouse schema."""
 
+    CURSOR_NESTED = "cursor_nested"
+    """The declared cursor_field is a multi-segment path this check cannot verify.
+
+    ``cursor_field`` is a PATH, as Airbyte spells it -- ``["payload",
+    "updated_at"]`` means the ``updated_at`` key inside the ``payload`` struct,
+    not two cursor columns. Glue gives us a flat top-level column list, so
+    confirming a nested path would mean walking the struct type. Reporting it
+    rather than checking the first segment: ``payload`` existing says nothing
+    about ``updated_at`` still being in it, so a first-segment check would
+    return ``cursor_ok`` for a cursor that had silently vanished -- the exact
+    failure this module exists to catch, inverted.
+    """
+
 
 @dataclass(frozen=True)
 class TableFinding:
@@ -134,6 +147,9 @@ class TableFinding:
     def needs_attention(self) -> bool:
         """Worth a human looking, as opposed to a settled or obvious case."""
         if self.verdict is Verdict.CURSOR_MISSING:
+            return True
+        # Unverifiable is not the same as fine: nobody is checking that cursor.
+        if self.verdict is Verdict.CURSOR_NESTED:
             return True
         if self.verdict is Verdict.INSERT_ONLY:
             return True
@@ -176,21 +192,28 @@ def classify_table(
     raw_table: str,
     stream: str,
     columns: Iterable[str] | None,
-    declared_cursor: str | None = None,
+    declared_cursor: Sequence[str] | None = None,
 ) -> TableFinding:
     """Classify one table against its landed column list.
 
     ``columns`` is None when the table is declared but has not landed.
-    ``declared_cursor`` is the inventory's ``cursor_field`` for the table, if any
-    -- checking it against reality is the point of the standing check.
+
+    ``declared_cursor`` is the inventory's ``cursor_field``: a PATH, as Airbyte
+    spells it, so it arrives as a sequence of segments even when there is only
+    one. Checking it against reality is the point of the standing check; a
+    multi-segment path is reported as unverifiable rather than guessed at (see
+    ``Verdict.CURSOR_NESTED``).
     """
+    # Rendered dotted for display; the segments are what the checks below use.
+    declared_display = ".".join(declared_cursor) if declared_cursor else None
+
     if columns is None:
         return TableFinding(
             unit_key=unit_key,
             raw_table=raw_table,
             stream=stream,
             verdict=Verdict.NOT_LANDED,
-            declared_cursor=declared_cursor,
+            declared_cursor=declared_display,
         )
 
     source = _source_columns(columns)
@@ -203,16 +226,18 @@ def classify_table(
             raw_table=raw_table,
             stream=stream,
             verdict=verdict,
-            declared_cursor=declared_cursor,
+            declared_cursor=declared_display,
             candidate=candidate,
             source_columns=len(source),
             time_like_columns=time_like,
         )
 
     if declared_cursor:
+        if len(declared_cursor) > 1:
+            return finding(Verdict.CURSOR_NESTED, declared_display)
         return finding(
-            Verdict.CURSOR_OK if declared_cursor.lower() in present else Verdict.CURSOR_MISSING,
-            declared_cursor,
+            Verdict.CURSOR_OK if declared_cursor[0].lower() in present else Verdict.CURSOR_MISSING,
+            declared_display,
         )
 
     if modified := _first_present(MODIFIED_COLUMNS, present):
@@ -222,6 +247,22 @@ def classify_table(
     if created := _first_present(CREATED_COLUMNS, present):
         return finding(Verdict.INSERT_ONLY, created)
     return finding(Verdict.REPLACE)
+
+
+def select_units(units: Iterable[object], wanted: Iterable[str]) -> tuple[list[object], list[str]]:
+    """Pick the requested units by ``deployment/layer``, reporting any that miss.
+
+    Returns ``(selected, missing)``. Missing keys are returned rather than
+    ignored because the caller's job is to audit everything it was asked about:
+    filtering and checking only for an empty result would let a typo alongside a
+    valid key pass silently, and the command would report success having covered
+    fewer units than requested.
+    """
+    by_key = {f"{getattr(u, 'data', {}).get('deployment')}/{getattr(u, 'data', {}).get('layer')}": u for u in units}
+    requested = set(wanted)
+    missing = sorted(requested - by_key.keys())
+    selected = [by_key[key] for key in sorted(requested & by_key.keys())]
+    return selected, missing
 
 
 def audit(
@@ -241,10 +282,9 @@ def audit(
         for table in getattr(unit, "tables", []) or []:
             raw_table = str(table.get("raw_table", ""))
             cursor = table.get("cursor_field")
-            # The inventory stores cursor_field as a list of path segments; a
-            # composite cursor is not something this check can reason about, so
-            # it takes the first and lets the finding carry it verbatim.
-            declared = str(cursor[0]) if isinstance(cursor, list) and cursor else None
+            # Passed through as the full path. classify_table decides what a
+            # multi-segment one means; truncating it here would hide that.
+            declared = [str(part) for part in cursor] if isinstance(cursor, list) and cursor else None
             result.findings.append(
                 classify_table(
                     unit_key=key,

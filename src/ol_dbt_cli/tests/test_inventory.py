@@ -356,6 +356,29 @@ class TestRules:
         report = _run(inventory)
         assert not report.errors, _messages(report)
 
+    def test_a_production_connection_may_not_omit_its_cadence(self, inventory: Path) -> None:
+        # The dangerous direction: render_dagster_intervals skips a non-integer,
+        # so the group falls through to definitions.py's 24-hour default and a
+        # 6-hour sync silently becomes daily. Nothing else would report it.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][0]["environment"] = "production"
+        unit["airbyte"]["connections"][0]["sync_interval_hours"] = None
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
+    def test_a_qa_connection_may_not_state_a_cadence(self, inventory: Path) -> None:
+        # The inverse case, and why this is an if/then rather than merely a
+        # nullable field: a number here reads as a schedule nothing will run.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = 12
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
     def test_a_connection_must_declare_its_environment(self, inventory: Path) -> None:
         # Omission is the dangerous direction, not the safe one: an untagged QA
         # connection reads as production, which is the exact fall-through RFC

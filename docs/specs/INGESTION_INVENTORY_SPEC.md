@@ -178,11 +178,12 @@ table_prefix: raw__mitxonline__app__postgres__   # §1.1; must be unique across 
 airbyte:                          # required iff loader == airbyte; dropped at cutover
   connections:                    # a LIST — one unit can have several (§3.5),
                                   # in one or more environments (§3.8)
-    - environment: production     # production | qa | ci — which Airbyte, §3.8
+    - environment: production     # production | qa — which Airbyte, §3.8
       name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
       status: active              # active | inactive — §3.6
       sync_interval_hours: 12     # per connection (§3.5); drives the DAGSTER
-                                  # schedule only — Airbyte renders as `manual`
+                                  # schedule only — Airbyte renders as `manual`.
+                                  # Required in production, null elsewhere §3.8
       streams: [assessment_assessment, …]             # which tables this one carries
     - environment: qa
       name: "MITx Online QA App DB → S3 Data Lake"
@@ -751,11 +752,16 @@ already uses:
 export AIRBYTE_PASSWORD="$(vault kv get -mount=secret-data \
     -field=dagster_unhashed_password dagster-http-auth-password)"
 
-uv run python bin/airbyte-inventory.py all --username dagster
-#   → airbyte-snapshot.json   redacted JSON snapshot
-#   → airbyte-findings.md     findings A–F below
-#   → ingestion/inventory/units/*.yml   draft units, TODO-marked
+uv run python bin/airbyte-inventory.py all --environment production
+#   → airbyte-snapshot-production.json   redacted JSON snapshot
+#   → airbyte-findings.md                findings A–F below
+#   → ingestion/inventory/units/*.yml    draft units, TODO-marked
 ```
+
+One environment per run — each Airbyte deployment's basic-auth credential comes from its own
+Vault service, so no single invocation reaches both (§3.8). Repeat with `--environment qa` and
+that environment's password; `render` merges whatever snapshots are on disk, so the inventory
+accumulates across runs rather than needing one pass with universal credentials.
 
 `report` and `render` re-run offline against a saved snapshot, so iterating on the derivation
 costs nothing and needs no further credentials. Findings produced:

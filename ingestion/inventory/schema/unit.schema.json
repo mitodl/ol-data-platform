@@ -77,6 +77,21 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["environment", "name", "status", "sync_interval_hours", "streams"],
+            "allOf": [
+              {
+                "description": "The cadence is required in production and must be absent elsewhere. A production `null` is the dangerous direction and the reason this is enforced rather than described: render_dagster_intervals skips a non-integer, so the group falls through to `group_name_to_interval`'s 24-hour default in definitions.py and a 6-hour sync silently becomes daily.",
+                "if": {
+                  "properties": {"environment": {"const": "production"}},
+                  "required": ["environment"]
+                },
+                "then": {
+                  "properties": {"sync_interval_hours": {"type": "integer", "enum": [6, 12, 24]}}
+                },
+                "else": {
+                  "properties": {"sync_interval_hours": {"type": "null"}}
+                }
+              }
+            ],
             "properties": {
               "environment": {
                 "enum": ["production", "qa"],
