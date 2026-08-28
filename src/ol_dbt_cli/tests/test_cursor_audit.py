@@ -146,6 +146,18 @@ class FakeUnit:
         return self.data.get("tables", [])
 
 
+def test_every_verdict_has_a_display_style() -> None:
+    """The text renderer indexes VERDICT_STYLE directly, so a gap is a crash.
+
+    Importing the command module already raises on a gap; this asserts it from
+    the test suite too, so the failure names the missing verdict instead of
+    surfacing as an unrelated collection error.
+    """
+    from ol_dbt_cli.commands.inventory import VERDICT_STYLE
+
+    assert not [verdict for verdict in Verdict if verdict not in VERDICT_STYLE]
+
+
 class TestSelectUnits:
     """A partial match must not read as success — the caller audits what it was asked for."""
 

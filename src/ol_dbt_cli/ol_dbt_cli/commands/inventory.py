@@ -403,6 +403,7 @@ def _emit_text(issues: list[ValidationIssue]) -> None:
 
 VERDICT_STYLE = {
     Verdict.CURSOR_MISSING: "bold red",
+    Verdict.CURSOR_NESTED: "yellow",
     Verdict.NOT_LANDED: "yellow",
     Verdict.INSERT_ONLY: "yellow",
     Verdict.REPLACE: "dim",
@@ -410,6 +411,16 @@ VERDICT_STYLE = {
     Verdict.CURSOR_AVAILABLE: "green",
     Verdict.CURSOR_OK: "dim green",
 }
+
+if _unstyled := [verdict for verdict in Verdict if verdict not in VERDICT_STYLE]:
+    # The text renderer indexes this map directly, so a verdict added to the
+    # enum without a style here crashes the command the first time that verdict
+    # occurs -- which, for a rare one, is long after the change that caused it.
+    # Cheap to rule out at import instead. A .get() default would paper over the
+    # omission rather than report it.
+    _names = ", ".join(verdict.value for verdict in _unstyled)
+    msg = f"VERDICT_STYLE is missing an entry for: {_names}"
+    raise RuntimeError(msg)
 
 
 @inventory_app.command
