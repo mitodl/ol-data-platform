@@ -26,6 +26,7 @@ from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
 from ol_dbt_cli.lib.inventory import (
     DEFAULT_INVENTORY_DIR,
     RenderError,
+    check_drift,
     check_removals,
     load_snapshot,
     load_snapshot_at_ref,
@@ -328,6 +329,74 @@ def reconcile(
                 f"{len(warehouse_result.observed_not_declared)} present but undeclared."
             )
         console.print(f"[bold]Summary:[/] {len(report.errors)} error(s), {len(report.warnings)} warning(s).")
+
+    if report.errors:
+        sys.exit(1)
+
+
+@inventory_app.command
+def drift(
+    *,
+    snapshot: Annotated[
+        Path,
+        Parameter(
+            name=["--snapshot", "-s"],
+            help="A workspace dump from `bin/airbyte-inventory.py dump`.",
+        ),
+    ] = Path("airbyte-snapshot.json"),
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/."),
+    ] = DEFAULT_INVENTORY_DIR,
+    output_format: Annotated[
+        str,
+        Parameter(name=["--format", "-f"], help="Output format: text (default) or json."),
+    ] = "text",
+) -> None:
+    """Report every way the live Airbyte workspace differs from the inventory.
+
+    Steps 5 and 6 were struck (§6.0), so Airbyte's configuration is
+    hand-managed and nothing applies the inventory to it. This is what keeps
+    the file honest in between: on a schedule, dump the workspace and diff it,
+    because the divergence nothing else can catch is somebody editing a
+    connection in the UI (§4).
+
+    Takes a dump rather than reading the API, so the credentialed step stays
+    separate and a drift report can be re-derived offline from a saved
+    snapshot. Exits non-zero when the inventory is wrong about something it
+    declares; a live connection or stream the inventory merely does not cover
+    is a warning.
+    """
+    units = load_units(inventory_dir)
+    if not snapshot.exists():
+        err_console.print(
+            f"[bold red]No snapshot at {escape(str(snapshot))}. Produce one with:\n"
+            "  uv run python bin/airbyte-inventory.py dump --username dagster"
+        )
+        sys.exit(1)
+
+    report = ValidationReport()
+    try:
+        workspace = json.loads(snapshot.read_text())
+        check_drift(workspace, units, report)
+    except (json.JSONDecodeError, RenderError) as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        sys.exit(1)
+
+    if output_format == "json":
+        _emit_json(report.issues)
+    else:
+        _emit_text(report.issues)
+        live = len(workspace.get("connections") or [])
+        # Connections, not units: `render airbyte` skips the dlt and Dagster
+        # units, so counting all 43 would put 43 against 43 and read as
+        # agreement while three live connections went undeclared.
+        rendered = sum(len(unit.get("connections") or []) for unit in render_airbyte(units).get("units") or [])
+        console.print(
+            f"\n[bold]Summary:[/] compared {live} live connection(s) against "
+            f"{rendered} declared — {len(report.errors)} error(s), "
+            f"{len(report.warnings)} warning(s)."
+        )
 
     if report.errors:
         sys.exit(1)

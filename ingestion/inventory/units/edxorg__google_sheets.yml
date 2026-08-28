@@ -23,4 +23,7 @@ tables:
 - name: raw__edxorg__program_entitlement
   raw_table: raw__edxorg__program_entitlement
   sync_mode: full_refresh_overwrite
+  primary_key:
+  - - Email
+  - - Program Title
   modeled: true

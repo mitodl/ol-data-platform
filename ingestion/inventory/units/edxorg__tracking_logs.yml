@@ -22,5 +22,7 @@ airbyte:
 tables:
 - name: raw__edxorg__s3__tracking_logs
   raw_table: raw__edxorg__s3__tracking_logs
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
   modeled: true

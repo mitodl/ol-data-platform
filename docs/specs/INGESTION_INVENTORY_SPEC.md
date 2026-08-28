@@ -355,6 +355,13 @@ Raise it on 12711 before the inventory is populated (step 3), not after.
 
 ## 4. Crossing the repo boundary: a committed, generated JSON
 
+> **The consumer changed (2026-08-25, §6.0).** This section was written for a Pulumi stack in
+> ol-infrastructure applying the rendered JSON. That stack is not being built. The render
+> survives as the *expected state* step 8's drift check diffs live Airbyte against, so the
+> reasoning below about committing a generated artifact rather than fetching it still applies —
+> it is simply read by a check rather than by an apply, and nothing crosses the repo boundary
+> any more.
+
 The Pulumi program in ol-infrastructure must not import a Python package from ol-data-platform,
 and Pulumi must not parse the YAML dialect directly. The contract between the repos is a
 **rendered JSON document**, produced by `ol-dbt inventory render airbyte`, carrying
@@ -413,7 +420,7 @@ part of the Airbyte-as-code story that needs to run on a timer.
 | Target | Command | Notes |
 |---|---|---|
 | dbt sources YAML | `ol-dbt generate sources --from-inventory` | Merges into existing files; emits `loader` from the unit (§1.2); only `modeled: true` tables (§1.4) |
-| Airbyte config | `ol-dbt inventory render airbyte` → committed JSON → Pulumi | §4, §6 |
+| Airbyte config | `ol-dbt inventory render airbyte` → the expected state step 8's drift check compares against | §4, §6.0 — no longer applied by Pulumi |
 | Dagster sync cadence | `ol-dbt inventory render dagster-intervals` | Replaces the hand-maintained `group_name_to_interval` literal (`definitions.py:219-254`) |
 | dlt source specs | `ol-dbt inventory render dlt` | Phase 2 only; emits `DatabaseSourceSpec`/`DatabaseTable` inputs (`src/ol_dlt/ol_dlt/database.py`) |
 
@@ -482,6 +489,45 @@ incident.
 ---
 
 ## 6. Airbyte-as-code mechanics
+
+### 6.0 Not being built — decided 2026-08-25
+
+**Steps 5 and 6 are struck. Airbyte's configuration stays hand-managed until Airbyte is
+retired.** The rest of §6 is kept as the record of why, and would be the starting point if the
+decision is ever revisited — none of it was wrong, it just buys less than it costs.
+
+Three measurements taken while starting the work moved the balance:
+
+1. **Airbyte's API masks connector secrets server-side.** An imported source reads the mask
+   into Pulumi state while the declared configuration holds the real value, so the two can
+   never match. §6.4's acceptance test — "after importing, `pulumi preview` shows zero changes
+   of any kind" — is unreachable for **33 of 50 sources**. It survives only for the 17
+   secret-free sources, the 4 destinations, and the connections.
+2. **The database sources authenticate with Vault *dynamic* roles**, which mint a new
+   credential on every read. Declaring one rotates the database user on every apply and
+   guarantees a dirty preview, so `tk-switch-source-read-replica-creds-from-vault-dyna-812a53`
+   would have had to land first.
+3. **Managing the configuration and rotating the credential are the same lever, and masking
+   takes it away.** The way round (1) is `ignore_changes` on `configuration` — after which
+   Pulumi can no longer push a rotated password into Airbyte either. The one benefit that
+   would have justified the stack on its own is the one the workaround removes.
+
+Against that: every connection here is scheduled to be deleted. The stack was always designed
+to be destroyed unit by unit as sources move to dlt (§6.5), so the work is an investment in a
+shrinking asset, and the migration itself is the thing that retires the risk.
+
+**What still holds, and is worth more than the stack was.** The inventory keeps all three of
+its other consumers — dbt source generation (step 7), the Dagster interval map (§5), and the
+drift check (step 8). **Step 8 gets more important, not less**: with the configuration
+hand-managed, a scheduled diff of live Airbyte against the inventory is the only thing that
+notices a UI edit, and `ol-dbt inventory render airbyte` is already the shape to compare
+against. The apply gate §6.3 describes has no preview to gate and is not needed.
+
+One loose end deliberately left alone: `SENSITIVE_KEY_MARKERS` in `bin/airbyte-inventory.py`
+contains a bare `auth`, which over-redacts `auth_type`, `database_config.auth_source` and
+`entra_service_principal_auth` — ordinary configuration, not credentials. It was worth fixing
+when a Pulumi artifact needed those values verbatim. With no consumer reading them, the
+conservative redaction is the better default; narrow the marker if something ever needs them.
 
 ### 6.1 Provider, edition, auth
 
@@ -659,10 +705,10 @@ ol-infrastructure; 7 closes the loop.
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
 | 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **Command and data both landed** (§8.2); the acceptance criterion is not yet met — see below | The three buckets of §5 are reported ✅; unmapped tables are explained, not deleted ✅; every one of the 374 dbt-declared raw tables maps to exactly one unit — **348/374**, the remaining 26 explained and tracked, not resolved |
 | 4 | **DONE.** CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI |
-| 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection — plus `airbyte_source_definition`/`airbyte_destination_definition`, so the deployed `docker_image_tag` is a reviewed diff rather than a UI click (§6.2) | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
-| 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |
+| ~~5~~ | ~~Pulumi `applications/airbyte_connections` + `sdks/airbyte`, import every source/destination/connection~~ | **STRUCK 2026-08-25 — §6.0** |
+| ~~6~~ | ~~Commit the rendered JSON into ol-infrastructure, register the stack in `simple_pulumi`~~ | **STRUCK 2026-08-25 — §6.0** |
 | 7 | Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5) | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2) |
-| 8 | Scheduled drift check: dump the live workspace, diff against the inventory, report differences (§4) | A connection edited in the UI is reported within a day |
+| 8 | Scheduled drift check: dump the live workspace, diff against the inventory, report differences (§4). **`ol-dbt inventory drift` is built**; what remains is scheduling it and choosing how it reports. Promoted to the load-bearing check by §6.0 — with the config hand-managed it is the only thing that notices a UI edit | A connection edited in the UI is reported within a day. Baseline 2026-08-25: **0 errors, 5 warnings**, all five deliberate — 3 connections pending deletion, 2 paused ones carrying an Airbyte schedule |
 
 Steps 1–4 unblock `tk-step-2-extend-the-rfc-12319-ingestion-inventory--5a2841` (RFC 12711's
 critical path) — that step needs the schema and the file, not the Pulumi half. Do not hold it
@@ -724,7 +770,7 @@ reproduce, and several of them changed this spec (§1.1, §3.4–§3.7).
 | Sources on `xmin` | 11, covering 560 streams |
 | Incremental streams with no explicit cursor | 514 — i.e. riding xmin |
 | Distinct explicit cursor fields | 22, dominated by Salesforce's `SystemModstamp` (1,176) |
-| Connections carrying their own Airbyte cron | **0** — Dagster is the sole trigger, as assumed |
+| Connections carrying their own Airbyte cron | **0 active** — Dagster is the sole trigger, as assumed. **Corrected 2026-08-25:** three *paused* connections do carry `scheduleType: basic` (Mailgun legacy, GitHub, HubSpot Bootcamps). Nothing runs twice while they are paused, but resuming one double-schedules it. Step 8's drift check reports them, at warning rather than error, for that reason. |
 
 Findings that are work items rather than schema changes:
 
