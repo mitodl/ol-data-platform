@@ -544,3 +544,431 @@ models:
   - name: grade_updated_on
     description: Grade last update timestamp (for incremental processing). Null for
       edX.org.
+
+unit_tests:
+- name: test_tfact_payment_refreshes_stale_user_fk_after_dim_user_rekey
+  description: >
+    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
+    for
+    a user, tfact_payment's incremental filter must re-select the affected payment
+    and
+    write the refreshed user_fk, even though the source row's own timestamp did not
+    change and the activity-timestamp watermark alone would not have caught it.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - transaction_id: 90001
+      order_id: 8001
+      transaction_amount: 100.00
+      transaction_type: "payment"
+      transaction_status: "fulfilled"
+      transaction_payment_method: "card"
+      transaction_created_on: "2024-01-15T00:00:00"
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows:
+    - order_id: 8001
+      order_purchaser_user_id: 555
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      mitxonline_application_user_id: 555
+      mitxpro_application_user_id:
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  - input: ref('dim_payment_method')
+    rows:
+    - payment_method_pk: "PM_CARD"
+      payment_method_code: "card"
+  - input: this
+    # Carries the pre-rekey user_fk; payment's watermark uses `>` so a lone row already
+    # fails it, isolating the stale-user_fk check without needing an extra row.
+    rows:
+    - payment_key: "53bc02a4e3704d46d59ab7f6f7924c47"  # pragma: allowlist secret
+      payment_id: 90001
+      order_id: 8001
+      payment_date_key: 20240115
+      user_fk: "OLD_USER_PK"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      payment_method_fk: "PM_CARD"
+      transaction_amount: 100.00
+      transaction_type: "payment"
+      transaction_status: "fulfilled"
+      transaction_created_on: "2024-01-15T00:00:00"
+  expect:
+    rows:
+    - payment_key: "53bc02a4e3704d46d59ab7f6f7924c47"  # pragma: allowlist secret
+      payment_id: 90001
+      order_id: 8001
+      payment_date_key: 20240115
+      user_fk: "NEW_USER_PK"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      payment_method_fk: "PM_CARD"
+      transaction_amount: 100.00
+      transaction_type: "payment"
+      transaction_status: "fulfilled"
+      transaction_created_on: "2024-01-15T00:00:00"
+- name: test_tfact_certificate_refreshes_stale_user_fk_after_dim_user_rekey
+  description: >
+    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
+    for
+    a user, tfact_certificate's incremental filter must re-select the affected certificate
+    and write the refreshed user_fk, even though the source row's own timestamp did
+    not
+    change and the activity-timestamp watermark alone would not have caught it.
+  model: tfact_certificate
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserun_certificates')
+    rows:
+    - courseruncertificate_id: 5001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courseruncertificate_uuid: "uuid-1"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-01-15T00:00:00"
+      courseruncertificate_updated_on: "2024-01-15T00:00:00"
+      courseruncertificate_issued_on: "2024-01-15T00:00:00"
+  - input: ref('int__mitxpro__courserun_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_certificates')
+    rows: []
+  - input: ref('int__micromasters__course_certificates')
+    rows: []
+  - input: ref('int__mitxonline__program_certificates')
+    rows: []
+  - input: ref('int__mitxpro__program_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_certificates')
+    rows: []
+  - input: ref('int__bootcamps__courserun_certificates')
+    rows: []
+      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  - input: ref('dim_certificate_type')
+    rows:
+    - certificate_type_pk: "CERT_TYPE_VERIFIED"
+      certificate_type_code: "verified"
+  - input: ref('dim_program')
+    rows: []
+      # Existing target state carries the pre-rekey user_fk; an unrelated later-dated certificate pushes the watermark past our row so only the stale-user_fk check can reselect it.
+  - input: this
+    rows:
+    - certificate_key: "341dbc50d750419afb7297181f38422a"  # pragma: allowlist secret
+      certificate_id: "5001"
+      certificate_issued_date_key: 20240115
+      user_fk: "OLD_USER_PK"
+      platform: "mitxonline"
+      certificate_scope: "course"
+      certificate_uuid: "uuid-1"
+      certificate_is_revoked: false
+      certificate_created_on: "2024-01-15T00:00:00"
+      certificate_updated_on: "2024-01-15T00:00:00"
+      certificate_issued_on: "2024-01-15T00:00:00"
+    - certificate_key: "unrelated-later-certificate"
+      certificate_id: "9999"
+      certificate_issued_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform: "mitxonline"
+      certificate_scope: "course"
+      certificate_uuid: "uuid-9999"
+      certificate_is_revoked: false
+      certificate_created_on: "2024-02-01T00:00:00"
+      certificate_updated_on: "2024-02-01T00:00:00"
+      certificate_issued_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - certificate_key: "341dbc50d750419afb7297181f38422a"  # pragma: allowlist secret
+      certificate_id: "5001"
+      certificate_issued_date_key: 20240115
+      user_fk: "NEW_USER_PK"
+      platform: "mitxonline"
+      certificate_scope: "course"
+      certificate_uuid: "uuid-1"
+      certificate_is_revoked: false
+      certificate_created_on: "2024-01-15T00:00:00"
+      certificate_updated_on: "2024-01-15T00:00:00"
+      certificate_issued_on: "2024-01-15T00:00:00"
+- name: test_tfact_enrollment_refreshes_stale_user_fk_after_dim_user_rekey
+  description: >
+    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
+    for
+    a user, tfact_enrollment's incremental filter must re-select the affected enrollment
+    and write the refreshed user_fk, even though the source row's own timestamp did
+    not
+    change and the activity-timestamp watermark alone would not have caught it.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows:
+    - courserunenrollment_id: 6001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+      courserunenrollment_enrollment_status: "enrolled"
+      courserunenrollment_is_edx_enrolled: true
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+      # Existing target state carries the pre-rekey user_fk; an unrelated later-dated enrollment pushes the watermark past our row so only the stale-user_fk check can reselect it.
+  - input: this
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "OLD_USER_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "9999"
+      enrollment_type: "course"
+      enrollment_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_updated_on: "2024-02-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+  expect:
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "NEW_USER_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+- name: test_tfact_grade_refreshes_stale_user_fk_after_dim_user_rekey
+  description: >
+    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
+    for
+    a user, tfact_grade's incremental filter must re-select the affected grade and
+    write
+    the refreshed user_fk, even though the source row's own timestamp did not change
+    and
+    the activity-timestamp watermark alone would not have caught it.
+  model: tfact_grade
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserun_grades')
+    rows:
+    - courserungrade_id: 7001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserun_platform: "MITx Online"
+      courserungrade_grade: 0.95
+      courserungrade_letter_grade: "A"
+      courserungrade_is_passing: true
+      courserungrade_created_on: "2024-01-15T00:00:00"
+      courserungrade_updated_on: "2024-01-15T00:00:00"
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_grades')
+    rows: []
+      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+      # Existing target state carries the pre-rekey user_fk; an unrelated later-dated grade pushes the watermark past our row so only the stale-user_fk check can reselect it.
+  - input: this
+    rows:
+    - grade_key: "e466cc3cac58c5170c9703eed3b27a11"  # pragma: allowlist secret
+      grade_id: "7001"
+      grade_date_key: 20240115
+      user_fk: "OLD_USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.95
+      is_passing: true
+      letter_grade: "A"
+      grade_created_on: "2024-01-15T00:00:00"
+      grade_updated_on: "2024-01-15T00:00:00"
+    - grade_key: "unrelated-later-grade"
+      grade_id: "9999"
+      grade_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.80
+      is_passing: true
+      letter_grade: "B"
+      grade_created_on: "2024-02-01T00:00:00"
+      grade_updated_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - grade_key: "e466cc3cac58c5170c9703eed3b27a11"  # pragma: allowlist secret
+      grade_id: "7001"
+      grade_date_key: 20240115
+      user_fk: "NEW_USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.95
+      is_passing: true
+      letter_grade: "A"
+      grade_created_on: "2024-01-15T00:00:00"
+      grade_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_order_refreshes_stale_user_fk_after_dim_user_rekey
+  description: >
+    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
+    for
+    a user, tfact_order's incremental filter must re-select the affected order line
+    and
+    write the refreshed user_fk, even though the source row's own timestamp did not
+    change and the activity-timestamp watermark alone would not have caught it.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - line_id: 1
+      order_id: 9001
+      user_id: 555
+      product_price: 100.00
+      order_state: "fulfilled"
+      order_total_price_paid: 100.00
+      order_reference_number: "REF1"
+      order_created_on: "2024-01-15T00:00:00"
+      order_updated_on: "2024-01-15T00:00:00"
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows: []
+      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_discount_type')
+    rows: []
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('dim_tax_rate')
+    rows: []
+      # Existing target state carries the pre-rekey user_fk; an unrelated later-dated order line pushes the watermark past our row so only the stale-user_fk check can reselect it.
+  - input: this
+    rows:
+    - order_key: "8ae1602610f2897cc24802a9e453aaa3"  # pragma: allowlist secret
+      order_id: 9001
+      line_id: "1"
+      order_date_key: 20240115
+      order_updated_date_key: 20240115
+      user_fk: "OLD_USER_PK"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      order_state: "fulfilled"
+      line_price: 100.00
+      order_total_price_paid: 100.00
+      order_reference_number: "REF1"
+      order_updated_on: "2024-01-15T00:00:00"
+    - order_key: "unrelated-later-order"
+      order_id: 9999
+      line_id: "1"
+      order_date_key: 20240201
+      order_updated_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      order_state: "fulfilled"
+      line_price: 100.00
+      order_total_price_paid: 100.00
+      order_reference_number: "REF9999"
+      order_updated_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - order_key: "8ae1602610f2897cc24802a9e453aaa3"  # pragma: allowlist secret
+      order_id: 9001
+      line_id: "1"
+      order_date_key: 20240115
+      order_updated_date_key: 20240115
+      user_fk: "NEW_USER_PK"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      order_state: "fulfilled"
+      line_price: 100.00
+      order_total_price_paid: 100.00
+      order_reference_number: "REF1"
+      order_updated_on: "2024-01-15T00:00:00"
