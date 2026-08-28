@@ -8,7 +8,6 @@ To run locally:
     PYTHONPATH=src uv run pytest tests/lib/test_openedx_integration.py -v -m integration
 """
 
-import io
 import json
 import tarfile
 from pathlib import Path
@@ -217,17 +216,20 @@ def test_real_archive_static_assets_are_bytes(
     source_system,
     expected_course_id,  # noqa: ARG001
 ):
-    """Static assets bundle contains (str, bytes) file pairs."""
+    """Static assets bundle writes a readable tar.gz of named members."""
     if not archive_exists(archive_path):
         pytest.skip(f"Archive not found: {archive_path}")
 
     _, bundle = process_course_xml_blocks(Path(archive_path), source_system)
 
     assert isinstance(bundle, CourseStaticAssetsBundle)
-    for relative_path, asset_bytes in bundle.files:
-        assert isinstance(relative_path, str)
-        assert len(relative_path) > 0
-        assert isinstance(asset_bytes, bytes)
+    try:
+        with tarfile.open(bundle.archive_path, "r:gz") as tar:
+            for member in tar.getmembers():
+                assert len(member.name) > 0
+                assert isinstance(tar.extractfile(member).read(), bytes)  # type: ignore[union-attr]
+    finally:
+        bundle.archive_path.unlink(missing_ok=True)
 
 
 @pytest.mark.integration
@@ -239,22 +241,24 @@ def test_real_archive_static_assets_rebundleable(
     source_system,
     expected_course_id,  # noqa: ARG001
 ):
-    """Static assets bundle can be written into a tar.gz."""
+    """The written archive holds exactly the files the manifest describes.
+
+    The archive keeps the source archive's member order (it is written in one
+    streaming pass) while the manifest is sorted by path, so this compares the
+    sets rather than the sequences.
+    """
     if not archive_exists(archive_path):
         pytest.skip(f"Archive not found: {archive_path}")
 
     _, bundle = process_course_xml_blocks(Path(archive_path), source_system)
 
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for relative_path, asset_bytes in bundle.files:
-            info = tarfile.TarInfo(name=relative_path)
-            info.size = len(asset_bytes)
-            tar.addfile(info, io.BytesIO(asset_bytes))
-
-    buf.seek(0)
-    with tarfile.open(fileobj=buf, mode="r:gz") as tar:
-        assert len(tar.getmembers()) == len(bundle.files)
+    try:
+        with tarfile.open(bundle.archive_path, "r:gz") as tar:
+            assert sorted(tar.getnames()) == [
+                entry["path"] for entry in bundle.manifest["files"]
+            ]
+    finally:
+        bundle.archive_path.unlink(missing_ok=True)
 
 
 @pytest.mark.integration
@@ -271,6 +275,7 @@ def test_real_archive_static_assets_bundle_version_and_manifest(
         pytest.skip(f"Archive not found: {archive_path}")
 
     _, bundle = process_course_xml_blocks(Path(archive_path), source_system)
+    bundle.archive_path.unlink(missing_ok=True)
 
     # data_version is a 64-char lowercase hex SHA-256 digest
     assert isinstance(bundle.data_version, str)
@@ -281,8 +286,7 @@ def test_real_archive_static_assets_bundle_version_and_manifest(
     manifest_json = json.dumps(bundle.manifest)
     assert manifest_json  # not empty
     assert bundle.manifest["data_version"] == bundle.data_version
-    assert bundle.manifest["file_count"] == len(bundle.files)
-    assert len(bundle.manifest["files"]) == len(bundle.files)
+    assert bundle.manifest["file_count"] == len(bundle.manifest["files"])
 
     # each manifest entry has required keys
     for entry in bundle.manifest["files"]:
@@ -293,7 +297,7 @@ def test_real_archive_static_assets_bundle_version_and_manifest(
 
     # Unpublished draft content is never collected. static/ and assets/ ARE
     # collected -- that is where a real export keeps the course's content files.
-    for path, _ in bundle.files:
-        assert path.split("/")[0] != "drafts", (
-            f"Unpublished draft file found in static_assets: {path}"
+    for entry in bundle.manifest["files"]:
+        assert entry["path"].split("/")[0] != "drafts", (
+            f"Unpublished draft file found in static_assets: {entry['path']}"
         )

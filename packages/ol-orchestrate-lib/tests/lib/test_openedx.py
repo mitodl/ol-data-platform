@@ -2,6 +2,7 @@
 
 import json
 import tarfile
+import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -18,6 +19,32 @@ from ol_orchestrate.lib.openedx import (
     process_course_xml_blocks,
     un_nest_course_structure,
 )
+
+
+@pytest.fixture(autouse=True)
+def _bundle_archives_under_tmp_path(tmp_path, monkeypatch):
+    """Keep the tar.gz the bundle writes inside pytest's per-test temp dir.
+
+    ``process_course_xml_blocks`` streams the static assets to a NamedTemporaryFile
+    and hands ownership to the caller, so without this every test would leave one
+    behind in the system temp directory.
+    """
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+
+def bundle_members(bundle: CourseStaticAssetsBundle) -> list[tuple[str, bytes]]:
+    """Read back the (path, bytes) pairs the bundle actually wrote."""
+    with tarfile.open(bundle.archive_path, "r:gz") as tar:
+        return [
+            (member.name, tar.extractfile(member).read())  # type: ignore[union-attr]
+            for member in tar.getmembers()
+        ]
+
+
+def bundle_paths(bundle: CourseStaticAssetsBundle) -> list[str]:
+    """Read back just the paths the bundle wrote."""
+    with tarfile.open(bundle.archive_path, "r:gz") as tar:
+        return tar.getnames()
 
 
 @pytest.fixture
@@ -113,6 +140,13 @@ def sample_course_archive():
     (static_dir / "manifest.xml").write_text(
         '<assets><asset name="logo.png"/></assets>'
     )
+
+    # assets/ is not in the documented OLX export layout but appears in real
+    # archives, and is collected on the same reasoning as static/. Covered here
+    # rather than only in the integration suite, which CI skips.
+    assets_dir = course_root / "assets"
+    assets_dir.mkdir()
+    (assets_dir / "handout.pdf").write_text("fake handout bytes")
 
     # drafts/ is the Studio draft workspace — unpublished, so nothing in it is
     # collected or parsed, XML or otherwise.
@@ -259,13 +293,14 @@ def test_process_course_xml_blocks_static_assets(sample_course_archive):
     _, bundle = process_course_xml_blocks(archive_path, "prod")
 
     assert isinstance(bundle, CourseStaticAssetsBundle)
-    assert len(bundle.files) > 0, "Should have static assets"
-    for relative_path, asset_bytes in bundle.files:
+    members = bundle_members(bundle)
+    assert len(members) > 0, "Should have static assets"
+    for relative_path, asset_bytes in members:
         assert isinstance(relative_path, str), "Path should be a string"
         assert isinstance(asset_bytes, bytes), "Content should be bytes"
         assert len(asset_bytes) > 0, "Asset should not be empty"
 
-    paths = [p for p, _ in bundle.files]
+    paths = [p for p, _ in members]
     assert any("subtitle.srt" in p for p in paths), "Should include SRT file"
     assert any("content.html" in p for p in paths), "Should include HTML file"
 
@@ -286,11 +321,12 @@ def test_process_course_xml_blocks_collects_static_content_files(sample_course_a
     """
     archive_path, _ = sample_course_archive
     _, bundle = process_course_xml_blocks(archive_path, "prod")
-    paths = [p for p, _ in bundle.files]
+    paths = bundle_paths(bundle)
 
     assert "static/syllabus.pdf" in paths, "Uploaded PDFs must be collected"
     assert "static/subs_video1.srt.sjson" in paths, "Subtitles must be collected"
     assert "static/logo.png" in paths, "Uploaded images must be collected"
+    assert "assets/handout.pdf" in paths, "assets/ files must be collected too"
 
 
 def test_process_course_xml_blocks_file_storage_xml_is_neither(sample_course_archive):
@@ -303,7 +339,7 @@ def test_process_course_xml_blocks_file_storage_xml_is_neither(sample_course_arc
     blocks, bundle = process_course_xml_blocks(archive_path, "prod")
 
     assert "static" not in {b.block_type for b in blocks}
-    assert "static/manifest.xml" not in [p for p, _ in bundle.files]
+    assert "static/manifest.xml" not in bundle_paths(bundle)
 
 
 def test_process_course_xml_blocks_drafts_never_collected(sample_course_archive):
@@ -312,7 +348,7 @@ def test_process_course_xml_blocks_drafts_never_collected(sample_course_archive)
     blocks, bundle = process_course_xml_blocks(archive_path, "prod")
 
     assert "drafts" not in {b.block_type for b in blocks}
-    assert not any(p.startswith("drafts/") for p, _ in bundle.files), (
+    assert not any(p.startswith("drafts/") for p in bundle_paths(bundle)), (
         "Unpublished draft content must never be collected"
     )
 
@@ -325,7 +361,7 @@ def test_process_course_xml_blocks_manifest_types_content_files(sample_course_ar
     by_path = {entry["path"]: entry for entry in bundle.manifest["files"]}
     assert by_path["static/syllabus.pdf"]["mime_type"] == "application/pdf"
     assert by_path["static/logo.png"]["mime_type"] == "image/png"
-    assert bundle.manifest["file_count"] == len(bundle.files)
+    assert bundle.manifest["file_count"] == len(bundle_paths(bundle))
 
 
 def test_process_course_xml_blocks_model_dump_serializable(sample_course_archive):
@@ -668,8 +704,8 @@ def test_data_version_changes_when_a_static_file_is_renamed(tmp_path):
     _, bundle_before = process_course_xml_blocks(before, "prod")
     _, bundle_after = process_course_xml_blocks(after, "prod")
 
-    assert [p for p, _ in bundle_before.files] == ["static/a.pdf"]
-    assert [p for p, _ in bundle_after.files] == ["static/b.pdf"]
+    assert bundle_paths(bundle_before) == ["static/a.pdf"]
+    assert bundle_paths(bundle_after) == ["static/b.pdf"]
     assert bundle_before.data_version != bundle_after.data_version
 
 
@@ -685,13 +721,17 @@ def test_data_version_is_stable_for_identical_content(tmp_path):
 
 
 def test_data_version_distinguishes_a_shifted_path_content_boundary(tmp_path):
-    """Length-prefixing keeps a path/content split from being ambiguous.
+    """A shifted path/content boundary must still be two different versions.
 
-    Without it, concatenating path and bytes lets two different bundles hash
-    identically when the boundary moves -- "ab" + "c" and "a" + "bc".
+    "ab" + "c" and "a" + "bc" are the ambiguous pair: naive concatenation makes
+    them identical. The names carry no extension on purpose -- with one, the
+    paths already differ before the boundary moves, so the case would be
+    trivially distinguishable and the test would prove nothing. Two things keep
+    it apart now: the path is length-prefixed, and what follows it is a
+    fixed-width per-file digest rather than the raw bytes.
     """
-    one = _archive_with_static(tmp_path, "one", {"ab.txt": b"c"})
-    two = _archive_with_static(tmp_path, "two", {"a.txt": b"bc"})
+    one = _archive_with_static(tmp_path, "one", {"ab": b"c"})
+    two = _archive_with_static(tmp_path, "two", {"a": b"bc"})
 
     _, bundle_one = process_course_xml_blocks(one, "prod")
     _, bundle_two = process_course_xml_blocks(two, "prod")
