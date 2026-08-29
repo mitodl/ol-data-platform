@@ -33,6 +33,9 @@ if TYPE_CHECKING:
 DEFAULT_DUCKDB_PATH = Path.home() / ".ol-dbt" / "local.duckdb"
 DEFAULT_GLUE_DATABASE = "ol_warehouse_production_raw"
 
+# Every layer a model can live in. This must stay in step with the Glue databases
+# macros/override_ref.sql derives from a model's schema: a layer that is derivable but not
+# registered turns an unbuilt ref into a missing-view error instead of a working fallback.
 LAYER_DATABASES = [
     "ol_warehouse_production_raw",
     "ol_warehouse_production_staging",
@@ -41,6 +44,8 @@ LAYER_DATABASES = [
     "ol_warehouse_production_mart",
     "ol_warehouse_production_reporting",
     "ol_warehouse_production_external",
+    "ol_warehouse_production_integrations",
+    "ol_warehouse_production_migration",
 ]
 
 PROTECTED_SCHEMAS = {
@@ -52,6 +57,8 @@ PROTECTED_SCHEMAS = {
     "ol_warehouse_production_mart",
     "ol_warehouse_production_reporting",
     "ol_warehouse_production_external",
+    "ol_warehouse_production_integrations",
+    "ol_warehouse_production_migration",
     "ol_warehouse_qa",
     "ol_warehouse_qa_raw",
     "ol_warehouse_qa_staging",
@@ -60,6 +67,8 @@ PROTECTED_SCHEMAS = {
     "ol_warehouse_qa_mart",
     "ol_warehouse_qa_reporting",
     "ol_warehouse_qa_external",
+    "ol_warehouse_qa_integrations",
+    "ol_warehouse_qa_migration",
 }
 
 TARGET_CONFIGS: dict[str, dict[str, str]] = {
