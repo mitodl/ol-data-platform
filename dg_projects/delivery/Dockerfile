@@ -19,10 +19,10 @@ WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
-COPY dg_projects/learning_resources dg_projects/learning_resources
+COPY dg_projects/delivery dg_projects/delivery
 
-# Install dependencies from the learning_resources project
-WORKDIR /app/dg_projects/learning_resources
+# Install dependencies from the delivery project
+WORKDIR /app/dg_projects/delivery
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
     uv sync --frozen --no-install-project --no-dev --no-editable
@@ -44,7 +44,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the application from the builder
-COPY --from=builder /app/dg_projects/learning_resources /app
+COPY --from=builder /app/dg_projects/delivery /app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
