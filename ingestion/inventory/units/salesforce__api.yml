@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-salesforce
   replication_method: n/a
   connections:
-  - name: OL Salesforce → S3 Data Lake
+  - environment: production
+    name: OL Salesforce → S3 Data Lake
     status: inactive
     sync_interval_hours: 24
     streams:

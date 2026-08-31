@@ -14,12 +14,14 @@ airbyte:
   source_kind: source-bigquery
   replication_method: n/a
   connections:
-  - name: IRx BigQuery - Email Opt In → S3 Data Lake
+  - environment: production
+    name: IRx BigQuery - Email Opt In → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:
     - email_opt_in
-  - name: IRx BigQuery → S3 Data Lake
+  - environment: production
+    name: IRx BigQuery → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:
