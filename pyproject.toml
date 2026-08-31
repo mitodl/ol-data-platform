@@ -263,7 +263,7 @@ path = "dg_projects/canvas"
 path = "dg_projects/data_platform"
 
 [[tool.dg.workspace.projects]]
-path = "dg_projects/learning_resources"
+path = "dg_projects/delivery"
 
 [[tool.dg.workspace.projects]]
 path = "dg_projects/data_loading"

@@ -1,16 +1,21 @@
-"""Learning resources API data extraction.
+"""Webhook delivery of learning resources to MIT Learn.
 
-Extracts course and program metadata from various learning platforms:
+The DELIVERY code location owns the push axis: assets that send resource
+metadata to MIT Learn over the webhook API. Sources currently delivered:
 - MIT Sloan Executive Education API
 - OVS (Open Video Studio) public videos
 - MIT Climate Portal articles
 - MIT Professional Education courses and programs
 - Open Learning Library courses
 - MIT edX programs
+
+The extraction halves of these pipelines (sloan_course_metadata, video_api,
+video_metadata) still live here and move on to INGEST later.
 """
 
 from dagster import (
     AssetSelection,
+    DefaultScheduleStatus,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
@@ -29,25 +34,25 @@ from ol_orchestrate.lib.utils import (
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
-from learning_resources.assets.mit_climate import mit_climate_webhook
-from learning_resources.assets.mit_edx_programs import mit_edx_programs_webhook
-from learning_resources.assets.mitpe import mitpe_webhook
-from learning_resources.assets.open_learning_library import oll_webhook
-from learning_resources.assets.ovs_videos import (
+from delivery.assets.mit_climate import mit_climate_webhook
+from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
+from delivery.assets.mitpe import mitpe_webhook
+from delivery.assets.open_learning_library import oll_webhook
+from delivery.assets.ovs_videos import (
     video_api,
     video_delete_webhook,
     video_metadata,
     video_webhook,
 )
-from learning_resources.assets.sloan_api import sloan_course_metadata
-from learning_resources.sensors.ovs_videos import (
+from delivery.assets.sloan_api import sloan_course_metadata
+from delivery.sensors.ovs_videos import (
     ovs_videos_delete_job,
     ovs_videos_delete_partition_cleanup_sensor,
     ovs_videos_discovery_sensor,
     ovs_videos_stale_cleanup_sensor,
 )
 
-init_sentry("learning_resources")
+init_sentry("delivery")
 
 # Initialize vault with resilient loading
 try:
@@ -100,6 +105,10 @@ extract_api_daily_schedule = ScheduleDefinition(
     target=AssetSelection.assets(sloan_course_metadata),
     cron_schedule="@daily",
     execution_timezone="Etc/UTC",
+    # RUNNING in the learning_resources location at the time of the move to
+    # delivery. Instigator state is keyed on (location_name, repository_name,
+    # name), so the new location starts with none and would default to STOPPED.
+    default_status=DefaultScheduleStatus.RUNNING,
 )
 
 # OVS videos jobs for manual triggering
@@ -126,6 +135,10 @@ ovs_videos_api_schedule = ScheduleDefinition(
     target=ovs_videos_api_job,
     cron_schedule="*/10 * * * *",  # Every 10 minutes
     execution_timezone="Etc/UTC",
+    # RUNNING in the learning_resources location at the time of the move to
+    # delivery. Instigator state is keyed on (location_name, repository_name,
+    # name), so the new location starts with none and would default to STOPPED.
+    default_status=DefaultScheduleStatus.RUNNING,
 )
 
 # Create unified definitions

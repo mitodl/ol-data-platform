@@ -16,7 +16,7 @@ from dagster import (
     sensor,
 )
 
-from learning_resources.assets.ovs_videos import video_api_key
+from delivery.assets.ovs_videos import video_api_key
 
 ovs_videos_delete_job = define_asset_job(
     name="ovs_videos_delete_job",
@@ -34,7 +34,10 @@ ovs_videos_delete_job = define_asset_job(
         "content-changed include_in_learn videos."
     ),
     minimum_interval_seconds=600,
-    default_status=DefaultSensorStatus.STOPPED,
+    # RUNNING in the learning_resources location at the time of the move to
+    # delivery. Instigator state is keyed on (location_name, repository_name,
+    # name), so the new location starts with none and would default to STOPPED.
+    default_status=DefaultSensorStatus.RUNNING,
     job_name="ovs_videos_webhook_job",
 )
 def ovs_videos_discovery_sensor(context):
@@ -103,7 +106,10 @@ def ovs_videos_discovery_sensor(context):
         "triggers the deletion webhook workflow."
     ),
     minimum_interval_seconds=3600 * 24,
-    default_status=DefaultSensorStatus.STOPPED,
+    # RUNNING in the learning_resources location at the time of the move to
+    # delivery. Instigator state is keyed on (location_name, repository_name,
+    # name), so the new location starts with none and would default to STOPPED.
+    default_status=DefaultSensorStatus.RUNNING,
     job_name="ovs_videos_delete_job",
 )
 def ovs_videos_stale_cleanup_sensor(context):
@@ -161,7 +167,10 @@ def ovs_videos_stale_cleanup_sensor(context):
     run_status=DagsterRunStatus.SUCCESS,
     monitored_jobs=[ovs_videos_delete_job],
     minimum_interval_seconds=60,
-    default_status=DefaultSensorStatus.STOPPED,
+    # RUNNING in the learning_resources location at the time of the move to
+    # delivery. Instigator state is keyed on (location_name, repository_name,
+    # name), so the new location starts with none and would default to STOPPED.
+    default_status=DefaultSensorStatus.RUNNING,
 )
 def ovs_videos_delete_partition_cleanup_sensor(context):
     """Remove dynamic partitions after sensor-triggered OVS deletes succeed."""
