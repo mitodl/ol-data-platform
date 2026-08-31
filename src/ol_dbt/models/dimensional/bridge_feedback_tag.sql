@@ -6,9 +6,9 @@
 with unioned as (
     select
         source_slug
+        , source_record_ref
         , source_tags
-        , {{ dbt_utils.generate_surrogate_key(['source_slug', 'source_record_ref']) }}
-            as feedback_pk
+        , {{ dbt_utils.generate_surrogate_key(['source_slug']) }} as feedback_source_fk
     from {{ ref('int__feedback__unioned') }}
     where source_tags is not null
 )
@@ -18,19 +18,26 @@ with unioned as (
 )
 
 , feedback as (
-    select feedback_pk from {{ ref('tfact_feedback') }}
+    select
+        feedback_pk
+        , source_record_id
+        , feedback_source_fk
+    from {{ ref('tfact_feedback') }}
 )
 
--- Joins to tfact_feedback so a turn only appears once its fact row exists.
+-- Joins to tfact_feedback so a turn only appears once its fact row exists, and takes
+-- feedback_pk from there rather than rederiving it, so a change to the fact's key
+-- formula can't silently stop matching rows here.
 , exploded as (
     select
-        unioned.feedback_pk
+        feedback.feedback_pk
         , unioned.source_slug
         , {{ slugify('tag.tag_label') }}
             as tag_slug
     from unioned
     inner join feedback
-        on feedback.feedback_pk = unioned.feedback_pk
+        on unioned.source_record_ref = feedback.source_record_id
+        and unioned.feedback_source_fk = feedback.feedback_source_fk
     cross join unnest(unioned.source_tags) as tag (tag_label)
     where tag.tag_label is not null
         and tag.tag_label != ''
