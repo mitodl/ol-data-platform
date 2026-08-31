@@ -4,6 +4,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 import jsonlines
 from dagster import (
@@ -38,8 +39,14 @@ def sloan_course_metadata(
 ):
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
 
-    sloan_courses = sloan_api.client.fetch_with_auth(
-        "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/courses"
+    # fetch_with_auth is annotated dict | tuple[dict, int], but the courses and
+    # course-offerings endpoints both return a JSON array of records. Cast once
+    # rather than suppressing the index error on every field below.
+    sloan_courses = cast(
+        list[dict[str, Any]],
+        sloan_api.client.fetch_with_auth(
+            "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/courses"
+        ),
     )
     courses = [
         {
@@ -59,8 +66,11 @@ def sloan_course_metadata(
 
     context.log.info("Total extracted %d Sloan courses....", len(courses))
 
-    sloan_course_offerings = sloan_api.client.fetch_with_auth(
-        "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/course-offerings"
+    sloan_course_offerings = cast(
+        list[dict[str, Any]],
+        sloan_api.client.fetch_with_auth(
+            "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/course-offerings"
+        ),
     )
     course_offerings = [
         {
