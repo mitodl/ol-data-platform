@@ -654,6 +654,55 @@ wheels = [
 ]
 
 [[package]]
+name = "delivery"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "dagster" },
+    { name = "dagster-aws" },
+    { name = "dagster-k8s" },
+    { name = "dagster-postgres" },
+    { name = "ffmpeg-python" },
+    { name = "httpx2" },
+    { name = "jsonlines" },
+    { name = "nh3" },
+    { name = "ol-orchestrate-lib" },
+    { name = "pygsheets" },
+    { name = "python-dateutil" },
+    { name = "pyyaml" },
+    { name = "requests" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "dagster-dg-cli" },
+    { name = "dagster-webserver" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagster", specifier = ">=1.12.10" },
+    { name = "dagster-aws", specifier = "~=0.29.0" },
+    { name = "dagster-k8s", specifier = ">=0.27.15" },
+    { name = "dagster-postgres", specifier = ">=0.27.13" },
+    { name = "ffmpeg-python", specifier = ">=0.2.0" },
+    { name = "httpx2", specifier = ">=2.2.0" },
+    { name = "jsonlines", specifier = "~=4.0.0" },
+    { name = "nh3", specifier = ">=0.2.0" },
+    { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
+    { name = "pygsheets", specifier = ">=2.0.6" },
+    { name = "python-dateutil", specifier = ">=2.8.2" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "requests", specifier = ">=2.32.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "dagster-dg-cli", specifier = ">=1.12.10" },
+    { name = "dagster-webserver" },
+]
+
+[[package]]
 name = "docstring-parser"
 version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1315,55 +1364,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ca/57/b07b96353f902aa1bdbe00e878e3a12a137977d03a962479785576aa8ec9/kubernetes-36.0.3.tar.gz", hash = "sha256:36993ed25ce59b789c9341473a228fcf268504a2fec7c2b2b1531d73072e5ce7", size = 2337528, upload-time = "2026-07-13T20:38:12.128Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5b/30/a96d47df739689ac0001ade0afefc16e3b477fc2fb426b568515fdc8afce/kubernetes-36.0.3-py2.py3-none-any.whl", hash = "sha256:8fde9241c4b298e6374a069dcf728359b4e72c2fb29489a975ba4e1c047cf10f", size = 4618066, upload-time = "2026-07-13T20:38:10.172Z" },
-]
-
-[[package]]
-name = "learning-resources"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "dagster" },
-    { name = "dagster-aws" },
-    { name = "dagster-k8s" },
-    { name = "dagster-postgres" },
-    { name = "ffmpeg-python" },
-    { name = "httpx2" },
-    { name = "jsonlines" },
-    { name = "nh3" },
-    { name = "ol-orchestrate-lib" },
-    { name = "pygsheets" },
-    { name = "python-dateutil" },
-    { name = "pyyaml" },
-    { name = "requests" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "dagster-dg-cli" },
-    { name = "dagster-webserver" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "dagster", specifier = ">=1.12.10" },
-    { name = "dagster-aws", specifier = "~=0.29.0" },
-    { name = "dagster-k8s", specifier = ">=0.27.15" },
-    { name = "dagster-postgres", specifier = ">=0.27.13" },
-    { name = "ffmpeg-python", specifier = ">=0.2.0" },
-    { name = "httpx2", specifier = ">=2.2.0" },
-    { name = "jsonlines", specifier = "~=4.0.0" },
-    { name = "nh3", specifier = ">=0.2.0" },
-    { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
-    { name = "pygsheets", specifier = ">=2.0.6" },
-    { name = "python-dateutil", specifier = ">=2.8.2" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "requests", specifier = ">=2.32.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "dagster-dg-cli", specifier = ">=1.12.10" },
-    { name = "dagster-webserver" },
 ]
 
 [[package]]

@@ -166,7 +166,7 @@ def is_retry_of_a_reported_failure(run: DagsterRun) -> bool:
 # which is not one of those but wraps the same way: an op with a RetryPolicy
 # that exhausts its attempts serializes as
 # ``RetryRequestedFromPolicy -> <the user's exception>`` while the hook still
-# reports the user's exception. Several learning_resources assets carry a
+# reports the user's exception. Several delivery assets carry a
 # RetryPolicy, so this is a live path, not a hypothetical one.
 DAGSTER_USER_CODE_WRAPPERS = frozenset(
     {

@@ -1,5 +1,5 @@
 [project]
-name = "learning_resources"
+name = "delivery"
 requires-python = ">=3.14,<3.15"
 version = "0.1.0"
 dependencies = [
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.entry-points]
-"dagster.components" = { learning_resources = "learning_resources.lib"}
+"dagster.components" = { delivery = "delivery.lib"}
 
 [dependency-groups]
 dev = [
@@ -32,17 +32,17 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "learning_resources.definitions"
-project_name = "learning_resources"
+module_name = "delivery.definitions"
+project_name = "delivery"
 
 [tool.dg]
 directory_type = "project"
 
 [tool.dg.project]
-root_module = "learning_resources"
+root_module = "delivery"
 
 [tool.setuptools.packages.find]
-exclude=["learning_resources_tests"]
+exclude=["delivery_tests"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
