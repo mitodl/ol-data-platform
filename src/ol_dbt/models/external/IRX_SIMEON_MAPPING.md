@@ -63,7 +63,7 @@ transform: `irx__{deployment}__openedx__mysql__{table}` → `{table}-analytics.s
 | `auth_user-analytics.sql` | `auth_user` | ✅ | ✅ | ✅ |
 | `auth_userprofile-analytics.sql` | `auth_userprofile` | ✅ | ✅ | ✅ |
 | `certificates_generatedcertificate-analytics.sql` | `certificates_generatedcertificate` | ✅ | ✅ | ✅ |
-| `courseware_studentmodule-analytics.sql` | `courseware_studentmodule` | ❌ | ❌ | ❌ |
+| `courseware_studentmodule-analytics.sql` | `courseware_studentmodule` | ✅ | ✅ | ✅ |
 | `django_comment_client_role_users-analytics.sql` | `django_comment_client_role_users` | ✅ | ✅ | ✅ |
 | `grades_persistentcoursegrade-analytics.sql` | `grades_persistentcoursegrade` | ✅ | ✅ | ✅ |
 | `grades_persistentsubsectiongrade-analytics.sql` | `grades_persistentsubsectiongrade` | ✅ | ✅ | ✅ |
@@ -74,7 +74,7 @@ transform: `irx__{deployment}__openedx__mysql__{table}` → `{table}-analytics.s
 | `course_structure-analytics.json` | — (openedx `course_structure` asset) | ✅ | ✅ | ✅ |
 | `forum.mongo` | — (see the forum track) | ❌ | ❌ | ❌ |
 
-Ten of the thirteen are one rename away. The `assessment_*`, `submissions_*` and `workflow_*`
+Eleven of the thirteen are one rename away. The `assessment_*`, `submissions_*` and `workflow_*`
 models map into `ora/` in the same way; no Simeon report query reads them, so they are carried, not
 consumed.
 
@@ -93,26 +93,28 @@ from the query builders. **They are byte-identical across all three deployments*
 `consecutive_days_visit_count` — all hardcoded `''`/`0`. Those are the Askbot forum-user columns
 the edX SQL bundle's `auth_user` carries, which is the contract the model was built for.
 
-**Gap:** `course_id` is not selected. The model already inner-joins `student_courseenrollment`, so
-one row is emitted per (user, enrollment) — but with no `course_id` column those rows are
-indistinguishable duplicates. One-line fix; the join is already there.
+**Gap, closed here:** `course_id` was not selected. The model already inner-joins
+`student_courseenrollment`, so one row was emitted per (user, enrollment) with no `course_id`
+column to tell them apart — on mitxonline that was 542,616 rows for 241,833 distinct users, i.e.
+300,783 indistinguishable duplicates. `course_id` is now carried from the existing join, and
+`(id, course_id)` is distinct at exactly the row count.
 
 ### `enrollment_query.csv`
 `id,user_id,course_id,created,is_active,mode`
 
 `irx__{d}__openedx__mysql__student_courseenrollment` emits `course_id, mode, id, is_active`.
 
-**Gaps:** `user_id` and `created` are missing. Both exist on
+**Gaps, closed here:** `user_id` and `created` were missing. Both exist on
 `raw__{d}__openedx__mysql__student_courseenrollment` (`id, mode, created, user_id, course_id,
-is_active`), so this is two added lines. `user_id` is load-bearing — an enrollment file without it
-is not usable.
+is_active`) and are now selected. `user_id` is load-bearing — an enrollment file without it is not
+usable.
 
 ### `role_query.csv`
 `id,user_id,org,course_id,role` — from `student_courseaccessrole` (course *staff* access roles).
 
 `irx__{d}__openedx__mysql__student_courseaccessrole` emits `org, course_id, user_id, role`.
 
-**Gap:** `id` is missing. Present on the raw table. One line.
+**Gap, closed here:** `id` was missing. It is present on the raw table and is now selected.
 
 Note `student_courseaccessrole.org` is free text and drifts in case from the course key (mitxonline
 production has both `MITxt` and `MITxT`). Use the column, do not derive it.
@@ -124,8 +126,10 @@ production has both `MITxt` and `MITxT`). Use the column, do not derive it.
 `irx__{d}__openedx__mysql__django_comment_client_role_users` emits `course_id, user_id, name`.
 
 **Gaps:**
-- `id` — present on `raw__{d}__openedx__mysql__django_comment_client_role_users`. One line.
-- `name` → `role` — a rename.
+- `id` — **closed here**; it is present on
+  `raw__{d}__openedx__mysql__django_comment_client_role_users` and is now selected.
+- `name` → `role` — a rename the export applies when projecting the header. `name` stays correct
+  for the source shape, so this is not a model change.
 - `org` — **not derivable from anything currently ingested.** The legacy op joins
   `organizations_organizationcourse` and `organizations_organization`; neither table exists in
   `ol_warehouse_production_raw` for any deployment. This is an *ingestion* gap, not a modelling one.
@@ -140,10 +144,17 @@ production has both `MITxt` and `MITxT`). Use the column, do not derive it.
 `id,module_type,module_id,student_id,state,grade,created,modified,max_grade,done,course_id`
 
 `irx__{d}__openedx__mysql__courseware_studentmodule`, added for all three deployments.
-`raw__{d}__openedx__mysql__courseware_studentmodule` carries exactly those eleven columns, and
-`simeon/upload/schemas/schema_studentmodule.json` declares exactly those eleven fields in the same
-order — legacy CSV, raw table and Simeon schema all agree, so the model is a plain `select` in that
-order.
+`raw__{d}__openedx__mysql__courseware_studentmodule` carries exactly those eleven columns, though
+in a different order (`id, done, grade, state, created, modified, course_id, max_grade, module_id,
+student_id, module_type`), so the model restates them in the delivered order — which is also the
+order `simeon/upload/schemas/schema_studentmodule.json` declares.
+
+**This source needs deduplicating, unlike the forum tables.** It syncs
+`incremental_deduped_history` with a `modified` cursor, so the raw table accumulates a row per
+version rather than per learner-block. The model therefore applies
+`deduplicate_raw_table(order_by='modified', partition_columns='course_id, student_id, module_id')`,
+matching the partition columns each deployment's own staging model already uses. Selecting straight
+from source would ship superseded versions alongside current state.
 
 The model is deliberately **unscoped**. The legacy op loops over `edx_course_ids` and filters
 `where course_id = <course>` per course; the facade applies that scoping at export time from the
