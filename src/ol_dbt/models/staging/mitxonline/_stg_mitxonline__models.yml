@@ -2236,6 +2236,9 @@ models:
   columns:
   - name: forumthread_id
     description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
   - name: user_id
     description: int, foreign key to auth_user for the thread author
   - name: user_username
@@ -2285,6 +2288,9 @@ models:
   columns:
   - name: forumcomment_id
     description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
   - name: forumthread_id
     description: int, foreign key to forum_commentthread. This is the thread association;
       in the pre-migration Mongo data the equivalent field held an ObjectId string
@@ -2332,6 +2338,9 @@ models:
   columns:
   - name: forumuservote_id
     description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
   - name: user_id
     description: int, foreign key to auth_user for the voter
   - name: forumuservote_value
@@ -2353,10 +2362,16 @@ models:
   columns:
   - name: forummongocontent_id
     description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
   - name: forumcontent_mongo_id
     description: str, the 24-character hex ObjectId this row carried in the pre-migration
       Mongo forum database. Only content that existed at the migration has a row here,
       so content created since has no ObjectId at all
+    tests:
+    - unique
+    - not_null
   - name: forumcontent_type_id
     description: int, Django content-type id identifying which forum table content_object_id
       points at. The value is assigned per deployment by migration order, so it is
@@ -2373,6 +2388,9 @@ models:
   columns:
   - name: forumabuseflag_id
     description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
   - name: user_id
     description: int, foreign key to auth_user for whoever raised the flag
   - name: forumabuseflag_flagged_on
@@ -2393,6 +2411,9 @@ models:
   columns:
   - name: forumhistoricalabuseflag_id
     description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
   - name: user_id
     description: int, foreign key to auth_user for whoever raised the flag
   - name: forumhistoricalabuseflag_flagged_on
