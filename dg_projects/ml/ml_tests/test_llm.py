@@ -112,3 +112,50 @@ def test_get_client_bedrock_defaults_region_and_caches() -> None:
 
     assert first.aws_region == "us-east-1"
     assert first is second
+
+
+def test_get_client_azure_openai_requires_endpoint() -> None:
+    kv_v1 = _FakeKvV1({})
+    factory = LLMClientFactory(vault=_build_vault(kv_v1), client_class="azure_openai")
+
+    with pytest.raises(ValueError, match="azure_endpoint"):
+        factory.get_client()
+
+
+def test_get_client_azure_openai_reads_vault_and_caches() -> None:
+    fake_api_key = "azure-test-key"  # pragma: allowlist secret
+    kv_v1 = _FakeKvV1({"secret-data/pipelines/feedback-llm": {"api_key": fake_api_key}})
+    factory = LLMClientFactory(
+        vault=_build_vault(kv_v1),
+        client_class="azure_openai",
+        azure_endpoint="https://example-resource.openai.azure.com",
+    )
+
+    first = factory.get_client()
+    second = factory.get_client()
+
+    assert isinstance(first, OpenAI)
+    assert first.api_key == fake_api_key
+    assert str(first.base_url) == "https://example-resource.openai.azure.com/openai/v1/"
+    assert first is second
+    assert kv_v1.reads == 1
+
+
+def test_get_client_azure_openai_honors_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AZURE_OPENAI_API_KEY skips Vault, matching the other client classes."""
+    fake_api_key = "azure-env-test-key"  # pragma: allowlist secret
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", fake_api_key)
+    kv_v1 = _FakeKvV1({})  # no secrets configured -- a Vault read would KeyError
+    factory = LLMClientFactory(
+        vault=_build_vault(kv_v1),
+        client_class="azure_openai",
+        azure_endpoint="https://example-resource.openai.azure.com",
+    )
+
+    client = factory.get_client()
+
+    assert isinstance(client, OpenAI)
+    assert client.api_key == fake_api_key
+    assert kv_v1.reads == 0
