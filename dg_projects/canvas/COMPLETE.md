@@ -106,9 +106,14 @@ The canvas code location depends on:
 
 The canvas assets use static partitioning by course ID:
 ```python
-canvas_course_ids = StaticPartitionsDefinition([
-    "155", "7023", "14566", "28766", # ... ~22 courses total
-])
+canvas_course_ids = StaticPartitionsDefinition(
+    [
+        "155",
+        "7023",
+        "14566",
+        "28766",  # ... ~22 courses total
+    ]
+)
 ```
 
 This allows:

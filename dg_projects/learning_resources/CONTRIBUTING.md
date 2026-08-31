@@ -91,6 +91,7 @@ Follow the Sloan asset (`assets/sloan_api.py`) as the canonical reference.
 from dagster import AssetExecutionContext, AssetOut, multi_asset, Output
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
+
 @multi_asset(
     group_name="my_source",
     outs={

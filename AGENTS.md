@@ -205,10 +205,7 @@ This is a **uv workspace** with unique dependency management:
 
 **Example**:
 ```python
-@asset(
-    group_name="openedx",
-    io_manager_key="s3file_io_manager"
-)
+@asset(group_name="openedx", io_manager_key="s3file_io_manager")
 def course_xml_data(context):
     # Asset implementation
     return data
