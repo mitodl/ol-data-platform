@@ -50,7 +50,7 @@ repos:
     - src/ol_dbt/package-lock.yml
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.16.4'
+  rev: 'v0.16.5'
   hooks:
   - id: ruff-format
   - id: ruff-check
@@ -89,7 +89,7 @@ repos:
       # (https://docs.getdbt.com/docs/available-adapters):
     additional_dependencies: ['dbt-trino==1.10.2', 'dbt-core<1.12']
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: v1.29.0
+  rev: v1.30.0
   hooks:
   - id: zizmor
     args: [--no-progress, --min-severity=medium, --min-confidence=medium]
