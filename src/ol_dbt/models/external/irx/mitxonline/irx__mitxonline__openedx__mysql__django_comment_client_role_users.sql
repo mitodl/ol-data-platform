@@ -12,5 +12,6 @@ select
     dccr.course_id
     , dccru.user_id
     , dccr.name
+    , dccru.id
 from dccr
 inner join dccru on dccr.id = dccru.role_id

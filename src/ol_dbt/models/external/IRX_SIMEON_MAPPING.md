@@ -4,22 +4,28 @@ Spec artifact for [#2359](https://github.com/mitodl/ol-data-platform/issues/2359
 2026-08-31 against the delivered files in the legacy buckets, the raw Iceberg tables, and
 [MIT-IR/simeon](https://github.com/MIT-IR/simeon) at `main`.
 
-## The two contracts are not the same, and this is the open question
+## Which shape we deliver — decided
+
+There are two candidate targets and they are not the same.
 
 `README.md` in this directory records that the `irx__` models "were written to match the SQL file
 output of the edx-analytics-exporter", deliberately breaking with "a legacy interface that is no
-longer being used".
+longer being used". On 2026-07-07 IRx replied on #2359: *"It would be great if the file format
+stays the same as the legacy data exports."* None of the six legacy CSV filenames appears anywhere
+in the Simeon source tree, and the legacy per-deployment layout is not the per-course layout Simeon
+walks — so "the same format" cannot mean both.
 
-On 2026-07-07 IRx replied on #2359: *"It would be great if the file format stays the same as the
-legacy data exports."*
+**Decision (2026-08-31): the facade reproduces the shape we have been shipping all along — the six
+per-deployment CSVs, with the headers documented below.** We do not gate delivery on exact parity
+with Simeon's bundle. We deliver that shape, document it, and IRx adapts on their side or comes back
+with requested changes.
 
-Those are two different targets. None of the six legacy CSV filenames appears anywhere in the
-Simeon source tree, and the legacy per-deployment layout is not the per-course layout Simeon walks.
-So "the same format" cannot mean both. **Resolve this with IRx before building the facade's tabular
-assets.** Everything below documents both contracts so the conversation has something concrete
-under it.
+That makes the legacy headers the build target and the acceptance criterion for the parallel run.
+The Simeon bundle mapping in the next section is documented because it is the destination the data
+eventually reaches, and because it is what makes several column decisions legible — not because it
+is what the facade emits.
 
-## What Simeon actually expects
+## What Simeon expects downstream (reference, not the build target)
 
 `simeon/report/utilities.py` defines `TARGET_FILES` and `_course_has_all_files(folder, ...)`, which
 checks *"a given course's folder from unpacking the SQL archive"*. The unit is a **course run**, not
@@ -133,11 +139,15 @@ production has both `MITxt` and `MITxT`). Use the column, do not derive it.
 ### `studentmodule_query.csv`
 `id,module_type,module_id,student_id,state,grade,created,modified,max_grade,done,course_id`
 
-No `irx__` model in any deployment. **But this is the cheapest gap on the list:**
-`raw__{d}__openedx__mysql__courseware_studentmodule` exists in all three deployments with exactly
-those eleven columns, and `simeon/upload/schemas/schema_studentmodule.json` declares exactly those
-eleven fields in exactly that order. Legacy CSV, raw table and Simeon schema all agree — the model
-is a plain `select` over the raw table.
+`irx__{d}__openedx__mysql__courseware_studentmodule`, added for all three deployments.
+`raw__{d}__openedx__mysql__courseware_studentmodule` carries exactly those eleven columns, and
+`simeon/upload/schemas/schema_studentmodule.json` declares exactly those eleven fields in the same
+order — legacy CSV, raw table and Simeon schema all agree, so the model is a plain `select` in that
+order.
+
+The model is deliberately **unscoped**. The legacy op loops over `edx_course_ids` and filters
+`where course_id = <course>` per course; the facade applies that scoping at export time from the
+course list, so the same list drives the tabular files and the `courses/` prefix.
 
 Size caution: `legacy_openedx` carries a 32Gi memory limit in ol-infrastructure specifically
 "because of studentmodule loading to memory". `get_dbt_model_as_dataframe` returns a
@@ -154,16 +164,21 @@ call and no new source.
 
 ## Summary of gaps
 
-| gap | kind | cost |
+| gap | kind | status |
 |---|---|---|
-| `courseware_studentmodule` model absent (×3) | modelling | plain `select`; raw table already matches the Simeon schema exactly |
-| `auth_user` missing `course_id` | modelling | one line; join already present |
-| `student_courseenrollment` missing `user_id`, `created` | modelling | two lines |
-| `student_courseaccessrole` missing `id` | modelling | one line |
-| `django_comment_client_role_users` missing `id`, `name`→`role` | modelling | two lines |
-| `django_comment_client_role_users` missing `org` | **ingestion** | needs `organizations_organizationcourse` + `organizations_organization`, or an agreed 99.55% approximation |
-| `course_ids.csv` has no warehouse source | none | already available as the `{deployment}_openedx_course_run` dynamic partition set |
-| `forum.mongo` replacement | modelling | 12 `forum_*` tables are ingested but all `modeled: false` |
+| `courseware_studentmodule` model absent (×3) | modelling | **closed** — added; plain `select`, column order matches the legacy file and `schema_studentmodule.json` |
+| `auth_user` missing `course_id` | modelling | **closed** — carried from the enrolment join that was already there |
+| `student_courseenrollment` missing `user_id`, `created` | modelling | **closed** |
+| `student_courseaccessrole` missing `id` | modelling | **closed** |
+| `django_comment_client_role_users` missing `id` | modelling | **closed**; `name`→`role` is a projection the export applies, not a model change |
+| `django_comment_client_role_users` missing `org` | **ingestion** | **OPEN** — needs `organizations_organizationcourse` + `organizations_organization`, or an agreed 99.55% approximation |
+| `course_ids.csv` has no warehouse source | none | not a gap — the `{deployment}_openedx_course_run` dynamic partition set is the same API enumeration legacy makes |
+| `forum.mongo` replacement | modelling | open — 12 `forum_*` tables are ingested but all `modeled: false` |
+
+The added columns are all additive: `ol-dbt impact` reports 0 breaking and 0 warnings across the 15
+changed models. Column order in the models is not the delivery order — the export projects the
+legacy header explicitly by name — so the new columns were appended rather than inserted, which
+keeps the existing `mit_irx` grants on these tables stable for anyone already querying them.
 
 The issue body calls the `irx__` set "a **superset**" of the six legacy CSVs. It is not. Correct
 that claim whenever #2359 is next updated.
