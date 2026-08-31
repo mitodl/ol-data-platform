@@ -8,6 +8,7 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
@@ -53,6 +54,11 @@ feedback_redacted_job = define_asset_job(
 feedback_summaries_job = define_asset_job(
     name="feedback_summaries_job",
     selection=[feedback_summaries],
+)
+
+feedback_embeddings_job = define_asset_job(
+    name="feedback_embeddings_job",
+    selection=[feedback_embeddings],
 )
 
 # Scoped to just this asset, independent of the ml code location's shared
@@ -109,10 +115,29 @@ defs = Definitions(
             vault=vault,
             client_class="bedrock" if DAGSTER_ENV == "production" else "anthropic",
         ),
+        # Separate resource, not a reused "llm": the summary asset's default
+        # provider (Anthropic/Bedrock) has no embeddings API at all, so this
+        # pipeline step needs its own client_class/secret independent of
+        # whatever the summarizer is configured with.
+        "embedding_llm": LLMClientFactory(
+            vault=vault,
+            client_class="openai",
+            vault_secret_key="openai_api_key",  # noqa: S106 -- a Vault key name, not a secret  # pragma: allowlist secret
+        ),
     },
     assets=with_failure_hooks(
-        [student_risk_probability, feedback_redacted, feedback_summaries]
+        [
+            student_risk_probability,
+            feedback_redacted,
+            feedback_summaries,
+            feedback_embeddings,
+        ]
     ),
-    jobs=[data_export_job, feedback_redacted_job, feedback_summaries_job],
+    jobs=[
+        data_export_job,
+        feedback_redacted_job,
+        feedback_summaries_job,
+        feedback_embeddings_job,
+    ],
     sensors=[feedback_summaries_automation_sensor],
 )
