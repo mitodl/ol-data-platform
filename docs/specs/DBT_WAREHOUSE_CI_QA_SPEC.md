@@ -119,14 +119,22 @@ New file `src/ol_dbt_cli/ol_dbt_cli/commands/diff.py`; register in `cli.py` via
 
 ```python
 def diff(
-    old: Annotated[str, Parameter(name=["--old"], help="Baseline model/relation name.")],
-    new: Annotated[str, Parameter(name=["--new"], help="Candidate model/relation name.")],
+    old: Annotated[
+        str, Parameter(name=["--old"], help="Baseline model/relation name.")
+    ],
+    new: Annotated[
+        str, Parameter(name=["--new"], help="Candidate model/relation name.")
+    ],
     dbt_dir_path: Annotated[str | None, Parameter(name=["--dbt-dir", "-d"])] = None,
     target: Annotated[str, Parameter(name=["--target", "-t"])] = "dev_local",
-    primary_key: Annotated[tuple[str, ...], Parameter(name=["--primary-key", "-k"])] = (),
-    exclude_columns: Annotated[tuple[str, ...], Parameter(name=["--exclude-columns"])] = (),
+    primary_key: Annotated[
+        tuple[str, ...], Parameter(name=["--primary-key", "-k"])
+    ] = (),
+    exclude_columns: Annotated[
+        tuple[str, ...], Parameter(name=["--exclude-columns"])
+    ] = (),
     output_format: Annotated[str, Parameter(name=["--format", "-f"])] = "text",
-    limit: Annotated[int, Parameter(name=["--limit"])] = 20,   # cap sample rows
+    limit: Annotated[int, Parameter(name=["--limit"])] = 20,  # cap sample rows
     auto_build: Annotated[bool, Parameter(name=["--auto-build"])] = False,
 ) -> None: ...
 ```

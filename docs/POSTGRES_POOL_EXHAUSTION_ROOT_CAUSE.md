@@ -112,7 +112,7 @@ But it does **NOT** handle:
 
 ### What pool_pre_ping Does
 ```python
-pool_pre_ping=True  # Already in our code
+pool_pre_ping = True  # Already in our code
 ```
 
 **On every checkout:**
