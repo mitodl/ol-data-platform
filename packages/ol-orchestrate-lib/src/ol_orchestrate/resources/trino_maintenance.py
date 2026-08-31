@@ -107,12 +107,19 @@ class TrinoMaintenanceResource(ConfigurableResource[None]):
             )
         return self._connection
 
-    def execute(self, sql: str) -> list[Any]:
-        """Execute a SQL statement and return all rows."""
+    def execute(self, sql: str, params: tuple[Any, ...] | None = None) -> list[Any]:
+        """Execute a SQL statement and return all rows.
+
+        ``params`` binds ``?`` placeholders through the Trino driver rather than
+        interpolating into *sql*.
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         log.debug("Trino maintenance SQL: %.200s", sql)
-        cursor.execute(sql)
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
         return cursor.fetchall()
 
     def optimize(
@@ -149,3 +156,29 @@ class TrinoMaintenanceResource(ConfigurableResource[None]):
         sql = f"ANALYZE {schema}.{table}"
         self.execute(sql)
         log.info("ANALYZE complete: %s.%s", schema, table)
+
+    def base_tables_in_schemas(self, schemas: set[str]) -> set[tuple[str, str]]:
+        """Return the ``(schema, table)`` pairs that exist as real tables.
+
+        The dbt ``manifest.json`` describes what production *builds*, not what
+        any given environment *has*. QA carries views under names the manifest
+        calls tables, and carries nothing at all under others, so issuing
+        OPTIMIZE and ANALYZE straight off the manifest produced 401 failures in
+        one run -- ``ALTER TABLE EXECUTE is not supported for views`` and
+        ``TABLE_NOT_FOUND``. Reconciling against the live catalog first is what
+        keeps maintenance reporting engine failures rather than its own
+        assumptions.
+
+        ``table_type = 'BASE TABLE'`` excludes views; a name absent from the
+        catalog is absent from the result.
+        """
+        if not schemas:
+            return set()
+        ordered = tuple(sorted(schemas))
+        placeholders = ", ".join("?" for _ in ordered)
+        sql = (
+            # Only the ? placeholders are interpolated; the values are bound.
+            "SELECT table_schema, table_name FROM information_schema.tables "  # noqa: S608
+            f"WHERE table_type = 'BASE TABLE' AND table_schema IN ({placeholders})"
+        )
+        return {(row[0], row[1]) for row in self.execute(sql, ordered)}
