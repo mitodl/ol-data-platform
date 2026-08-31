@@ -8,6 +8,7 @@ pipeline/destination objects are constructed but nothing connects to S3/Glue.
 """
 
 from data_loading.definitions import defs
+from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
 
 _REPO = defs.get_repository_def()
 
@@ -39,3 +40,32 @@ def test_schedules_and_sensors_load() -> None:
 
 def test_dlt_resource_present() -> None:
     assert "dlt" in defs.resources
+
+
+def test_mitxonline_app_assets_load_outside_production() -> None:
+    """The MITx Online app tables are dlt assets everywhere dlt owns them.
+
+    Tests import under the default ``dev`` profile, which is inside
+    ``MITXONLINE_APP_DLT_ENVIRONMENTS``, so the assets must be here.
+    """
+    asset_keys = {k.to_user_string() for k in _REPO.assets_defs_by_key}
+    for expected in (
+        "ol_warehouse_raw_data/raw__mitxonline__app__postgres__b2b_organizationpage",
+        "ol_warehouse_raw_data/raw__mitxonline__app__postgres__b2b_contractpage",
+        "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun",
+    ):
+        assert expected in asset_keys
+    assert "mitxonline_app_ingest_schedule" in {s.name for s in _REPO.schedule_defs}
+
+
+def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
+    """Production still loads this unit through Airbyte, and the keys collide.
+
+    The lakehouse code location prefixes every Airbyte stream asset with
+    ``ol_warehouse_raw_data`` and keys it on the connection prefix plus the
+    stream name -- exactly the keys these dlt assets produce. Two code
+    locations claiming one asset key, and two loaders writing one Iceberg
+    table. Adding ``production`` here is only correct in the same change that
+    disables the Airbyte connection.
+    """
+    assert "production" not in MITXONLINE_APP_DLT_ENVIRONMENTS
