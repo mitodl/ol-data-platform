@@ -133,6 +133,11 @@ Kernels are culled after 4 hours idle; there is no absolute session limit.
 
 ## Sharing
 
-`marimo run <file>.py` serves the notebook as an app with the code hidden.
-Export to self-contained HTML, or to `.ipynb` for a Jupyter collaborator. The
-notebook is a `.py` file, so it commits and code-reviews like source.
+`marimo run --sandbox <file>.py` serves the notebook as an app with the code
+hidden. Export to self-contained HTML, or to `.ipynb` for a Jupyter
+collaborator. The notebook is a `.py` file, so it commits and code-reviews like
+source.
+
+`--sandbox` is what builds the environment from the `/// script` header. Without
+it marimo runs in the base environment, which has none of the notebook
+packages.

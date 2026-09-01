@@ -36,9 +36,10 @@ def _(mo):
 
     For a blank starting point, use `getting_started.py`.
 
-    **Everything here queries aggregates.** No example selects individual
-    learner rows, and none of them touch `dim_user`. See *Working with
-    personal data* at the bottom before you write anything that does.
+    **No example here returns learner-level data.** Nothing selects individual
+    learner rows and none of these queries touch `dim_user` — course and
+    course-run rows appear, but people never do. See *Working with personal
+    data* at the bottom before you write anything that does.
     """)
     return
 
@@ -941,13 +942,17 @@ def _(mo):
     mo.md(r"""
     ## 12. Sharing what you made
 
-    - **`mo.ui` inputs plus `marimo run`** turn this file into an app with the
-      code hidden — the notebook *is* the app, no port or rewrite involved.
+    - **`mo.ui` inputs plus `marimo run --sandbox`** turn this file into an app
+      with the code hidden — the notebook *is* the app, no port or rewrite
+      involved.
     - **Export** to HTML (static, self-contained), or to `.ipynb` if a
       collaborator needs Jupyter.
-    - **The file is a Python script.** It diffs and reviews like code, and
-      `python demo.py` runs it head-first outside marimo. Notebook JSON is a
-      merge conflict waiting to happen; this is not.
+    - **The file is a Python script.** It diffs and reviews like code — notebook
+      JSON is a merge conflict waiting to happen; this is not. To run it outside
+      JupyterLab, use `marimo edit --sandbox demo.py`: sandbox mode builds the
+      environment from the `/// script` header and adds marimo itself. Plain
+      `python demo.py` ignores that header and fails on the connect cell's
+      imports, because this image installs no notebook-level packages.
     - The kernel is culled after 4 hours idle. Your home directory persists;
       anything held only in memory does not.
     """)
