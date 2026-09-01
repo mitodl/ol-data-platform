@@ -90,8 +90,10 @@ def feedback_embeddings(
     already_embedded_df = pl.DataFrame(
         schema={
             **dict.fromkeys(JOIN_COLS, pl.String),
+            "turn_count": pl.Int64,
             "embedding_input": pl.String,
             "embedding_model_version": pl.String,
+            "embedding_dim": pl.Int64,
         }
     )
     if not config.full_refresh:
@@ -101,16 +103,28 @@ def feedback_embeddings(
                     database_name=database_name,
                     table_name="feedback_embeddings",
                 )
-                .select([*JOIN_COLS, "embedding_input", "embedding_model_version"])
+                .select(
+                    [
+                        *JOIN_COLS,
+                        "turn_count",
+                        "embedding_input",
+                        "embedding_model_version",
+                        "embedding_dim",
+                    ]
+                )
                 .collect()
             )
 
-    # Built before filtering: filter_unembedded needs the model actually in use to
-    # re-submit a conversation whose stored embedding_model_version has since gone
-    # stale (a model change), not just an embedding_input arm change.
+    # Built before filtering: filter_unembedded needs the model/dim actually in use
+    # to re-submit a conversation whose stored embedding_model_version or
+    # embedding_dim has since gone stale (a model change or dimension sweep), not
+    # just a turn_count or embedding_input change.
     client = build_embedding_client(embedding_llm)
     unembedded_df = filter_unembedded(
-        resolved_df, already_embedded_df, current_model_version=client.model_version
+        resolved_df,
+        already_embedded_df,
+        current_model_version=client.model_version,
+        current_dim=client.dim,
     )
     if config.sample_limit is not None:
         unembedded_df = unembedded_df.head(config.sample_limit)
