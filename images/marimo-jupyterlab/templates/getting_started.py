@@ -74,7 +74,7 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(mo):
     import os
 
     import sqlalchemy
@@ -82,10 +82,32 @@ def _():
     import trino.sqlalchemy  # registers the "trino://" SQLAlchemy dialect
 
     def _show_login_url(url: str) -> None:
-        # Printed rather than rendered with mo.md: this runs while the calling
-        # cell is still blocked inside execute(), polling Galaxy for the token,
-        # so the cell's rendered output is not on screen yet. marimo streams
-        # stdout to the cell's console area live, which is where this lands.
+        # mo.output.append() writes to the cell's OUTPUT area and pushes to the
+        # frontend immediately, while this cell is still blocked inside
+        # execute() waiting for the login. That matters: printing alone puts the
+        # link in the cell's *console* pane, which is easy to miss, and a missed
+        # link means a restart. Rendering it as a callout with a real hyperlink
+        # is the difference between "it hung" and "click here".
+        #
+        # It no-ops outside a marimo runtime (ContextNotInitializedError), so
+        # the print below is the fallback for `python <file>.py` and for the
+        # console pane.
+        mo.output.append(
+            mo.callout(
+                mo.md(
+                    f"""
+                    ### Sign in to Starburst Galaxy
+
+                    **[Open the login page]({url})** — sign in with MIT OL SSO
+                    and this cell resumes on its own.
+
+                    The link is single-use and expires. If you miss it, re-run
+                    this cell to get a new one.
+                    """
+                ),
+                kind="warn",
+            )
+        )
         print(  # noqa: T201
             "\nStarburst Galaxy login required. Open this URL, sign in with "
             f"MIT OL SSO, then come back — the query resumes on its own:\n\n"
