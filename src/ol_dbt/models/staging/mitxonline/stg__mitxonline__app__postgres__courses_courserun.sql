@@ -4,6 +4,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_courserun') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , cleaned as (
     select
         id as courserun_id
@@ -33,7 +35,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('certificate_available_date') }} as courserun_certificate_available_on
         ,{{ cast_timestamp_to_iso8601('created_on') }} as courserun_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as courserun_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned
