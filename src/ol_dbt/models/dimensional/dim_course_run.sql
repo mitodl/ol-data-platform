@@ -192,7 +192,7 @@ with micromasters_courseruns as (
                         length(courserun_readable_id)
                         - strpos(reverse(courserun_readable_id), '+')
                     )
-                when regexp_like(courserun_readable_id, '^[^/]+/[^/]+/[^/]+')
+                when {{ regexp_like('courserun_readable_id', "'^[^/]+/[^/]+/[^/]+'") }}
                     then substring(
                         courserun_readable_id,
                         1,
