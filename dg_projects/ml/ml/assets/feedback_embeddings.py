@@ -6,6 +6,7 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     Config,
+    MetadataValue,
     asset,
 )
 from ml.lib.embed import (
@@ -130,11 +131,35 @@ def feedback_embeddings(
         unembedded_df = unembedded_df.head(config.sample_limit)
     embeddings_df = embed_conversations(unembedded_df, client)
 
+    # A null resolved_text or a failed API call inside embed_conversations silently
+    # drops that row rather than raising, so the run itself still reports success --
+    # this is the visible signal for a partial run, surfaced as metadata (queryable
+    # from the asset catalog, not just buried in a log line) rather than failing the
+    # whole materialization over what may be a single transient row.
+    dropped_count = unembedded_df.height - embeddings_df.height
+
     context.log.info(
-        "Embedded %d conversations (%d already embedded, %d total upstream)",
+        "Embedded %d conversations (%d already embedded, %d total upstream, "
+        "%d dropped)",
         embeddings_df.height,
         already_embedded_df.height,
         resolved_df.height,
+        dropped_count,
+    )
+    if dropped_count:
+        context.log.warning(
+            "%d conversation(s) were not embedded this run; will be retried on the "
+            "next upstream/code-triggered run",
+            dropped_count,
+        )
+
+    context.add_output_metadata(
+        {
+            "embedded_count": MetadataValue.int(embeddings_df.height),
+            "dropped_count": MetadataValue.int(dropped_count),
+            "already_embedded_count": MetadataValue.int(already_embedded_df.height),
+            "total_upstream_count": MetadataValue.int(resolved_df.height),
+        }
     )
 
     return embeddings_df
