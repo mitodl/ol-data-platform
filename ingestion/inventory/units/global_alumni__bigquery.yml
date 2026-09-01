@@ -1,0 +1,28 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: global_alumni
+layer: bigquery
+scope: singleton
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__global_alumni__bigquery__
+airbyte:
+  source_kind: source-bigquery
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: Global Alumni BigQuery → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - api_enrollments
+tables:
+- name: api_enrollments
+  raw_table: raw__global_alumni__bigquery__api_enrollments
+  sync_mode: full_refresh_append
+  namespace: mit_xpro_api
+  modeled: true

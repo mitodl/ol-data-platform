@@ -1,0 +1,51 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: irx
+layer: bigquery
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__irx__edxorg__bigquery__
+airbyte:
+  source_kind: source-bigquery
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: IRx BigQuery - Email Opt In → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - email_opt_in
+  - environment: production
+    name: IRx BigQuery → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - mitx_course
+    - mitx_person_course
+    - mitx_user_info_combo
+tables:
+- name: email_opt_in
+  raw_table: raw__irx__edxorg__bigquery__email_opt_in
+  sync_mode: full_refresh_overwrite
+  namespace: email_opt_in
+  modeled: true
+- name: mitx_course
+  raw_table: raw__irx__edxorg__bigquery__mitx_course
+  sync_mode: full_refresh_overwrite
+  namespace: aggregate_data
+  modeled: true
+- name: mitx_person_course
+  raw_table: raw__irx__edxorg__bigquery__mitx_person_course
+  sync_mode: full_refresh_overwrite
+  namespace: aggregate_data
+  modeled: true
+- name: mitx_user_info_combo
+  raw_table: raw__irx__edxorg__bigquery__mitx_user_info_combo
+  sync_mode: full_refresh_overwrite
+  namespace: aggregate_data
+  modeled: true

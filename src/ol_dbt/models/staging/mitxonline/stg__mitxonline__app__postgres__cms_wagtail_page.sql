@@ -2,6 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__wagtailcore_page') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , cleaned as (
     select
         id as wagtail_page_id
@@ -22,7 +24,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('first_published_at') }} as wagtail_page_first_published_on
         ,{{ cast_timestamp_to_iso8601('last_published_at') }} as wagtail_page_last_published_on
 
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

@@ -1,0 +1,334 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: micromasters
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__micromasters__app__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - environment: production
+    name: MicroMasters Production App DB → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - auth_user
+    - cms_programpage
+    - courses_course
+    - courses_courserun
+    - courses_electivecourse
+    - courses_electivesset
+    - courses_program
+    - courses_program_topics
+    - courses_topic
+    - dashboard_programenrollment
+    - django_content_type
+    - ecommerce_coupon
+    - ecommerce_couponaudit
+    - ecommerce_couponinvoice
+    - ecommerce_couponinvoiceaudit
+    - ecommerce_line
+    - ecommerce_order
+    - ecommerce_orderaudit
+    - ecommerce_receipt
+    - ecommerce_redeemedcoupon
+    - ecommerce_redeemedcouponaudit
+    - ecommerce_usercoupon
+    - ecommerce_usercouponaudit
+    - exams_examrun
+    - grades_combinedfinalgrade
+    - grades_courserungradingstatus
+    - grades_finalgrade
+    - grades_micromasterscoursecertificate
+    - grades_micromastersprogramcertificate
+    - grades_micromastersprogramcommendation
+    - grades_proctoredexamgrade
+    - grades_proctoredexamgradeaudit
+    - profiles_country
+    - profiles_education
+    - profiles_employment
+    - profiles_profile
+    - social_auth_usersocialauth
+    - wagtailcore_page
+    - wagtailimages_image
+tables:
+- name: auth_user
+  raw_table: raw__micromasters__app__postgres__auth_user
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_programpage
+  raw_table: raw__micromasters__app__postgres__cms_programpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: courses_course
+  raw_table: raw__micromasters__app__postgres__courses_course
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserun
+  raw_table: raw__micromasters__app__postgres__courses_courserun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_electivecourse
+  raw_table: raw__micromasters__app__postgres__courses_electivecourse
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_electivesset
+  raw_table: raw__micromasters__app__postgres__courses_electivesset
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_program
+  raw_table: raw__micromasters__app__postgres__courses_program
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_program_topics
+  raw_table: raw__micromasters__app__postgres__courses_program_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_topic
+  raw_table: raw__micromasters__app__postgres__courses_topic
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: dashboard_programenrollment
+  raw_table: raw__micromasters__app__postgres__dashboard_programenrollment
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: django_content_type
+  raw_table: raw__micromasters__app__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_coupon
+  raw_table: raw__micromasters__app__postgres__ecommerce_coupon
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponaudit
+  raw_table: raw__micromasters__app__postgres__ecommerce_couponaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_couponinvoice
+  raw_table: raw__micromasters__app__postgres__ecommerce_couponinvoice
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponinvoiceaudit
+  raw_table: raw__micromasters__app__postgres__ecommerce_couponinvoiceaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_line
+  raw_table: raw__micromasters__app__postgres__ecommerce_line
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_order
+  raw_table: raw__micromasters__app__postgres__ecommerce_order
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_orderaudit
+  raw_table: raw__micromasters__app__postgres__ecommerce_orderaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_receipt
+  raw_table: raw__micromasters__app__postgres__ecommerce_receipt
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_redeemedcoupon
+  raw_table: raw__micromasters__app__postgres__ecommerce_redeemedcoupon
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_redeemedcouponaudit
+  raw_table: raw__micromasters__app__postgres__ecommerce_redeemedcouponaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_usercoupon
+  raw_table: raw__micromasters__app__postgres__ecommerce_usercoupon
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_usercouponaudit
+  raw_table: raw__micromasters__app__postgres__ecommerce_usercouponaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: exams_examrun
+  raw_table: raw__micromasters__app__postgres__exams_examrun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_combinedfinalgrade
+  raw_table: raw__micromasters__app__postgres__grades_combinedfinalgrade
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_courserungradingstatus
+  raw_table: raw__micromasters__app__postgres__grades_courserungradingstatus
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: grades_finalgrade
+  raw_table: raw__micromasters__app__postgres__grades_finalgrade
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_micromasterscoursecertificate
+  raw_table: raw__micromasters__app__postgres__grades_micromasterscoursecertificate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_micromastersprogramcertificate
+  raw_table: raw__micromasters__app__postgres__grades_micromastersprogramcertificate
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_micromastersprogramcommendation
+  raw_table: raw__micromasters__app__postgres__grades_micromastersprogramcommendation
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: grades_proctoredexamgrade
+  raw_table: raw__micromasters__app__postgres__grades_proctoredexamgrade
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: grades_proctoredexamgradeaudit
+  raw_table: raw__micromasters__app__postgres__grades_proctoredexamgradeaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: profiles_country
+  raw_table: raw__micromasters__app__postgres__profiles_country
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: profiles_education
+  raw_table: raw__micromasters__app__postgres__profiles_education
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: profiles_employment
+  raw_table: raw__micromasters__app__postgres__profiles_employment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: profiles_profile
+  raw_table: raw__micromasters__app__postgres__profiles_profile
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: social_auth_usersocialauth
+  raw_table: raw__micromasters__app__postgres__social_auth_usersocialauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailcore_page
+  raw_table: raw__micromasters__app__postgres__wagtailcore_page
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailimages_image
+  raw_table: raw__micromasters__app__postgres__wagtailimages_image
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true

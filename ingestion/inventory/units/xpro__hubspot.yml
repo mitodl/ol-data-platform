@@ -1,0 +1,213 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: xpro
+layer: hubspot
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__xpro__hubspot__
+airbyte:
+  source_kind: source-hubspot
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: HubSpot xPro → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - campaigns
+    - companies
+    - companies_property_history
+    - contact_lists
+    - contacts
+    - deal_pipelines
+    - deal_splits
+    - deals
+    - deals_archived
+    - deals_property_history
+    - email_subscriptions
+    - engagements_calls
+    - engagements_emails
+    - engagements_meetings
+    - engagements_notes
+    - engagements_tasks
+    - leads
+    - line_items
+    - marketing_emails
+    - products
+    - workflows
+tables:
+- name: campaigns
+  raw_table: raw__xpro__hubspot__campaigns
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - lastUpdatedTime
+  primary_key:
+  - - id
+  modeled: false
+- name: companies
+  raw_table: raw__xpro__hubspot__companies
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: companies_property_history
+  raw_table: raw__xpro__hubspot__companies_property_history
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - timestamp
+  primary_key:
+  - - companyId
+  - - property
+  - - timestamp
+  modeled: false
+- name: contact_lists
+  raw_table: raw__xpro__hubspot__contact_lists
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - listId
+  modeled: false
+- name: contacts
+  raw_table: raw__xpro__hubspot__contacts
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: deal_pipelines
+  raw_table: raw__xpro__hubspot__deal_pipelines
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - pipelineId
+  modeled: false
+- name: deal_splits
+  raw_table: raw__xpro__hubspot__deal_splits
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: deals
+  raw_table: raw__xpro__hubspot__deals
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: deals_archived
+  raw_table: raw__xpro__hubspot__deals_archived
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - archivedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: deals_property_history
+  raw_table: raw__xpro__hubspot__deals_property_history
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - timestamp
+  primary_key:
+  - - dealId
+  - - property
+  - - timestamp
+  modeled: false
+- name: email_subscriptions
+  raw_table: raw__xpro__hubspot__email_subscriptions
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: engagements_calls
+  raw_table: raw__xpro__hubspot__engagements_calls
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: engagements_emails
+  raw_table: raw__xpro__hubspot__engagements_emails
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: engagements_meetings
+  raw_table: raw__xpro__hubspot__engagements_meetings
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: engagements_notes
+  raw_table: raw__xpro__hubspot__engagements_notes
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: engagements_tasks
+  raw_table: raw__xpro__hubspot__engagements_tasks
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: leads
+  raw_table: raw__xpro__hubspot__leads
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: line_items
+  raw_table: raw__xpro__hubspot__line_items
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: marketing_emails
+  raw_table: raw__xpro__hubspot__marketing_emails
+  sync_mode: full_refresh_overwrite_deduped
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: products
+  raw_table: raw__xpro__hubspot__products
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false
+- name: workflows
+  raw_table: raw__xpro__hubspot__workflows
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updatedAt
+  primary_key:
+  - - id
+  modeled: false

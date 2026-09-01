@@ -1,0 +1,230 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: ovs
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__ovs__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - environment: production
+    name: ODL Video Service → S3 Data Lake
+    status: active
+    sync_interval_hours: 6
+    streams:
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - auth_user
+    - auth_user_groups
+    - auth_user_user_permissions
+    - dj_elastictranscoder_encodejob
+    - django_admin_log
+    - django_content_type
+    - django_migrations
+    - django_session
+    - techtv2ovs_techtvcollection
+    - techtv2ovs_techtvvideo
+    - ui_collection
+    - ui_collection_admin_lists
+    - ui_collection_view_lists
+    - ui_collectionedxendpoint
+    - ui_edxendpoint
+    - ui_encodejob
+    - ui_moiralist
+    - ui_video
+    - ui_video_view_lists
+    - ui_videofile
+    - ui_videosubtitle
+    - ui_videothumbnail
+    - ui_youtubevideo
+tables:
+- name: auth_group
+  raw_table: raw__ovs__postgres__auth_group
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__ovs__postgres__auth_group_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__ovs__postgres__auth_permission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user
+  raw_table: raw__ovs__postgres__auth_user
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user_groups
+  raw_table: raw__ovs__postgres__auth_user_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user_user_permissions
+  raw_table: raw__ovs__postgres__auth_user_user_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: dj_elastictranscoder_encodejob
+  raw_table: raw__ovs__postgres__dj_elastictranscoder_encodejob
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: django_admin_log
+  raw_table: raw__ovs__postgres__django_admin_log
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__ovs__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_migrations
+  raw_table: raw__ovs__postgres__django_migrations
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_session
+  raw_table: raw__ovs__postgres__django_session
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - session_key
+  modeled: false
+- name: techtv2ovs_techtvcollection
+  raw_table: raw__ovs__postgres__techtv2ovs_techtvcollection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: techtv2ovs_techtvvideo
+  raw_table: raw__ovs__postgres__techtv2ovs_techtvvideo
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_collection
+  raw_table: raw__ovs__postgres__ui_collection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ui_collection_admin_lists
+  raw_table: raw__ovs__postgres__ui_collection_admin_lists
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_collection_view_lists
+  raw_table: raw__ovs__postgres__ui_collection_view_lists
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_collectionedxendpoint
+  raw_table: raw__ovs__postgres__ui_collectionedxendpoint
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ui_edxendpoint
+  raw_table: raw__ovs__postgres__ui_edxendpoint
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ui_encodejob
+  raw_table: raw__ovs__postgres__ui_encodejob
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ui_moiralist
+  raw_table: raw__ovs__postgres__ui_moiralist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_video
+  raw_table: raw__ovs__postgres__ui_video
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ui_video_view_lists
+  raw_table: raw__ovs__postgres__ui_video_view_lists
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_videofile
+  raw_table: raw__ovs__postgres__ui_videofile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_videosubtitle
+  raw_table: raw__ovs__postgres__ui_videosubtitle
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_videothumbnail
+  raw_table: raw__ovs__postgres__ui_videothumbnail
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ui_youtubevideo
+  raw_table: raw__ovs__postgres__ui_youtubevideo
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - video_id
+  modeled: false

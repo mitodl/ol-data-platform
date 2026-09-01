@@ -41,9 +41,11 @@ there are 23 distinct two-segment prefixes with at least four incompatible shape
 | `raw__thirdparty__salesforce___destination_v2__Opportunity` | vendor + Airbyte destination artifact, **mixed case**, triple underscore | 2 |
 | `raw__edxorg__s3__tables__auth_user` | deployment, system, sub-namespace, table | 18 |
 
-**Consequence:** each unit declares its `table_prefix` explicitly. The inventory maps
-prefix → unit; nothing parses names. A validator rule asserts prefixes are non-overlapping,
-which is what makes the mapping total and unambiguous.
+**Consequence:** each unit declares its `table_prefix` explicitly, and nothing parses names.
+A prefix documents a unit rather than routing to it: prefixes may nest, and what makes
+ownership total and unambiguous is that every `tables[].raw_table` is globally unique across
+units (rule 8). An *undeclared* table therefore has no owner to infer — several prefixes may
+cover it, and `reconcile` reports the candidates rather than picking the longest (§8.2).
 
 **Confirmed against the live workspace (2026-08-14, §8.1).** There are exactly two naming
 mechanisms, and neither is a positional parse:
@@ -174,12 +176,20 @@ loader: airbyte                   # airbyte | dlt
 table_prefix: raw__mitxonline__app__postgres__   # §1.1; must be unique across all units
 
 airbyte:                          # required iff loader == airbyte; dropped at cutover
-  connections:                    # a LIST — one unit can have several (§3.5)
-    - name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
+  connections:                    # a LIST — one unit can have several (§3.5),
+                                  # in one or more environments (§3.8)
+    - environment: production     # production | qa — which Airbyte, §3.8
+      name: "MITx Online Open edX DB → S3 Data Lake"   # §1.3, byte-exact
       status: active              # active | inactive — §3.6
       sync_interval_hours: 12     # per connection (§3.5); drives the DAGSTER
-                                  # schedule only — Airbyte renders as `manual`
+                                  # schedule only — Airbyte renders as `manual`.
+                                  # Required in production, null elsewhere §3.8
       streams: [assessment_assessment, …]             # which tables this one carries
+    - environment: qa
+      name: "MITx Online QA App DB → S3 Data Lake"
+      status: inactive            # configured, then disabled — §3.8
+      sync_interval_hours: null   # null outside production — §3.8
+      streams: [assessment_assessment]
   source_kind: source-postgres
   replication_method: xmin        # xmin | cursor | cdc  — see §3.4
 
@@ -203,21 +213,40 @@ tables:
 Carried over from RFC 12711 §3, unchanged:
 
 1. `local: mirror` is rejected by the schema (the enum omits the value).
-2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d.
+2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d. Adding `dagster`
+   (rule 7) does not widen this: dlt is the only supported local ingest target, so the rule
+   stays "requires dlt" rather than becoming "bans Airbyte". A `dagster` unit declaring
+   `local: ingest` would name a local path nothing implements.
 3. `mirror_max_age_days` is required iff any strategy is `mirror`, with no default.
 
 New here:
 
-4. `table_prefix` values are pairwise non-overlapping **across units**, and every
-   `tables[].raw_table` starts with its unit's prefix. This is what makes prefix → unit total
-   (§1.1). Note the direction: prefix → unit must be a function; connection → prefix need not
-   be injective, because a unit legitimately has several connections (§3.5).
-5. `cursor_field` is required iff `sync_mode` is incremental, and must name a column the
-   table actually has once §8's warehouse reconcile runs.
+4. Every `tables[].raw_table` starts with its unit's `table_prefix`. Prefixes **may nest**:
+   the rule that forbade it was a proxy for rule 8, which enforces the real invariant
+   directly. Since §1.1 fixed that raw tables are declared and never parsed, a prefix
+   documents a unit rather than routing to it. Populating the inventory proved the proxy too
+   strong — edxorg's namespace nests three loaders, with dlt's `raw__edxorg__s3__tables__`
+   database dumps sitting inside Airbyte's `raw__edxorg__s3__` catalog files (§8.2).
+5. `cursor_field` is required when `sync_mode` is incremental **and the unit's
+   `replication_method` does not already explain its absence**. `xmin` does explain it (§3.4),
+   and is then reported once per unit rather than once per table: all 514 cursorless
+   incrementals sit in the eight xmin Postgres units, and writing a `cursor_field` to silence
+   them would invent config Airbyte does not hold — precisely what breaks §6.4's empty preview.
+
+   The converse does **not** hold, and this rule deliberately no longer says "iff". A
+   full-refresh stream may carry a cursor, and 45 in the live workspace do — 42
+   `full_refresh_overwrite`, 2 `full_refresh_overwrite_deduped`, 1 `full_refresh_append`
+   (measured 2026-08-25). Airbyte keeps the cursor when a stream is switched off incremental,
+   so the pairing is untidy but true. Deleting it to satisfy a neater rule is the same
+   mistake in the other direction: `render airbyte` would then disagree with the live config
+   on 45 streams, and §6.4's empty preview is what that breaks.
 6. Every `airbyte.connections[].name` ends with `s3 data lake` (case-insensitive) — the
    Dagster selector's precondition (§1.3) — or the unit is marked `dagster_visible: false`,
    which is an assertion that no dbt model depends on it (§8.1 finding C).
-7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`.
+7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`. A third
+   value, `loader: dagster`, carries neither block: some tables are produced by a bespoke
+   asset pipeline under `dg_projects/` rather than pulled by a loader, and the inventory
+   claims to record everything we load (§2), not everything a loader fetches.
 8. Every `raw_table` is globally unique across units, and appears in exactly one connection's
    `streams` within its unit.
 
@@ -230,6 +259,15 @@ populated:
 - `tk-determine-per-source-incremental-cursor-viabilit-51f299` — which connections use xmin,
   and therefore which need a replacement cursor column chosen before dlt can take over. Today
   that answer requires crawling the Airbyte UI; after this lands it is `rg replication_method: xmin`.
+
+  Choosing the replacement is `ol-dbt inventory cursors`, which reads the LANDED column list
+  from Glue and reports, per table, whether a modification timestamp exists to key on. It is a
+  standing check rather than a one-off audit for two reasons: a new app is covered the moment
+  its unit exists, nothing is hard-coded per source; and a declared `cursor_field` whose column
+  is later dropped or renamed does not fail loudly — the load just stops advancing. That case
+  (`cursor_missing`) exits non-zero. Note what it cannot tell you: whether the column is stamped
+  on *every* mutation path. A write-once column yields a load that captures inserts and silently
+  never reflects an edit, so a `cursor_available` finding is a shortlist entry, not an approval.
 - The Airbyte-side deadline: source-postgres 3.8+ refuses xmin mode outright on any database
   that has ever exceeded 2^32 lifetime transactions
   (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent
@@ -329,6 +367,53 @@ layers instead of deployments.
 
 **This is a change to RFC 12711's schema, not just this spec's**, since the key is shared.
 Raise it on 12711 before the inventory is populated (step 3), not after.
+
+### 3.8 Each environment runs its own Airbyte, so `environment` is on the connection
+
+The unit key is `(deployment, layer)` and stays environment-agnostic — a unit is the same
+analytics object wherever it runs. What differs per environment is the *wiring*: production
+and QA each run a separate Airbyte deployment (`api-airbyte.odl.mit.edu` and
+`api-airbyte-qa.odl.mit.edu`, from ol-infrastructure's `airbyte:api_host_domain`), each with
+its own connections against its own lake. So `environment` is a required field on each
+connection, and one unit's `airbyte.connections` list legitimately holds both.
+
+There is no `ci`. ol-infrastructure defines an `api-airbyte-ci.odl.mit.edu` host, but nothing
+runs behind it — the CI code location sets `SKIP_AIRBYTE` and loads an empty workspace. The
+enum omits the value rather than documenting it as always-empty, because an empty snapshot is
+indistinguishable from a workspace whose connections were all deleted.
+
+`bin/airbyte-inventory.py dump --environment <env>` writes `airbyte-snapshot-<env>.json`;
+`render` merges however many exist into one inventory. **One environment per run**: each
+deployment's basic-auth credential comes from its own Vault service, so no single invocation
+can authenticate to both. Run `all --environment <env>` once per environment; the render step
+reads whatever snapshots are on disk, so the merged inventory accumulates across runs rather
+than requiring one pass with universal credentials.
+
+Three consequences the validator and renderer encode:
+
+1. **The duplicate-stream rule counts per environment, not per unit.** It exists to catch two
+   connections writing one raw table; across environments the writes land in different lakes,
+   so the same stream in a production and a QA connection is the normal case for a unit
+   ingested in both.
+2. **`sync_interval_hours` is null outside production.** The cadence lives in
+   `group_name_to_interval` in `lakehouse/definitions.py`, which is guarded by
+   `DAGSTER_ENV == "production"` and therefore says nothing about any other environment.
+   Emitting a number there would invent one.
+3. **`environment` crosses the repo boundary** in `render airbyte` (§4), so a consumer —
+   Pulumi, or the drift check of §8 — can select one workspace's connections instead of
+   being handed the union of two as though it were one.
+
+Omission is the dangerous direction here, which is why the field is required rather than
+defaulted: an untagged QA connection reads as production, and a silent fall-through to
+production is precisely the class of bug RFC 12711 exists to end.
+
+This is also what makes `strategies.qa` decidable from evidence. Outside production most
+connections are `inactive` — configured once, then disabled as they fell out of use — and an
+inactive connection produces no Dagster asset, so reading the asset graph makes QA look nearly
+empty when it is merely switched off. A unit with **no** QA connection and a unit whose QA
+connection exists but is disabled are different situations calling for different work, and
+before this they looked identical here. The same distinction scopes the dlt migration: a
+disabled connection still records the streams someone once wanted in QA.
 
 ---
 
@@ -442,6 +527,16 @@ reported in three buckets — *in inventory, missing from warehouse* (ingestion 
 *in warehouse, missing from inventory* (undeclared drift), *in both* (fine). It stays useful
 precisely because it is an independent observation; making it the source of truth is the
 current defect.
+
+`reconcile` is built, and takes its warehouse side from either the local DuckDB registry
+(`--duckdb-path`) or a dumped table list (`--warehouse-tables`) — the dbt side needs no
+credentials and always runs, so the command is useful before anyone has warehouse access.
+Only one finding is an ERROR: a dbt source table no unit declares, which is step 3's
+acceptance criterion. Both warehouse directions are warnings, because a declared table the
+warehouse lacks is also what a just-added entry looks like before its first sync, and an
+undeclared table is also what years-old drift looks like — neither is fixable by editing the
+pull request that trips it, which is the line §7.2 draws for what may be an ERROR. That is
+also why `reconcile` is not in the PR workflow: it needs an observation CI does not have.
 
 The Dagster interval map is worth calling out as the immediate win: it is a hand-maintained
 32-entry dict of strings that must match names Airbyte generates, with a silent 24-hour default
@@ -626,7 +721,7 @@ ol-infrastructure; 7 closes the loop.
 |---|---|---|
 | 1 | `ol-dbt inventory` sub-app (§5): JSON Schema, dbt-free loader, `validate` | `ol-dbt inventory validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
-| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. The generation half (`render airbyte`, `render dagster-intervals`) is built; `reconcile` and the data itself remain | The three buckets of §5 are reported; every one of the 374 dbt-declared raw tables maps to exactly one unit; unmapped tables are explained, not deleted |
+| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **Command and data both landed** (§8.2); the acceptance criterion is not yet met — see below | The three buckets of §5 are reported ✅; unmapped tables are explained, not deleted ✅; every one of the 374 dbt-declared raw tables maps to exactly one unit — **348/374**, the remaining 26 explained and tracked, not resolved |
 | 4 | **DONE.** CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI |
 | 5 | Pulumi `applications/airbyte_connections` + `sdks/airbyte`, provider pinned, **preview-gate first** (§6.3), then import every existing source/destination/connection — plus `airbyte_source_definition`/`airbyte_destination_definition`, so the deployed `docker_image_tag` is a reviewed diff rather than a UI click (§6.2) | `pulumi preview` is empty after import — zero creates, zero updates, zero replacements |
 | 6 | Commit the rendered JSON into ol-infrastructure and register the stack in `simple_pulumi`'s `pipeline_params` + `meta.py` (§4) | Changing the committed JSON triggers the stack's own pipeline; no new pipeline is written |
@@ -657,11 +752,16 @@ already uses:
 export AIRBYTE_PASSWORD="$(vault kv get -mount=secret-data \
     -field=dagster_unhashed_password dagster-http-auth-password)"
 
-uv run python bin/airbyte-inventory.py all --username dagster
-#   → airbyte-snapshot.json   redacted JSON snapshot
-#   → airbyte-findings.md     findings A–F below
-#   → ingestion/inventory/units/*.yml   draft units, TODO-marked
+uv run python bin/airbyte-inventory.py all --environment production
+#   → airbyte-snapshot-production.json   redacted JSON snapshot
+#   → airbyte-findings.md                findings A–F below
+#   → ingestion/inventory/units/*.yml    draft units, TODO-marked
 ```
+
+One environment per run — each Airbyte deployment's basic-auth credential comes from its own
+Vault service, so no single invocation reaches both (§3.8). Repeat with `--environment qa` and
+that environment's password; `render` merges whatever snapshots are on disk, so the inventory
+accumulates across runs rather than needing one pass with universal credentials.
 
 `report` and `render` re-run offline against a saved snapshot, so iterating on the derivation
 costs nothing and needs no further credentials. Findings produced:
@@ -720,6 +820,55 @@ Findings that are work items rather than schema changes:
   has a live interval-map entry, dbt models, and 568 configured streams, and all of that is
   correct and should stay, just not running.
 - **1,185 loaded-but-unmodeled tables** against 374 modelled — the §1.4 ratio, now measured.
+
+### 8.2 What populating it changed, 2026-08-25
+
+43 units, 982 tables, validating clean — 34 `loader: airbyte` units from the snapshot plus
+nine the snapshot structurally cannot see: seven dlt sources (`mit_climate`, `mitpe`, `oll`,
+`keycloak`, `podcast`, `edxorg/api`, `edxorg/mysql`) and two Dagster asset pipelines
+(`openedx/s3`, `edxorg/course_structure`). Four things the schema did not survive contact
+with, each fixed above rather than worked around:
+
+- **A raw namespace can hold more than one loader.** `raw__edxorg__*` is served by three:
+  Airbyte (4 connections), dlt (`edxorg_s3`, `mit_edx_programs`), and a bespoke Dagster asset
+  pipeline (`dg_projects/edxorg/edxorg/assets/openedx_course_archives.py`). Their prefixes nest, and
+  `loader` had no value for the third. Hence rule 4's relaxation and rule 7's `dagster`.
+- **`xmin` made the file unlandable.** 514 cursorless incremental streams, every one in an
+  xmin Postgres unit — see rule 5.
+- **`_destination_v2` is not a twin, it is a successor.** Both Salesforce connections carry
+  the same stream names to different prefixes, so no single unit can hold them. dbt reads only
+  the `_destination_v2` tables and no Mailgun table at all, and the legacy connections are
+  paused against an S3-Glue destination we no longer read — so the v2 connection is the unit
+  and 567 legacy tables are retired. This answers §9's first open question with measurement
+  rather than deferring it to cutover.
+- **A single-table unit has no `__`-terminated prefix.** A deployment's tracking logs are one
+  table; requiring the trailing `__` left only `raw__<dep>__openedx__`, which swallows that
+  deployment's mysql, api and mongodb units.
+
+**Step 3's acceptance criterion is not yet met, and `reconcile` exits non-zero saying so.**
+348 of 374 dbt-declared raw tables map to a unit. Of the 26 that do not, 19 bootcamps tables
+are retired in `retired.yml` — reported as a warning, because the graveyard explains them and
+the stale reader is the dbt model, not the inventory. The remaining 7 are `assessment_ai*`
+sources under mitxonline and xpro that those deployments have never synced
+(`tk-7-assessment-ai-dbt-sources-under-mitxonline-and-e489de`); they stay ERROR because
+nothing yet explains them, so a clean checkout exits 1. That is the honest state rather than
+a baseline to be silenced, and it is why `reconcile` is not a CI gate yet: it becomes one
+when that task closes.
+
+**`reconcile` cannot tell you the inventory is incomplete.** The `keycloak` and `podcast`
+units were missing from the first populated draft, and both are actively scheduled daily in
+`dg_projects/data_loading`. Neither half of the three-way diff could see it: no dbt model
+reads either source, so the dbt half compares against nothing, and the warehouse half needs
+an observation CI does not have. They were found by reading
+`dg_projects/data_loading/data_loading/defs/ingestion/schedules.py` against the unit list.
+Until step 8's scheduled drift check runs, **adding a loader means adding its unit by hand**,
+and the only reliable check is that every scheduled ingestion asset maps to one.
+
+One finding needs an action outside this repo: the paused Airbyte connection
+`edx.org Production Course Metadata → S3 Data Lake` writes two raw tables that
+`openedx_course_archives.py` also produces and that dbt reads. It is superseded dead config,
+and re-enabling it would have two pipelines writing one table. Delete it in Airbyte before
+step 5's import, or step 5 will faithfully import the hazard.
 
 ---
 

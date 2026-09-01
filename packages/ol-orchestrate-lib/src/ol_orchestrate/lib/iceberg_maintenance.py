@@ -483,6 +483,33 @@ def load_maintenance_configs_from_manifest(
     return configs
 
 
+def partition_by_catalog_presence(
+    configs: list[TableMaintenanceConfig],
+    base_tables: set[tuple[str, str]],
+) -> tuple[list[TableMaintenanceConfig], list[str]]:
+    """Split *configs* into those backed by a real table and those that are not.
+
+    ``manifest.json`` is compiled against production and shipped to every
+    environment, so it states what production builds rather than what the
+    target environment holds.  QA holds views under names the manifest calls
+    tables, and holds nothing at all under others.  Both are indistinguishable
+    from the manifest alone, and both are unmaintainable: OPTIMIZE and ANALYZE
+    reject views outright, and pyiceberg cannot load a table that is not there.
+
+    *base_tables* is the live ``(schema, table)`` set from the engine, so a
+    config is kept only when the engine agrees it is a table.  The second
+    return value names the rest as ``schema.table`` for reporting.
+    """
+    present: list[TableMaintenanceConfig] = []
+    unbacked: list[str] = []
+    for cfg in configs:
+        if (cfg.schema_name, cfg.model_name) in base_tables:
+            present.append(cfg)
+        else:
+            unbacked.append(f"{cfg.schema_name}.{cfg.model_name}")
+    return present, unbacked
+
+
 # ── Raw Layer ─────────────────────────────────────────────────────────────────
 
 

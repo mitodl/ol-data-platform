@@ -1,15 +1,26 @@
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any, Self
 from urllib.parse import urlparse, urlunparse
 
 from dagster._annotations import beta
 from dagster_airbyte.resources import AirbyteClient, AirbyteWorkspace
+from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
 from dagster_shared.utils.cached_method import cached_method
 from pydantic.fields import Field, PrivateAttr
 from pydantic.functional_validators import model_validator
 
 AIRBYTE_REST_API_VERSION = "v1"
 AIRBYTE_CONFIGURATION_API_VERSION = "v1"
+
+# The statuses ``AirbyteClient.sync_and_poll`` counts as "a sync is already
+# under way" when it decides whether to start a new job or attach to an
+# existing one.  Mirrored here so the collapse below keys off the same set.
+IN_FLIGHT_JOB_STATUSES = (
+    AirbyteJobStatusType.RUNNING,
+    AirbyteJobStatusType.PENDING,
+    AirbyteJobStatusType.INCOMPLETE,
+)
 
 
 @beta
@@ -77,6 +88,40 @@ class AirbyteOSSClient(AirbyteClient):
             ).get("data", [])
             self.__dict__["workspace_id"] = workspaces[0]["workspaceId"]
         return self
+
+    def get_jobs_for_connection(
+        self, connection_id: str, created_after: datetime | None = None
+    ) -> Sequence[AirbyteJob]:
+        """Return the connection's jobs with concurrent in-flight ones collapsed.
+
+        ``sync_and_poll`` attaches to a single in-flight job and raises
+        ``Found multiple running jobs`` on two or more.  That distinction does
+        not hold here: ``definitions.py`` sets ``poll_previous_running_sync``
+        precisely because the automation condition and Airbyte's own scheduler
+        both launch syncs into the same connection, so two in-flight jobs is
+        the same routine overlap as one, arriving twice.  Nine connections were
+        failing nightly on it, each amplified fourfold by run retries that
+        cannot succeed -- the condition is unchanged by re-running.
+
+        Attaching to the newest is what the one-job branch already does, and
+        Airbyte job ids increase monotonically, so the highest id is the most
+        recently created.  Older in-flight jobs are dropped from the returned
+        list; every terminal job is passed through untouched.
+
+        This overrides the accessor rather than ``sync_and_poll`` because the
+        library exposes no other seam: the decision is inline in a method too
+        large to fork safely, and this is its only caller in dagster-airbyte
+        0.29.
+        """
+        jobs = super().get_jobs_for_connection(
+            connection_id=connection_id, created_after=created_after
+        )
+        in_flight = [job for job in jobs if job.status in IN_FLIGHT_JOB_STATUSES]
+        if len(in_flight) <= 1:
+            return jobs
+        newest_id = max(job.id for job in in_flight)
+        superseded = {job.id for job in in_flight if job.id != newest_id}
+        return [job for job in jobs if job.id not in superseded]
 
     def _paginated_request(
         self,

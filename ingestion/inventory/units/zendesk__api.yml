@@ -1,0 +1,256 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: zendesk
+layer: api
+scope: singleton
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__thirdparty__zendesk_support__
+airbyte:
+  source_kind: source-zendesk-support
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: Zendesk Support → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - account_attributes
+    - articles
+    - brands
+    - categories
+    - group_memberships
+    - groups
+    - organizations
+    - satisfaction_ratings
+    - sections
+    - side_conversations
+    - sla_policies
+    - tags
+    - ticket_activities
+    - ticket_audits
+    - ticket_comments
+    - ticket_events
+    - ticket_fields
+    - ticket_forms
+    - ticket_metric_events
+    - ticket_metrics
+    - ticket_skips
+    - tickets
+    - topics
+    - user_fields
+    - user_identities
+    - users
+tables:
+- name: account_attributes
+  raw_table: raw__thirdparty__zendesk_support__account_attributes
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - ''
+  primary_key:
+  - - id
+  modeled: false
+- name: articles
+  raw_table: raw__thirdparty__zendesk_support__articles
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: brands
+  raw_table: raw__thirdparty__zendesk_support__brands
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - ''
+  primary_key:
+  - - id
+  modeled: true
+- name: categories
+  raw_table: raw__thirdparty__zendesk_support__categories
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - ''
+  primary_key:
+  - - id
+  modeled: false
+- name: group_memberships
+  raw_table: raw__thirdparty__zendesk_support__group_memberships
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: groups
+  raw_table: raw__thirdparty__zendesk_support__groups
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: true
+- name: organizations
+  raw_table: raw__thirdparty__zendesk_support__organizations
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: true
+- name: satisfaction_ratings
+  raw_table: raw__thirdparty__zendesk_support__satisfaction_ratings
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: sections
+  raw_table: raw__thirdparty__zendesk_support__sections
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - ''
+  primary_key:
+  - - id
+  modeled: false
+- name: side_conversations
+  raw_table: raw__thirdparty__zendesk_support__side_conversations
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: sla_policies
+  raw_table: raw__thirdparty__zendesk_support__sla_policies
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: tags
+  raw_table: raw__thirdparty__zendesk_support__tags
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - ''
+  primary_key:
+  - - name
+  modeled: false
+- name: ticket_activities
+  raw_table: raw__thirdparty__zendesk_support__ticket_activities
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: ticket_audits
+  raw_table: raw__thirdparty__zendesk_support__ticket_audits
+  sync_mode: incremental_append
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: ticket_comments
+  raw_table: raw__thirdparty__zendesk_support__ticket_comments
+  sync_mode: incremental_append
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: true
+- name: ticket_events
+  raw_table: raw__thirdparty__zendesk_support__ticket_events
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - timestamp
+  primary_key:
+  - - id
+  modeled: false
+- name: ticket_fields
+  raw_table: raw__thirdparty__zendesk_support__ticket_fields
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: true
+- name: ticket_forms
+  raw_table: raw__thirdparty__zendesk_support__ticket_forms
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: ticket_metric_events
+  raw_table: raw__thirdparty__zendesk_support__ticket_metric_events
+  sync_mode: incremental_append
+  cursor_field:
+  - time
+  primary_key:
+  - - id
+  modeled: false
+- name: ticket_metrics
+  raw_table: raw__thirdparty__zendesk_support__ticket_metrics
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: ticket_skips
+  raw_table: raw__thirdparty__zendesk_support__ticket_skips
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: tickets
+  raw_table: raw__thirdparty__zendesk_support__tickets
+  sync_mode: incremental_append
+  cursor_field:
+  - generated_timestamp
+  primary_key:
+  - - id
+  modeled: true
+- name: topics
+  raw_table: raw__thirdparty__zendesk_support__topics
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: user_fields
+  raw_table: raw__thirdparty__zendesk_support__user_fields
+  sync_mode: full_refresh_overwrite
+  cursor_field:
+  - ''
+  primary_key:
+  - - id
+  modeled: false
+- name: user_identities
+  raw_table: raw__thirdparty__zendesk_support__user_identities
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: users
+  raw_table: raw__thirdparty__zendesk_support__users
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: true

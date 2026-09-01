@@ -1,0 +1,1446 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: xpro
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__xpro__app__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - environment: production
+    name: xPro Production App DB → S3 Data Lake
+    status: active
+    sync_interval_hours: 6
+    streams:
+    - affiliate_affiliate
+    - affiliate_affiliatereferralaction
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - b2b_ecommerce_b2bcoupon
+    - b2b_ecommerce_b2bcouponaudit
+    - b2b_ecommerce_b2bcouponredemption
+    - b2b_ecommerce_b2bline
+    - b2b_ecommerce_b2border
+    - b2b_ecommerce_b2borderaudit
+    - b2b_ecommerce_b2breceipt
+    - cms_blogindexpage
+    - cms_catalogpage
+    - cms_certificateindexpage
+    - cms_certificatepage
+    - cms_commoncomponentindexpage
+    - cms_companieslogocarouselsection
+    - cms_courseindexpage
+    - cms_courseoverviewpage
+    - cms_coursepage
+    - cms_coursepage_topics
+    - cms_coursesinprogrampage
+    - cms_enterprisepage
+    - cms_externalcoursepage
+    - cms_externalcoursepage_topics
+    - cms_externalprogrampage
+    - cms_facultymemberspage
+    - cms_forteamscommonpage
+    - cms_forteamspage
+    - cms_frequentlyaskedquestion
+    - cms_frequentlyaskedquestionpage
+    - cms_homepage
+    - cms_imagecarouselpage
+    - cms_learningjourneysection
+    - cms_learningoutcomespage
+    - cms_learningstrategyformsection
+    - cms_learningtechniquescommonpage
+    - cms_learningtechniquespage
+    - cms_newsandeventspage
+    - cms_programindexpage
+    - cms_programpage
+    - cms_resourcepage
+    - cms_signatoryindexpage
+    - cms_signatorypage
+    - cms_sitenotification
+    - cms_successstoriessection
+    - cms_termsofservicespage
+    - cms_textsection
+    - cms_textvideosection
+    - cms_usertestimonialspage
+    - cms_webinarindexpage
+    - cms_webinarpage
+    - cms_whoshouldenrollpage
+    - compliance_exportsinquirylog
+    - courses_course
+    - courses_courselanguage
+    - courses_courserun
+    - courses_courseruncertificate
+    - courses_courserunenrollment
+    - courses_courserunenrollmentaudit
+    - courses_courserungrade
+    - courses_courserungradeaudit
+    - courses_coursetopic
+    - courses_platform
+    - courses_program
+    - courses_programcertificate
+    - courses_programenrollment
+    - courses_programenrollmentaudit
+    - courses_programrun
+    - courseware_coursewareuser
+    - courseware_openedxapiauth
+    - digitalcredentials_digitalcredential
+    - digitalcredentials_digitalcredentialrequest
+    - digitalcredentials_learnerdid
+    - django_admin_log
+    - django_content_type
+    - django_migrations
+    - django_session
+    - django_site
+    - durable_cache
+    - ecommerce_basket
+    - ecommerce_basketitem
+    - ecommerce_bulkcouponassignment
+    - ecommerce_company
+    - ecommerce_coupon
+    - ecommerce_couponeligibility
+    - ecommerce_couponpayment
+    - ecommerce_couponpaymentversion
+    - ecommerce_couponredemption
+    - ecommerce_couponselection
+    - ecommerce_couponversion
+    - ecommerce_courserunselection
+    - ecommerce_dataconsentagreement
+    - ecommerce_dataconsentagreement_courses
+    - ecommerce_dataconsentuser
+    - ecommerce_line
+    - ecommerce_linerunselection
+    - ecommerce_order
+    - ecommerce_orderaudit
+    - ecommerce_product
+    - ecommerce_productcouponassignment
+    - ecommerce_productversion
+    - ecommerce_programrunline
+    - ecommerce_receipt
+    - ecommerce_taxrate
+    - hubspot_api_hubspotobject
+    - hubspot_hubspoterrorcheck
+    - hubspot_hubspotlineresync
+    - maxmind_geoname
+    - maxmind_netblock
+    - oauth2_provider_accesstoken
+    - oauth2_provider_application
+    - oauth2_provider_grant
+    - oauth2_provider_idtoken
+    - oauth2_provider_refreshtoken
+    - oauth_toolkit_extensions_applicationaccess
+    - robots_rule
+    - robots_rule_allowed
+    - robots_rule_disallowed
+    - robots_rule_sites
+    - robots_url
+    - sheets_coupongenerationrequest
+    - sheets_deferralrequest
+    - sheets_filewatchrenewalattempt
+    - sheets_googleapiauth
+    - sheets_googlefilewatch
+    - sheets_refundrequest
+    - social_auth_association
+    - social_auth_code
+    - social_auth_nonce
+    - social_auth_partial
+    - social_auth_usersocialauth
+    - taggit_tag
+    - taggit_taggeditem
+    - users_blocklist
+    - users_changeemailrequest
+    - users_legaladdress
+    - users_profile
+    - users_user
+    - users_user_groups
+    - users_user_user_permissions
+    - voucher_voucher
+    - wagtailadmin_admin
+    - wagtailcore_collection
+    - wagtailcore_collectionviewrestriction
+    - wagtailcore_collectionviewrestriction_groups
+    - wagtailcore_comment
+    - wagtailcore_commentreply
+    - wagtailcore_groupapprovaltask
+    - wagtailcore_groupapprovaltask_groups
+    - wagtailcore_groupcollectionpermission
+    - wagtailcore_grouppagepermission
+    - wagtailcore_locale
+    - wagtailcore_modellogentry
+    - wagtailcore_page
+    - wagtailcore_pagelogentry
+    - wagtailcore_pagesubscription
+    - wagtailcore_pageviewrestriction
+    - wagtailcore_pageviewrestriction_groups
+    - wagtailcore_referenceindex
+    - wagtailcore_revision
+    - wagtailcore_site
+    - wagtailcore_task
+    - wagtailcore_taskstate
+    - wagtailcore_workflow
+    - wagtailcore_workflowcontenttype
+    - wagtailcore_workflowpage
+    - wagtailcore_workflowstate
+    - wagtailcore_workflowtask
+    - wagtaildocs_document
+    - wagtailembeds_embed
+    - wagtailforms_formsubmission
+    - wagtailimages_image
+    - wagtailimages_rendition
+    - wagtailredirects_redirect
+    - wagtailsearch_indexentry
+    - wagtailusers_userprofile
+tables:
+- name: affiliate_affiliate
+  raw_table: raw__xpro__app__postgres__affiliate_affiliate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: affiliate_affiliatereferralaction
+  raw_table: raw__xpro__app__postgres__affiliate_affiliatereferralaction
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group
+  raw_table: raw__xpro__app__postgres__auth_group
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__xpro__app__postgres__auth_group_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__xpro__app__postgres__auth_permission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: b2b_ecommerce_b2bcoupon
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2bcoupon
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: b2b_ecommerce_b2bcouponaudit
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: b2b_ecommerce_b2bcouponredemption
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponredemption
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: b2b_ecommerce_b2bline
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2bline
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: b2b_ecommerce_b2border
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2border
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: b2b_ecommerce_b2borderaudit
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2borderaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: b2b_ecommerce_b2breceipt
+  raw_table: raw__xpro__app__postgres__b2b_ecommerce_b2breceipt
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_blogindexpage
+  raw_table: raw__xpro__app__postgres__cms_blogindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_catalogpage
+  raw_table: raw__xpro__app__postgres__cms_catalogpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_certificateindexpage
+  raw_table: raw__xpro__app__postgres__cms_certificateindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_certificatepage
+  raw_table: raw__xpro__app__postgres__cms_certificatepage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_commoncomponentindexpage
+  raw_table: raw__xpro__app__postgres__cms_commoncomponentindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_companieslogocarouselsection
+  raw_table: raw__xpro__app__postgres__cms_companieslogocarouselsection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_courseindexpage
+  raw_table: raw__xpro__app__postgres__cms_courseindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_courseoverviewpage
+  raw_table: raw__xpro__app__postgres__cms_courseoverviewpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_coursepage
+  raw_table: raw__xpro__app__postgres__cms_coursepage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_coursepage_topics
+  raw_table: raw__xpro__app__postgres__cms_coursepage_topics
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_coursesinprogrampage
+  raw_table: raw__xpro__app__postgres__cms_coursesinprogrampage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_enterprisepage
+  raw_table: raw__xpro__app__postgres__cms_enterprisepage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_externalcoursepage
+  raw_table: raw__xpro__app__postgres__cms_externalcoursepage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_externalcoursepage_topics
+  raw_table: raw__xpro__app__postgres__cms_externalcoursepage_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_externalprogrampage
+  raw_table: raw__xpro__app__postgres__cms_externalprogrampage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_facultymemberspage
+  raw_table: raw__xpro__app__postgres__cms_facultymemberspage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_forteamscommonpage
+  raw_table: raw__xpro__app__postgres__cms_forteamscommonpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - forteamspage_ptr_id
+  modeled: false
+- name: cms_forteamspage
+  raw_table: raw__xpro__app__postgres__cms_forteamspage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_frequentlyaskedquestion
+  raw_table: raw__xpro__app__postgres__cms_frequentlyaskedquestion
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: cms_frequentlyaskedquestionpage
+  raw_table: raw__xpro__app__postgres__cms_frequentlyaskedquestionpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_homepage
+  raw_table: raw__xpro__app__postgres__cms_homepage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_imagecarouselpage
+  raw_table: raw__xpro__app__postgres__cms_imagecarouselpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_learningjourneysection
+  raw_table: raw__xpro__app__postgres__cms_learningjourneysection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_learningoutcomespage
+  raw_table: raw__xpro__app__postgres__cms_learningoutcomespage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_learningstrategyformsection
+  raw_table: raw__xpro__app__postgres__cms_learningstrategyformsection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_learningtechniquescommonpage
+  raw_table: raw__xpro__app__postgres__cms_learningtechniquescommonpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - learningtechniquespage_ptr_id
+  modeled: false
+- name: cms_learningtechniquespage
+  raw_table: raw__xpro__app__postgres__cms_learningtechniquespage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_newsandeventspage
+  raw_table: raw__xpro__app__postgres__cms_newsandeventspage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_programindexpage
+  raw_table: raw__xpro__app__postgres__cms_programindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_programpage
+  raw_table: raw__xpro__app__postgres__cms_programpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_resourcepage
+  raw_table: raw__xpro__app__postgres__cms_resourcepage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_signatoryindexpage
+  raw_table: raw__xpro__app__postgres__cms_signatoryindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_signatorypage
+  raw_table: raw__xpro__app__postgres__cms_signatorypage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_sitenotification
+  raw_table: raw__xpro__app__postgres__cms_sitenotification
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: cms_successstoriessection
+  raw_table: raw__xpro__app__postgres__cms_successstoriessection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_termsofservicespage
+  raw_table: raw__xpro__app__postgres__cms_termsofservicespage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_textsection
+  raw_table: raw__xpro__app__postgres__cms_textsection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_textvideosection
+  raw_table: raw__xpro__app__postgres__cms_textvideosection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_usertestimonialspage
+  raw_table: raw__xpro__app__postgres__cms_usertestimonialspage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_webinarindexpage
+  raw_table: raw__xpro__app__postgres__cms_webinarindexpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_webinarpage
+  raw_table: raw__xpro__app__postgres__cms_webinarpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_whoshouldenrollpage
+  raw_table: raw__xpro__app__postgres__cms_whoshouldenrollpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: compliance_exportsinquirylog
+  raw_table: raw__xpro__app__postgres__compliance_exportsinquirylog
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_course
+  raw_table: raw__xpro__app__postgres__courses_course
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courselanguage
+  raw_table: raw__xpro__app__postgres__courses_courselanguage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_courserun
+  raw_table: raw__xpro__app__postgres__courses_courserun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courseruncertificate
+  raw_table: raw__xpro__app__postgres__courses_courseruncertificate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserunenrollment
+  raw_table: raw__xpro__app__postgres__courses_courserunenrollment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserunenrollmentaudit
+  raw_table: raw__xpro__app__postgres__courses_courserunenrollmentaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_courserungrade
+  raw_table: raw__xpro__app__postgres__courses_courserungrade
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserungradeaudit
+  raw_table: raw__xpro__app__postgres__courses_courserungradeaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_coursetopic
+  raw_table: raw__xpro__app__postgres__courses_coursetopic
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_platform
+  raw_table: raw__xpro__app__postgres__courses_platform
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_program
+  raw_table: raw__xpro__app__postgres__courses_program
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programcertificate
+  raw_table: raw__xpro__app__postgres__courses_programcertificate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programenrollment
+  raw_table: raw__xpro__app__postgres__courses_programenrollment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programenrollmentaudit
+  raw_table: raw__xpro__app__postgres__courses_programenrollmentaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_programrun
+  raw_table: raw__xpro__app__postgres__courses_programrun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courseware_coursewareuser
+  raw_table: raw__xpro__app__postgres__courseware_coursewareuser
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courseware_openedxapiauth
+  raw_table: raw__xpro__app__postgres__courseware_openedxapiauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: digitalcredentials_digitalcredential
+  raw_table: raw__xpro__app__postgres__digitalcredentials_digitalcredential
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: digitalcredentials_digitalcredentialrequest
+  raw_table: raw__xpro__app__postgres__digitalcredentials_digitalcredentialrequest
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: digitalcredentials_learnerdid
+  raw_table: raw__xpro__app__postgres__digitalcredentials_learnerdid
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_admin_log
+  raw_table: raw__xpro__app__postgres__django_admin_log
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__xpro__app__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: django_migrations
+  raw_table: raw__xpro__app__postgres__django_migrations
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_session
+  raw_table: raw__xpro__app__postgres__django_session
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - session_key
+  modeled: false
+- name: django_site
+  raw_table: raw__xpro__app__postgres__django_site
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: durable_cache
+  raw_table: raw__xpro__app__postgres__durable_cache
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: ecommerce_basket
+  raw_table: raw__xpro__app__postgres__ecommerce_basket
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_basketitem
+  raw_table: raw__xpro__app__postgres__ecommerce_basketitem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_bulkcouponassignment
+  raw_table: raw__xpro__app__postgres__ecommerce_bulkcouponassignment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_company
+  raw_table: raw__xpro__app__postgres__ecommerce_company
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_coupon
+  raw_table: raw__xpro__app__postgres__ecommerce_coupon
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponeligibility
+  raw_table: raw__xpro__app__postgres__ecommerce_couponeligibility
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponpayment
+  raw_table: raw__xpro__app__postgres__ecommerce_couponpayment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponpaymentversion
+  raw_table: raw__xpro__app__postgres__ecommerce_couponpaymentversion
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponredemption
+  raw_table: raw__xpro__app__postgres__ecommerce_couponredemption
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponselection
+  raw_table: raw__xpro__app__postgres__ecommerce_couponselection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_couponversion
+  raw_table: raw__xpro__app__postgres__ecommerce_couponversion
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_courserunselection
+  raw_table: raw__xpro__app__postgres__ecommerce_courserunselection
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_dataconsentagreement
+  raw_table: raw__xpro__app__postgres__ecommerce_dataconsentagreement
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_dataconsentagreement_courses
+  raw_table: raw__xpro__app__postgres__ecommerce_dataconsentagreement_courses
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_dataconsentuser
+  raw_table: raw__xpro__app__postgres__ecommerce_dataconsentuser
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: ecommerce_line
+  raw_table: raw__xpro__app__postgres__ecommerce_line
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_linerunselection
+  raw_table: raw__xpro__app__postgres__ecommerce_linerunselection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_order
+  raw_table: raw__xpro__app__postgres__ecommerce_order
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_orderaudit
+  raw_table: raw__xpro__app__postgres__ecommerce_orderaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_product
+  raw_table: raw__xpro__app__postgres__ecommerce_product
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_productcouponassignment
+  raw_table: raw__xpro__app__postgres__ecommerce_productcouponassignment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_productversion
+  raw_table: raw__xpro__app__postgres__ecommerce_productversion
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_programrunline
+  raw_table: raw__xpro__app__postgres__ecommerce_programrunline
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_receipt
+  raw_table: raw__xpro__app__postgres__ecommerce_receipt
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_taxrate
+  raw_table: raw__xpro__app__postgres__ecommerce_taxrate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: hubspot_api_hubspotobject
+  raw_table: raw__xpro__app__postgres__hubspot_api_hubspotobject
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: hubspot_hubspoterrorcheck
+  raw_table: raw__xpro__app__postgres__hubspot_hubspoterrorcheck
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: hubspot_hubspotlineresync
+  raw_table: raw__xpro__app__postgres__hubspot_hubspotlineresync
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: maxmind_geoname
+  raw_table: raw__xpro__app__postgres__maxmind_geoname
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: maxmind_netblock
+  raw_table: raw__xpro__app__postgres__maxmind_netblock
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_accesstoken
+  raw_table: raw__xpro__app__postgres__oauth2_provider_accesstoken
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_application
+  raw_table: raw__xpro__app__postgres__oauth2_provider_application
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_grant
+  raw_table: raw__xpro__app__postgres__oauth2_provider_grant
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_idtoken
+  raw_table: raw__xpro__app__postgres__oauth2_provider_idtoken
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth2_provider_refreshtoken
+  raw_table: raw__xpro__app__postgres__oauth2_provider_refreshtoken
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: oauth_toolkit_extensions_applicationaccess
+  raw_table: raw__xpro__app__postgres__oauth_toolkit_extensions_applicationaccess
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule
+  raw_table: raw__xpro__app__postgres__robots_rule
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule_allowed
+  raw_table: raw__xpro__app__postgres__robots_rule_allowed
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule_disallowed
+  raw_table: raw__xpro__app__postgres__robots_rule_disallowed
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_rule_sites
+  raw_table: raw__xpro__app__postgres__robots_rule_sites
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: robots_url
+  raw_table: raw__xpro__app__postgres__robots_url
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sheets_coupongenerationrequest
+  raw_table: raw__xpro__app__postgres__sheets_coupongenerationrequest
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sheets_deferralrequest
+  raw_table: raw__xpro__app__postgres__sheets_deferralrequest
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sheets_filewatchrenewalattempt
+  raw_table: raw__xpro__app__postgres__sheets_filewatchrenewalattempt
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sheets_googleapiauth
+  raw_table: raw__xpro__app__postgres__sheets_googleapiauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sheets_googlefilewatch
+  raw_table: raw__xpro__app__postgres__sheets_googlefilewatch
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sheets_refundrequest
+  raw_table: raw__xpro__app__postgres__sheets_refundrequest
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_association
+  raw_table: raw__xpro__app__postgres__social_auth_association
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_code
+  raw_table: raw__xpro__app__postgres__social_auth_code
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_nonce
+  raw_table: raw__xpro__app__postgres__social_auth_nonce
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_partial
+  raw_table: raw__xpro__app__postgres__social_auth_partial
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_usersocialauth
+  raw_table: raw__xpro__app__postgres__social_auth_usersocialauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: taggit_tag
+  raw_table: raw__xpro__app__postgres__taggit_tag
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: taggit_taggeditem
+  raw_table: raw__xpro__app__postgres__taggit_taggeditem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_blocklist
+  raw_table: raw__xpro__app__postgres__users_blocklist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_changeemailrequest
+  raw_table: raw__xpro__app__postgres__users_changeemailrequest
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_legaladdress
+  raw_table: raw__xpro__app__postgres__users_legaladdress
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_profile
+  raw_table: raw__xpro__app__postgres__users_profile
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_user
+  raw_table: raw__xpro__app__postgres__users_user
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_user_groups
+  raw_table: raw__xpro__app__postgres__users_user_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_user_user_permissions
+  raw_table: raw__xpro__app__postgres__users_user_user_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: voucher_voucher
+  raw_table: raw__xpro__app__postgres__voucher_voucher
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailadmin_admin
+  raw_table: raw__xpro__app__postgres__wagtailadmin_admin
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_collection
+  raw_table: raw__xpro__app__postgres__wagtailcore_collection
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_collectionviewrestriction
+  raw_table: raw__xpro__app__postgres__wagtailcore_collectionviewrestriction
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_collectionviewrestriction_groups
+  raw_table: raw__xpro__app__postgres__wagtailcore_collectionviewrestriction_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_comment
+  raw_table: raw__xpro__app__postgres__wagtailcore_comment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_commentreply
+  raw_table: raw__xpro__app__postgres__wagtailcore_commentreply
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_groupapprovaltask
+  raw_table: raw__xpro__app__postgres__wagtailcore_groupapprovaltask
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - task_ptr_id
+  modeled: false
+- name: wagtailcore_groupapprovaltask_groups
+  raw_table: raw__xpro__app__postgres__wagtailcore_groupapprovaltask_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_groupcollectionpermission
+  raw_table: raw__xpro__app__postgres__wagtailcore_groupcollectionpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_grouppagepermission
+  raw_table: raw__xpro__app__postgres__wagtailcore_grouppagepermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_locale
+  raw_table: raw__xpro__app__postgres__wagtailcore_locale
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_modellogentry
+  raw_table: raw__xpro__app__postgres__wagtailcore_modellogentry
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_page
+  raw_table: raw__xpro__app__postgres__wagtailcore_page
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailcore_pagelogentry
+  raw_table: raw__xpro__app__postgres__wagtailcore_pagelogentry
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_pagesubscription
+  raw_table: raw__xpro__app__postgres__wagtailcore_pagesubscription
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_pageviewrestriction
+  raw_table: raw__xpro__app__postgres__wagtailcore_pageviewrestriction
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_pageviewrestriction_groups
+  raw_table: raw__xpro__app__postgres__wagtailcore_pageviewrestriction_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_referenceindex
+  raw_table: raw__xpro__app__postgres__wagtailcore_referenceindex
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_revision
+  raw_table: raw__xpro__app__postgres__wagtailcore_revision
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_site
+  raw_table: raw__xpro__app__postgres__wagtailcore_site
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_task
+  raw_table: raw__xpro__app__postgres__wagtailcore_task
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_taskstate
+  raw_table: raw__xpro__app__postgres__wagtailcore_taskstate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_workflow
+  raw_table: raw__xpro__app__postgres__wagtailcore_workflow
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_workflowcontenttype
+  raw_table: raw__xpro__app__postgres__wagtailcore_workflowcontenttype
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - content_type_id
+  modeled: false
+- name: wagtailcore_workflowpage
+  raw_table: raw__xpro__app__postgres__wagtailcore_workflowpage
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - page_id
+  modeled: false
+- name: wagtailcore_workflowstate
+  raw_table: raw__xpro__app__postgres__wagtailcore_workflowstate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailcore_workflowtask
+  raw_table: raw__xpro__app__postgres__wagtailcore_workflowtask
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtaildocs_document
+  raw_table: raw__xpro__app__postgres__wagtaildocs_document
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailembeds_embed
+  raw_table: raw__xpro__app__postgres__wagtailembeds_embed
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailforms_formsubmission
+  raw_table: raw__xpro__app__postgres__wagtailforms_formsubmission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailimages_image
+  raw_table: raw__xpro__app__postgres__wagtailimages_image
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailimages_rendition
+  raw_table: raw__xpro__app__postgres__wagtailimages_rendition
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailredirects_redirect
+  raw_table: raw__xpro__app__postgres__wagtailredirects_redirect
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailsearch_indexentry
+  raw_table: raw__xpro__app__postgres__wagtailsearch_indexentry
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: wagtailusers_userprofile
+  raw_table: raw__xpro__app__postgres__wagtailusers_userprofile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false

@@ -1,0 +1,534 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitxonline
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitxonline__app__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - environment: production
+    name: MITx Online Production App DB → S3 Data Lake
+    status: active
+    sync_interval_hours: 6
+    streams:
+    - b2b_contractpage
+    - b2b_discountcontractattachmentredemption
+    - b2b_organizationindexpage
+    - b2b_organizationpage
+    - b2b_userorganization
+    - cms_certificatepage
+    - cms_courseindexpage
+    - cms_coursepage
+    - cms_coursepage_topics
+    - cms_instructorpage
+    - cms_instructorpagelink
+    - cms_programpage
+    - cms_signatoryindexpage
+    - cms_signatorypage
+    - courses_blockedcountry
+    - courses_course
+    - courses_course_departments
+    - courses_courserun
+    - courses_courseruncertificate
+    - courses_courserunenrollment
+    - courses_courserunenrollmentaudit
+    - courses_courserungrade
+    - courses_courserungradeaudit
+    - courses_coursestopic
+    - courses_department
+    - courses_learnerprogramrecordshare
+    - courses_paidcourserun
+    - courses_partnerschool
+    - courses_program
+    - courses_program_departments
+    - courses_programcertificate
+    - courses_programenrollment
+    - courses_programenrollmentaudit
+    - courses_programrequirement
+    - courses_programrun
+    - courses_relatedprogram
+    - django_content_type
+    - ecommerce_basket
+    - ecommerce_basketdiscount
+    - ecommerce_basketitem
+    - ecommerce_discount
+    - ecommerce_discountproduct
+    - ecommerce_discountredemption
+    - ecommerce_line
+    - ecommerce_order
+    - ecommerce_product
+    - ecommerce_transaction
+    - ecommerce_userdiscount
+    - flexiblepricing_countryincomethreshold
+    - flexiblepricing_currencyexchangerate
+    - flexiblepricing_flexibleprice
+    - flexiblepricing_flexiblepricetier
+    - flexiblepricing_flexiblepricingrequestsubmission
+    - openedx_openedxuser
+    - reversion_revision
+    - reversion_version
+    - users_legaladdress
+    - users_user
+    - users_user_b2b_contracts
+    - users_userprofile
+    - wagtailcore_page
+    - wagtailcore_revision
+    - wagtailimages_image
+    - wagtailusers_userprofile
+tables:
+- name: b2b_contractpage
+  raw_table: raw__mitxonline__app__postgres__b2b_contractpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: b2b_discountcontractattachmentredemption
+  raw_table: raw__mitxonline__app__postgres__b2b_discountcontractattachmentredemption
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: b2b_organizationindexpage
+  raw_table: raw__mitxonline__app__postgres__b2b_organizationindexpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: b2b_organizationpage
+  raw_table: raw__mitxonline__app__postgres__b2b_organizationpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: b2b_userorganization
+  raw_table: raw__mitxonline__app__postgres__b2b_userorganization
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_certificatepage
+  raw_table: raw__mitxonline__app__postgres__cms_certificatepage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_courseindexpage
+  raw_table: raw__mitxonline__app__postgres__cms_courseindexpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_coursepage
+  raw_table: raw__mitxonline__app__postgres__cms_coursepage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_coursepage_topics
+  raw_table: raw__mitxonline__app__postgres__cms_coursepage_topics
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_instructorpage
+  raw_table: raw__mitxonline__app__postgres__cms_instructorpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_instructorpagelink
+  raw_table: raw__mitxonline__app__postgres__cms_instructorpagelink
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_programpage
+  raw_table: raw__mitxonline__app__postgres__cms_programpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: cms_signatoryindexpage
+  raw_table: raw__mitxonline__app__postgres__cms_signatoryindexpage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: false
+- name: cms_signatorypage
+  raw_table: raw__mitxonline__app__postgres__cms_signatorypage
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - page_ptr_id
+  modeled: true
+- name: courses_blockedcountry
+  raw_table: raw__mitxonline__app__postgres__courses_blockedcountry
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_course
+  raw_table: raw__mitxonline__app__postgres__courses_course
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_course_departments
+  raw_table: raw__mitxonline__app__postgres__courses_course_departments
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserun
+  raw_table: raw__mitxonline__app__postgres__courses_courserun
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courseruncertificate
+  raw_table: raw__mitxonline__app__postgres__courses_courseruncertificate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserunenrollment
+  raw_table: raw__mitxonline__app__postgres__courses_courserunenrollment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserunenrollmentaudit
+  raw_table: raw__mitxonline__app__postgres__courses_courserunenrollmentaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserungrade
+  raw_table: raw__mitxonline__app__postgres__courses_courserungrade
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserungradeaudit
+  raw_table: raw__mitxonline__app__postgres__courses_courserungradeaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_coursestopic
+  raw_table: raw__mitxonline__app__postgres__courses_coursestopic
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_department
+  raw_table: raw__mitxonline__app__postgres__courses_department
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_learnerprogramrecordshare
+  raw_table: raw__mitxonline__app__postgres__courses_learnerprogramrecordshare
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - share_uuid
+  modeled: false
+- name: courses_paidcourserun
+  raw_table: raw__mitxonline__app__postgres__courses_paidcourserun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_partnerschool
+  raw_table: raw__mitxonline__app__postgres__courses_partnerschool
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_program
+  raw_table: raw__mitxonline__app__postgres__courses_program
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_program_departments
+  raw_table: raw__mitxonline__app__postgres__courses_program_departments
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_programcertificate
+  raw_table: raw__mitxonline__app__postgres__courses_programcertificate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programenrollment
+  raw_table: raw__mitxonline__app__postgres__courses_programenrollment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programenrollmentaudit
+  raw_table: raw__mitxonline__app__postgres__courses_programenrollmentaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programrequirement
+  raw_table: raw__mitxonline__app__postgres__courses_programrequirement
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_programrun
+  raw_table: raw__mitxonline__app__postgres__courses_programrun
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_relatedprogram
+  raw_table: raw__mitxonline__app__postgres__courses_relatedprogram
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__mitxonline__app__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_basket
+  raw_table: raw__mitxonline__app__postgres__ecommerce_basket
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_basketdiscount
+  raw_table: raw__mitxonline__app__postgres__ecommerce_basketdiscount
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_basketitem
+  raw_table: raw__mitxonline__app__postgres__ecommerce_basketitem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_discount
+  raw_table: raw__mitxonline__app__postgres__ecommerce_discount
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_discountproduct
+  raw_table: raw__mitxonline__app__postgres__ecommerce_discountproduct
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_discountredemption
+  raw_table: raw__mitxonline__app__postgres__ecommerce_discountredemption
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_line
+  raw_table: raw__mitxonline__app__postgres__ecommerce_line
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_order
+  raw_table: raw__mitxonline__app__postgres__ecommerce_order
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_product
+  raw_table: raw__mitxonline__app__postgres__ecommerce_product
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_transaction
+  raw_table: raw__mitxonline__app__postgres__ecommerce_transaction
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: ecommerce_userdiscount
+  raw_table: raw__mitxonline__app__postgres__ecommerce_userdiscount
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: flexiblepricing_countryincomethreshold
+  raw_table: raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: flexiblepricing_currencyexchangerate
+  raw_table: raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: flexiblepricing_flexibleprice
+  raw_table: raw__mitxonline__app__postgres__flexiblepricing_flexibleprice
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: flexiblepricing_flexiblepricetier
+  raw_table: raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: flexiblepricing_flexiblepricingrequestsubmission
+  raw_table: raw__mitxonline__app__postgres__flexiblepricing_flexiblepricingrequestsubmission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: openedx_openedxuser
+  raw_table: raw__mitxonline__app__postgres__openedx_openedxuser
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: reversion_revision
+  raw_table: raw__mitxonline__app__postgres__reversion_revision
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: reversion_version
+  raw_table: raw__mitxonline__app__postgres__reversion_version
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_legaladdress
+  raw_table: raw__mitxonline__app__postgres__users_legaladdress
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_user
+  raw_table: raw__mitxonline__app__postgres__users_user
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: users_user_b2b_contracts
+  raw_table: raw__mitxonline__app__postgres__users_user_b2b_contracts
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: users_userprofile
+  raw_table: raw__mitxonline__app__postgres__users_userprofile
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailcore_page
+  raw_table: raw__mitxonline__app__postgres__wagtailcore_page
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailcore_revision
+  raw_table: raw__mitxonline__app__postgres__wagtailcore_revision
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailimages_image
+  raw_table: raw__mitxonline__app__postgres__wagtailimages_image
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: wagtailusers_userprofile
+  raw_table: raw__mitxonline__app__postgres__wagtailusers_userprofile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false

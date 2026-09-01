@@ -114,11 +114,11 @@ models:
       so user_fk can be recomputed later without rebuilding this insert-only fact.
       Not for downstream consumption.
   - name: feedback_title
-    description: str, the redacted title. Null until the feedback_redacted Dagster
-      asset lands and this fact left-joins it in on (source_slug, source_record_id).
+    description: str, the redacted title populated from the feedback_redacted Dagster
+      asset
   - name: feedback_text
-    description: str, the redacted body text. Null until the feedback_redacted Dagster
-      asset lands and this fact left-joins it in on (source_slug, source_record_id).
+    description: str, the redacted body text populated from the feedback_redacted
+      Dagster asset
   - name: feedback_text_chars
     description: int, length of the text measured before masking, so the metric survives
       redaction.
@@ -252,3 +252,103 @@ models:
     description: double, cohesion signal for ranking systemic issues.
   - name: conversation_ingested_at
     description: str, ISO8601 timestamp this row was materialized.
+
+unit_tests:
+- name: test_tfact_feedback_refreshes_stale_user_fk_after_dim_user_rekey
+  description: >
+    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
+    for
+    a user, tfact_feedback's incremental filter must re-select the affected turn and
+    write
+    the refreshed user_fk, even though the source ticket's updated_at did not change
+    and
+    the conversation-level watermark alone would not have caught it.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "zendesk"
+      source_record_ref: "TICKET-1"
+      channel_slug: "support"
+      conversation_ref: "CONV-1"
+      turn_index: 1
+      is_conversation_opening: true
+      source_url: "http://example.com/ticket/1"
+      subject_type: "ticket"
+      subject_ref: "TICKET-1"
+      subject_url: "http://example.com/ticket/1"
+      subject_user_ref: "learner@example.com"
+      feedback_text_chars: 20
+      occurred_at: "2024-01-15T00:00:00"
+      created_at: "2024-01-15T00:00:00"
+      updated_at: "2024-01-15T00:00:00"
+      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      email: "learner@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows:
+    - source_slug: "zendesk"
+      source_record_ref: "TICKET-1"
+      title_redacted: "Title"
+      text_redacted: "Some feedback text"
+  - input: this
+    # Carries the pre-rekey user_fk; a lone row already fails the `>` watermark, isolating
+    # the stale-user_fk check.
+    rows:
+    - feedback_pk: "ff8fd307a4dfe4d8794b3b59332b1e07"  # pragma: allowlist secret
+      feedback_source_fk: "01260647de9803dd69df3ecc34a8d908"  # pragma: allowlist secret
+      feedback_channel_fk: "434990c8a25d2be94863561ae98bd682"  # pragma: allowlist secret
+      user_fk: "OLD_USER_PK"
+      occurred_date_fk: 20240115
+      occurred_time_fk: 0
+      created_date_fk: 20240115
+      created_time_fk: 0
+      updated_date_fk: 20240115
+      updated_time_fk: 0
+      conversation_id: "CONV-1"
+      turn_index: 1
+      is_conversation_opening: true
+      source_record_id: "TICKET-1"
+      source_url: "http://example.com/ticket/1"
+      subject_type: "ticket"
+      subject_ref: "TICKET-1"
+      subject_url: "http://example.com/ticket/1"
+      subject_user_ref: "learner@example.com"
+      feedback_title: "Title"
+      feedback_text: "Some feedback text"
+      feedback_text_chars: 20
+      feedback_occurred_at: "2024-01-15T00:00:00"
+      feedback_created_at: "2024-01-15T00:00:00"
+      feedback_updated_at: "2024-01-15T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "ff8fd307a4dfe4d8794b3b59332b1e07"  # pragma: allowlist secret
+      feedback_source_fk: "01260647de9803dd69df3ecc34a8d908"  # pragma: allowlist secret
+      feedback_channel_fk: "434990c8a25d2be94863561ae98bd682"  # pragma: allowlist secret
+      user_fk: "NEW_USER_PK"
+      occurred_date_fk: 20240115
+      occurred_time_fk: 0
+      created_date_fk: 20240115
+      created_time_fk: 0
+      updated_date_fk: 20240115
+      updated_time_fk: 0
+      conversation_id: "CONV-1"
+      turn_index: 1
+      is_conversation_opening: true
+      source_record_id: "TICKET-1"
+      source_url: "http://example.com/ticket/1"
+      subject_type: "ticket"
+      subject_ref: "TICKET-1"
+      subject_url: "http://example.com/ticket/1"
+      subject_user_ref: "learner@example.com"
+      feedback_title: "Title"
+      feedback_text: "Some feedback text"
+      feedback_text_chars: 20
+      feedback_occurred_at: "2024-01-15T00:00:00"
+      feedback_created_at: "2024-01-15T00:00:00"
+      feedback_updated_at: "2024-01-15T00:00:00"

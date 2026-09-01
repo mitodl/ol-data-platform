@@ -1,0 +1,36 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitx
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitx__openedx__api__
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: S3 MITx Open edX Extracts → S3 Data Lake
+    status: active
+    sync_interval_hours: 12
+    streams:
+    - raw__mitx__openedx__api__course_blocks
+    - raw__mitx__openedx__api__course_structure
+tables:
+- name: raw__mitx__openedx__api__course_blocks
+  raw_table: raw__mitx__openedx__api__course_blocks
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+- name: raw__mitx__openedx__api__course_structure
+  raw_table: raw__mitx__openedx__api__course_structure
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: false

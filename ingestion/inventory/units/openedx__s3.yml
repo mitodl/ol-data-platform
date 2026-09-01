@@ -1,0 +1,17 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: openedx
+layer: s3
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dagster
+table_prefix: raw__openedx__s3__
+tables:
+- name: raw__openedx__s3__course_xml_blocks
+  raw_table: raw__openedx__s3__course_xml_blocks
+  sync_mode: full_refresh_overwrite
+  modeled: true

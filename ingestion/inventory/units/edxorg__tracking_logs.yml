@@ -1,0 +1,27 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: tracking_logs
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__edxorg__s3__tracking_logs
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: edx.org Tracking Logs → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__tracking_logs
+tables:
+- name: raw__edxorg__s3__tracking_logs
+  raw_table: raw__edxorg__s3__tracking_logs
+  sync_mode: full_refresh_overwrite
+  modeled: true

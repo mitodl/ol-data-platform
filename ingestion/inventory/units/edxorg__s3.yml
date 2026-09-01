@@ -1,0 +1,62 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: s3
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__edxorg__
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: edx.org Production Course Structure→ S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__course_blocks
+  - environment: production
+    name: S3 edX.org course and program → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__mitx_course
+    - raw__edxorg__s3__mitx_course_run
+    - raw__edxorg__s3__program
+    - raw__edxorg__s3__program_course
+  - environment: production
+    name: S3 edX.org Program Credentials → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__program_learner_report
+tables:
+- name: raw__edxorg__s3__course_blocks
+  raw_table: raw__edxorg__s3__course_blocks
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__mitx_course
+  raw_table: raw__edxorg__s3__mitx_course
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__mitx_course_run
+  raw_table: raw__edxorg__s3__mitx_course_run
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__program
+  raw_table: raw__edxorg__s3__program
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__s3__program_course
+  raw_table: raw__edxorg__s3__program_course
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__edxorg__program_learner_report
+  raw_table: raw__edxorg__program_learner_report
+  sync_mode: full_refresh_overwrite
+  modeled: true

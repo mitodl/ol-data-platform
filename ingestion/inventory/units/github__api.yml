@@ -1,0 +1,335 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: github
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__thirdparty__github__
+airbyte:
+  source_kind: source-github
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: GitHub - MIT ODL → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - assignees
+    - branches
+    - collaborators
+    - comments
+    - commit_comment_reactions
+    - commit_comments
+    - commits
+    - deployments
+    - events
+    - issue_comment_reactions
+    - issue_events
+    - issue_labels
+    - issue_milestones
+    - issue_reactions
+    - issue_timeline_events
+    - issues
+    - organizations
+    - project_cards
+    - project_columns
+    - projects
+    - projects_v2
+    - pull_request_comment_reactions
+    - pull_request_commits
+    - pull_request_stats
+    - pull_requests
+    - releases
+    - repositories
+    - review_comments
+    - reviews
+    - stargazers
+    - tags
+    - team_members
+    - team_memberships
+    - teams
+    - users
+    - workflow_jobs
+    - workflows
+tables:
+- name: assignees
+  raw_table: raw__thirdparty__github__assignees
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: branches
+  raw_table: raw__thirdparty__github__branches
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - repository
+  - - name
+  modeled: false
+- name: collaborators
+  raw_table: raw__thirdparty__github__collaborators
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: comments
+  raw_table: raw__thirdparty__github__comments
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: commit_comment_reactions
+  raw_table: raw__thirdparty__github__commit_comment_reactions
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: commit_comments
+  raw_table: raw__thirdparty__github__commit_comments
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: commits
+  raw_table: raw__thirdparty__github__commits
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - sha
+  modeled: false
+- name: deployments
+  raw_table: raw__thirdparty__github__deployments
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: events
+  raw_table: raw__thirdparty__github__events
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: issue_comment_reactions
+  raw_table: raw__thirdparty__github__issue_comment_reactions
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: issue_events
+  raw_table: raw__thirdparty__github__issue_events
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: issue_labels
+  raw_table: raw__thirdparty__github__issue_labels
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: issue_milestones
+  raw_table: raw__thirdparty__github__issue_milestones
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: issue_reactions
+  raw_table: raw__thirdparty__github__issue_reactions
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: issue_timeline_events
+  raw_table: raw__thirdparty__github__issue_timeline_events
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - repository
+  - - issue_number
+  modeled: false
+- name: issues
+  raw_table: raw__thirdparty__github__issues
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: organizations
+  raw_table: raw__thirdparty__github__organizations
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: project_cards
+  raw_table: raw__thirdparty__github__project_cards
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: project_columns
+  raw_table: raw__thirdparty__github__project_columns
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: projects
+  raw_table: raw__thirdparty__github__projects
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: projects_v2
+  raw_table: raw__thirdparty__github__projects_v2
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: pull_request_comment_reactions
+  raw_table: raw__thirdparty__github__pull_request_comment_reactions
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: pull_request_commits
+  raw_table: raw__thirdparty__github__pull_request_commits
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - sha
+  modeled: false
+- name: pull_request_stats
+  raw_table: raw__thirdparty__github__pull_request_stats
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: pull_requests
+  raw_table: raw__thirdparty__github__pull_requests
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: releases
+  raw_table: raw__thirdparty__github__releases
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - created_at
+  primary_key:
+  - - id
+  modeled: false
+- name: repositories
+  raw_table: raw__thirdparty__github__repositories
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: review_comments
+  raw_table: raw__thirdparty__github__review_comments
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: reviews
+  raw_table: raw__thirdparty__github__reviews
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
+- name: stargazers
+  raw_table: raw__thirdparty__github__stargazers
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - starred_at
+  primary_key:
+  - - user_id
+  modeled: false
+- name: tags
+  raw_table: raw__thirdparty__github__tags
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - repository
+  - - name
+  modeled: false
+- name: team_members
+  raw_table: raw__thirdparty__github__team_members
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  - - team_slug
+  modeled: false
+- name: team_memberships
+  raw_table: raw__thirdparty__github__team_memberships
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - url
+  modeled: false
+- name: teams
+  raw_table: raw__thirdparty__github__teams
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: users
+  raw_table: raw__thirdparty__github__users
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - id
+  modeled: false
+- name: workflow_jobs
+  raw_table: raw__thirdparty__github__workflow_jobs
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - completed_at
+  primary_key:
+  - - id
+  modeled: false
+- name: workflows
+  raw_table: raw__thirdparty__github__workflows
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false

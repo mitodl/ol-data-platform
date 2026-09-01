@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mitodl/ol-data-platform/ingestion/inventory/schema/unit.schema.json",
   "title": "Ingestion inventory unit",
-  "description": "One (deployment, layer) ingestion unit. See docs/specs/INGESTION_INVENTORY_SPEC.md §3. Shape only — cross-unit invariants (prefix overlap, global raw_table uniqueness, vocabulary membership) are checked by `ol-dbt inventory validate`, which JSON Schema cannot express.",
+  "description": "One (deployment, layer) ingestion unit. See docs/specs/INGESTION_INVENTORY_SPEC.md §3. Shape only — cross-unit invariants (global raw_table uniqueness, unique (deployment, layer) key, vocabulary membership) are checked by `ol-dbt inventory validate`, which JSON Schema cannot express. Prefix overlap is deliberately not among them: prefixes may nest (§3.3 rule 4).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "deployment", "layer", "scope", "strategies", "loader", "table_prefix", "tables"],
@@ -43,12 +43,13 @@
       "description": "Required iff a strategy is `mirror`; no default, so it is a decision per unit."
     },
     "loader": {
-      "enum": ["airbyte", "dlt"]
+      "enum": ["airbyte", "dlt", "dagster"],
+      "description": "What actually loads these tables. `dagster` is a bespoke asset pipeline under dg_projects/ — neither an Airbyte connection nor a dlt source, so it carries neither block. It exists because the inventory claims to record everything we load (§2), and edxorg's course archives are loaded that way."
     },
     "table_prefix": {
       "type": "string",
-      "pattern": "^raw__[a-z0-9_]+__$",
-      "description": "Declared, never parsed from table names (§1.1)."
+      "pattern": "^raw__[a-z0-9_]+$",
+      "description": "Declared, never parsed from table names (§1.1). Conventionally ends in `__` to name a family, but a single-table unit whose one table is not a `__`-terminated family — a deployment's tracking logs, say — declares that table's full name instead. Requiring the trailing `__` made those units unexpressible: their only `__`-terminated prefix is the deployment's whole Open edX namespace, which swallows its mysql, api and mongodb units. Prefixes are documentation, not routing keys: they may nest, and ownership comes from `tables[].raw_table`, which is globally unique across units. Neither this pattern nor any overlap rule establishes it."
     },
     "dagster_visible": {
       "type": "boolean",
@@ -75,8 +76,27 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "status", "sync_interval_hours", "streams"],
+            "required": ["environment", "name", "status", "sync_interval_hours", "streams"],
+            "allOf": [
+              {
+                "description": "The cadence is required in production and must be absent elsewhere. A production `null` is the dangerous direction and the reason this is enforced rather than described: render_dagster_intervals skips a non-integer, so the group falls through to `group_name_to_interval`'s 24-hour default in definitions.py and a 6-hour sync silently becomes daily.",
+                "if": {
+                  "properties": {"environment": {"const": "production"}},
+                  "required": ["environment"]
+                },
+                "then": {
+                  "properties": {"sync_interval_hours": {"type": "integer", "enum": [6, 12, 24]}}
+                },
+                "else": {
+                  "properties": {"sync_interval_hours": {"type": "null"}}
+                }
+              }
+            ],
             "properties": {
+              "environment": {
+                "enum": ["production", "qa"],
+                "description": "Which Airbyte deployment this connection lives in. Each environment runs its own, so one unit legitimately has a connection in both — and a unit with no `qa` entry has no QA connection at all, which is a different fact from having one that is `inactive`. `ci` is not a value: an api-airbyte-ci host exists but nothing runs there, since the CI code location sets SKIP_AIRBYTE and loads an empty workspace."
+              },
               "name": {
                 "type": "string",
                 "minLength": 1,
@@ -86,8 +106,9 @@
                 "enum": ["active", "inactive"]
               },
               "sync_interval_hours": {
-                "type": "integer",
-                "enum": [6, 12, 24]
+                "type": ["integer", "null"],
+                "enum": [6, 12, 24, null],
+                "description": "Null outside production. The cadence lives in `group_name_to_interval` in lakehouse/definitions.py, which is guarded by `DAGSTER_ENV == \"production\"` and so says nothing about any other environment; emitting a number there would invent one."
               },
               "streams": {
                 "type": "array",

@@ -1,0 +1,35 @@
+---
+version: 2
+
+sources:
+# database/schema are target-derived, not literals, so they must keep resolving to
+# the same relation feedback_redacted.py's DAGSTER_ENV branch actually writes to
+# (dev -> production catalog + personal suffix, qa -> qa catalog, else -> production).
+# Verify both sides agree before changing either.
+- name: feedback_intermediate
+  loader: dagster
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_intermediate'
+  tables:
+  - name: feedback_redacted
+    description: Presidio-masked title/text for every feedback turn, materialized
+      by the feedback_redacted Dagster asset.
+    columns:
+    - name: source_slug
+      description: str, which source the turn came from.
+      tests:
+      - not_null
+    - name: source_record_ref
+      description: str, the source-native turn id.
+      tests:
+      - not_null
+    - name: title_redacted
+      description: str, PII-masked ticket subject/title. Null where the source turn's
+        title was null.
+    - name: text_redacted
+      description: str, PII-masked turn body. Null where the source turn's text was
+        null.
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        arguments:
+          column_list: ["source_slug", "source_record_ref"]

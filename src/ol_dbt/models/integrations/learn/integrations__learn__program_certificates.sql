@@ -59,7 +59,9 @@ select
     , certificates.user_address_postal_code
     , certificates.user_street_address
     , certificates.program_completion_timestamp
-    , coalesce(certificates.program_completion_timestamp, current_timestamp)
-        as last_modified
+    , coalesce(
+        {{ from_iso8601_timestamp('certificates.program_completion_timestamp') }}
+        , current_timestamp
+    ) as last_modified
 from certificates
 where certificates.program_certificate_hashed_id is not null
