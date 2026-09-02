@@ -268,8 +268,9 @@ def _(mo):
     - Ordinary Python. Loop it, build SQL from a list, wrap it in a function,
       call it from a helper module.
     - `fetchmany(n)` streams, so you can process more than fits in memory.
-    - Handles everything that is not a single `SELECT`: `SHOW CATALOGS`,
-      `EXPLAIN`, `SET SESSION`, DDL.
+    - Carries connection-scoped state. `SET SESSION` and `USE` apply to a
+      connection, and a SQL cell opens a fresh one per statement, so state set
+      in one cell is gone by the next. On the cursor it persists.
     - `cur.stats` and `cur.query_id` expose Galaxy's own view of the running
       query, which is how you find out why something is slow.
 
@@ -281,8 +282,10 @@ def _(mo):
     - Invisible to the reactive graph. marimo cannot tell that a cell using
       `cur` depends on a query in another cell, so ordering is your problem.
 
-    **Rule of thumb:** reach for a SQL cell. Drop to the cursor when you need a
-    loop, a stream, or a statement that is not a `SELECT`.
+    **Rule of thumb:** reach for a SQL cell. It is not limited to `SELECT` —
+    `SHOW`, `EXPLAIN` and DDL all run there, and a statement that returns rows
+    comes back as a dataframe. Drop to the cursor when you need a loop, a
+    stream, session state, or `cur.stats`.
     """)
     return
 
@@ -931,7 +934,7 @@ def _(mo):
     | Symptom | Cause |
     |---|---|
     | `401 Authentication required` | Sign-in never completed, or the kernel restarted. Re-run the connect cell and open the link. |
-    | Login link never appears | Look at the cell's *console* output, not its rendered output. |
+    | Login link never appears | It renders as a callout in the cell's own output while the cell blocks. If that is empty, check the cell's *console* pane — the `print()` there is the fallback for when `mo.output.append()` cannot reach the frontend. |
     | The login link does not work | Each attempt mints a new link and retires the previous one. Re-run the connect cell to get a fresh one. |
     | `Catalog must be specified` | Unqualified table name with no session catalog. Qualify it, or use the `warehouse` engine. |
     | Counts look inflated | A join to an SCD2 dimension missing `AND is_current` — see section 4. |

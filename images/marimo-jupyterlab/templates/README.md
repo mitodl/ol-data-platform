@@ -95,12 +95,14 @@ column completion, result is a dataframe, cell joins the reactive graph. One
 statement, whole result in memory, no parameter binding.
 
 **The cursor** — `cur.execute("SELECT ...")`. Ordinary Python: loops, dynamic
-SQL, `fetchmany` streaming, and anything that is not a single `SELECT` (`SHOW`,
-`EXPLAIN`, `SET SESSION`). `cur.stats` is how you find out why a query is slow.
-Returns tuples; marimo cannot see the dependency.
+SQL, `fetchmany` streaming, and connection-scoped state like `SET SESSION`,
+which a SQL cell cannot hold because it opens a fresh connection per statement.
+`cur.stats` is how you find out why a query is slow. Returns tuples; marimo
+cannot see the dependency.
 
-Reach for a SQL cell. Drop to the cursor for a loop, a stream, or a
-non-`SELECT`. `demo.py` §3 has the full trade-off.
+Reach for a SQL cell — it runs `SHOW`, `EXPLAIN` and DDL too, not only
+`SELECT`. Drop to the cursor for a loop, a stream, session state, or
+`cur.stats`. `demo.py` §3 has the full trade-off.
 
 ## Personal data
 
@@ -121,7 +123,7 @@ Kernels are culled after 4 hours idle; there is no absolute session limit.
 | Symptom | Cause |
 |---|---|
 | `401 Authentication required` | Sign-in never completed, or the kernel restarted. Re-run the connect cell and open the link. |
-| Login link never appears | Look at the cell's **console** output, not its rendered output. |
+| Login link never appears | It renders as a callout in the cell's own output while the cell blocks. If that is empty, check the cell's **console** pane — the `print()` there is a fallback. |
 | The login link does not work | Each attempt mints a new link and retires the previous one. Re-run the connect cell to get a fresh one. |
 | `Catalog must be specified` | Unqualified table name with no session catalog. Qualify it, or use the `warehouse` engine. |
 | Counts look too high | A join to an SCD2 dimension missing `AND is_current`. |
