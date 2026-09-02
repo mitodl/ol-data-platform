@@ -224,6 +224,18 @@ inline-quotes = "double"
 builtins-allowed-modules = ["secrets", "platform"]
 
 [tool.ruff.lint.per-file-ignores]
+# marimo notebooks are a machine-managed file format. `marimo check --fix` and
+# the marimo UI both rewrite these files on save, so the patterns below are the
+# tool's output rather than authored style, and fighting them means CI breaks
+# every time a user saves a notebook. They are also user-facing teaching files,
+# so the suppressions live here instead of cluttering the top of each notebook.
+#   PLC0415  imports must be inside cell functions
+#   B018     a bare expression is how a cell renders its output
+#   PLR1711  marimo emits a bare `return` in cells nothing else consumes
+#   F401     libraries are pre-imported for the reader's own cells to use
+#   F841     a named cell result is the rendered output, not a dead local
+#   E501     markdown tables inside mo.md() cells cannot be wrapped
+"images/marimo-jupyterlab/templates/*.py" = ["PLC0415", "B018", "PLR1711", "F401", "F841", "E501"]
 "scripts/**" = ["T201", "ERA001", "B", "BLE001", "PLR", "E501", "G004", "FBT", "C90", "INP001"]
 "**/tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001"]
 "**/*_tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001", "D103"]
