@@ -2,7 +2,11 @@
 
 import pytest
 from learning_resources.assets.mitpe import _row_to_resource
-from learning_resources.lib.sanitize import clean_html
+from learning_resources.lib.sanitize import (
+    ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
+    ALLOWED_HTML_TAGS_WITH_LINKS,
+    clean_html,
+)
 
 
 def test_clean_html_strips_script_tags():
@@ -21,16 +25,37 @@ def test_clean_html_strips_event_handler_attributes():
     assert "Body" in cleaned
 
 
-def test_clean_html_preserves_links():
-    """Links keep href and title -- mit-learn's WITH_LINKS allowlist."""
+def test_clean_html_strips_links_by_default():
+    """The default allowlist has no <a>, matching clean_data's own default.
+
+    mit-learn's MIT PE ETL calls ``clean_data(description)`` with no overrides,
+    so anchors never reached the database on the legacy path either. Keeping
+    them here would make webhook delivery diverge from the ETL it replaces.
+    """
     cleaned = clean_html('<a href="https://example.com" title="Docs">Docs</a>')
+    assert "<a" not in cleaned
+    assert "href" not in cleaned
+    assert cleaned == "Docs"
+
+
+def test_clean_html_preserves_links_when_asked():
+    """The WITH_LINKS allowlists keep href and title, for the podcast path."""
+    cleaned = clean_html(
+        '<a href="https://example.com" title="Docs">Docs</a>',
+        tags=ALLOWED_HTML_TAGS_WITH_LINKS,
+        attributes=ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
+    )
     assert 'href="https://example.com"' in cleaned
     assert 'title="Docs"' in cleaned
 
 
 def test_clean_html_drops_disallowed_link_attributes():
-    """Attributes outside href/title are stripped from links."""
-    cleaned = clean_html('<a href="https://example.com" onclick="x()">Docs</a>')
+    """Under WITH_LINKS, attributes outside href/title are still stripped."""
+    cleaned = clean_html(
+        '<a href="https://example.com" onclick="x()">Docs</a>',
+        tags=ALLOWED_HTML_TAGS_WITH_LINKS,
+        attributes=ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
+    )
     assert "onclick" not in cleaned
     assert 'href="https://example.com"' in cleaned
 
@@ -57,10 +82,13 @@ def test_clean_html_leaves_plain_text_unchanged():
 def test_clean_html_preserves_none():
     """None must stay None, not become an empty string.
 
-    The payload is delivered to MIT Learn as ``defaults`` for
-    ``update_or_create``, so an empty string would overwrite an existing
-    description rather than leaving it alone. This is a deliberate divergence
-    from mit-learn's ``clean_data``, which returns "" for falsy input.
+    ``clean_data`` returns "" for both None and "", collapsing the two.
+    ``_row_to_resource`` always emits a ``description`` key, so whichever value
+    this returns lands in ``update_or_create(defaults=...)`` and is written:
+    None writes SQL NULL, "" writes an empty string. Neither leaves an existing
+    description alone. Passing both through unchanged means MIT Learn records
+    the source's own null-versus-empty distinction instead of one this function
+    invented.
     """
     result = clean_html(None)
     assert result is None

@@ -58,7 +58,8 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "url": row.get("url"),
         # The legacy Celery ETL ran this field through clean_data() before it
         # reached the database; nothing on the webhook path does, so sanitize
-        # here to keep the migration behaviour-preserving.
+        # here to keep the migration behaviour-preserving. No allowlist
+        # override, because mitpe.parse_description passes none either.
         "description": clean_html(row.get("description")),
         "image": {"url": image_url, "alt": image_alt} if image_url else None,
         "topics": topics,
