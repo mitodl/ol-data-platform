@@ -877,43 +877,7 @@ def _(certificate_summary, mo, platform):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 10. Reading Iceberg directly, without Trino
-
-    The warehouse is Iceberg tables on S3 with a Glue catalog, and the pod's
-    IRSA role can read both. For a full-table scan feeding a model, going
-    straight to the files with `pyiceberg` skips the query engine entirely.
-    For anything with a filter, a join, or an aggregate, use Trino — that is
-    what it is for.
-
-    Add `pyiceberg[glue,s3fs]>=0.9` to the `/// script` header and restart the
-    kernel to try it:
-
-    ```python
-    from pyiceberg.catalog.glue import GlueCatalog
-
-    glue = GlueCatalog(name="ol", **{"region_name": "us-east-1"})
-    table = glue.load_table(
-        ("ol_warehouse_production_dimensional", "dim_course")
-    )
-    arrow_table = table.scan(
-        selected_fields=("course_readable_id", "course_title"),
-        row_filter="is_current = true",
-    ).to_arrow()
-    ```
-
-    **This works on `nb.data.ol.mit.edu` and will not work on `nb-qa`.** The
-    IRSA policy grants S3 and Glue on `ol-data-lake-*-<environment>`, so the QA
-    pod holds QA-scoped credentials — while `TRINO_HOST` points every
-    environment at the production Galaxy cluster. Trino reaches production data
-    from QA; a direct S3 read does not.
-    """)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 11. Working with personal data
+    ## 10. Working with personal data
 
     `dim_user` exists, and joining to it is sometimes the right thing. Nothing
     in this notebook does, on purpose — a getting-started file should not
@@ -940,7 +904,7 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 12. Sharing what you made
+    ## 11. Sharing what you made
 
     - **`mo.ui` inputs plus `marimo run --sandbox`** turn this file into an app
       with the code hidden — the notebook *is* the app, no port or rewrite
@@ -962,7 +926,7 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 13. When something goes wrong
+    ## 12. When something goes wrong
 
     | Symptom | Cause |
     |---|---|

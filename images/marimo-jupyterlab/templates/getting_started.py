@@ -59,8 +59,7 @@ def _(mo):
 
     There is no token to manage. Galaxy authenticates query clients itself and
     federates the login to MIT OL SSO, so the first query of a session prints a
-    link for you to open. AWS credentials for S3 and Glue arrive via IRSA — no
-    `AWS_ACCESS_KEY_ID` needed.
+    link for you to open.
     """)
     return
 

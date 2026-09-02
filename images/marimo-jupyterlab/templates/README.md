@@ -33,8 +33,6 @@ Configured for you:
 | `TRINO_PORT` | `443` |
 | `TRINO_CATALOG` | Default warehouse catalog |
 
-AWS credentials for S3 and Glue arrive via IRSA — no `AWS_ACCESS_KEY_ID` needed.
-
 ## Adding a package
 
 Each notebook has its own isolated environment, built from the `/// script`
