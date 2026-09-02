@@ -38,7 +38,6 @@ from email.utils import parsedate_to_datetime
 from typing import Any, cast
 
 import httpx2 as httpx
-import nh3
 import polars as pl
 from dagster import (
     AssetExecutionContext,
@@ -51,6 +50,12 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
+
+from learning_resources.lib.sanitize import (
+    ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
+    ALLOWED_HTML_TAGS_WITH_LINKS,
+    clean_html,
+)
 
 log = logging.getLogger(__name__)
 
@@ -161,66 +166,27 @@ def _parse_pub_date(pub_date: str | None) -> str | None:
         return None
 
 
-# Mirrors main/constants.py in mit-learn: ALLOWED_HTML_TAGS plus "a", and
-# ALLOWED_HTML_ATTRIBUTES_WITH_LINKS. The Celery ETL sanitizes podcast titles
-# and descriptions with exactly this allowlist before they reach the database;
-# the webhook path has to do the same, because the loader passes these fields
-# straight to LearningResource and would otherwise persist raw third-party RSS
-# HTML unchanged.
-#
-# Duplicated rather than imported -- there is no shared package between the two
-# repos. If MIT Learn changes its allowlist, this must change with it; a drift
-# here is a sanitization difference, not a formatting one.
-_ALLOWED_HTML_TAGS = {
-    "a",
-    "b",
-    "blockquote",
-    "br",
-    "caption",
-    "center",
-    "cite",
-    "code",
-    "div",
-    "em",
-    "hr",
-    "i",
-    "li",
-    "ol",
-    "p",
-    "pre",
-    "q",
-    "small",
-    "span",
-    "strike",
-    "strong",
-    "sub",
-    "sup",
-    "u",
-    "ul",
-}
-_ALLOWED_HTML_ATTRIBUTES = {"a": {"href", "title"}}
-
-
+# mit-learn's podcast ETL is the one caller that passes the _WITH_LINKS
+# allowlists (learning_resources/etl/podcast.py:205,275): RSS show notes carry
+# resource links worth keeping, unlike the MIT PE descriptions clean_html
+# sanitizes by default. Bound once here so both payload builders below cannot
+# drift apart.
 def _clean(value: str | None) -> str | None:
-    """Strip disallowed HTML, mirroring mit-learn's clean_data().
+    """Sanitize an RSS field the way mit-learn's podcast ETL does.
 
-    mit-learn's clean_data returns "" for a falsy input; the falsy value is
-    preserved here instead, so the delivered payload matches the source row
-    exactly.
-
-    Note this is NOT protection against clobbering an existing description.
-    The "description" key is always present in the payload and
-    ``LearningResource.description`` is ``TextField(null=True, blank=True)``,
-    so ``update_or_create(defaults=...)`` writes whatever we send -- None
-    replaces a populated value just as "" would. The reason to preserve it is
-    fidelity: coercing None to "" would flip a NULL description to an empty
-    string on every delivery, which is a diff the Celery ETL would not produce
-    and therefore noise during parallel validation.
+    A falsy value is delivered unchanged rather than coerced to "" the way
+    ``clean_data`` does. Not protection against clobbering: the "description"
+    key is always present and ``LearningResource.description`` is
+    ``TextField(null=True, blank=True)``, so ``update_or_create(defaults=...)``
+    writes whatever we send -- None replaces a populated value just as "" would.
+    The reason to preserve it is fidelity. Coercing None to "" would flip a NULL
+    description to an empty string on every delivery, a diff the Celery ETL
+    would not produce and therefore noise during parallel validation.
     """
-    if not value:
-        return value
-    return nh3.clean(
-        value, tags=_ALLOWED_HTML_TAGS, attributes=_ALLOWED_HTML_ATTRIBUTES
+    return clean_html(
+        value,
+        tags=ALLOWED_HTML_TAGS_WITH_LINKS,
+        attributes=ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
     )
 
 
