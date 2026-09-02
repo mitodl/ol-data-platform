@@ -4,7 +4,12 @@ with orders as (
 )
 
 , couponredemption as (
-    select *
+    select
+        *
+        , row_number() over (
+            partition by order_id
+            order by couponredemption_created_on desc
+        ) as row_num
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponredemption') }}
 )
 
@@ -61,7 +66,7 @@ select
             then couponredemption.couponredemption_created_on
     end as couponredemption_created_on
 from orders
-left join couponredemption on orders.order_id = couponredemption.order_id
+left join couponredemption on orders.order_id = couponredemption.order_id and couponredemption.row_num = 1
 left join couponversion on couponredemption.couponversion_id = couponversion.couponversion_id
 left join coupon on couponversion.coupon_id = coupon.coupon_id
 left join couponpaymentversion on couponversion.couponpaymentversion_id = couponpaymentversion.couponpaymentversion_id

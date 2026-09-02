@@ -19,7 +19,12 @@ with b2becommerce_b2border as (
 )
 
 , ecommerce_couponredemption as (
-    select *
+    select
+        *
+        , row_number() over (
+            partition by order_id
+            order by couponredemption_created_on desc
+        ) as row_num
     from {{ ref('int__mitxpro__ecommerce_couponredemption') }}
 )
 
@@ -95,7 +100,7 @@ with b2becommerce_b2border as (
     left join ecommerce_couponpaymentversion
         on ecommerce_order.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
     left join ecommerce_couponredemption
-        on ecommerce_order.order_id = ecommerce_couponredemption.order_id
+        on ecommerce_order.order_id = ecommerce_couponredemption.order_id and ecommerce_couponredemption.row_num = 1
     left join users
         on ecommerce_order.order_purchaser_user_id = users.user_id
     left join course_runs
