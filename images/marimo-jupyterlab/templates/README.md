@@ -19,8 +19,10 @@ second gets you into the warehouse: Starburst Galaxy authenticates query clients
 itself, federating the login to the same MIT OL SSO, so the first query of a
 session prints a link for you to open.
 
-The token is cached in memory for the life of the kernel, so you sign in once
-per session. Restarting the kernel means signing in again.
+The token is cached in memory and reused while Galaxy accepts it, so signing in
+is not per-query — but it is not guaranteed to be once per session either. If
+the token expires or is revoked, the next query 401s and a fresh login link
+appears. Restarting the kernel also means signing in again.
 
 Queries run as **you** — your access is exactly what your role grants, and your
 queries are attributable.
@@ -86,7 +88,11 @@ every historical row.
 
 So a join on the key alone matches every version, and counts multiply by the
 number of times that row has been edited. **Every join to an SCD2 dimension
-needs `AND <dim>.is_current`.** `demo.py` §4 measures the difference.
+needs a version filter.** For current-state questions that is
+`AND <dim>.is_current`; for a point-in-time question, match the fact's date
+against the row's `effective_date`/`end_date` interval instead, because
+`is_current` would assign today's attributes to a past fact. `demo.py` §4
+measures the difference.
 
 ## Two ways to query
 

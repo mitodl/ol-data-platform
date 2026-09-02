@@ -176,9 +176,12 @@ def _(mo):
     Running the next cell triggers the login. It blocks until you have opened
     the printed link and signed in, then lists the catalogs you can reach.
 
-    The token is cached in memory for the life of this kernel, so you sign in
-    once per session — not once per query. Restarting the kernel, or re-running
-    the connection cell above, starts a new session and asks again.
+    The token is cached in memory and reused for as long as Galaxy accepts it,
+    so signing in is not per-query. It is not guaranteed to be once per
+    session either: if the token expires or is revoked, Galaxy answers the next
+    query with a 401 and the client starts the flow again, so a fresh login
+    callout appears mid-session. Restarting the kernel, or re-running the
+    connection cell above, also asks again.
     """)
     return
 

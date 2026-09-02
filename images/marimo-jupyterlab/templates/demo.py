@@ -384,9 +384,18 @@ def _(mo):
 
     So a join on the key alone matches every version of the run, and your
     counts multiply by however many times that run has been edited. Every join
-    to an SCD2 dimension needs `AND <dim>.is_current`, on both dimensions. The
-    dbt schema for `courserun_pk` says so outright: *"Always filter with
-    is_current=true when looking up by this key."*
+    to an SCD2 dimension needs a version filter, on both dimensions. For
+    current-state questions — almost everything you will ask — that filter is
+    `AND <dim>.is_current`, and the dbt schema for `courserun_pk` says so
+    outright: *"Always filter with is_current=true when looking up by this
+    key."*
+
+    For a point-in-time question — what the course was called *when* that
+    certificate was issued — `is_current` is the wrong filter: it staples
+    today's attributes onto a past fact. Match the interval instead, e.g.
+    `AND cert.certificate_created_on >= run.effective_date AND
+    (cert.certificate_created_on < run.end_date OR run.end_date IS NULL)`.
+    Every example here is current-state.
 
     **Why this hides.** Only 144 of ~8,000 course runs have more than one
     version, so a query that forgets the filter looks right on almost
@@ -897,9 +906,10 @@ def _(mo):
       them to anyone who knows the cohort.
     - Your home directory is a persistent volume. A CSV of learner rows written
       there is a copy that outlives the question you wrote it to answer.
-    - Everything you run is attributed to you: Galaxy authorises the query
+    - Queries through Galaxy are attributed to you: Galaxy authorises each one
       against your own SSO identity, so your access is exactly your role's
-      access, and it is logged.
+      access, and it is logged. That guarantee is specific to the Trino path —
+      it is the reason this notebook queries the warehouse and nothing else.
     """)
     return
 
