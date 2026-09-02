@@ -7,8 +7,26 @@ from typing import Any, Protocol
 import polars as pl
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
+from pyiceberg.catalog import Catalog
 
 JOIN_COLS = ["source_slug", "conversation_ref"]
+
+EMBEDDING_CHECKPOINT_SCHEMA = {
+    **dict.fromkeys(JOIN_COLS, pl.String),
+    "turn_count": pl.Int64,
+    "embedding_input": pl.String,
+    "embedding_vector": pl.List(pl.Float32),
+    "embedding_dim": pl.Int64,
+    "embedding_model_version": pl.String,
+}
+
+# Abort after this many whole chunks in a row come back with zero successful
+# embeddings, same rationale as summarize.py's MAX_CONSECUTIVE_FAILED_CHUNKS: a
+# systemic error (bad credential) isn't going to start succeeding on the next
+# chunk either.
+EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS = int(
+    os.environ.get("EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS", "1")
+)
 
 # Safe baseline from feedback_ml_approach.md §B, pending the model bake-off. Anthropic
 # has no embeddings API, so this must always resolve to an OpenAI-compatible model id,
@@ -157,13 +175,19 @@ def filter_unembedded(
 
 
 def _embed_chunk(
-    chunk: list[dict[str, Any]], client: EmbeddingClient
+    chunk: list[dict[str, Any]],
+    client: EmbeddingClient,
+    errors: list[str] | None = None,
 ) -> list[tuple[dict[str, Any], list[float]]]:
     """Embed one chunk via a single batched API call, falling back row-by-row.
 
     A single bad row (e.g. a length/encoding issue the API rejects) fails the whole
     batch call -- retrying one at a time isolates it rather than dropping every
     otherwise-fine row in the chunk along with it.
+
+    errors, if given, collects each failure's message -- lets a caller surface
+    *why* calls failed (e.g. in a Failure message) without changing this
+    function's return type.
     """
     try:
         vectors = client.embed_batch([row["resolved_text"] for row in chunk])
@@ -177,53 +201,34 @@ def _embed_chunk(
         for row in chunk:
             try:
                 vector = client.embed_batch([row["resolved_text"]])[0]
-            except Exception:
+            except Exception as e:
                 logger.warning(
                     "Failed to embed conversation %s/%s; will retry next run",
                     row["source_slug"],
                     row["conversation_ref"],
                     exc_info=True,
                 )
+                if errors is not None:
+                    errors.append(
+                        f"{row['source_slug']}/{row['conversation_ref']}: "
+                        f"{type(e).__name__}: {e}"
+                    )
                 continue
             results.append((row, vector))
         return results
     return list(zip(chunk, vectors, strict=True))
 
 
-def embed_conversations(df: pl.DataFrame, client: EmbeddingClient) -> pl.DataFrame:
-    """Embed each conversation's resolved_text, in bounded batches.
-
-    Args:
-        df: a frame with (at least) source_slug, conversation_ref, turn_count,
-            embedding_input, resolved_text columns, e.g. resolve_embedding_text's
-            output.
-        client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
-            method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
-
-    Returns:
-        pl.DataFrame: source_slug, conversation_ref, turn_count, embedding_vector,
-            embedding_dim, embedding_model_version, embedding_input - keyed the same
-            way feedback_conversation_pk is minted, for afact_feedback_conversation to
-            left-join. turn_count is carried through so a later run's filter_unembedded
-            can detect a conversation that gained a turn. A null resolved_text
-            (upstream summary/redaction not ready yet) is skipped and retried next
-            run, same as a failed API call (#2542's checkpointing precedent).
-    """
-    rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
-
-    source_slugs: list[str] = []
-    conversation_refs: list[str] = []
-    turn_counts: list[int] = []
-    embedding_inputs: list[str] = []
-    vectors: list[list[float]] = []
-    for chunk_start in range(0, len(rows), EMBEDDING_BATCH_SIZE):
-        chunk = rows[chunk_start : chunk_start + EMBEDDING_BATCH_SIZE]
-        for row, vector in _embed_chunk(chunk, client):
-            source_slugs.append(row["source_slug"])
-            conversation_refs.append(row["conversation_ref"])
-            turn_counts.append(row["turn_count"])
-            embedding_inputs.append(row["embedding_input"])
-            vectors.append(vector)
+def _results_to_df(
+    results: list[tuple[dict[str, Any], list[float]]], client: EmbeddingClient
+) -> pl.DataFrame:
+    if not results:
+        return pl.DataFrame(schema=EMBEDDING_CHECKPOINT_SCHEMA)
+    source_slugs = [row["source_slug"] for row, _ in results]
+    conversation_refs = [row["conversation_ref"] for row, _ in results]
+    turn_counts = [row["turn_count"] for row, _ in results]
+    embedding_inputs = [row["embedding_input"] for row, _ in results]
+    vectors = [vector for _, vector in results]
 
     return pl.DataFrame(
         {
@@ -241,3 +246,103 @@ def embed_conversations(df: pl.DataFrame, client: EmbeddingClient) -> pl.DataFra
         pl.lit(client.dim, dtype=pl.Int64).alias("embedding_dim"),
         pl.lit(client.model_version, dtype=pl.String).alias("embedding_model_version"),
     )
+
+
+def embed_conversations(
+    df: pl.DataFrame, client: EmbeddingClient, errors: list[str] | None = None
+) -> pl.DataFrame:
+    """Embed each conversation's resolved_text, in bounded batches.
+
+    Args:
+        df: a frame with (at least) source_slug, conversation_ref, turn_count,
+            embedding_input, resolved_text columns, e.g. resolve_embedding_text's
+            output.
+        client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
+            method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
+        errors: if given, each failure's message is appended here (see _embed_chunk).
+
+    Returns:
+        pl.DataFrame: source_slug, conversation_ref, turn_count, embedding_vector,
+            embedding_dim, embedding_model_version, embedding_input - keyed the same
+            way feedback_conversation_pk is minted, for afact_feedback_conversation to
+            left-join. turn_count is carried through so a later run's filter_unembedded
+            can detect a conversation that gained a turn. A null resolved_text
+            (upstream summary/redaction not ready yet) is skipped and retried next
+            run, same as a failed API call (#2542's checkpointing precedent).
+    """
+    rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
+
+    results: list[tuple[dict[str, Any], list[float]]] = []
+    for chunk_start in range(0, len(rows), EMBEDDING_BATCH_SIZE):
+        chunk = rows[chunk_start : chunk_start + EMBEDDING_BATCH_SIZE]
+        results.extend(_embed_chunk(chunk, client, errors=errors))
+
+    return _results_to_df(results, client)
+
+
+def checkpoint_embedding_chunk(
+    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
+) -> None:
+    """Upsert one chunk directly into the real feedback_embeddings table.
+
+    Mirrors summarize.checkpoint_chunk: a crash after this call keeps everything
+    upserted so far, so the next run's ordinary filter_unembedded pass sees it as
+    already embedded, no separate recovery step needed. table_identifier is
+    "database.table", e.g. "ol_warehouse_production_intermediate.feedback_embeddings".
+    """
+    if chunk_df.height == 0:
+        return
+    table = catalog.load_table(table_identifier)
+    table.upsert(
+        df=chunk_df.to_arrow(),
+        join_cols=JOIN_COLS,
+        when_matched_update_all=True,
+        when_not_matched_insert_all=True,
+    )
+
+
+def embed_and_checkpoint(
+    df: pl.DataFrame,
+    client: EmbeddingClient,
+    checkpoint_target: tuple[Catalog, str],
+    batch_size: int = EMBEDDING_BATCH_SIZE,
+    errors: list[str] | None = None,
+) -> pl.DataFrame:
+    """Embed df in chunks, upserting each into feedback_embeddings as it completes.
+
+    Mirrors summarize.summarize_and_checkpoint. errors, if given, collects every
+    failure's message (see _embed_chunk) so a caller can surface *why* calls failed,
+    e.g. in a Failure message.
+
+    Stops the whole loop (not just the current chunk) after
+    EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS chunks in a row come back with zero
+    successful embeddings -- a systemic error (bad credential) isn't going to start
+    succeeding on the next chunk either. Everything embedded before the abort is
+    already upserted into the real table.
+
+    Returns the full concatenated output for the caller's normal return/metadata
+    handling -- the caller's own write of this (e.g. via the io_manager) upserts
+    the same rows again, which is a harmless no-op since they're already there.
+    """
+    catalog, table_identifier = checkpoint_target
+    rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
+
+    consecutive_failed_chunks = 0
+    chunk_dfs: list[pl.DataFrame] = []
+    for chunk_start in range(0, len(rows), batch_size):
+        chunk = rows[chunk_start : chunk_start + batch_size]
+        results = _embed_chunk(chunk, client, errors=errors)
+        chunk_df = _results_to_df(results, client)
+        chunk_dfs.append(chunk_df)
+        checkpoint_embedding_chunk(catalog, table_identifier, chunk_df)
+
+        if len(chunk) > 0 and len(results) == 0:
+            consecutive_failed_chunks += 1
+            if consecutive_failed_chunks >= EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS:
+                break
+        else:
+            consecutive_failed_chunks = 0
+
+    if chunk_dfs:
+        return pl.concat(chunk_dfs)
+    return pl.DataFrame(schema=EMBEDDING_CHECKPOINT_SCHEMA)

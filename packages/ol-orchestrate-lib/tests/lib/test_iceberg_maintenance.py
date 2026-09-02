@@ -408,6 +408,7 @@ class TestEnvironmentScoping:
         assert [t.schema_name for t in non_dbt_singleton_tables("qa")] == [
             "ol_warehouse_qa_reporting",
             "ol_warehouse_qa_intermediate",
+            "ol_warehouse_qa_intermediate",
         ]
 
 

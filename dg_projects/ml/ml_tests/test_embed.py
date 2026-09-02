@@ -289,3 +289,128 @@ def test_build_embedding_client_rejects_non_openai_clients() -> None:
 
     with pytest.raises(TypeError, match="embeddings API"):
         embed.build_embedding_client(_FakeLLM())
+
+
+class _FakeTable:
+    def __init__(self) -> None:
+        self.upserts: list[dict[str, object]] = []
+
+    def upsert(self, **kwargs: object) -> None:
+        self.upserts.append(kwargs)
+
+
+class _FakeCatalog:
+    def __init__(self, table: _FakeTable) -> None:
+        self._table = table
+        self.load_calls: list[str] = []
+
+    def load_table(self, identifier: str) -> _FakeTable:
+        self.load_calls.append(identifier)
+        return self._table
+
+
+def _embedding_df(**overrides: object) -> pl.DataFrame:
+    row = {
+        "source_slug": "zendesk",
+        "conversation_ref": "1",
+        "turn_count": 1,
+        "embedding_input": "summary",
+        "resolved_text": "hello",
+    }
+    row.update(overrides)
+    return pl.DataFrame([row])
+
+
+def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    chunk_df = pl.DataFrame(
+        {
+            "source_slug": ["zendesk"],
+            "conversation_ref": ["1"],
+            "turn_count": [1],
+            "embedding_input": ["summary"],
+            "embedding_vector": [[0.1, 0.2, 0.3]],
+            "embedding_dim": [3],
+            "embedding_model_version": ["text-embedding-3-large"],
+        }
+    )
+
+    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", chunk_df)
+
+    assert catalog.load_calls == ["some_db.feedback_embeddings"]
+    assert len(table.upserts) == 1
+    assert table.upserts[0]["join_cols"] == embed.JOIN_COLS
+
+
+def test_checkpoint_embedding_chunk_skips_empty_chunks_without_touching_catalog() -> (
+    None
+):
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    empty_df = pl.DataFrame(schema=embed.EMBEDDING_CHECKPOINT_SCHEMA)
+
+    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", empty_df)
+
+    assert catalog.load_calls == []
+    assert table.upserts == []
+
+
+def test_embed_and_checkpoint_upserts_each_chunk() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient()
+    df = pl.concat(
+        [_embedding_df(conversation_ref=str(i)) for i in range(5)],
+        how="vertical_relaxed",
+    )
+
+    result = embed.embed_and_checkpoint(
+        df,
+        client,
+        (catalog, "some_db.feedback_embeddings"),
+        batch_size=2,
+    )
+
+    assert result.height == 5
+    # 3 chunks of size 2, 2, 1 -- one upsert call per chunk
+    assert len(table.upserts) == 3
+
+
+def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
+    """A credential-type failure shouldn't burn through every remaining chunk with
+    the same error -- a whole chunk with zero successes should abort the run
+    (default EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS=1) instead of trying every
+    chunk. Chunks already upserted before the abort stay in the real table -- no
+    separate recovery step needed on the next run.
+    """
+
+    class _AlwaysFailingClient:
+        model_version = "test-model"
+        dim = 3
+
+        def embed_batch(self, texts: list[str]) -> list[list[float]]:  # noqa: ARG002
+            msg = "simulated auth failure"
+            raise RuntimeError(msg)
+
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    batch_size = 2
+    df = pl.concat(
+        [_embedding_df(conversation_ref=str(i)) for i in range(10)],
+        how="vertical_relaxed",
+    )
+    errors: list[str] = []
+
+    result = embed.embed_and_checkpoint(
+        df,
+        _AlwaysFailingClient(),
+        (catalog, "some_db.feedback_embeddings"),
+        batch_size=batch_size,
+        errors=errors,
+    )
+
+    assert result.height == 0
+    # Aborted after the first fully-failed chunk, not all 10 rows.
+    assert len(errors) == batch_size
+    assert len(errors) < df.height

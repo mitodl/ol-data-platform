@@ -6,13 +6,14 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     Config,
+    Failure,
     MetadataValue,
     asset,
 )
 from ml.lib.embed import (
     JOIN_COLS,
     build_embedding_client,
-    embed_conversations,
+    embed_and_checkpoint,
     filter_unembedded,
     resolve_embedding_text,
 )
@@ -22,6 +23,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
+from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 
@@ -129,14 +131,25 @@ def feedback_embeddings(
     )
     if config.sample_limit is not None:
         unembedded_df = unembedded_df.head(config.sample_limit)
-    embeddings_df = embed_conversations(unembedded_df, client)
 
-    # A null resolved_text or a failed API call inside embed_conversations silently
-    # drops that row rather than raising, so the run itself still reports success --
-    # this is the visible signal for a partial run, surfaced as metadata (queryable
-    # from the asset catalog, not just buried in a log line) rather than failing the
-    # whole materialization over what may be a single transient row.
+    errors: list[str] = []
+    catalog = get_glue_catalog()
+    table_identifier = f"{database_name}.feedback_embeddings"
+    embeddings_df = embed_and_checkpoint(
+        unembedded_df,
+        client,
+        (catalog, table_identifier),
+        errors=errors,
+    )
+
+    # A null resolved_text or a failed API call is dropped from embeddings_df
+    # entirely, so this difference is exactly the failure count -- including rows
+    # never attempted because of an early abort.
     dropped_count = unembedded_df.height - embeddings_df.height
+    # len(errors) rather than dropped_count: a null resolved_text is dropped
+    # without an API call or an error message, so dropped_count alone would
+    # overstate how many embed calls actually ran.
+    attempted_count = embeddings_df.height + len(errors)
 
     context.log.info(
         "Embedded %d conversations (%d already embedded, %d total upstream, "
@@ -146,6 +159,17 @@ def feedback_embeddings(
         resolved_df.height,
         dropped_count,
     )
+
+    # 100% failure would otherwise look identical to "nothing new to embed".
+    if attempted_count > 0 and embeddings_df.height == 0:
+        sample_errors = "; ".join(errors[:3])
+        msg = (
+            f"All {attempted_count} attempted embedding calls failed; the "
+            f"embedding client/credential is likely misconfigured. Sample "
+            f"errors: {sample_errors}"
+        )
+        raise Failure(msg)
+
     if dropped_count:
         context.log.warning(
             "%d conversation(s) were not embedded this run; will be retried on the "
