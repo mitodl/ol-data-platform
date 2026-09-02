@@ -8,7 +8,7 @@ with orders as (
         *
         , row_number() over (
             partition by order_id
-            order by couponredemption_created_on desc
+            order by couponredemption_created_on desc, couponredemption_id desc
         ) as row_num
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponredemption') }}
 )

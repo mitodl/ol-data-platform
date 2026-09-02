@@ -23,7 +23,7 @@ with b2becommerce_b2border as (
         *
         , row_number() over (
             partition by order_id
-            order by couponredemption_created_on desc
+            order by couponredemption_created_on desc, couponredemption_id desc
         ) as row_num
     from {{ ref('int__mitxpro__ecommerce_couponredemption') }}
 )
