@@ -8,6 +8,7 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.feedback_clustering import feedback_clustering
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_summaries import feedback_summaries
@@ -61,12 +62,21 @@ feedback_embeddings_job = define_asset_job(
     selection=[feedback_embeddings],
 )
 
-# Scoped to just these two assets, independent of the ml code location's
-# shared default_automation_condition_sensor. Stopped by default so a fresh
-# deploy doesn't auto-run against an unverified LLM credential.
+feedback_clustering_job = define_asset_job(
+    name="feedback_clustering_job",
+    selection=[feedback_clustering],
+)
+
+# Scoped to just these assets, independent of the ml code location's shared
+# default_automation_condition_sensor. Stopped by default so a fresh deploy
+# doesn't auto-run against an unverified LLM credential (feedback_clustering
+# itself has no LLM dependency, but it's downstream of feedback_embeddings via
+# upstream_or_code_changes, so it belongs in the same sensor scope).
 feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
     name="feedback_summaries_automation_sensor",
-    target=AssetSelection.assets(feedback_summaries, feedback_embeddings),
+    target=AssetSelection.assets(
+        feedback_summaries, feedback_embeddings, feedback_clustering
+    ),
     default_status=DefaultSensorStatus.STOPPED,
 )
 
@@ -130,6 +140,7 @@ defs = Definitions(
             feedback_redacted,
             feedback_summaries,
             feedback_embeddings,
+            feedback_clustering,
         ]
     ),
     jobs=[
@@ -137,6 +148,7 @@ defs = Definitions(
         feedback_redacted_job,
         feedback_summaries_job,
         feedback_embeddings_job,
+        feedback_clustering_job,
     ],
     sensors=[feedback_summaries_automation_sensor],
 )
