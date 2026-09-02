@@ -130,6 +130,50 @@ def test_redact_text_still_redacts_pii_that_only_partially_overlaps_a_url(
     assert "<PERSON>" in redact._redact_text(text)
 
 
+def test_redact_text_still_redacts_an_email_and_phone_contained_in_a_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An email or phone number inside a URL (e.g. a reset link's ?email=...&
+    phone=... query params) must still be redacted, on two fronts: the strict
+    pattern matches only the email, not the URL text preceding it (Presidio's
+    built-in EmailRecognizer regex allows URL delimiters / ? = & in the local
+    part and would over-match), and _redact_text keeps both despite being fully
+    contained in an excluded URL span, since they're real PII rather than a NER
+    false positive.
+    """
+    text = (
+        "See https://example.com/support?email=jane.doe@mit.edu&phone=617-555-0100 "
+        "for help"
+    )
+    url_start = text.index("https")
+    url_end = len(text) - len(" for help")
+    email_start = text.index("jane.doe@mit.edu")
+    email_end = email_start + len("jane.doe@mit.edu")
+    phone_start = text.index("617-555-0100")
+    phone_end = phone_start + len("617-555-0100")
+
+    results = redact._STRICT_EMAIL_RECOGNIZER.analyze(
+        text=text, entities=["EMAIL_ADDRESS"]
+    )
+    assert len(results) == 1
+    assert text[results[0].start : results[0].end] == "jane.doe@mit.edu"
+
+    class _EmailAndPhoneInUrlAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("URL", url_start, url_end),
+                _AnalyzerResult("EMAIL_ADDRESS", email_start, email_end),
+                _AnalyzerResult("PHONE_NUMBER", phone_start, phone_end),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _EmailAndPhoneInUrlAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    redacted = redact._redact_text(text)
+    assert "<EMAIL_ADDRESS>" in redacted
+    assert "<PHONE_NUMBER>" in redacted
+
+
 def test_filter_unredacted_drops_already_redacted_rows() -> None:
     """Only rows missing from the feedback_redacted output should get re-run."""
     source_df = pl.DataFrame(

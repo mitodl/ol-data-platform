@@ -8,8 +8,32 @@ import polars as pl
 from anthropic import Anthropic, AnthropicBedrockMantle
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
+from pyiceberg.catalog import Catalog
 
 JOIN_COLS = ["source_slug", "conversation_ref"]
+
+SUMMARIZE_CHECKPOINT_SCHEMA = {
+    **dict.fromkeys(JOIN_COLS, pl.String),
+    "turn_count": pl.Int64,
+    "conversation_summary": pl.String,
+    "summary_model_version": pl.String,
+    "embedding_input": pl.String,
+}
+
+# Bounds how many LLM calls a crash can lose (feedback_dagster_asset_spec.md).
+SUMMARIZE_CHECKPOINT_BATCH_SIZE = int(
+    os.environ.get("SUMMARIZE_CHECKPOINT_BATCH_SIZE", "25")
+)
+
+# Abort after this many whole chunks in a row come back with zero successful LLM
+# calls, rather than burning through every remaining chunk with the same (e.g.
+# credential) error. No existing consecutive-failure precedent elsewhere in this
+# repo to anchor to (only per-request retry counts, a different concept); 1
+# means a single fully-failed chunk (SUMMARIZE_CHECKPOINT_BATCH_SIZE calls) is
+# already enough to call it systemic rather than bad luck.
+MAX_CONSECUTIVE_FAILED_CHUNKS = int(
+    os.environ.get("SUMMARIZE_MAX_CONSECUTIVE_FAILED_CHUNKS", "1")
+)
 
 # §A.1 of feedback_ml_approach.md: sits below the measured p25 (601 chars), so it skips
 # only the shortest multi-turn conversations rather than trading away summary quality
@@ -34,7 +58,7 @@ logger = logging.getLogger(__name__)
 class SummaryClient(Protocol):
     model_version: str
 
-    def summarize(self, conversation_text: str) -> str: ...
+    def summarize(self, conversation_text: str) -> str | None: ...
 
 
 class AnthropicSummaryClient:
@@ -48,7 +72,7 @@ class AnthropicSummaryClient:
         self._client = client
         self.model_version = SUMMARY_MODEL_VERSION
 
-    def summarize(self, conversation_text: str) -> str:
+    def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
             max_tokens=200,
@@ -81,7 +105,7 @@ class OpenAISummaryClient:
         self._client = client
         self.model_version = SUMMARY_MODEL_VERSION
 
-    def summarize(self, conversation_text: str) -> str:
+    def summarize(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,
             messages=[
@@ -166,7 +190,9 @@ def needs_summary(row: dict[str, Any]) -> bool:
     return text_chars is not None and text_chars >= SKIP_CHAR_THRESHOLD
 
 
-def summarize_conversations(df: pl.DataFrame, client: SummaryClient) -> pl.DataFrame:
+def summarize_conversations(
+    df: pl.DataFrame, client: SummaryClient, errors: list[str] | None = None
+) -> pl.DataFrame:
     """Summarize each conversation that clears the skip rule.
 
     Args:
@@ -175,6 +201,9 @@ def summarize_conversations(df: pl.DataFrame, client: SummaryClient) -> pl.DataF
             int__feedback__conversation.
         client: an object with a `summarize(conversation_text: str) -> str` method,
             e.g. an AnthropicSummaryClient wrapping LLMClientFactory.
+        errors: if given, each failure's message is appended here -- lets a caller
+            surface *why* calls failed (e.g. in a Failure message) without changing
+            this function's return type.
 
     Returns:
         pl.DataFrame: source_slug, conversation_ref, conversation_summary,
@@ -197,13 +226,31 @@ def summarize_conversations(df: pl.DataFrame, client: SummaryClient) -> pl.DataF
         if needs_summary(row):
             try:
                 summary = client.summarize(row["conversation_text"])
-            except Exception:
+            except Exception as e:
                 logger.warning(
                     "Failed to summarize conversation %s/%s; will retry next run",
                     row["source_slug"],
                     row["conversation_ref"],
                     exc_info=True,
                 )
+                if errors is not None:
+                    errors.append(
+                        f"{row['source_slug']}/{row['conversation_ref']}: "
+                        f"{type(e).__name__}: {e}"
+                    )
+                continue
+
+            if not summary:
+                logger.warning(
+                    "Empty summary for conversation %s/%s; will retry next run",
+                    row["source_slug"],
+                    row["conversation_ref"],
+                )
+                if errors is not None:
+                    errors.append(
+                        f"{row['source_slug']}/{row['conversation_ref']}: "
+                        "empty/null summary (refusal or content filter)"
+                    )
                 continue
             summaries.append(summary)
             model_versions.append(client.model_version)
@@ -232,3 +279,83 @@ def summarize_conversations(df: pl.DataFrame, client: SummaryClient) -> pl.DataF
         pl.Series("summary_model_version", model_versions, dtype=pl.String),
         pl.Series("embedding_input", embedding_inputs, dtype=pl.String),
     )
+
+
+def checkpoint_chunk(
+    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
+) -> None:
+    """Upsert one chunk directly into the real feedback_summaries table.
+
+    A crash after this call keeps everything upserted so far -- the next run's
+    ordinary filter_unsummarized pass sees it as already summarized, no separate
+    recovery step needed. table_identifier is "database.table", e.g.
+    "ol_warehouse_production_intermediate.feedback_summaries". The table is
+    registered in non_dbt_singleton_tables() (ol_orchestrate.lib.iceberg_maintenance)
+    so nightly maintenance expires the resulting one-snapshot-per-chunk history.
+    """
+    if chunk_df.height == 0:
+        return
+    table = catalog.load_table(table_identifier)
+    table.upsert(
+        df=chunk_df.to_arrow(),
+        join_cols=JOIN_COLS,
+        when_matched_update_all=True,
+        when_not_matched_insert_all=True,
+    )
+
+
+def summarize_and_checkpoint(
+    unsummarized_df: pl.DataFrame,
+    client: SummaryClient,
+    checkpoint_target: tuple[Catalog, str],
+    batch_size: int = SUMMARIZE_CHECKPOINT_BATCH_SIZE,
+    errors: list[str] | None = None,
+) -> pl.DataFrame:
+    """Summarize unsummarized_df in chunks, upserting each as it completes.
+
+    errors, if given, collects every failure's message (see summarize_conversations)
+    so a caller can surface *why* calls failed, e.g. in a Failure message.
+
+    Stops the whole loop (not just the current chunk) after
+    MAX_CONSECUTIVE_FAILED_CHUNKS chunks in a row come back with zero successful
+    LLM calls -- a systemic error (bad credential) isn't going to start succeeding
+    on the next chunk either, so there's no point burning through the rest of
+    unsummarized_df with the same failure. Everything summarized before the abort
+    is already upserted into the real table.
+
+    Returns the full concatenated output for the caller's normal return/metadata
+    handling -- the caller's own write of this (e.g. via the io_manager) upserts
+    the same rows again, which is a harmless no-op since they're already there.
+    """
+    catalog, table_identifier = checkpoint_target
+    consecutive_failed_chunks = 0
+    summary_chunks: list[pl.DataFrame] = []
+    chunk_starts = range(0, unsummarized_df.height, batch_size)
+    total_chunks = len(chunk_starts)
+    for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
+        chunk = unsummarized_df.slice(chunk_start, batch_size)
+        chunk_summaries = summarize_conversations(chunk, client, errors=errors)
+        summary_chunks.append(chunk_summaries)
+        checkpoint_chunk(catalog, table_identifier, chunk_summaries)
+        logger.info(
+            "Upserted chunk %d/%d (%d rows) into %s",
+            chunk_index,
+            total_chunks,
+            chunk_summaries.height,
+            table_identifier,
+        )
+
+        chunk_llm_successes = chunk_summaries.filter(
+            pl.col("summary_model_version").is_not_null()
+        ).height
+        chunk_attempted = chunk_llm_successes + (chunk.height - chunk_summaries.height)
+        if chunk_attempted > 0 and chunk_llm_successes == 0:
+            consecutive_failed_chunks += 1
+            if consecutive_failed_chunks >= MAX_CONSECUTIVE_FAILED_CHUNKS:
+                break
+        else:
+            consecutive_failed_chunks = 0
+
+    if summary_chunks:
+        return pl.concat(summary_chunks)
+    return pl.DataFrame(schema=SUMMARIZE_CHECKPOINT_SCHEMA)

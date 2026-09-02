@@ -1,12 +1,30 @@
 """Presidio-based PII redaction for feedback title/text."""
 
 import polars as pl
-from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
 
 JOIN_COLS = ["source_slug", "source_record_ref"]
 
 EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
+
+# The only types that must be redacted even when fully contained in a URL/date span
+# (e.g. a reset link's ?email=... query param) -- real PII someone could paste into
+# feedback text. Everything else stays exempted: pattern recognizers for driver's
+# license/passport/bank numbers etc. routinely false-positive on UUIDs, order
+# numbers, and course IDs, which are common and harmless inside a URL.
+ALWAYS_REDACT_EVEN_IN_URL = {"EMAIL_ADDRESS", "PHONE_NUMBER"}
+
+# Presidio's built-in EmailRecognizer's local-part character class includes URL
+# delimiters (/ ? = &), so an email right after a URL's domain/path (e.g. a reset
+# link's ?email=jane.doe@mit.edu) matches starting from the URL itself, redacting
+# the whole URL along with the email. This tighter pattern stops at the first '@'.
+_STRICT_EMAIL_PATTERN = Pattern(
+    name="strict_email", regex=r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", score=0.85
+)
+_STRICT_EMAIL_RECOGNIZER = PatternRecognizer(
+    supported_entity="EMAIL_ADDRESS", patterns=[_STRICT_EMAIL_PATTERN]
+)
 
 _analyzer: AnalyzerEngine | None = None
 _anonymizer: AnonymizerEngine | None = None
@@ -19,6 +37,8 @@ def _get_analyzer() -> AnalyzerEngine:
     global _analyzer  # noqa: PLW0603
     if _analyzer is None:
         _analyzer = AnalyzerEngine()
+        _analyzer.registry.remove_recognizer("EmailRecognizer")
+        _analyzer.registry.add_recognizer(_STRICT_EMAIL_RECOGNIZER)
     return _analyzer
 
 
@@ -46,15 +66,20 @@ def _redact_text(value: str | None) -> str | None:
     ]
     # Containment, not any overlap: a PII match that only partially overlaps an
     # excluded span (e.g. a name immediately followed by a URL) extends beyond it
-    # and is still real PII outside that span -- a one-character overlap must not
-    # exempt the whole match. Only a result fully inside an excluded span is the
-    # "NER misread a URL/date" case this is meant to catch.
+    # and is still real PII outside that span, so it's never exempted regardless
+    # of type. A match fully inside the span is only redacted if its type is in
+    # ALWAYS_REDACT_EVEN_IN_URL -- everything else (including a URL/date span's own
+    # NER false positives) is exempted.
     filtered_results = [
         result
         for result in results
         if result.entity_type not in EXCLUDED_ENTITIES
-        and not any(
-            start <= result.start and result.end <= end for start, end in excluded_spans
+        and not (
+            result.entity_type not in ALWAYS_REDACT_EVEN_IN_URL
+            and any(
+                start <= result.start and result.end <= end
+                for start, end in excluded_spans
+            )
         )
     ]
     return (

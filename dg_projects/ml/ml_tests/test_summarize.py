@@ -250,3 +250,127 @@ def test_summarize_conversations_keeps_successful_rows_when_one_fails() -> None:
     assert result.row(0, named=True)["conversation_summary"] == (
         "summary of: turn one\n---\nturn two"
     )
+
+
+def test_summarize_conversations_treats_a_none_summary_as_a_failure() -> None:
+    """A refusal/content-filter finish (message.content is None) must not be
+    recorded as a success -- it would never be retried otherwise.
+    """
+
+    class _RefusingClient:
+        model_version = "test-model"
+
+        def summarize(self, conversation_text: str) -> str | None:  # noqa: ARG002
+            return None
+
+    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
+
+    result = summarize.summarize_conversations(df, _RefusingClient())
+
+    assert result.height == 0
+
+
+def _summary_row(**overrides: object) -> dict[str, object]:
+    row = {
+        "source_slug": "zendesk",
+        "conversation_ref": "1",
+        "turn_count": 3,
+        "conversation_summary": "a summary",
+        "summary_model_version": "claude-haiku-4-5",
+        "embedding_input": "summary",
+    }
+    row.update(overrides)
+    return row
+
+
+class _FakeTable:
+    def __init__(self) -> None:
+        self.upserts: list[dict[str, object]] = []
+
+    def upsert(self, **kwargs: object) -> None:
+        self.upserts.append(kwargs)
+
+
+class _FakeCatalog:
+    def __init__(self, table: _FakeTable) -> None:
+        self._table = table
+        self.load_calls: list[str] = []
+
+    def load_table(self, identifier: str) -> _FakeTable:
+        self.load_calls.append(identifier)
+        return self._table
+
+
+def test_checkpoint_chunk_upserts_a_non_empty_chunk() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    chunk_df = pl.DataFrame([_summary_row(), _summary_row(conversation_ref="2")])
+
+    summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", chunk_df)
+
+    assert catalog.load_calls == ["some_db.feedback_summaries"]
+    assert len(table.upserts) == 1
+    assert table.upserts[0]["join_cols"] == summarize.JOIN_COLS
+
+
+def test_checkpoint_chunk_skips_empty_chunks_without_touching_the_catalog() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    empty_df = pl.DataFrame(
+        schema={"source_slug": pl.String, "conversation_ref": pl.String}
+    )
+
+    summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", empty_df)
+
+    assert catalog.load_calls == []
+    assert table.upserts == []
+
+
+def test_summarize_and_checkpoint_upserts_each_chunk() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(5)])
+
+    result = summarize.summarize_and_checkpoint(
+        df,
+        _FakeSummaryClient(),
+        (catalog, "some_db.feedback_summaries"),
+        batch_size=2,
+    )
+
+    assert result.height == 5
+    # 3 chunks of size 2, 2, 1 -- one upsert call per chunk
+    assert len(table.upserts) == 3
+
+
+def test_summarize_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
+    """A credential-type failure shouldn't burn through every remaining chunk with
+    the same error -- a whole chunk with zero successes should abort the run
+    instead of trying every chunk.
+    """
+
+    class _AlwaysFailingClient:
+        model_version = "test-model"
+
+        def summarize(self, conversation_text: str) -> str:  # noqa: ARG002
+            msg = "simulated auth failure"
+            raise RuntimeError(msg)
+
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    batch_size = 2
+    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(10)])
+    errors: list[str] = []
+
+    result = summarize.summarize_and_checkpoint(
+        df,
+        _AlwaysFailingClient(),
+        (catalog, "some_db.feedback_summaries"),
+        batch_size=batch_size,
+        errors=errors,
+    )
+
+    assert result.height == 0
+    # Aborted after the first fully-failed chunk, not all 10 rows.
+    assert len(errors) == batch_size
+    assert len(errors) < df.height

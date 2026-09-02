@@ -6,13 +6,15 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     Config,
+    Failure,
+    MetadataValue,
     asset,
 )
 from ml.lib.summarize import (
     JOIN_COLS,
     build_summary_client,
     filter_unsummarized,
-    summarize_conversations,
+    summarize_and_checkpoint,
 )
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -20,6 +22,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
+from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 
@@ -102,19 +105,62 @@ def feedback_summaries(
     )
     if config.sample_limit is not None:
         unsummarized_df = unsummarized_df.head(config.sample_limit)
-    summaries_df = summarize_conversations(unsummarized_df, client)
+
+    errors: list[str] = []
+    catalog = get_glue_catalog()
+    table_identifier = f"{database_name}.feedback_summaries"
+    summaries_df = summarize_and_checkpoint(
+        unsummarized_df,
+        client,
+        (catalog, table_identifier),
+        errors=errors,
+    )
 
     llm_call_count = summaries_df.filter(
         pl.col("summary_model_version").is_not_null()
     ).height
+    # A failed conversation is dropped from summaries_df entirely (unlike a
+    # skipped-by-length-rule row, which is kept with a null summary), so this
+    # difference is exactly the failure count -- including rows never attempted
+    # because of an early abort.
+    failed_count = unsummarized_df.height - summaries_df.height
+    # len(errors) rather than failed_count: on an early abort, failed_count also
+    # counts never-attempted rows, overstating how many calls actually ran.
+    attempted_count = llm_call_count + len(errors)
+
     context.log.info(
         "Processed %d conversations (%d LLM calls, %d skipped by the length rule, "
-        "%d already summarized, %d total upstream)",
+        "%d failed, %d already summarized, %d total upstream)",
         summaries_df.height,
         llm_call_count,
         summaries_df.height - llm_call_count,
+        failed_count,
         already_summarized_df.height,
         source_df.height,
+    )
+
+    # 100% failure would otherwise look identical to "nothing new to summarize".
+    if attempted_count > 0 and llm_call_count == 0:
+        sample_errors = "; ".join(errors[:3])
+        msg = (
+            f"All {attempted_count} attempted LLM calls failed; the summary "
+            f"client/credential is likely misconfigured. Sample errors: {sample_errors}"
+        )
+        raise Failure(msg)
+
+    if failed_count:
+        context.log.warning(
+            "%d conversation(s) failed to summarize this run; will retry next run",
+            failed_count,
+        )
+
+    context.add_output_metadata(
+        {
+            "llm_call_count": MetadataValue.int(llm_call_count),
+            "failed_count": MetadataValue.int(failed_count),
+            "already_summarized_count": MetadataValue.int(already_summarized_df.height),
+            "total_upstream_count": MetadataValue.int(source_df.height),
+        }
     )
 
     return summaries_df
