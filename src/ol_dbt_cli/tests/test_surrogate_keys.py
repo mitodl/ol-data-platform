@@ -87,6 +87,56 @@ def test_reindenting_and_recasing_do_not_count_as_a_re_key():
     assert changed_surrogate_keys(tidy, reformatted) == []
 
 
+def test_a_changed_sql_string_literal_is_a_re_key():
+    """`concat(kind, 'A')` and `concat(kind, 'a')` hash differently.
+
+    Folding case across the whole expression would equate them and miss the
+    exact re-key this detector exists to catch.
+    """
+    change = changed_surrogate_keys(
+        "{{ generate_surrogate_key([\"concat(kind, 'A')\"]) }} as pk",
+        "{{ generate_surrogate_key([\"concat(kind, 'a')\"]) }} as pk",
+    )
+    assert [c.column for c in change] == ["pk"]
+
+
+def test_whitespace_inside_a_sql_literal_is_a_re_key():
+    change = changed_surrogate_keys(
+        "{{ generate_surrogate_key([\"concat(a, ', ', b)\"]) }} as pk",
+        "{{ generate_surrogate_key([\"concat(a, ',', b)\"]) }} as pk",
+    )
+    assert [c.column for c in change] == ["pk"]
+
+
+def test_a_quoted_identifier_keeps_its_case():
+    """Trino folds a bare identifier and preserves a quoted one."""
+    change = changed_surrogate_keys(
+        "{{ generate_surrogate_key(['cast(\"Col\" as varchar)']) }} as pk",
+        "{{ generate_surrogate_key(['cast(\"col\" as varchar)']) }} as pk",
+    )
+    assert [c.column for c in change] == ["pk"]
+
+
+def test_recasing_outside_a_literal_is_still_not_a_re_key():
+    """The fold that keeps a reindent quiet must survive the literal-awareness."""
+    change = changed_surrogate_keys(
+        "{{ generate_surrogate_key([\"CONCAT(KIND, 'A')\"]) }} as pk",
+        "{{ generate_surrogate_key([\"concat(kind, 'A')\"]) }} as pk",
+    )
+    assert change == []
+
+
+def test_a_doubled_quote_stays_inside_its_literal():
+    """`''` is SQL's escape for a quote, not a close followed by a reopen."""
+    keys = extract_surrogate_keys("{{ generate_surrogate_key([\"concat(a, 'it''s')\"]) }} as pk")
+    assert keys[0].inputs == ("concat(a, 'it''s')",)
+
+
+def test_an_unterminated_quote_normalizes_without_raising():
+    keys = extract_surrogate_keys('{{ generate_surrogate_key(["concat(a, \'x)"]) }} as pk')
+    assert keys[0].column == "pk"
+
+
 def test_unaliased_calls_are_dropped():
     """A key minted inside a join predicate defines no column to go stale."""
     sql = """
@@ -252,6 +302,53 @@ def test_no_finding_when_nothing_incremental_stores_the_key():
     )
 
     assert detect_key_regen({"dim_thing": changed}, registry, lambda *_: {"thing_pk"}) == []
+
+
+def test_a_diamond_does_not_lose_the_path_that_carries_the_key():
+    """Marking a node seen on first sight makes the result traversal-ordered.
+
+    Here `dim_thing` reaches `fact_thing` two ways: through `int_bare`, which
+    carries nothing, and through `int_carrier`, which carries the key. Whichever
+    the walk reaches first, the fact must still be flagged.
+    """
+    dim = _model("dim_thing", "table")
+    bare = _model("int_bare", "table", ["dim_thing"])
+    carrier = _model("int_carrier", "table", ["dim_thing"])
+    fact = _model("fact_thing", "incremental", ["int_bare", "int_carrier"])
+    reads = {
+        ("int_bare", "dim_thing"): set(),
+        ("int_carrier", "dim_thing"): {"thing_pk"},
+        ("fact_thing", "int_bare"): set(),
+        ("fact_thing", "int_carrier"): {"thing_pk"},
+    }
+
+    for order in ([bare, carrier], [carrier, bare]):
+        registry = _registry(dim, *order, fact)
+        affected = affected_incremental_descendants(
+            registry,
+            dim,
+            "thing_pk",
+            lambda child, parent: reads.get((child, parent), set()),
+        )
+        assert [m.model_name for m in affected] == ["fact_thing"], order
+
+
+def test_a_second_path_carrying_a_new_column_reopens_the_node():
+    """A node already reached under one column must be re-walked for another."""
+    dim = _model("dim_thing", "table")
+    fact = _model("fact_thing", "incremental", ["dim_thing"])
+    registry = _registry(dim, fact)
+    registry.foreign_keys[fact.unique_id] = [
+        ForeignKeyRef(
+            child_unique_id=fact.unique_id,
+            child_column="thing_fk",
+            parent_name="dim_thing",
+            parent_column="thing_pk",
+        )
+    ]
+
+    affected = affected_incremental_descendants(registry, dim, "thing_pk")
+    assert [(m.model_name, m.fk_column) for m in affected] == [("fact_thing", "thing_fk")]
 
 
 # ---------------------------------------------------------------------------

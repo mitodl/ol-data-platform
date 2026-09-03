@@ -8,6 +8,12 @@ from botocore.exceptions import ClientError
 from dagster import AssetExecutionContext, ConfigurableResource, OpExecutionContext
 from pydantic import Field, field_validator
 
+# What S3 returns for an object that is not there. GetObject answers NoSuchKey;
+# a bucket-level miss answers NoSuchBucket; some paths (and several
+# S3-compatible endpoints) answer a bare "404" instead. Anything else -- 403,
+# throttling, a 5xx -- is a failed read, not an absent object.
+_MISSING_OBJECT_CODES = frozenset({"NoSuchKey", "NoSuchBucket", "404"})
+
 
 class DbtS3ArtifactsResource(ConfigurableResource):
     """Uploads dbt build artifacts to S3 for consumption by OpenMetadata OMJobs."""
@@ -34,27 +40,39 @@ class DbtS3ArtifactsResource(ConfigurableResource):
     ) -> Any | None:
         """Read and decode a JSON artifact at ``<prefix>/<artifact>``.
 
-        Returns None when the object does not exist or does not decode, which
-        callers treat as "no prior state" rather than as an error: the first
-        run after this check ships has nothing to compare against, and a build
-        must not be blocked by a corrupt bookkeeping file.
+        Returns None only when the object genuinely is not there, which callers
+        read as "no prior state". Every other failure raises.
+
+        Both narrowings matter because callers use the returned state to decide
+        whether something needs repairing, and then overwrite it. A denied,
+        throttled, or 5xx read reported as "absent" would let the run record a
+        fresh baseline over a comparison it never actually made, so whatever
+        had drifted is now indistinguishable from steady state. Undecodable
+        content is the same failure with a different cause: the object exists
+        and says something, and treating it as silence blesses a baseline
+        nothing was checked against. Delete the object deliberately to reset
+        the baseline; do not let a bad read do it by accident.
         """
         key = f"{self.s3_prefix}/{artifact}"
         try:
             response = boto3.client("s3").get_object(Bucket=self.s3_bucket, Key=key)
             body = response["Body"].read()
-        except ClientError:
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") not in _MISSING_OBJECT_CODES:
+                raise
             context.log.info("No existing s3://%s/%s", self.s3_bucket, key)
             return None
         try:
             return json.loads(body)
-        except ValueError:
-            context.log.warning(
-                "s3://%s/%s is not valid JSON; treating it as absent",
-                self.s3_bucket,
-                key,
+        except ValueError as exc:
+            msg = (
+                f"s3://{self.s3_bucket}/{key} exists but is not valid JSON. It is "
+                "written only by this code, so this means it was corrupted or "
+                "hand-edited. Delete the object to reset the baseline -- the next "
+                "run will then record a fresh one -- rather than letting a run "
+                "treat it as absent and bless a baseline it never compared against."
             )
-            return None
+            raise ValueError(msg) from exc
 
     def write_json_artifact(
         self,

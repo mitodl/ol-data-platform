@@ -69,25 +69,28 @@ class SurrogateKeyDrift:
     def resolved_against(self, built: AbstractSet[str]) -> tuple[list[str], bool]:
         """``(models to full-refresh now, whether the drift is fully handled)``.
 
-        ``full_dbt_project`` is a subset build — Dagster's automation
-        conditions decide which models a run materializes — so what this run
-        can repair is only what it actually rebuilt. A fact table refreshed
-        against a dimension the run never touched would take its keys from the
-        *old* hash and then be recorded as fixed, which is the incident
-        recurring with the check's own blessing.
+        The one thing a run must have done before its repair can be trusted is
+        rebuild the re-keyed dimension: the fact tables have to read its *new*
+        keys, and refreshing them against a dimension this run never touched
+        would copy the old ones straight back in. It is materialized ``table``,
+        so a single build re-keys it whole and being in *built* is the entire
+        precondition.
 
-        So a finding counts as handled only when the run rebuilt both the
-        re-keyed dimension and every incremental model holding its key. When
-        one is missing the caller withholds the state artifact and the next
-        run tries again — redundantly re-refreshing what this run already
-        repaired, which is wasteful but never wrong.
+        The affected fact tables do NOT have to be in *built*. The repair names
+        them in its own ``--select``, so it rebuilds them whether or not
+        Dagster's automation conditions put them in this run — and requiring
+        them here would deadlock the repair outright.
+        ``upstream_or_code_changes`` selects the dimension on the tick its code
+        version changes, and gates its facts behind ``any_deps_updated``, which
+        cannot be true until that build has finished; ``~any_deps_in_progress``
+        keeps them out of the same run besides. The dimension and its facts
+        therefore land in *different* runs by construction: the first would
+        find no facts to refresh and the second no dimension, and the drift
+        would sit unrepaired forever while both runs reported success.
         """
         ready = [f for f in self.findings if f.ancestor in built]
-        models = sorted({m for f in ready for m in f.affected_model_names} & built)
-        complete = len(ready) == len(self.findings) and all(
-            set(f.affected_model_names) <= built for f in ready
-        )
-        return models, complete
+        models = sorted({m for f in ready for m in f.affected_model_names})
+        return models, len(ready) == len(self.findings)
 
 
 def _join(calls: list[list[str]]) -> str:
