@@ -109,9 +109,16 @@ def compute_silhouette(
     Requires at least 2 genuine clusters with 2+ members each to be defined;
     returns None (not 0.0, which would misleadingly read as "bad but valid")
     when the run doesn't clear that bar -- e.g. everything landed in one
-    cluster, or everything is noise. Bounded to max_samples (a deterministic
-    random subsample via sklearn's own sample_size/random_state) once the
-    non-noise population exceeds it, since the score is O(n^2).
+    cluster, or everything is noise. Bounded to max_samples (a random subsample
+    via sklearn's own sample_size/random_state) once the non-noise population
+    exceeds it, since the score is O(n^2).
+
+    The subsample isn't stratified by cluster, so an unlucky draw can exclude
+    every member of a small cluster entirely -- at ~198K rows and
+    min_cluster_size=15, sklearn's own sample_size raises ValueError in this
+    case roughly 68% of the time. Treated the same as "not enough clusters":
+    the metric is optional, so an unrepresentative sample returns None rather
+    than failing the whole run.
     """
     non_noise = labels != NOISE_CLUSTER_ID
     if non_noise.sum() < 2:  # noqa: PLR2004
@@ -120,14 +127,17 @@ def compute_silhouette(
     if len(distinct_clusters) < 2:  # noqa: PLR2004
         return None
     sample_size = max_samples if non_noise.sum() > max_samples else None
-    return float(
-        silhouette_score(
-            vectors[non_noise],
-            labels[non_noise],
-            sample_size=sample_size,
-            random_state=random_state,
+    try:
+        return float(
+            silhouette_score(
+                vectors[non_noise],
+                labels[non_noise],
+                sample_size=sample_size,
+                random_state=random_state,
+            )
         )
-    )
+    except ValueError:
+        return None
 
 
 def compute_cluster_agreement(
@@ -150,12 +160,13 @@ def compute_cluster_agreement(
     }
 
 
-def cluster_embeddings(
+def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each independently meaningful args
     embeddings_df: pl.DataFrame,
     embedding_provenance: tuple[str, int, str | None],
     umap_params: tuple[int, int] = (UMAP_N_COMPONENTS, UMAP_N_NEIGHBORS),
     min_cluster_size: int = HDBSCAN_MIN_CLUSTER_SIZE,
     random_state: int = RANDOM_STATE,
+    cluster_run_id: str | None = None,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
     """Cluster every row's embedding_vector; produce this run's candidates + summary.
 
@@ -170,19 +181,21 @@ def cluster_embeddings(
             compare a summary-vs-raw or model bake-off run against another after
             the source table has moved on.
         umap_params: (umap_n_components, umap_n_neighbors).
+        cluster_run_id: caller-supplied, retry-stable ID (e.g. Dagster's run ID);
+            defaults to a fresh UUID for callers that don't need retry-stability.
 
     Returns:
         (candidates_df, run_metadata): candidates_df has cluster_run_id plus
             JOIN_COLS, cluster_id, cluster_probability -- one row per input
-            conversation. run_metadata matches CLUSTER_RUN_SCHEMA minus
-            cluster_run_id/run_at, which the caller stamps (the caller owns
-            the run id and the wall-clock time, not this pure function).
+            conversation. run_metadata matches CLUSTER_RUN_SCHEMA minus run_at,
+            which the caller stamps (the caller owns the wall-clock time, not
+            this pure function).
     """
     embedding_model_version, embedding_dim, embedding_input_filter = (
         embedding_provenance
     )
     umap_n_components, umap_n_neighbors = umap_params
-    cluster_run_id = new_cluster_run_id()
+    cluster_run_id = cluster_run_id or new_cluster_run_id()
     # list.to_array + to_numpy gives a contiguous float32 (n, dim) array directly;
     # to_list() would materialize every element as a Python float first, then
     # allocate a second array from that -- several GB of avoidable transient

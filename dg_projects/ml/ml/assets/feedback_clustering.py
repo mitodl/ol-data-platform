@@ -27,13 +27,25 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
+from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
+from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.expressions import EqualTo
 
 if DAGSTER_ENV == "dev":
     _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
     database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
 else:
     database_name = "ol_warehouse_production_intermediate"
+
+
+def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> None:
+    """Delete any rows a failed prior attempt at this cluster_run_id already wrote."""
+    try:
+        table = catalog.load_table(table_identifier)
+    except NoSuchTableError:
+        return
+    table.delete(EqualTo("cluster_run_id", cluster_run_id))
 
 
 class FeedbackClusteringConfig(Config):
@@ -134,11 +146,21 @@ def feedback_clustering(
         )
         raise Failure(msg)
 
+    # context.run_id, not a fresh UUID: retry-stable so _clear_partial_run can
+    # repair a prior partial attempt instead of orphaning it.
+    cluster_run_id = context.run_id
+    catalog = get_glue_catalog()
+    _clear_partial_run(
+        catalog, f"{database_name}.feedback_cluster_candidate", cluster_run_id
+    )
+    _clear_partial_run(catalog, f"{database_name}.feedback_cluster_run", cluster_run_id)
+
     candidates_df, run_metadata = cluster_embeddings(
         embeddings_df,
         (EMBEDDING_MODEL_VERSION, EMBEDDING_DIM, config.embedding_input_filter),
         umap_params=(config.umap_n_components, config.umap_n_neighbors),
         min_cluster_size=config.min_cluster_size,
+        cluster_run_id=cluster_run_id,
     )
     run_metadata["run_at"] = datetime.now(tz=UTC)
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
@@ -154,8 +176,7 @@ def feedback_clustering(
 
     # Candidates before the run row: the run row is the commit marker for a
     # complete run. Writing it first would let a failed candidate write leave
-    # a run marked complete with no matching candidates, and a retry would
-    # mint a new cluster_run_id rather than repairing the orphaned one.
+    # a run marked complete with no matching candidates.
     yield Output(
         candidates_df.cast(CLUSTER_CANDIDATE_SCHEMA),
         output_name="feedback_cluster_candidate",
