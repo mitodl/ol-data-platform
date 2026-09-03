@@ -35,12 +35,6 @@ if DAGSTER_ENV == "dev":
 else:
     database_name = "ol_warehouse_production_intermediate"
 
-# HDBSCAN needs at least this many points to form even a single cluster of the
-# configured min_cluster_size; below it every point is trivially noise, which
-# is a config/data problem worth failing loudly on rather than "succeeding"
-# with a useless all-noise run.
-MIN_CONVERSATIONS_TO_CLUSTER = HDBSCAN_MIN_CLUSTER_SIZE
-
 
 class FeedbackClusteringConfig(Config):
     sample_limit: int | None = Field(
@@ -63,9 +57,9 @@ class FeedbackClusteringConfig(Config):
         "a group counts as systemic rather than a one-off.",
     )
     embedding_input_filter: str | None = Field(
-        default=None,
+        default="summary",
         description="Restrict to one embedding_input arm ('summary' or "
-        "'concatenated_turns') for A/B comparison. Default clusters both together.",
+        "'concatenated_turns')",
     )
 
 
@@ -130,7 +124,7 @@ def feedback_clustering(
         # Random, not head(): the table's row order isn't meaningful.
         embeddings_df = embeddings_df.sample(n=config.sample_limit, seed=RANDOM_STATE)
 
-    if embeddings_df.height < MIN_CONVERSATIONS_TO_CLUSTER:
+    if embeddings_df.height < config.min_cluster_size:
         msg = (
             f"Only {embeddings_df.height} embedded conversations available "
             f"(min_cluster_size={config.min_cluster_size}); not enough to form "
@@ -141,11 +135,11 @@ def feedback_clustering(
 
     candidates_df, run_metadata = cluster_embeddings(
         embeddings_df,
-        umap_n_components=config.umap_n_components,
-        umap_n_neighbors=config.umap_n_neighbors,
+        (EMBEDDING_MODEL_VERSION, EMBEDDING_DIM, config.embedding_input_filter),
+        umap_params=(config.umap_n_components, config.umap_n_neighbors),
         min_cluster_size=config.min_cluster_size,
     )
-    run_metadata["run_at"] = datetime.now(tz=UTC).isoformat()
+    run_metadata["run_at"] = datetime.now(tz=UTC)
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
 
     context.log.info(
@@ -157,6 +151,15 @@ def feedback_clustering(
         run_metadata["silhouette_score"],
     )
 
+    # Candidates before the run row: the run row is the commit marker for a
+    # complete run. Writing it first would let a failed candidate write leave
+    # a run marked complete with no matching candidates, and a retry would
+    # mint a new cluster_run_id rather than repairing the orphaned one.
+    yield Output(
+        candidates_df.cast(CLUSTER_CANDIDATE_SCHEMA),
+        output_name="feedback_cluster_candidate",
+        metadata={"row_count": MetadataValue.int(candidates_df.height)},
+    )
     yield Output(
         run_df,
         output_name="feedback_cluster_run",
@@ -165,9 +168,4 @@ def feedback_clustering(
             "cluster_count": MetadataValue.int(run_metadata["cluster_count"]),
             "noise_count": MetadataValue.int(run_metadata["noise_count"]),
         },
-    )
-    yield Output(
-        candidates_df.cast(CLUSTER_CANDIDATE_SCHEMA),
-        output_name="feedback_cluster_candidate",
-        metadata={"row_count": MetadataValue.int(candidates_df.height)},
     )

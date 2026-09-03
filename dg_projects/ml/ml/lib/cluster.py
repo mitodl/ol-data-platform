@@ -20,15 +20,19 @@ JOIN_COLS = ["source_slug", "conversation_ref"]
 CLUSTER_RUN_SCHEMA = {
     "cluster_run_id": pl.String,
     "algorithm": pl.String,
+    "embedding_model_version": pl.String,
+    "embedding_dim": pl.Int64,
+    "embedding_input_filter": pl.String,
     "umap_n_components": pl.Int64,
     "umap_n_neighbors": pl.Int64,
     "hdbscan_min_cluster_size": pl.Int64,
+    "random_state": pl.Int64,
     "cluster_count": pl.Int64,
     "noise_count": pl.Int64,
     "total_conversations": pl.Int64,
     "silhouette_score": pl.Float64,
     "run_status": pl.String,
-    "run_at": pl.String,
+    "run_at": pl.Datetime(time_zone="UTC"),
 }
 
 CLUSTER_CANDIDATE_SCHEMA = {
@@ -127,8 +131,8 @@ def compute_cluster_agreement(
 
 def cluster_embeddings(
     embeddings_df: pl.DataFrame,
-    umap_n_components: int = UMAP_N_COMPONENTS,
-    umap_n_neighbors: int = UMAP_N_NEIGHBORS,
+    embedding_provenance: tuple[str, int, str | None],
+    umap_params: tuple[int, int] = (UMAP_N_COMPONENTS, UMAP_N_NEIGHBORS),
     min_cluster_size: int = HDBSCAN_MIN_CLUSTER_SIZE,
     random_state: int = RANDOM_STATE,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
@@ -138,6 +142,13 @@ def cluster_embeddings(
         embeddings_df: a frame with (at least) source_slug, conversation_ref,
             embedding_vector columns, e.g. feedback_embeddings filtered to one
             consistent embedding_model_version/embedding_dim.
+        embedding_provenance: (embedding_model_version, embedding_dim,
+            embedding_input_filter), recorded on the run rather than just used to
+            build embeddings_df -- feedback_embeddings is upserted in place, so
+            this provenance can't be reconstructed from it later. Needed to
+            compare a summary-vs-raw or model bake-off run against another after
+            the source table has moved on.
+        umap_params: (umap_n_components, umap_n_neighbors).
 
     Returns:
         (candidates_df, run_metadata): candidates_df has cluster_run_id plus
@@ -146,8 +157,16 @@ def cluster_embeddings(
             cluster_run_id/run_at, which the caller stamps (the caller owns
             the run id and the wall-clock time, not this pure function).
     """
+    embedding_model_version, embedding_dim, embedding_input_filter = (
+        embedding_provenance
+    )
+    umap_n_components, umap_n_neighbors = umap_params
     cluster_run_id = new_cluster_run_id()
-    vectors = np.array(embeddings_df["embedding_vector"].to_list())
+    # list.to_array + to_numpy gives a contiguous float32 (n, dim) array directly;
+    # to_list() would materialize every element as a Python float first, then
+    # allocate a second array from that -- several GB of avoidable transient
+    # memory at the ~198K-conversation, 1024-dim scale this is meant to run at.
+    vectors = embeddings_df["embedding_vector"].list.to_array(embedding_dim).to_numpy()
 
     labels, probabilities, reduced = reduce_and_cluster(
         vectors,
@@ -170,9 +189,13 @@ def cluster_embeddings(
     run_metadata = {
         "cluster_run_id": cluster_run_id,
         "algorithm": "umap+hdbscan",
+        "embedding_model_version": embedding_model_version,
+        "embedding_dim": embedding_dim,
+        "embedding_input_filter": embedding_input_filter,
         "umap_n_components": umap_n_components,
         "umap_n_neighbors": umap_n_neighbors,
         "hdbscan_min_cluster_size": min_cluster_size,
+        "random_state": random_state,
         "cluster_count": cluster_count,
         "noise_count": noise_count,
         "total_conversations": embeddings_df.height,

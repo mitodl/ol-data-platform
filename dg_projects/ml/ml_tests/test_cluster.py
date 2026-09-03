@@ -104,8 +104,8 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
 
     candidates_df, run_metadata = cluster.cluster_embeddings(
         df,
-        umap_n_components=2,
-        umap_n_neighbors=5,
+        ("text-embedding-3-small", 5, "summary"),
+        umap_params=(2, 5),
         min_cluster_size=5,
         random_state=42,
     )
@@ -118,5 +118,9 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["total_conversations"] == df.height
     assert run_metadata["run_status"] == "completed"
     assert run_metadata["algorithm"] == "umap+hdbscan"
+    assert run_metadata["embedding_model_version"] == "text-embedding-3-small"
+    assert run_metadata["embedding_dim"] == 5
+    assert run_metadata["embedding_input_filter"] == "summary"
+    assert run_metadata["random_state"] == 42
     # Two well-separated blobs should not all collapse into a single cluster.
     assert run_metadata["cluster_count"] >= 1
