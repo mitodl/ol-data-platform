@@ -31,6 +31,28 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
+# OpenTelemetry auto-instrumentation agent, activated by PYTHONPATH (see the
+# /opt/otel symlink in the final stage).
+#
+# Installed with `uv pip install` rather than added to pyproject.toml so the
+# agent can be added or removed without a resolve across all ten code
+# locations. It has to come after the syncs above, which prune anything the
+# lockfile does not name. Only the HTTP OTLP exporter is installed -- the SDK
+# default "otlp" resolves to the gRPC exporter, which is why ol-infrastructure
+# sets OTEL_TRACES_EXPORTER=otlp_proto_http.
+#
+# The instrumentation list is explicit rather than whatever
+# opentelemetry-bootstrap would select, because bootstrap picks psycopg2
+# alongside sqlalchemy and that emits two spans for every query.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv \
+        opentelemetry-distro \
+        opentelemetry-exporter-otlp-proto-http \
+        opentelemetry-instrumentation-sqlalchemy \
+        opentelemetry-instrumentation-grpc \
+        opentelemetry-instrumentation-botocore \
+        opentelemetry-instrumentation-requests \
+        opentelemetry-instrumentation-urllib3
 
 # Then, use a final image without uv
 FROM python:3.14-slim-bookworm
@@ -42,5 +64,20 @@ COPY --from=builder /app/dg_projects/ml /app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+
+# A stable path to the auto-instrumentation agent directory, so ol-infrastructure
+# can switch tracing on with PYTHONPATH without encoding this image's Python
+# version or venv layout. The directory holds a sitecustomize.py, which is the
+# whole of what `opentelemetry-instrument` does: it prepends this path and execs
+# the command.
+#
+# PYTHONPATH rather than an ENTRYPOINT because run worker pods share this image
+# and are deliberately NOT instrumented yet; PYTHONPATH is the one of the two a
+# run launcher can override back off, which is what dagster_instance.yaml in
+# ol-infrastructure does. The gRPC health-check probes run `env -u PYTHONPATH`
+# for the same reason.
+RUN mkdir -p /opt/otel && \
+    ln -s "$(python -c 'import opentelemetry.instrumentation.auto_instrumentation as m, pathlib; print(pathlib.Path(m.__file__).parent)')" \
+        /opt/otel/auto_instrumentation
 
 WORKDIR /app

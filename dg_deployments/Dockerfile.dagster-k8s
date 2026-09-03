@@ -33,3 +33,34 @@ COPY dg_deployments/reconcile_edxorg_partitions.py /opt/dagster/app/reconcile_ed
 # not handle, raising AttributeError at launch time. Pin until dagster-k8s upstream
 # resolves the incompatibility.
 RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib dagster==${DAGSTER_VERSION} dagster-azure dagster-postgres dagster-k8s "kubernetes<36" dagster-aws dagster-gcp dagster-graphql dagster-webserver
+
+# OpenTelemetry auto-instrumentation for the webserver and the daemon.
+#
+# Installed outside the pinned line above because these are agent packages, not
+# runtime dependencies: nothing in ol-orchestrate-lib imports them, and the
+# whole agent can be added or removed without a resolve. Only the HTTP OTLP
+# exporter is installed -- the SDK default "otlp" resolves to the gRPC exporter,
+# so ol-infrastructure sets OTEL_TRACES_EXPORTER=otlp_proto_http to match.
+#
+# The instrumentation list is explicit rather than whatever opentelemetry-bootstrap
+# would select, because bootstrap picks psycopg2 alongside sqlalchemy and that
+# emits two spans for every query.
+RUN uv pip install --system \
+        opentelemetry-distro \
+        opentelemetry-exporter-otlp-proto-http \
+        opentelemetry-instrumentation-sqlalchemy \
+        opentelemetry-instrumentation-grpc \
+        opentelemetry-instrumentation-botocore \
+        opentelemetry-instrumentation-requests \
+        opentelemetry-instrumentation-urllib3
+
+# A stable path to the agent directory, so ol-infrastructure can turn
+# instrumentation on with PYTHONPATH without encoding this image's Python
+# version. That directory holds a sitecustomize.py, which is the whole of what
+# `opentelemetry-instrument` does: it prepends this path and execs the command.
+# PYTHONPATH is the only workable lever here because the Dagster Helm chart
+# hardcodes `command: ["/bin/bash", "-c", ...]` for both the webserver and the
+# daemon, so an ENTRYPOINT would never run.
+RUN mkdir -p /opt/otel && \
+    ln -s "$(python -c 'import opentelemetry.instrumentation.auto_instrumentation as m, pathlib; print(pathlib.Path(m.__file__).parent)')" \
+        /opt/otel/auto_instrumentation
