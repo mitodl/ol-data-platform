@@ -15,7 +15,10 @@ with feedback as (
 )
 
 select
-    feedback_source.source_slug
+    {{ dbt_utils.generate_surrogate_key(
+        ["feedback_source.source_slug", "feedback.conversation_id"]
+    ) }} as feedback_conversation_pk
+    , feedback_source.source_slug
     , feedback.conversation_id as conversation_ref
     , count(*) as turn_count
     , sum(feedback.feedback_text_chars) as conversation_text_chars

@@ -156,6 +156,13 @@ models:
   description: One row per conversation, its kept turns assembled in turn_index order.
     This is the text the summarization and embedding assets send to the LLM.
   columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key hashed from (source_slug, conversation_ref) --
+      the same value afact_feedback_conversation.feedback_conversation_pk hashes,
+      computed here as the single source of truth for both.
+    tests:
+    - not_null
+    - unique
   - name: source_slug
     description: str, which source the conversation came from.
     tests:
