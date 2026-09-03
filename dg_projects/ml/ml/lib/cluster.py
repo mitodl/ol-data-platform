@@ -8,7 +8,11 @@ from typing import Any
 import numpy as np
 import polars as pl
 from sklearn.cluster import HDBSCAN
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import (
+    adjusted_rand_score,
+    normalized_mutual_info_score,
+    silhouette_score,
+)
 from umap import UMAP
 
 JOIN_COLS = ["source_slug", "conversation_ref"]
@@ -74,10 +78,12 @@ def reduce_and_cluster(
             (NOISE_CLUSTER_ID for the noise class); probabilities[i] is HDBSCAN's
             confidence that row i belongs to its assigned cluster (0.0 for noise).
     """
+    # cosine, not UMAP's euclidean default: embeddings encode meaning in direction.
     reduced = UMAP(
         n_components=umap_n_components,
         n_neighbors=umap_n_neighbors,
         random_state=random_state,
+        metric="cosine",
     ).fit_transform(vectors)
     clusterer = HDBSCAN(min_cluster_size=min_cluster_size)
     labels = clusterer.fit_predict(reduced)
@@ -99,6 +105,26 @@ def compute_silhouette(vectors: np.ndarray, labels: np.ndarray) -> float | None:
     if len(distinct_clusters) < 2:  # noqa: PLR2004
         return None
     return float(silhouette_score(vectors[non_noise], labels[non_noise]))
+
+
+def compute_cluster_agreement(
+    cluster_labels: np.ndarray, reference_labels: list[str | None]
+) -> dict[str, float] | None:
+    """ARI/NMI between cluster_id and a noisy reference (e.g. dominant Zendesk tag).
+
+    Untagged conversations are dropped, not treated as their own category. Returns
+    None if fewer than 2 tagged points or 2 distinct tags remain.
+    """
+    reference = np.asarray(reference_labels, dtype=object)
+    tagged = reference != None  # noqa: E711 -- np.asarray(dtype=object) needs `!= None`, not `is not None`
+    if tagged.sum() < 2 or len(np.unique(reference[tagged])) < 2:  # noqa: PLR2004
+        return None
+    return {
+        "ari": float(adjusted_rand_score(reference[tagged], cluster_labels[tagged])),
+        "nmi": float(
+            normalized_mutual_info_score(reference[tagged], cluster_labels[tagged])
+        ),
+    }
 
 
 def cluster_embeddings(

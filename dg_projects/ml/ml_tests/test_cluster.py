@@ -46,6 +46,48 @@ def test_compute_silhouette_ignores_noise_points() -> None:
     assert score > 0.9
 
 
+def test_compute_cluster_agreement_returns_none_with_fewer_than_two_distinct_tags() -> (
+    None
+):
+    cluster_labels = np.array([0, 0, 1, 1])
+    reference_labels = ["billing", "billing", "billing", "billing"]
+
+    assert cluster.compute_cluster_agreement(cluster_labels, reference_labels) is None
+
+
+def test_compute_cluster_agreement_drops_untagged_conversations() -> None:
+    """None entries (no dominant tag) must not count as their own reference group."""
+    cluster_labels = np.array([0, 0, 1, 1])
+    reference_labels = ["billing", "billing", None, None]
+
+    # Only 2 tagged rows remain, and they share one tag -- same as the
+    # fewer-than-two-distinct-tags case once untagged rows are dropped.
+    assert cluster.compute_cluster_agreement(cluster_labels, reference_labels) is None
+
+
+def test_compute_cluster_agreement_scores_perfect_agreement() -> None:
+    cluster_labels = np.array([0, 0, 0, 1, 1, 1])
+    reference_labels = ["billing", "billing", "billing", "login", "login", "login"]
+
+    result = cluster.compute_cluster_agreement(cluster_labels, reference_labels)
+
+    assert result is not None
+    assert result["ari"] == 1.0
+    assert result["nmi"] == 1.0
+
+
+def test_compute_cluster_agreement_scores_low_for_unrelated_labels() -> None:
+    """Clusters that don't align with the tags at all should score near 0, not 1."""
+    cluster_labels = np.array([0, 0, 1, 1, 0, 1])
+    reference_labels = ["billing", "login", "billing", "login", "billing", "login"]
+
+    result = cluster.compute_cluster_agreement(cluster_labels, reference_labels)
+
+    assert result is not None
+    assert result["ari"] < 0.2
+    assert result["nmi"] < 0.2
+
+
 def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() -> None:
     rng = np.random.default_rng(0)
     n_per_cluster = 20

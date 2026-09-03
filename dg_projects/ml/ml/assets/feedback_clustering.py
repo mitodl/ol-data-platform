@@ -16,6 +16,7 @@ from ml.lib.cluster import (
     CLUSTER_CANDIDATE_SCHEMA,
     CLUSTER_RUN_SCHEMA,
     HDBSCAN_MIN_CLUSTER_SIZE,
+    RANDOM_STATE,
     UMAP_N_COMPONENTS,
     UMAP_N_NEIGHBORS,
     cluster_embeddings,
@@ -60,6 +61,11 @@ class FeedbackClusteringConfig(Config):
         default=HDBSCAN_MIN_CLUSTER_SIZE,
         description="HDBSCAN's min_cluster_size -- how many conversations before "
         "a group counts as systemic rather than a one-off.",
+    )
+    embedding_input_filter: str | None = Field(
+        default=None,
+        description="Restrict to one embedding_input arm ('summary' or "
+        "'concatenated_turns') for A/B comparison. Default clusters both together.",
     )
 
 
@@ -109,11 +115,20 @@ def feedback_clustering(
             (pl.col("embedding_model_version") == EMBEDDING_MODEL_VERSION)
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
         )
-        .select(["source_slug", "conversation_ref", "embedding_vector"])
+        .select(
+            ["source_slug", "conversation_ref", "embedding_vector", "embedding_input"]
+        )
         .collect()
     )
-    if config.sample_limit is not None:
-        embeddings_df = embeddings_df.head(config.sample_limit)
+    if config.embedding_input_filter is not None:
+        embeddings_df = embeddings_df.filter(
+            pl.col("embedding_input") == config.embedding_input_filter
+        )
+    embeddings_df = embeddings_df.drop("embedding_input")
+
+    if config.sample_limit is not None and config.sample_limit < embeddings_df.height:
+        # Random, not head(): the table's row order isn't meaningful.
+        embeddings_df = embeddings_df.sample(n=config.sample_limit, seed=RANDOM_STATE)
 
     if embeddings_df.height < MIN_CONVERSATIONS_TO_CLUSTER:
         msg = (
