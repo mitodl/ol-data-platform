@@ -154,6 +154,31 @@ def test_repeated_alias_keeps_every_call():
     assert surrogate_key_inputs(sql) == {"pk": (("a",), ("b",))}
 
 
+def test_adjacent_literals_are_one_argument():
+    """Jinja concatenates them, so `['O' 'Brien']` reaches dbt as one value.
+
+    Reading them as two would make it compare equal to `['O', 'Brien']`, which
+    hashes differently -- one input versus two -- and a re-key between the two
+    spellings would go unreported.
+    """
+    joined = extract_surrogate_keys("{{ generate_surrogate_key(['O' 'Brien']) }} as pk")
+    assert joined[0].inputs == ("obrien",)
+
+    separate = extract_surrogate_keys("{{ generate_surrogate_key(['O', 'Brien']) }} as pk")
+    assert separate[0].inputs == ("o", "brien")
+
+    assert changed_surrogate_keys(
+        "{{ generate_surrogate_key(['O' 'Brien']) }} as pk",
+        "{{ generate_surrogate_key(['O', 'Brien']) }} as pk",
+    )
+
+
+def test_doubled_quotes_at_the_argument_level_concatenate():
+    """`['O''Brien']` is two adjacent literals to Jinja, not a SQL escape."""
+    keys = extract_surrogate_keys("{{ generate_surrogate_key(['O''Brien']) }} as pk")
+    assert keys[0].inputs == ("obrien",)
+
+
 def test_unbalanced_call_is_skipped_not_raised():
     assert extract_surrogate_keys("{{ generate_surrogate_key(['a'] as pk") == []
 
