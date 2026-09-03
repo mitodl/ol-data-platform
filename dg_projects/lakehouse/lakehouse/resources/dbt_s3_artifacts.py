@@ -1,5 +1,7 @@
 import hashlib
+import json
 from pathlib import Path
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -24,6 +26,50 @@ class DbtS3ArtifactsResource(ConfigurableResource):
     def strip_trailing_slash(cls, v: str) -> str:
         """Normalize prefix so keys are always constructed as prefix/filename."""
         return v.rstrip("/")
+
+    def read_json_artifact(
+        self,
+        artifact: str,
+        context: AssetExecutionContext | OpExecutionContext,
+    ) -> Any | None:
+        """Read and decode a JSON artifact at ``<prefix>/<artifact>``.
+
+        Returns None when the object does not exist or does not decode, which
+        callers treat as "no prior state" rather than as an error: the first
+        run after this check ships has nothing to compare against, and a build
+        must not be blocked by a corrupt bookkeeping file.
+        """
+        key = f"{self.s3_prefix}/{artifact}"
+        try:
+            response = boto3.client("s3").get_object(Bucket=self.s3_bucket, Key=key)
+            body = response["Body"].read()
+        except ClientError:
+            context.log.info("No existing s3://%s/%s", self.s3_bucket, key)
+            return None
+        try:
+            return json.loads(body)
+        except ValueError:
+            context.log.warning(
+                "s3://%s/%s is not valid JSON; treating it as absent",
+                self.s3_bucket,
+                key,
+            )
+            return None
+
+    def write_json_artifact(
+        self,
+        artifact: str,
+        payload: Any,
+        context: AssetExecutionContext | OpExecutionContext,
+    ) -> None:
+        """Write *payload* as JSON to ``<prefix>/<artifact>``, overwriting it."""
+        key = f"{self.s3_prefix}/{artifact}"
+        context.log.info("Writing s3://%s/%s", self.s3_bucket, key)
+        boto3.client("s3").put_object(
+            Body=json.dumps(payload, sort_keys=True).encode(),
+            Bucket=self.s3_bucket,
+            Key=key,
+        )
 
     def upload_artifacts(
         self,

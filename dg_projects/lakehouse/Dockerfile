@@ -25,6 +25,10 @@ WORKDIR /app
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
 COPY dg_projects/lakehouse dg_projects/lakehouse
 COPY src/ol_dbt src/ol_dbt
+# The surrogate-key drift check in assets/lakehouse/dbt.py shares its detector
+# with `ol-dbt impact`, so the same hash-input parser decides what CI warns
+# about pre-merge and what the build full-refreshes afterwards.
+COPY src/ol_dbt_cli src/ol_dbt_cli
 
 # Install dependencies from the lakehouse project
 WORKDIR /app/dg_projects/lakehouse
