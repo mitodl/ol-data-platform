@@ -157,9 +157,8 @@ models:
     This is the text the summarization and embedding assets send to the LLM.
   columns:
   - name: feedback_conversation_pk
-    description: str, surrogate key hashed from (source_slug, conversation_ref),
-      computed here as the single source of truth and passed unchanged to
-      afact_feedback_conversation.
+    description: str, surrogate key hashed from (source_slug, conversation_ref), computed
+      here as the single source of truth and passed unchanged to afact_feedback_conversation.
     tests:
     - not_null
     - unique
