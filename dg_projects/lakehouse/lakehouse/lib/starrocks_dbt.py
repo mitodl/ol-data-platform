@@ -47,8 +47,8 @@ RETRY_BASE_DELAY = 30
 # node's logged error message unmodified -- so these do reach us, but as plain
 # text inside a multi-line message rather than a structured field. Hence the
 # word boundaries on the numeric codes, so an unrelated number (a row count, a
-# line number, part of a timestamp) can't trip a retry. The two text signatures
-# need no such guard; neither string appears in a successful build's output.
+# line number, part of a timestamp) can't trip a retry. The three text signatures
+# need no such guard; none of them appears in a successful build's output.
 #
 # "base-table dropped" -- also wrapped in a generic 1064.  The b2b_analytics MVs
 # read the `dimensional` tables through an Iceberg external catalog, and the
