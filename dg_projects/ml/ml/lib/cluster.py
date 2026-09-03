@@ -70,13 +70,11 @@ def reduce_and_cluster(
     umap_n_neighbors: int = UMAP_N_NEIGHBORS,
     min_cluster_size: int = HDBSCAN_MIN_CLUSTER_SIZE,
     random_state: int = RANDOM_STATE,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Reduce vectors' dimensionality via UMAP, then cluster via HDBSCAN.
 
-    Returns:
-        (labels, probabilities): labels[i] is the cluster id for vectors[i]
-            (NOISE_CLUSTER_ID for the noise class); probabilities[i] is HDBSCAN's
-            confidence that row i belongs to its assigned cluster (0.0 for noise).
+    Returns (labels, probabilities, reduced): reduced is the UMAP output HDBSCAN
+    clustered on, returned so silhouette can be scored in that same space.
     """
     # cosine, not UMAP's euclidean default: embeddings encode meaning in direction.
     reduced = UMAP(
@@ -87,7 +85,7 @@ def reduce_and_cluster(
     ).fit_transform(vectors)
     clusterer = HDBSCAN(min_cluster_size=min_cluster_size)
     labels = clusterer.fit_predict(reduced)
-    return labels, clusterer.probabilities_
+    return labels, clusterer.probabilities_, reduced
 
 
 def compute_silhouette(vectors: np.ndarray, labels: np.ndarray) -> float | None:
@@ -151,14 +149,15 @@ def cluster_embeddings(
     cluster_run_id = new_cluster_run_id()
     vectors = np.array(embeddings_df["embedding_vector"].to_list())
 
-    labels, probabilities = reduce_and_cluster(
+    labels, probabilities, reduced = reduce_and_cluster(
         vectors,
         umap_n_components=umap_n_components,
         umap_n_neighbors=umap_n_neighbors,
         min_cluster_size=min_cluster_size,
         random_state=random_state,
     )
-    silhouette = compute_silhouette(vectors, labels)
+    # `reduced`, not `vectors`: score in the same space HDBSCAN clustered on.
+    silhouette = compute_silhouette(reduced, labels)
 
     candidates_df = embeddings_df.select(JOIN_COLS).with_columns(
         pl.lit(cluster_run_id).alias("cluster_run_id"),
