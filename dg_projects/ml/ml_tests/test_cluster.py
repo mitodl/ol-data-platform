@@ -122,5 +122,5 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["embedding_dim"] == 5
     assert run_metadata["embedding_input_filter"] == "summary"
     assert run_metadata["random_state"] == 42
-    # Two well-separated blobs should not all collapse into a single cluster.
-    assert run_metadata["cluster_count"] >= 1
+    # Two well-separated blobs must not collapse into a single cluster.
+    assert run_metadata["cluster_count"] >= 2

@@ -57,6 +57,12 @@ HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "15"))
 # comparison the promotion loop depends on.
 RANDOM_STATE = int(os.environ.get("CLUSTER_RANDOM_STATE", "42"))
 
+# silhouette_score is O(n^2) (pairwise distances) -- at the ~198K-conversation
+# MVP scale that's tens of billions of distance calculations after clustering
+# has already finished. Bounding it to a deterministic random sample keeps the
+# metric's cost independent of corpus size.
+SILHOUETTE_MAX_SAMPLES = int(os.environ.get("SILHOUETTE_MAX_SAMPLES", "5000"))
+
 # HDBSCAN's noise label -- kept out of silhouette_score and cluster_count, which
 # only describe genuine clusters.
 NOISE_CLUSTER_ID = -1
@@ -92,13 +98,20 @@ def reduce_and_cluster(
     return labels, clusterer.probabilities_, reduced
 
 
-def compute_silhouette(vectors: np.ndarray, labels: np.ndarray) -> float | None:
+def compute_silhouette(
+    vectors: np.ndarray,
+    labels: np.ndarray,
+    max_samples: int = SILHOUETTE_MAX_SAMPLES,
+    random_state: int = RANDOM_STATE,
+) -> float | None:
     """Silhouette score over the non-noise points only.
 
     Requires at least 2 genuine clusters with 2+ members each to be defined;
     returns None (not 0.0, which would misleadingly read as "bad but valid")
     when the run doesn't clear that bar -- e.g. everything landed in one
-    cluster, or everything is noise.
+    cluster, or everything is noise. Bounded to max_samples (a deterministic
+    random subsample via sklearn's own sample_size/random_state) once the
+    non-noise population exceeds it, since the score is O(n^2).
     """
     non_noise = labels != NOISE_CLUSTER_ID
     if non_noise.sum() < 2:  # noqa: PLR2004
@@ -106,7 +119,15 @@ def compute_silhouette(vectors: np.ndarray, labels: np.ndarray) -> float | None:
     distinct_clusters = np.unique(labels[non_noise])
     if len(distinct_clusters) < 2:  # noqa: PLR2004
         return None
-    return float(silhouette_score(vectors[non_noise], labels[non_noise]))
+    sample_size = max_samples if non_noise.sum() > max_samples else None
+    return float(
+        silhouette_score(
+            vectors[non_noise],
+            labels[non_noise],
+            sample_size=sample_size,
+            random_state=random_state,
+        )
+    )
 
 
 def compute_cluster_agreement(
@@ -176,7 +197,7 @@ def cluster_embeddings(
         random_state=random_state,
     )
     # `reduced`, not `vectors`: score in the same space HDBSCAN clustered on.
-    silhouette = compute_silhouette(reduced, labels)
+    silhouette = compute_silhouette(reduced, labels, random_state=random_state)
 
     candidates_df = embeddings_df.select(JOIN_COLS).with_columns(
         pl.lit(cluster_run_id).alias("cluster_run_id"),

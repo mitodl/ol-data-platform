@@ -97,7 +97,7 @@ def feedback_clustering(
     against the live one before a human promotes it onto afact_feedback_conversation
     -- that promotion step is not part of this asset.
     """
-    embeddings_df = (
+    embeddings_lazy = (
         get_dbt_model_as_dataframe(
             database_name=database_name,
             table_name="feedback_embeddings",
@@ -109,16 +109,17 @@ def feedback_clustering(
             (pl.col("embedding_model_version") == EMBEDDING_MODEL_VERSION)
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
         )
-        .select(
-            ["source_slug", "conversation_ref", "embedding_vector", "embedding_input"]
-        )
-        .collect()
     )
     if config.embedding_input_filter is not None:
-        embeddings_df = embeddings_df.filter(
+        # Filtered before collect(): applied lazily, so the other arm's rows
+        # (and their 1024-dim vectors) are never pulled from S3 at all, rather
+        # than materialized and then discarded.
+        embeddings_lazy = embeddings_lazy.filter(
             pl.col("embedding_input") == config.embedding_input_filter
         )
-    embeddings_df = embeddings_df.drop("embedding_input")
+    embeddings_df = embeddings_lazy.select(
+        ["source_slug", "conversation_ref", "embedding_vector"]
+    ).collect()
 
     if config.sample_limit is not None and config.sample_limit < embeddings_df.height:
         # Random, not head(): the table's row order isn't meaningful.
