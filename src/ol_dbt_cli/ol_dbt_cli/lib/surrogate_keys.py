@@ -224,6 +224,35 @@ def _balanced_call_args(sql: str, open_paren: int) -> tuple[str, int] | None:
     return None
 
 
+def _argument_literals(args: str) -> tuple[str, ...]:
+    r"""Return the hashed expressions in a ``generate_surrogate_key`` argument list.
+
+    Two string literals separated by nothing but whitespace are one argument,
+    not two: Jinja concatenates adjacent literals, so ``['O' 'Brien']`` reaches
+    dbt as the single value ``OBrien``. Reading them as two would make
+    ``['O' 'Brien']`` and ``['O', 'Brien']`` — which hash differently, one
+    input versus two — compare identical, and a re-key between them would go
+    unreported.
+
+    Jinja's lexer has no backslash escape (``['it\\'s']`` is a syntax error),
+    so a quote inside a literal can only be written by delimiting with the
+    other quote character. That is why the literal pattern needs no escape
+    handling at this level; the ``''`` doubling that SQL uses is one level
+    down, inside the expression, and is handled by :func:`_normalize_input`.
+    """
+    inputs: list[str] = []
+    previous_end: int | None = None
+    for match in _STRING_LITERAL.finditer(args):
+        single, double = match.group(1), match.group(2)
+        value = single if single is not None else double
+        if previous_end is not None and not args[previous_end : match.start()].strip():
+            inputs[-1] += value
+        else:
+            inputs.append(value)
+        previous_end = match.end()
+    return tuple(_normalize_input(value) for value in inputs)
+
+
 def extract_surrogate_keys(sql: str) -> list[SurrogateKeyDef]:
     """Every ``generate_surrogate_key`` call in *sql*, in source order.
 
@@ -244,7 +273,7 @@ def extract_surrogate_keys(sql: str) -> list[SurrogateKeyDef]:
         if call is None:
             continue
         args, after = call
-        inputs = tuple(_normalize_input(single or double) for single, double in _STRING_LITERAL.findall(args))
+        inputs = _argument_literals(args)
         alias_match = _KEY_ALIAS.match(sql, after)
         column = alias_match.group(1).lower() if alias_match else ""
         keys.append(SurrogateKeyDef(column=column, inputs=inputs))
