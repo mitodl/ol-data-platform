@@ -49,8 +49,25 @@ RETRY_BASE_DELAY = 30
 # word boundaries on the numeric codes, so an unrelated number (a row count, a
 # line number, part of a timestamp) can't trip a retry. The two text signatures
 # need no such guard; neither string appears in a successful build's output.
+#
+# "base-table dropped" -- also wrapped in a generic 1064.  The b2b_analytics MVs
+# read the `dimensional` tables through an Iceberg external catalog, and the
+# Trino project rebuilds those (materialized='table') on every run.  For a window
+# afterwards StarRocks refuses to analyze a CREATE against one, reporting the
+# base table as dropped, and the condition then clears on its own.
+#
+# Measured on the 2026-09-03 17:31 UTC run: the first four models dbt started
+# concurrently all failed on dim_organization in 0.61-0.70s, models 5-8 built OK
+# in that same invocation seconds later, and a re-run 60s afterwards built all
+# eight.  A second attempt is all this needs.
+#
+# A base table that is genuinely gone rather than momentarily stale costs the
+# full 210s of backoff before failing the same way.  That is the trade the
+# signatures above already accept, and cheaper than a red asset that only ever
+# needed a second attempt.
 RETRIABLE_ERROR_PATTERN = re.compile(
     r"\b(1044|1045|2003|2006|2013)\b|forward failed|SocketTimeoutException"
+    r"|base-table dropped"
 )
 
 # dbt_project.yml tags the StarRocks-targeted models with this; it is also what
