@@ -16,6 +16,7 @@ from openedx.assets.transcripts import (
     is_transcript,
     text_from_sjson_content,
     text_from_srt_content,
+    text_from_vtt_content,
     transcript_text,
 )
 
@@ -81,6 +82,8 @@ def test_srt_digit_only_caption_is_stripped():
         ("static/subs_abc123.srt.sjson", True),
         ("static/captions.srt", True),
         ("static/CAPTIONS.SRT", True),
+        ("static/captions.vtt", True),
+        ("static/CAPTIONS.VTT", True),
         ("static/syllabus.pdf", False),
         ("static/logo.png", False),
         ("html/content.html", False),
@@ -293,6 +296,43 @@ def test_whitespace_only_transcript_is_empty_with_null_content():
     assert rows[0]["content"] is None
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("static/subs_x.srt.sjson", ".sjson"),
+        ("static/captions.srt", ".srt"),
+        ("static/captions.vtt", ".vtt"),
+    ],
+)
+def test_transcript_rows_carry_file_extension_like_document_rows(path, expected):
+    """A field on one row source and not the other is a schema inconsistency.
+
+    Both feed integrations__learn__content_files, so omitting file_extension
+    here made every transcript-derived row read as a null extension.
+    """
+    rows, _ = rows_for([(path, b'{"text": ["hi"]}')])
+    assert rows[0]["file_extension"] == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("static/subs_x.srt.sjson", "application/json"),
+        ("static/captions.srt", "text/plain"),
+        ("static/captions.vtt", "text/vtt"),
+    ],
+)
+def test_transcript_rows_use_the_same_content_type_spelling(path, expected):
+    """The union has to agree on the MIME string, not just the field name.
+
+    The document asset derives content_type from mimetypes, which answers
+    `text/vtt` for a `.vtt` in both the host and the builtin table. Publishing
+    `text/plain` for the same file put two conventions in one column.
+    """
+    rows, _ = rows_for([(path, b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhi")])
+    assert rows[0]["content_type"] == expected
+
+
 def test_status_vocabulary_matches_the_document_asset():
     """Both row sources feed one model, so "parsed" vs "extracted" is a schema
     difference dressed up as a naming choice.
@@ -353,3 +393,110 @@ def test_srt_blank_lines_between_blocks_collapse_to_a_space():
     assert "First caption." in text
     assert "Second caption." in text
     assert "\n\n" not in text
+
+
+# --- WebVTT ----------------------------------------------------------------
+#
+# The one deliberate divergence from mit-learn, which has no VTT transformer
+# and stores Tika's verbatim output instead. These pin what "parsed properly"
+# means so the divergence stays intentional rather than drifting.
+
+REALISTIC_VTT = """WEBVTT Kind: captions; Language: en
+
+NOTE This transcript was auto-generated.
+
+intro-cue
+00:00:00.500 --> 00:00:03.910 line:90% align:middle
+But the problem is that as soon as you
+introduce many units,
+
+2
+00:00:03.910 --> 00:00:07.030
+you introduce many states of the world.
+
+3
+00:00:07.030 --> 00:00:11.765
+<v Instructor>Take <i>this</i> example.</v>
+"""
+
+
+def test_vtt_keeps_only_the_spoken_text():
+    text = text_from_vtt_content(REALISTIC_VTT)
+
+    assert text == (
+        "But the problem is that as soon as you introduce many units, "
+        "you introduce many states of the world. "
+        "Take this example."
+    )
+
+
+@pytest.mark.parametrize(
+    "noise",
+    ["WEBVTT", "-->", "line:90%", "align:middle", "<v ", "NOTE", "intro-cue"],
+)
+def test_vtt_structure_never_reaches_the_stored_text(noise):
+    """Every one of these survives in what MIT Learn stores for a `.vtt` today."""
+    assert noise not in text_from_vtt_content(REALISTIC_VTT)
+
+
+def test_vtt_cue_identifiers_are_dropped_not_spoken():
+    """A cue id sits above the timing line and is metadata, not caption text."""
+    vtt = "WEBVTT\n\nslide-14-intro\n00:00:01.000 --> 00:00:02.000\nHello there.\n"
+    assert text_from_vtt_content(vtt) == "Hello there."
+
+
+def test_vtt_style_and_region_blocks_are_excluded():
+    """Non-cue blocks carry no `-->`, which is the rule that excludes them."""
+    vtt = (
+        "WEBVTT\n\n"
+        "STYLE\n::cue { color: papayawhip; }\n\n"
+        "REGION\nid:fred width:40%\n\n"
+        "00:00:01.000 --> 00:00:02.000\nActual caption.\n"
+    )
+    assert text_from_vtt_content(vtt) == "Actual caption."
+
+
+def test_vtt_entities_are_unescaped_after_tags_are_stripped():
+    """Order matters: an escaped tag in the caption must survive as text."""
+    vtt = (
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:02.000\n"
+        "Use &lt;b&gt; for bold &amp; &lt;i&gt; for italic.\n"
+    )
+    assert text_from_vtt_content(vtt) == "Use <b> for bold & <i> for italic."
+
+
+def test_vtt_inline_timestamps_are_stripped():
+    """Karaoke-style mid-cue timestamps are markup, not words."""
+    vtt = (
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:05.000\n"
+        "<00:00:01.000>Now <00:00:02.000>hear <00:00:03.000>this.\n"
+    )
+    assert text_from_vtt_content(vtt) == "Now hear this."
+
+
+def test_vtt_with_no_cues_is_empty_not_an_error():
+    """A header-only file is an empty caption track, which is a fact."""
+    assert text_from_vtt_content("WEBVTT\n\nNOTE nothing here\n") == ""
+
+
+def test_vtt_handles_crlf_and_a_byte_order_mark():
+    """Studio exports are not guaranteed to be LF-only or BOM-free."""
+    vtt = "﻿WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nHello there.\r\n"
+    assert text_from_vtt_content(vtt) == "Hello there."
+
+
+def test_vtt_dispatches_through_transcript_text():
+    text = transcript_text("static/captions.vtt", REALISTIC_VTT.encode())
+    assert text.startswith("But the problem is")
+
+
+def test_vtt_rows_are_built_like_any_other_transcript():
+    rows, counters = rows_for([("static/captions.vtt", REALISTIC_VTT.encode())])
+
+    assert counters["candidates"] == 1
+    assert counters["extracted"] == 1
+    assert counters["failed"] == 0
+    assert rows[0]["file_path"] == "static/captions.vtt"
+    assert "-->" not in rows[0]["content"]
