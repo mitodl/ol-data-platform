@@ -114,10 +114,12 @@ ENV PATH="/app/.venv/bin:$PATH"
 # the command.
 #
 # PYTHONPATH rather than an ENTRYPOINT because run worker pods share this image
-# and are deliberately NOT instrumented yet; PYTHONPATH is the one of the two a
-# run launcher can override back off, which is what dagster_instance.yaml in
-# ol-infrastructure does. The gRPC health-check probes run `env -u PYTHONPATH`
-# for the same reason.
+# and are deliberately NOT instrumented yet. An ENTRYPOINT applies to every
+# process the image starts, so there would be nothing left to switch off; a
+# variable can be stripped for one workload and not another. dagster_instance.yaml
+# in ol-infrastructure strips it from run workers by giving their container a
+# `command` of `env -u PYTHONPATH`, and the gRPC health-check probes prepend the
+# same thing for the same reason.
 RUN mkdir -p /opt/otel && \
     ln -s "$(python -c 'import opentelemetry.instrumentation.auto_instrumentation as m, pathlib; print(pathlib.Path(m.__file__).parent)')" \
         /opt/otel/auto_instrumentation
