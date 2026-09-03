@@ -247,14 +247,14 @@ with mitxonline_product as (
         ) as certification_type
     from edxorg_runs
     left join mitxonline_product_view
-        on  {{ format_course_id('edxorg_runs.courserun_readable_id') }} 
+        on  {{ format_course_id('edxorg_runs.courserun_readable_id') }}
             =  {{ format_course_id('mitxonline_product_view.product_readable_id') }}
     left join edxorg_product_view
-        on  {{ format_course_id('edxorg_runs.courserun_readable_id') }} 
+        on  {{ format_course_id('edxorg_runs.courserun_readable_id') }}
             =  {{ format_course_id('edxorg_product_view.product_readable_id') }}
     left join edxorg_paid_product
         on edxorg_runs.courserun_readable_id = edxorg_paid_product.courserun_readable_id
-    where 
+    where
         edxorg_product_view.product_readable_id is null
         and mitxonline_product_view.product_readable_id is null
         and edxorg_paid_product.courserun_readable_id is null
