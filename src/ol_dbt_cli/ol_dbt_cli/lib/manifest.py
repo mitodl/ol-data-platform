@@ -8,6 +8,7 @@ needing to re-parse Jinja-laden SQL.
 from __future__ import annotations
 
 import json
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,6 +34,8 @@ class ManifestModel:
     original_file_path: str
     schema: str
     database: str
+    materialized: str = ""
+    """``config.materialized`` — "table"/"view"/"incremental"/"ephemeral"/""."""
     columns: dict[str, ManifestColumn] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
     """unique_ids of parent nodes."""
@@ -60,6 +63,24 @@ class ManifestMacro:
     """unique_ids of other macros this macro references."""
 
 
+@dataclass(frozen=True)
+class ForeignKeyRef:
+    """A declared FK edge, recovered from a ``relationships`` schema test.
+
+    dbt records each ``relationships`` test as its own node naming both sides
+    and both columns, which makes it a far better source for "this column holds
+    that model's key" than inferring it from the SQL — the test is the
+    convention the dimensional models are already written to, and it survives
+    aliasing (``dim_user.user_pk`` stored as ``tfact_order.user_fk``) that no
+    name-matching heuristic follows.
+    """
+
+    child_unique_id: str
+    child_column: str
+    parent_name: str
+    parent_column: str
+
+
 @dataclass
 class ManifestRegistry:
     """Registry built from a dbt manifest.json."""
@@ -75,6 +96,8 @@ class ManifestRegistry:
     """unique_id -> list of child unique_ids (reverse of depends_on)."""
     macros: dict[str, ManifestMacro] = field(default_factory=dict)
     """macro unique_id -> ManifestMacro for every macro in the project graph."""
+    foreign_keys: dict[str, list[ForeignKeyRef]] = field(default_factory=dict)
+    """child unique_id -> the FK edges its ``relationships`` tests declare."""
 
     def get_model(self, name: str) -> ManifestModel | None:
         return self.by_name.get(name)
@@ -128,6 +151,10 @@ class ManifestRegistry:
             if column_name in child.column_names:
                 matches.append((child, column_name))
         return matches
+
+    def foreign_keys_between(self, child_unique_id: str, parent_name: str) -> list[ForeignKeyRef]:
+        """FK edges *child_unique_id* declares onto the model named *parent_name*."""
+        return [fk for fk in self.foreign_keys.get(child_unique_id, ()) if fk.parent_name == parent_name]
 
     def models_for_changed_macros(self, changed_macro_files: set[str]) -> set[str]:
         """Return the names of models whose output can change when the given macros change.
@@ -196,9 +223,40 @@ def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
         original_file_path=node_data.get("original_file_path", ""),
         schema=node_data.get("schema", ""),
         database=node_data.get("database", ""),
+        materialized=(node_data.get("config") or {}).get("materialized", ""),
         columns=columns,
         depends_on=depends_on.get("nodes", []),
         depends_on_macros=depends_on.get("macros", []),
+    )
+
+
+# `to: ref('dim_discount')` / `to: ref('open_learning', 'dim_discount')` — the
+# last quoted segment is the model name in either spelling.
+_REF_MODEL_NAME = re.compile(r"ref\s*\(\s*(?:[^)]*,)?\s*['\"]([^'\"]+)['\"]")
+
+
+def _parse_relationship_test(node_data: dict[str, Any]) -> ForeignKeyRef | None:
+    """Convert a ``relationships`` test node into a :class:`ForeignKeyRef`.
+
+    Returns None for any other test, and for a ``relationships`` test pointed
+    at a ``source()`` rather than a ``ref()`` — a source is a relation dbt does
+    not build, so it mints no key that could be regenerated.
+    """
+    metadata = node_data.get("test_metadata") or {}
+    if metadata.get("name") != "relationships":
+        return None
+    kwargs = metadata.get("kwargs") or {}
+    child_column = kwargs.get("column_name") or node_data.get("column_name")
+    parent_column = kwargs.get("field")
+    child_unique_id = node_data.get("attached_node")
+    match = _REF_MODEL_NAME.search(kwargs.get("to") or "")
+    if not (child_column and parent_column and child_unique_id and match):
+        return None
+    return ForeignKeyRef(
+        child_unique_id=child_unique_id,
+        child_column=str(child_column).lower(),
+        parent_name=match.group(1),
+        parent_column=str(parent_column).lower(),
     )
 
 
@@ -215,8 +273,17 @@ def _parse_macro(macro_data: dict[str, Any]) -> ManifestMacro:
 
 def load_manifest(manifest_path: Path) -> ManifestRegistry:
     """Load and parse a dbt ``manifest.json`` file into a :class:`ManifestRegistry`."""
-    raw: dict[str, Any] = json.loads(manifest_path.read_text())
+    return registry_from_manifest(json.loads(manifest_path.read_text()))
 
+
+def registry_from_manifest(raw: dict[str, Any]) -> ManifestRegistry:
+    """Build a :class:`ManifestRegistry` from an already-decoded manifest.
+
+    Split out from :func:`load_manifest` so a caller that needs the raw
+    manifest as well (``raw_code``, say, which the registry deliberately does
+    not carry — it would roughly double the resident size of a 20MB manifest)
+    can decode the JSON once instead of twice.
+    """
     registry = ManifestRegistry()
 
     all_nodes: dict[str, Any] = {}
@@ -239,6 +306,11 @@ def load_manifest(manifest_path: Path) -> ManifestRegistry:
             table_name = node_data.get("name", "")
             if source_name and table_name:
                 registry.sources[f"{source_name}.{table_name}"] = model
+
+    for node_data in raw.get("nodes", {}).values():
+        fk = _parse_relationship_test(node_data)
+        if fk is not None:
+            registry.foreign_keys.setdefault(fk.child_unique_id, []).append(fk)
 
     for uid, macro_data in raw.get("macros", {}).items():
         registry.macros[uid] = _parse_macro(macro_data)

@@ -12,6 +12,7 @@ dependencies = [
     "dbt-starrocks>=1.9.0",
     "dbt-trino >=1.10.0",
     "httpx2 >= 2.2.0",
+    "ol-dbt-cli",
     "ol-orchestrate-lib",
     "pygithub>=2.8.1",
     "pyiceberg>=0.8.0",
@@ -49,6 +50,7 @@ root_module = "lakehouse"
 exclude=["lakehouse_tests"]
 
 [tool.uv.sources]
+ol-dbt-cli = { path = "../../src/ol_dbt_cli", editable = true }
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
 
 # Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py
