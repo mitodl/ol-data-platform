@@ -50,6 +50,8 @@ _KEY_ALIAS = re.compile(r"\s*(?:\}\})?\s*as\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?", r
 
 _STRING_LITERAL = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 
+_WHITESPACE_RUN = re.compile(r"\s+")
+
 
 @dataclass(frozen=True)
 class SurrogateKeyDef:
@@ -130,14 +132,68 @@ def _normalize_input(expression: str) -> str:
     changes no hash in the warehouse, so it must not full-refresh a fact table
     here either.
 
-    Deliberately no further than that: collapsing spaces around punctuation
-    would also equate ``concat(a, ', ', b)`` with ``concat(a, ',', b)``, which
-    really do hash differently. The same caveat applies to lowercasing and a
-    literal like ``'A'``. Both are contrived next to the reformats above, and
-    the failure they would cause — a silent miss — is the one this check
-    exists to prevent, so normalization stops here.
+    Quoted regions are copied through untouched. A SQL string literal and a
+    quoted identifier are both case- and space-sensitive: ``concat(kind, 'A')``
+    and ``concat(kind, 'a')`` hash differently, and folding them together would
+    make the detector miss the exact re-key it exists to catch. ``''`` inside a
+    single-quoted literal is SQL's own escape for a quote and stays inside the
+    literal.
+
+    Outside a quoted region, each run of whitespace folds to a single space —
+    enough to absorb a reindent, and safe there because whitespace between SQL
+    tokens is insignificant. ``concat(a, ', ', b)`` and ``concat(a, ',', b)``
+    still compare different, since what separates them lives inside a literal.
     """
-    return " ".join(expression.split()).lower()
+    out: list[str] = []
+    for text, quote in _quoted_regions(expression):
+        # Each run of whitespace collapses to a single space rather than being
+        # removed: dropping it would join a literal to its neighbour, turning
+        # `'a' 'b'` into `'a''b'` -- a different expression, since `''` is an
+        # escaped quote inside one literal rather than two adjacent ones.
+        out.append(text if quote else _WHITESPACE_RUN.sub(" ", text).lower())
+    return "".join(out).strip()
+
+
+def _quoted_regions(text: str) -> list[tuple[str, str | None]]:
+    """Split *text* into ``(chunk, quote_char_or_None)`` runs.
+
+    A chunk tagged with a quote character is a complete SQL string literal or
+    quoted identifier including its delimiters, with ``''``/``""`` doubling
+    treated as an escaped quote inside it rather than as a close followed by a
+    reopen. An unterminated quote runs to the end of *text*, which keeps the
+    split total: a malformed expression must still normalize to something
+    stable rather than raise.
+    """
+    regions: list[tuple[str, str | None]] = []
+    start = 0
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char not in "'\"":
+            index += 1
+            continue
+        if start != index:
+            regions.append((text[start:index], None))
+        end = _end_of_quoted(text, index)
+        regions.append((text[index:end], char))
+        start = index = end
+    if start < len(text):
+        regions.append((text[start:], None))
+    return regions
+
+
+def _end_of_quoted(text: str, start: int) -> int:
+    """Index just past the literal opening at *start*, or the end of *text*."""
+    quote = text[start]
+    index = start + 1
+    while index < len(text):
+        if text[index] != quote:
+            index += 1
+        elif index + 1 < len(text) and text[index + 1] == quote:
+            index += 2  # doubled quote: SQL's escape, still inside the literal
+        else:
+            return index + 1
+    return len(text)
 
 
 def _balanced_call_args(sql: str, open_paren: int) -> tuple[str, int] | None:
@@ -301,37 +357,45 @@ def affected_incremental_descendants(
     rows, but an incremental model downstream of *it* copied the stale FK too
     and needs the same treatment.
 
-    Each node is visited once, on the shortest path that reaches it. A second,
-    longer path could in principle carry a different column, but rediscovering
-    the same subgraph per path turns a wide dimension's fan-out into an
-    exponential walk for a case that has not arisen.
+    A node is re-walked whenever a path reaches it carrying a column it has not
+    been seen holding before, rather than being marked visited on first sight.
+    Marking on sight makes the result depend on traversal order: where two
+    paths converge, the first to arrive might carry nothing the child reads,
+    and the child -- along with every incremental model below it -- would be
+    struck off before the path that does carry the key is ever tried. Carried
+    sets only grow and are bounded by the column names in the graph, so the
+    worklist still terminates.
     """
     results: dict[tuple[str, str], AffectedIncrementalModel] = {}
     queue: deque[tuple[ManifestModel, frozenset[str], int]] = deque([(ancestor, frozenset({key_column}), 0)])
-    seen: set[str] = {ancestor.unique_id}
+    carried_by: dict[str, frozenset[str]] = {ancestor.unique_id: frozenset({key_column})}
 
     while queue:
         parent, carried, depth = queue.popleft()
         for child in registry.get_model_children(parent.unique_id):
-            if child.unique_id in seen:
-                continue
-            seen.add(child.unique_id)
-
             child_carried = _carried_into(registry, parent, child, carried, column_reads)
             if not child_carried:
                 continue
 
+            known = carried_by.get(child.unique_id, frozenset())
+            if child_carried.keys() <= known:
+                continue  # nothing this path carries is new to the child
+
             if child.materialized == INCREMENTAL_MATERIALIZATION:
                 for column, evidence in child_carried.items():
+                    found = results.get((child.name, column))
+                    if found is not None and _EVIDENCE_RANK.get(found.evidence, 9) <= _EVIDENCE_RANK.get(evidence, 9):
+                        continue
                     results[(child.name, column)] = AffectedIncrementalModel(
                         model_name=child.name,
                         unique_id=child.unique_id,
                         fk_column=column,
                         evidence=evidence,
-                        depth=depth + 1,
+                        depth=min(depth + 1, found.depth if found else depth + 1),
                     )
 
-            queue.append((child, frozenset(child_carried), depth + 1))
+            carried_by[child.unique_id] = known | child_carried.keys()
+            queue.append((child, carried_by[child.unique_id], depth + 1))
 
     return sorted(
         results.values(),

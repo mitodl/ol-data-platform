@@ -10,15 +10,19 @@ repairing, or a state file written when the repair failed.
 """
 
 import ast
+import io
 from pathlib import Path
 
 import lakehouse
 import pytest
+from botocore.exceptions import ClientError
 from lakehouse.lib.surrogate_key_drift import (
     SURROGATE_KEY_STATE_ARTIFACT,
     detect_drift,
     full_refresh_build_args,
 )
+from lakehouse.resources import dbt_s3_artifacts
+from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 
 # One re-keyed dimension (dim_thing.thing_pk) and one incremental fact that
 # stores it, declared the way dbt records a `relationships` test.
@@ -115,12 +119,21 @@ def test_a_run_that_skipped_the_re_keyed_dimension_repairs_nothing():
     assert complete is False
 
 
-def test_a_run_that_skipped_an_affected_fact_withholds_the_state():
+def test_the_ancestor_alone_is_enough_to_repair():
+    """The repair names the facts in its own --select, so the run need not have
+    built them -- and under `upstream_or_code_changes` it never will have.
+
+    A dimension is selected on the tick its code version changes; its facts are
+    gated behind `any_deps_updated`, which cannot be true until that build has
+    finished, and `~any_deps_in_progress` keeps them out of the same run
+    besides. Requiring both in one run deadlocks the repair: the first run has
+    no facts to refresh and the second no dimension, forever.
+    """
     models, complete = detect_drift(MANIFEST, PRIOR_STATE).resolved_against(
         {"dim_thing"}
     )
-    assert models == []
-    assert complete is False
+    assert models == ["fact_thing"]
+    assert complete is True
 
 
 def test_a_clean_run_records_the_baseline_whatever_it_built():
@@ -234,3 +247,72 @@ def test_the_repair_is_scoped_to_what_this_run_actually_built(dbt_asset_module):
 def test_the_state_artifact_name_is_stable():
     """Renaming it silently orphans the baseline and re-fires every escalation."""
     assert SURROGATE_KEY_STATE_ARTIFACT == "surrogate-key-state.json"
+
+
+# ---------------------------------------------------------------------------
+# The state artifact must fail closed
+# ---------------------------------------------------------------------------
+
+
+class _FakeLog:
+    def info(self, *args) -> None:
+        pass
+
+    def warning(self, *args) -> None:
+        pass
+
+
+class _FakeContext:
+    log = _FakeLog()
+
+
+def _resource_reading(monkeypatch, *, error=None, body=b""):
+    """Build a resource whose get_object raises *error* or returns *body*."""
+
+    class _Client:
+        def get_object(self, **_kwargs):
+            if error is not None:
+                raise error
+            return {"Body": io.BytesIO(body)}
+
+    monkeypatch.setattr(dbt_s3_artifacts.boto3, "client", lambda _svc: _Client())
+    return DbtS3ArtifactsResource(s3_bucket="bucket", s3_prefix="prefix")
+
+
+def _client_error(code: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": code}}, "GetObject")
+
+
+def test_a_missing_object_is_no_prior_state(monkeypatch):
+    resource = _resource_reading(monkeypatch, error=_client_error("NoSuchKey"))
+    assert resource.read_json_artifact("state.json", _FakeContext()) is None
+
+
+def test_a_denied_read_raises_rather_than_faking_a_missing_baseline(monkeypatch):
+    """A 403 reported as absent lets the run record a baseline it never compared
+    against, hiding the drift it was supposed to repair.
+    """
+    resource = _resource_reading(monkeypatch, error=_client_error("AccessDenied"))
+    with pytest.raises(ClientError):
+        resource.read_json_artifact("state.json", _FakeContext())
+
+
+def test_a_throttled_read_raises(monkeypatch):
+    resource = _resource_reading(monkeypatch, error=_client_error("SlowDown"))
+    with pytest.raises(ClientError):
+        resource.read_json_artifact("state.json", _FakeContext())
+
+
+def test_undecodable_state_raises_rather_than_blessing_a_new_baseline(monkeypatch):
+    resource = _resource_reading(monkeypatch, body=b"{not json")
+    with pytest.raises(ValueError, match="not valid JSON"):
+        resource.read_json_artifact("state.json", _FakeContext())
+
+
+def test_valid_state_decodes(monkeypatch):
+    resource = _resource_reading(
+        monkeypatch, body=b'{"dim_thing": {"thing_pk": [["a"]]}}'
+    )
+    assert resource.read_json_artifact("state.json", _FakeContext()) == {
+        "dim_thing": {"thing_pk": [["a"]]}
+    }
