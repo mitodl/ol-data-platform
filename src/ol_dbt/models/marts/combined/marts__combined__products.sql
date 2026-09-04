@@ -55,6 +55,23 @@ with mitxonline_product as (
     select * from {{ ref('int__edxorg__mitx_product') }}
 )
 
+, edxorg_paid_product as (
+    select
+        courserun_readable_id
+        , price
+        , upgrade_deadline
+        , row_number() over (
+            partition by courserun_readable_id
+            order by
+                if(courserun_mode = 'verified', 0, 1)
+                , price desc nulls last
+                , courserun_mode
+                , upgrade_deadline desc nulls last
+        ) as _row_num
+    from edxorg_product
+    where courserun_mode not in ('audit', 'honor')
+)
+
 , edxorg_runs as (
     select * from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -178,12 +195,12 @@ with mitxonline_product as (
         edxorg_runs.courserun_readable_id as product_readable_id
         , edxorg_runs.courserun_title as product_name
         , edxorg_runs.courserun_description as product_description
-        , edxorg_product.price as list_price
+        , edxorg_paid_product.price as list_price
         , edxorg_runs.courserun_start_date as start_on
         , edxorg_runs.courserun_end_date as end_on
         , edxorg_runs.courserun_enrollment_start_date as enrollment_start_on
         , edxorg_runs.courserun_enrollment_end_date as enrollment_end_on
-        , edxorg_product.upgrade_deadline
+        , edxorg_paid_product.upgrade_deadline
         , edxorg_runs.courserun_pace as pace
         , edxorg_runs.courserun_duration as duration
         , edxorg_runs.courserun_time_commitment as time_commitment
@@ -195,14 +212,52 @@ with mitxonline_product as (
             , 'MicroMasters Credential'
             , 'Certificate of Completion'
         ) as certification_type
-    from edxorg_product
+    from edxorg_paid_product
     inner join edxorg_runs
-        on edxorg_product.courserun_readable_id = edxorg_runs.courserun_readable_id
+        on edxorg_paid_product.courserun_readable_id = edxorg_runs.courserun_readable_id
+        and edxorg_paid_product._row_num = 1
     left join mitxonline_product_view
-        on edxorg_product.courserun_readable_id = mitxonline_product_view.product_readable_id
+        on edxorg_paid_product.courserun_readable_id = mitxonline_product_view.product_readable_id
     where
-        edxorg_product.courserun_mode = 'verified'
+        mitxonline_product_view.product_readable_id is null
+
+)
+
+, edxorg_product_view_extra as (
+    select
+        edxorg_runs.courserun_readable_id as product_readable_id
+        , edxorg_runs.courserun_title as product_name
+        , edxorg_runs.courserun_description as product_description
+        , null as list_price
+        , edxorg_runs.courserun_start_date as start_on
+        , edxorg_runs.courserun_end_date as end_on
+        , edxorg_runs.courserun_enrollment_start_date as enrollment_start_on
+        , edxorg_runs.courserun_enrollment_end_date as enrollment_end_on
+        , null as upgrade_deadline
+        , edxorg_runs.courserun_pace as pace
+        , edxorg_runs.courserun_duration as duration
+        , edxorg_runs.courserun_time_commitment as time_commitment
+        , edxorg_runs.course_topics as topics
+        , edxorg_runs.courserun_instructors as instructors
+        , if(edxorg_runs.courserun_is_published, true, false) as is_live
+        , if(
+            edxorg_runs.micromasters_program_id is not null
+            , 'MicroMasters Credential'
+            , 'Certificate of Completion'
+        ) as certification_type
+    from edxorg_runs
+    left join mitxonline_product_view
+        on  {{ format_course_id('edxorg_runs.courserun_readable_id') }}
+            =  {{ format_course_id('mitxonline_product_view.product_readable_id') }}
+    left join edxorg_product_view
+        on  {{ format_course_id('edxorg_runs.courserun_readable_id') }}
+            =  {{ format_course_id('edxorg_product_view.product_readable_id') }}
+    left join edxorg_paid_product
+        on edxorg_runs.courserun_readable_id = edxorg_paid_product.courserun_readable_id
+    where
+        edxorg_product_view.product_readable_id is null
         and mitxonline_product_view.product_readable_id is null
+        and edxorg_paid_product.courserun_readable_id is null
 
 )
 
@@ -296,3 +351,34 @@ select
     , 'MITx' as offered_by
     , is_live
 from edxorg_product_view
+
+union all
+
+select
+    '{{ var("edxorg") }}' as platform
+    , '{{ var("edxorg") }}' as product_platform
+    , product_readable_id
+    , product_name
+    , null as product_id
+    , 'course run' as product_type
+    , product_description
+    , list_price
+    , null as product_is_active
+    , false as product_is_private
+    , null as product_created_on
+    , start_on
+    , end_on
+    , enrollment_start_on
+    , enrollment_end_on
+    , upgrade_deadline
+    , pace
+    , duration
+    , time_commitment
+    , certification_type
+    , 'Online' as delivery
+    , null as continuing_education_credits
+    , topics
+    , instructors
+    , 'MITx' as offered_by
+    , is_live
+from edxorg_product_view_extra
