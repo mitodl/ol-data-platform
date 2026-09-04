@@ -59,6 +59,7 @@ migrations (epic #2072).
 
 ```bash
 ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
+ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on   # composite key
 ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at --format json
 ol-dbt diff --old m_old --new m_new --auto-build   # build both sides first
 ```
@@ -82,6 +83,19 @@ ol-dbt diff --target dev_local \
   for models with known surrogate-key non-determinism (e.g. `dim_user.user_pk`
   is email-keyed and collapses NULL emails — a naive full-row compare shows
   spurious mismatches).
+- **Use the model's real grain, including composite keys.** Pass a composite key
+  comma-separated (`-k a,b,c`) or by repeating the flag (`-k a -k b -k c`); the two
+  are equivalent. `-k a b c` does *not* work — only the first token is taken as a
+  key and the rest are read as positional args, producing a confusing `--dbt-dir`
+  error. A non-unique key pairs rows many-to-many and inflates the mismatch and
+  "missing" counts with join artifacts rather than real differences, so a
+  single-column key on a composite-grain model actively misleads. If you don't know
+  the grain, check the model YAML for a
+  `dbt_expectations.expect_compound_columns_to_be_unique` test — its column list is
+  the key. (Grep the dotted spelling; the underscored form appears only in compiled
+  test names.) A single column is safe alone only with **both** `unique` and
+  `not_null` passing — `unique` ignores NULLs, and the single-column join cannot
+  pair NULL keys.
 - Use `--exclude-columns` for non-deterministic columns (load timestamps, etc.).
 - Column sets are reconciled first: a schema mismatch is reported as
   `schema_divergence`, not a raw SQL error.
