@@ -1,5 +1,6 @@
 """OpenEdX data extraction and tracking log normalization definitions."""
 
+import logging
 import os
 from datetime import UTC, datetime
 from functools import partial
@@ -32,6 +33,8 @@ from openedx.jobs.normalize_logs import (
 
 init_sentry("openedx")
 
+log = logging.getLogger(__name__)
+
 # Initialize vault with resilient loading
 try:
     vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
@@ -55,34 +58,62 @@ dagster_env: Literal["dev", "ci", "qa", "production"] = cast(
     os.environ.get("DAGSTER_ENVIRONMENT", DAGSTER_ENV),
 )
 
-# Tika text extraction. Host and Vault path are per environment; see
+# Tika text extraction. Only the host varies by environment; see
 # ol_orchestrate/resources/tika.py and ol-infrastructure applications/tika/.
 # Only production has its own deployment -- everything else points at QA, which
 # is deliberate: a dev run extracting text is harmless, and standing up a third
 # Tika for it would not change the result.
 TIKA_ENVIRONMENTS = {
-    "production": ("https://tika-production.ol.mit.edu", "production-apps"),
+    "production": "https://tika-production.ol.mit.edu",
 }
-TIKA_BASE_URL, TIKA_VAULT_APP_PATH = TIKA_ENVIRONMENTS.get(
-    DAGSTER_ENV, ("https://tika-qa.ol.mit.edu", "rc-apps")
-)
+TIKA_BASE_URL = TIKA_ENVIRONMENTS.get(DAGSTER_ENV, "https://tika-qa.ol.mit.edu")
 
 # Read at definition time, matching how this code location already loads other
 # static secrets. An unauthenticated Vault yields an empty token rather than
 # failing the whole location to load -- the same resilient-loading posture used
 # for Vault auth above. A run that actually needs Tika then fails on the call,
 # where the error is legible, instead of at import.
-try:
-    tika_access_token = (
-        vault.client.secrets.kv.v1.read_secret(
-            mount_point="secret-operations",
-            path=f"{TIKA_VAULT_APP_PATH}/tika/access-token",
-        )["data"]["value"]
-        if vault_authenticated
-        else ""
+#
+# The path is flat rather than environment-scoped on purpose. Each environment
+# authenticates to its own Vault (vault-$DAGSTER_ENV), and the tika stack writes
+# secret-operations/tika/access-token there from the same value it inlines as
+# the `expected` token in the APISIX route guarding that environment's Tika, so
+# a token read from this path matches the gateway it will be sent to -- with the
+# exception of `ci`, which reads from vault-ci but posts to the QA host above.
+# That pre-existing host/Vault mismatch is out of scope here.
+# Reading the env-scoped secret-operations/{production-apps,rc-apps}/tika/
+# access-token is what broke this asset: the tika stack stopped writing those
+# paths, the Dagster Vault policy never granted them, and the denial below
+# turned into an empty token and a 401 on every extraction.
+#
+# Resilient, but not silent. Substituting an empty token without saying so is
+# how this shipped broken for a day: the location loaded healthy, nothing
+# logged, and the only symptom was a 401 buried in the run logs of an asset
+# that had never once succeeded. Log at ERROR in the code location's process
+# logs, then carry on -- an empty token costs one asset, whereas failing the
+# import costs every asset in the location. Note that this does not raise in
+# Sentry: init_sentry configures LoggingIntegration(event_level=None), so log
+# records become breadcrumbs and never events.
+if not vault_authenticated:
+    log.error(
+        "Vault is unauthenticated, so the Tika access token is empty. Tika "
+        "extraction will fail with a 401 until Vault auth is restored."
     )
-except Exception:  # noqa: BLE001 (resilient loading, as above)
     tika_access_token = ""
+else:
+    try:
+        tika_access_token = vault.client.secrets.kv.v1.read_secret(
+            mount_point="secret-operations",
+            path="tika/access-token",
+        )["data"]["value"]
+    except Exception:
+        log.exception(
+            "Could not read the Tika access token from Vault at "
+            "secret-operations/tika/access-token, so it is empty. Tika "
+            "extraction will fail with a 401 until this is resolved. Check "
+            "that the Dagster Vault policy grants read on that path."
+        )
+        tika_access_token = ""
 
 
 def s3_uploads_bucket(

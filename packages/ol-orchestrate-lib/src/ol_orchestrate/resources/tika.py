@@ -7,9 +7,12 @@ Deployment details:
   Production:  https://tika-production.ol.mit.edu
   QA:          https://tika-qa.ol.mit.edu
   Auth:        X-Access-Token header
-  Vault paths:
-    production  secret-operations/production-apps/tika/access-token  key: value
-    qa          secret-operations/rc-apps/tika/access-token           key: value
+  Vault path:  secret-operations/tika/access-token  key: value
+
+    The same path in every environment -- the environment is selected by which
+    Vault you authenticate to, not by the path. Do not use the env-scoped
+    secret-operations/{production-apps,rc-apps}/tika/access-token: nothing
+    writes those paths any more, so a token read there earns a 401.
 
 Infrastructure source:
   ol-infrastructure/src/ol_infrastructure/applications/tika/
@@ -131,10 +134,8 @@ class TikaResource(ConfigurableResource[None]):
     access_token: str = Field(
         description=(
             "X-Access-Token value for the Tika service. "
-            "Read from Vault at "
-            "secret-operations/production-apps/tika/access-token (key: value) "
-            "for production or "
-            "secret-operations/rc-apps/tika/access-token for QA."
+            "Read from Vault at secret-operations/tika/access-token "
+            "(key: value), the same path in every environment."
         ),
     )
     timeout: int = Field(
