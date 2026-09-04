@@ -250,6 +250,21 @@ in `dg_projects`, and no OCW dg project** — OCW's only Learn-facing model is t
 of anything above; it cannot ride the existing mechanism.
 Tracked by `tk-ocw-text-extraction-assets-integrations-learn-oc-8ff9b4`.
 
+**What triggers it, and what happens to the existing Learn-facing webhook.** Today Concourse
+notifies Learn directly when an OCW course publishes, and Learn downloads from S3 and extracts it
+itself; after this change the platform does the extraction, so the platform — not Learn — needs to
+learn a course published. Narrowed to two candidates, not yet decided between them:
+- Concourse's publish step calls a new platform-side endpoint instead of (or alongside) Learn's.
+- A Dagster sensor watches the OCW S3 bucket directly for new/changed course exports.
+
+(Polling OCW Studio's `publish_date` column already in the warehouse was considered and set aside
+— the two options above stay closer to the current push-based, low-latency model.)
+
+Whichever is chosen, it needs to account for **unpublish**, which the existing Learn-facing webhook
+also handles and which happens immediately today. If that webhook is retired outright, the platform
+side needs an equivalent immediate signal for a course being unpublished — the §7 daily
+reconciliation sweep is not a substitute for that latency. Not designed here.
+
 ## 9. Warehouse views the tasks read
 
 | Task | View |
