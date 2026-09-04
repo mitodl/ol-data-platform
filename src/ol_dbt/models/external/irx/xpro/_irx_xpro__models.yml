@@ -56,6 +56,10 @@ models:
     description: int, the auto-incremented ID for this table
   - name: is_active
     description: boolean, whether the user has been active in a course
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: created
+    description: timestamp, when the enrolment was created
 
 - name: irx__xpro__openedx__mysql__grades_persistentcoursegrade
   description: xPro open edX course grades
@@ -179,6 +183,9 @@ models:
     description: int, display_tag_filter_strategy
   - name: consecutive_days_visit_count
     description: int, consecutive_days_visit_count
+  - name: course_id
+    description: string, unique ID representing a single xPro course run the user
+      is enrolled in. A user appears once per enrolment.
 
 - name: irx__xpro__openedx__bigquery__email_opt_in
   description: Email opt-in preferences for xPRO learners from BigQuery
@@ -468,6 +475,8 @@ models:
     description: int, foreign key to auth_user
   - name: name
     description: string, name of the discussion role e.g. Moderator
+  - name: id
+    description: int, the auto-incremented ID for this table
 
 - name: irx__xpro__openedx__mysql__student_anonymoususerid
   description: Mapping of xPRO OpenedX learners to their anonymous user IDs per course
@@ -481,6 +490,40 @@ models:
     description: string, unique ID representing a single xPRO course run
   - name: id
     description: int, auto-incremented ID for this table
+
+- name: irx__xpro__openedx__mysql__courseware_studentmodule
+  description: Current learner state per course block in xPRO OpenedX. Backs the studentmodule
+    file in the IRx delivery; the column order matches that file.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, the auto-incremented ID for this table
+  - name: module_type
+    description: str, category/type of the block, referencing course_structure
+  - name: module_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+  - name: student_id
+    description: int, foreign key to auth_user
+  - name: state
+    description: str, JSON text indicating the learner's last known state within a
+      course
+  - name: grade
+    description: str, floating point value indicating the total unweighted grade the
+      learner scored for this problem
+  - name: created
+    description: timestamp, when the row was created
+  - name: modified
+    description: timestamp, when the row was last updated
+  - name: max_grade
+    description: str, floating point value indicating the total possible unweighted
+      grade for this problem
+  - name: done
+    description: str, not used. The value is 'na' in every row
+  - name: course_id
+    description: string, unique ID representing a single xPro course run
 
 - name: irx__xpro__openedx__mysql__student_courseaccessrole
   description: Course staff and instructor role assignments in xPRO OpenedX
@@ -496,6 +539,8 @@ models:
     description: int, foreign key to auth_user
   - name: role
     description: string, the role name e.g. instructor, staff
+  - name: id
+    description: int, the auto-incremented ID for this table
 
 - name: irx__xpro__openedx__mysql__student_languageproficiency
   description: Language proficiency records for xPRO OpenedX learners enrolled in
