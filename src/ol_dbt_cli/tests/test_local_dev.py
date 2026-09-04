@@ -297,22 +297,19 @@ class TestClassifyRegistration:
 class TestRegistryAge:
     """Tests for registry staleness reporting — the signal the incident lacked."""
 
-    def _make_registry(self, db_path: Path, registered_at_sql: str, glue_database: str = "my_db") -> None:
+    def _make_registry(self, db_path: Path, scanned_at_sql: str, glue_database: str = "my_db") -> None:
         import duckdb
 
         with duckdb.connect(str(db_path)) as conn:
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS _glue_source_registry (
-                    view_name VARCHAR PRIMARY KEY,
+                CREATE TABLE IF NOT EXISTS _glue_registry_scans (
                     glue_database VARCHAR,
-                    glue_table VARCHAR,
-                    metadata_location VARCHAR,
-                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.execute(
-                f"INSERT INTO _glue_source_registry VALUES (?, ?, ?, ?, {registered_at_sql})",  # noqa: S608
-                (f"glue__{glue_database}__users", glue_database, "users", "s3://bucket/users/v1.json"),
+                f"INSERT OR REPLACE INTO _glue_registry_scans VALUES (?, {scanned_at_sql})",  # noqa: S608
+                (glue_database,),
             )
 
     def test_returns_none_when_no_database_file(self, tmp_path: Path) -> None:

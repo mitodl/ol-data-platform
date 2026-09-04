@@ -34,7 +34,8 @@ if TYPE_CHECKING:
 DEFAULT_DUCKDB_PATH = Path.home() / ".ol-dbt" / "local.duckdb"
 DEFAULT_GLUE_DATABASE = "ol_warehouse_production_raw"
 
-# How old the newest registry entry may get before `register` and `list-sources`
+# How old the newest successful Glue-scan entry may get before `register` and
+# `list-sources`
 # warn about it. A registered view pins one Iceberg metadata.json; when production
 # rebuilds that table the old metadata file is eventually cleaned up, and the
 # pinned view starts failing with an S3 404 that says nothing about staleness
@@ -165,12 +166,44 @@ def _classify_registration(previous_location: str | None, metadata_location: str
     return "updated"
 
 
-def _registry_last_refreshed(duckdb_path: Path, databases: list[str]) -> datetime.datetime | None:
-    """Return the newest ``registered_at`` across *databases*, or None if unknown.
+def _ensure_registry_tables(conn: duckdb.DuckDBPyConnection) -> None:
+    """Create local registry tables if they do not exist yet."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS _glue_source_registry (
+            view_name VARCHAR PRIMARY KEY,
+            glue_database VARCHAR,
+            glue_table VARCHAR,
+            metadata_location VARCHAR,
+            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS _glue_registry_scans (
+            glue_database VARCHAR PRIMARY KEY,
+            scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
-    None covers every "cannot tell" case — no DuckDB file, no registry table, no
-    rows for these databases — because the caller treats them identically: it has
-    no age to report and says so, rather than implying a fresh registry.
+
+def _record_registry_scan(duckdb_path: Path, database_name: str) -> None:
+    """Record that a Glue database was successfully scanned in this run."""
+    with duckdb.connect(str(duckdb_path)) as conn:
+        _ensure_registry_tables(conn)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO _glue_registry_scans (glue_database, scanned_at)
+            VALUES (?, CURRENT_TIMESTAMP)
+            """,
+            (database_name,),
+        )
+
+
+def _registry_last_refreshed(duckdb_path: Path, databases: list[str]) -> datetime.datetime | None:
+    """Return the newest Glue scan timestamp across *databases*, or None if unknown.
+
+    None covers every "cannot tell" case — no DuckDB file, no scan table, no rows
+    for these databases — because the caller treats them identically: it has no
+    age to report and says so, rather than implying a fresh registry.
     """
     if not duckdb_path.exists() or not databases:
         return None
@@ -178,7 +211,7 @@ def _registry_last_refreshed(duckdb_path: Path, databases: list[str]) -> datetim
     try:
         with duckdb.connect(str(duckdb_path), read_only=True) as conn:
             row = conn.execute(
-                f"SELECT max(registered_at) FROM _glue_source_registry WHERE glue_database IN ({placeholders})",  # noqa: S608
+                f"SELECT max(scanned_at) FROM _glue_registry_scans WHERE glue_database IN ({placeholders})",  # noqa: S608
                 databases,
             ).fetchone()
     except Exception:  # noqa: BLE001
@@ -295,15 +328,7 @@ def _register_tables_in_duckdb(
             if verbose:
                 print("  ✓ AWS credentials loaded")
 
-            setup_conn.execute("""
-                CREATE TABLE IF NOT EXISTS _glue_source_registry (
-                    view_name VARCHAR PRIMARY KEY,
-                    glue_database VARCHAR,
-                    glue_table VARCHAR,
-                    metadata_location VARCHAR,
-                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+            _ensure_registry_tables(setup_conn)
 
             # Loaded even under --force. force governs only whether an unchanged
             # table is SKIPPED; the recorded locations are still what tells new
@@ -443,10 +468,8 @@ def _show_registry(duckdb_path: Path) -> None:
             print(f"{view_name:<60} {glue_db:<30} {registered!s}")
         print("=" * 100)
 
-        # Ordered registered_at DESC above, so the first row is the newest. A view
-        # only ever pins the metadata file that was current when it was
-        # registered, so this age is the single most useful thing here.
-        newest_phrase, is_stale = _describe_registry_age(result[0][3])
+        databases = sorted({row[1] for row in result})
+        newest_phrase, is_stale = _describe_registry_age(_registry_last_refreshed(duckdb_path, databases))
         print(f"  Last refreshed: {newest_phrase}")
         if is_stale:
             print(
@@ -762,6 +785,8 @@ def register(
         except Exception as e:  # noqa: BLE001
             print(f"  ✗ Error accessing database: {e}")
             continue
+        if not dry_run:
+            _record_registry_scan(duckdb_path, db_name)
 
         if not tables:
             print(f"  ⚠ No Iceberg tables found in {db_name}")
@@ -1310,15 +1335,7 @@ def setup(
             conn.execute(f"INSTALL {ext}")
             conn.execute(f"LOAD {ext}")
         conn.execute("CALL load_aws_credentials()")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS _glue_source_registry (
-                view_name VARCHAR PRIMARY KEY,
-                glue_database VARCHAR,
-                glue_table VARCHAR,
-                metadata_location VARCHAR,
-                registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        _ensure_registry_tables(conn)
         conn.close()
         print(f"✓ DuckDB database initialized: {duckdb_path}")
 
@@ -1366,6 +1383,7 @@ def setup(
         except Exception as e:  # noqa: BLE001
             print(f"  ✗ Error: {e}")
             continue
+        _record_registry_scan(duckdb_path, db_name)
 
         if not tables:
             print(f"  ⚠ No Iceberg tables found in {db_name}")
