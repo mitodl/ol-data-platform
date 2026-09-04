@@ -27,9 +27,12 @@ models:
     which fire the same event.
   columns:
   - name: search_event_uuid
-    description: str, PostHog's per-event identifier
+    description: >
+      str, PostHog's per-event identifier. Deduplicated on: the raw table is
+      at-least-once at hour granularity, so a replayed hour repeats it.
     tests:
     - not_null
+    - unique
   - name: search_event_timestamp
     description: timestamp, when the search fired on the client
     tests:
