@@ -187,6 +187,25 @@ aws sts get-caller-identity
 ol-dbt local setup --layers all
 ```
 
+### "HTTP 403 - RequestTimeTooSkewed"
+The 403 body says `RequestTimeTooSkewed`, and the error text still blames credentials.
+It is not a credentials problem: SigV4 rejects any request whose timestamp is more than
+15 minutes from S3's clock. Common on WSL2, whose clock drifts after the host sleeps, and
+it can appear mid-run after earlier queries in the same session succeeded.
+
+**Check** (compare the two; the `RequestTime` and `ServerTime` in the error body say the
+same thing):
+```bash
+date -u
+curl -sI https://s3.us-east-1.amazonaws.com/ | grep -i '^date:'
+```
+
+**Fix**: resync the clock, then re-run. WSL2 usually recovers on its own within a few
+minutes; to force it:
+```bash
+sudo hwclock -s
+```
+
 ### "Catalog Error: View/table does not exist"
 **Cause**: Iceberg tables not registered
 **Fix**:

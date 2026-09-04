@@ -53,6 +53,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 )
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
+from lakehouse.assets.user_key_map_backup import user_key_map_s3_backup
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
 from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
@@ -483,6 +484,7 @@ defs = Definitions(
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             refresh_starrocks_analytics_mvs,
+            user_key_map_s3_backup,
         ]
     ),
     asset_checks=dbt_layer_freshness_checks,
