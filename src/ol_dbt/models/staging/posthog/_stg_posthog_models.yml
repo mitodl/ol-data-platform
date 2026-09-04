@@ -7,21 +7,19 @@ models:
     One row per MIT Learn `search_update` event: a search the user ran on
     learn.mit.edu, with the query term, the page it happened on, and who ran it.
 
-    The recorded term is not reliably the term the user just submitted. MIT
-    Learn calls `posthog.capture("search_update")` with no properties, so every
-    property on the event is autocaptured by PostHog, and `search_param_q` is
+    The recorded term is not reliably the term the user just submitted. Before
+    mitodl/mit-learn#3908, `posthog.capture("search_update")` carried no
+    properties, so every property was autocaptured and `search_param_q` was
     derived by PostHog from `$current_url`. The capture fires before the Next.js
-    router commits the navigation, so on events captured before the pending
-    mitodl/mit-learn fix the URL still holds the PREVIOUS query and
-    `search_query_from_url` is that stale term rather than the new one.
+    router commits the navigation, so on those events the URL still holds the
+    PREVIOUS query and `search_term_from_url` is that stale term.
 
-    `search_query` prefers an explicit `search_query` property on the event and
-    falls back to the URL-derived value, and `search_query_is_from_event` says
-    which of the two each row got. Filter on that flag for any analysis that
-    needs the term to be the one actually submitted. No event in the lake
-    carries the explicit property yet, so today every row is `false`; the
-    property name is a forward contract with the mit-learn fix and must be
-    reconciled against that PR when it lands.
+    `search_term` prefers the explicit `search_term` property that
+    mitodl/mit-learn#3908 puts on the event and falls back to the URL-derived
+    value, and `search_term_is_from_event` says which of the two each row got.
+    Filter on that flag for any analysis that needs the term to be the one
+    actually submitted. Every row is `false` until that PR ships, and no earlier
+    event can be corrected after the fact.
 
     Only a subset of `search_update` events carry a query term at all: in a
     sampled production hour (2026-09-03 00:00 UTC) 75 of 249 had
@@ -54,23 +52,23 @@ models:
     description: >
       str, the path portion of search_page_url with the query string and
       fragment removed (e.g. /search)
-  - name: search_query_from_event
+  - name: search_term_from_event
     description: >
-      str, the query term taken from an explicit `search_query` property on the
-      event. Null on every event captured before the mit-learn fix ships.
-  - name: search_query_from_url
+      str, the query term taken from an explicit `search_term` property on the
+      event. Null on every event captured before mitodl/mit-learn#3908 ships.
+  - name: search_term_from_url
     description: >
       str, the query term PostHog derived from `$current_url`
       (`search_param_q`). Stale for events captured before the mit-learn fix:
       it is the query the user ran previously, not the one being submitted.
-  - name: search_query
+  - name: search_term
     description: >
-      str, the query term: search_query_from_event where present, otherwise
-      search_query_from_url. Check search_query_is_from_event before treating a
+      str, the query term: search_term_from_event where present, otherwise
+      search_term_from_url. Check search_term_is_from_event before treating a
       value as the term the user just submitted.
-  - name: search_query_is_from_event
+  - name: search_term_is_from_event
     description: >
-      boolean, true when search_query came from an explicit event property and
+      boolean, true when search_term came from an explicit event property and
       is therefore the submitted term; false when it fell back to the
       URL-derived value, which may be the user's previous query.
     tests:
