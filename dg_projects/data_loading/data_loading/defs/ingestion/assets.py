@@ -21,6 +21,7 @@ from ol_dlt.sources import (
     mitxonline_app,
     oll,
     podcast_rss,
+    posthog_events,
     youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
@@ -117,6 +118,14 @@ youtube_assets = build_ingest_assets(
     source=youtube.build_source(),
     pipeline=youtube.youtube_pipeline,
 )
+# Resumes from the dlt cursor every run. A backfill is a deliberate
+# `posthog_events_source(start_date=...)` invocation (see the source's
+# __main__), not something a scheduled run can fall into.
+posthog_events_assets = build_ingest_assets(
+    name="posthog_events_ingest",
+    source=posthog_events.build_source(),
+    pipeline=posthog_events.posthog_events_pipeline,
+)
 
 
 # --- edxorg_s3: custom upstream deps + one op per table ---------------------
@@ -179,6 +188,7 @@ defs = Definitions(
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
             youtube_assets,
+            posthog_events_assets,
             *edxorg_s3_table_assets,
         ]
     ),
