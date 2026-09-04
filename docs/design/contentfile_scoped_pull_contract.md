@@ -115,6 +115,14 @@ An entry naming an unknown/unsupported `source` is logged and skipped, not 500'd
 source cannot reject an otherwise-valid batch. (Same resilience rule the `learning_resources`
 handler uses.)
 
+**Per-run lock.** Two scoped pulls for the same `readable_id` can be in flight at once — a course
+exported twice in quick succession, or a retried POST. Without coordination, an
+earlier-started/later-finishing pull can prune based on a result set that predates a
+later-started/earlier-finishing pull's upserts, unpublishing files the other pull just added, with
+nothing to correct it until the next export. **Decision: serialize scoped pulls per `readable_id`**
+(a lock keyed on the scope key) rather than a staleness check against a payload timestamp — a
+second pull for a run already in flight waits rather than racing it.
+
 These tasks subclass `BaseWarehouseETLTask` from
 [mit-learn#3807](https://github.com/mitodl/mit-learn/pull/3807)
 (`learning_resources/lib/warehouse.py`), which already provides the StarRocks connection,
@@ -223,6 +231,16 @@ Both paths run simultaneously; each sender moves independently.
 
 Because Canvas migrates, the `ETLSource.canvas` branch in the current handler is transitional, not
 permanent.
+
+**Self-healing after cutover.** This design is purely event-driven — nothing else re-triggers a
+pull. mit-learn's `import_all_*_files` Celery beat sweeps currently provide a backstop against a
+dropped webhook POST by periodically re-pulling everything regardless of what triggered it; once
+those retire, a dropped POST would leave that run stale indefinitely with no automatic recovery.
+**Decision: a daily reconciliation sweep on the Learn side**, not a platform-side re-announce —
+now that the "ETL" on Learn's end is just a SQL pull against the warehouse view rather than
+downloading and parsing an archive, a full sweep is cheap enough to run on a schedule without the
+O(N²) hazard §5 warns about (that hazard is specific to re-triggering the *extraction* side, not
+reading an already-materialized view).
 
 ## 8. OCW has no sender at all
 
