@@ -55,28 +55,36 @@ dagster_env: Literal["dev", "ci", "qa", "production"] = cast(
     os.environ.get("DAGSTER_ENVIRONMENT", DAGSTER_ENV),
 )
 
-# Tika text extraction. Host and Vault path are per environment; see
+# Tika text extraction. Only the host varies by environment; see
 # ol_orchestrate/resources/tika.py and ol-infrastructure applications/tika/.
 # Only production has its own deployment -- everything else points at QA, which
 # is deliberate: a dev run extracting text is harmless, and standing up a third
 # Tika for it would not change the result.
 TIKA_ENVIRONMENTS = {
-    "production": ("https://tika-production.ol.mit.edu", "production-apps"),
+    "production": "https://tika-production.ol.mit.edu",
 }
-TIKA_BASE_URL, TIKA_VAULT_APP_PATH = TIKA_ENVIRONMENTS.get(
-    DAGSTER_ENV, ("https://tika-qa.ol.mit.edu", "rc-apps")
-)
+TIKA_BASE_URL = TIKA_ENVIRONMENTS.get(DAGSTER_ENV, "https://tika-qa.ol.mit.edu")
 
 # Read at definition time, matching how this code location already loads other
 # static secrets. An unauthenticated Vault yields an empty token rather than
 # failing the whole location to load -- the same resilient-loading posture used
 # for Vault auth above. A run that actually needs Tika then fails on the call,
 # where the error is legible, instead of at import.
+#
+# The path is flat rather than environment-scoped on purpose. Each environment
+# authenticates to its own Vault (vault-$DAGSTER_ENV), and the tika stack writes
+# secret-operations/tika/access-token there from the same value it inlines as
+# the `expected` token in the APISIX route guarding that environment's Tika, so
+# a token read from this path always matches the gateway it will be sent to.
+# Reading the env-scoped secret-operations/{production-apps,rc-apps}/tika/
+# access-token is what broke this asset: the tika stack stopped writing those
+# paths, the Dagster Vault policy never granted them, and the denial below
+# turned into an empty token and a 401 on every extraction.
 try:
     tika_access_token = (
         vault.client.secrets.kv.v1.read_secret(
             mount_point="secret-operations",
-            path=f"{TIKA_VAULT_APP_PATH}/tika/access-token",
+            path="tika/access-token",
         )["data"]["value"]
         if vault_authenticated
         else ""
