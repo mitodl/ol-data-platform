@@ -15,8 +15,8 @@ Today three Dagster locations already POST to `/api/v1/webhooks/content_files/`:
 
 | Sender | Partitioned by |
 |---|---|
-| `dg_projects/openedx/openedx/assets/openedx.py:725` | `partitions_def` (per deployment, per course) |
-| `dg_projects/edxorg/edxorg/assets/openedx_course_archives.py:340` | `course_and_source_partitions` |
+| `dg_projects/openedx/openedx/assets/openedx.py:731` | `partitions_def` (per deployment, per course) |
+| `dg_projects/edxorg/edxorg/assets/openedx_course_archives.py:332` | `course_and_source_partitions` |
 | `dg_projects/canvas/canvas/assets/canvas.py:294` | `canvas_course_ids` (`DynamicPartitionsDefinition`) |
 
 All three send a **pointer**: `{course_id, course_readable_id, content_path, source}`. On receipt
@@ -76,12 +76,15 @@ one-element list, a batched/scheduled run sends N.
 **`content_path` is deliberately absent.** It points at a raw archive MIT Learn no longer reads.
 Carrying it would invite exactly the confusion this endpoint exists to remove.
 
-`readable_id` is the course/run identifier used as the pull's scope key, and must match the
-identifier in the corresponding `integrations__learn__*content_files` row. Getting this wrong is
-the failure mode from the podcast migration (`integrations__learn__podcasts`), where a dlt-derived
-id differed from MIT Learn's own derivation by a trailing slash and would have created duplicate
-resources instead of updating them. **Verify the derivation on both sides per source before
-enabling.**
+`readable_id` is the course/run identifier used as the pull's scope key, and must match
+`ContentFile.run.run_id` on the MIT Learn side — **not** `LearningResource.readable_id`, which is
+keyed at the course level and would unpublish every other run's files. This is what the existing
+webhook already sends as `course_readable_id` (`process_create_content_file_request` passes it
+straight through as `run_id=`), so the new payload keeps the same semantics under a new field name.
+Getting this wrong is the failure mode from the podcast migration (`integrations__learn__podcasts`),
+where a dlt-derived id differed from MIT Learn's own derivation by a trailing slash and would have
+created duplicate resources instead of updating them. **Verify the derivation on both sides per
+source before enabling.**
 
 ## 3. Receiver behaviour
 
@@ -101,9 +104,17 @@ source cannot reject an otherwise-valid batch. (Same resilience rule the `learni
 handler uses.)
 
 These tasks subclass `BaseWarehouseETLTask` from
-[mit-learn#3566](https://github.com/mitodl/mit-learn/pull/3566)
-(`learning_resources/lib/warehouse.py`), which already provides the Trino connection, `iter_rows`,
-and the watermark bookkeeping.
+[mit-learn#3807](https://github.com/mitodl/mit-learn/pull/3807)
+(`learning_resources/lib/warehouse.py`), which already provides the StarRocks connection,
+`iter_rows`, and the watermark bookkeeping (mit-learn#3566, the earlier Trino-backed version, was
+closed in favor of #3807's StarRocks rewrite).
+
+**Open for the implementer:** `iter_rows` currently only filters on `last_modified` (the
+incremental path) and `BaseWarehouseETLTask.run()` discards `**kwargs`, so neither supports a scope
+predicate yet. Landing the scoped pull needs new code on the mit-learn side: a scope predicate
+parameter on `iter_rows`, `run()` forwarding `source`/`readable_id` through to it, and confirming a
+scoped run does not advance the incremental watermark. Not designed here since it's mit-learn-side
+work.
 
 ## 4. The scoping problem — the part that needs new code
 
@@ -120,8 +131,13 @@ pruning globally from a single-course pull would unpublish the entire corpus.
 
 So the prune predicate must be scoped to the same key as the fetch:
 
-> prune content files whose `run.learning_resource.readable_id == readable_id` **and** which are
-> absent from this result set — never anything outside that course.
+> prune content files whose `run.run_id == readable_id` **and**
+> `run.learning_resource.etl_source == source` **and** which are absent from this result set —
+> never anything outside that course.
+
+Both fields are needed: `run_id` alone is not unique across sources (Open edX run keys and Canvas
+course/run pairs can collide), so the warehouse view must expose `etl_source` alongside the scope
+key for the receiver to filter on (see §9).
 
 This is the podcast full-sync hazard (`MIN_PODCASTS` / `MIN_EPISODES` in
 `assets/podcasts.py`) at a different granularity, and it deserves the same guard.
@@ -137,10 +153,11 @@ to "stale extra files" rather than "missing files."
 ## 5. Cadence — per asset, not one global answer
 
 Cadence is chosen per sending asset via Dagster automation conditions / freshness policies, not a
-hardcoded cron. All four senders are already partitioned per course, so per-partition triggering
-needs no restructuring.
+hardcoded cron. The three existing senders (openedx, edxorg, canvas) are already partitioned per
+course, so per-partition triggering needs no restructuring there; OCW's new sending asset (§8) will
+need this designed from scratch.
 
-**⚠ Constraint learned the hard way.** `dg_projects/openedx/openedx/assets/openedx.py:196`
+**⚠ Constraint learned the hard way.** `dg_projects/openedx/openedx/assets/openedx.py:194`
 documents an outage caused by exactly this:
 
 > Deliberately carries no `automation_condition`. An AutomationCondition is evaluated per
@@ -159,7 +176,7 @@ high-cardinality partitioned asset — this asset graph has already been taken d
 wrong.
 
 Existing pattern to build on: `_DBT_AUTOMATION_CONDITION = upstream_or_code_changes()` in
-`dg_projects/lakehouse/lakehouse/assets/lakehouse/dbt.py:36`.
+`dg_projects/lakehouse/lakehouse/assets/lakehouse/dbt.py:39`.
 
 ## 6. Deletes
 
@@ -200,7 +217,8 @@ Tracked by `tk-ocw-text-extraction-assets-integrations-learn-oc-8ff9b4`.
 | `SyncOpenEdXContentFilesTask` | `integrations.integrations__learn__content_files` |
 
 Neither model exists yet. Both must expose at minimum the scope key (`readable_id` of the owning
-course/run) plus the `ContentFile` fields MIT Learn persists — `key`, `title`, `description`,
+course/run), `etl_source` (needed by the §4 prune predicate to disambiguate scope keys across
+sources), plus the `ContentFile` fields MIT Learn persists — `key`, `title`, `description`,
 `url`, `file_type`, `content`, `content_title`, `content_author`, `content_language`,
 `content_type`, `image_src`, `uid` — and a `last_modified` for the incremental (`since`) path.
 Column names must match `learn_marts_contract.md` conventions.
