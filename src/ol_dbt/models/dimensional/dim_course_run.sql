@@ -58,7 +58,11 @@ with micromasters_courseruns as (
         , cr.courserun_is_live
         , cr.courserun_created_on
         , cs.course_readable_id
-        , er.examrun_semester as semester
+        -- Course runs with an embedded proctored-exam unit (rather than a dedicated
+        -- MicroMasters exam-run course object) have no micromasters_examruns match at all;
+        -- fall back to the course run's own tag, matching the semester derivation that
+        -- int__mitxonline__proctored_exam_grades used before this field moved here.
+        , coalesce(er.examrun_semester, cr.courserun_tag) as semester
         , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
         , cr.courserun_upgrade_deadline
@@ -188,7 +192,7 @@ with micromasters_courseruns as (
                         length(courserun_readable_id)
                         - strpos(reverse(courserun_readable_id), '+')
                     )
-                when regexp_like(courserun_readable_id, '^[^/]+/[^/]+/[^/]+')
+                when {{ regexp_like('courserun_readable_id', "'^[^/]+/[^/]+/[^/]+'") }}
                     then substring(
                         courserun_readable_id,
                         1,
