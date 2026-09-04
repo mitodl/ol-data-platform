@@ -1,13 +1,20 @@
-# Contributing to `learning_resources`
+# Contributing to `delivery`
 
-This code location extracts catalog data from external learning content providers and
-delivers it to MIT Learn. Currently it serves three delivery patterns:
+The DELIVERY code location owns the **push** axis of MIT Learn integration:
+assets that send catalog metadata to MIT Learn over its webhook API.
 
 | Pattern | Used by |
 |---|---|
-| Webhook push (REST API) | Sloan Executive Education, OVS Videos |
+| Webhook push (REST API) | Sloan Executive Education, MIT Climate, MIT PE, OLL, MIT edX programs |
 | Sensor-driven partitioned | OVS Videos (one asset execution per item ID) |
-| Trino-pull (Iceberg mart) | OCW, MITxOnline, xPRO, MIT edX _(migration in progress)_ |
+
+The **pull** axes are not owned by a code location. Warehouse-pull reads
+StarRocks over the MySQL protocol, and MV-serve is built and refreshed in
+WAREHOUSE; both are dbt-built surfaces governed by the contract docs. Do not
+add pull-side assets here.
+
+Extraction assets that predate the split (`sloan_course_metadata`, `video_api`,
+`video_metadata`) still live here and move on to INGEST later.
 
 ## Prerequisites
 
@@ -20,7 +27,7 @@ delivers it to MIT Learn. Currently it serves three delivery patterns:
 
 ```bash
 # From the ol-data-platform repo root
-cd dg_projects/learning_resources
+cd dg_projects/delivery
 
 # Create the virtual environment and install dependencies
 uv sync
@@ -56,7 +63,7 @@ bin/vault-login
 ### Running tests
 
 ```bash
-uv run pytest learning_resources_tests/ -v
+uv run pytest delivery_tests/ -v
 ```
 
 ---
@@ -64,8 +71,8 @@ uv run pytest learning_resources_tests/ -v
 ## Code Location Structure
 
 ```
-learning_resources/
-├── learning_resources/
+delivery/
+├── delivery/
 │   ├── assets/             # One file per data source
 │   │   ├── sloan_api.py         # Reference implementation — read this first
 │   │   ├── ovs_videos.py        # Sensor-driven partitioned asset
@@ -73,7 +80,7 @@ learning_resources/
 │   ├── lib/                # Shared utilities (not assets)
 │   ├── sensors/            # Discovery and cleanup sensors
 │   └── definitions.py      # Wires everything together
-├── learning_resources_tests/
+├── delivery_tests/
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -87,7 +94,7 @@ Follow the Sloan asset (`assets/sloan_api.py`) as the canonical reference.
 ### 1. Create the asset file
 
 ```python
-# learning_resources/assets/my_source.py
+# delivery/assets/my_source.py
 from dagster import AssetExecutionContext, AssetOut, multi_asset, Output
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
@@ -109,7 +116,7 @@ def my_source_metadata(context: AssetExecutionContext, my_source_api: ApiClientF
 ### 2. Register the asset and resource in `definitions.py`
 
 ```python
-from learning_resources.assets.my_source import my_source_metadata
+from delivery.assets.my_source import my_source_metadata
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 defs = Definitions(
@@ -182,15 +189,12 @@ def my_item_metadata(context: AssetExecutionContext, ...):
 ## Pattern 3: Adding a Trino-Pull Asset (new — OCW/OpenEdX migration)
 
 For large, batch-oriented sources that are materialized as Iceberg tables via
-`lakehouse` dbt models, the preferred pattern is a **Trino-pull asset** that
-reads from the Trino mart directly using `dagster-trino` or a lightweight Python
-client, then calls the MIT Learn webhook API with the resulting payload.
+dbt models, MIT Learn reads the StarRocks surface directly over the MySQL
+protocol rather than having Dagster push it. That is the warehouse-pull axis and
+it has no assets in this location. See `docs/learn_marts_contract.md`.
 
-This pattern is being introduced in Cohort 1 of the ETL migration. See
-`implementation_guide_01_db_catalog.md` for the full specification.
-
-A placeholder component stub exists at `learning_resources/defs/` for future
-`dg`-component based Trino assets.
+A placeholder component stub exists at `delivery/defs/` for future `dg`-component
+based delivery assets.
 
 ---
 
@@ -200,8 +204,8 @@ If your source is better served by a dlt pipeline (e.g., RSS feeds, structured
 file dumps, or sources with a dlt connector), add it to the `data_loading` code
 location instead. See `dg_projects/data_loading/` and its `README`.
 
-Use this code location (`learning_resources`) only for sources that produce MIT
-Learn catalog assets (courses, programs, content files).
+Use this code location (`delivery`) only for assets that push MIT Learn catalog
+data (courses, programs, content files) over the webhook API.
 
 ---
 

@@ -1,8 +1,8 @@
 """Tests for the shared HTML sanitizer used by MIT Learn webhook delivery."""
 
 import pytest
-from learning_resources.assets.mitpe import _row_to_resource
-from learning_resources.lib.sanitize import (
+from delivery.assets.mitpe import _row_to_resource
+from delivery.lib.sanitize import (
     ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
     ALLOWED_HTML_TAGS_WITH_LINKS,
     clean_html,
