@@ -25,6 +25,34 @@ log = logging.getLogger(__name__)
 
 # MIME types Tika handles well via the /tika endpoint.
 # Anything outside this set is likely to return empty text or garbage.
+#
+# The last four were added to close a gap against MIT Learn, which filters by
+# file EXTENSION against VALID_TEXT_FILE_TYPES rather than by MIME type. Files
+# it extracts today but whose MIME type was missing here would have been
+# silently dropped by any caller gating on this set:
+#
+#   application/json   .json  -- confirmed against a local Tika 3.2.2 to return
+#   application/x-tex  .tex      usable text rather than an empty body.
+#   text/x-tex         .tex
+#   text/rtf           .rtf  -- what the builtin mimetypes table answers for
+#                               .rtf. `application/rtf` below is what a host
+#                               with an /etc/mime.types answers, and callers
+#                               that pin to the builtin table (as the Open edX
+#                               asset does) would otherwise skip every RTF in
+#                               production while extracting them in dev.
+#
+# Both `.tex` spellings stay for the same class of reason: a caller reading the
+# host mime database can produce either. That divergence is the argument for
+# the parity test over MIT Learn's extension list, which is what caught it.
+#
+# Deliberately absent:
+#   text/csv   -- excluded from VALID_TEXT_FILE_TYPES. It appears only in
+#                 VALID_TUTOR_PROBLEM_FILE_TYPES, which is Canvas-specific:
+#                 Canvas needs an explicit folder mapping because its export is
+#                 structurally different. Open edX problems are a first-class
+#                 OLX block type and are already carried as blocks, so nothing
+#                 in the Open edX path needs `.csv`.
+#   text/vtt   -- subtitles, owned by the transcript parser rather than Tika.
 SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
     [
         "application/pdf",
@@ -38,9 +66,13 @@ SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
         "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/rtf",
+        "text/rtf",
         "application/epub+zip",
         "application/xml",
         "text/xml",
+        "application/json",
+        "application/x-tex",
+        "text/x-tex",
     ]
 )
 

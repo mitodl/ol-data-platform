@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-bigquery
   replication_method: n/a
   connections:
-  - name: Global Alumni BigQuery → S3 Data Lake
+  - environment: production
+    name: Global Alumni BigQuery → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:

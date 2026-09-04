@@ -46,6 +46,7 @@ UNIT: dict[str, Any] = {
         "replication_method": "cursor",
         "connections": [
             {
+                "environment": "production",
                 "name": "MITx Online Open edX DB → S3 Data Lake",
                 "status": "active",
                 "sync_interval_hours": 12,

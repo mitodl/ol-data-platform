@@ -4,6 +4,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , renamed as (
 
     select
@@ -13,7 +15,7 @@ with source as (
             , app_label
             , model
         ) as contenttype_full_name
-    from source
+    from most_recent_source
 
 )
 

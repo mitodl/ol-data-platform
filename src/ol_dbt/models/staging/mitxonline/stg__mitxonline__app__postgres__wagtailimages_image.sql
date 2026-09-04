@@ -2,6 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__wagtailimages_image') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , cleaned as (
     select
         id as image_id
@@ -20,7 +22,7 @@ with source as (
         , focal_point_height as image_focal_point_height
         , uploaded_by_user_id
         , description as image_description
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

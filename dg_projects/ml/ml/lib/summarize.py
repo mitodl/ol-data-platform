@@ -10,10 +10,10 @@ from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
-JOIN_COLS = ["source_slug", "conversation_ref"]
+JOIN_COLS = ["feedback_conversation_pk"]
 
 SUMMARIZE_CHECKPOINT_SCHEMA = {
-    **dict.fromkeys(JOIN_COLS, pl.String),
+    **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
     "turn_count": pl.Int64,
     "conversation_summary": pl.String,
     "summary_model_version": pl.String,
@@ -196,9 +196,9 @@ def summarize_conversations(
     """Summarize each conversation that clears the skip rule.
 
     Args:
-        df: a frame with (at least) source_slug, conversation_ref, turn_count,
-            conversation_text, conversation_text_chars columns, e.g.
-            int__feedback__conversation.
+        df: a frame with (at least) feedback_conversation_pk, source_slug,
+            conversation_ref, turn_count, conversation_text, conversation_text_chars
+            columns, e.g. int__feedback__conversation.
         client: an object with a `summarize(conversation_text: str) -> str` method,
             e.g. an AnthropicSummaryClient wrapping LLMClientFactory.
         errors: if given, each failure's message is appended here -- lets a caller
@@ -206,9 +206,9 @@ def summarize_conversations(
             this function's return type.
 
     Returns:
-        pl.DataFrame: source_slug, conversation_ref, conversation_summary,
-            summary_model_version, embedding_input, turn_count - keyed the same way
-            feedback_conversation_pk is minted, for afact_feedback_conversation to
+        pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
+            conversation_summary, summary_model_version, embedding_input, turn_count -
+            keyed by feedback_conversation_pk, for afact_feedback_conversation to
             left-join. conversation_summary stays null for skipped rows;
             summary_model_version is the "was this LLM-generated" signal. A
             conversation whose LLM call raises is dropped from the output entirely
@@ -216,6 +216,7 @@ def summarize_conversations(
             feedback_summaries, it's picked up again as new on the next run.
     """
     rows = df.to_dicts()
+    feedback_conversation_pks: list[str] = []
     source_slugs: list[str] = []
     conversation_refs: list[str] = []
     turn_counts: list[int] = []
@@ -259,6 +260,7 @@ def summarize_conversations(
             summaries.append(None)
             model_versions.append(None)
             embedding_inputs.append("concatenated_turns")
+        feedback_conversation_pks.append(row["feedback_conversation_pk"])
         source_slugs.append(row["source_slug"])
         conversation_refs.append(row["conversation_ref"])
         turn_counts.append(row["turn_count"])
@@ -267,6 +269,9 @@ def summarize_conversations(
     # so the surviving rows no longer line up with df's original row order/count.
     return pl.DataFrame(
         {
+            "feedback_conversation_pk": pl.Series(
+                feedback_conversation_pks, dtype=pl.String
+            ),
             "source_slug": pl.Series(source_slugs, dtype=pl.String),
             "conversation_ref": pl.Series(conversation_refs, dtype=pl.String),
             "turn_count": pl.Series(turn_counts, dtype=pl.Int64),
@@ -292,10 +297,17 @@ def checkpoint_chunk(
     "ol_warehouse_production_intermediate.feedback_summaries". The table is
     registered in non_dbt_singleton_tables() (ol_orchestrate.lib.iceberg_maintenance)
     so nightly maintenance expires the resulting one-snapshot-per-chunk history.
+
+    create_table_if_not_exists rather than load_table: a brand-new deployment (or a
+    dropped dev table) has no feedback_summaries table yet, and this call -- not the
+    io_manager's write of the asset's final return -- is the first write of any run,
+    so it must be able to bootstrap the table itself.
     """
     if chunk_df.height == 0:
         return
-    table = catalog.load_table(table_identifier)
+    table = catalog.create_table_if_not_exists(
+        table_identifier, schema=chunk_df.to_arrow().schema
+    )
     table.upsert(
         df=chunk_df.to_arrow(),
         join_cols=JOIN_COLS,

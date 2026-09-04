@@ -3,7 +3,7 @@
 import os
 from datetime import UTC, datetime
 from functools import partial
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from dagster import (
     daily_partitioned_config,
@@ -22,6 +22,7 @@ from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.tika import TikaResource
 
 from openedx.components import OpenEdxDeploymentComponent
 from openedx.jobs.normalize_logs import (
@@ -45,9 +46,43 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
-dagster_env: Literal["dev", "ci", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
-    "DAGSTER_ENVIRONMENT", DAGSTER_ENV
+# cast rather than `# type: ignore`: mypy resolves this assignment differently
+# depending on how many files are in the check set, so a blanket ignore reads as
+# "unused" when the hook runs on changed files only and as "required" when it
+# runs over the whole repo. The cast is correct under both.
+dagster_env: Literal["dev", "ci", "qa", "production"] = cast(
+    'Literal["dev", "ci", "qa", "production"]',
+    os.environ.get("DAGSTER_ENVIRONMENT", DAGSTER_ENV),
 )
+
+# Tika text extraction. Host and Vault path are per environment; see
+# ol_orchestrate/resources/tika.py and ol-infrastructure applications/tika/.
+# Only production has its own deployment -- everything else points at QA, which
+# is deliberate: a dev run extracting text is harmless, and standing up a third
+# Tika for it would not change the result.
+TIKA_ENVIRONMENTS = {
+    "production": ("https://tika-production.ol.mit.edu", "production-apps"),
+}
+TIKA_BASE_URL, TIKA_VAULT_APP_PATH = TIKA_ENVIRONMENTS.get(
+    DAGSTER_ENV, ("https://tika-qa.ol.mit.edu", "rc-apps")
+)
+
+# Read at definition time, matching how this code location already loads other
+# static secrets. An unauthenticated Vault yields an empty token rather than
+# failing the whole location to load -- the same resilient-loading posture used
+# for Vault auth above. A run that actually needs Tika then fails on the call,
+# where the error is legible, instead of at import.
+try:
+    tika_access_token = (
+        vault.client.secrets.kv.v1.read_secret(
+            mount_point="secret-operations",
+            path=f"{TIKA_VAULT_APP_PATH}/tika/access-token",
+        )["data"]["value"]
+        if vault_authenticated
+        else ""
+    )
+except Exception:  # noqa: BLE001 (resilient loading, as above)
+    tika_access_token = ""
 
 
 def s3_uploads_bucket(
@@ -160,6 +195,10 @@ shared_resources = {
     "vault": vault,
     "s3": S3Resource(),
     "duckdb": DuckDBResource.configure_at_launch(),
+    "tika": TikaResource(
+        base_url=TIKA_BASE_URL,
+        access_token=tika_access_token,
+    ),
     "learn_api": ApiClientFactory(
         deployment="mit-learn",
         client_class="MITLearnApiClient",

@@ -15,9 +15,13 @@ class _FakeSummaryClient:
 
 
 def _conversation_row(**overrides: object) -> dict[str, object]:
+    conversation_ref = overrides.get("conversation_ref", "1")
     row = {
+        # Distinct from conversation_ref -- these tests don't reimplement dbt's
+        # surrogate-key hash, just a fake, stable, per-conversation pk.
+        "feedback_conversation_pk": f"pk-{conversation_ref}",
         "source_slug": "zendesk",
-        "conversation_ref": "1",
+        "conversation_ref": conversation_ref,
         "turn_count": 2,
         "conversation_text": "turn one\n---\nturn two",
         "conversation_text_chars": 600,
@@ -102,6 +106,7 @@ def test_filter_unsummarized_drops_already_summarized_rows_with_same_turn_count(
     )
     already_summarized_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [2],
@@ -152,6 +157,7 @@ def test_filter_unsummarized_resubmits_conversations_with_new_turns() -> None:
     source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=3)])
     already_summarized_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [2],
@@ -168,6 +174,7 @@ def test_filter_unsummarized_resubmits_on_stale_model_version() -> None:
     source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=2)])
     already_summarized_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [2],
@@ -189,6 +196,7 @@ def test_filter_unsummarized_does_not_resubmit_skipped_rows_on_model_change() ->
     source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
     already_summarized_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [1],
@@ -271,9 +279,11 @@ def test_summarize_conversations_treats_a_none_summary_as_a_failure() -> None:
 
 
 def _summary_row(**overrides: object) -> dict[str, object]:
+    conversation_ref = overrides.get("conversation_ref", "1")
     row = {
+        "feedback_conversation_pk": f"pk-{conversation_ref}",
         "source_slug": "zendesk",
-        "conversation_ref": "1",
+        "conversation_ref": conversation_ref,
         "turn_count": 3,
         "conversation_summary": "a summary",
         "summary_model_version": "claude-haiku-4-5",
@@ -294,10 +304,14 @@ class _FakeTable:
 class _FakeCatalog:
     def __init__(self, table: _FakeTable) -> None:
         self._table = table
-        self.load_calls: list[str] = []
+        self.create_calls: list[str] = []
 
-    def load_table(self, identifier: str) -> _FakeTable:
-        self.load_calls.append(identifier)
+    def create_table_if_not_exists(
+        self,
+        identifier: str,
+        **kwargs: object,  # noqa: ARG002
+    ) -> _FakeTable:
+        self.create_calls.append(identifier)
         return self._table
 
 
@@ -308,7 +322,7 @@ def test_checkpoint_chunk_upserts_a_non_empty_chunk() -> None:
 
     summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", chunk_df)
 
-    assert catalog.load_calls == ["some_db.feedback_summaries"]
+    assert catalog.create_calls == ["some_db.feedback_summaries"]
     assert len(table.upserts) == 1
     assert table.upserts[0]["join_cols"] == summarize.JOIN_COLS
 
@@ -317,12 +331,16 @@ def test_checkpoint_chunk_skips_empty_chunks_without_touching_the_catalog() -> N
     table = _FakeTable()
     catalog = _FakeCatalog(table)
     empty_df = pl.DataFrame(
-        schema={"source_slug": pl.String, "conversation_ref": pl.String}
+        schema={
+            "feedback_conversation_pk": pl.String,
+            "source_slug": pl.String,
+            "conversation_ref": pl.String,
+        }
     )
 
     summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", empty_df)
 
-    assert catalog.load_calls == []
+    assert catalog.create_calls == []
     assert table.upserts == []
 
 

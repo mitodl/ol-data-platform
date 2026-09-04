@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-postgres
   replication_method: xmin
   connections:
-  - name: MicroMasters Production App DB → S3 Data Lake
+  - environment: production
+    name: MicroMasters Production App DB → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:
