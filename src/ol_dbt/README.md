@@ -161,42 +161,35 @@ ol-dbt diff --old m_old --new m_new -k id --format json
 
 #### Choosing the primary key
 
-`--primary-key` is how rows get paired across the two sides, so it has to be the
-model's **actual grain**. Pass every column of a composite key — either
-comma-separated (`-k a,b,c`) or by repeating the flag (`-k a -k b -k c`). The two
-forms are interchangeable.
+`--primary-key` pairs rows across the two sides, so it has to be the model's
+**actual grain**. A non-unique key joins many-to-many and the mismatch counts
+become an artifact of the join rather than a real difference: on one 20,908-row
+mart, keying on a single column of a three-column grain reported 65,000+
+mismatches and 7,826 rows "missing", where the correct composite key found one
+genuinely differing column, 8,891 rows, and nothing missing.
 
-Note that `-k a b c` does **not** work. Only the first token is consumed as a key;
-the rest are read as positional arguments, so you get a confusing error about
-`--dbt-dir` rather than anything mentioning primary keys.
+Composite keys take either form, interchangeably:
 
-Repeated spellings of one column collapse (`-k id,ID` is just `id`), and the tool
-fails fast rather than degrading quietly in two cases: passing the flag with
-nothing usable in it (`-k ""`, `-k ","`) is an error rather than being read as "no
-key given", and a key column that is not present in both relations is reported by
-name — with the common column list — instead of surfacing later as a raw SQL
-"column not found".
+```
+-k a,b,c          # comma-separated
+-k a -k b -k c    # repeated flag
+```
 
-Getting the grain right matters more than it looks. A key that is not unique pairs
-rows many-to-many, and the resulting mismatch counts are an artifact of the join
-rather than a real difference. For example, on a 20,908-row mart whose real grain is
-three columns, keying on just one of them reported 65,000+ mismatches across eight
-columns and 7,826 rows as "missing" — all noise. The correct composite key reported
-the truth: one genuinely differing column, 8,891 rows, nothing missing on either
-side.
+`-k a b c` does **not** work — only `a` is read as a key, the rest are consumed
+as positional arguments, and the resulting error mentions `--dbt-dir` rather
+than primary keys.
 
-If you are unsure of the grain, look for a
-`dbt_expectations.expect_compound_columns_to_be_unique` test on the model — its
-column list is the key you want. (That dotted spelling is what appears in the model
-YAML; the underscored form only shows up in compiled test names, so grep for the
-dotted one.)
+To find the grain, look for a `dbt_expectations.expect_compound_columns_to_be_unique`
+test on the model; its column list is the key you want. (Grep the dotted
+spelling — the underscored form only appears in compiled test names.) Failing
+that, a single column is safe alone only with **both** a passing `unique` and a
+passing `not_null` test: `unique` ignores NULLs, and the single-column path joins
+on `a.k = b.k`, which never matches NULL to NULL, so those rows land in the
+"missing from" buckets on both sides instead of pairing up.
 
-Failing that, a single column is safe to use alone only if it has **both** a passing
-`unique` **and** a passing `not_null` test. `unique` on its own is not enough: dbt's
-`unique` test ignores NULLs, so a nullable column can pass it and still have NULL
-values — and the single-column comparison path joins with a plain `a.k = b.k`, which
-never matches NULL to NULL. Those rows land in the "missing from" buckets on both
-sides rather than pairing up.
+Duplicate spellings collapse (`-k id,ID` is just `id`), and the tool fails fast
+rather than degrading quietly on an empty key (`-k ""`, `-k ","`) or a key column
+absent from either relation (reported by name, with the common column list).
 
 `--old-raw`/`--new-raw` treat that side as a literal existing table rather than a
 dbt model — required for a snapshot table (`ol-dbt local snapshot` output) or any
