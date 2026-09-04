@@ -5,7 +5,7 @@ import os
 from typing import Any, Protocol
 
 import polars as pl
-from anthropic import Anthropic, AnthropicBedrockMantle
+from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
@@ -46,6 +46,14 @@ SKIP_CHAR_THRESHOLD = 500
 # this to a matching id (e.g. "gpt-4o-mini") -- there is no one id valid everywhere.
 SUMMARY_MODEL_VERSION = os.environ.get("SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
 
+# Bedrock uses its own model id namespace (a Bedrock model or inference-profile
+# id, e.g. "global.anthropic.claude-haiku-4-5-20251001-v1:0"), never the plain
+# Anthropic API id above -- client_class="bedrock" needs this override instead.
+BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
+    "BEDROCK_SUMMARY_MODEL_VERSION",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+)
+
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
     "view. Focus on the problem reported and its resolution if one is present. "
@@ -64,13 +72,17 @@ class SummaryClient(Protocol):
 class AnthropicSummaryClient:
     """Adapts an Anthropic-compatible client to the SummaryClient protocol.
 
-    Also covers AnthropicBedrockMantle, which exposes the same messages.create
+    Also covers AnthropicBedrock, which exposes the same messages.create
     interface but is not an Anthropic subclass.
     """
 
-    def __init__(self, client: Anthropic | AnthropicBedrockMantle) -> None:
+    def __init__(self, client: Anthropic | AnthropicBedrock) -> None:
         self._client = client
-        self.model_version = SUMMARY_MODEL_VERSION
+        self.model_version = (
+            BEDROCK_SUMMARY_MODEL_VERSION
+            if isinstance(client, AnthropicBedrock)
+            else SUMMARY_MODEL_VERSION
+        )
 
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
@@ -124,7 +136,7 @@ def build_summary_client(
     llm: LLMClientFactory,
 ) -> AnthropicSummaryClient | OpenAISummaryClient:
     client = llm.get_client()
-    if isinstance(client, Anthropic | AnthropicBedrockMantle):
+    if isinstance(client, Anthropic | AnthropicBedrock):
         return AnthropicSummaryClient(client)
     return OpenAISummaryClient(client)
 

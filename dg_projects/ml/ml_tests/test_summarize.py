@@ -2,7 +2,7 @@
 
 import polars as pl
 import pytest
-from anthropic import Anthropic
+from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import summarize
 from openai import OpenAI
 
@@ -150,6 +150,27 @@ def test_build_summary_client_uses_configured_model_for_anthropic(
 
     assert isinstance(client, summarize.AnthropicSummaryClient)
     assert client.model_version == "claude-haiku-4-5"
+
+
+def test_build_summary_client_uses_bedrock_model_for_bedrock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SUMMARY_MODEL_VERSION is an Anthropic API id and never valid on Bedrock, so
+    the Bedrock path must use BEDROCK_SUMMARY_MODEL_VERSION instead.
+    """
+    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
+    monkeypatch.setattr(
+        summarize,
+        "BEDROCK_SUMMARY_MODEL_VERSION",
+        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    )
+
+    client = summarize.build_summary_client(
+        _FakeLLM(AnthropicBedrock(aws_region="us-east-1"))
+    )
+
+    assert isinstance(client, summarize.AnthropicSummaryClient)
+    assert client.model_version == "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def test_filter_unsummarized_resubmits_conversations_with_new_turns() -> None:
