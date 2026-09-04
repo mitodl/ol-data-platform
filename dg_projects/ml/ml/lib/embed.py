@@ -57,10 +57,10 @@ class EmbeddingClient(Protocol):
 class OpenAIEmbeddingClient:
     """Adapts an OpenAI-compatible client to the EmbeddingClient protocol."""
 
-    def __init__(self, client: OpenAI) -> None:
+    def __init__(self, client: OpenAI, model_version: str, dim: int) -> None:
         self._client = client
-        self.model_version = EMBEDDING_MODEL_VERSION
-        self.dim = EMBEDDING_DIM
+        self.model_version = model_version
+        self.dim = dim
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         response = self._client.embeddings.create(
@@ -75,7 +75,17 @@ class OpenAIEmbeddingClient:
         return [item.embedding for item in ordered]
 
 
-def build_embedding_client(llm: LLMClientFactory) -> OpenAIEmbeddingClient:
+def build_embedding_client(
+    llm: LLMClientFactory,
+    model_version: str | None = None,
+    dim: int | None = None,
+) -> OpenAIEmbeddingClient:
+    """Build the client whose model_version/dim come from run config, else a default.
+
+    model_version/dim are the feedback_embeddings asset's own per-run Config
+    fields (FeedbackEmbeddingsConfig) -- None means the run didn't override them,
+    so EMBEDDING_MODEL_VERSION/EMBEDDING_DIM apply.
+    """
     client = llm.get_client()
     if not isinstance(client, OpenAI):
         # Anthropic has no embeddings endpoint at all -- unlike the summary asset,
@@ -87,7 +97,11 @@ def build_embedding_client(llm: LLMClientFactory) -> OpenAIEmbeddingClient:
             "'openai_compatible'."
         )
         raise TypeError(msg)
-    return OpenAIEmbeddingClient(client)
+    return OpenAIEmbeddingClient(
+        client,
+        model_version or EMBEDDING_MODEL_VERSION,
+        dim or EMBEDDING_DIM,
+    )
 
 
 def resolve_embedding_text(

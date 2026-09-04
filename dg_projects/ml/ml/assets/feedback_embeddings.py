@@ -47,6 +47,20 @@ class FeedbackEmbeddingsConfig(Config):
             "candidates instead of re-hitting already-embedded rows."
         ),
     )
+    embedding_model_version: str | None = Field(
+        default=None,
+        description=(
+            "Override the embedding model id for this run. Unset uses "
+            "EMBEDDING_MODEL_VERSION (ml.lib.embed)."
+        ),
+    )
+    embedding_dim: int | None = Field(
+        default=None,
+        description=(
+            "Override the embedding vector dimension for this run. Unset uses "
+            "EMBEDDING_DIM (ml.lib.embed)."
+        ),
+    )
 
 
 @asset(
@@ -122,7 +136,9 @@ def feedback_embeddings(
     # to re-submit a conversation whose stored embedding_model_version or
     # embedding_dim has since gone stale (a model change or dimension sweep), not
     # just a turn_count or embedding_input change.
-    client = build_embedding_client(embedding_llm)
+    client = build_embedding_client(
+        embedding_llm, config.embedding_model_version, config.embedding_dim
+    )
     unembedded_df = filter_unembedded(
         resolved_df,
         already_embedded_df,
@@ -179,6 +195,8 @@ def feedback_embeddings(
 
     context.add_output_metadata(
         {
+            "embedding_model_version": MetadataValue.text(client.model_version),
+            "embedding_dim": MetadataValue.int(client.dim),
             "embedded_count": MetadataValue.int(embeddings_df.height),
             "dropped_count": MetadataValue.int(dropped_count),
             "already_embedded_count": MetadataValue.int(already_embedded_df.height),

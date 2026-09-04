@@ -248,6 +248,40 @@ def test_build_embedding_client_rejects_non_openai_clients() -> None:
         embed.build_embedding_client(_FakeLLM())
 
 
+class _FakeLLM:
+    """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
+
+    def __init__(self, client: object) -> None:
+        self._client = client
+
+    def get_client(self) -> object:
+        return self._client
+
+
+def test_build_embedding_client_uses_default_model_and_dim() -> None:
+    client = embed.build_embedding_client(
+        _FakeLLM(openai.OpenAI(api_key="sk-test"))  # pragma: allowlist secret
+    )
+
+    assert client.model_version == embed.EMBEDDING_MODEL_VERSION
+    assert client.dim == embed.EMBEDDING_DIM
+
+
+def test_build_embedding_client_honors_model_version_and_dim_override() -> None:
+    """FeedbackEmbeddingsConfig.embedding_model_version/embedding_dim (passed
+    through as model_version/dim here) override the module defaults -- how a run
+    tries a different model or dimension without a code change (§B bake-off).
+    """
+    client = embed.build_embedding_client(
+        _FakeLLM(openai.OpenAI(api_key="sk-test")),  # pragma: allowlist secret
+        model_version="text-embedding-3-small",
+        dim=256,
+    )
+
+    assert client.model_version == "text-embedding-3-small"
+    assert client.dim == 256
+
+
 class _FakeTable:
     def __init__(self) -> None:
         self.upserts: list[dict[str, object]] = []
