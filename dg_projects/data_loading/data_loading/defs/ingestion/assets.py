@@ -20,6 +20,7 @@ from ol_dlt.sources import (
     mitpe,
     oll,
     podcast_rss,
+    youtube,
 )
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
@@ -79,6 +80,11 @@ keycloak_assets = build_ingest_assets(
     name="keycloak_ingest",
     source=keycloak.build_source(),
     pipeline=keycloak.keycloak_pipeline,
+)
+youtube_assets = build_ingest_assets(
+    name="youtube_ingest",
+    source=youtube.build_source(),
+    pipeline=youtube.youtube_pipeline,
 )
 
 
@@ -140,6 +146,7 @@ defs = Definitions(
             mit_edx_programs_assets,
             podcast_rss_assets,
             keycloak_assets,
+            youtube_assets,
             *edxorg_s3_table_assets,
         ]
     ),
