@@ -51,9 +51,13 @@ wiring into four credential/engine-gated phases.
 - **JSON output convention:** build a flat `list[dict]`, `print(json.dumps(data, indent=2))`
   (plain `print`, never rich). Text mode uses `console.print` + a trailing rich `Summary:`
   line. Dual consoles: `console = Console()`, `err_console = Console(stderr=True)`.
-- **Severity enums:** `impact` uses `AlertLevel(StrEnum) = BREAKING|WARNING|INFO`; `validate`
-  uses `Severity(StrEnum) = ERROR|WARNING|INFO`. Exit `1` when the top severity is present,
-  bare `return` for the clean/no-op case.
+- **Severity enums:** `impact` uses `AlertLevel(StrEnum) = BREAKING|KEY_REGEN|WARNING|INFO`;
+  `validate` uses `Severity(StrEnum) = ERROR|WARNING|INFO`. Exit `1` when the top severity is
+  present, bare `return` for the clean/no-op case. `KEY_REGEN` is deliberately outside that
+  exit-code rule: it reports a full-refresh model whose `generate_surrogate_key` inputs
+  changed, orphaning the FK copies its incremental descendants hold. Nothing in the PR is
+  wrong — the follow-up is a production rebuild, which `lakehouse.lib.surrogate_key_drift`
+  performs on the first build after merge.
 - **dbt invocation:** always `subprocess.run([...], cwd=str(dbt_dir))`, argv list, no
   `dbtRunner`. `run.py` passes `--profiles-dir str(dbt_dir)`; `impact`/`validate` rely on
   cwd. `DBT_PROFILES_DIR` is not set by the CLI.
@@ -216,7 +220,9 @@ run `dbt parse`/`compile` against `dev_local`, no warehouse network):
    the BREAKING/WARNING column-level blast radius as a **PR comment** (create-or-update a
    single sticky comment). BREAKING → non-zero (or convert to a required-review signal — decide
    at impl; default: annotate, do not hard-fail, to avoid blocking legitimate breaking changes
-   that are reviewed).
+   that are reviewed). KEY_REGEN alerts get their own section in that comment: they change no
+   column, so a reviewer scanning the collapsed details for a renamed field would not find
+   them.
 4. **dimensional-layering-lint** — see §5 (runs as `ol-dbt validate --only dimensional_layering`
    or a dedicated flag).
 5. **sqlfluff-lint** — run the same sqlfluff config used in pre-commit (today pre-commit only).

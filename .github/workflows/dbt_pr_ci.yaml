@@ -110,16 +110,38 @@ jobs:
           } catch (e) {
             // No changed models / non-JSON output → treat as no impact.
           }
-          const counts = { BREAKING: 0, WARNING: 0, INFO: 0 };
+          const counts = { BREAKING: 0, KEY_REGEN: 0, WARNING: 0, INFO: 0 };
           for (const a of alerts) { counts[a.level] = (counts[a.level] || 0) + 1; }
-          const emoji = { BREAKING: '🔴', WARNING: '⚠️', INFO: 'ℹ️' };
+          const emoji = { BREAKING: '🔴', KEY_REGEN: '🔑', WARNING: '⚠️', INFO: 'ℹ️' };
 
           let body = `${marker}\n## 🔎 ol-dbt impact — column-level blast radius\n\n`;
           if (alerts.length === 0) {
             body += '✅ No column-level downstream impact detected for the changed models.';
           } else {
-            body += `**${counts.BREAKING} breaking**, **${counts.WARNING} warning**, ${counts.INFO} info` +
+            body += `**${counts.BREAKING} breaking**, **${counts.KEY_REGEN} surrogate-key regeneration**, ` +
+                    `**${counts.WARNING} warning**, ${counts.INFO} info` +
                     ` across ${alerts.length} changed model(s).\n\n`;
+
+            // Surrogate-key drift gets its own section rather than a line in the
+            // collapsed list: it changes no column, so a reviewer scanning the
+            // details for a renamed field would never look for it — and unlike the
+            // other levels the follow-up is a production rebuild, not a code edit.
+            const keyRegen = alerts.filter(a => a.level === 'KEY_REGEN');
+            for (const a of keyRegen) {
+              const change = (a.column_changes || [])[0] || {};
+              const models = (a.downstream || []).map(d => d.model).join(' ');
+              body += `### 🔑 \`${a.changed_model}.${change.column}\` is hashed from different inputs\n\n`;
+              body += `\`${change.related || ''}\`\n\n`;
+              body += 'Every existing value changes on the next build, orphaning the copies ' +
+                      'these incremental models hold:\n\n';
+              for (const d of a.downstream || []) {
+                body += `- \`${d.model}\` (\`${(d.affected_columns || []).join(', ')}\`)\n`;
+              }
+              body += '\nThe production build repairs this automatically on the first run after ' +
+                      'merge (`lakehouse.lib.surrogate_key_drift`). To repair another environment ' +
+                      `by hand: \`dbt build --full-refresh --select ${models}\`.\n\n`;
+            }
+
             body += '<details><summary>Details</summary>\n\n';
             for (const a of alerts) {
               const cols = (a.column_changes || []).map(c => c.column).filter(Boolean).join(', ');
