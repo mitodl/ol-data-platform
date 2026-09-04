@@ -93,10 +93,13 @@ created duplicate resources instead of updating them. **Verify the derivation on
 source before enabling.**
 
 **Canvas:** the sender computes `readable_id`, not Learn. Learn's own derivation is
-`f"{course_folder}-{course_code}"` (`learning_resources/etl/canvas.py:138`); the Dagster Canvas
-sender has `course_id` and `metadata["course_code"]` available but does not currently compose
-them into this form. The new Canvas sending asset must build `readable_id` this same way before
-sending, so it matches `LearningResource.readable_id` on receipt.
+`f"{course_folder}-{course_code}"` (`learning_resources/etl/canvas.py:138`), where `course_folder`
+is just `str(course_id)` — Learn's `canvas_course_folder()` derives it from the archive's S3 key,
+but its own docstring says that value *is* the Canvas course id, it's just reached via the archive
+path today. So the formula the new sender builds is `f"{course_id}-{course_code}"`, using the
+`course_id` and `metadata["course_code"]` it already has; it does not need `course_folder` as a
+separate lookup. The new Canvas sending asset must build `readable_id` this way before sending, so
+it matches `LearningResource.readable_id` on receipt.
 
 ## 3. Receiver behaviour
 
