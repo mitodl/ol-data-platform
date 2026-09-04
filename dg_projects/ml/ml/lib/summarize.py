@@ -5,7 +5,7 @@ import os
 from typing import Any, Protocol
 
 import polars as pl
-from anthropic import Anthropic, AnthropicBedrockMantle
+from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
@@ -64,11 +64,11 @@ class SummaryClient(Protocol):
 class AnthropicSummaryClient:
     """Adapts an Anthropic-compatible client to the SummaryClient protocol.
 
-    Also covers AnthropicBedrockMantle, which exposes the same messages.create
+    Also covers AnthropicBedrock, which exposes the same messages.create
     interface but is not an Anthropic subclass.
     """
 
-    def __init__(self, client: Anthropic | AnthropicBedrockMantle) -> None:
+    def __init__(self, client: Anthropic | AnthropicBedrock) -> None:
         self._client = client
         self.model_version = SUMMARY_MODEL_VERSION
 
@@ -124,7 +124,7 @@ def build_summary_client(
     llm: LLMClientFactory,
 ) -> AnthropicSummaryClient | OpenAISummaryClient:
     client = llm.get_client()
-    if isinstance(client, Anthropic | AnthropicBedrockMantle):
+    if isinstance(client, Anthropic | AnthropicBedrock):
         return AnthropicSummaryClient(client)
     return OpenAISummaryClient(client)
 
