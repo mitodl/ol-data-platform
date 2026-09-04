@@ -23,6 +23,12 @@ All three send a **pointer**: `{course_id, course_readable_id, content_path, sou
 MIT Learn fires `ingest_edx_run_archive` (or `ingest_canvas_course` for Canvas) — i.e. the message
 means *"a new archive is at this path, go extract it yourself."* **MIT Learn does the extraction.**
 
+**Known gap in the current Canvas sender:** `course_readable_id` is only set when Canvas's
+`sis_course_id` is truthy (`dg_projects/canvas/canvas/assets/canvas.py:283-286`) — Learn rejects a
+null value, so some Canvas courses never carry this field today. The new endpoint closes this gap
+rather than inheriting it: §2 has the Canvas sender compute `readable_id` itself from
+`course_id`/`course_code`, so it no longer depends on `sis_course_id` being set.
+
 Cohort 4 inverts that: the platform runs Tika extraction and publishes
 `integrations__learn__ocw_content_files` / `integrations__learn__content_files`, and MIT Learn
 *consumes* extracted text. The message has to change meaning from "go extract" to
@@ -86,6 +92,12 @@ where a dlt-derived id differed from MIT Learn's own derivation by a trailing sl
 created duplicate resources instead of updating them. **Verify the derivation on both sides per
 source before enabling.**
 
+**Canvas:** the sender computes `readable_id`, not Learn. Learn's own derivation is
+`f"{course_folder}-{course_code}"` (`learning_resources/etl/canvas.py:138`); the Dagster Canvas
+sender has `course_id` and `metadata["course_code"]` available but does not currently compose
+them into this form. The new Canvas sending asset must build `readable_id` this same way before
+sending, so it matches `LearningResource.readable_id` on receipt.
+
 ## 3. Receiver behaviour
 
 For each entry, enqueue a **scoped** pull rather than doing work in the request:
@@ -141,14 +153,25 @@ key for the receiver to filter on (see §9).
 
 This is the podcast full-sync hazard (`MIN_PODCASTS` / `MIN_EPISODES` in
 `assets/podcasts.py`) at a different granularity, and it deserves the same guard.
-`content_file_count` in the payload is that guard: the platform states how many rows it published,
-and the task **refuses to prune** if the warehouse returns materially fewer. A course legitimately
-going to zero files is rare enough to be worth an explicit override rather than a silent mass
-unpublish.
+`content_file_count` in the payload is that guard: the platform states how many rows it published
+for this course, and the task compares that against what it actually reads back from the warehouse
+view for the same scope key. Since both numbers come from the same publish event, any gap between
+them is a read-consistency skew (StarRocks/Iceberg catalog cache not yet refreshed, a dbt rebuild
+of the view in flight, etc.), not a legitimate content change — a course that really did shrink
+would already show the smaller count in `content_file_count` itself.
 
-**Open for the implementer:** whether `content_file_count` mismatch should abort the whole pull or
-merely skip pruning while still upserting. Skipping the prune is the safer default — it degrades
-to "stale extra files" rather than "missing files."
+**Decision: any mismatch, not just a "material" one, skips the prune** (still upserts the rows it
+did read). The task never aborts the pull outright on a count mismatch. This is the strict
+direction on purpose — the alternative (tolerating a small gap) risks unpublishing files that
+still exist but weren't visible yet in the read, which is exactly the podcast-migration failure
+mode above; the cost of being strict is that pruning stalls on any catalog-timing hiccup rather
+than clean-deleting the same run, so a lingering-stale-file backlog needs some other cleanup path
+(not designed here) rather than relying on this guard to eventually catch up.
+
+**Still open:** a course legitimately going to zero files has no explicit override path — as
+written, the strict-mismatch guard above also blocks that case (0 read vs. non-zero
+`content_file_count` is the largest possible "mismatch"), so a real empty-course prune needs its
+own signal, not decided here.
 
 ## 5. Cadence — per asset, not one global answer
 
@@ -237,9 +260,13 @@ Column names must match `learn_marts_contract.md` conventions.
 
 ## Open questions
 
-1. **Abort vs skip-prune on count mismatch** (§4). Recommend skip-prune.
+1. ~~Abort vs skip-prune on count mismatch~~ — decided (§4): any mismatch skips the prune, never
+   aborts.
 2. **Batch size ceiling** for the N-element form. Unbounded lists make one failed POST lose a whole
    sweep; a cap turns it into partial progress.
 3. **Does `expected_count` belong in the task signature or re-read from the view?** In the payload
    it is a cross-check between two systems; re-read from the view it only catches read failures,
    not publish failures.
+4. **Explicit override for a legitimate zero-file course** (§4). The strict count-mismatch guard
+   has no way to distinguish "real content lost" from "this course now legitimately has zero
+   files," so a genuine empty-course prune needs its own signal — not designed here.
