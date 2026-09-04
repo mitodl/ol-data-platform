@@ -14,6 +14,7 @@ from dagster import (
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
+from openedx.assets.content_files import extract_course_document_text
 from openedx.assets.openedx import (
     build_courseware_source_asset,
     course_structure,
@@ -21,6 +22,7 @@ from openedx.assets.openedx import (
     extract_courserun_details,
     openedx_course_content_webhook,
 )
+from openedx.assets.transcripts import extract_course_transcript_text
 from openedx.lib.assets_helper import (
     add_prefix_to_asset_keys,
     late_bind_partition_to_asset,
@@ -90,12 +92,28 @@ class OpenEdxDeploymentComponent:
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
+        document_text_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(
+                extract_course_document_text, self.deployment_name
+            ),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
+        transcript_text_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(
+                extract_course_transcript_text, self.deployment_name
+            ),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
         return {
             "courseware_asset": courseware_asset,
             "course_structure_asset": course_structure_asset,
             "course_xml_asset": course_xml_asset,
             "courserun_detail_asset": courserun_detail_asset,
             "course_content_webhook_asset": course_content_webhook_asset,
+            "document_text_asset": document_text_asset,
+            "transcript_text_asset": transcript_text_asset,
         }
 
     def build_sensors(

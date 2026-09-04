@@ -40,11 +40,7 @@ class FeedbackSummariesConfig(Config):
     )
     sample_limit: int | None = Field(
         default=None,
-        description=(
-            "Cap the number of conversations summarized, for local tests. Applied "
-            "after the incremental filter, so repeated runs keep finding new "
-            "candidates instead of re-hitting already-summarized rows."
-        ),
+        description="Cap the number of upstream rows read, for fast local testing.",
     )
 
 
@@ -73,10 +69,13 @@ def feedback_summaries(
     The one per-record LLM call in the design - see feedback_ml_approach.md §A.1 for
     the skip threshold and measured cost.
     """
-    source_df = get_dbt_model_as_dataframe(
+    source_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__conversation",
-    ).collect()
+    )
+    if config.sample_limit is not None:
+        source_lazy = source_lazy.limit(config.sample_limit)
+    source_df = source_lazy.collect()
 
     already_summarized_df = pl.DataFrame(
         schema={
@@ -103,8 +102,6 @@ def feedback_summaries(
     unsummarized_df = filter_unsummarized(
         source_df, already_summarized_df, current_model_version=client.model_version
     )
-    if config.sample_limit is not None:
-        unsummarized_df = unsummarized_df.head(config.sample_limit)
 
     errors: list[str] = []
     catalog = get_glue_catalog()

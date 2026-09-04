@@ -86,4 +86,13 @@ left join redacted
             and stale.feedback_text is null
             and redacted.text_redacted is not null
     )
+    -- dim_user re-key: a stored user_fk that no longer matches the current dim_user
+    -- resolution means the turn's subject_user_ref was re-keyed after ingestion, and
+    -- the source row's updated_at won't have moved to trigger the watermark above.
+    or exists (
+        select 1
+        from {{ this }} as stale
+        where stale.feedback_pk = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
+            and stale.user_fk is distinct from users.user_pk
+    )
 {% endif %}

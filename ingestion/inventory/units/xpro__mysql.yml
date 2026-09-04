@@ -14,12 +14,14 @@ airbyte:
   source_kind: source-mysql
   replication_method: cursor
   connections:
-  - name: xPro Open edX DB Studentmodule History → S3 Data Lake
+  - environment: production
+    name: xPro Open edX DB Studentmodule History → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:
     - coursewarehistoryextended_studentmodulehistoryextended
-  - name: xPro Open edX DB → S3 Data Lake
+  - environment: production
+    name: xPro Open edX DB → S3 Data Lake
     status: active
     sync_interval_hours: 12
     streams:

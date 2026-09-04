@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 from ol_orchestrate.lib.iceberg_maintenance import (
     RAW_LAYER_GROUP_CONFIGS,
+    TableMaintenanceConfig,
     load_maintenance_configs_from_manifest,
     maintenance_failure_threshold,
     non_dbt_singleton_tables,
+    partition_by_catalog_presence,
     raw_config_for_table,
     scope_schema_to_env,
     warehouse_env_for,
@@ -459,3 +461,76 @@ class TestMaintenanceFailureThreshold:
         threshold of zero and fail on nothing.
         """
         assert maintenance_failure_threshold(0) == 1
+
+
+# ── Catalog reconciliation ────────────────────────────────────────────────────
+
+
+class TestPartitionByCatalogPresence:
+    """The manifest is compiled against production and shipped everywhere.
+
+    QA holds views under names the manifest calls tables, and holds nothing at
+    all under others. Both are unmaintainable and both were being attempted:
+    401 of 628 configs failed in a single QA run on ``ALTER TABLE EXECUTE is
+    not supported for views`` and ``TABLE_NOT_FOUND``.
+    """
+
+    @staticmethod
+    def _cfg(schema: str, model: str) -> TableMaintenanceConfig:
+        return TableMaintenanceConfig(
+            model_name=model,
+            schema_name=schema,
+            materialized="table",
+            asset_key=[schema.rsplit("_", 1)[-1], model],
+        )
+
+    def test_a_config_the_catalog_calls_a_table_is_kept(self) -> None:
+        cfg = self._cfg("ol_warehouse_qa_intermediate", "int__mitx__enrollments")
+        present, unbacked = partition_by_catalog_presence(
+            [cfg], {("ol_warehouse_qa_intermediate", "int__mitx__enrollments")}
+        )
+        assert present == [cfg]
+        assert unbacked == []
+
+    def test_a_view_is_dropped_and_named(self) -> None:
+        """A view is in the catalog but not in the BASE TABLE set."""
+        cfg = self._cfg("ol_warehouse_qa_intermediate", "int__mitx__users")
+        present, unbacked = partition_by_catalog_presence([cfg], set())
+        assert present == []
+        assert unbacked == ["ol_warehouse_qa_intermediate.int__mitx__users"]
+
+    def test_a_table_missing_from_the_environment_is_dropped(self) -> None:
+        cfg = self._cfg("ol_warehouse_qa_intermediate", "int__mitx__courses")
+        present, unbacked = partition_by_catalog_presence(
+            [cfg], {("ol_warehouse_qa_intermediate", "something_else")}
+        )
+        assert present == []
+        assert unbacked == ["ol_warehouse_qa_intermediate.int__mitx__courses"]
+
+    def test_the_match_is_schema_qualified(self) -> None:
+        """A production table of the same name must not vouch for the QA one.
+
+        Matching on model name alone would let production's build satisfy QA's
+        config, which is the cross-environment confusion scope_schema_to_env
+        exists to prevent.
+        """
+        cfg = self._cfg("ol_warehouse_qa_intermediate", "int__mitx__users")
+        present, unbacked = partition_by_catalog_presence(
+            [cfg], {("ol_warehouse_production_intermediate", "int__mitx__users")}
+        )
+        assert present == []
+        assert unbacked == ["ol_warehouse_qa_intermediate.int__mitx__users"]
+
+    def test_order_is_preserved_for_the_kept_configs(self) -> None:
+        first = self._cfg("ol_warehouse_qa_mart", "a")
+        second = self._cfg("ol_warehouse_qa_mart", "b")
+        third = self._cfg("ol_warehouse_qa_mart", "c")
+        present, unbacked = partition_by_catalog_presence(
+            [first, second, third],
+            {("ol_warehouse_qa_mart", "a"), ("ol_warehouse_qa_mart", "c")},
+        )
+        assert present == [first, third]
+        assert unbacked == ["ol_warehouse_qa_mart.b"]
+
+    def test_an_empty_config_list_yields_nothing(self) -> None:
+        assert partition_by_catalog_presence([], {("s", "t")}) == ([], [])

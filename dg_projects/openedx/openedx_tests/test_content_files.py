@@ -1,0 +1,611 @@
+"""Tests for Open edX document text extraction.
+
+These cover the pure half of assets/content_files.py -- the dispatch decision
+and the failure accounting -- without a Dagster context or a live Tika service.
+"""
+
+import io
+import mimetypes
+import tarfile
+from pathlib import Path
+
+import httpx2 as httpx
+import pytest
+from ol_orchestrate.resources.tika import SUPPORTED_CONTENT_TYPES
+from openedx.assets.content_files import (
+    MIN_DOCUMENTS_FOR_RATE_CHECK,
+    TikaUnavailableError,
+    _content_type,
+    assert_extraction_healthy,
+    build_document_rows,
+    file_extension,
+    open_bundle_members,
+    output_digest,
+)
+from upath import UPath
+
+
+def fake_is_supported(content_type):
+    """Gate on the real supported set rather than a hand-picked subset.
+
+    A local subset would keep passing while the real one drifted, which is the
+    exact failure these tests exist to catch.
+    """
+    return content_type in SUPPORTED_CONTENT_TYPES
+
+
+def fake_extract(_file_bytes, _content_type):
+    return "extracted text"
+
+
+def rows_for(members, extract=fake_extract):
+    """Run build_document_rows over (path, bytes) pairs.
+
+    The real caller hands over a reader per member so unwanted files are never
+    read; tests state the bytes directly and this wraps them.
+    """
+    lazy = [(path, (lambda data=data: data)) for path, data in members]
+    return build_document_rows(
+        lazy,
+        course_id="course-v1:MITx+6.00.1x+2T2024",
+        source_system="mitx",
+        extract=extract,
+        is_supported=fake_is_supported,
+    )
+
+
+def test_supported_documents_are_extracted():
+    rows, counters = rows_for([("static/syllabus.pdf", b"%PDF-fake")])
+
+    assert counters["candidates"] == 1
+    assert counters["extracted"] == 1
+    assert rows[0]["content"] == "extracted text"
+    assert rows[0]["content_type"] == "application/pdf"
+    assert rows[0]["extraction_status"] == "extracted"
+    assert rows[0]["course_id"] == "course-v1:MITx+6.00.1x+2T2024"
+    assert rows[0]["source_system"] == "mitx"
+
+
+def test_subtitles_are_not_treated_as_documents():
+    """Subtitles belong to the transcript asset, not Tika.
+
+    This is not hypothetical. `mimetypes` maps `.srt` to `text/plain`, which is
+    in Tika's supported set, and Tika returns the file verbatim -- timestamps,
+    sequence numbers and all. Without this exclusion every `.srt` in a course
+    would be extracted twice: once as unusable noise here, and once properly by
+    the transcript parser. Filenames below are taken from a real
+    course-v1:MITx+14.310x+3T2021 export, which carries 302 `.srt` and 720
+    `.srt.sjson` files.
+    """
+    rows, counters = rows_for(
+        [
+            ("course/static/subs_-GQxFdhr_qU.srt.sjson", b'{"text": ["hi"]}'),
+            ("course/static/00508b03-8131-41de-b383-6732c625a82a-en.srt", b"1\n"),
+            ("course/static/14.310_Lecture_15_Segment_03-_Part1.srt", b"1\n"),
+        ]
+    )
+
+    assert rows == []
+    assert counters["transcripts"] == 3
+    assert counters["candidates"] == 0
+
+
+def test_real_archive_documents_are_still_extracted():
+    """The exclusion must not swallow the documents that share that directory.
+
+    Filenames taken from the same real export -- note the dots in the names,
+    which is why suffix detection has to be last-suffix rather than split-on-dot.
+    """
+    rows, counters = rows_for(
+        [
+            ("course/static/14.310x Syllabus.pdf", b"%PDF-fake"),
+            ("course/static/14.310x_3T2018.pdf", b"%PDF-fake"),
+        ]
+    )
+
+    assert counters["candidates"] == 2
+    assert {r["content_type"] for r in rows} == {"application/pdf"}
+
+
+def test_empty_files_are_empty_not_failed():
+    """A zero-byte file has no text; that is a fact, not an extraction failure.
+
+    Tika answers 422 for an empty body. Counting that as a failure would both
+    waste a round trip and pollute the denominator the health guard divides by.
+    A real course-v1:MITx+14.310x+3T2021 export ships nine empty about/
+    placeholders like these, which was 15% of a 60-file sample -- enough to drag
+    a sparse course toward the guard's floor for no reason.
+    """
+
+    def must_not_be_called(_file_bytes, _content_type):
+        msg = "Tika must not be called for a zero-byte file"
+        raise AssertionError(msg)
+
+    rows, counters = rows_for(
+        [
+            ("about/short_description.html", b""),
+            ("about/entrance_exam_enabled.html", b""),
+        ],
+        extract=must_not_be_called,
+    )
+
+    assert counters["failed"] == 0
+    assert counters["empty"] == 2
+    assert counters["candidates"] == 2
+    assert [r["extraction_status"] for r in rows] == ["empty", "empty"]
+    assert all(r["content"] is None for r in rows)
+
+
+def test_empty_files_do_not_drag_the_health_guard():
+    """Empty placeholders count as success, so they cannot trip the floor."""
+    counters = {
+        "candidates": 20,
+        "extracted": 11,
+        "empty": 9,
+        "failed": 0,
+        "skipped": 0,
+        "transcripts": 0,
+    }
+    assert_extraction_healthy(counters, "course-v1:MITx+14.310x+3T2021")
+
+
+def test_unsupported_files_are_skipped_not_failed():
+    """Images and archives are normal course content, not extraction errors."""
+    rows, counters = rows_for(
+        [("static/logo.png", b"fake png"), ("static/data.zip", b"fake zip")]
+    )
+
+    assert rows == []
+    assert counters["skipped"] == 2
+    assert counters["candidates"] == 0
+    assert counters["failed"] == 0
+
+
+def test_extraction_error_does_not_lose_the_course():
+    """One unparseable document must not abort the other documents."""
+
+    def flaky(_file_bytes, content_type):
+        if content_type == "application/pdf":
+            msg = "Tika exploded"
+            raise ValueError(msg)
+        return "text from html"
+
+    rows, counters = rows_for(
+        [("static/broken.pdf", b"junk"), ("static/page.html", b"<p>hi</p>")],
+        extract=flaky,
+    )
+
+    assert counters["failed"] == 1
+    assert counters["extracted"] == 1
+    assert [r["file_path"] for r in rows] == ["static/broken.pdf", "static/page.html"]
+
+
+def test_failed_extraction_is_recorded_not_dropped():
+    """A failed document gets a row, or downstream reads it as a deleted file.
+
+    MIT Learn unpublishes content files that disappear from a run's output. Its
+    own extractor gets away with recording nothing for a failure because it
+    passes the keys out through a `failed_keys` side channel that exempts them
+    from the stale pass; a JSONL snapshot has no side channel, so a transient
+    Tika failure would silently unpublish the last good text.
+    """
+
+    def always_fails(_file_bytes, _content_type):
+        msg = "Tika exploded"
+        raise ValueError(msg)
+
+    rows, _ = rows_for(
+        [("static/broken.pdf", b"junk"), ("static/page.html", b"<p>hi</p>")],
+        extract=always_fails,
+    )
+
+    assert [r["extraction_status"] for r in rows] == ["failed", "failed"]
+    assert all(r["content"] is None for r in rows)
+    assert [r["size_bytes"] for r in rows] == [4, 9]
+
+
+def test_empty_extraction_is_recorded_not_dropped():
+    """A scanned PDF yielding no text is recorded, so the absence is visible.
+
+    Dropping the row would make "Tika found nothing" look identical to "the
+    file was never seen".
+    """
+    rows, counters = rows_for(
+        [("static/scanned.pdf", b"%PDF-scan")], extract=lambda _b, _c: ""
+    )
+
+    assert counters["empty"] == 1
+    assert len(rows) == 1
+    assert rows[0]["content"] is None
+    assert rows[0]["extraction_status"] == "empty"
+
+
+def test_content_type_guessed_from_path():
+    rows, _ = rows_for([("static/notes.html", b"<p>x</p>")])
+    assert rows[0]["content_type"] == "text/html"
+
+
+def test_healthy_extraction_passes():
+    """A healthy batch publishes -- the guard raises, so no exception is the pass."""
+    counters = {"candidates": 10, "extracted": 9, "empty": 1, "failed": 0, "skipped": 3}
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_mass_extraction_failure_raises():
+    """A course whose documents nearly all fail publishes as 'no documents'."""
+    counters = {
+        "candidates": 20,
+        "extracted": 1,
+        "empty": 0,
+        "failed": 19,
+        "skipped": 0,
+    }
+    with pytest.raises(RuntimeError, match="Refusing to publish"):
+        assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_no_documents_is_not_a_failure():
+    """Plenty of courses carry no documents at all; that is not an error."""
+    counters = {"candidates": 0, "extracted": 0, "empty": 0, "failed": 0, "skipped": 7}
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_small_document_sets_skip_the_rate_check():
+    """A bad PDF in a small course is below the floor, so the rate is ignored.
+
+    The exemption is about the *rate* being meaningless on small samples, not
+    about small courses being unguarded: one success is enough to show the
+    extractor works. A small course where nothing succeeded is covered by
+    test_total_failure_raises_below_the_rate_check_floor instead.
+    """
+    counters = {
+        "candidates": MIN_DOCUMENTS_FOR_RATE_CHECK - 1,
+        "extracted": 1,
+        "empty": 0,
+        "failed": MIN_DOCUMENTS_FOR_RATE_CHECK - 2,
+        "skipped": 0,
+    }
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_empty_counts_toward_health():
+    """Tika answering with no text is a working extractor, not a failure.
+
+    A scanned-PDF-heavy course would otherwise trip the guard despite Tika
+    behaving correctly.
+    """
+    counters = {
+        "candidates": 10,
+        "extracted": 0,
+        "empty": 10,
+        "failed": 0,
+        "skipped": 0,
+    }
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+# --- a broken service must not look like a course with nothing to read ------
+
+
+def _http_error(status):
+    request = httpx.Request("PUT", "https://tika.example/tika")
+    response = httpx.Response(status, request=request)
+    message = f"HTTP {status}"
+    return httpx.HTTPStatusError(message, request=request, response=response)
+
+
+@pytest.mark.parametrize("status", [401, 403, 500, 502, 503])
+def test_service_level_failures_abort_instead_of_counting_as_documents(status):
+    """A dead or unauthorised Tika is not N unparseable documents.
+
+    The concrete path: a Vault read failure leaves an empty access token, every
+    call 401s, and a course with fewer than MIN_DOCUMENTS_FOR_RATE_CHECK
+    candidates skipped the health guard entirely and published an empty JSONL
+    as a success.
+    """
+
+    def failing_extract(_file_bytes, _content_type):
+        raise _http_error(status)
+
+    with pytest.raises(TikaUnavailableError):
+        rows_for([("static/syllabus.pdf", b"%PDF-fake")], extract=failing_extract)
+
+
+def test_transport_errors_abort_but_timeouts_stay_per_document():
+    """A connection that never landed is a service fact; a slow file is not.
+
+    One oversized PDF times out on a perfectly healthy Tika, so a timeout is
+    still counted per document -- a genuinely dead service produces enough of
+    them to trip the all-candidates-failed guard.
+    """
+
+    def unreachable(_file_bytes, _content_type):
+        message = "no route to host"
+        raise httpx.ConnectError(message)
+
+    with pytest.raises(TikaUnavailableError):
+        rows_for([("static/a.pdf", b"%PDF-fake")], extract=unreachable)
+
+    def slow(_file_bytes, _content_type):
+        message = "too slow"
+        raise httpx.ReadTimeout(message)
+
+    rows, counters = rows_for(
+        [("static/a.pdf", b"%PDF-fake"), ("static/b.pdf", b"%PDF-fake")], extract=slow
+    )
+    assert counters["failed"] == 2
+    assert [r["extraction_status"] for r in rows] == ["failed", "failed"]
+
+
+def test_document_level_failures_still_count_as_failures():
+    """A 422 really is about this file, so it must not abort the course."""
+
+    def unprocessable(_file_bytes, _content_type):
+        raise _http_error(422)
+
+    _, counters = rows_for([("static/a.pdf", b"%PDF-fake")], extract=unprocessable)
+    assert counters["failed"] == 1
+
+
+def test_total_failure_raises_below_the_rate_check_floor():
+    """The small-course exemption must not exempt a course that wholly failed."""
+    counters = {
+        "candidates": 2,
+        "extracted": 0,
+        "empty": 0,
+        "failed": 2,
+        "skipped": 0,
+    }
+    with pytest.raises(RuntimeError, match="all 2 candidate documents failed"):
+        assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+def test_no_candidates_is_still_not_a_failure():
+    """Zero documents and zero successes is a quiet course, not a broken one."""
+    counters = {
+        "candidates": 0,
+        "extracted": 0,
+        "empty": 0,
+        "failed": 0,
+        "skipped": 7,
+    }
+    assert_extraction_healthy(counters, "course-v1:MITx+6.00.1x+2T2024")
+
+
+# --- laziness ---------------------------------------------------------------
+
+
+def test_filtered_out_members_are_never_read():
+    """Skipped files must not be pulled into memory just to be discarded.
+
+    A real export is mostly images and archives; reading them to skip them is
+    what put the whole 152 MiB archive in the worker's heap at once.
+    """
+    reads = []
+
+    def _reader(path, data):
+        def _read():
+            reads.append(path)
+            return data
+
+        return _read
+
+    members = [
+        ("static/logo.png", _reader("static/logo.png", b"fake png")),
+        ("static/data.zip", _reader("static/data.zip", b"fake zip")),
+        ("static/subs_a.srt.sjson", _reader("static/subs_a.srt.sjson", b"{}")),
+        ("static/syllabus.pdf", _reader("static/syllabus.pdf", b"%PDF-fake")),
+    ]
+
+    build_document_rows(
+        members,
+        course_id="course-v1:MITx+6.00.1x+2T2024",
+        source_system="mitx",
+        extract=fake_extract,
+        is_supported=fake_is_supported,
+    )
+
+    assert reads == ["static/syllabus.pdf"]
+
+
+# --- data_version ----------------------------------------------------------
+
+
+def test_output_digest_changes_when_the_extracted_text_changes(tmp_path):
+    """The version must track the output, not the input bundle.
+
+    Versioning on the bundle hash meant a Tika upgrade, a parser change, or a
+    partial-failure run later succeeding all produced different text under the
+    same DataVersion and the same S3 key: the corrected output overwrote the
+    old one and no downstream data_version_changed() check fired.
+    """
+    partial = tmp_path / "partial.jsonl"
+    partial.write_text('{"content": null}\n')
+    complete = tmp_path / "complete.jsonl"
+    complete.write_text('{"content": "the real text"}\n')
+
+    assert output_digest(partial) != output_digest(complete)
+
+
+def test_output_digest_is_stable_for_identical_output(tmp_path):
+    """Identical extraction must hash identically, or nothing ever caches."""
+    one = tmp_path / "one.jsonl"
+    one.write_text('{"content": "same"}\n')
+    two = tmp_path / "two.jsonl"
+    two.write_text('{"content": "same"}\n')
+
+    assert output_digest(one) == output_digest(two)
+
+
+# --- reading the bundle ----------------------------------------------------
+
+
+def test_open_bundle_members_reads_a_real_tarball(tmp_path):
+    """The one path in this module that touches tarfile, exercised for real.
+
+    Everything above hands build_document_rows its members directly, so nothing
+    covered the download-and-walk step -- which is how the `tarfile` import
+    nearly got dropped without a test noticing.
+    """
+    bundle = tmp_path / "static_assets.tar.gz"
+    with tarfile.open(bundle, "w:gz") as tar:
+        for name, payload in [
+            ("static/syllabus.pdf", b"%PDF-fake"),
+            ("static/subs_x.srt.sjson", b'{"text": ["hi"]}'),
+        ]:
+            info = tarfile.TarInfo(name=name)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+        directory = tarfile.TarInfo(name="static/nested")
+        directory.type = tarfile.DIRTYPE
+        tar.addfile(directory)
+
+    temp_files: list[Path] = []
+    with open_bundle_members(UPath(bundle), temp_files) as members:
+        read_back = [(path, read_bytes()) for path, read_bytes in members]
+
+    assert read_back == [
+        ("static/syllabus.pdf", b"%PDF-fake"),
+        ("static/subs_x.srt.sjson", b'{"text": ["hi"]}'),
+    ]
+    assert len(temp_files) == 1, "the download must be registered for cleanup"
+    for temp_file in temp_files:
+        temp_file.unlink(missing_ok=True)
+
+
+# Verbatim from mit-learn learning_resources/constants.py. Reproduced rather
+# than imported because mit-learn is a separate deployment with no shared
+# package; these tests are what catches the two drifting apart.
+VALID_TEXT_FILE_TYPES = frozenset(
+    {
+        ".doc",
+        ".docx",
+        ".htm",
+        ".html",
+        ".json",
+        ".md",
+        ".pdf",
+        ".tex",
+        ".ppt",
+        ".pptx",
+        ".rtf",
+        ".sjson",
+        ".srt",
+        ".txt",
+        ".vtt",
+        ".xml",
+    }
+)
+
+# Subtitles belong to the sibling transcript asset, so they are expected NOT to
+# be Tika-supported here. `.vtt` is in that set deliberately: MIT Learn sends it
+# to Tika and stores the cue timings, and routing it to the parser instead is a
+# considered divergence rather than an oversight.
+_HANDLED_ELSEWHERE = {".srt", ".sjson", ".vtt"}
+
+# `.xml` never reaches the MIME gate at all: process_course_xml_blocks collects
+# only non-XML members, so no XML file is in the bundle this asset reads. Course
+# XML travels as blocks with its raw_xml intact. Asserting a MIME type for it
+# here would be a check that cannot fail.
+_NEVER_IN_THE_BUNDLE = {".xml"}
+
+
+@pytest.mark.parametrize(
+    "extension",
+    sorted(VALID_TEXT_FILE_TYPES - _HANDLED_ELSEWHERE - _NEVER_IN_THE_BUNDLE),
+)
+def test_every_extension_mit_learn_extracts_is_supported(extension):
+    """Nothing MIT Learn extracts today may be silently dropped by this asset.
+
+    The two systems filter by different mechanisms -- MIT Learn by extension,
+    this asset by MIME type -- so agreement between them is a coincidence
+    unless it is asserted. `.json` was genuinely lost before this check
+    existed: four files in a real course-v1:MITx+14.310x+3T2021 export. `.tex`
+    did not appear in the archives sampled, but maps to `application/x-tex`,
+    which was missing from the supported set for the same reason.
+    """
+    content_type = _content_type("problem_set" + extension)
+    assert content_type in SUPPORTED_CONTENT_TYPES, (
+        f"{extension} maps to {content_type}, which Tika will refuse; "
+        "MIT Learn extracts this extension, so the file would be lost"
+    )
+
+
+def test_the_mime_lookup_does_not_depend_on_the_host():
+    """The parity check above is only worth anything if it runs prod's table.
+
+    `mimetypes.guess_type` reads /etc/mime.types when the host has one. A dev
+    machine and ubuntu-latest do; the python:3.14-slim runtime image does not.
+    `.rtf` is where that bit: the host table answers `application/rtf` and the
+    builtin answers `text/rtf`, so every RTF extracted in dev and was skipped in
+    production with no row and no error, while this test passed.
+    """
+    assert _content_type("notes.rtf") == "text/rtf"
+    assert (
+        _content_type("notes.rtf")
+        == mimetypes.MimeTypes(filenames=()).guess_type("notes.rtf")[0]
+    )
+
+
+def test_csv_stays_out_of_the_document_set():
+    """`.csv` is excluded from VALID_TEXT_FILE_TYPES and must stay excluded.
+
+    It appears only in VALID_TUTOR_PROBLEM_FILE_TYPES, which exists because
+    Canvas needs an explicit mapping of which assets to process for tutor -- its
+    export is structurally different. Open edX problems are a first-class OLX
+    block type and are already carried as blocks, so nothing here needs `.csv`,
+    and extracting it would publish course data files as course text.
+    """
+    rows, counters = rows_for(
+        [("course/static/gradebook.csv", b"student,score\nalice,90\n")]
+    )
+
+    assert rows == []
+    assert counters["skipped"] == 1
+    assert counters["candidates"] == 0
+
+
+def test_vtt_stays_out_of_the_document_set():
+    """`.vtt` is a subtitle track; the transcript parser owns it.
+
+    MIT Learn sends it to Tika and stores the result verbatim, cue timings and
+    all, because it has no VTT transformer. Routing it to the parser is the
+    divergence this asset makes on purpose.
+    """
+    rows, counters = rows_for(
+        [
+            (
+                "course/static/lecture01.vtt",
+                b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhi",
+            )
+        ]
+    )
+
+    assert rows == []
+    assert counters["transcripts"] == 1
+    assert counters["candidates"] == 0
+
+
+def test_rows_carry_the_extension_consumers_filter_on():
+    """The extension is what lets one extraction serve both MIT Learn allowlists."""
+    rows, _ = rows_for(
+        [
+            ("course/static/syllabus.pdf", b"%PDF-fake"),
+            ("course/static/notes.tex", b"\\documentclass{article}"),
+            ("course/tabs/overview.html", b"<p>hi</p>"),
+        ]
+    )
+
+    by_path = {row["file_path"]: row["file_extension"] for row in rows}
+    assert by_path == {
+        "course/static/syllabus.pdf": ".pdf",
+        "course/static/notes.tex": ".tex",
+        "course/tabs/overview.html": ".html",
+    }
+    assert all(row["file_extension"] in VALID_TEXT_FILE_TYPES for row in rows)
+
+
+def test_extensionless_files_report_an_empty_extension():
+    """A bare `LICENSE` has no suffix; it must not become the whole filename."""
+    assert file_extension("course/static/LICENSE") == ""
+    assert file_extension("course/static/subs_abc.srt.sjson") == ".sjson"

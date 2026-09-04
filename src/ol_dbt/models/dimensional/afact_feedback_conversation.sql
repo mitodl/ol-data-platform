@@ -98,8 +98,7 @@ with conversation as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['conversation.source_slug', 'conversation.conversation_ref']) }}
-        as feedback_conversation_pk
+    conversation.feedback_conversation_pk
     , conversation.conversation_ref as conversation_id
     , turn_aggregates.feedback_source_fk
     , turn_aggregates.opened_by_user_fk

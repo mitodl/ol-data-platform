@@ -18,5 +18,8 @@ RUN pip install --no-cache-dir \
     'marimo[sandbox]>=0.19.11' \
     marimo-jupyter-extension
 
-# Seed notebook copied to ~/notebooks/ on first user login via postStart hook.
+# Seed notebooks and the environment README. The JupyterHub singleuser
+# postStart hook copies these into ~/notebooks/ with `cp -n`, so a user's
+# edited copy on the persistent home volume is never overwritten. See
+# ol-infrastructure applications/jupyterhub_data/deployment.py.
 COPY templates/ /usr/local/share/marimo/templates/
