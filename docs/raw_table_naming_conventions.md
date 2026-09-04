@@ -107,6 +107,14 @@ raw__podcast__rss__channels                ← MIT Learn podcast channels from R
 raw__podcast__rss__episodes                ← MIT Learn podcast episodes from RSS
 ```
 
+### Client analytics (via dlt)
+
+```
+raw__posthog__learn__s3__events            ← PostHog's hourly batch export of every
+                                             raw MIT Learn client event
+                                             (subsystem=learn is PostHog's project)
+```
+
 ### External partner data
 
 ```
