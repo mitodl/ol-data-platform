@@ -20,7 +20,9 @@ than flattened, because the property set is open-ended.
 
 Incrementality is keyed on the hour window parsed out of the object name, not
 on ``LastModified``: the January-March 2025 partitions were backfilled on
-2025-09-15, so modification time does not order the export.
+2025-09-15, so modification time does not order the export. A resumed run reads
+from ``CURSOR_LOOKBACK`` behind the stored cursor so an hour that lands after a
+later one is still picked up.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.posthog_events
@@ -59,6 +61,16 @@ BATCH_SIZE = 10_000
 # given. A first run should produce a usable table without pulling 600+ day
 # partitions; the full history is a deliberate `start_date=EXPORT_EPOCH` run.
 DEFAULT_COLD_START_DAYS = 7
+
+# How far behind the cursor a resumed run re-reads. The cursor is one high-water
+# mark over window ends, so an hour that has not landed yet when a later one has
+# would be stepped over and never revisited: nothing afterwards satisfies
+# `after < window_end` for it. Re-reading is safe rather than merely tolerable,
+# because the raw table is append-only and the staging model deduplicates on the
+# PostHog event uuid. Three hours clears the 1.4-15.1 minute export lag measured
+# across the 168 objects written 2026-08-28 to 2026-09-03, with room for a run
+# that itself ran late.
+CURSOR_LOOKBACK = timedelta(hours=3)
 
 # Events are immutable and each hour object is read once, so rows are appended.
 # A run that fails after committing part of a load package and before dlt
@@ -214,6 +226,8 @@ def posthog_events_source(
             after = datetime.combine(start_date, time.min, tzinfo=UTC)
         elif after is None:
             after = datetime.now(UTC) - timedelta(days=DEFAULT_COLD_START_DAYS)
+        else:
+            after -= CURSOR_LOOKBACK
 
         # `end_date` is inclusive, and the hour ending at midnight belongs to the
         # day it covers, so the bound is the following midnight.
@@ -244,12 +258,28 @@ def posthog_events_source(
             # Advance only once an object is fully yielded. dlt persists resource
             # state alongside a completed load, so a failed run leaves the cursor
             # where the last successful one left it.
-            state[_STATE_KEY] = window_end.isoformat()
+            #
+            # Monotonic because a run starts CURSOR_LOOKBACK behind the cursor:
+            # if `max_objects` ends a run inside that re-read window, taking the
+            # raw window_end would walk the cursor backwards on every run.
+            stored = state.get(_STATE_KEY)
+            if stored is None or window_end > datetime.fromisoformat(stored):
+                state[_STATE_KEY] = window_end.isoformat()
 
     yield events
 
 
 posthog_events_pipeline = config.pipeline_for("posthog", pipeline_name="posthog_events")
+
+# The CLI runs against its own pipeline state. A bounded backfill chunk leaves
+# the cursor at the end of that chunk, so sharing state with the scheduled run
+# would drag the production cursor back to the backfill position and make the
+# next hourly tick replay everything from there without `max_objects` to bound
+# it. Both pipelines write the same destination table; overlap between them is
+# resolved by the staging model's uuid dedup.
+posthog_events_backfill_pipeline = config.pipeline_for(
+    "posthog", pipeline_name="posthog_events_backfill"
+)
 
 
 def build_source() -> Any:  # noqa: ANN401
