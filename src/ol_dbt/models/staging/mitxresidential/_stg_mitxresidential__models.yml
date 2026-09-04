@@ -545,3 +545,200 @@ models:
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+
+- name: stg__mitxresidential__openedx__mysql__forum_commentthread
+  description: Residential MITx open edX discussion forum threads
+  columns:
+  - name: forumthread_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for the thread author
+  - name: user_username
+    description: str, username of the thread author
+  - name: user_retired_username
+    description: str, placeholder username left behind when the author has been retired
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+  - name: forumthread_title
+    description: str, the thread title as authored by the learner
+  - name: forumthread_body
+    description: str, free-text thread body authored by the learner
+  - name: forumthread_type
+    description: str, discussion or question
+  - name: forumthread_commentable_id
+    description: str, id of the discussion topic the thread was posted under
+  - name: forumthread_context
+    description: str, where the thread lives, e.g. course
+  - name: forumthread_group_id
+    description: int, cohort the thread is scoped to, null when visible to everyone
+  - name: forumthread_is_closed
+    description: boolean, whether the thread has been closed to further replies
+  - name: forumthread_closed_by_user_id
+    description: int, foreign key to auth_user for whoever closed the thread
+  - name: forumthread_close_reason_code
+    description: str, reason code recorded when the thread was closed
+  - name: forumthread_is_pinned
+    description: boolean, whether the thread is pinned to the top of its topic
+  - name: forumthread_is_visible
+    description: boolean, whether the thread is visible, used as a soft delete
+  - name: forumthread_is_endorsed
+    description: boolean, whether the thread has an endorsed response
+  - name: forumthread_is_anonymous
+    description: boolean, whether the thread was posted anonymously
+  - name: forumthread_is_anonymous_to_peers
+    description: boolean, whether the thread is anonymous to other learners but not
+      to staff
+  - name: forumthread_created_on
+    description: timestamp, when the thread was posted
+  - name: forumthread_updated_on
+    description: timestamp, when the thread was last edited
+  - name: forumthread_last_activity_on
+    description: timestamp, when the thread last saw any activity
+
+- name: stg__mitxresidential__openedx__mysql__forum_comment
+  description: Residential MITx open edX discussion forum responses and comments
+  columns:
+  - name: forumcomment_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: forumthread_id
+    description: int, foreign key to forum_commentthread. This is the thread association;
+      in the pre-migration Mongo data the equivalent field held an ObjectId string
+      rather than an integer
+  - name: forumcomment_parent_id
+    description: int, foreign key to forum_comment for the response this comment replies
+      to. Null for a top-level response to the thread
+  - name: user_id
+    description: int, foreign key to auth_user for the comment author
+  - name: user_username
+    description: str, username of the comment author
+  - name: user_retired_username
+    description: str, placeholder username left behind when the author has been retired
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+  - name: forumcomment_body
+    description: str, free-text comment body authored by the learner
+  - name: forumcomment_depth
+    description: int, nesting depth, 0 for a direct response to the thread
+  - name: forumcomment_sort_key
+    description: str, ordering key used to sort sibling comments
+  - name: forumcomment_child_count
+    description: int, number of direct replies to this comment
+  - name: forumcomment_endorsement_data
+    description: str, JSON object holding the endorsing user and time. Empty object
+      when the comment is not endorsed
+  - name: forumcomment_is_endorsed
+    description: boolean, whether the comment has been endorsed by staff
+  - name: forumcomment_is_visible
+    description: boolean, whether the comment is visible, used as a soft delete
+  - name: forumcomment_is_anonymous
+    description: boolean, whether the comment was posted anonymously
+  - name: forumcomment_is_anonymous_to_peers
+    description: boolean, whether the comment is anonymous to other learners but not
+      to staff
+  - name: forumcomment_group_id
+    description: int, cohort the comment is scoped to, null when visible to everyone
+  - name: forumcomment_created_on
+    description: timestamp, when the comment was posted
+  - name: forumcomment_updated_on
+    description: timestamp, when the comment was last edited
+
+- name: stg__mitxresidential__openedx__mysql__forum_uservote
+  description: Residential MITx open edX votes cast on discussion forum content
+  columns:
+  - name: forumuservote_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for the voter
+  - name: forumuservote_value
+    description: int, +1 for an upvote and -1 for a downvote. Only upvotes occur in
+      practice, since the Open edX forum UI does not offer a downvote
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+
+- name: stg__mitxresidential__openedx__mysql__forum_mongocontent
+  description: Residential MITx open edX bridge from forum-v2 rows to their pre-migration
+    mongo objectids
+  columns:
+  - name: forummongocontent_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: forumcontent_mongo_id
+    description: str, the 24-character hex ObjectId this row carried in the pre-migration
+      Mongo forum database. Only content that existed at the migration has a row here,
+      so content created since has no ObjectId at all
+    tests:
+    - unique
+    - not_null
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+
+- name: stg__mitxresidential__openedx__mysql__forum_abuseflagger
+  description: Residential MITx open edX active abuse flags raised on discussion forum
+    content
+  columns:
+  - name: forumabuseflag_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for whoever raised the flag
+  - name: forumabuseflag_flagged_on
+    description: timestamp, when the content was flagged
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+
+- name: stg__mitxresidential__openedx__mysql__forum_historicalabuseflagger
+  description: Residential MITx open edX abuse flags that were raised on discussion
+    forum content and later cleared
+  columns:
+  - name: forumhistoricalabuseflag_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for whoever raised the flag
+  - name: forumhistoricalabuseflag_flagged_on
+    description: timestamp, when the content was flagged
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
