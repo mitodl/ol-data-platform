@@ -44,15 +44,25 @@ SKIP_CHAR_THRESHOLD = 500
 # client_class="anthropic" default. A model id is only valid for one vendor's API,
 # so switching client_class to "openai"/"openai_compatible" requires overriding
 # this to a matching id (e.g. "gpt-4o-mini") -- there is no one id valid everywhere.
+# FeedbackSummariesConfig.model_version (a per-run Dagster config field) overrides
+# this; the env var/default here is only the fallback when a run doesn't set it.
 SUMMARY_MODEL_VERSION = os.environ.get("SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
 
 # Bedrock uses its own model id namespace (a Bedrock model or inference-profile
 # id, e.g. "global.anthropic.claude-haiku-4-5-20251001-v1:0"), never the plain
 # Anthropic API id above -- client_class="bedrock" needs this override instead.
+# FeedbackSummariesConfig.bedrock_model_version overrides this the same way.
 BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
     "BEDROCK_SUMMARY_MODEL_VERSION",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
+
+# 200 was enough for claude-haiku-4-5 (no thinking), but a model with adaptive
+# thinking on by default (e.g. claude-sonnet-5/claude-opus-5) can spend the whole
+# budget on hidden thinking before any visible output, leaving Anthropic's
+# response content empty rather than erroring -- this needs enough headroom for
+# thinking plus the actual summary across whichever model is configured.
+SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
@@ -76,18 +86,16 @@ class AnthropicSummaryClient:
     interface but is not an Anthropic subclass.
     """
 
-    def __init__(self, client: Anthropic | AnthropicBedrock) -> None:
+    def __init__(
+        self, client: Anthropic | AnthropicBedrock, model_version: str
+    ) -> None:
         self._client = client
-        self.model_version = (
-            BEDROCK_SUMMARY_MODEL_VERSION
-            if isinstance(client, AnthropicBedrock)
-            else SUMMARY_MODEL_VERSION
-        )
+        self.model_version = model_version
 
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
-            max_tokens=200,
+            max_tokens=SUMMARY_MAX_TOKENS,
             messages=[
                 {
                     "role": "user",
@@ -97,25 +105,34 @@ class AnthropicSummaryClient:
                 }
             ],
         )
+        if not message.content:
+            # A model with thinking on by default can spend the whole max_tokens
+            # budget on hidden thinking and return no visible output at all
+            # (stop_reason="max_tokens", content=[]) rather than raising --
+            # surfaced as an empty summary (like a refusal) instead of an
+            # IndexError, so the caller's existing empty-summary handling
+            # (retry next run) applies here too.
+            return None
         return message.content[0].text
 
 
 class OpenAISummaryClient:
     """Adapts an OpenAI-compatible client to the SummaryClient protocol."""
 
-    def __init__(self, client: OpenAI) -> None:
-        if SUMMARY_MODEL_VERSION.startswith("claude"):
+    def __init__(self, client: OpenAI, model_version: str) -> None:
+        if model_version.startswith("claude"):
             # Can't validate a model id belongs to OpenAI in general, but a Claude
             # id can never work here -- catches the default-left-unset case rather
             # than failing later with an opaque error from OpenAI's API.
             msg = (
-                f"SUMMARY_MODEL_VERSION={SUMMARY_MODEL_VERSION!r} looks like an "
-                "Anthropic model id, but client_class='openai' is configured. Set "
-                "SUMMARY_MODEL_VERSION to an OpenAI model id (e.g. 'gpt-4o-mini')."
+                f"model_version={model_version!r} looks like an Anthropic model "
+                "id, but client_class='openai' is configured. Set "
+                "FeedbackSummariesConfig.model_version (or SUMMARY_MODEL_VERSION) "
+                "to an OpenAI model id (e.g. 'gpt-4o-mini')."
             )
             raise ValueError(msg)
         self._client = client
-        self.model_version = SUMMARY_MODEL_VERSION
+        self.model_version = model_version
 
     def summarize(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
@@ -134,11 +151,23 @@ class OpenAISummaryClient:
 
 def build_summary_client(
     llm: LLMClientFactory,
+    model_version: str | None = None,
+    bedrock_model_version: str | None = None,
 ) -> AnthropicSummaryClient | OpenAISummaryClient:
+    """Build the client whose model_version comes from run config, else a default.
+
+    model_version/bedrock_model_version are the feedback_summaries asset's own
+    per-run Config fields (FeedbackSummariesConfig) -- None means the run didn't
+    override them, so SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION apply.
+    """
     client = llm.get_client()
-    if isinstance(client, Anthropic | AnthropicBedrock):
-        return AnthropicSummaryClient(client)
-    return OpenAISummaryClient(client)
+    if isinstance(client, AnthropicBedrock):
+        return AnthropicSummaryClient(
+            client, bedrock_model_version or BEDROCK_SUMMARY_MODEL_VERSION
+        )
+    if isinstance(client, Anthropic):
+        return AnthropicSummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
+    return OpenAISummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
 
 
 def filter_unsummarized(

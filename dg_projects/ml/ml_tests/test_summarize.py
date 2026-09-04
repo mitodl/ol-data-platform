@@ -1,7 +1,6 @@
 """Tests for ml.lib.summarize."""
 
 import polars as pl
-import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import summarize
 from openai import OpenAI
@@ -119,6 +118,8 @@ def test_filter_unsummarized_drops_already_summarized_rows_with_same_turn_count(
 
 
 class _FakeLLM:
+    """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
+
     def __init__(self, client: object) -> None:
         self._client = client
 
@@ -126,51 +127,88 @@ class _FakeLLM:
         return self._client
 
 
-def test_build_summary_client_uses_configured_model_for_openai(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SUMMARY_MODEL_VERSION is vendor-agnostic: whatever it's set to is what gets
-    sent to whichever backend is configured -- the caller is responsible for
-    setting it to an id that backend actually recognizes.
-    """
-    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "gpt-4o-mini")
-
-    client = summarize.build_summary_client(_FakeLLM(OpenAI(api_key="sk-test")))
-
-    assert isinstance(client, summarize.OpenAISummaryClient)
-    assert client.model_version == "gpt-4o-mini"
-
-
-def test_build_summary_client_uses_configured_model_for_anthropic(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
-
-    client = summarize.build_summary_client(_FakeLLM(Anthropic(api_key="sk-ant-test")))
-
-    assert isinstance(client, summarize.AnthropicSummaryClient)
-    assert client.model_version == "claude-haiku-4-5"
-
-
-def test_build_summary_client_uses_bedrock_model_for_bedrock(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SUMMARY_MODEL_VERSION is an Anthropic API id and never valid on Bedrock, so
-    the Bedrock path must use BEDROCK_SUMMARY_MODEL_VERSION instead.
-    """
-    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
-    monkeypatch.setattr(
-        summarize,
-        "BEDROCK_SUMMARY_MODEL_VERSION",
-        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+def test_build_summary_client_uses_default_model_for_anthropic() -> None:
+    client = summarize.build_summary_client(
+        _FakeLLM(Anthropic(api_key="sk-ant-test"))  # pragma: allowlist secret
     )
 
+    assert isinstance(client, summarize.AnthropicSummaryClient)
+    assert client.model_version == summarize.SUMMARY_MODEL_VERSION
+
+
+def test_build_summary_client_uses_bedrock_default_for_bedrock() -> None:
+    """A plain Anthropic API id (SUMMARY_MODEL_VERSION) is never valid on
+    Bedrock -- the bedrock client must get BEDROCK_SUMMARY_MODEL_VERSION instead.
+    """
     client = summarize.build_summary_client(
         _FakeLLM(AnthropicBedrock(aws_region="us-east-1"))
     )
 
     assert isinstance(client, summarize.AnthropicSummaryClient)
-    assert client.model_version == "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    assert client.model_version == summarize.BEDROCK_SUMMARY_MODEL_VERSION
+
+
+def test_build_summary_client_honors_model_version_override_for_openai() -> None:
+    """FeedbackSummariesConfig.model_version (passed through as model_version here)
+    overrides SUMMARY_MODEL_VERSION -- how a run tries a different model.
+    """
+    client = summarize.build_summary_client(
+        _FakeLLM(OpenAI(api_key="sk-test")),  # pragma: allowlist secret
+        model_version="gpt-4o-mini",
+    )
+
+    assert isinstance(client, summarize.OpenAISummaryClient)
+    assert client.model_version == "gpt-4o-mini"
+
+
+def test_build_summary_client_honors_model_version_override_for_anthropic() -> None:
+    client = summarize.build_summary_client(
+        _FakeLLM(Anthropic(api_key="sk-ant-test")),  # pragma: allowlist secret
+        model_version="claude-sonnet-5",
+    )
+
+    assert isinstance(client, summarize.AnthropicSummaryClient)
+    assert client.model_version == "claude-sonnet-5"
+
+
+def test_build_summary_client_honors_bedrock_model_version_override() -> None:
+    client = summarize.build_summary_client(
+        _FakeLLM(AnthropicBedrock(aws_region="us-east-1")),
+        bedrock_model_version="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    )
+
+    assert isinstance(client, summarize.AnthropicSummaryClient)
+    assert client.model_version == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+
+class _FakeMessage:
+    def __init__(self, content: list[object]) -> None:
+        self.content = content
+
+
+class _FakeAnthropicClient:
+    """Stands in for the anthropic SDK client: only messages.create is used."""
+
+    def __init__(self, content: list[object]) -> None:
+        self._content = content
+        self.messages = type(
+            "_Messages", (), {"create": lambda _self, **_kwargs: self._response()}
+        )()
+
+    def _response(self) -> _FakeMessage:
+        return _FakeMessage(self._content)
+
+
+def test_anthropic_summary_client_treats_empty_content_as_no_summary() -> None:
+    """A model with thinking on by default can spend the whole max_tokens budget
+    on hidden thinking and return content=[] rather than erroring -- this must
+    come back as None (like a refusal), not raise IndexError.
+    """
+    client = summarize.AnthropicSummaryClient(
+        _FakeAnthropicClient(content=[]), "claude-sonnet-5"
+    )
+
+    assert client.summarize("some conversation text") is None
 
 
 def test_filter_unsummarized_resubmits_conversations_with_new_turns() -> None:

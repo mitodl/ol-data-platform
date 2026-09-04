@@ -42,6 +42,25 @@ class FeedbackSummariesConfig(Config):
         default=None,
         description="Cap the number of upstream rows read, for fast local testing.",
     )
+    model_version: str | None = Field(
+        default=None,
+        description=(
+            "Override the model id sent to the anthropic/openai/openai_compatible/"
+            "azure_openai client classes, e.g. to try a different model's cost/"
+            "quality without a code change. Unset uses SUMMARY_MODEL_VERSION "
+            "(ml.lib.summarize). Ignored when the llm resource's client_class is "
+            "'bedrock' -- see bedrock_model_version."
+        ),
+    )
+    bedrock_model_version: str | None = Field(
+        default=None,
+        description=(
+            "Same as model_version, but for client_class='bedrock' -- Bedrock has "
+            "its own model/inference-profile id namespace (e.g. "
+            "'global.anthropic.claude-haiku-4-5-20251001-v1:0'), never a plain "
+            "Anthropic API id. Unset uses BEDROCK_SUMMARY_MODEL_VERSION."
+        ),
+    )
 
 
 @asset(
@@ -98,7 +117,9 @@ def feedback_summaries(
     # Built before filtering: filter_unsummarized needs the model actually in use
     # to re-submit a conversation whose stored summary_model_version has since
     # gone stale (a model/prompt change), not just a turn_count change.
-    client = build_summary_client(llm)
+    client = build_summary_client(
+        llm, config.model_version, config.bedrock_model_version
+    )
     unsummarized_df = filter_unsummarized(
         source_df, already_summarized_df, current_model_version=client.model_version
     )
@@ -153,6 +174,7 @@ def feedback_summaries(
 
     context.add_output_metadata(
         {
+            "model_version": MetadataValue.text(client.model_version),
             "llm_call_count": MetadataValue.int(llm_call_count),
             "failed_count": MetadataValue.int(failed_count),
             "already_summarized_count": MetadataValue.int(already_summarized_df.height),
