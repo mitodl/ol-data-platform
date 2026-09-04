@@ -26,6 +26,7 @@ from dagster_airbyte import (
 from dagster_dbt import (
     DbtCliResource,
 )
+from dagster_dbt.asset_utils import get_asset_key_for_model
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
@@ -399,6 +400,28 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# The PostHog staging model is the only staging model fed by a dlt source rather
+# than an Airbyte connection. `sync_and_stage_*` jobs are generated per Airbyte
+# group, and the automation sensor target subtracts the whole `staging` group,
+# so nothing else in this file reaches it: without this schedule the model has
+# no execution path at all and the raw table accumulates unmodelled.
+#
+# data_loading lands the closed hour at :20 (see its posthog_events_ingest
+# schedule for the measured export lag); :35 leaves the load room to finish.
+posthog_staging_schedule = ScheduleDefinition(
+    name="posthog_staging_hourly",
+    job=define_asset_job(
+        name="posthog_staging_job",
+        selection=AssetSelection.keys(
+            get_asset_key_for_model(
+                [full_dbt_project], "stg__posthog__learn__s3__search_update_events"
+            )
+        ).downstream(depth=1, include_self=True),
+    ),
+    cron_schedule="35 * * * *",
+    execution_timezone="UTC",
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -546,6 +569,7 @@ defs = Definitions(
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
+            ("posthog_staging_hourly", posthog_staging_schedule),
         ]
     ),
 )
