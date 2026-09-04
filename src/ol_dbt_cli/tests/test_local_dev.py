@@ -303,7 +303,7 @@ class TestRegistryAge:
         with duckdb.connect(str(db_path)) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS _glue_registry_scans (
-                    glue_database VARCHAR,
+                    glue_database VARCHAR PRIMARY KEY,
                     scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
