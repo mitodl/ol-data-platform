@@ -408,7 +408,8 @@ class TestEnvironmentScoping:
     def test_singletons_are_scoped_to_the_calling_environment(self) -> None:
         """The hand-written list hardcoded production for every environment."""
         assert [t.schema_name for t in non_dbt_singleton_tables("qa")] == [
-            "ol_warehouse_qa_reporting"
+            "ol_warehouse_qa_reporting",
+            "ol_warehouse_qa_intermediate",
         ]
 
 

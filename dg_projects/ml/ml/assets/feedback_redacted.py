@@ -43,6 +43,17 @@ class FeedbackRedactedConfig(Config):
         default=None,
         description="Cap the number of upstream rows read, for fast local testing.",
     )
+    record_refs: list[str] | None = Field(
+        default=None,
+        description=(
+            "Only process rows with this source_record_ref, for spot-checking "
+            "specific known cases locally without redacting the whole table. "
+        ),
+    )
+    source_slug: str | None = Field(
+        default=None,
+        description="Paired with record_refs to disambiguate across sources.",
+    )
 
 
 @asset(
@@ -70,6 +81,13 @@ def feedback_redacted(
         database_name=database_name,
         table_name="int__feedback__unioned",
     )
+    if config.record_refs is not None:
+        record_filter = pl.col("source_record_ref").is_in(config.record_refs)
+        if config.source_slug is not None:
+            record_filter = record_filter & (
+                pl.col("source_slug") == config.source_slug
+            )
+        source_lazy = source_lazy.filter(record_filter)
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
     source_df = source_lazy.collect()

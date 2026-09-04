@@ -215,6 +215,20 @@ def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]
             optimize_after_every_n_runs=1,
             analyze_after_every_n_runs=7,
         ),
+        TableMaintenanceConfig(
+            model_name="feedback_summaries",
+            schema_name=f"ol_warehouse_{warehouse_env}_intermediate",
+            materialized="table",
+            # Asset key matches the Dagster asset in dg_projects/ml/ml/assets/
+            # feedback_summaries.py. Written by per-chunk upsert, so this table
+            # accumulates one snapshot per chunk per run -- needs nightly
+            # expiration, unlike a table written once per run.
+            asset_key=["intermediate", "feedback_summaries"],
+            snapshot_retention_days=7,
+            orphan_retention_days=7,
+            optimize_after_every_n_runs=1,
+            analyze_after_every_n_runs=7,
+        ),
     ]
 
 
