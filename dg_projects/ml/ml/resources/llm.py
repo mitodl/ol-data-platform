@@ -51,10 +51,12 @@ class LLMClientFactory(ConfigurableResource):
             "required when client_class='azure_openai'"
         ),
     )
+    # Plain default=, not default_factory=: computed once at import time (same
+    # timing the old module-level constants used), so Dagster's resource docs
+    # page can render it -- default_factory is a callable, which the UI can't
+    # display a value for.
     model_version: str = Field(
-        default_factory=lambda: os.environ.get(
-            "SUMMARY_MODEL_VERSION", "claude-haiku-4-5"
-        ),
+        default=os.environ.get("SUMMARY_MODEL_VERSION", "claude-haiku-4-5"),
         description=(
             "Model id sent to the anthropic/openai/openai_compatible/azure_openai "
             "client classes. A model id is only valid for one vendor's API, so "
@@ -63,7 +65,7 @@ class LLMClientFactory(ConfigurableResource):
         ),
     )
     bedrock_model_version: str = Field(
-        default_factory=lambda: os.environ.get(
+        default=os.environ.get(
             "BEDROCK_SUMMARY_MODEL_VERSION",
             "global.anthropic.claude-haiku-4-5-20251001-v1:0",
         ),
