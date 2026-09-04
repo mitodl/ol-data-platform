@@ -29,5 +29,6 @@ select
     , 0 as email_tag_filter_strategy
     , 0 as display_tag_filter_strategy
     , 0 as consecutive_days_visit_count
+    , student_courseenrollment.course_id
 from auth_user
 inner join student_courseenrollment on auth_user.id = student_courseenrollment.user_id
