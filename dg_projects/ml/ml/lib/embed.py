@@ -4,6 +4,7 @@ import logging
 import os
 from typing import Any, Protocol
 
+import openai
 import polars as pl
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
@@ -193,8 +194,15 @@ def _embed_chunk(
     """Embed one chunk via a single batched API call, falling back row-by-row.
 
     A single bad row (e.g. a length/encoding issue the API rejects) fails the whole
-    batch call -- retrying one at a time isolates it rather than dropping every
-    otherwise-fine row in the chunk along with it.
+    batch call as openai.BadRequestError -- retrying one at a time isolates it
+    rather than dropping every otherwise-fine row in the chunk along with it.
+
+    Any other exception (rate limit, auth, connection, 5xx) is systemic: retrying
+    row-by-row would just multiply the same failure by len(chunk) rather than fix
+    anything -- e.g. 100 extra calls at an endpoint that already asked us to back
+    off (the OpenAI SDK's own retry/backoff is exhausted by the time an error
+    surfaces here at all). So it's recorded as a single whole-chunk failure instead,
+    letting the caller's consecutive-failed-chunks counter decide whether to abort.
 
     errors, if given, collects each failure's message -- lets a caller surface
     *why* calls failed (e.g. in a Failure message) without changing this
@@ -202,7 +210,7 @@ def _embed_chunk(
     """
     try:
         vectors = client.embed_batch([row["resolved_text"] for row in chunk])
-    except Exception:
+    except openai.BadRequestError:
         logger.warning(
             "Batch embed failed for %d conversations; retrying individually",
             len(chunk),
@@ -227,6 +235,16 @@ def _embed_chunk(
                 continue
             results.append((row, vector))
         return results
+    except Exception as e:
+        logger.warning(
+            "Batch embed failed for %d conversations with a systemic error; "
+            "not retrying individually",
+            len(chunk),
+            exc_info=True,
+        )
+        if errors is not None:
+            errors.append(f"chunk of {len(chunk)}: {type(e).__name__}: {e}")
+        return []
     return list(zip(chunk, vectors, strict=True))
 
 
@@ -261,39 +279,6 @@ def _results_to_df(
         pl.lit(client.dim, dtype=pl.Int64).alias("embedding_dim"),
         pl.lit(client.model_version, dtype=pl.String).alias("embedding_model_version"),
     )
-
-
-def embed_conversations(
-    df: pl.DataFrame, client: EmbeddingClient, errors: list[str] | None = None
-) -> pl.DataFrame:
-    """Embed each conversation's resolved_text, in bounded batches.
-
-    Args:
-        df: a frame with (at least) feedback_conversation_pk, source_slug,
-            conversation_ref, turn_count, embedding_input, resolved_text columns,
-            e.g. resolve_embedding_text's output.
-        client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
-            method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
-        errors: if given, each failure's message is appended here (see _embed_chunk).
-
-    Returns:
-        pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
-            turn_count, embedding_vector, embedding_dim, embedding_model_version,
-            embedding_input - keyed by feedback_conversation_pk, for
-            afact_feedback_conversation to left-join. turn_count is carried through
-            so a later run's filter_unembedded
-            can detect a conversation that gained a turn. A null resolved_text
-            (upstream summary/redaction not ready yet) is skipped and retried next
-            run, same as a failed API call (#2542's checkpointing precedent).
-    """
-    rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
-
-    results: list[tuple[dict[str, Any], list[float]]] = []
-    for chunk_start in range(0, len(rows), EMBEDDING_BATCH_SIZE):
-        chunk = rows[chunk_start : chunk_start + EMBEDDING_BATCH_SIZE]
-        results.extend(_embed_chunk(chunk, client, errors=errors))
-
-    return _results_to_df(results, client)
 
 
 def checkpoint_embedding_chunk(
@@ -333,9 +318,29 @@ def embed_and_checkpoint(
 ) -> pl.DataFrame:
     """Embed df in chunks, upserting each into feedback_embeddings as it completes.
 
-    Mirrors summarize.summarize_and_checkpoint. errors, if given, collects every
-    failure's message (see _embed_chunk) so a caller can surface *why* calls failed,
-    e.g. in a Failure message.
+    Args:
+        df: a frame with (at least) feedback_conversation_pk, source_slug,
+            conversation_ref, turn_count, embedding_input, resolved_text columns,
+            e.g. resolve_embedding_text's output. A null resolved_text (upstream
+            summary/redaction not ready yet) is skipped and retried next run, same
+            as a failed API call (#2542's checkpointing precedent).
+        client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
+            method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
+        checkpoint_target: (catalog, table_identifier) passed through to
+            checkpoint_embedding_chunk.
+        batch_size: rows per embed_batch call and per checkpoint upsert.
+        errors: if given, collects every failure's message (see _embed_chunk) so a
+            caller can surface *why* calls failed, e.g. in a Failure message.
+
+    Returns:
+        pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
+            turn_count, embedding_vector, embedding_dim, embedding_model_version,
+            embedding_input - keyed by feedback_conversation_pk, for
+            afact_feedback_conversation to left-join. turn_count is carried through
+            so a later run's filter_unembedded can detect a conversation that
+            gained a turn.
+
+    Mirrors summarize.summarize_and_checkpoint.
 
     Stops the whole loop (not just the current chunk) after
     EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS chunks in a row come back with zero
