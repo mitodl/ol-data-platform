@@ -20,6 +20,21 @@ with source as (
 
 )
 
+-- The raw table is at-least-once at hour granularity: a run that fails after
+-- committing part of a load package re-reads those hours on the next attempt.
+-- Without this the documented one-row-per-event grain does not hold and search
+-- counts double for the replayed hours.
+, source_deduped as (
+
+    select
+        *
+        , row_number() over (
+            partition by uuid order by _inserted_at desc, s3_object_key desc
+        ) as row_num
+    from source
+
+)
+
 , extracted as (
 
     select
@@ -37,7 +52,8 @@ with source as (
         , cast(
             nullif({{ json_query_string('properties', "'$.isEnter'") }}, '') as boolean
         ) as search_submitted_with_enter_key
-    from source
+    from source_deduped
+    where row_num = 1
 
 )
 
