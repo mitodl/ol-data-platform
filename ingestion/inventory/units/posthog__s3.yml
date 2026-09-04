@@ -1,0 +1,31 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: posthog
+layer: s3
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__posthog__learn__
+dlt:
+  source_module: ol_dlt.sources.posthog_events
+  write_disposition: append
+tables:
+- name: raw__posthog__learn__s3__events
+  raw_table: raw__posthog__learn__s3__events
+  sync_mode: incremental_append
+  # The cursor is the hour window parsed out of the export object's name, which
+  # every row carries in s3_object_key. It is not compared column-wise: PostHog
+  # backfilled the January-March 2025 partitions on 2025-09-15, so neither
+  # LastModified nor any per-row timestamp orders the export.
+  cursor_field:
+  - s3_object_key
+  # PostHog's per-event uuid. Recorded as the grain rather than used for
+  # deduplication: the load appends, so a re-read of an hour after a partial
+  # failure duplicates it, and this is the key that identifies the duplicates.
+  primary_key:
+  - - uuid
+  modeled: true

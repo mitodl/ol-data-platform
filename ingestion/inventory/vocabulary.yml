@@ -58,6 +58,10 @@ deployments:
 - mailgun
 - salesforce
 - zendesk
+  # Vendor SaaS that reaches us as a file drop rather than an API: PostHog
+  # batch-exports every raw MIT Learn client event to the landing zone hourly,
+  # so its unit is (posthog, s3) and there is nothing to call.
+- posthog
 
 # A layer is the system within a deployment that the data comes out of. Two
 # layers of one deployment are separate units because they fail, and are

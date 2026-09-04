@@ -57,6 +57,20 @@ keycloak_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# PostHog writes an hour's export object after that hour closes. Across the 168
+# objects written 2026-08-28 to 2026-09-03 the lag ran 1.4 to 15.1 minutes,
+# median 8.3, so :20 clears the measured maximum. Landing later than that costs
+# nothing: the dlt cursor only advances past objects a run actually read, so an
+# hour that arrives late is picked up by the next run rather than skipped.
+posthog_events_ingest_schedule = dg.ScheduleDefinition(
+    name="posthog_events_ingest_hourly_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__posthog__learn__s3__events"]
+    ),
+    cron_schedule="20 * * * *",
+    execution_timezone="Etc/UTC",
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -65,5 +79,6 @@ defs = dg.Definitions(
         mit_edx_programs_ingest_schedule,
         podcast_rss_ingest_schedule,
         keycloak_ingest_schedule,
+        posthog_events_ingest_schedule,
     ],
 )

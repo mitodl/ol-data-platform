@@ -20,6 +20,7 @@ from ol_dlt.sources import (
     mitpe,
     oll,
     podcast_rss,
+    posthog_events,
 )
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
@@ -79,6 +80,14 @@ keycloak_assets = build_ingest_assets(
     name="keycloak_ingest",
     source=keycloak.build_source(),
     pipeline=keycloak.keycloak_pipeline,
+)
+# Resumes from the dlt cursor every run. A backfill is a deliberate
+# `posthog_events_source(start_date=...)` invocation (see the source's
+# __main__), not something a scheduled run can fall into.
+posthog_events_assets = build_ingest_assets(
+    name="posthog_events_ingest",
+    source=posthog_events.build_source(),
+    pipeline=posthog_events.posthog_events_pipeline,
 )
 
 
@@ -140,6 +149,7 @@ defs = Definitions(
             mit_edx_programs_assets,
             podcast_rss_assets,
             keycloak_assets,
+            posthog_events_assets,
             *edxorg_s3_table_assets,
         ]
     ),
