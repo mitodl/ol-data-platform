@@ -57,6 +57,13 @@ BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
     "global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
 
+# 200 was enough for claude-haiku-4-5 (no thinking), but a model with adaptive
+# thinking on by default (e.g. claude-sonnet-5/claude-opus-5) can spend the whole
+# budget on hidden thinking before any visible output, leaving Anthropic's
+# response content empty rather than erroring -- this needs enough headroom for
+# thinking plus the actual summary across whichever model is configured.
+SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
+
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
     "view. Focus on the problem reported and its resolution if one is present. "
@@ -88,7 +95,7 @@ class AnthropicSummaryClient:
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
-            max_tokens=200,
+            max_tokens=SUMMARY_MAX_TOKENS,
             messages=[
                 {
                     "role": "user",
@@ -98,6 +105,14 @@ class AnthropicSummaryClient:
                 }
             ],
         )
+        if not message.content:
+            # A model with thinking on by default can spend the whole max_tokens
+            # budget on hidden thinking and return no visible output at all
+            # (stop_reason="max_tokens", content=[]) rather than raising --
+            # surfaced as an empty summary (like a refusal) instead of an
+            # IndexError, so the caller's existing empty-summary handling
+            # (retry next run) applies here too.
+            return None
         return message.content[0].text
 
 

@@ -181,6 +181,36 @@ def test_build_summary_client_honors_bedrock_model_version_override() -> None:
     assert client.model_version == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
+class _FakeMessage:
+    def __init__(self, content: list[object]) -> None:
+        self.content = content
+
+
+class _FakeAnthropicClient:
+    """Stands in for the anthropic SDK client: only messages.create is used."""
+
+    def __init__(self, content: list[object]) -> None:
+        self._content = content
+        self.messages = type(
+            "_Messages", (), {"create": lambda _self, **_kwargs: self._response()}
+        )()
+
+    def _response(self) -> _FakeMessage:
+        return _FakeMessage(self._content)
+
+
+def test_anthropic_summary_client_treats_empty_content_as_no_summary() -> None:
+    """A model with thinking on by default can spend the whole max_tokens budget
+    on hidden thinking and return content=[] rather than erroring -- this must
+    come back as None (like a refusal), not raise IndexError.
+    """
+    client = summarize.AnthropicSummaryClient(
+        _FakeAnthropicClient(content=[]), "claude-sonnet-5"
+    )
+
+    assert client.summarize("some conversation text") is None
+
+
 def test_filter_unsummarized_resubmits_conversations_with_new_turns() -> None:
     """A ticket that gained a comment since it was summarized is re-submitted."""
     source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=3)])
