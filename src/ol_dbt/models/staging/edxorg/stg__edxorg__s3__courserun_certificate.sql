@@ -19,11 +19,11 @@ with source as (
         , try_cast(grade as decimal(38, 2)) as courseruncertificate_grade
         , case
             when lower(created_date) = 'null' or lower(created_date) = 'none' then null
-            else to_iso8601(date_parse(created_date, '%Y-%m-%d %H:%i:%s'))
+            else {{ cast_timestamp_to_iso8601(date_parse("created_date", "'%Y-%m-%d %H:%i:%s'")) }}
         end as courseruncertificate_created_on
         , case
             when lower(modified_date) = 'null' or lower(modified_date) = 'none' then null
-            else to_iso8601(date_parse(modified_date, '%Y-%m-%d %H:%i:%s'))
+            else {{ cast_timestamp_to_iso8601(date_parse("modified_date", "'%Y-%m-%d %H:%i:%s'")) }}
         end as courseruncertificate_updated_on
     from most_recent_source
 )
