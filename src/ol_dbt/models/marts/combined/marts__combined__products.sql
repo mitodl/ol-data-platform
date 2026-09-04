@@ -217,7 +217,8 @@ with mitxonline_product as (
         on edxorg_paid_product.courserun_readable_id = edxorg_runs.courserun_readable_id
         and edxorg_paid_product._row_num = 1
     left join mitxonline_product_view
-        on edxorg_paid_product.courserun_readable_id = mitxonline_product_view.product_readable_id
+        on  {{ format_course_id('edxorg_paid_product.courserun_readable_id') }}
+            =  {{ format_course_id('mitxonline_product_view.product_readable_id') }}
     where
         mitxonline_product_view.product_readable_id is null
 
