@@ -185,20 +185,83 @@ def test_loads_the_requested_window(
 
 
 @pytest.mark.integration
-def test_second_run_resumes_and_loads_nothing_new(
+def test_second_run_rereads_only_the_lookback_window(
     test_profile: Path,
     fake_filesystem: FakeS3FileSystem,  # noqa: ARG001
 ) -> None:
-    """The cursor advances past the loaded hours, so a re-run appends no rows."""
+    """A re-run repeats the lookback hours and discovers no new events.
+
+    The re-read is the price of CURSOR_LOOKBACK and is why the staging model
+    deduplicates on the event uuid. What must not change is the set of events:
+    a resumed run finds nothing it has not already seen.
+    """
     pipeline = config.pipeline_for("posthog", pipeline_name="posthog_events_test")
     pipeline.run(
         _source(start_date=date(2026, 3, 1), end_date=date(2026, 3, 1)),
         loader_file_format="parquet",
     )
+    first = pipeline.dataset()[posthog_events.RESOURCE_NAME].arrow()
+
+    pipeline.run(_source(end_date=date(2026, 3, 1)), loader_file_format="parquet")
+    second = pipeline.dataset()[posthog_events.RESOURCE_NAME].arrow()
+
+    # Both fixture hours sit inside the 3h lookback, so both are read again.
+    assert second.num_rows == first.num_rows * 2
+    assert set(second.column("uuid").to_pylist()) == set(
+        first.column("uuid").to_pylist()
+    )
+
+
+@pytest.mark.integration
+def test_an_hour_that_lands_late_is_still_picked_up(
+    test_profile: Path,
+    export_root: Path,
+    fake_filesystem: FakeS3FileSystem,  # noqa: ARG001
+) -> None:
+    """A window absent when a later one is read is not skipped forever.
+
+    The cursor is a single high-water mark, so without CURSOR_LOOKBACK reading
+    12:00-13:00 while 11:00-12:00 is missing would move it past the gap and
+    nothing afterwards would satisfy `after < window_end` for the missing hour.
+    """
+    late_start = datetime(2026, 3, 1, 11, tzinfo=UTC)
+    late_end = datetime(2026, 3, 1, 12, tzinfo=UTC)
+    late_object = export_root / _object_key(late_start, late_end)
+    late_rows = [
+        _event_row("uuid-late-a", "search_update", late_start),
+        _event_row("uuid-late-b", "$pageview", late_start),
+    ]
+    late_object.unlink()
+
+    _write_export_object(
+        export_root / _object_key(late_end, datetime(2026, 3, 1, 13, tzinfo=UTC)),
+        [_event_row("uuid-2-a", "search_update", late_end)],
+    )
+
+    pipeline = config.pipeline_for("posthog", pipeline_name="posthog_events_gap")
+    pipeline.run(
+        _source(start_date=date(2026, 3, 1), end_date=date(2026, 3, 1)),
+        loader_file_format="parquet",
+    )
+    seen = set(
+        pipeline.dataset()[posthog_events.RESOURCE_NAME]
+        .arrow()
+        .column("uuid")
+        .to_pylist()
+    )
+    assert "uuid-2-a" in seen, "the later hour should have been read"
+    assert "uuid-late-a" not in seen, "the missing hour cannot have been read yet"
+
+    _write_export_object(late_object, late_rows)
     pipeline.run(_source(end_date=date(2026, 3, 1)), loader_file_format="parquet")
 
-    table = pipeline.dataset()[posthog_events.RESOURCE_NAME].arrow()
-    assert table.num_rows == 4  # noqa: PLR2004
+    seen = set(
+        pipeline.dataset()[posthog_events.RESOURCE_NAME]
+        .arrow()
+        .column("uuid")
+        .to_pylist()
+    )
+    assert "uuid-late-a" in seen, "the late hour was skipped by the cursor"
 
 
 @pytest.mark.integration
