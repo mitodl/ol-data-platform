@@ -1,7 +1,6 @@
 """Tests for ml.lib.summarize."""
 
 import polars as pl
-import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import summarize
 from openai import OpenAI
@@ -119,54 +118,54 @@ def test_filter_unsummarized_drops_already_summarized_rows_with_same_turn_count(
 
 
 class _FakeLLM:
-    def __init__(self, client: object) -> None:
+    """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
+
+    def __init__(self, client: object, model_version: str) -> None:
         self._client = client
+        self._model_version = model_version
 
     def get_client(self) -> object:
         return self._client
 
+    def model_version_for_client(self) -> str:
+        return self._model_version
 
-def test_build_summary_client_uses_configured_model_for_openai(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SUMMARY_MODEL_VERSION is vendor-agnostic: whatever it's set to is what gets
-    sent to whichever backend is configured -- the caller is responsible for
-    setting it to an id that backend actually recognizes.
+
+def test_build_summary_client_uses_configured_model_for_openai() -> None:
+    """model_version is vendor-agnostic: whatever LLMClientFactory is configured
+    with is what gets sent to whichever backend is configured -- the caller is
+    responsible for setting it to an id that backend actually recognizes.
     """
-    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "gpt-4o-mini")
-
-    client = summarize.build_summary_client(_FakeLLM(OpenAI(api_key="sk-test")))
+    client = summarize.build_summary_client(
+        _FakeLLM(OpenAI(api_key="sk-test"), "gpt-4o-mini")  # pragma: allowlist secret
+    )
 
     assert isinstance(client, summarize.OpenAISummaryClient)
     assert client.model_version == "gpt-4o-mini"
 
 
-def test_build_summary_client_uses_configured_model_for_anthropic(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
-
-    client = summarize.build_summary_client(_FakeLLM(Anthropic(api_key="sk-ant-test")))
+def test_build_summary_client_uses_configured_model_for_anthropic() -> None:
+    client = summarize.build_summary_client(
+        _FakeLLM(
+            Anthropic(api_key="sk-ant-test"),  # pragma: allowlist secret
+            "claude-haiku-4-5",
+        )
+    )
 
     assert isinstance(client, summarize.AnthropicSummaryClient)
     assert client.model_version == "claude-haiku-4-5"
 
 
-def test_build_summary_client_uses_bedrock_model_for_bedrock(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SUMMARY_MODEL_VERSION is an Anthropic API id and never valid on Bedrock, so
-    the Bedrock path must use BEDROCK_SUMMARY_MODEL_VERSION instead.
+def test_build_summary_client_uses_bedrock_model_for_bedrock() -> None:
+    """A plain Anthropic API id (as model_version_for_client would return for
+    client_class="anthropic") is never valid on Bedrock -- LLMClientFactory picks
+    bedrock_model_version instead, which build_summary_client must pass through.
     """
-    monkeypatch.setattr(summarize, "SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
-    monkeypatch.setattr(
-        summarize,
-        "BEDROCK_SUMMARY_MODEL_VERSION",
-        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-    )
-
     client = summarize.build_summary_client(
-        _FakeLLM(AnthropicBedrock(aws_region="us-east-1"))
+        _FakeLLM(
+            AnthropicBedrock(aws_region="us-east-1"),
+            "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        )
     )
 
     assert isinstance(client, summarize.AnthropicSummaryClient)

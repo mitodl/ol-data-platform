@@ -141,6 +141,44 @@ def test_get_client_azure_openai_reads_vault_and_caches() -> None:
     assert kv_v1.reads == 1
 
 
+def test_model_version_for_client_defaults_to_anthropic_model_version() -> None:
+    kv_v1 = _FakeKvV1({})
+    factory = LLMClientFactory(vault=_build_vault(kv_v1))
+
+    assert factory.model_version_for_client() == "claude-haiku-4-5"
+
+
+def test_model_version_for_client_uses_bedrock_model_version_for_bedrock() -> None:
+    """model_version is a plain Anthropic API id, never valid on Bedrock -- the
+    bedrock client_class must select bedrock_model_version instead.
+    """
+    kv_v1 = _FakeKvV1({})
+    factory = LLMClientFactory(vault=_build_vault(kv_v1), client_class="bedrock")
+
+    assert (
+        factory.model_version_for_client()
+        == "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    )
+
+
+def test_model_version_for_client_is_overridable_per_run() -> None:
+    """Both fields are ordinary resource config -- overridable via Dagster run
+    config (e.g. the launchpad) to experiment with a different model, with no
+    code change or redeploy needed.
+    """
+    kv_v1 = _FakeKvV1({})
+    factory = LLMClientFactory(
+        vault=_build_vault(kv_v1),
+        client_class="bedrock",
+        bedrock_model_version="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    )
+
+    assert (
+        factory.model_version_for_client()
+        == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    )
+
+
 def test_get_client_azure_openai_honors_env_var(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

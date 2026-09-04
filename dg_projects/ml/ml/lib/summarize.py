@@ -40,20 +40,6 @@ MAX_CONSECUTIVE_FAILED_CHUNKS = int(
 # for a bigger cost cut.
 SKIP_CHAR_THRESHOLD = 500
 
-# Defaults to an Anthropic model id, matching LLMClientFactory's own
-# client_class="anthropic" default. A model id is only valid for one vendor's API,
-# so switching client_class to "openai"/"openai_compatible" requires overriding
-# this to a matching id (e.g. "gpt-4o-mini") -- there is no one id valid everywhere.
-SUMMARY_MODEL_VERSION = os.environ.get("SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
-
-# Bedrock uses its own model id namespace (a Bedrock model or inference-profile
-# id, e.g. "global.anthropic.claude-haiku-4-5-20251001-v1:0"), never the plain
-# Anthropic API id above -- client_class="bedrock" needs this override instead.
-BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
-    "BEDROCK_SUMMARY_MODEL_VERSION",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-)
-
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
     "view. Focus on the problem reported and its resolution if one is present. "
@@ -76,13 +62,11 @@ class AnthropicSummaryClient:
     interface but is not an Anthropic subclass.
     """
 
-    def __init__(self, client: Anthropic | AnthropicBedrock) -> None:
+    def __init__(
+        self, client: Anthropic | AnthropicBedrock, model_version: str
+    ) -> None:
         self._client = client
-        self.model_version = (
-            BEDROCK_SUMMARY_MODEL_VERSION
-            if isinstance(client, AnthropicBedrock)
-            else SUMMARY_MODEL_VERSION
-        )
+        self.model_version = model_version
 
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
@@ -103,19 +87,20 @@ class AnthropicSummaryClient:
 class OpenAISummaryClient:
     """Adapts an OpenAI-compatible client to the SummaryClient protocol."""
 
-    def __init__(self, client: OpenAI) -> None:
-        if SUMMARY_MODEL_VERSION.startswith("claude"):
+    def __init__(self, client: OpenAI, model_version: str) -> None:
+        if model_version.startswith("claude"):
             # Can't validate a model id belongs to OpenAI in general, but a Claude
             # id can never work here -- catches the default-left-unset case rather
             # than failing later with an opaque error from OpenAI's API.
             msg = (
-                f"SUMMARY_MODEL_VERSION={SUMMARY_MODEL_VERSION!r} looks like an "
-                "Anthropic model id, but client_class='openai' is configured. Set "
-                "SUMMARY_MODEL_VERSION to an OpenAI model id (e.g. 'gpt-4o-mini')."
+                f"model_version={model_version!r} looks like an Anthropic model "
+                "id, but client_class='openai' is configured. Set "
+                "LLMClientFactory.model_version to an OpenAI model id "
+                "(e.g. 'gpt-4o-mini')."
             )
             raise ValueError(msg)
         self._client = client
-        self.model_version = SUMMARY_MODEL_VERSION
+        self.model_version = model_version
 
     def summarize(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
@@ -136,9 +121,10 @@ def build_summary_client(
     llm: LLMClientFactory,
 ) -> AnthropicSummaryClient | OpenAISummaryClient:
     client = llm.get_client()
+    model_version = llm.model_version_for_client()
     if isinstance(client, Anthropic | AnthropicBedrock):
-        return AnthropicSummaryClient(client)
-    return OpenAISummaryClient(client)
+        return AnthropicSummaryClient(client, model_version)
+    return OpenAISummaryClient(client, model_version)
 
 
 def filter_unsummarized(
