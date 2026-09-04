@@ -2,6 +2,7 @@
 
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
+from dagster import asset, materialize
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
@@ -177,6 +178,32 @@ def test_model_version_for_client_is_overridable_per_run() -> None:
         factory.model_version_for_client()
         == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     )
+
+
+def test_configure_at_launch_allows_run_config_to_override_model_version() -> None:
+    """LLMClientFactory must be registered via configure_at_launch() (see
+    ml/definitions.py), not instantiated directly -- otherwise its fields are
+    frozen at code-location load time and a Launchpad run-config override never
+    reaches model_version_for_client(). This exercises the actual Dagster
+    run-config path, not just the constructor, to catch that regression.
+    """
+    kv_v1 = _FakeKvV1({})
+    partial_llm = LLMClientFactory.configure_at_launch(
+        vault=_build_vault(kv_v1), client_class="anthropic"
+    )
+
+    @asset
+    def _model_version_probe(llm: LLMClientFactory) -> str:
+        return llm.model_version_for_client()
+
+    result = materialize(
+        [_model_version_probe],
+        resources={"llm": partial_llm},
+        run_config={"resources": {"llm": {"config": {"model_version": "gpt-4o-mini"}}}},
+    )
+
+    assert result.success
+    assert result.output_for_node("_model_version_probe") == "gpt-4o-mini"
 
 
 def test_get_client_azure_openai_honors_env_var(
