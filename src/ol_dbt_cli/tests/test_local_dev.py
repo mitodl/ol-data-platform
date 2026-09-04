@@ -14,6 +14,7 @@ from ol_dbt_cli.commands.local_dev import (
     _describe_registry_age,
     _register_single_table,
     _registry_last_refreshed,
+    _show_registry,
     _stale_threshold_phrase,
     _validate_schema_safety,
     snapshot,
@@ -311,6 +312,46 @@ class TestRegistryAge:
                 f"INSERT OR REPLACE INTO _glue_registry_scans VALUES (?, {scanned_at_sql})",  # noqa: S608
                 (glue_database,),
             )
+
+    def test_reports_age_through_show_registry(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """_show_registry must report the age, not degrade it to "unknown".
+
+        Regression: _show_registry holds a read-write connection while asking for
+        the age. When _registry_last_refreshed opened its own read_only handle to
+        the same file, DuckDB refused it ("Can't open a connection to same
+        database file with a different configuration") and the broad except
+        turned a readable 3-day-old registry into "unknown" -- so list-sources
+        could never report an age or warn, on either a fresh or a stale registry.
+        """
+        import duckdb
+
+        db = tmp_path / "local.duckdb"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE _glue_source_registry (
+                    view_name VARCHAR PRIMARY KEY,
+                    glue_database VARCHAR,
+                    glue_table VARCHAR,
+                    metadata_location VARCHAR,
+                    registered_at TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "INSERT INTO _glue_source_registry VALUES ('glue__my_db__t', 'my_db', 't', 's3://x', CURRENT_TIMESTAMP)"
+            )
+            conn.execute("""
+                CREATE TABLE _glue_registry_scans (
+                    glue_database VARCHAR PRIMARY KEY,
+                    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("INSERT INTO _glue_registry_scans VALUES ('my_db', CURRENT_TIMESTAMP - INTERVAL 3 DAY)")
+
+        _show_registry(db)
+        out = capsys.readouterr().out
+        assert "unknown" not in out
+        assert "3.0 days ago" in out
+        assert "More than a day old" in out
 
     def test_returns_none_when_no_database_file(self, tmp_path: Path) -> None:
         assert _registry_last_refreshed(tmp_path / "missing.duckdb", ["my_db"]) is None

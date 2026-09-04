@@ -35,8 +35,7 @@ DEFAULT_DUCKDB_PATH = Path.home() / ".ol-dbt" / "local.duckdb"
 DEFAULT_GLUE_DATABASE = "ol_warehouse_production_raw"
 
 # How old the newest successful Glue-scan entry may get before `register` and
-# `list-sources`
-# warn about it. A registered view pins one Iceberg metadata.json; when production
+# `list-sources` warn about it. A registered view pins one Iceberg metadata.json; when production
 # rebuilds that table the old metadata file is eventually cleaned up, and the
 # pinned view starts failing with an S3 404 that says nothing about staleness
 # being the cause. Re-running `register` re-reads Glue and repoints the view, so
@@ -198,22 +197,37 @@ def _record_registry_scan(duckdb_path: Path, database_name: str) -> None:
         )
 
 
-def _registry_last_refreshed(duckdb_path: Path, databases: list[str]) -> datetime.datetime | None:
+def _registry_last_refreshed(
+    duckdb_path: Path,
+    databases: list[str],
+    conn: duckdb.DuckDBPyConnection | None = None,
+) -> datetime.datetime | None:
     """Return the newest Glue scan timestamp across *databases*, or None if unknown.
 
     None covers every "cannot tell" case — no DuckDB file, no scan table, no rows
     for these databases — because the caller treats them identically: it has no
     age to report and says so, rather than implying a fresh registry.
+
+    Pass *conn* when the caller already holds a connection to this file. DuckDB
+    refuses a second connection to the same path under a different configuration
+    ("Can't open a connection to same database file with a different
+    configuration than existing connections"), so opening a read_only handle of
+    our own beside an open read-write one raises, and the except below would turn
+    a perfectly readable stale registry into "unknown". That is what made
+    ``list-sources`` never report an age.
     """
-    if not duckdb_path.exists() or not databases:
+    if not databases:
+        return None
+    if conn is None and not duckdb_path.exists():
         return None
     placeholders = ", ".join("?" for _ in databases)
+    sql = f"SELECT max(scanned_at) FROM _glue_registry_scans WHERE glue_database IN ({placeholders})"  # noqa: S608
     try:
-        with duckdb.connect(str(duckdb_path), read_only=True) as conn:
-            row = conn.execute(
-                f"SELECT max(scanned_at) FROM _glue_registry_scans WHERE glue_database IN ({placeholders})",  # noqa: S608
-                databases,
-            ).fetchone()
+        if conn is not None:
+            row = conn.execute(sql, databases).fetchone()
+        else:
+            with duckdb.connect(str(duckdb_path), read_only=True) as own_conn:
+                row = own_conn.execute(sql, databases).fetchone()
     except Exception:  # noqa: BLE001
         return None
     return row[0] if row else None
@@ -469,7 +483,9 @@ def _show_registry(duckdb_path: Path) -> None:
         print("=" * 100)
 
         databases = sorted({row[1] for row in result})
-        newest_phrase, is_stale = _describe_registry_age(_registry_last_refreshed(duckdb_path, databases))
+        # Reuse this function's connection — a second handle to the same file
+        # would be refused and silently degrade the age to "unknown".
+        newest_phrase, is_stale = _describe_registry_age(_registry_last_refreshed(duckdb_path, databases, conn=conn))
         print(f"  Last refreshed: {newest_phrase}")
         if is_stale:
             print(
