@@ -78,7 +78,9 @@ TIKA_BASE_URL = TIKA_ENVIRONMENTS.get(DAGSTER_ENV, "https://tika-qa.ol.mit.edu")
 # authenticates to its own Vault (vault-$DAGSTER_ENV), and the tika stack writes
 # secret-operations/tika/access-token there from the same value it inlines as
 # the `expected` token in the APISIX route guarding that environment's Tika, so
-# a token read from this path always matches the gateway it will be sent to.
+# a token read from this path matches the gateway it will be sent to -- with the
+# exception of `ci`, which reads from vault-ci but posts to the QA host above.
+# That pre-existing host/Vault mismatch is out of scope here.
 # Reading the env-scoped secret-operations/{production-apps,rc-apps}/tika/
 # access-token is what broke this asset: the tika stack stopped writing those
 # paths, the Dagster Vault policy never granted them, and the denial below
@@ -87,9 +89,11 @@ TIKA_BASE_URL = TIKA_ENVIRONMENTS.get(DAGSTER_ENV, "https://tika-qa.ol.mit.edu")
 # Resilient, but not silent. Substituting an empty token without saying so is
 # how this shipped broken for a day: the location loaded healthy, nothing
 # logged, and the only symptom was a 401 buried in the run logs of an asset
-# that had never once succeeded. Log loudly enough for Sentry to raise it,
-# then carry on -- an empty token costs one asset, whereas failing the import
-# costs every asset in the location.
+# that had never once succeeded. Log at ERROR in the code location's process
+# logs, then carry on -- an empty token costs one asset, whereas failing the
+# import costs every asset in the location. Note that this does not raise in
+# Sentry: init_sentry configures LoggingIntegration(event_level=None), so log
+# records become breadcrumbs and never events.
 if not vault_authenticated:
     log.error(
         "Vault is unauthenticated, so the Tika access token is empty. Tika "
