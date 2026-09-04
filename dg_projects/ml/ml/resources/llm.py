@@ -51,31 +51,6 @@ class LLMClientFactory(ConfigurableResource):
             "required when client_class='azure_openai'"
         ),
     )
-    # Plain default=, not default_factory=: computed once at import time (same
-    # timing the old module-level constants used), so Dagster's resource docs
-    # page can render it -- default_factory is a callable, which the UI can't
-    # display a value for.
-    model_version: str = Field(
-        default=os.environ.get("SUMMARY_MODEL_VERSION", "claude-haiku-4-5"),
-        description=(
-            "Model id sent to the anthropic/openai/openai_compatible/azure_openai "
-            "client classes. A model id is only valid for one vendor's API, so "
-            "switching client_class requires overriding this to a matching id "
-            "(e.g. 'gpt-4o-mini' for client_class='openai')."
-        ),
-    )
-    bedrock_model_version: str = Field(
-        default=os.environ.get(
-            "BEDROCK_SUMMARY_MODEL_VERSION",
-            "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-        ),
-        description=(
-            "Bedrock model/inference-profile id, used instead of model_version "
-            "when client_class='bedrock' -- Bedrock has its own id namespace "
-            "(e.g. 'global.anthropic.claude-haiku-4-5-20251001-v1:0'), never the "
-            "plain Anthropic API id in model_version."
-        ),
-    )
 
     _client: Anthropic | OpenAI | AnthropicBedrock | None = PrivateAttr(default=None)
 
@@ -124,16 +99,6 @@ class LLMClientFactory(ConfigurableResource):
         self._client = sdk_client_class(api_key=self._resolve_api_key(env_key_var))
 
         return self._client
-
-    def model_version_for_client(self) -> str:
-        """Return the model id matching whichever client get_client() will build.
-
-        Lets a caller (e.g. summarize.build_summary_client) read the resource's
-        model config without duplicating the client_class == "bedrock" branch.
-        """
-        if self.client_class == "bedrock":
-            return self.bedrock_model_version
-        return self.model_version
 
     def _require(self, value: str | None, field_name: str) -> str:
         """Return value, or raise naming the field and client_class that need it."""

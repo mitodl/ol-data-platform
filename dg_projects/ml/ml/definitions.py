@@ -105,13 +105,7 @@ defs = Definitions(
         # Bedrock in production: IAM metadata auth, same as S3 access, no API
         # key/Vault secret. Everywhere else keeps the Vault-backed Anthropic
         # client (and ANTHROPIC_API_KEY still overrides it for local dev).
-        #
-        # configure_at_launch(), not a plain LLMClientFactory(...): a directly
-        # instantiated ConfigurableResource is fully resolved at code-location
-        # load time, so its fields (e.g. model_version) can't be overridden from
-        # the Launchpad -- configure_at_launch() defers resolution to run
-        # launch, which is what lets a run pick a different model to try.
-        "llm": LLMClientFactory.configure_at_launch(
+        "llm": LLMClientFactory(
             vault=vault,
             client_class="bedrock" if DAGSTER_ENV == "production" else "anthropic",
         ),
