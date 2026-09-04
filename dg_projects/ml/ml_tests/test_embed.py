@@ -30,6 +30,7 @@ class _FakeEmbeddingClient:
 def test_resolve_embedding_text_picks_summary_or_concatenated_turns() -> None:
     summaries_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1", "pk-2"],
             "source_slug": ["zendesk", "zendesk"],
             "conversation_ref": ["1", "2"],
             "turn_count": [3, 1],
@@ -39,6 +40,7 @@ def test_resolve_embedding_text_picks_summary_or_concatenated_turns() -> None:
     )
     conversation_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1", "pk-2"],
             "source_slug": ["zendesk", "zendesk"],
             "conversation_ref": ["1", "2"],
             "conversation_text": ["full turn 1\n---\nfull turn 2", "one turn"],
@@ -55,6 +57,7 @@ def test_resolve_embedding_text_picks_summary_or_concatenated_turns() -> None:
 def test_filter_unembedded_drops_already_embedded_rows() -> None:
     source_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1", "pk-2"],
             "source_slug": ["zendesk", "zendesk"],
             "conversation_ref": ["1", "2"],
             "turn_count": [3, 1],
@@ -64,6 +67,7 @@ def test_filter_unembedded_drops_already_embedded_rows() -> None:
     )
     already_embedded_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -91,6 +95,7 @@ def test_filter_unembedded_reembeds_on_turn_count_change() -> None:
     """
     source_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [4],
@@ -100,6 +105,7 @@ def test_filter_unembedded_reembeds_on_turn_count_change() -> None:
     )
     already_embedded_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -123,6 +129,7 @@ def test_filter_unembedded_reembeds_on_input_arm_change() -> None:
     """A conversation embedded off concatenated_turns is reprocessed once summarized."""
     source_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -132,6 +139,7 @@ def test_filter_unembedded_reembeds_on_input_arm_change() -> None:
     )
     already_embedded_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -154,6 +162,7 @@ def test_filter_unembedded_reembeds_on_input_arm_change() -> None:
 def test_filter_unembedded_reembeds_on_stale_model_version() -> None:
     source_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -163,6 +172,7 @@ def test_filter_unembedded_reembeds_on_stale_model_version() -> None:
     )
     already_embedded_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -186,6 +196,7 @@ def test_filter_unembedded_reembeds_on_stale_dim() -> None:
     """A dimension sweep on the same model (e.g. 512 -> 1024) triggers re-embedding."""
     source_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -195,6 +206,7 @@ def test_filter_unembedded_reembeds_on_stale_dim() -> None:
     )
     already_embedded_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [3],
@@ -218,6 +230,7 @@ def test_embed_conversations_skips_null_text() -> None:
     client = _FakeEmbeddingClient()
     df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1", "pk-2"],
             "source_slug": ["zendesk", "zendesk"],
             "conversation_ref": ["1", "2"],
             "turn_count": [3, 1],
@@ -243,6 +256,7 @@ def test_embed_conversations_batches_calls() -> None:
     client = _FakeEmbeddingClient()
     df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
             "source_slug": ["zendesk", "zendesk", "zendesk"],
             "conversation_ref": ["1", "2", "3"],
             "turn_count": [1, 1, 1],
@@ -263,6 +277,7 @@ def test_embed_conversations_retries_individually_on_batch_failure() -> None:
     client = _FakeEmbeddingClient()
     df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
             "source_slug": ["zendesk", "zendesk", "zendesk"],
             "conversation_ref": ["1", "2", "3"],
             "turn_count": [1, 1, 1],
@@ -302,17 +317,23 @@ class _FakeTable:
 class _FakeCatalog:
     def __init__(self, table: _FakeTable) -> None:
         self._table = table
-        self.load_calls: list[str] = []
+        self.create_calls: list[str] = []
 
-    def load_table(self, identifier: str) -> _FakeTable:
-        self.load_calls.append(identifier)
+    def create_table_if_not_exists(
+        self,
+        identifier: str,
+        **kwargs: object,  # noqa: ARG002
+    ) -> _FakeTable:
+        self.create_calls.append(identifier)
         return self._table
 
 
 def _embedding_df(**overrides: object) -> pl.DataFrame:
+    conversation_ref = overrides.get("conversation_ref", "1")
     row = {
+        "feedback_conversation_pk": f"pk-{conversation_ref}",
         "source_slug": "zendesk",
-        "conversation_ref": "1",
+        "conversation_ref": conversation_ref,
         "turn_count": 1,
         "embedding_input": "summary",
         "resolved_text": "hello",
@@ -326,6 +347,7 @@ def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
     catalog = _FakeCatalog(table)
     chunk_df = pl.DataFrame(
         {
+            "feedback_conversation_pk": ["pk-1"],
             "source_slug": ["zendesk"],
             "conversation_ref": ["1"],
             "turn_count": [1],
@@ -338,7 +360,7 @@ def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
 
     embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", chunk_df)
 
-    assert catalog.load_calls == ["some_db.feedback_embeddings"]
+    assert catalog.create_calls == ["some_db.feedback_embeddings"]
     assert len(table.upserts) == 1
     assert table.upserts[0]["join_cols"] == embed.JOIN_COLS
 
@@ -352,7 +374,7 @@ def test_checkpoint_embedding_chunk_skips_empty_chunks_without_touching_catalog(
 
     embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", empty_df)
 
-    assert catalog.load_calls == []
+    assert catalog.create_calls == []
     assert table.upserts == []
 
 

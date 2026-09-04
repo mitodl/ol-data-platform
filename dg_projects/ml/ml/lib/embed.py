@@ -9,10 +9,10 @@ from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
-JOIN_COLS = ["source_slug", "conversation_ref"]
+JOIN_COLS = ["feedback_conversation_pk"]
 
 EMBEDDING_CHECKPOINT_SCHEMA = {
-    **dict.fromkeys(JOIN_COLS, pl.String),
+    **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
     "turn_count": pl.Int64,
     "embedding_input": pl.String,
     "embedding_vector": pl.List(pl.Float32),
@@ -95,16 +95,18 @@ def resolve_embedding_text(
     """Pick each conversation's embedding input text per its embedding_input arm.
 
     Args:
-        summaries_df: feedback_summaries output -- source_slug, conversation_ref,
-            turn_count, conversation_summary, embedding_input.
-        conversation_df: int__feedback__conversation -- source_slug, conversation_ref,
-            conversation_text.
+        summaries_df: feedback_summaries output -- feedback_conversation_pk,
+            source_slug, conversation_ref, turn_count, conversation_summary,
+            embedding_input.
+        conversation_df: int__feedback__conversation -- feedback_conversation_pk,
+            source_slug, conversation_ref, conversation_text.
 
     Returns:
-        pl.DataFrame: source_slug, conversation_ref, turn_count, embedding_input,
-            resolved_text (conversation_summary where embedding_input == 'summary',
-            else conversation_text). A conversation with no feedback_summaries row
-            (skipped as short/single-turn, or not yet summarized) isn't emitted here.
+        pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
+            turn_count, embedding_input, resolved_text (conversation_summary where
+            embedding_input == 'summary', else conversation_text). A conversation
+            with no feedback_summaries row (skipped as short/single-turn, or not
+            yet summarized) isn't emitted here.
     """
     joined = summaries_df.join(
         conversation_df.select([*JOIN_COLS, "conversation_text"]),
@@ -116,7 +118,16 @@ def resolve_embedding_text(
         .then(pl.col("conversation_summary"))
         .otherwise(pl.col("conversation_text"))
         .alias("resolved_text")
-    ).select([*JOIN_COLS, "turn_count", "embedding_input", "resolved_text"])
+    ).select(
+        [
+            *JOIN_COLS,
+            "source_slug",
+            "conversation_ref",
+            "turn_count",
+            "embedding_input",
+            "resolved_text",
+        ]
+    )
 
 
 def filter_unembedded(
@@ -224,6 +235,7 @@ def _results_to_df(
 ) -> pl.DataFrame:
     if not results:
         return pl.DataFrame(schema=EMBEDDING_CHECKPOINT_SCHEMA)
+    feedback_conversation_pks = [row["feedback_conversation_pk"] for row, _ in results]
     source_slugs = [row["source_slug"] for row, _ in results]
     conversation_refs = [row["conversation_ref"] for row, _ in results]
     turn_counts = [row["turn_count"] for row, _ in results]
@@ -232,6 +244,9 @@ def _results_to_df(
 
     return pl.DataFrame(
         {
+            "feedback_conversation_pk": pl.Series(
+                feedback_conversation_pks, dtype=pl.String
+            ),
             "source_slug": pl.Series(source_slugs, dtype=pl.String),
             "conversation_ref": pl.Series(conversation_refs, dtype=pl.String),
             "turn_count": pl.Series(turn_counts, dtype=pl.Int64),
@@ -254,18 +269,19 @@ def embed_conversations(
     """Embed each conversation's resolved_text, in bounded batches.
 
     Args:
-        df: a frame with (at least) source_slug, conversation_ref, turn_count,
-            embedding_input, resolved_text columns, e.g. resolve_embedding_text's
-            output.
+        df: a frame with (at least) feedback_conversation_pk, source_slug,
+            conversation_ref, turn_count, embedding_input, resolved_text columns,
+            e.g. resolve_embedding_text's output.
         client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
             method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
         errors: if given, each failure's message is appended here (see _embed_chunk).
 
     Returns:
-        pl.DataFrame: source_slug, conversation_ref, turn_count, embedding_vector,
-            embedding_dim, embedding_model_version, embedding_input - keyed the same
-            way feedback_conversation_pk is minted, for afact_feedback_conversation to
-            left-join. turn_count is carried through so a later run's filter_unembedded
+        pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
+            turn_count, embedding_vector, embedding_dim, embedding_model_version,
+            embedding_input - keyed by feedback_conversation_pk, for
+            afact_feedback_conversation to left-join. turn_count is carried through
+            so a later run's filter_unembedded
             can detect a conversation that gained a turn. A null resolved_text
             (upstream summary/redaction not ready yet) is skipped and retried next
             run, same as a failed API call (#2542's checkpointing precedent).
@@ -289,10 +305,17 @@ def checkpoint_embedding_chunk(
     upserted so far, so the next run's ordinary filter_unembedded pass sees it as
     already embedded, no separate recovery step needed. table_identifier is
     "database.table", e.g. "ol_warehouse_production_intermediate.feedback_embeddings".
+
+    create_table_if_not_exists rather than load_table: a brand-new deployment (or a
+    dropped dev table) has no feedback_embeddings table yet, and this call -- not
+    the io_manager's write of the asset's final return -- is the first write of any
+    run, so it must be able to bootstrap the table itself.
     """
     if chunk_df.height == 0:
         return
-    table = catalog.load_table(table_identifier)
+    table = catalog.create_table_if_not_exists(
+        table_identifier, schema=chunk_df.to_arrow().schema
+    )
     table.upsert(
         df=chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
