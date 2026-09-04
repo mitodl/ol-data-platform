@@ -257,12 +257,18 @@ Tracked by `tk-ocw-text-extraction-assets-integrations-learn-oc-8ff9b4`.
 | `SyncOCWContentFilesTask` | `integrations.integrations__learn__ocw_content_files` |
 | `SyncOpenEdXContentFilesTask` | `integrations.integrations__learn__content_files` |
 
-Neither model exists yet. Both must expose at minimum the scope key (`readable_id` of the owning
-course/run), `etl_source` (needed by the §4 prune predicate to disambiguate scope keys across
-sources), plus the `ContentFile` fields MIT Learn persists — `key`, `title`, `description`,
-`url`, `file_type`, `content`, `content_title`, `content_author`, `content_language`,
-`content_type`, `image_src`, `uid` — and a `last_modified` for the incremental (`since`) path.
-Column names must match `learn_marts_contract.md` conventions.
+Neither model exists yet. Both must expose at minimum the scope key, `etl_source` (needed by the
+§4 prune predicate to disambiguate scope keys across sources), plus the `ContentFile` fields MIT
+Learn persists — `key`, `title`, `description`, `url`, `file_type`, `content`, `content_title`,
+`content_author`, `content_language`, `content_type`, `image_src`, `uid`, `edx_module_id`,
+`source_path`, `file_extension`, `checksum` — and a `last_modified` for the incremental (`since`)
+path. Column names must match `learn_marts_contract.md` conventions.
+
+**Naming: `run_readable_id`, not `readable_id`.** This view is one row per file, so its own
+identity column is `key` (the `ContentFile` key). Calling the scope-key column `readable_id` here
+would clash with §2's `readable_id`, which is the payload's course/run-level field — despite both
+naming the same underlying value, this is one row per *file* using a column that reads like the
+row's own key. Name it `run_readable_id` to keep the two unambiguous.
 
 ## 10. Checklist before enabling any source
 
