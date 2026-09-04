@@ -1,5 +1,6 @@
 """OpenEdX data extraction and tracking log normalization definitions."""
 
+import logging
 import os
 from datetime import UTC, datetime
 from functools import partial
@@ -31,6 +32,8 @@ from openedx.jobs.normalize_logs import (
 )
 
 init_sentry("openedx")
+
+log = logging.getLogger(__name__)
 
 # Initialize vault with resilient loading
 try:
@@ -80,17 +83,33 @@ TIKA_BASE_URL = TIKA_ENVIRONMENTS.get(DAGSTER_ENV, "https://tika-qa.ol.mit.edu")
 # access-token is what broke this asset: the tika stack stopped writing those
 # paths, the Dagster Vault policy never granted them, and the denial below
 # turned into an empty token and a 401 on every extraction.
-try:
-    tika_access_token = (
-        vault.client.secrets.kv.v1.read_secret(
+#
+# Resilient, but not silent. Substituting an empty token without saying so is
+# how this shipped broken for a day: the location loaded healthy, nothing
+# logged, and the only symptom was a 401 buried in the run logs of an asset
+# that had never once succeeded. Log loudly enough for Sentry to raise it,
+# then carry on -- an empty token costs one asset, whereas failing the import
+# costs every asset in the location.
+if not vault_authenticated:
+    log.error(
+        "Vault is unauthenticated, so the Tika access token is empty. Tika "
+        "extraction will fail with a 401 until Vault auth is restored."
+    )
+    tika_access_token = ""
+else:
+    try:
+        tika_access_token = vault.client.secrets.kv.v1.read_secret(
             mount_point="secret-operations",
             path="tika/access-token",
         )["data"]["value"]
-        if vault_authenticated
-        else ""
-    )
-except Exception:  # noqa: BLE001 (resilient loading, as above)
-    tika_access_token = ""
+    except Exception:
+        log.exception(
+            "Could not read the Tika access token from Vault at "
+            "secret-operations/tika/access-token, so it is empty. Tika "
+            "extraction will fail with a 401 until this is resolved. Check "
+            "that the Dagster Vault policy grants read on that path."
+        )
+        tika_access_token = ""
 
 
 def s3_uploads_bucket(
