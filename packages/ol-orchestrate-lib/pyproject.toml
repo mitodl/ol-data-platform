@@ -10,7 +10,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "PyAthena ~=3.35.1",
+    "PyAthena ~=3.36.0",
     "boto3 ~=1.43.0",
     "dagster ~= 1.11",
     "dagster-aws ~=0.29.0",
