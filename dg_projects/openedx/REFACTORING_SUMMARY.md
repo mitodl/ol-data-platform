@@ -91,9 +91,7 @@ all_deployment_resources = {}
 
 for deployment_name in OPENEDX_DEPLOYMENTS:
     # Create component instance for this deployment
-    component = OpenEdxDeploymentComponent(
-        deployment_name=deployment_name, vault=vault
-    )
+    component = OpenEdxDeploymentComponent(deployment_name=deployment_name, vault=vault)
 
     # Build and collect assets, sensors, and resources
     deployment_assets = component.build_assets()

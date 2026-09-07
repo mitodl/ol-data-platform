@@ -124,12 +124,11 @@ Set the `name` in each `@dlt.resource` decorator:
 
 ```python
 @dlt.resource(
-    name="raw__mitpe__api__courses",   # ← full canonical name
+    name="raw__mitpe__api__courses",  # ← full canonical name
     primary_key=["title", "url"],
     write_disposition="replace",
 )
-def courses() -> Generator[dict[str, Any], None, None]:
-    ...
+def courses() -> Generator[dict[str, Any], None, None]: ...
 ```
 
 dlt writes the Iceberg table using this name exactly. The asset key in Dagster
