@@ -481,10 +481,11 @@ class TestRawMetadataColumn:
         unit = Unit(path=Path("mitxonline__mysql.yml"), data=copy.deepcopy(APP_UNIT))
         assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
 
-    def test_dlt_unit_resolves_to_none(self) -> None:
-        # None means "no metadata column, do not deduplicate" -- not "unknown".
+    def test_dlt_unit_resolves_to_the_dlt_load_id(self) -> None:
+        # ol_dlt enables normalize.parquet_normalizer.add_dlt_load_id for every
+        # pipeline, so a dlt unit stamps a monotonic load id to order by.
         unit = Unit(path=Path("edxorg__s3.yml"), data=copy.deepcopy(DLT_UNIT))
-        assert raw_metadata_column(unit, unit.tables[0]) is None
+        assert raw_metadata_column(unit, unit.tables[0]) == "_dlt_load_id"
 
     def test_dagster_unit_resolves_to_none(self) -> None:
         data = copy.deepcopy(DLT_UNIT)
@@ -527,11 +528,19 @@ class TestRawMetadataColumn:
         declared = {table["raw_table"] for unit in units for table in unit.tables}
         assert set(mapping) == declared
 
-    def test_real_inventory_marks_the_edxorg_dlt_tables_as_undeduplicatable(self) -> None:
-        # The regression this was filed for: these are dlt output, and every one
-        # of their staging models used to order by an Airbyte column.
+    def test_real_inventory_keeps_edxorg_undeduplicatable_until_it_reloads(self) -> None:
+        # edxorg/mysql declares `raw_metadata_column: null` because its tables
+        # predate add_dlt_load_id. Ordering them by a column they do not carry is
+        # the exact regression this seam was filed for, so the explicit null has
+        # to beat the loader default until that unit reloads.
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
         assert mapping["raw__edxorg__s3__tables__auth_user"] is None
+
+    def test_real_inventory_gives_reloaded_dlt_units_the_load_id(self) -> None:
+        # A dlt unit carrying no override takes the new default, which is what
+        # makes the edxorg entry above removable rather than permanent.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
 
     def test_real_inventory_keeps_salesforce_on_the_v1_column(self) -> None:
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))

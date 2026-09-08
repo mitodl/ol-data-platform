@@ -56,20 +56,32 @@ DAGSTER_LOADER = "dagster"
 # loader (INGESTION_INVENTORY_SPEC.md §1.2).
 AIRBYTE_METADATA_COLUMN = "_airbyte_extracted_at"
 
-# dlt and dagster units get None: "there is no metadata column, so do not
-# deduplicate". That is measured, not assumed — the Iceberg schemas that dlt
-# writes here carry no metadata columns at all, neither `_airbyte_*` nor
-# `_dlt_*`. Checked 2026-09-08 against production
-# raw__edxorg__s3__tables__auth_user (28 columns, none starting with `_`) and
-# QA raw__mitxonline__app__postgres__b2b_organizationpage (7 business columns).
+# dlt stamps each row with the load package id once
+# `normalize.parquet_normalizer.add_dlt_load_id` is on, which ol_dlt enables for
+# every pipeline in src/ol_dlt/.dlt/config.toml. That config lands ahead of this
+# map and its first load has to be confirmed to stamp the column, because
+# resolving to a column no load has written is the failure this whole seam
+# exists to end. It is
+# `str(increasing_precise_time())` and dlt guarantees it increases over time for
+# a given schema/destination/dataset, so "highest load id wins" is a valid
+# latest-version ordering — the same shape as Airbyte's extracted-at column.
 #
-# Nothing is lost by not deduplicating them: dlt's `merge` disposition dedups on
-# the primary key within a load, and `replace` leaves one row per key by
-# construction. The dedup step exists for Airbyte's incremental-append mode,
-# which is what the macro's own comment says.
+# `_dlt_id` is deliberately NOT the answer: on the pyarrow backend every ol_dlt
+# source uses, it is a random per-row value. dlt's deterministic key_hash and
+# row_hash variants exist only in the relational (dict) normalizer, and the
+# arrow path carries an explicit TODO saying so.
+#
+# A dlt unit whose tables predate the flag has no such column yet, and declares
+# `raw_metadata_column: null` until its first load stamps one. That is the
+# inventory recording reality rather than this map guessing at it.
+#
+# dagster units get None and stay there: those tables come from bespoke asset
+# pipelines under dg_projects/, not from a loader that stamps anything.
+DLT_METADATA_COLUMN = "_dlt_load_id"
+
 LOADER_METADATA_COLUMNS: dict[str, str | None] = {
     AIRBYTE_LOADER: AIRBYTE_METADATA_COLUMN,
-    DLT_LOADER: None,
+    DLT_LOADER: DLT_METADATA_COLUMN,
     DAGSTER_LOADER: None,
 }
 # Which Airbyte deployment a connection belongs to when it does not say.

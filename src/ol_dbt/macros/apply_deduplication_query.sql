@@ -70,7 +70,18 @@
     , source_sorted as (
         select
             *
-            , row_number() over ( partition by {{ partition_columns }} order by {{ resolved }} desc) as row_num
+            {#-
+                NULLS LAST is explicit rather than inherited. Trino documents
+                NULLS LAST as its default in both directions, but this ordering
+                has to survive the StarRocks migration, and the case it protects
+                is real: a unit that starts stamping `_dlt_load_id` leaves rows
+                loaded before the flag with a null one. Nulls first would let a
+                stale row win the dedup.
+            -#}
+            , row_number() over (
+                partition by {{ partition_columns }}
+                order by {{ resolved }} desc nulls last
+            ) as row_num
         from source
     )
     , most_recent_source as (
