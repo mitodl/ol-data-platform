@@ -35,8 +35,6 @@ from pyiceberg.expressions import EqualTo
 if DAGSTER_ENV == "dev":
     _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
     database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-elif DAGSTER_ENV == "qa":
-    database_name = "ol_warehouse_qa_intermediate"
 else:
     database_name = "ol_warehouse_production_intermediate"
 
