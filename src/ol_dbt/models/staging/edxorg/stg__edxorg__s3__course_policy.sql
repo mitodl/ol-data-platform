@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__edxorg__s3__course_structure__course_policy') }}
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'course_id') }}
+{{ deduplicate_raw_table(raw_table='raw__edxorg__s3__course_structure__course_policy', partition_columns = 'course_id') }}
 , cleaned as (
 
     select

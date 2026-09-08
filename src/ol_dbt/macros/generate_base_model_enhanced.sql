@@ -132,8 +132,17 @@
         {%- for column in column_names -%} {%- set _ = column_mappings.update({column: column}) -%} {%- endfor -%}
     {%- endif -%}
 
-    {# Check if table needs deduplication (has airbyte metadata) #}
-    {%- set needs_deduplication = "id" in column_names and "_airbyte_extracted_at" in column_names -%}
+    {#
+        Whether the generated model deduplicates, resolved from the ingestion
+        inventory rather than from the presence of an Airbyte column.
+
+        The old test was `"_airbyte_extracted_at" in column_names`, which turned
+        dedup silently OFF for every dlt-loaded table -- the same coupling that
+        left the edxorg staging models ordering by a column their raw tables do
+        not have. raw_extracted_at() raises on a table the inventory does not
+        declare, so generation asks for the entry instead of guessing.
+    #}
+    {%- set needs_deduplication = "id" in column_names and raw_extracted_at(table_name) is not none -%}
 
     {% set base_model_sql %}
 {%- if materialized is not none -%}
@@ -161,7 +170,7 @@ with source as (
 
 {%- if needs_deduplication %}
 
-{{ "{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}" }}
+{{ "{{ deduplicate_raw_table(raw_table='" ~ table_name ~ "', partition_columns='id') }}" }}
 {%- endif %}
 
 {# Build non-airbyte columns list #}

@@ -42,6 +42,36 @@ INCREMENTAL_PREFIX = "incremental"
 XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
 AIRBYTE_LOADER = "airbyte"
+DLT_LOADER = "dlt"
+DAGSTER_LOADER = "dagster"
+
+# The raw-metadata column a staging model can order by to pick the newest copy
+# of a record key. Resolved per raw table, because one dbt source mixes tables
+# from units with different loaders and edxorg alone nests three of them.
+#
+# Airbyte's current destination writes `_airbyte_extracted_at`. Two Salesforce
+# tables still carry the v1 pair (`_airbyte_ab_id` / `_airbyte_emitted_at`) and
+# declare the override rather than being special-cased here — which is why this
+# resolves through a declaration at all instead of switching two ways on the
+# loader (INGESTION_INVENTORY_SPEC.md §1.2).
+AIRBYTE_METADATA_COLUMN = "_airbyte_extracted_at"
+
+# dlt and dagster units get None: "there is no metadata column, so do not
+# deduplicate". That is measured, not assumed — the Iceberg schemas that dlt
+# writes here carry no metadata columns at all, neither `_airbyte_*` nor
+# `_dlt_*`. Checked 2026-09-08 against production
+# raw__edxorg__s3__tables__auth_user (28 columns, none starting with `_`) and
+# QA raw__mitxonline__app__postgres__b2b_organizationpage (7 business columns).
+#
+# Nothing is lost by not deduplicating them: dlt's `merge` disposition dedups on
+# the primary key within a load, and `replace` leaves one row per key by
+# construction. The dedup step exists for Airbyte's incremental-append mode,
+# which is what the macro's own comment says.
+LOADER_METADATA_COLUMNS: dict[str, str | None] = {
+    AIRBYTE_LOADER: AIRBYTE_METADATA_COLUMN,
+    DLT_LOADER: None,
+    DAGSTER_LOADER: None,
+}
 # Which Airbyte deployment a connection belongs to when it does not say.
 # Units written before connections carried `environment` describe the
 # production workspace, the only one the generator could reach.
@@ -399,6 +429,77 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
 # ---------------------------------------------------------------------------
 # §7.2 — the graveyard, and the removal/rename check
 # ---------------------------------------------------------------------------
+
+
+def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | None:
+    """Resolve the raw-metadata ordering column for one declared table.
+
+    Returns the column name, or None meaning "this table has no metadata column,
+    so do not deduplicate it". Precedence: the table's own declaration, then the
+    unit's, then the loader default.
+
+    Resolution is per TABLE rather than per source because a dbt source mixes
+    tables from units with different loaders — dbt's own `source.loader` is not
+    usable for this (INGESTION_INVENTORY_SPEC.md §1.2: `_edxorg_sources.yml`
+    says `loader: airbyte` over 18 dlt-produced tables).
+    """
+    for holder in (table, unit.data):
+        if "raw_metadata_column" in holder:
+            declared = holder["raw_metadata_column"]
+            # `raw_metadata_column: null` is a real answer ("no column"), which
+            # is why this tests for the KEY rather than for truthiness.
+            return declared if isinstance(declared, str) else None
+    loader = unit.data.get("loader")
+    return LOADER_METADATA_COLUMNS.get(loader) if isinstance(loader, str) else None
+
+
+def raw_metadata_columns(units: list[Unit]) -> dict[str, str | None]:
+    """Map every declared raw table to its metadata column (or None).
+
+    Keyed on `raw_table`, which §3.3 rule 8 guarantees names exactly one unit,
+    so the mapping is unambiguous even where prefixes nest.
+    """
+    resolved: dict[str, str | None] = {}
+    for unit in units:
+        for table in unit.tables:
+            raw_table = table.get("raw_table")
+            if isinstance(raw_table, str) and raw_table:
+                resolved[raw_table] = raw_metadata_column(unit, table)
+    return resolved
+
+
+GENERATED_MACRO_NAME = "_raw_metadata_columns"
+
+
+def render_dbt_metadata_columns(units: list[Unit]) -> str:
+    """Render the inventory's metadata-column map as a dbt macro.
+
+    dbt's Jinja cannot read a YAML file, so the inventory has to be projected
+    into something the macros can call. A generated macro (rather than a var or
+    a seed) is what makes every dbt invocation agree — local, CI and Dagster
+    alike — with no runtime plumbing to forget.
+    """
+    mapping = raw_metadata_columns(units)
+    lines = [
+        "{#-",
+        "    GENERATED FILE - DO NOT EDIT.",
+        "",
+        "    Regenerate with `ol-dbt inventory metadata-columns --write`; CI fails if",
+        "    this file and ingestion/inventory/ disagree.",
+        "",
+        "    Maps each declared raw table to the column a staging model orders by to",
+        "    pick the newest copy of a record key. `none` means the table carries no",
+        "    metadata column, so it must not be deduplicated.",
+        "-#}",
+        "{% macro raw_metadata_column_map() %}",
+        "    {% do return({",
+    ]
+    for raw_table in sorted(mapping):
+        column = mapping[raw_table]
+        rendered = "none" if column is None else f"'{column}'"
+        lines.append(f"        '{raw_table}': {rendered},")
+    lines += ["    }) %}", "{% endmacro %}", ""]
+    return "\n".join(lines)
 
 
 def unit_key(data: dict[str, Any]) -> str:
