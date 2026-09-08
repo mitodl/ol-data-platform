@@ -210,3 +210,49 @@ models:
   - name: observed_on
     description: When the merge was recorded, most recent if merged more than once.
       Null for cross-platform links.
+
+- name: bridge_user_key_alias
+  description: >
+    Retired-to-surviving user_pk map. When identity resolution discovers that two
+    previously-separate people are one (a user_global_id appears and links accounts
+    across
+    platforms), each account keeps its own assigned key, so the person has more than
+    one.
+    dim_user reports the survivor; this table names the keys it retired so a downstream
+    FK
+    pointing at one is remapped deliberately instead of silently orphaning.
+
+
+    Derived every run rather than persisted, which guarantees every non-survivor points
+    directly at the one survivor: alias chains cannot form. Empty is the normal state;
+    a
+    non-empty result is a real merge event that reverse-ETL consumers of user_pk must
+    act
+    on. See docs/design/adr_durable_user_surrogate_key.md.
+
+
+    Grain: one row per retired key.
+  columns:
+  - name: retired_user_pk
+    description: >
+      str, a user_pk that identity resolution merged away. Downstream rows still carrying
+      it should be remapped to surviving_user_pk.
+    tests:
+    - not_null
+    # warn, not error: a duplicate here is a genuine ambiguity worth a human look (one
+    # retired key reachable from two email groups, which happens when an account carrying
+    # a non-surviving key moves groups on an email edit), but it is diagnostic output --
+    # dim_user is unaffected, so it must not fail the nightly build.
+    - unique:
+        config:
+          severity: warn
+  - name: surviving_user_pk
+    description: >
+      str, the user_pk that survived the merge and appears in dim_user. Always resolves
+      in
+      one hop.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk

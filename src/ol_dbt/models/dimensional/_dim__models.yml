@@ -287,11 +287,25 @@ models:
     where we are able to see they are the same person.
   columns:
   - name: user_pk
-    description: string, primary key for this user dim table. The grain is still one
-      row per shared email, but the key's value is derived from durable identifiers
-      - the user_global_id when the group has one, otherwise the highest-ranked platform
-      account id in the group - so it no longer changes when a user edits their email
-      address.
+    description: >
+      string, primary key for this user dim table. The grain is one row per shared
+      email.
+
+
+      DURABLE: assigned once by int__combined__user_key_map and never reassigned,
+      so it
+      does not move when the platform ranking, an account's global id, or an email
+      edit
+      changes which account "wins" the group. The key reported here is the group's
+      survivor, the earliest-assigned of its accounts' keys. Where a merge retired
+      another
+      key, bridge_user_key_alias names it. See
+      docs/design/adr_durable_user_surrogate_key.md.
+
+
+      One residual: an account with no source id at all (some Emeritus and Global
+      Alumni
+      rows) is identified by email, so editing that email does still re-key it.
     tests:
     - not_null
     - unique
