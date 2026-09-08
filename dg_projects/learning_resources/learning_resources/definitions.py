@@ -39,6 +39,7 @@ from learning_resources.assets.ovs_videos import (
     video_metadata,
     video_webhook,
 )
+from learning_resources.assets.podcasts import podcast_webhook
 from learning_resources.assets.sloan_api import sloan_course_metadata
 from learning_resources.sensors.ovs_videos import (
     ovs_videos_delete_job,
@@ -91,6 +92,15 @@ mit_edx_programs_schedule = ScheduleDefinition(
     name="mit_edx_programs_schedule",
     target=AssetSelection.assets(mit_edx_programs_webhook),
     cron_schedule="45 6 * * *",
+    execution_timezone="Etc/UTC",
+)
+
+# Cohort 3 media/feed delivery. Podcasts deliver a nested channel+episode
+# payload, so this runs after the Cohort 2 slots rather than sharing one.
+podcast_schedule = ScheduleDefinition(
+    name="podcast_schedule",
+    target=AssetSelection.assets(podcast_webhook),
+    cron_schedule="0 7 * * *",
     execution_timezone="Etc/UTC",
 )
 
@@ -160,6 +170,8 @@ defs = Definitions(
             mitpe_webhook,
             oll_webhook,
             mit_edx_programs_webhook,
+            # Media/feed webhook delivery
+            podcast_webhook,
         ]
     ),
     schedules=[
@@ -169,6 +181,7 @@ defs = Definitions(
         mitpe_schedule,
         oll_schedule,
         mit_edx_programs_schedule,
+        podcast_schedule,
     ],
     sensors=[
         ovs_videos_discovery_sensor,
