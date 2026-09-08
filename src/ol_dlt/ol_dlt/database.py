@@ -255,6 +255,10 @@ def build_table_resource(
     return resource.with_name(raw_name).apply_hints(
         table_name=raw_name,
         table_format=config.active_table_format(resolved_profile),
+        # Nullable, overriding dlt's required default -- see
+        # config.DLT_LOAD_ID_COLUMN for why a required column cannot be added to
+        # an Iceberg table that already holds rows.
+        columns=config.DLT_LOAD_ID_COLUMN,
     )
 
 

@@ -283,6 +283,11 @@ def edxorg_s3_source(
                 write_disposition="merge",
                 primary_key=_EDXORG_PRIMARY_KEY,
                 table_format=resolved_format,
+                # Nullable, overriding dlt's required default -- see
+                # config.DLT_LOAD_ID_COLUMN. This source has no build_source()
+                # to route through config.with_nullable_load_id, so it declares
+                # the column on the resource directly.
+                columns=config.DLT_LOAD_ID_COLUMN,
             )
         )
 

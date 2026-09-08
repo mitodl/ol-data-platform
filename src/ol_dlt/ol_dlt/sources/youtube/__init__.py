@@ -378,4 +378,4 @@ youtube_pipeline = config.pipeline_for("youtube")
 
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the source (uniform entrypoint for the Dagster wrapper)."""
-    return youtube_source()
+    return config.with_nullable_load_id(youtube_source())
