@@ -18,10 +18,11 @@ from ol_dlt.sources import (
     mit_climate,
     mit_edx_programs,
     mitpe,
+    mitxonline_app,
     oll,
     podcast_rss,
 )
-from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
+from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
 
 from data_loading.defs.ingestion.translators import (
@@ -79,6 +80,36 @@ keycloak_assets = build_ingest_assets(
     name="keycloak_ingest",
     source=keycloak.build_source(),
     pipeline=keycloak.keycloak_pipeline,
+)
+# Environments where dlt owns the MITx Online app-database load.
+#
+# Production is deliberately absent, and it is not a preference. The Airbyte
+# connection "MITx Online Production App DB → S3 Data Lake" still loads that
+# unit there, and the lakehouse code location builds one asset per stream keyed
+# ol_warehouse_raw_data/raw__mitxonline__app__postgres__<table> -- byte-for-byte
+# the keys these dlt assets produce (definitions.py:182, and dagster_airbyte
+# keys on stream_prefix + stream_name). Registering both is a duplicate asset
+# key across two code locations, and two loaders writing one Iceberg table.
+#
+# QA has nothing to collide with: per the 2026-08-28 Airbyte snapshot its
+# connection is named "MITx Online QA Application DB → OL S3 Glue Data Lake -
+# QA", which the lakehouse selector (endswith "s3 data lake") drops, and it
+# still points at the legacy Glue destination that was never migrated to
+# Iceberg. That is why QA raw for this unit is frozen at 2025-01-19 despite the
+# connection being enabled, and it is what RFC 12711 step 8 exists to fix.
+#
+# Add "production" here in the SAME change that disables the Airbyte connection
+# and flips the inventory unit to `loader: dlt`. Never before.
+MITXONLINE_APP_DLT_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+
+mitxonline_app_assets = (
+    build_ingest_assets(
+        name="mitxonline_app_ingest",
+        source=mitxonline_app.build_source(),
+        pipeline=mitxonline_app.mitxonline_app_pipeline,
+    )
+    if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    else None
 )
 
 
@@ -140,6 +171,7 @@ defs = Definitions(
             mit_edx_programs_assets,
             podcast_rss_assets,
             keycloak_assets,
+            *([mitxonline_app_assets] if mitxonline_app_assets else []),
             *edxorg_s3_table_assets,
         ]
     ),

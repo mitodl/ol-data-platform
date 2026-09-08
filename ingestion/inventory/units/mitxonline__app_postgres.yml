@@ -6,7 +6,7 @@ deployment: mitxonline
 layer: app_postgres
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__mitxonline__app__postgres__
