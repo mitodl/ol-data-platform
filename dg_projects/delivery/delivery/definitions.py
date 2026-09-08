@@ -2,7 +2,6 @@
 
 The DELIVERY code location owns the push axis: assets that send resource
 metadata to MIT Learn over the webhook API. Sources currently delivered:
-- MIT Sloan Executive Education API
 - OVS (Open Video Studio) public videos
 - MIT Climate Portal articles
 - MIT Professional Education courses and programs
@@ -45,6 +44,9 @@ from delivery.assets.ovs_videos import (
     video_webhook,
 )
 from delivery.assets.sloan_api import sloan_course_metadata
+from delivery.lib.scheduled_automation import (
+    instigators_for_environment,
+)
 from delivery.sensors.ovs_videos import (
     ovs_videos_delete_job,
     ovs_videos_delete_partition_cleanup_sensor,
@@ -175,19 +177,26 @@ defs = Definitions(
             mit_edx_programs_webhook,
         ]
     ),
-    schedules=[
-        extract_api_daily_schedule,
-        ovs_videos_api_schedule,
-        mit_climate_schedule,
-        mitpe_schedule,
-        oll_schedule,
-        mit_edx_programs_schedule,
-    ],
-    sensors=[
-        ovs_videos_discovery_sensor,
-        ovs_videos_stale_cleanup_sensor,
-        ovs_videos_delete_partition_cleanup_sensor,
-    ],
+    # Registration, not default_status, is what keeps these out of the
+    # environments they were never meant to run in -- see
+    # delivery.lib.scheduled_automation.
+    schedules=instigators_for_environment(
+        [
+            extract_api_daily_schedule,
+            ovs_videos_api_schedule,
+            mit_climate_schedule,
+            mitpe_schedule,
+            oll_schedule,
+            mit_edx_programs_schedule,
+        ]
+    ),
+    sensors=instigators_for_environment(
+        [
+            ovs_videos_discovery_sensor,
+            ovs_videos_stale_cleanup_sensor,
+            ovs_videos_delete_partition_cleanup_sensor,
+        ]
+    ),
     jobs=[
         ovs_videos_api_job,
         ovs_videos_webhook_job,

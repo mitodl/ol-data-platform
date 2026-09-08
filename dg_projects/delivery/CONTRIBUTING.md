@@ -5,7 +5,7 @@ assets that send catalog metadata to MIT Learn over its webhook API.
 
 | Pattern | Used by |
 |---|---|
-| Webhook push (REST API) | Sloan Executive Education, MIT Climate, MIT PE, OLL, MIT edX programs |
+| Webhook push (REST API) | MIT Climate, MIT PE, OLL, MIT edX programs |
 | Sensor-driven partitioned | OVS Videos (one asset execution per item ID) |
 
 The **pull** axes are not owned by a code location. Warehouse-pull reads
