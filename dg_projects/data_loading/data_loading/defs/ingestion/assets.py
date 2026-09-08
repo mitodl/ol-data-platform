@@ -21,6 +21,7 @@ from ol_dlt.sources import (
     mitxonline_app,
     oll,
     podcast_rss,
+    youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
@@ -111,6 +112,11 @@ mitxonline_app_assets = (
     if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
     else None
 )
+youtube_assets = build_ingest_assets(
+    name="youtube_ingest",
+    source=youtube.build_source(),
+    pipeline=youtube.youtube_pipeline,
+)
 
 
 # --- edxorg_s3: custom upstream deps + one op per table ---------------------
@@ -172,6 +178,7 @@ defs = Definitions(
             podcast_rss_assets,
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            youtube_assets,
             *edxorg_s3_table_assets,
         ]
     ),
