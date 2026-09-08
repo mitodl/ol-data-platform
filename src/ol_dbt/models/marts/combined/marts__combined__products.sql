@@ -246,6 +246,8 @@ with mitxonline_product as (
             , 'Certificate of Completion'
         ) as certification_type
     from edxorg_runs
+    left join mitxonline_product_view
+        on edxorg_runs.courserun_readable_id = mitxonline_product_view.product_readable_id
     left join edxorg_product_view
         on  {{ format_course_id('edxorg_runs.courserun_readable_id') }}
             =  {{ format_course_id('edxorg_product_view.product_readable_id') }}
@@ -254,6 +256,7 @@ with mitxonline_product as (
     where
         edxorg_product_view.product_readable_id is null
         and edxorg_paid_product.courserun_readable_id is null
+        and mitxonline_product_view.product_readable_id is null --2 records filtered
 
 )
 
