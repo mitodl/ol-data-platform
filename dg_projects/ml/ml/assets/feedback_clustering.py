@@ -35,6 +35,8 @@ from pyiceberg.expressions import EqualTo
 if DAGSTER_ENV == "dev":
     _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
     database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
+elif DAGSTER_ENV == "qa":
+    database_name = "ol_warehouse_qa_intermediate"
 else:
     database_name = "ol_warehouse_production_intermediate"
 
@@ -71,7 +73,7 @@ class FeedbackClusteringConfig(Config):
     embedding_input_filter: str | None = Field(
         default="summary",
         description="Restrict to one embedding_input arm ('summary' or "
-        "'concatenated_turns')",
+        "'concatenated_turns'). Set to null to cluster all arms together.",
     )
     embedding_model_version: str | None = Field(
         default=None,
