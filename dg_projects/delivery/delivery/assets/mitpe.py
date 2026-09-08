@@ -33,7 +33,7 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
-from learning_resources.lib.sanitize import clean_html
+from delivery.lib.sanitize import clean_html
 
 log = logging.getLogger(__name__)
 
