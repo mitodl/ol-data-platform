@@ -8,7 +8,7 @@ as a foreign key at insert time and only revisit rows inside their watermark,
 so those FKs orphan — and because no column was added or removed,
 ``on_schema_change='append_new_columns'`` sees nothing to react to. Two
 production incidents came from exactly this: the ``dim_discount.discount_pk``
-hash-input change (#2411) and the ``dim_user`` re-key (#2618).
+hash-input change (#2411) and the ``dim_user`` re-key (#2497).
 
 Nothing in this module touches disk, git, or a database. Callers supply SQL
 text and a parsed manifest, which is what lets both consumers share one

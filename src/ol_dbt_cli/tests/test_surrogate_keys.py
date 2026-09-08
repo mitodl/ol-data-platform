@@ -399,10 +399,13 @@ def test_flags_the_dim_discount_re_key_of_2411(dimensional_registry):
 def test_flags_the_dim_user_re_key_of_2497(dimensional_registry):
     """#2497 re-keyed user_pk off durable ids instead of email.
 
-    The orphaned FKs surfaced later as #2618, which repaired six fact tables by
-    hand. The detector finds those six plus tfact_problem_events and
+    #2618 later added self-healing catch-up SQL to six of the affected fact
+    tables (tfact_certificate, tfact_enrollment, tfact_feedback, tfact_grade,
+    tfact_order, tfact_payment) for a separate data-driven re-key scenario —
+    not a hashed-column-list edit, so this detector doesn't see it. The
+    detector finds those six plus tfact_problem_events and
     tfact_studentmodule_problems, which are incremental, declare the same
-    user_fk -> dim_user.user_pk relationship, and were not repaired.
+    user_fk -> dim_user.user_pk relationship, and have no such catch-up.
     """
     changed = changed_surrogate_keys(fixture_sql("dim_user_before.sql"), fixture_sql("dim_user_after.sql"))
     findings = detect_key_regen({"dim_user": changed}, dimensional_registry)

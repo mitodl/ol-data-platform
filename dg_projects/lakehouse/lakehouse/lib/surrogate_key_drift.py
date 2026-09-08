@@ -6,8 +6,11 @@ a foreign key and only revisit rows inside their watermark, so editing the
 hashed column list orphans every historical FK — silently, because no column
 changed for ``on_schema_change`` to react to. It has happened twice in
 production (``dim_discount.discount_pk``, #2411; the ``dim_user`` re-key,
-#2618), both times needing a hand-run ``dbt build --full-refresh`` that only
-memory and a doc comment were prompting anyone to do.
+#2497), both times needing a hand-run ``dbt build --full-refresh`` that only
+memory and a doc comment were prompting anyone to do. (#2618 is a related but
+distinct incident — a data-driven re-key, not a hashed-column-list edit —
+that this detector cannot see and that self-repairs on the next incremental
+run instead of needing a full refresh.)
 
 The comparison is against a small state artifact this module writes to S3 after
 each successful build, not against the warehouse: the hashed column list only
