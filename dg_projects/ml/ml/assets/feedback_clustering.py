@@ -73,6 +73,20 @@ class FeedbackClusteringConfig(Config):
         description="Restrict to one embedding_input arm ('summary' or "
         "'concatenated_turns')",
     )
+    embedding_model_version: str | None = Field(
+        default=None,
+        description=(
+            "Override the embedding model id to cluster. Unset uses "
+            "EMBEDDING_MODEL_VERSION (ml.lib.embed)."
+        ),
+    )
+    embedding_dim: int | None = Field(
+        default=None,
+        description=(
+            "Override the embedding vector dimension to cluster. Unset uses "
+            "EMBEDDING_DIM (ml.lib.embed)."
+        ),
+    )
 
 
 @multi_asset(
@@ -109,6 +123,8 @@ def feedback_clustering(
     against the live one before a human promotes it onto afact_feedback_conversation
     -- that promotion step is not part of this asset.
     """
+    embedding_model_version = config.embedding_model_version or EMBEDDING_MODEL_VERSION
+    embedding_dim = config.embedding_dim or EMBEDDING_DIM
     embeddings_lazy = (
         get_dbt_model_as_dataframe(
             database_name=database_name,
@@ -118,8 +134,8 @@ def feedback_clustering(
         # meaningless -- only cluster the embeddings produced by the model
         # currently configured.
         .filter(
-            (pl.col("embedding_model_version") == EMBEDDING_MODEL_VERSION)
-            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            (pl.col("embedding_model_version") == embedding_model_version)
+            & (pl.col("embedding_dim") == embedding_dim)
         )
     )
     if config.embedding_input_filter is not None:
@@ -130,7 +146,12 @@ def feedback_clustering(
             pl.col("embedding_input") == config.embedding_input_filter
         )
     embeddings_df = embeddings_lazy.select(
-        ["source_slug", "conversation_ref", "embedding_vector"]
+        [
+            "feedback_conversation_pk",
+            "source_slug",
+            "conversation_ref",
+            "embedding_vector",
+        ]
     ).collect()
 
     if config.sample_limit is not None and config.sample_limit < embeddings_df.height:
@@ -157,7 +178,7 @@ def feedback_clustering(
 
     candidates_df, run_metadata = cluster_embeddings(
         embeddings_df,
-        (EMBEDDING_MODEL_VERSION, EMBEDDING_DIM, config.embedding_input_filter),
+        (embedding_model_version, embedding_dim, config.embedding_input_filter),
         umap_params=(config.umap_n_components, config.umap_n_neighbors),
         min_cluster_size=config.min_cluster_size,
         cluster_run_id=cluster_run_id,
@@ -189,5 +210,7 @@ def feedback_clustering(
             "cluster_run_id": MetadataValue.text(run_metadata["cluster_run_id"]),
             "cluster_count": MetadataValue.int(run_metadata["cluster_count"]),
             "noise_count": MetadataValue.int(run_metadata["noise_count"]),
+            "embedding_model_version": MetadataValue.text(embedding_model_version),
+            "embedding_dim": MetadataValue.int(embedding_dim),
         },
     )

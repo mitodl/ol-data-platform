@@ -15,7 +15,9 @@ from sklearn.metrics import (
 )
 from umap import UMAP
 
-JOIN_COLS = ["source_slug", "conversation_ref"]
+JOIN_COLS = ["feedback_conversation_pk"]
+# Not part of the join key, but carried through for debugging without a join.
+DEBUG_COLS = ["source_slug", "conversation_ref"]
 
 CLUSTER_RUN_SCHEMA = {
     "cluster_run_id": pl.String,
@@ -38,6 +40,7 @@ CLUSTER_RUN_SCHEMA = {
 CLUSTER_CANDIDATE_SCHEMA = {
     "cluster_run_id": pl.String,
     **dict.fromkeys(JOIN_COLS, pl.String),
+    **dict.fromkeys(DEBUG_COLS, pl.String),
     "cluster_id": pl.Int64,
     "cluster_probability": pl.Float64,
 }
@@ -171,9 +174,10 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     """Cluster every row's embedding_vector; produce this run's candidates + summary.
 
     Args:
-        embeddings_df: a frame with (at least) source_slug, conversation_ref,
-            embedding_vector columns, e.g. feedback_embeddings filtered to one
-            consistent embedding_model_version/embedding_dim.
+        embeddings_df: a frame with (at least) feedback_conversation_pk,
+            source_slug, conversation_ref, embedding_vector columns, e.g.
+            feedback_embeddings filtered to one consistent
+            embedding_model_version/embedding_dim.
         embedding_provenance: (embedding_model_version, embedding_dim,
             embedding_input_filter), recorded on the run rather than just used to
             build embeddings_df -- feedback_embeddings is upserted in place, so
@@ -212,7 +216,7 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     # `reduced`, not `vectors`: score in the same space HDBSCAN clustered on.
     silhouette = compute_silhouette(reduced, labels, random_state=random_state)
 
-    candidates_df = embeddings_df.select(JOIN_COLS).with_columns(
+    candidates_df = embeddings_df.select(JOIN_COLS + DEBUG_COLS).with_columns(
         pl.lit(cluster_run_id).alias("cluster_run_id"),
         pl.Series("cluster_id", labels, dtype=pl.Int64),
         pl.Series("cluster_probability", probabilities, dtype=pl.Float64),
