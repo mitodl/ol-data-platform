@@ -11,7 +11,7 @@ with source as (
         , cast(user_id as integer) as user_id
         , cast(is_active as boolean) as courserunenrollment_is_active
         , mode as courserunenrollment_mode
-        , to_iso8601(date_parse(created, '%Y-%m-%d %H:%i:%s')) as courserunenrollment_created_on
+        , {{ cast_timestamp_to_iso8601(date_parse("created", "'%Y-%m-%d %H:%i:%s'")) }} as courserunenrollment_created_on
     from most_recent_source
 )
 

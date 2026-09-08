@@ -37,12 +37,14 @@ APP_UNIT: dict[str, Any] = {
         "replication_method": "cursor",
         "connections": [
             {
+                "environment": "production",
                 "name": "MITx Online Open edX DB → S3 Data Lake",
                 "status": "active",
                 "sync_interval_hours": 12,
                 "streams": ["auth_user"],
             },
             {
+                "environment": "production",
                 "name": "MITx Online Production Open edX Student Module History → S3 Data Lake",
                 "status": "active",
                 "sync_interval_hours": 24,
@@ -325,7 +327,67 @@ class TestRules:
         unit["tables"] = [unit["tables"][0]]
         _write(inventory, "mitxonline__mysql", unit)
         report = _run(inventory)
-        assert "is carried 2 times within this unit" in _messages(report)
+        assert "is carried 2 times by production connections" in _messages(report)
+
+    def test_the_same_stream_in_two_environments_is_not_a_collision(self, inventory: Path) -> None:
+        # The rule above guards two connections writing one raw table. Each
+        # environment runs its own Airbyte against its own lake, so a unit
+        # ingested in both legitimately carries the same stream twice — and
+        # counting per unit rather than per environment would make every such
+        # unit an error the moment a QA snapshot is merged in.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = None
+        unit["airbyte"]["connections"][1]["status"] = "inactive"
+        unit["airbyte"]["connections"][1]["streams"] = ["auth_user"]
+        unit["tables"] = [unit["tables"][0]]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert not report.errors, _messages(report)
+
+    def test_a_qa_connection_may_omit_its_cadence(self, inventory: Path) -> None:
+        # group_name_to_interval in definitions.py is production-guarded, so
+        # there is no cadence to state for any other environment. Null is the
+        # honest value and the schema has to accept it.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = None
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert not report.errors, _messages(report)
+
+    def test_a_production_connection_may_not_omit_its_cadence(self, inventory: Path) -> None:
+        # The dangerous direction: render_dagster_intervals skips a non-integer,
+        # so the group falls through to definitions.py's 24-hour default and a
+        # 6-hour sync silently becomes daily. Nothing else would report it.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][0]["environment"] = "production"
+        unit["airbyte"]["connections"][0]["sync_interval_hours"] = None
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
+    def test_a_qa_connection_may_not_state_a_cadence(self, inventory: Path) -> None:
+        # The inverse case, and why this is an if/then rather than merely a
+        # nullable field: a number here reads as a schedule nothing will run.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = 12
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
+    def test_a_connection_must_declare_its_environment(self, inventory: Path) -> None:
+        # Omission is the dangerous direction, not the safe one: an untagged QA
+        # connection reads as production, which is the exact fall-through RFC
+        # 12711 exists to end.
+        unit = copy.deepcopy(APP_UNIT)
+        del unit["airbyte"]["connections"][0]["environment"]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "'environment' is a required property" in _messages(report)
 
 
 class TestCrossUnit:

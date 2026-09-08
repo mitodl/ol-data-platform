@@ -15,7 +15,8 @@ airbyte:
   source_kind: source-mysql
   replication_method: cursor
   connections:
-  - name: MITx Online Production edX Notes → Ol S3 Glue Data Lake - Production
+  - environment: production
+    name: MITx Online Production edX Notes → Ol S3 Glue Data Lake - Production
     status: inactive
     sync_interval_hours: 24
     streams:

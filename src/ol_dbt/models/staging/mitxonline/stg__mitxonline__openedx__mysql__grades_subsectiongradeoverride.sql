@@ -16,8 +16,8 @@ with source as (
         , earned_graded_override as subsectiongradeoverride_total_earned_graded_score
         , override_reason as subsectiongradeoverride_reason
         , system as subsectiongradeoverride_system
-        , to_iso8601(created) as subsectiongradeoverride_created_on
-        , to_iso8601(modified) as subsectiongradeoverride_updated_on
+        , {{ cast_timestamp_to_iso8601('created') }} as subsectiongradeoverride_created_on
+        , {{ cast_timestamp_to_iso8601('modified') }} as subsectiongradeoverride_updated_on
     from most_recent_source
 )
 

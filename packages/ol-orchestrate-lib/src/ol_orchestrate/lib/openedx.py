@@ -468,19 +468,53 @@ class CourseXmlBlock(BaseModel):
     )
 
 
+class _HashingReader:
+    """Feed a member's bytes to a digest as tarfile streams them past.
+
+    ``tarfile.addfile`` copies from a file object in chunks, so wrapping the
+    source here hashes the same bytes on their way out without ever holding a
+    whole file -- let alone a whole course -- in memory.
+    """
+
+    def __init__(self, source: IO[bytes], digest: Any) -> None:
+        self._source = source
+        self._digest = digest
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = self._source.read(size)
+        self._digest.update(chunk)
+        return chunk
+
+
+def _archive_root_name(tf: tarfile.TarFile) -> str:
+    """Return the archive's root directory name, or fail if it has none."""
+    archive_root = tf.next()
+    if archive_root is None:
+        msg = "Unable to retrieve the archive root of the course XML."
+        raise ValueError(msg)
+    return archive_root.name
+
+
 class CourseStaticAssetsBundle(BaseModel):
     """Bundle of non-XML static assets extracted from a course archive.
 
-    Encapsulates the raw file data alongside a content-addressed version and a
-    machine-readable manifest. Callers can materialize `files` into a tar archive
-    and `manifest` as a separate lightweight JSON object, allowing downstream
-    consumers to check the version cheaply without fetching the full archive.
+    Encapsulates the written tar archive alongside a content-addressed version
+    and a machine-readable manifest. Callers upload `archive_path` and
+    `manifest` as separate S3 objects, allowing downstream consumers to check
+    the version cheaply without fetching the full archive.
+
+    The archive is written to disk rather than returned as bytes because
+    ``static/`` is where the bulk of an export lives -- measured at ~99% of the
+    three largest QA archives, up to 1286 MiB in a single course. Holding that
+    as a list of byte strings made peak memory a function of course size on a
+    run pod that requests 1Gi.
     """
 
     data_version: str = Field(
         description=(
-            "SHA-256 hex digest computed over all file contents sorted by path. "
-            "Changes only when the actual content of the static assets changes."
+            "SHA-256 hex digest computed over every collected file's path and "
+            "contents, sorted by path. Changes when the content of the static "
+            "assets changes and when a file is renamed."
         )
     )
     manifest: dict[str, Any] = Field(
@@ -489,8 +523,11 @@ class CourseStaticAssetsBundle(BaseModel):
             "file_count, and files (list of {path, mime_type, size_bytes})."
         )
     )
-    files: list[tuple[str, bytes]] = Field(
-        description="(relative_path, content) pairs for building the tar archive."
+    archive_path: Path = Field(
+        description=(
+            "Path to the written .tar.gz of the collected files. The caller owns "
+            "this temp file and is responsible for removing it."
+        )
     )
 
 
@@ -506,12 +543,29 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     raw XML of every block is preserved for downstream enrichment. This avoids
     reprocessing archives when new fields are needed.
 
-    Non-XML files (e.g. SRT subtitles, HTML content, PDFs) are collected and returned
-    as a CourseStaticAssetsBundle containing the raw files, a content-addressed
-    data_version (SHA-256 of all file contents sorted by path), and a manifest JSON
-    describing each file's path, MIME type, and size. Files under structural directories
-    (drafts/, assets/, static/) are excluded from both XML block parsing and static
-    asset collection.
+    Non-XML files (e.g. SRT subtitles, HTML content, PDFs) are streamed into a
+    tar.gz and returned as a CourseStaticAssetsBundle carrying that archive's path,
+    a content-addressed data_version (SHA-256 over every file's path and contents,
+    sorted by path, so a rename moves the version too), and a manifest JSON
+    describing each file's path, MIME type, and size. The caller owns the written
+    archive and is responsible for removing it.
+
+    Structural directories are handled by intent rather than uniformly:
+
+    - ``drafts/`` is skipped entirely. It is the Studio draft workspace, so its
+      contents are unpublished and must not reach the catalogue.
+    - ``assets/`` and ``static/`` are never parsed as blocks, but their non-XML
+      contents ARE collected. Per the OLX reference, ``static/`` "contains the
+      files used in a course, such as images or PDFs"
+      (https://docs.openedx.org/en/latest/educators/olx/directory-structure.html),
+      which makes it the source of the documents ContentFile text extraction
+      consumes. Excluding it left the bundle structurally unable to carry course
+      content. ``assets/`` is not in the documented export layout but appears in
+      real archives; it is treated the same way on the same reasoning.
+
+    XML inside those two directories is skipped rather than collected: the block
+    parser handles real course XML from the block directories, and a document
+    extractor has nothing to do with an XML manifest.
 
     The root course.xml file is skipped because it is already processed by
     process_course_xml() to extract course-level metadata. The course/{run_tag}.xml
@@ -527,136 +581,185 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     log = logging.getLogger(__name__)
 
     blocks: list[CourseXmlBlock] = []
-    static_assets: list[tuple[str, bytes]] = []
+    # (relative_path, size_bytes, sha256 of contents) for every collected file.
+    collected: list[tuple[str, int, str]] = []
     retrieved_at = datetime.now(tz=UTC).isoformat()
 
-    with tarfile.open(archive_path, "r") as tf:
-        # Get course info from the course xml file in the root directory
-        archive_root = tf.next()
-        if archive_root is None:
-            msg = "Unable to retrieve the archive root of the course XML."
-            raise ValueError(msg)
+    # The bundle is written as the source archive is walked, rather than
+    # collected in memory and written afterwards. Two reasons: ``static/`` is
+    # ~99% of a real export (up to 1286 MiB in a single QA course, against a
+    # 1Gi pod request), and a second pass would have to seek backwards through
+    # the gzip stream, which costs a full re-decompression per member.
+    assets_archive_path = Path(
+        NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
+    )
 
-        try:
-            tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
-        except KeyError as err:
-            msg = f"course.xml not found in archive root '{archive_root.name}'."
-            raise ValueError(msg) from err
-        course_xml_file = Path(
-            NamedTemporaryFile(delete=False, suffix="_course.xml").name
-        )
-        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
-        course_id, _course_number, _run_tag, _org = parse_course_id(
-            str(course_xml_file)
-        )
-        course_xml_file.unlink()
-
-        for member in tf.getmembers():
-            if member.isdir():
-                continue
-
-            path_parts = member.path.split("/")
-            if len(path_parts) < 2:  # noqa: PLR2004
-                continue
-
-            block_type = path_parts[1]
-
-            # Skip the root course.xml — already processed by process_course_xml()
-            # to extract course-level metadata.
-            if block_type == "course.xml":
-                continue
-
-            # Skip course/{run_tag}.xml — this is the course metadata block already
-            # processed by process_course_xml(), not a structural content block.
-            if block_type == "course":
-                continue
-
-            # Skip archive structural directories that are not course block types:
-            # - drafts/: Studio draft workspace, not published content
-            # - assets/ and static/: Static file storage directories, not blocks
-            # NOTE: This check must come before the non-XML branch so that non-XML
-            # files in these directories (e.g. draft images, PDFs) are also excluded.
-            if block_type in {"drafts", "assets", "static"}:
-                continue
-
-            if not member.path.endswith(".xml"):
-                # Collect non-XML files as (relative_path, bytes) for S3 materialization
-                file_data = tf.extractfile(member)
-                if file_data:
-                    # Strip archive root prefix to get a clean relative path
-                    relative_path = "/".join(path_parts[1:])
-                    static_assets.append((relative_path, file_data.read()))
-                continue
-
-            xml_data = tf.extractfile(member)
-            if not xml_data:
-                continue
+    try:
+        with (
+            tarfile.open(archive_path, "r") as tf,
+            tarfile.open(assets_archive_path, "w:gz") as assets_tar,
+        ):
+            # Get course info from the course xml file in the root directory
+            archive_root_name = _archive_root_name(tf)
 
             try:
-                xml_bytes = xml_data.read()
-                tree = ElementTree()
-                tree.parse(io.BytesIO(xml_bytes))
-                root = tree.getroot()
+                tar_info_course = tf.getmember(f"{archive_root_name}/course.xml")
+            except KeyError as err:
+                msg = f"course.xml not found in archive root '{archive_root_name}'."
+                raise ValueError(msg) from err
+            course_xml_file = Path(
+                NamedTemporaryFile(delete=False, suffix="_course.xml").name
+            )
+            course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+            course_id, _course_number, _run_tag, _org = parse_course_id(
+                str(course_xml_file)
+            )
+            course_xml_file.unlink()
 
-                if root is None:
+            for member in tf.getmembers():
+                if member.isdir():
                     continue
 
-                block_id = root.attrib.get("url_name") or Path(member.path).stem
-                raw_xml = tostring(root, encoding="unicode")
+                path_parts = member.path.split("/")
+                if len(path_parts) < 2:  # noqa: PLR2004
+                    continue
 
-                block = CourseXmlBlock(
-                    course_id=course_id,
-                    source_system=source_system,
-                    block_id=block_id,
-                    block_type=block_type,
-                    block_display_name=root.attrib.get("display_name", ""),
-                    xml_attributes=dict(root.attrib),
-                    xml_path=member.path,
-                    raw_xml=raw_xml,
-                    retrieved_at=retrieved_at,
-                )
+                block_type = path_parts[1]
 
-                if block_type == "video":
-                    block.edx_video_id = root.attrib.get("edx_video_id")
-                    video_asset = root.find("video_asset")
-                    if video_asset is not None:
-                        block.duration = video_asset.attrib.get("duration", "0.0")
-                elif block_type == "problem":
-                    block.max_attempts = root.attrib.get("max_attempts")
-                    block.weight = root.attrib.get("weight")
-                    block.markdown = root.attrib.get("markdown")
+                # Skip the root course.xml — already processed by process_course_xml()
+                # to extract course-level metadata.
+                if block_type == "course.xml":
+                    continue
 
-                blocks.append(block)
+                # Skip course/{run_tag}.xml — this is the course metadata block already
+                # processed by process_course_xml(), not a structural content block.
+                if block_type == "course":
+                    continue
 
-            except Exception:  # noqa: BLE001
-                log.warning("Skipping malformed XML file: %s", member.path)
-                continue
+                # drafts/ is the Studio draft workspace. Its contents are unpublished
+                # by definition, so they are skipped outright -- neither parsed as
+                # blocks nor collected as files. Publishing draft content downstream
+                # would put unreviewed material into the catalogue.
+                if block_type == "drafts":
+                    continue
 
-    # Build the static assets bundle: compute a content-addressed version hash
-    # and a manifest describing each file so downstream consumers can detect
-    # changes and inspect available content without extracting the full archive.
+                # assets/ and static/ are file storage, not block types. Their NON-XML
+                # payload is the course's actual content files -- the OLX reference
+                # describes static/ as holding "the files used in a course, such as
+                # images or PDFs" -- which is exactly what ContentFile extraction
+                # consumes. So they fall through to the collection branch rather than
+                # being excluded from it.
+                is_file_storage = block_type in {"assets", "static"}
+
+                if not member.path.endswith(".xml"):
+                    # Stream the member straight into the bundle, hashing its bytes
+                    # on the way past, so peak memory is one chunk regardless of
+                    # course size. Strip archive root prefix for a clean relative
+                    # path.
+                    file_data = tf.extractfile(member)
+                    if file_data:
+                        relative_path = "/".join(path_parts[1:])
+                        content_digest = hashlib.sha256()
+                        info = tarfile.TarInfo(name=relative_path)
+                        info.size = member.size
+                        assets_tar.addfile(
+                            info, _HashingReader(file_data, content_digest)
+                        )
+                        collected.append(
+                            (relative_path, member.size, content_digest.hexdigest())
+                        )
+                    continue
+
+                # XML under file storage is not a course block -- the block
+                # directories carry those -- and is not a document to extract either.
+                if is_file_storage:
+                    continue
+
+                xml_data = tf.extractfile(member)
+                if not xml_data:
+                    continue
+
+                try:
+                    xml_bytes = xml_data.read()
+                    tree = ElementTree()
+                    tree.parse(io.BytesIO(xml_bytes))
+                    root = tree.getroot()
+
+                    if root is None:
+                        continue
+
+                    block_id = root.attrib.get("url_name") or Path(member.path).stem
+                    raw_xml = tostring(root, encoding="unicode")
+
+                    block = CourseXmlBlock(
+                        course_id=course_id,
+                        source_system=source_system,
+                        block_id=block_id,
+                        block_type=block_type,
+                        block_display_name=root.attrib.get("display_name", ""),
+                        xml_attributes=dict(root.attrib),
+                        xml_path=member.path,
+                        raw_xml=raw_xml,
+                        retrieved_at=retrieved_at,
+                    )
+
+                    if block_type == "video":
+                        block.edx_video_id = root.attrib.get("edx_video_id")
+                        video_asset = root.find("video_asset")
+                        if video_asset is not None:
+                            block.duration = video_asset.attrib.get("duration", "0.0")
+                    elif block_type == "problem":
+                        block.max_attempts = root.attrib.get("max_attempts")
+                        block.weight = root.attrib.get("weight")
+                        block.markdown = root.attrib.get("markdown")
+
+                    blocks.append(block)
+
+                except Exception:  # noqa: BLE001
+                    log.warning("Skipping malformed XML file: %s", member.path)
+                    continue
+
+    except Exception:
+        # The caller only learns the path on a successful return, so an
+        # abandoned archive would otherwise be left behind with no owner.
+        assets_archive_path.unlink(missing_ok=True)
+        raise
+
+    # The version is a digest of per-file digests, combined in path order, so it
+    # is a property of the collected content rather than of the order the source
+    # archive happened to store it in. Paths are length-prefixed so a path and
+    # the digest that follows it cannot run together -- without it, renaming
+    # static/a.pdf to static/b.pdf could leave the version unchanged, the S3
+    # object key reused, and every downstream data_version_changed() check
+    # blind to the update.
     hasher = hashlib.sha256()
     manifest_files: list[dict[str, Any]] = []
-    for relative_path, content in sorted(static_assets, key=lambda x: x[0]):
-        hasher.update(content)
+    for relative_path, size_bytes, content_hexdigest in sorted(collected):
+        path_bytes = relative_path.encode("utf-8")
+        hasher.update(str(len(path_bytes)).encode("ascii"))
+        hasher.update(b":")
+        hasher.update(path_bytes)
+        hasher.update(content_hexdigest.encode("ascii"))
+
         mime_type, _ = mimetypes.guess_type(relative_path)
         manifest_files.append(
             {
                 "path": relative_path,
                 "mime_type": mime_type or "application/octet-stream",
-                "size_bytes": len(content),
+                "size_bytes": size_bytes,
             }
         )
+
     data_version = hasher.hexdigest()
     manifest: dict[str, Any] = {
         "data_version": data_version,
-        "file_count": len(static_assets),
+        "file_count": len(manifest_files),
         "files": manifest_files,
     }
     bundle = CourseStaticAssetsBundle(
         data_version=data_version,
         manifest=manifest,
-        files=static_assets,
+        archive_path=assets_archive_path,
     )
 
     return blocks, bundle

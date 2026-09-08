@@ -76,8 +76,27 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "status", "sync_interval_hours", "streams"],
+            "required": ["environment", "name", "status", "sync_interval_hours", "streams"],
+            "allOf": [
+              {
+                "description": "The cadence is required in production and must be absent elsewhere. A production `null` is the dangerous direction and the reason this is enforced rather than described: render_dagster_intervals skips a non-integer, so the group falls through to `group_name_to_interval`'s 24-hour default in definitions.py and a 6-hour sync silently becomes daily.",
+                "if": {
+                  "properties": {"environment": {"const": "production"}},
+                  "required": ["environment"]
+                },
+                "then": {
+                  "properties": {"sync_interval_hours": {"type": "integer", "enum": [6, 12, 24]}}
+                },
+                "else": {
+                  "properties": {"sync_interval_hours": {"type": "null"}}
+                }
+              }
+            ],
             "properties": {
+              "environment": {
+                "enum": ["production", "qa"],
+                "description": "Which Airbyte deployment this connection lives in. Each environment runs its own, so one unit legitimately has a connection in both — and a unit with no `qa` entry has no QA connection at all, which is a different fact from having one that is `inactive`. `ci` is not a value: an api-airbyte-ci host exists but nothing runs there, since the CI code location sets SKIP_AIRBYTE and loads an empty workspace."
+              },
               "name": {
                 "type": "string",
                 "minLength": 1,
@@ -87,8 +106,9 @@
                 "enum": ["active", "inactive"]
               },
               "sync_interval_hours": {
-                "type": "integer",
-                "enum": [6, 12, 24]
+                "type": ["integer", "null"],
+                "enum": [6, 12, 24, null],
+                "description": "Null outside production. The cadence lives in `group_name_to_interval` in lakehouse/definitions.py, which is guarded by `DAGSTER_ENV == \"production\"` and so says nothing about any other environment; emitting a number there would invent one."
               },
               "streams": {
                 "type": "array",

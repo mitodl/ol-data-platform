@@ -14,12 +14,14 @@ airbyte:
   source_kind: source-s3
   replication_method: n/a
   connections:
-  - name: edx.org Production Course Structure→ S3 Data Lake
+  - environment: production
+    name: edx.org Production Course Structure→ S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:
     - raw__edxorg__s3__course_blocks
-  - name: S3 edX.org course and program → S3 Data Lake
+  - environment: production
+    name: S3 edX.org course and program → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:
@@ -27,7 +29,8 @@ airbyte:
     - raw__edxorg__s3__mitx_course_run
     - raw__edxorg__s3__program
     - raw__edxorg__s3__program_course
-  - name: S3 edX.org Program Credentials → S3 Data Lake
+  - environment: production
+    name: S3 edX.org Program Credentials → S3 Data Lake
     status: active
     sync_interval_hours: 24
     streams:

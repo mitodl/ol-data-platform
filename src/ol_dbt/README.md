@@ -132,11 +132,18 @@ the rebuild only reflects your code change), any reported mismatch can only come
 from your change — never from production data changing in the background.
 
 ```bash
-# Per-column mismatch rates require --primary-key (repeatable for a composite key)
+# Per-column mismatch rates require --primary-key
 ol-dbt diff --old m_old --new m_new --primary-key id
+
+# Composite key: comma-separated, or repeat the flag. These are equivalent.
+ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on
+ol-dbt diff --old m_old --new m_new -k user_email -k exam_created_on
 
 # Exclude a known non-deterministic column (e.g. a load timestamp)
 ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at
+
+# --exclude-columns takes the same two forms
+ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at,_synced_at
 
 # Build both sides first, then compare
 ol-dbt diff --old m_old --new m_new --auto-build
@@ -151,6 +158,38 @@ ol-dbt diff --target dev_production \
 # Emit JSON (e.g. for CI); exits non-zero on any divergence
 ol-dbt diff --old m_old --new m_new -k id --format json
 ```
+
+#### Choosing the primary key
+
+`--primary-key` pairs rows across the two sides, so it has to be the model's
+**actual grain**. A non-unique key joins many-to-many and the mismatch counts
+become an artifact of the join rather than a real difference: on one 20,908-row
+mart, keying on a single column of a three-column grain reported 65,000+
+mismatches and 7,826 rows "missing", where the correct composite key found one
+genuinely differing column, 8,891 rows, and nothing missing.
+
+Composite keys take either form, interchangeably:
+
+```
+-k a,b,c          # comma-separated
+-k a -k b -k c    # repeated flag
+```
+
+`-k a b c` does **not** work — only `a` is read as a key, the rest are consumed
+as positional arguments, and the resulting error mentions `--dbt-dir` rather
+than primary keys.
+
+To find the grain, look for a `dbt_expectations.expect_compound_columns_to_be_unique`
+test on the model; its column list is the key you want. (Grep the dotted
+spelling — the underscored form only appears in compiled test names.) Failing
+that, a single column is safe alone only with **both** a passing `unique` and a
+passing `not_null` test: `unique` ignores NULLs, and the single-column path joins
+on `a.k = b.k`, which never matches NULL to NULL, so those rows land in the
+"missing from" buckets on both sides instead of pairing up.
+
+Duplicate spellings collapse (`-k id,ID` is just `id`), and the tool fails fast
+rather than degrading quietly on an empty key (`-k ""`, `-k ","`) or a key column
+absent from either relation (reported by name, with the common column list).
 
 `--old-raw`/`--new-raw` treat that side as a literal existing table rather than a
 dbt model — required for a snapshot table (`ol-dbt local snapshot` output) or any

@@ -305,6 +305,16 @@ with mitxonline_enrollments as (
     from {{ this }}
     group by platform, enrollment_type
 )
+
+-- Snapshot of the target's current (enrollment_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        enrollment_key
+        , user_fk as stored_user_fk
+    from {{ this }}
+)
 {% endif %}
 
 , final as (
@@ -336,6 +346,12 @@ with mitxonline_enrollments as (
     left join incremental_watermarks w
         on w.watermark_platform = ewf.platform
         and w.watermark_enrollment_type = ewf.enrollment_scope
+    left join stale_user_fk_lookup as sufk
+        on sufk.enrollment_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(ewf.enrollment_id as varchar)",
+            "ewf.platform",
+            "ewf.enrollment_scope"
+        ]) }}
     where (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
@@ -348,6 +364,8 @@ with mitxonline_enrollments as (
             and ewf.enrollment_created_on >= {{ cast_timestamp_to_iso8601("current_timestamp - interval '7' day") }}
         )
         or ewf.enrollment_created_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from ewf.user_fk
     )
     {% endif %}
 )

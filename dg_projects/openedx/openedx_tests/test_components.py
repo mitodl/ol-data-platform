@@ -18,6 +18,7 @@ SHARED_RESOURCES = {
     "s3file_io_manager": FilesystemIOManager(),
     "s3": S3Resource(),
     "learn_api": None,
+    "tika": None,
 }
 
 

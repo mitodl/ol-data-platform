@@ -5,6 +5,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , renamed as (
 
     select
@@ -14,7 +16,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('created_on') }} as countryincomethreshold_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as countryincomethreshold_updated_on
 
-    from source
+    from most_recent_source
 
 )
 

@@ -25,5 +25,8 @@ src/ol_dbt/.user.yml
 .sup/
 
 # Airbyte inventory working files — regenerate with bin/airbyte-inventory.py
-airbyte-snapshot.json
+# Snapshots are per-environment (airbyte-snapshot-production.json,
+# airbyte-snapshot-qa.json) and hold connector configuration, redacted but not
+# worth committing.
+airbyte-snapshot*.json
 airbyte-findings.md

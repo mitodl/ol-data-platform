@@ -16,9 +16,9 @@ with source as (
         , possible_graded as subsectiongrade_total_graded_score
         , earned_all as subsectiongrade_total_earned_score
         , earned_graded as subsectiongrade_total_earned_graded_score
-        , to_iso8601(first_attempted) as subsectiongrade_first_attempted_on
-        , to_iso8601(created) as subsectiongrade_created_on
-        , to_iso8601(modified) as subsectiongrade_updated_on
+        , {{ cast_timestamp_to_iso8601('first_attempted') }} as subsectiongrade_first_attempted_on
+        , {{ cast_timestamp_to_iso8601('created') }} as subsectiongrade_created_on
+        , {{ cast_timestamp_to_iso8601('modified') }} as subsectiongrade_updated_on
     from most_recent_source
 )
 

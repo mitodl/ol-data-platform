@@ -70,6 +70,55 @@ class InvalidIdentifierError(ValueError):
     """Raised when a user-supplied name is not a safe dbt identifier."""
 
 
+def _split_columns(values: tuple[str, ...]) -> list[str]:
+    """Flatten repeated and comma-separated column arguments into one list.
+
+    Cyclopts consumes exactly one token per flag occurrence, so the repeatable
+    form (``-k a -k b``) is the only one it understands natively; ``-k a b`` puts
+    ``b`` in the next positional parameter instead. Accepting commas as well means
+    ``-k a,b`` and ``-k a -k b`` are equivalent, which is what most people try
+    first for a composite key.
+
+    Order is preserved and duplicates are dropped -- a repeated key column would
+    otherwise be emitted twice into the surrogate-key expression, and would
+    needlessly push a single-column key onto the composite path. Matching is
+    case-INSENSITIVE, because unquoted warehouse identifiers are and the rest of
+    this path already treats them that way (see ``_validate_identifiers`` and the
+    ``pk_lower`` filter in :func:`diff`); the first spelling seen is the one kept,
+    since that is what the user wrote and what the emitted SQL should say.
+
+    Empty segments (a trailing comma, ``-k ""``, ``-k ","``) are dropped here
+    rather than reaching :func:`_validate_identifiers` as a confusing
+    empty-identifier error. Dropping them means an all-empty value flattens to
+    ``[]``, which is indistinguishable from the option never being passed -- so
+    the caller must reject that case explicitly rather than silently treating it
+    as "no key given". See :func:`_require_non_empty`.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for part in value.split(","):
+            cleaned = part.strip()
+            if cleaned and cleaned.lower() not in seen:
+                seen.add(cleaned.lower())
+                out.append(cleaned)
+    return out
+
+
+def _require_non_empty(kind: str, flag: str, given: tuple[str, ...], flattened: list[str]) -> None:
+    """Reject a column-list option that was supplied but held no usable names.
+
+    ``-k ""`` and ``-k ","`` flatten to nothing. Treating that as "not supplied"
+    would silently skip the per-column comparison the user explicitly asked for
+    (or silently exclude nothing), where before comma-splitting existed the empty
+    string simply failed identifier validation. Silent degradation is worse than a
+    loud error for a tool whose output is meant to be trusted, so this fails.
+    """
+    if given and not flattened:
+        msg = f"{flag} was given but contains no column names (values: {', '.join(repr(g) for g in given)})."
+        raise InvalidIdentifierError(msg)
+
+
 def _validate_identifiers(kind: str, names: list[str]) -> None:
     """Reject any *names* that are not plain dbt identifiers.
 
@@ -332,6 +381,50 @@ def _jinja_list(values: list[str]) -> str:
     return f"[{inner}]"
 
 
+# Base alias for the synthetic single-column join key that stands in for a
+# composite primary key in the per-column comparison (see `_compare_column_sql`).
+# Deliberately tool-namespaced, but see `_surrogate_alias` -- "unlikely to
+# collide" is not the same as "cannot", and the collision failed silently.
+_SURROGATE_PK = "ol_dbt_diff_surrogate_key"
+
+
+def _surrogate_alias(taken: list[str]) -> str:
+    """Pick a surrogate-key alias that cannot collide with a real column name.
+
+    If the compared column is itself called ``ol_dbt_diff_surrogate_key``, the
+    emitted select would carry that identifier twice -- once for the generated
+    key, once for the real column -- and audit_helper would then use the same
+    name as both ``primary_key`` and ``column_to_compare``. DuckDB does not
+    reject that: it binds to the *first* match, so the comparison compares the
+    generated key against itself and reports a perfect match no matter how much
+    the real values differ. A silent false negative is the worst outcome for a
+    tool whose job is detecting differences, so the alias is derived rather than
+    assumed safe.
+
+    Matching is case-insensitive because warehouse identifiers are. The ``_x``
+    suffix keeps the result a plain identifier, so it still satisfies
+    :data:`_IDENTIFIER_RE`.
+    """
+    taken_lower = {t.lower() for t in taken}
+    alias = _SURROGATE_PK
+    while alias.lower() in taken_lower:
+        alias += "_x"
+    return alias
+
+
+def _pk_string(values: list[str]) -> str:
+    """Render primary key columns as a single quoted, comma-joined SQL fragment.
+
+    audit_helper takes ``primary_key`` as an opaque string it interpolates
+    straight into SQL, never as a list -- a Jinja list literal reaches the
+    database as the text ``['k1', 'k2']`` and fails to parse. For
+    ``compare_relations``/``compare_queries`` the only use is the ``order by``
+    of the ``summarize=false`` branch, where a comma-joined column list is
+    exactly right.
+    """
+    return f"'{', '.join(values)}'"
+
+
 def _relation_jinja(
     name: str,
     *,
@@ -374,10 +467,7 @@ def _compare_relations_sql(
     ``percent_of_total`` grouping; with ``summarize=False`` it returns the actual
     differing rows (used to sample mismatches).
     """
-    pk_arg = ""
-    if primary_key:
-        pk_repr = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
-        pk_arg = f", primary_key={pk_repr}"
+    pk_arg = f", primary_key={_pk_string(primary_key)}" if primary_key else ""
     exclude_arg = f", exclude_columns={_jinja_list(exclude_columns)}" if exclude_columns else ""
     a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
     b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
@@ -403,8 +493,28 @@ def _compare_column_sql(
     old_database: str | None = None,
     new_database: str | None = None,
 ) -> str:
-    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column."""
-    pk = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
+    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column.
+
+    ``compare_column_values`` supports only a *scalar* primary key: it emits
+    ``a_query.{{ primary_key }} = b_query.{{ primary_key }}`` (plus a coalesce
+    and several null checks), so the key has to be one column name that exists
+    in both queries. A composite key therefore cannot be passed through --
+    neither as a Jinja list (which reaches the database as the literal text
+    ``['k1', 'k2']``) nor comma-joined (``a.k1, k2 = b.k1, k2``).
+
+    For a composite key we instead synthesize a single hashed join column with the
+    project's ``diff_composite_key`` macro inside a_query/b_query and hand
+    audit_helper *that* column name. One side effect is better than the scalar
+    path: the macro encodes nulls rather than dropping them, so rows whose key
+    components are null still pair up, where a plain equi-join drops them.
+
+    ``dbt_utils.generate_surrogate_key`` is deliberately NOT used here: it joins
+    components with a literal ``-`` before hashing, without encoding component
+    boundaries, so ``('a-b', 'c')`` and ``('a', 'b-c')`` hash identically
+    (verified on dbt_utils 1.3.3). That would pair two distinct keys as one row
+    and reintroduce the very mispairing a composite key exists to prevent.
+    ``diff_composite_key`` length-prefixes each component instead.
+    """
     a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
     b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
     # Only the primary key(s) + the one column being compared are needed here --
@@ -412,7 +522,17 @@ def _compare_column_sql(
     # selecting every column (as this used to) forces that join to carry the
     # whole row width for a single-column comparison, which is needless I/O on
     # wide tables.
-    select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
+    if len(primary_key) > 1:
+        # Guard against every identifier that could appear alongside the alias --
+        # `column` is the only other one emitted today, but including the key
+        # columns keeps this correct if they are ever selected again.
+        alias = _surrogate_alias([*primary_key, column])
+        pk = f"'{alias}'"
+        key_expr = f"{{{{ diff_composite_key({_jinja_list(primary_key)}) }}}}"
+        select_cols = f"{key_expr} as {alias}, {column}"
+    else:
+        pk = f"'{primary_key[0]}'"
+        select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
     # a_query/b_query are built with {% set %}/{% endset %} so `a_expr`/`b_expr`
     # (a ref()/api.Relation.create() call) are rendered by Jinja BEFORE
     # compare_column_values ever sees the string. Embedding `{{ ... }}` directly
@@ -646,8 +766,10 @@ def diff(
             name=["--primary-key", "-k"],
             help=(
                 "Column(s) uniquely identifying a row, used as the comparison join key. "
-                "Repeatable. Required for per-column mismatch rates. Use this for models with "
-                "known surrogate-key non-determinism (e.g. dim_user.user_pk email-keyed collapse)."
+                "For a composite key pass a comma-separated list (-k a,b,c) or repeat the flag "
+                "(-k a -k b -k c); note that '-k a b c' does NOT work, since only the first "
+                "token is consumed. Required for per-column mismatch rates. Use this for models "
+                "with known surrogate-key non-determinism (e.g. dim_user.user_pk email-keyed collapse)."
             ),
         ),
     ] = (),
@@ -655,7 +777,8 @@ def diff(
         tuple[str, ...],
         Parameter(
             name=["--exclude-columns"],
-            help="Column(s) to exclude from the comparison (e.g. non-deterministic load timestamps). Repeatable.",
+            help="Column(s) to exclude from the comparison (e.g. non-deterministic load timestamps). "
+            "Comma-separated (--exclude-columns a,b) or repeatable, same as --primary-key.",
         ),
     ] = (),
     output_format: Annotated[
@@ -728,6 +851,13 @@ def diff(
         Compare an old mart against its migrated replacement on local DuckDB:
             ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 
+        Use the model's real grain when no single column is unique. A composite key is
+        comma-separated, or the flag repeated -- these two are equivalent, and getting it
+        right matters: a single non-unique key pairs rows many-to-many and reports
+        mismatches that are an artifact of the join rather than a real difference.
+            ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on
+            ol-dbt diff --old m_old --new m_new -k user_email -k exam_created_on
+
         Exclude a non-deterministic column and emit JSON for CI:
             ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at --format json
 
@@ -750,8 +880,8 @@ def diff(
 
     """
     new = new or old
-    primary_key_list = list(primary_key)
-    exclude_list = list(exclude_columns)
+    primary_key_list = _split_columns(primary_key)
+    exclude_list = _split_columns(exclude_columns)
     notes: list[str] = []
 
     if (old_schema or old_database) and not old_raw:
@@ -763,6 +893,8 @@ def diff(
 
     # Validate every value interpolated into inline Jinja SQL before use.
     try:
+        _require_non_empty("primary key", "--primary-key", primary_key, primary_key_list)
+        _require_non_empty("excluded column", "--exclude-columns", exclude_columns, exclude_list)
         _validate_identifiers("model name", [old, new])
         _validate_identifiers("primary key", primary_key_list)
         _validate_identifiers("excluded column", exclude_list)
@@ -860,6 +992,23 @@ def diff(
             else unresolved_note.format(new)
         )
     recon = reconcile_columns(old_cols, new_cols, set(exclude_list))
+
+    # A mistyped --primary-key is a valid identifier, so identifier validation
+    # cannot catch it; without this it reaches the warehouse and comes back as a
+    # raw "column not found" SQL error with no hint that the key is at fault.
+    # Composite keys multiply the typo surface, so name the offenders here. Only
+    # meaningful when the column set actually resolved -- an unresolved set is
+    # "unknown", not "empty", and must not be read as "the key does not exist".
+    if primary_key_list and old_cols and new_cols:
+        known = {c.lower() for c in old_cols} & {c.lower() for c in new_cols}
+        unknown = [k for k in primary_key_list if k.lower() not in known]
+        if unknown:
+            err_console.print(
+                f"[red]Error:[/] --primary-key column(s) not present in both relations: "
+                f"{', '.join(repr(u) for u in unknown)}."
+            )
+            err_console.print(f"[dim]Columns common to both: {', '.join(sorted(known))}[/]")
+            sys.exit(1)
 
     # When a column set can't be resolved statically, the schema-divergence gate
     # cannot run — an empty reconciliation is "unverified", NOT "verified equal".

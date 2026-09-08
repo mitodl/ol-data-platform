@@ -5,15 +5,15 @@ import os
 from typing import Any, Protocol
 
 import polars as pl
-from anthropic import Anthropic, AnthropicBedrockMantle
+from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
-JOIN_COLS = ["source_slug", "conversation_ref"]
+JOIN_COLS = ["feedback_conversation_pk"]
 
 SUMMARIZE_CHECKPOINT_SCHEMA = {
-    **dict.fromkeys(JOIN_COLS, pl.String),
+    **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
     "turn_count": pl.Int64,
     "conversation_summary": pl.String,
     "summary_model_version": pl.String,
@@ -44,7 +44,25 @@ SKIP_CHAR_THRESHOLD = 500
 # client_class="anthropic" default. A model id is only valid for one vendor's API,
 # so switching client_class to "openai"/"openai_compatible" requires overriding
 # this to a matching id (e.g. "gpt-4o-mini") -- there is no one id valid everywhere.
+# FeedbackSummariesConfig.model_version (a per-run Dagster config field) overrides
+# this; the env var/default here is only the fallback when a run doesn't set it.
 SUMMARY_MODEL_VERSION = os.environ.get("SUMMARY_MODEL_VERSION", "claude-haiku-4-5")
+
+# Bedrock uses its own model id namespace (a Bedrock model or inference-profile
+# id, e.g. "global.anthropic.claude-haiku-4-5-20251001-v1:0"), never the plain
+# Anthropic API id above -- client_class="bedrock" needs this override instead.
+# FeedbackSummariesConfig.bedrock_model_version overrides this the same way.
+BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
+    "BEDROCK_SUMMARY_MODEL_VERSION",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+)
+
+# 200 was enough for claude-haiku-4-5 (no thinking), but a model with adaptive
+# thinking on by default (e.g. claude-sonnet-5/claude-opus-5) can spend the whole
+# budget on hidden thinking before any visible output, leaving Anthropic's
+# response content empty rather than erroring -- this needs enough headroom for
+# thinking plus the actual summary across whichever model is configured.
+SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
@@ -64,18 +82,20 @@ class SummaryClient(Protocol):
 class AnthropicSummaryClient:
     """Adapts an Anthropic-compatible client to the SummaryClient protocol.
 
-    Also covers AnthropicBedrockMantle, which exposes the same messages.create
+    Also covers AnthropicBedrock, which exposes the same messages.create
     interface but is not an Anthropic subclass.
     """
 
-    def __init__(self, client: Anthropic | AnthropicBedrockMantle) -> None:
+    def __init__(
+        self, client: Anthropic | AnthropicBedrock, model_version: str
+    ) -> None:
         self._client = client
-        self.model_version = SUMMARY_MODEL_VERSION
+        self.model_version = model_version
 
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
-            max_tokens=200,
+            max_tokens=SUMMARY_MAX_TOKENS,
             messages=[
                 {
                     "role": "user",
@@ -85,25 +105,34 @@ class AnthropicSummaryClient:
                 }
             ],
         )
+        if not message.content:
+            # A model with thinking on by default can spend the whole max_tokens
+            # budget on hidden thinking and return no visible output at all
+            # (stop_reason="max_tokens", content=[]) rather than raising --
+            # surfaced as an empty summary (like a refusal) instead of an
+            # IndexError, so the caller's existing empty-summary handling
+            # (retry next run) applies here too.
+            return None
         return message.content[0].text
 
 
 class OpenAISummaryClient:
     """Adapts an OpenAI-compatible client to the SummaryClient protocol."""
 
-    def __init__(self, client: OpenAI) -> None:
-        if SUMMARY_MODEL_VERSION.startswith("claude"):
+    def __init__(self, client: OpenAI, model_version: str) -> None:
+        if model_version.startswith("claude"):
             # Can't validate a model id belongs to OpenAI in general, but a Claude
             # id can never work here -- catches the default-left-unset case rather
             # than failing later with an opaque error from OpenAI's API.
             msg = (
-                f"SUMMARY_MODEL_VERSION={SUMMARY_MODEL_VERSION!r} looks like an "
-                "Anthropic model id, but client_class='openai' is configured. Set "
-                "SUMMARY_MODEL_VERSION to an OpenAI model id (e.g. 'gpt-4o-mini')."
+                f"model_version={model_version!r} looks like an Anthropic model "
+                "id, but client_class='openai' is configured. Set "
+                "FeedbackSummariesConfig.model_version (or SUMMARY_MODEL_VERSION) "
+                "to an OpenAI model id (e.g. 'gpt-4o-mini')."
             )
             raise ValueError(msg)
         self._client = client
-        self.model_version = SUMMARY_MODEL_VERSION
+        self.model_version = model_version
 
     def summarize(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
@@ -122,11 +151,23 @@ class OpenAISummaryClient:
 
 def build_summary_client(
     llm: LLMClientFactory,
+    model_version: str | None = None,
+    bedrock_model_version: str | None = None,
 ) -> AnthropicSummaryClient | OpenAISummaryClient:
+    """Build the client whose model_version comes from run config, else a default.
+
+    model_version/bedrock_model_version are the feedback_summaries asset's own
+    per-run Config fields (FeedbackSummariesConfig) -- None means the run didn't
+    override them, so SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION apply.
+    """
     client = llm.get_client()
-    if isinstance(client, Anthropic | AnthropicBedrockMantle):
-        return AnthropicSummaryClient(client)
-    return OpenAISummaryClient(client)
+    if isinstance(client, AnthropicBedrock):
+        return AnthropicSummaryClient(
+            client, bedrock_model_version or BEDROCK_SUMMARY_MODEL_VERSION
+        )
+    if isinstance(client, Anthropic):
+        return AnthropicSummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
+    return OpenAISummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
 
 
 def filter_unsummarized(
@@ -196,9 +237,9 @@ def summarize_conversations(
     """Summarize each conversation that clears the skip rule.
 
     Args:
-        df: a frame with (at least) source_slug, conversation_ref, turn_count,
-            conversation_text, conversation_text_chars columns, e.g.
-            int__feedback__conversation.
+        df: a frame with (at least) feedback_conversation_pk, source_slug,
+            conversation_ref, turn_count, conversation_text, conversation_text_chars
+            columns, e.g. int__feedback__conversation.
         client: an object with a `summarize(conversation_text: str) -> str` method,
             e.g. an AnthropicSummaryClient wrapping LLMClientFactory.
         errors: if given, each failure's message is appended here -- lets a caller
@@ -206,9 +247,9 @@ def summarize_conversations(
             this function's return type.
 
     Returns:
-        pl.DataFrame: source_slug, conversation_ref, conversation_summary,
-            summary_model_version, embedding_input, turn_count - keyed the same way
-            feedback_conversation_pk is minted, for afact_feedback_conversation to
+        pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
+            conversation_summary, summary_model_version, embedding_input, turn_count -
+            keyed by feedback_conversation_pk, for afact_feedback_conversation to
             left-join. conversation_summary stays null for skipped rows;
             summary_model_version is the "was this LLM-generated" signal. A
             conversation whose LLM call raises is dropped from the output entirely
@@ -216,6 +257,7 @@ def summarize_conversations(
             feedback_summaries, it's picked up again as new on the next run.
     """
     rows = df.to_dicts()
+    feedback_conversation_pks: list[str] = []
     source_slugs: list[str] = []
     conversation_refs: list[str] = []
     turn_counts: list[int] = []
@@ -259,6 +301,7 @@ def summarize_conversations(
             summaries.append(None)
             model_versions.append(None)
             embedding_inputs.append("concatenated_turns")
+        feedback_conversation_pks.append(row["feedback_conversation_pk"])
         source_slugs.append(row["source_slug"])
         conversation_refs.append(row["conversation_ref"])
         turn_counts.append(row["turn_count"])
@@ -267,6 +310,9 @@ def summarize_conversations(
     # so the surviving rows no longer line up with df's original row order/count.
     return pl.DataFrame(
         {
+            "feedback_conversation_pk": pl.Series(
+                feedback_conversation_pks, dtype=pl.String
+            ),
             "source_slug": pl.Series(source_slugs, dtype=pl.String),
             "conversation_ref": pl.Series(conversation_refs, dtype=pl.String),
             "turn_count": pl.Series(turn_counts, dtype=pl.Int64),
@@ -292,10 +338,17 @@ def checkpoint_chunk(
     "ol_warehouse_production_intermediate.feedback_summaries". The table is
     registered in non_dbt_singleton_tables() (ol_orchestrate.lib.iceberg_maintenance)
     so nightly maintenance expires the resulting one-snapshot-per-chunk history.
+
+    create_table_if_not_exists rather than load_table: a brand-new deployment (or a
+    dropped dev table) has no feedback_summaries table yet, and this call -- not the
+    io_manager's write of the asset's final return -- is the first write of any run,
+    so it must be able to bootstrap the table itself.
     """
     if chunk_df.height == 0:
         return
-    table = catalog.load_table(table_identifier)
+    table = catalog.create_table_if_not_exists(
+        table_identifier, schema=chunk_df.to_arrow().schema
+    )
     table.upsert(
         df=chunk_df.to_arrow(),
         join_cols=JOIN_COLS,

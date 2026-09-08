@@ -27,9 +27,9 @@ with mitxonline_programenrollments as (
                 then {{ var("dedp_mitxonline_public_policy_program_id") }}
             when
                 mitxonline_courseruns.courserun_start_on
-                < to_iso8601(
-                    date '{{ var("dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff") }}'
-                )
+                < {{ cast_date_to_iso8601(
+                    "date '" ~ var("dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff") ~ "'"
+                ) }}
                 then {{ var("dedp_mitxonline_international_development_program_id") }}
         end as program_id
     from mitxonline_courserunenrollments

@@ -43,6 +43,26 @@ Database Error
   1064 (HY000): forward failed: unknown result
 """
 
+# Verbatim from the 2026-09-03 17:31 UTC run, after the Trino project rebuilt the
+# `dimensional` Iceberg tables.  dbt's first four concurrent models all failed on
+# dim_organization; models 5-8 built OK in that same invocation and a re-run 60s
+# later built all eight -- which is what makes this signature worth retrying.
+BASE_TABLE_DROPPED_FAILURE = """The dbt CLI process with command
+
+`dbt build --target starrocks_production --select tag:starrocks`
+
+failed with exit code `1`.
+
+Errors parsed from dbt logs:
+
+3 of 8 ERROR creating sql materialized_view model \
+b2b_analytics.mv_b2b_contract_monthly_engagement_trend  [ERROR in 0.61s]
+
+  Database Error in model mv_b2b_contract_monthly_engagement_trend
+  1064 (HY000): Getting analyzing error. Detail message: base-table dropped: \
+dim_organization.
+"""
+
 CLEAN_BUILD_OUTPUT = """
 1 of 7 OK created sql materialized_view model b2b_analytics.mv_b2b_program_funnel \
 [SUCCESS in 12.06s]
@@ -79,6 +99,22 @@ class TestLooksRetriable:
     )
     def test_wire_protocol_codes(self, code, meaning):
         assert looks_retriable(Exception(f"{code} (HY000): {meaning}"))
+
+    def test_stale_external_base_table_is_retriable(self):
+        """A rebuilt Iceberg base table leaves StarRocks' cached handle stale for
+        a window.  The same invocation went on to build the remaining models and
+        a re-run went green, so this is worth another attempt rather than a red
+        asset.
+        """
+        assert looks_retriable(Exception(BASE_TABLE_DROPPED_FAILURE))
+
+    def test_base_table_dropped_signature(self):
+        assert looks_retriable(
+            Exception(
+                "1064 (HY000): Getting analyzing error. Detail message: "
+                "base-table dropped: dim_organization."
+            )
+        )
 
     def test_successful_build_output_is_not_retriable(self):
         assert not looks_retriable(Exception(CLEAN_BUILD_OUTPUT))

@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-mysql
   replication_method: cursor
   connections:
-  - name: MITx Online Open edX DB → S3 Data Lake
+  - environment: production
+    name: MITx Online Open edX DB → S3 Data Lake
     status: active
     sync_interval_hours: 12
     streams:
@@ -82,7 +83,8 @@ airbyte:
     - workflow_assessmentworkflow
     - workflow_assessmentworkflowstep
     - workflow_teamassessmentworkflow
-  - name: MITx Online Production Open edX Student Module History → S3 Data Lake
+  - environment: production
+    name: MITx Online Production Open edX Student Module History → S3 Data Lake
     status: active
     sync_interval_hours: 12
     streams:

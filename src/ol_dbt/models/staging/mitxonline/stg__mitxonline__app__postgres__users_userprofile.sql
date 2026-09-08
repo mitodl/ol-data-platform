@@ -2,6 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__users_userprofile') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , cleaned as (
     select
         id as user_profile_id
@@ -22,7 +24,7 @@ with source as (
         ,{{ transform_years_experience_value('years_experience') }} as user_years_experience
         ,{{ cast_timestamp_to_iso8601('created_on') }} as user_profile_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as user_profile_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

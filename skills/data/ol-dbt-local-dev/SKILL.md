@@ -63,6 +63,10 @@ ol-dbt local register --all-layers          # mount prod data
 ol-dbt run --select dim_user_old dim_user   # build both relations on dev_local
 ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 ```
+For a model whose grain is more than one column, pass the whole key —
+comma-separated (`-k a,b,c`) or by repeating the flag (`-k a -k b -k c`), which are
+equivalent. `-k a b c` does not work. A non-unique key pairs rows many-to-many and
+reports join artifacts as mismatches.
 
 ## Typical use: freeze a baseline before an in-place edit
 When you change a model's SQL rather than adding a `_new` copy, snapshot the

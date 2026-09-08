@@ -4,6 +4,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_programrequirement') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , cleaned as (
     select
         id as programrequirement_id
@@ -16,7 +18,7 @@ with source as (
         , title as programrequirement_title
         , operator as programrequirement_operator
         , cast(operator_value as INTEGER) as programrequirement_operator_value
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

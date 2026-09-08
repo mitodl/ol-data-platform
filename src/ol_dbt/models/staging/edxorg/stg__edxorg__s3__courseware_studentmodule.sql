@@ -14,8 +14,8 @@ with source as (
         , state as studentmodule_state_data
         , try_cast(grade as double) as studentmodule_problem_grade
         , try_cast(max_grade as double) as studentmodule_problem_max_grade
-        , to_iso8601(date_parse(created, '%Y-%m-%d %H:%i:%s')) as studentmodule_created_on
-        , to_iso8601(date_parse(modified, '%Y-%m-%d %H:%i:%s')) as studentmodule_updated_on
+        , {{ cast_timestamp_to_iso8601(date_parse("created", "'%Y-%m-%d %H:%i:%s'")) }} as studentmodule_created_on
+        , {{ cast_timestamp_to_iso8601(date_parse("modified", "'%Y-%m-%d %H:%i:%s'")) }} as studentmodule_updated_on
     from most_recent_source
 )
 

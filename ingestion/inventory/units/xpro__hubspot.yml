@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-hubspot
   replication_method: n/a
   connections:
-  - name: HubSpot xPro → S3 Data Lake
+  - environment: production
+    name: HubSpot xPro → S3 Data Lake
     status: inactive
     sync_interval_hours: 24
     streams:

@@ -12,12 +12,33 @@ Nothing here writes to Airbyte. Every call is a GET.
 Usage::
 
     export AIRBYTE_PASSWORD='...'          # or pass --password
-    uv run python bin/airbyte-inventory.py all --username dagster
+    uv run python bin/airbyte-inventory.py all --environment qa
 
     # or one step at a time
-    uv run python bin/airbyte-inventory.py dump --username dagster --password "$PW"
+    uv run python bin/airbyte-inventory.py dump --environment qa
     uv run python bin/airbyte-inventory.py report --output findings.md
     uv run python bin/airbyte-inventory.py render --output-dir ingestion/inventory/units
+
+Each environment runs its OWN Airbyte deployment with its own connections, so a
+snapshot is per-environment: ``--environment`` picks the host from
+``AIRBYTE_SERVERS`` and writes ``airbyte-snapshot-<environment>.json``.
+``render`` merges however many exist into one inventory, tagging each connection
+with the environment it came from.
+
+**One environment per run.** Each deployment's basic-auth credential comes from
+its own Vault service, so a single ``--username``/``--password`` cannot reach
+two of them. Run the whole thing once per environment with that environment's
+credential; ``render`` picks up whatever snapshots are on disk, so the merged
+inventory accumulates across runs.
+
+That merge is what makes the QA side legible. Outside production most
+connections are ``inactive`` — configured once, then disabled as they fell out
+of use — and an inactive connection produces no Dagster asset, so reading the
+asset graph makes QA look nearly empty when it is merely switched off. The
+distinction matters twice over: it is the evidence ``strategies.qa`` is meant to
+be decided on (RFC 12711 §3), and it is the scope of what a replacement dlt
+pipeline has to cover, since a disabled connection still records the streams
+someone once wanted in QA.
 
 The password is the same Vault KV v1 secret Dagster uses::
 
@@ -67,9 +88,49 @@ app = App(
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SNAPSHOT = Path("airbyte-snapshot.json")
-DEFAULT_SERVER_URL = "https://api-airbyte.odl.mit.edu"
 PUBLIC_API_PATH = "/api/public/v1"
+
+# One Airbyte deployment per environment, each with its own connections. Hosts
+# come from ol-infrastructure's `airbyte:api_host_domain` (applications/airbyte/
+# Pulumi.<Env>.yaml). Exhaustive on purpose, matching the no-fallback rule the
+# dbt target maps follow: an unknown environment raises rather than quietly
+# snapshotting production and filing the result under another name.
+#
+# `ci` is deliberately absent. ol-infrastructure defines an api-airbyte-ci host,
+# but nothing runs there -- the CI code location sets SKIP_AIRBYTE and loads an
+# empty workspace (definitions.py). Listing it would offer a snapshot that can
+# only ever come back empty, and an empty snapshot is indistinguishable from a
+# workspace whose connections were all deleted.
+AIRBYTE_SERVERS: dict[str, str] = {
+    "production": "https://api-airbyte.odl.mit.edu",
+    "qa": "https://api-airbyte-qa.odl.mit.edu",
+}
+DEFAULT_ENVIRONMENT = "production"
+
+
+def snapshot_path_for(environment: str) -> Path:
+    """Default snapshot filename for an environment.
+
+    Environment-qualified so a QA dump cannot silently overwrite the production
+    snapshot -- `render` reads several at once and the two are not
+    interchangeable.
+    """
+    return Path(f"airbyte-snapshot-{environment}.json")
+
+
+def _resolve_server_url(environment: str, server_url: str | None) -> str:
+    if server_url:
+        return server_url
+    try:
+        return AIRBYTE_SERVERS[environment]
+    except KeyError:
+        msg = (
+            f"No Airbyte server known for environment {environment!r} "
+            f"(known: {sorted(AIRBYTE_SERVERS)}). Add it to AIRBYTE_SERVERS or "
+            f"pass --server-url."
+        )
+        raise SystemExit(msg) from None
+
 
 DEFINITIONS_PY = (
     REPO_ROOT / "dg_projects" / "lakehouse" / "lakehouse" / "definitions.py"
@@ -197,15 +258,34 @@ def dump(  # noqa: PLR0913
     password: Annotated[
         str | None, Parameter(env_var="AIRBYTE_PASSWORD", show_default=False)
     ] = None,
+    environment: Annotated[
+        str,
+        Parameter(
+            env_var="AIRBYTE_ENVIRONMENT",
+            help=(
+                "Which Airbyte deployment to snapshot: "
+                f"{', '.join(sorted(AIRBYTE_SERVERS))}."
+            ),
+        ),
+    ] = DEFAULT_ENVIRONMENT,
     server_url: Annotated[
-        str, Parameter(env_var="AIRBYTE_SERVER_URL")
-    ] = DEFAULT_SERVER_URL,
+        str | None,
+        Parameter(
+            env_var="AIRBYTE_SERVER_URL",
+            help="Override the host for --environment.",
+            show_default=False,
+        ),
+    ] = None,
     workspace_id: Annotated[
         str | None, Parameter(help="Limit to one workspace.")
     ] = None,
     output: Annotated[
-        Path, Parameter(help="Where to write the JSON snapshot.")
-    ] = DEFAULT_SNAPSHOT,
+        Path | None,
+        Parameter(
+            help="Where to write the JSON snapshot.",
+            show_default=False,
+        ),
+    ] = None,
     page_size: int = 50,
     timeout: float = 60.0,
     include_deleted: bool = False,
@@ -228,7 +308,9 @@ def dump(  # noqa: PLR0913
 ) -> Path:
     """Fetch workspaces, sources, destinations and connections into a JSON snapshot."""
     secret = _resolve_password(password)
-    base_url = server_url.rstrip("/") + PUBLIC_API_PATH
+    resolved_url = _resolve_server_url(environment, server_url)
+    output = output or snapshot_path_for(environment)
+    base_url = resolved_url.rstrip("/") + PUBLIC_API_PATH
 
     with httpx.Client(
         base_url=base_url,
@@ -241,7 +323,7 @@ def dump(  # noqa: PLR0913
         if workspace_id:
             common["workspaceIds"] = [workspace_id]
 
-        _progress(f"Fetching from {base_url} as {username} …")
+        _progress(f"Fetching {environment} from {base_url} as {username} …")
         workspaces = _paginated_get(client, "/workspaces", dict(common), "workspaceId")
         _progress(f"  workspaces:   {len(workspaces)}")
         sources = _paginated_get(client, "/sources", dict(common), "sourceId")
@@ -253,7 +335,15 @@ def dump(  # noqa: PLR0913
         connections = _paginated_get(
             client, "/connections", dict(common), "connectionId"
         )
-        _progress(f"  connections:  {len(connections)}")
+        # Broken out by status because outside production most connections are
+        # `inactive` -- disabled after falling out of use, not absent. A count
+        # alone reads as "QA has almost nothing", which is the wrong conclusion
+        # and the reason this command grew an --environment flag.
+        by_status = Counter(c.get("status", "unknown") for c in connections)
+        _progress(
+            f"  connections:  {len(connections)} "
+            f"({', '.join(f'{n} {s}' for s, n in sorted(by_status.items()))})"
+        )
 
         # Some server versions omit stream configs from the list response.
         for connection in connections:
@@ -299,7 +389,8 @@ def dump(  # noqa: PLR0913
 
     snapshot = {
         "fetched_at": datetime.now(UTC).isoformat(),
-        "server_url": server_url,
+        "environment": environment,
+        "server_url": resolved_url,
         "redacted": not full_config,
         "workspaces": workspaces,
         "sources": sources,
@@ -349,6 +440,10 @@ def _load_snapshot(path: Path) -> dict[str, Any]:
             "broken pagination loop; re-run `airbyte-inventory dump`."
         )
         raise SystemExit(msg)
+
+    # Snapshots predate --environment; they can only have come from the one
+    # server the script used to hard-code.
+    snapshot.setdefault("environment", DEFAULT_ENVIRONMENT)
     return snapshot
 
 
@@ -798,17 +893,27 @@ def _finding_f_prefixes(snapshot: dict[str, Any]) -> list[str]:
 def report(
     *,
     snapshot: Annotated[
-        Path, Parameter(help="Snapshot written by `dump`.")
-    ] = DEFAULT_SNAPSHOT,
+        Path | None,
+        Parameter(help="Snapshot written by `dump`.", show_default=False),
+    ] = None,
     output: Annotated[
         Path | None, Parameter(help="Write markdown here instead of stdout.")
     ] = None,
 ) -> None:
-    """Derive the findings from a snapshot and print them as markdown."""
+    """Derive the findings from ONE snapshot and print them as markdown.
+
+    Single-environment by design, unlike `render`. Findings C and E join against
+    production-only facts -- ``group_name_to_interval`` (guarded by
+    ``DAGSTER_ENV == "production"``) and the dbt sources, which describe the
+    production warehouse -- so running them over a QA snapshot would report every
+    QA connection as miswired. Point it at one environment at a time.
+    """
+    snapshot = snapshot or snapshot_path_for(DEFAULT_ENVIRONMENT)
     data = _load_snapshot(snapshot)
     lines = [
         "# Airbyte ingestion inventory — findings",
         "",
+        f"Environment: `{data['environment']}`.",
         f"Source: `{data['server_url']}`, fetched {data['fetched_at']}.",
         f"- {len(data['sources'])} sources, {len(data['destinations'])} destinations",
         f"- {len(data['connections'])} connections",
@@ -870,44 +975,90 @@ def _infer_unit_key(prefix: str) -> tuple[str, str, bool]:  # noqa: PLR0911
 @app.command
 def render(  # noqa: C901, PLR0912, PLR0915
     *,
-    snapshot: Annotated[
-        Path, Parameter(help="Snapshot written by `dump`.")
-    ] = DEFAULT_SNAPSHOT,
+    snapshots: Annotated[
+        list[Path] | None,
+        Parameter(
+            help=(
+                "Snapshots written by `dump`, one per environment. Repeat the "
+                "flag to merge several; defaults to whichever "
+                "airbyte-snapshot-<env>.json files exist."
+            ),
+            show_default=False,
+        ),
+    ] = None,
     output_dir: Annotated[
         Path, Parameter(help="Directory for the draft unit files.")
     ] = Path("ingestion/inventory/units"),
 ) -> None:
-    """Render a DRAFT inventory from the snapshot — for review, not for merging as-is.
+    """Render a DRAFT inventory from the snapshots — for review, not for merging as-is.
 
     Every field the API cannot answer (`scope`, `strategies`, `modeled` for
     tables dbt does not declare) is emitted with a TODO so the reviewer has to
     decide it rather than inherit a guess.
+
+    Merges across environments. A unit is (deployment, layer) regardless of where
+    it runs, so the same unit's production and QA connections land in one
+    `airbyte.connections` list, each tagged with its `environment`. That is what
+    makes `strategies.qa` decidable from evidence instead of assumption: a unit
+    with no QA connection at all, and a unit whose QA connection exists but is
+    `inactive`, are different situations and used to look identical here.
     """
-    data = _load_snapshot(snapshot)
-    sources_by_id = {s["sourceId"]: s for s in data["sources"]}
+    paths = snapshots or [
+        candidate
+        for environment in sorted(AIRBYTE_SERVERS)
+        if (candidate := snapshot_path_for(environment)).exists()
+    ]
+    if not paths:
+        msg = (
+            "No snapshots found. Run `airbyte-inventory dump --environment "
+            f"<{'|'.join(sorted(AIRBYTE_SERVERS))}>` first, or pass --snapshots."
+        )
+        raise SystemExit(msg)
+
     dbt_tables = {table.lower() for table in _dbt_raw_tables()}
     interval_map = _parse_interval_map()
 
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    sources_by_id: dict[str, dict[str, Any]] = {}
+    grouped: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     unresolved: list[str] = []
-    for connection in sorted(data["connections"], key=lambda c: c["name"].lower()):
-        prefix = _effective_prefix(connection)
-        deployment, layer, confident = _infer_unit_key(prefix)
-        if not confident:
-            unresolved.append(f"{connection['name']} (prefix {prefix or '(none)'})")
-        grouped[deployment, layer].append(connection)
+    environments: list[str] = []
+    for path in paths:
+        data = _load_snapshot(path)
+        environment = data["environment"]
+        if environment in environments:
+            msg = (
+                f"Two snapshots claim environment {environment!r} "
+                f"(latest: {path}). Renders would double-count its connections."
+            )
+            raise SystemExit(msg)
+        environments.append(environment)
+        _progress(
+            f"  {path}: {environment}, {len(data['connections'])} connection(s), "
+            f"fetched {data['fetched_at']}"
+        )
+        sources_by_id.update({s["sourceId"]: s for s in data["sources"]})
+        for connection in sorted(data["connections"], key=lambda c: c["name"].lower()):
+            prefix = _effective_prefix(connection)
+            deployment, layer, confident = _infer_unit_key(prefix)
+            if not confident:
+                unresolved.append(
+                    f"[{environment}] {connection['name']} "
+                    f"(prefix {prefix or '(none)'})"
+                )
+            grouped[deployment, layer].append((environment, connection))
 
     units: dict[tuple[str, str], dict[str, Any]] = {}
     todos_by_key: dict[tuple[str, str], list[str]] = {}
-    for key, connections in grouped.items():
+    for key, tagged_connections in grouped.items():
         deployment, layer = key
         todos: list[str] = []
         actors = []
-        for connection in connections:
+        for environment, connection in tagged_connections:
             source = sources_by_id.get(connection["sourceId"], {})
             group = dagster_group_name(connection["name"])
             actors.append(
                 {
+                    "environment": environment,
                     "connection_name": connection["name"],
                     "source_kind": f"source-{source.get('sourceType', 'unknown')}",
                     "replication_method": _normalized_replication_method(
@@ -920,7 +1071,14 @@ def render(  # noqa: C901, PLR0912, PLR0915
                     ),
                     "table_prefix": _effective_prefix(connection),
                     "dagster_group": group,
-                    "sync_interval_hours": interval_map.get(group),
+                    # group_name_to_interval in definitions.py is guarded by
+                    # `if DAGSTER_ENV == "production"`, so it says nothing about
+                    # any other environment. Reading it for a QA connection would
+                    # invent a cadence -- and QA's schedules are all STOPPED
+                    # anyway, so there is no cadence to report.
+                    "sync_interval_hours": (
+                        interval_map.get(group) if environment == "production" else None
+                    ),
                 }
             )
 
@@ -943,6 +1101,51 @@ def render(  # noqa: C901, PLR0912, PLR0915
                 "(deployment, layer) could not be inferred — assign it by hand"
             )
 
+        by_environment: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for actor in actors:
+            by_environment[actor["environment"]].append(actor)
+        reference = next(
+            (a for a in actors if a["environment"] == DEFAULT_ENVIRONMENT), actors[0]
+        )
+
+        # The per-environment notes below are the whole point of merging
+        # snapshots: they are the evidence `strategies.qa` is supposed to be
+        # decided on, and equally the scoping input for replacing this unit with
+        # a dlt pipeline -- what a QA loader would have to cover, whatever loads
+        # it. Only emitted for environments actually snapshotted, so a
+        # production-only render says nothing about QA rather than implying
+        # absence.
+        production_streams = {
+            stream
+            for actor in by_environment.get(DEFAULT_ENVIRONMENT, [])
+            for stream in actor["streams"]
+        }
+        for environment in environments:
+            if environment == DEFAULT_ENVIRONMENT:
+                continue
+            peers = by_environment.get(environment, [])
+            if not peers:
+                todos.append(
+                    f"no {environment} connection exists for this unit — "
+                    f"`strategies.{environment}` cannot be `ingest` without "
+                    f"building one"
+                )
+                continue
+            if all(actor["status"] != "active" for actor in peers):
+                todos.append(
+                    f"every {environment} connection is disabled "
+                    f"({', '.join(sorted(a['connection_name'] for a in peers))}) — "
+                    f"the unit is configured there but has gone dark"
+                )
+            peer_streams = {s for actor in peers for s in actor["streams"]}
+            if missing := sorted(production_streams - peer_streams):
+                shown = ", ".join(missing[:5])
+                more = f", +{len(missing) - 5} more" if len(missing) > 5 else ""  # noqa: PLR2004
+                todos.append(
+                    f"{len(missing)} stream(s) in production are absent from "
+                    f"{environment}: {shown}{more}"
+                )
+
         # Structurally schema-valid (§3): every required key present and every
         # list in the right shape, so `ol-dbt inventory validate` reports only
         # the TODO values a human still has to decide — not a wall of shape
@@ -956,16 +1159,24 @@ def render(  # noqa: C901, PLR0912, PLR0915
             "loader": "airbyte",
             "table_prefix": sorted(prefixes)[0],
             "airbyte": {
-                "source_kind": actors[0]["source_kind"],
-                "replication_method": actors[0]["replication_method"],
+                # Production is the reference for the unit-level facts when a
+                # unit runs in several environments: QA's connector can lag a
+                # version or sit on an older replication method without that
+                # being what the unit means.
+                "source_kind": reference["source_kind"],
+                "replication_method": reference["replication_method"],
                 "connections": [
                     {
+                        "environment": actor["environment"],
                         "name": actor["connection_name"],
                         "status": actor["status"],
-                        "sync_interval_hours": actor["sync_interval_hours"] or 24,
+                        "sync_interval_hours": actor["sync_interval_hours"],
                         "streams": actor["streams"],
                     }
-                    for actor in actors
+                    for actor in sorted(
+                        actors,
+                        key=lambda a: (a["environment"], a["connection_name"].lower()),
+                    )
                 ],
             },
         }
@@ -974,7 +1185,15 @@ def render(  # noqa: C901, PLR0912, PLR0915
             todos.append(f"connections use different source kinds ({sorted(kinds)})")
 
         tables: dict[str, dict[str, Any]] = {}
-        for connection in connections:
+        # Production first, so it wins every raw_table it defines. `tables` is
+        # the unit's intended contract, not a description of any one
+        # environment's current wiring -- and a QA connection frozen before a
+        # schema change would otherwise overwrite the live definition with a
+        # stale one purely on iteration order.
+        for environment, connection in sorted(
+            tagged_connections,
+            key=lambda pair: (pair[0] != DEFAULT_ENVIRONMENT, pair[0]),
+        ):
             for stream in sorted(
                 _streams_of(connection), key=lambda s: s.get("name", "")
             ):
@@ -999,12 +1218,40 @@ def render(  # noqa: C901, PLR0912, PLR0915
                     # is indistinguishable from two nested segments once joined.
                     entry["primary_key"] = [list(part) for part in stream["primaryKey"]]
                 entry["modeled"] = raw_table.lower() in dbt_tables
-                if raw_table in tables and tables[raw_table] != entry:
-                    todos.append(
-                        f"{raw_table} is configured differently by two connections"
-                    )
-                tables.setdefault(raw_table, entry)
-        unit["tables"] = sorted(tables.values(), key=lambda t: t["raw_table"])
+                held = tables.get(raw_table)
+                # Compare on the stream config alone: `held` also carries the
+                # `_environment` scratch key, so comparing whole dicts would
+                # report every table as differing.
+                if (
+                    held is not None
+                    and {k: v for k, v in held.items() if k != "_environment"} != entry
+                ):
+                    # Across environments this is drift, not a conflict to
+                    # resolve: production defines the table and the other
+                    # environment has fallen behind it. Only same-environment
+                    # disagreement means two connections genuinely contradict.
+                    if environment == tables[raw_table]["_environment"]:
+                        todos.append(
+                            f"{raw_table} is configured differently by two "
+                            f"{environment} connections"
+                        )
+                    else:
+                        todos.append(
+                            f"{raw_table} differs between "
+                            f"{tables[raw_table]['_environment']} and {environment} "
+                            f"— keeping the "
+                            f"{tables[raw_table]['_environment']} definition"
+                        )
+                tables.setdefault(raw_table, {**entry, "_environment": environment})
+        # `_environment` is renderer scratch for the drift note above; the schema
+        # forbids unknown keys, so it never reaches the file.
+        unit["tables"] = sorted(
+            (
+                {k: v for k, v in entry.items() if k != "_environment"}
+                for entry in tables.values()
+            ),
+            key=lambda t: t["raw_table"],
+        )
         # Kept beside the unit rather than inside it: the schema forbids unknown
         # keys, and renderer scratch notes should not earn a slot in it.
         todos_by_key[key] = todos
@@ -1018,8 +1265,8 @@ def render(  # noqa: C901, PLR0912, PLR0915
         path = path.with_suffix(".yml")
         header = (
             "---\n"
-            "# DRAFT — generated by bin/airbyte-inventory.py from a live "
-            "Airbyte snapshot.\n"
+            "# DRAFT — generated by bin/airbyte-inventory.py from live Airbyte\n"
+            f"# snapshots of: {', '.join(environments)}.\n"
             "# Every TODO is a decision the API cannot make: scope, per-environment\n"
             "# strategies, and any layer that could not be inferred from the prefix.\n"
             "# See docs/specs/INGESTION_INVENTORY_SPEC.md §3.\n"
@@ -1056,17 +1303,57 @@ def run_all(  # noqa: PLR0913
     password: Annotated[
         str | None, Parameter(env_var="AIRBYTE_PASSWORD", show_default=False)
     ] = None,
+    environment: Annotated[
+        str,
+        Parameter(
+            env_var="AIRBYTE_ENVIRONMENT",
+            help=(
+                "Which Airbyte deployment to snapshot: "
+                f"{', '.join(sorted(AIRBYTE_SERVERS))}."
+            ),
+        ),
+    ] = DEFAULT_ENVIRONMENT,
     server_url: Annotated[
-        str, Parameter(env_var="AIRBYTE_SERVER_URL")
-    ] = DEFAULT_SERVER_URL,
-    snapshot: Path = DEFAULT_SNAPSHOT,
+        str | None,
+        Parameter(
+            env_var="AIRBYTE_SERVER_URL",
+            help="Override the host for --environment.",
+            show_default=False,
+        ),
+    ] = None,
     findings: Path = Path("airbyte-findings.md"),
     output_dir: Path = Path("ingestion/inventory/units"),
 ) -> None:
-    """Dump → report → render in one go."""
-    dump(username=username, password=password, server_url=server_url, output=snapshot)
-    report(snapshot=snapshot, output=findings)
-    render(snapshot=snapshot, output_dir=output_dir)
+    """Dump ONE environment → report → render from every snapshot on disk.
+
+    One environment per run, because each Airbyte deployment has its own
+    credentials from its own Vault service -- a single set of
+    --username/--password cannot reach two of them. Run it once per
+    environment; the render step picks up whatever snapshots are present, so
+    the merged inventory builds up across runs rather than needing one pass
+    that could authenticate everywhere.
+    """
+    dump(
+        username=username,
+        password=password,
+        environment=environment,
+        server_url=server_url,
+    )
+
+    # Findings C and E join against production-only facts, so they are derived
+    # from the production snapshot whenever one exists -- this run's, or an
+    # earlier one's. Nothing to report from without it.
+    production_snapshot = snapshot_path_for(DEFAULT_ENVIRONMENT)
+    if production_snapshot.exists():
+        report(snapshot=production_snapshot, output=findings)
+    else:
+        _progress(
+            f"No {production_snapshot} yet — skipping findings, which are "
+            f"production-only. Run `all --environment {DEFAULT_ENVIRONMENT}` "
+            f"to produce them."
+        )
+
+    render(output_dir=output_dir)
 
 
 if __name__ == "__main__":

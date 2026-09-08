@@ -14,7 +14,8 @@ airbyte:
   source_kind: source-github
   replication_method: n/a
   connections:
-  - name: GitHub - MIT ODL → S3 Data Lake
+  - environment: production
+    name: GitHub - MIT ODL → S3 Data Lake
     status: inactive
     sync_interval_hours: 24
     streams:

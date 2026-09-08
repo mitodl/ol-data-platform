@@ -4,6 +4,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}
+
 , renamed as (
 
     select
@@ -12,7 +14,7 @@ with source as (
         , revision_id
         , content_type_id as contenttype_id
         , serialized_data as version_object_serialized_data
-    from source
+    from most_recent_source
 
 )
 

@@ -2,6 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__b2b_contractpage') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='page_ptr_id') }}
+
 , cleaned as (
     select
         page_ptr_id as b2b_contract_id,
@@ -14,7 +16,7 @@ with source as (
         max_learners as b2b_contract_max_learners,
         enrollment_fixed_price as b2b_contract_enrollment_fixed_price,
         membership_type as b2b_contract_membership_type
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

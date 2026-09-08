@@ -1,7 +1,7 @@
 """Tests for ml.resources.llm.LLMClientFactory."""
 
 import pytest
-from anthropic import Anthropic, AnthropicBedrockMantle
+from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
@@ -98,7 +98,7 @@ def test_get_client_bedrock_skips_vault_and_uses_iam_auth() -> None:
 
     client = factory.get_client()
 
-    assert isinstance(client, AnthropicBedrockMantle)
+    assert isinstance(client, AnthropicBedrock)
     assert client.aws_region == "us-west-2"
     assert kv_v1.reads == 0
 

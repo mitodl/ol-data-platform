@@ -303,6 +303,16 @@ with mitxonline_certificates as (
          , max(coalesce(certificate_updated_on, certificate_created_on)) as max_activity_on
     from {{ this }}
     group by platform, certificate_scope)
+
+-- Snapshot of the target's current (certificate_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        certificate_key
+        , user_fk as stored_user_fk
+    from {{ this }}
+)
 {% endif %}
 
 , final as (
@@ -333,11 +343,19 @@ with mitxonline_certificates as (
     left join incremental_watermarks w
         on w.watermark_platform = cwf.platform
         and w.watermark_certificate_type = cwf.certificate_scope
+    left join stale_user_fk_lookup as sufk
+        on sufk.certificate_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(cwf.certificate_id as varchar)",
+            "cwf.platform",
+            "cwf.certificate_scope"
+        ]) }}
     where cwf._cross_source_row_num = 1
     and (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from cwf.user_fk
     )
     {% else %}
     where cwf._cross_source_row_num = 1

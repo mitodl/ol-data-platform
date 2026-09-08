@@ -9,6 +9,7 @@ import pytest
 
 from ol_dbt_cli.commands import diff as diff_mod
 from ol_dbt_cli.commands.diff import (
+    InvalidIdentifierError,
     Verdict,
     _compare_column_sql,
     _compare_relations_sql,
@@ -16,8 +17,12 @@ from ol_dbt_cli.commands.diff import (
     _format_sample_mismatches,
     _jinja_list,
     _relation_jinja,
+    _require_non_empty,
     _resolve_raw_columns,
+    _split_columns,
     _summarize_relations,
+    _surrogate_alias,
+    _validate_identifiers,
     diff,
     reconcile_columns,
 )
@@ -168,6 +173,126 @@ class TestFormatSampleMismatches:
         assert lines == ["id=3: only in old_side (+1 more rows in this key group, not shown)"]
 
 
+class TestSplitColumns:
+    """Comma-separated and repeated column arguments must be equivalent."""
+
+    def test_repeated_flags(self) -> None:
+        assert _split_columns(("a", "b", "c")) == ["a", "b", "c"]
+
+    def test_comma_separated_single_token(self) -> None:
+        assert _split_columns(("a,b,c",)) == ["a", "b", "c"]
+
+    def test_comma_and_repeat_are_equivalent(self) -> None:
+        assert _split_columns(("a,b,c",)) == _split_columns(("a", "b", "c"))
+
+    def test_mixed_forms(self) -> None:
+        assert _split_columns(("a,b", "c")) == ["a", "b", "c"]
+
+    def test_surrounding_whitespace_is_stripped(self) -> None:
+        # `-k "a, b"` is a single shell token; the space must not become part of
+        # the identifier, or _validate_identifiers rejects a legitimate key.
+        assert _split_columns(("a, b",)) == ["a", "b"]
+
+    def test_order_is_preserved(self) -> None:
+        assert _split_columns(("z,a,m",)) == ["z", "a", "m"]
+
+    def test_duplicates_dropped_so_a_key_is_not_emitted_twice(self) -> None:
+        assert _split_columns(("a,b,a",)) == ["a", "b"]
+        assert _split_columns(("a", "a")) == ["a"]
+
+    def test_empty_segments_discarded(self) -> None:
+        # A trailing comma or an empty value must not reach _validate_identifiers
+        # as an empty-string identifier.
+        assert _split_columns(("a,",)) == ["a"]
+        assert _split_columns(("a,,b",)) == ["a", "b"]
+        assert _split_columns(("",)) == []
+
+    def test_no_arguments(self) -> None:
+        assert _split_columns(()) == []
+
+
+class TestSplitColumnsCaseInsensitivity:
+    """Warehouse identifiers are case-insensitive; dedup must match that."""
+
+    def test_case_differing_duplicates_are_collapsed(self) -> None:
+        # `-k id,ID` previously emitted the column twice AND pushed a single-column
+        # key onto the composite path.
+        assert _split_columns(("id,ID",)) == ["id"]
+
+    def test_first_spelling_is_the_one_kept(self) -> None:
+        # The user's spelling is what should reach the emitted SQL.
+        assert _split_columns(("ID,id",)) == ["ID"]
+        assert _split_columns(("Id", "iD")) == ["Id"]
+
+    def test_case_dedup_across_separate_flags(self) -> None:
+        assert _split_columns(("id", "ID")) == ["id"]
+
+    def test_a_case_duplicate_collapses_to_the_single_key_path(self) -> None:
+        # Consequence of the above: one real column must not take the composite path.
+        sql = _compare_column_sql("old_m", "new_m", _split_columns(("id,ID",)), "some_col")
+        assert "primary_key='id'" in sql
+        assert "diff_composite_key" not in sql
+
+    def test_distinct_names_are_not_collapsed(self) -> None:
+        assert _split_columns(("k1,K2",)) == ["k1", "K2"]
+
+
+class TestRequireNonEmpty:
+    """An option supplied but empty must fail, not silently mean "not supplied"."""
+
+    @pytest.mark.parametrize("given", [("",), (",",), (" ",), ("", ""), (" , ",)])
+    def test_supplied_but_empty_is_rejected(self, given: tuple[str, ...]) -> None:
+        with pytest.raises(InvalidIdentifierError):
+            _require_non_empty("primary key", "--primary-key", given, _split_columns(given))
+
+    def test_not_supplied_is_fine(self) -> None:
+        _require_non_empty("primary key", "--primary-key", (), [])
+
+    def test_supplied_and_usable_is_fine(self) -> None:
+        _require_non_empty("primary key", "--primary-key", ("a,b",), _split_columns(("a,b",)))
+
+    def test_error_names_the_flag_and_the_offending_values(self) -> None:
+        with pytest.raises(InvalidIdentifierError, match="--primary-key"):
+            _require_non_empty("primary key", "--primary-key", ("",), [])
+
+
+class TestSurrogateAlias:
+    """The synthetic join-key alias must never collide with a real column."""
+
+    def test_default_alias_when_nothing_collides(self) -> None:
+        assert _surrogate_alias(["k1", "k2", "some_col"]) == "ol_dbt_diff_surrogate_key"
+
+    def test_collision_with_compared_column_is_avoided(self) -> None:
+        # A model column actually named ol_dbt_diff_surrogate_key would otherwise
+        # be emitted twice; audit_helper would bind primary_key and
+        # column_to_compare to the same identifier and DuckDB silently resolves
+        # to the FIRST match -- comparing the generated key against itself and
+        # reporting a perfect match however much the real values differ.
+        alias = _surrogate_alias(["k1", "k2", "ol_dbt_diff_surrogate_key"])
+        assert alias != "ol_dbt_diff_surrogate_key"
+
+    def test_collision_check_is_case_insensitive(self) -> None:
+        # Warehouse identifiers are case-insensitive, so an upper/mixed-case
+        # column still collides.
+        for name in ("OL_DBT_DIFF_SURROGATE_KEY", "Ol_Dbt_Diff_Surrogate_Key"):
+            assert _surrogate_alias(["k1", name]).lower() != name.lower()
+
+    def test_collision_with_a_key_column_is_avoided(self) -> None:
+        alias = _surrogate_alias(["ol_dbt_diff_surrogate_key", "k2", "some_col"])
+        assert alias != "ol_dbt_diff_surrogate_key"
+
+    def test_escalates_until_free(self) -> None:
+        # Pathological but must terminate on a distinct, still-valid identifier.
+        taken = ["ol_dbt_diff_surrogate_key", "ol_dbt_diff_surrogate_key_x"]
+        alias = _surrogate_alias(taken)
+        assert alias == "ol_dbt_diff_surrogate_key_x_x"
+
+    def test_result_is_always_a_plain_identifier(self) -> None:
+        # Must keep satisfying _validate_identifiers' pattern.
+        taken = ["ol_dbt_diff_surrogate_key", "ol_dbt_diff_surrogate_key_x"]
+        _validate_identifiers("primary key", [_surrogate_alias(taken)])
+
+
 class TestSqlBuilders:
     def test_jinja_list(self) -> None:
         assert _jinja_list(["a", "b"]) == "['a', 'b']"
@@ -180,9 +305,14 @@ class TestSqlBuilders:
         assert "exclude_columns=['_loaded_at']" in sql
         assert "summarize=true" in sql
 
-    def test_compare_relations_composite_pk(self) -> None:
+    def test_compare_relations_composite_pk_is_comma_joined_not_a_jinja_list(self) -> None:
+        # audit_helper interpolates primary_key straight into the summarize=false
+        # `order by`, so a Jinja list reaches the database as the literal text
+        # `['k1', 'k2']` and fails to parse. A comma-joined column list is the
+        # only form that renders to valid SQL there.
         sql = _compare_relations_sql("a", "b", ["k1", "k2"], [], summarize=False)
-        assert "primary_key=['k1', 'k2']" in sql
+        assert "primary_key='k1, k2'" in sql
+        assert "['k1', 'k2']" not in sql
         assert "summarize=false" in sql
 
     def test_compare_relations_no_pk(self) -> None:
@@ -250,6 +380,43 @@ class TestRelationJinja:
         sql = _compare_column_sql("old_m", "new_m", ["id"], "some_col")
         assert "select id, some_col from" in sql
         assert "select *" not in sql
+
+    def test_compare_column_sql_composite_pk_uses_a_surrogate_join_key(self) -> None:
+        # compare_column_values only supports a scalar primary key -- it emits
+        # `a_query.{{ primary_key }} = b_query.{{ primary_key }}`. A composite key
+        # is collapsed into one hashed column inside a_query/b_query instead, so no
+        # Jinja list (or comma-joined list) ever lands in the emitted SQL.
+        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
+        assert "primary_key='ol_dbt_diff_surrogate_key'" in sql
+        # Must NOT be dbt_utils.generate_surrogate_key -- it joins components with
+        # a literal '-' without encoding boundaries, so ('a-b','c') and ('a','b-c')
+        # collide and would pair two distinct keys as one row.
+        assert "generate_surrogate_key" not in sql
+        assert "{{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key" in sql
+        assert "primary_key=['k1', 'k2']" not in sql
+        assert "primary_key='k1, k2'" not in sql
+
+    def test_compare_column_sql_composite_pk_selects_key_on_both_sides(self) -> None:
+        # The surrogate must exist in a_query AND b_query for the join to resolve.
+        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
+        select_clause = "select {{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key, some_col from"
+        assert sql.count(select_clause) == 2
+
+    def test_compare_column_sql_alias_does_not_shadow_the_compared_column(self) -> None:
+        # Regression for the silent false negative: comparing a column that is
+        # itself named ol_dbt_diff_surrogate_key must not emit that identifier
+        # twice in one select.
+        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "ol_dbt_diff_surrogate_key")
+        assert "as ol_dbt_diff_surrogate_key," not in sql
+        assert "as ol_dbt_diff_surrogate_key_x, ol_dbt_diff_surrogate_key" in sql
+        assert "primary_key='ol_dbt_diff_surrogate_key_x'" in sql
+        assert "column_to_compare='ol_dbt_diff_surrogate_key'" in sql
+
+    def test_compare_column_sql_single_pk_keeps_the_real_column(self) -> None:
+        # No surrogate for a single key -- the real column joins directly.
+        sql = _compare_column_sql("old_m", "new_m", ["id"], "some_col")
+        assert "primary_key='id'" in sql
+        assert "surrogate_key" not in sql
 
 
 class TestCompareSingleColumn:
@@ -410,6 +577,132 @@ class TestDiffCommand:
         diff(old="m_old", new="m_new", primary_key=("id",), dbt_dir_path=str(dbt_dir))
         assert len(compared) == 1
         assert "column_to_compare='name'" in compared[0]
+
+    def test_comma_separated_primary_key_reaches_comparison_as_composite(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # End-to-end through the CLI entrypoint: `-k a,b` must behave exactly like
+        # `-k a -k b`, i.e. produce the composite surrogate-key join rather than a
+        # single key named "a,b" (which _validate_identifiers would reject).
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as k1, 2 as k2, 'x' as name",
+            "select 1 as k1, 2 as k2, 'x' as name",
+        )
+        seen: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            if "compare_column_values" in inline_sql:
+                seen.append(inline_sql)
+                return [{"match_status": "✅: perfect match", "count_records": 10}]
+            return [{"in_a": True, "in_b": True, "count": 10}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(old="m_old", new="m_new", primary_key=("k1,k2",), dbt_dir_path=str(dbt_dir))
+
+        # Only `name` is compared -- both key columns were recognised as keys.
+        assert len(seen) == 1
+        assert "column_to_compare='name'" in seen[0]
+        assert "diff_composite_key(['k1', 'k2'])" in seen[0]
+
+    def test_comma_and_repeated_primary_key_produce_identical_sql(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as k1, 2 as k2, 'x' as name",
+            "select 1 as k1, 2 as k2, 'x' as name",
+        )
+
+        def run(pk: tuple[str, ...]) -> list[str]:
+            captured: list[str] = []
+
+            def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+                captured.append(inline_sql)
+                if "compare_column_values" in inline_sql:
+                    return [{"match_status": "✅: perfect match", "count_records": 10}]
+                return [{"in_a": True, "in_b": True, "count": 10}]
+
+            monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+            diff(old="m_old", new="m_new", primary_key=pk, dbt_dir_path=str(dbt_dir))
+            return captured
+
+        assert run(("k1,k2",)) == run(("k1", "k2"))
+
+    def test_comma_separated_exclude_columns_are_all_excluded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dbt_dir = _make_project(
+            tmp_path,
+            "select 1 as id, 'x' as a, 'y' as b",
+            "select 1 as id, 'x' as a, 'y' as b",
+        )
+        seen: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            seen.append(inline_sql)
+            if "compare_column_values" in inline_sql:
+                return [{"match_status": "✅: perfect match", "count_records": 10}]
+            return [{"in_a": True, "in_b": True, "count": 10}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(
+            old="m_old",
+            new="m_new",
+            primary_key=("id",),
+            exclude_columns=("a,b",),
+            dbt_dir_path=str(dbt_dir),
+        )
+        relations = [q for q in seen if "compare_relations" in q]
+        assert "exclude_columns=['a', 'b']" in relations[0]
+        # Both excluded, so nothing is left to compare per-column.
+        assert not [q for q in seen if "compare_column_values" in q]
+
+    def test_empty_primary_key_exits_1_instead_of_silently_skipping(self, tmp_path: Path) -> None:
+        # `-k ""` must not degrade into "no --primary-key given", which would
+        # silently skip the per-column comparison the user asked for.
+        dbt_dir = _make_project(tmp_path, "select 1 as id", "select 1 as id")
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", primary_key=("",), dbt_dir_path=str(dbt_dir))
+        assert exc.value.code == 1
+
+    def test_empty_exclude_columns_exits_1(self, tmp_path: Path) -> None:
+        dbt_dir = _make_project(tmp_path, "select 1 as id", "select 1 as id")
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", exclude_columns=(",",), dbt_dir_path=str(dbt_dir))
+        assert exc.value.code == 1
+
+    def test_unknown_primary_key_column_exits_1_before_any_warehouse_call(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A typo is a valid identifier, so identifier validation cannot catch it;
+        # without this guard it reaches the warehouse as a raw column-not-found error.
+        dbt_dir = _make_project(tmp_path, "select 1 as id, 'x' as name", "select 1 as id, 'x' as name")
+        called: list[str] = []
+
+        def fake_show(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            called.append("ran")
+            return []
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", primary_key=("idd",), dbt_dir_path=str(dbt_dir))
+        assert exc.value.code == 1
+        assert called == []
+
+    def test_known_primary_key_accepted_case_insensitively(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The guard must not reject a correct key spelled in a different case.
+        dbt_dir = _make_project(tmp_path, "select 1 as id, 'x' as name", "select 1 as id, 'x' as name")
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            if "compare_column_values" in inline_sql:
+                return [{"match_status": "✅: perfect match", "count_records": 1}]
+            return [{"in_a": True, "in_b": True, "count": 1}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        diff(old="m_old", new="m_new", primary_key=("ID",), dbt_dir_path=str(dbt_dir))
 
     def test_row_mismatch_exits_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         dbt_dir = _make_project(

@@ -3,7 +3,7 @@
 import os
 from typing import ClassVar
 
-from anthropic import Anthropic, AnthropicBedrockMantle
+from anthropic import Anthropic, AnthropicBedrock
 from dagster import ConfigurableResource
 from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
@@ -52,19 +52,17 @@ class LLMClientFactory(ConfigurableResource):
         ),
     )
 
-    _client: Anthropic | OpenAI | AnthropicBedrockMantle | None = PrivateAttr(
-        default=None
-    )
+    _client: Anthropic | OpenAI | AnthropicBedrock | None = PrivateAttr(default=None)
 
     supported_client_class: ClassVar[dict[str, type]] = {
         "anthropic": Anthropic,
         "openai": OpenAI,
         "openai_compatible": OpenAI,
         "azure_openai": OpenAI,
-        "bedrock": AnthropicBedrockMantle,
+        "bedrock": AnthropicBedrock,
     }
 
-    def get_client(self) -> Anthropic | OpenAI | AnthropicBedrockMantle:
+    def get_client(self) -> Anthropic | OpenAI | AnthropicBedrock:
         """Create and return an authenticated LLM client."""
         if self._client is not None:
             return self._client
@@ -80,7 +78,7 @@ class LLMClientFactory(ConfigurableResource):
 
         if self.client_class == "bedrock":
             # Deployed environments: no API key at all, auth is the same IAM
-            # metadata credentials used for S3 access - AnthropicBedrockMantle
+            # metadata credentials used for S3 access - AnthropicBedrock
             # picks these up from the standard AWS credential chain.
             self._client = sdk_client_class(aws_region=self.aws_region)
             return self._client

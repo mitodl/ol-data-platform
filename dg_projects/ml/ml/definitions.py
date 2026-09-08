@@ -69,9 +69,8 @@ feedback_clustering_job = define_asset_job(
 
 # Scoped to just these assets, independent of the ml code location's shared
 # default_automation_condition_sensor. Stopped by default so a fresh deploy
-# doesn't auto-run against an unverified LLM credential (feedback_clustering
-# itself has no LLM dependency, but it's downstream of feedback_embeddings via
-# upstream_or_code_changes, so it belongs in the same sensor scope).
+# doesn't auto-run against an unverified LLM credential; enable in the UI
+# once the Bedrock/API path is confirmed working.
 feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
     name="feedback_summaries_automation_sensor",
     target=AssetSelection.assets(

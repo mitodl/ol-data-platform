@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,6 +42,10 @@ INCREMENTAL_PREFIX = "incremental"
 XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
 AIRBYTE_LOADER = "airbyte"
+# Which Airbyte deployment a connection belongs to when it does not say.
+# Units written before connections carried `environment` describe the
+# production workspace, the only one the generator could reach.
+DEFAULT_ENVIRONMENT = "production"
 
 
 @dataclass
@@ -261,9 +265,15 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
     # here would invent disagreements that are not the author's error.
     declared = {str(table.get("name", "")) for table in unit.tables}
 
-    carried: dict[str, int] = {}
+    # Counted per environment, not per unit. Each environment runs its own
+    # Airbyte against its own lake, so the same stream appearing in a production
+    # and a QA connection is the normal case for a unit that is ingested in
+    # both — the collision this guards against is two connections in the SAME
+    # environment writing one raw table.
+    carried_by_environment: dict[str, dict[str, int]] = defaultdict(dict)
     for connection in unit.connections:
         name = connection.get("name", "")
+        environment = str(connection.get("environment", DEFAULT_ENVIRONMENT))
         if dagster_visible and not name.lower().endswith(DAGSTER_SELECTOR_SUFFIX):
             report.add(
                 CHECK,
@@ -273,33 +283,41 @@ def _check_connections(unit: Unit, report: ValidationReport) -> None:
                 "Dagster's connection_selector_fn drops it, so its tables would "
                 "never materialize. Set dagster_visible: false if that is intended.",
             )
+        counts = carried_by_environment[environment]
         for stream in connection.get("streams") or []:
-            carried[str(stream)] = carried.get(str(stream), 0) + 1
+            counts[str(stream)] = counts.get(str(stream), 0) + 1
 
-    for stream in sorted(declared - set(carried)):
+    # The declared/carried reconciliation below is a union across environments:
+    # `tables` states the unit's contract, and an environment whose connection
+    # is disabled or predates a schema change legitimately carries fewer
+    # streams. Only a stream no environment carries is an error.
+    carried = {stream for counts in carried_by_environment.values() for stream in counts}
+
+    for stream in sorted(declared - carried):
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
             f"table {stream!r} is declared but no connection carries that stream",
         )
-    for stream in sorted(set(carried) - declared):
+    for stream in sorted(carried - declared):
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
             f"a connection carries stream {stream!r} but the unit declares no such table",
         )
-    for stream, count in sorted(carried.items()):
-        if count > 1:
-            report.add(
-                CHECK,
-                Severity.ERROR,
-                unit.key,
-                f"stream {stream!r} is carried {count} times within this unit",
-                "Whether that is two connections or one connection listing the "
-                "stream twice, both writes land in the same raw table.",
-            )
+    for environment, counts in sorted(carried_by_environment.items()):
+        for stream, count in sorted(counts.items()):
+            if count > 1:
+                report.add(
+                    CHECK,
+                    Severity.ERROR,
+                    unit.key,
+                    f"stream {stream!r} is carried {count} times by {environment} connections in this unit",
+                    "Whether that is two connections or one connection listing the "
+                    "stream twice, both writes land in the same raw table.",
+                )
 
     # The renderer joins a connection's stream name to its table entry to find
     # the stream's `namespace` (§6.2), so the name has to identify one table.
@@ -668,6 +686,12 @@ def render_airbyte(units: list[Unit]) -> dict[str, Any]:
             "source_kind": airbyte.get("source_kind"),
             "connections": [
                 {
+                    # Carried across the boundary so the consumer can select one
+                    # environment's connections. Without it a unit ingested in
+                    # both would hand Pulumi -- or a drift check comparing
+                    # against one workspace -- the union of two Airbyte
+                    # deployments as though it were one.
+                    "environment": connection.get("environment", DEFAULT_ENVIRONMENT),
                     "name": connection.get("name"),
                     "status": connection.get("status"),
                     "sync_interval_hours": connection.get("sync_interval_hours"),

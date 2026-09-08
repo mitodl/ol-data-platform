@@ -2,6 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__cms_programpage') }}
 )
 
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='page_ptr_id') }}
+
 , cleaned as (
     select
         page_ptr_id as wagtail_page_id
@@ -16,7 +18,7 @@ with source as (
         , video_url as program_video_url
         , {{ json_query_string('price', "'$.value.text'") }} as program_price
         , feature_image_id as program_feature_image_id
-    from source
+    from most_recent_source
 )
 
 select * from cleaned
