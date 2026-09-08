@@ -98,6 +98,8 @@ DLT_PROFILE=dev uv run python -m ol_dlt.sources.podcast_rss
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.mit_edx_programs
 #    Needs AWS creds (reads the prod S3 landing zone):
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.edxorg_s3
+#    Reads one hour of the PostHog export by default; --max-objects raises it:
+DLT_PROFILE=dev uv run python -m ol_dlt.sources.posthog_events
 #    Needs the local-dev Postgres cluster port-forwarded (see Database sources):
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.keycloak
 
@@ -149,6 +151,23 @@ run in a deployed environment, both in `ol-infrastructure`:
    `src/ol_infrastructure/applications/dagster/dagster_server_policy.hcl`.
 2. Add `<NAME>_DB_HOST` to the `data_loading` deployment env in the dagster
    `__main__.py`, sourced from the application stack's exported RDS host.
+
+## Backfilling a file-drop source
+
+`posthog_events` resumes from a cursor it keeps in dlt state, and a cold start
+with no cursor and no explicit window loads the last 7 days rather than the
+whole export. Reaching further back is an explicit, chunked operation:
+
+```bash
+cd src/ol_dlt
+DLT_PROFILE=production uv run python -m ol_dlt.sources.posthog_events \
+    --start-date 2025-01-01 --max-objects 240
+```
+
+`--start-date` overrides the cursor, so repeat the command (dropping
+`--start-date` after the first chunk) until the cursor reaches the present.
+`--max-objects` bounds one run; the export is ~24 objects a day and 600+ days
+deep, so an unbounded first run is not a thing to attempt.
 
 ## Adding a new source
 

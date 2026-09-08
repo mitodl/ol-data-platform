@@ -117,6 +117,12 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Always target-correct via STARROCKS_DBT_TARGET, but a QA run reads the
     # empty QA lake and publishes a B2B dashboard's worth of silently partial
     # data -- the exact failure mode RFC 12711 is about. Step 8's call to flip.
+    # The only execution path for the PostHog staging model: it is fed by a dlt
+    # source, so no sync_and_stage_* job covers it, and the automation sensor
+    # target subtracts the staging group it belongs to. Production only, because
+    # the source reads the production landing zone and no QA PostHog raw table
+    # exists to build from.
+    "posthog_staging_hourly": frozenset({"production"}),
     "b2b_analytics_starrocks_nightly": frozenset({"production"}),
     # Not a data-platform schedule at all: it pushes a commit to the access
     # forge GitHub repository. There is one of those, not one per environment,

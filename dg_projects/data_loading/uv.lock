@@ -489,6 +489,21 @@ wheels = [
 ]
 
 [[package]]
+name = "cyclopts"
+version = "4.23.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "docstring-parser" },
+    { name = "rich" },
+    { name = "rich-rst" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/4e/4afd08d7dd836c436bbc5999f2743eda0ad4eac8946a8eb4b72241e3c555/cyclopts-4.23.3.tar.gz", hash = "sha256:4299ec47f5be853f9a114fcc534c84d42bbf19fefa303994597ecb7e5fd3082b", size = 197067, upload-time = "2026-08-26T18:16:35.688Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/d0/247938ef46dd81ab293efcac06ac2fee922db5bede9039d059912081db51/cyclopts-4.23.3-py3-none-any.whl", hash = "sha256:b3a65872942afb08f3ab5ca3d65b0b3ecfc872c9ccbea9d6a74ec11aa8a0215e", size = 237180, upload-time = "2026-08-26T18:16:34.128Z" },
+]
+
+[[package]]
 name = "dagster"
 version = "1.13.18"
 source = { registry = "https://pypi.org/simple" }
@@ -1936,6 +1951,7 @@ name = "ol-dlt"
 version = "0.1.0"
 source = { editable = "../../src/ol_dlt" }
 dependencies = [
+    { name = "cyclopts" },
     { name = "defusedxml" },
     { name = "dlt", extra = ["filesystem", "parquet", "pyiceberg", "sql-database"] },
     { name = "duckdb" },
@@ -1947,6 +1963,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cyclopts", specifier = "~=4.23.0" },
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "dlt", extras = ["filesystem", "parquet", "pyiceberg", "sql-database"], specifier = ">=1.28,<2" },
     { name = "duckdb", specifier = ">=1.2,!=1.5.0,!=1.5.1" },
@@ -1971,6 +1988,7 @@ dependencies = [
     { name = "boto3" },
     { name = "dagster" },
     { name = "dagster-aws" },
+    { name = "dagster-postgres" },
     { name = "fsspec" },
     { name = "gcsfs" },
     { name = "httpx2" },
@@ -1994,6 +2012,7 @@ requires-dist = [
     { name = "boto3", specifier = "~=1.43.0" },
     { name = "dagster", specifier = "~=1.11" },
     { name = "dagster-aws", specifier = "~=0.29.0" },
+    { name = "dagster-postgres", specifier = "~=0.29.0" },
     { name = "fsspec", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "gcsfs", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "httpx2", specifier = ">=2.2.0" },
@@ -2834,6 +2853,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6a/e5/1064c43203a357d668cd42435f7a15fe6af51512d85b2104fecb937aa861/rich_argparse-1.8.0.tar.gz", hash = "sha256:679df3d832fa94ad6e4bdb07ded088cd7ea2dddc58ae9b2b46346a40b06cbc0c", size = 38940, upload-time = "2026-05-01T15:18:43.604Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/35/1cceccc5fcb50fa2ed53e2aa278cd032f3902682a73e763fb1ac3be8e6fa/rich_argparse-1.8.0-py3-none-any.whl", hash = "sha256:d2a3ce7854654e2253c578763ab0a32f05016f23a55fadba7b9a91b6c0e92142", size = 25616, upload-time = "2026-05-01T15:18:42.395Z" },
+]
+
+[[package]]
+name = "rich-rst"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pygments" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e2/d6/d0b9fafc73b65767200da027acab1db1bdb1048f4fea5ebf659df01c700e/rich_rst-2.1.0.tar.gz", hash = "sha256:f4d117b49697f338769759fa5cacf5197da4888b347b9fda2e50aef5cd8d93bd", size = 302732, upload-time = "2026-07-05T02:59:44.308Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/68/1fc93dd759605b5d00fc98b50200739e41ed32bd22d6ba35ca6c3932371b/rich_rst-2.1.0-py3-none-any.whl", hash = "sha256:7ecd1343ee12c879d0e7ae74c3eb6d263b023d2929c6d114212eb1fd91057255", size = 272987, upload-time = "2026-07-05T02:59:42.792Z" },
 ]
 
 [[package]]

@@ -15,6 +15,9 @@ dependencies = [
     # Relational sources (ol_dlt.database) and their Vault-issued credentials.
     "psycopg2-binary>=2.9",
     "hvac>=2.3",
+    # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real
+    # arguments -- a date window and a chunk size -- rather than env vars.
+    "cyclopts~=4.23.0",
 ]
 
 [dependency-groups]

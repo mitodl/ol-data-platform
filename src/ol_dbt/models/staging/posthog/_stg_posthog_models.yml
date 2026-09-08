@@ -1,0 +1,82 @@
+---
+version: 2
+
+models:
+- name: stg__posthog__learn__s3__search_update_events
+  description: >
+    One row per MIT Learn `search_update` event: a search the user ran on
+    learn.mit.edu, with the query term, the page it happened on, and who ran it.
+
+    The recorded term is not reliably the term the user just submitted. Before
+    mitodl/mit-learn#3908, `posthog.capture("search_update")` carried no
+    properties, so every property was autocaptured and `search_param_q` was
+    derived by PostHog from `$current_url`. The capture fires before the Next.js
+    router commits the navigation, so on those events the URL still holds the
+    PREVIOUS query and `search_term_from_url` is that stale term.
+
+    `search_term` prefers the explicit `search_term` property that
+    mitodl/mit-learn#3908 puts on the event and falls back to the URL-derived
+    value, and `search_term_is_from_event` says which of the two each row got.
+    Filter on that flag for any analysis that needs the term to be the one
+    actually submitted. Every row is `false` until that PR ships, and no earlier
+    event can be corrected after the fact.
+
+    Only a subset of `search_update` events carry a query term at all: in a
+    sampled production hour (2026-09-03 00:00 UTC) 75 of 249 had
+    `search_param_q` and 49 had `isEnter`. The rest are facet-only changes,
+    which fire the same event.
+  columns:
+  - name: search_event_uuid
+    description: >
+      str, PostHog's per-event identifier. Deduplicated on: the raw table is
+      at-least-once at hour granularity, so a replayed hour repeats it.
+    tests:
+    - not_null
+    - unique
+  - name: search_event_timestamp
+    description: timestamp, when the search fired on the client
+    tests:
+    - not_null
+  - name: search_user_distinct_id
+    description: >
+      str, PostHog's per-device identifier for the searcher. Becomes the
+      Keycloak global_id once the frontend calls posthog.identify, so this is
+      the join key to an identified user.
+  - name: search_user_person_id
+    description: str, PostHog's resolved person identifier across distinct_ids
+  - name: search_event_source_object_key
+    description: >
+      str, the hourly export object this event was read from. The raw table is
+      at-least-once at hour granularity, so this is what identifies rows from a
+      re-read hour.
+  - name: search_page_url
+    description: str, the `$current_url` PostHog autocaptured with the event
+  - name: search_page_path
+    description: >
+      str, the path portion of search_page_url with the query string and
+      fragment removed (e.g. /search)
+  - name: search_term_from_event
+    description: >
+      str, the query term taken from an explicit `search_term` property on the
+      event. Null on every event captured before mitodl/mit-learn#3908 ships.
+  - name: search_term_from_url
+    description: >
+      str, the query term PostHog derived from `$current_url`
+      (`search_param_q`). Stale for events captured before the mit-learn fix:
+      it is the query the user ran previously, not the one being submitted.
+  - name: search_term
+    description: >
+      str, the query term: search_term_from_event where present, otherwise
+      search_term_from_url. Check search_term_is_from_event before treating a
+      value as the term the user just submitted.
+  - name: search_term_is_from_event
+    description: >
+      boolean, true when search_term came from an explicit event property and
+      is therefore the submitted term; false when it fell back to the
+      URL-derived value, which may be the user's previous query.
+    tests:
+    - not_null
+  - name: search_submitted_with_enter_key
+    description: >
+      boolean, PostHog's `isEnter` property: the user pressed Enter rather than
+      changing a facet. Null when the event did not carry it.
