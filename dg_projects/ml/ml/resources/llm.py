@@ -3,8 +3,11 @@
 import os
 from typing import ClassVar
 
+import boto3
 from anthropic import Anthropic, AnthropicBedrock
+from botocore.client import BaseClient
 from dagster import ConfigurableResource
+from google import genai
 from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
 from pydantic import Field, PrivateAttr
@@ -34,14 +37,18 @@ class LLMClientFactory(ConfigurableResource):
     base_url: str | None = Field(
         default=None,
         description=(
-            "Base URL of a self-hosted OpenAI-compatible server (vLLM/Ollama/etc."
-            " on a GPU node); required when client_class='openai_compatible'"
+            "Base URL of an OpenAI-compatible server -- a self-hosted one "
+            "(vLLM/Ollama/etc. on a GPU node, no auth) or an authenticated "
+            "gateway (e.g. an internal LLM proxy fronting multiple providers); "
+            "required when client_class='openai_compatible'. See "
+            "OPENAI_COMPATIBLE_API_KEY for the latter."
         ),
     )
     aws_region: str = Field(
         default="us-east-1",
         description=(
-            "AWS region for the Bedrock endpoint; used when client_class='bedrock'"
+            "AWS region for the Bedrock endpoint; used when client_class is "
+            "'bedrock' or 'bedrock_embeddings'"
         ),
     )
     azure_endpoint: str | None = Field(
@@ -52,7 +59,9 @@ class LLMClientFactory(ConfigurableResource):
         ),
     )
 
-    _client: Anthropic | OpenAI | AnthropicBedrock | None = PrivateAttr(default=None)
+    _client: (
+        Anthropic | OpenAI | AnthropicBedrock | genai.Client | BaseClient | None
+    ) = PrivateAttr(default=None)
 
     supported_client_class: ClassVar[dict[str, type]] = {
         "anthropic": Anthropic,
@@ -60,9 +69,16 @@ class LLMClientFactory(ConfigurableResource):
         "openai_compatible": OpenAI,
         "azure_openai": OpenAI,
         "bedrock": AnthropicBedrock,
+        "gemini": genai.Client,
+        # Not actually instantiated via this class (boto3.client() builds a
+        # dynamic type, not a fixed one) -- present so an unknown client_class
+        # still fails the same KeyError lookup as every other branch.
+        "bedrock_embeddings": BaseClient,
     }
 
-    def get_client(self) -> Anthropic | OpenAI | AnthropicBedrock:
+    def get_client(  # noqa: PLR0911 -- one early return per client_class branch
+        self,
+    ) -> Anthropic | OpenAI | AnthropicBedrock | genai.Client | BaseClient:
         """Create and return an authenticated LLM client."""
         if self._client is not None:
             return self._client
@@ -70,9 +86,15 @@ class LLMClientFactory(ConfigurableResource):
         sdk_client_class = self.supported_client_class[self.client_class]
 
         if self.client_class == "openai_compatible":
+            # "unused" for a truly unauthenticated self-hosted server; an
+            # authenticated gateway (Parley et al.) needs a real bearer token,
+            # which the OpenAI SDK sends as this same api_key value.
             self._client = sdk_client_class(
                 base_url=self._require(self.base_url, "base_url"),
-                api_key="unused",  # pragma: allowlist secret
+                api_key=os.environ.get(
+                    "OPENAI_COMPATIBLE_API_KEY",
+                    "unused",  # pragma: allowlist secret
+                ),
             )
             return self._client
 
@@ -89,6 +111,18 @@ class LLMClientFactory(ConfigurableResource):
                 base_url=f"{endpoint.rstrip('/')}/openai/v1/",
                 api_key=self._resolve_api_key("AZURE_OPENAI_API_KEY"),
             )
+            return self._client
+
+        if self.client_class == "bedrock_embeddings":
+            # AWS's native Titan/Cohere embedding models -- a different SDK and
+            # response shape than "bedrock" (AnthropicBedrock, Claude chat only,
+            # no embeddings API at all). Same IAM metadata credential chain as
+            # "bedrock" and S3 access; no API key.
+            self._client = boto3.client("bedrock-runtime", region_name=self.aws_region)
+            return self._client
+
+        if self.client_class == "gemini":
+            self._client = genai.Client(api_key=self._resolve_api_key("GEMINI_API_KEY"))
             return self._client
 
         # Local dev convenience: ANTHROPIC_API_KEY/OPENAI_API_KEY let a developer

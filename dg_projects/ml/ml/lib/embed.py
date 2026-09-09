@@ -1,11 +1,15 @@
 """Embedding of assembled/summarized feedback conversations."""
 
+import json
 import logging
 import os
 from typing import Any, Protocol
 
 import openai
 import polars as pl
+from botocore.client import BaseClient
+from google import genai
+from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
@@ -29,11 +33,23 @@ EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS = int(
     os.environ.get("EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS", "1")
 )
 
-# Safe baseline from feedback_ml_approach.md §B, pending the model bake-off. Anthropic
-# has no embeddings API, so this must always resolve to an OpenAI-compatible model id,
-# unlike SUMMARY_MODEL_VERSION which follows LLMClientFactory's own default provider.
+# Safe baseline from feedback_ml_approach.md §B, pending the model bake-off. A model
+# id is only valid for one vendor's API, so client_class='gemini'/'bedrock_embeddings'
+# needs a matching override -- there is no one id valid everywhere (same reasoning as
+# SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION in ml.lib.summarize).
+# FeedbackEmbeddingsConfig.embedding_model_version overrides this; the env var/default
+# here is only the fallback when a run doesn't set it.
 EMBEDDING_MODEL_VERSION = os.environ.get(
     "EMBEDDING_MODEL_VERSION", "text-embedding-3-large"
+)
+
+# Bedrock's own model id namespace, never an OpenAI/Gemini id -- client_class=
+# 'bedrock_embeddings' needs this override instead. Titan Embed Text v2 supports
+# Matryoshka truncation the same way OpenAI's does (dimensions param), unlike Cohere
+# Embed, which has a fixed output size per model variant.
+# FeedbackEmbeddingsConfig.bedrock_model_version overrides this the same way.
+BEDROCK_EMBEDDING_MODEL_VERSION = os.environ.get(
+    "BEDROCK_EMBEDDING_MODEL_VERSION", "amazon.titan-embed-text-v2:0"
 )
 
 # Matryoshka truncation via the API's own `dimensions` param (§B sweeps 256/512/1024).
@@ -75,33 +91,110 @@ class OpenAIEmbeddingClient:
         return [item.embedding for item in ordered]
 
 
+class GeminiEmbeddingClient:
+    """Adapts a google-genai client to the EmbeddingClient protocol."""
+
+    def __init__(self, client: genai.Client, model_version: str, dim: int) -> None:
+        self._client = client
+        self.model_version = model_version
+        self.dim = dim
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        # Order is the API's own contract (response.embeddings lines up with the
+        # input contents list), unlike OpenAI's which documents an index field --
+        # nothing to sort by here.
+        response = self._client.models.embed_content(
+            model=self.model_version,
+            contents=texts,
+            config=genai_types.EmbedContentConfig(output_dimensionality=self.dim),
+        )
+        return [embedding.values for embedding in response.embeddings]
+
+
+class BedrockEmbeddingClient:
+    """Adapts AWS Bedrock's native embedding models (Titan, Cohere) to
+    EmbeddingClient.
+
+    Titan and Cohere embedding models have different request/response shapes on
+    Bedrock's shared invoke_model API -- unlike OpenAI/Gemini, there's no single
+    contract to adapt to, so this dispatches on model_version's prefix.
+    """
+
+    def __init__(self, client: BaseClient, model_version: str, dim: int) -> None:
+        self._client = client
+        self.model_version = model_version
+        self.dim = dim
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        if self.model_version.startswith("amazon.titan-embed"):
+            return self._embed_titan(texts)
+        if self.model_version.startswith("cohere.embed"):
+            return self._embed_cohere(texts)
+        msg = (
+            f"No Bedrock embedding adapter for model_version={self.model_version!r}. "
+            "Supported prefixes: 'amazon.titan-embed', 'cohere.embed'."
+        )
+        raise ValueError(msg)
+
+    def _embed_titan(self, texts: list[str]) -> list[list[float]]:
+        # Titan's invoke_model embeds one inputText per call -- no batch endpoint,
+        # unlike Cohere's below.
+        embeddings = []
+        for text in texts:
+            body = json.dumps(
+                {"inputText": text, "dimensions": self.dim, "normalize": True}
+            )
+            response = self._client.invoke_model(modelId=self.model_version, body=body)
+            payload = json.loads(response["body"].read())
+            embeddings.append(payload["embedding"])
+        return embeddings
+
+    def _embed_cohere(self, texts: list[str]) -> list[list[float]]:
+        body = json.dumps({"texts": texts, "input_type": "search_document"})
+        response = self._client.invoke_model(modelId=self.model_version, body=body)
+        payload = json.loads(response["body"].read())
+        return payload["embeddings"]
+
+
 def build_embedding_client(
     llm: LLMClientFactory,
     model_version: str | None = None,
     dim: int | None = None,
-) -> OpenAIEmbeddingClient:
+    bedrock_model_version: str | None = None,
+) -> OpenAIEmbeddingClient | GeminiEmbeddingClient | BedrockEmbeddingClient:
     """Build the client whose model_version/dim come from run config, else a default.
 
-    model_version/dim are the feedback_embeddings asset's own per-run Config
-    fields (FeedbackEmbeddingsConfig) -- None means the run didn't override them,
-    so EMBEDDING_MODEL_VERSION/EMBEDDING_DIM apply.
+    model_version/dim/bedrock_model_version are the feedback_embeddings asset's
+    own per-run Config fields (FeedbackEmbeddingsConfig) -- None means the run
+    didn't override them, so EMBEDDING_MODEL_VERSION/EMBEDDING_DIM/
+    BEDROCK_EMBEDDING_MODEL_VERSION apply. bedrock_model_version is ignored
+    unless the resolved client is BedrockEmbeddingClient -- same split as
+    ml.lib.summarize.build_summary_client's model_version/bedrock_model_version.
     """
     client = llm.get_client()
-    if not isinstance(client, OpenAI):
-        # Anthropic has no embeddings endpoint at all -- unlike the summary asset,
-        # there is no adapter to fall back to. The embedding_llm resource must be
-        # configured with client_class='openai' or 'openai_compatible'.
-        msg = (
-            f"{type(client).__name__} has no embeddings API. Configure the "
-            "embedding_llm resource's client_class as 'openai' or "
-            "'openai_compatible'."
+    resolved_dim = dim or EMBEDDING_DIM
+    if isinstance(client, OpenAI):
+        return OpenAIEmbeddingClient(
+            client, model_version or EMBEDDING_MODEL_VERSION, resolved_dim
         )
-        raise TypeError(msg)
-    return OpenAIEmbeddingClient(
-        client,
-        model_version or EMBEDDING_MODEL_VERSION,
-        dim or EMBEDDING_DIM,
+    if isinstance(client, genai.Client):
+        return GeminiEmbeddingClient(
+            client, model_version or EMBEDDING_MODEL_VERSION, resolved_dim
+        )
+    if isinstance(client, BaseClient):
+        return BedrockEmbeddingClient(
+            client,
+            bedrock_model_version or BEDROCK_EMBEDDING_MODEL_VERSION,
+            resolved_dim,
+        )
+    # Anthropic (chat-only, no embeddings API at all) lands here too -- unlike
+    # the summary asset, there is no adapter to fall back to.
+    msg = (
+        f"{type(client).__name__} has no embeddings adapter. Configure the "
+        "embedding_llm resource's client_class as one of 'openai', "
+        "'openai_compatible', 'azure_openai', 'gemini', or 'bedrock_embeddings'."
     )
+    raise TypeError(msg)
 
 
 def resolve_embedding_text(

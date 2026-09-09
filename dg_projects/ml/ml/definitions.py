@@ -1,3 +1,5 @@
+import os
+
 from dagster import (
     AssetSelection,
     AutomationConditionSensorDefinition,
@@ -8,6 +10,7 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.feedback_clustering import feedback_clustering
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_summaries import feedback_summaries
@@ -61,13 +64,20 @@ feedback_embeddings_job = define_asset_job(
     selection=[feedback_embeddings],
 )
 
-# Scoped to just these two assets, independent of the ml code location's
-# shared default_automation_condition_sensor. Stopped by default so a fresh
-# deploy doesn't auto-run against an unverified LLM credential; enable in the
-# UI once the Bedrock/API path is confirmed working.
+feedback_clustering_job = define_asset_job(
+    name="feedback_clustering_job",
+    selection=[feedback_clustering],
+)
+
+# Scoped to just these assets, independent of the ml code location's shared
+# default_automation_condition_sensor. Stopped by default so a fresh deploy
+# doesn't auto-run against an unverified LLM credential; enable in the UI
+# once the Bedrock/API path is confirmed working.
 feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
     name="feedback_summaries_automation_sensor",
-    target=AssetSelection.assets(feedback_summaries, feedback_embeddings),
+    target=AssetSelection.assets(
+        feedback_summaries, feedback_embeddings, feedback_clustering
+    ),
     default_status=DefaultSensorStatus.STOPPED,
 )
 
@@ -111,9 +121,15 @@ defs = Definitions(
         # Bedrock in production: IAM metadata auth, same as S3 access, no API
         # key/Vault secret. Everywhere else keeps the Vault-backed Anthropic
         # client (and ANTHROPIC_API_KEY still overrides it for local dev).
+        # SUMMARY_PROVIDER overrides the client_class picked here (try 'openai'/
+        # 'openai_compatible'/'azure_openai' locally) without touching the
+        # production default.
         "llm": LLMClientFactory(
             vault=vault,
-            client_class="bedrock" if DAGSTER_ENV == "production" else "anthropic",
+            client_class=os.environ.get(
+                "SUMMARY_PROVIDER",
+                "bedrock" if DAGSTER_ENV == "production" else "anthropic",
+            ),
         ),
         # Separate resource, not a reused "llm": the summary asset's default
         # provider (Anthropic/Bedrock) has no embeddings API at all, so this
@@ -121,8 +137,12 @@ defs = Definitions(
         # whatever the summarizer is configured with.
         "embedding_llm": LLMClientFactory(
             vault=vault,
-            client_class="openai",
+            client_class=os.environ.get("EMBEDDING_PROVIDER", "openai"),
             vault_secret_key="openai_api_key",  # noqa: S106 -- a Vault key name, not a secret  # pragma: allowlist secret
+            # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
+            # -- e.g. a local gateway like Parley that fronts multiple providers
+            # behind one OpenAI-shaped API.
+            base_url=os.environ.get("EMBEDDING_BASE_URL"),
         ),
     },
     assets=with_failure_hooks(
@@ -131,6 +151,7 @@ defs = Definitions(
             feedback_redacted,
             feedback_summaries,
             feedback_embeddings,
+            feedback_clustering,
         ]
     ),
     jobs=[
@@ -138,6 +159,7 @@ defs = Definitions(
         feedback_redacted_job,
         feedback_summaries_job,
         feedback_embeddings_job,
+        feedback_clustering_job,
     ],
     sensors=[feedback_summaries_automation_sensor],
 )
