@@ -126,15 +126,89 @@ you are validating never actually runs. A suspiciously fast "success" on an
 incremental model is a warning sign, not a good one. Check for
 `materialized='incremental'` in the config block of every model you selected.
 
-This is the one place this skill contradicts `ol-dbt-local-dev`, which advises
-preferring incremental runs for fast iteration. That advice is right for
-iterating and wrong for validating.
+#### Incremental vs `--full-refresh`: which to use when
 
-Expect test failures that are **not** this PR's fault: `relationships_*` tests
-comparing a locally-rebuilt dimensional model against fact tables still
-resolving to production Glue views will report orphans from the mixed
-local/production graph. Read every failure before attributing it; say in the PR
-which ones you reproduced on `main`.
+The distinction is **iterating** vs **concluding**, not "fresh" vs "stale".
+
+| You are... | Use | Why |
+|---|---|---|
+| Re-running a model repeatedly while editing SQL | incremental (plain `dbt run`) | You want the 0.1s loop, and you only care that it executes |
+| About to read the model's contents and draw a conclusion | **`--full-refresh`** | Validation, before/after diffing, confirming a fix landed |
+| Checking that a changed *expression* now produces different values | **`--full-refresh`** | An incremental merge will not re-evaluate it |
+
+The trap is that a `delete+insert` or `merge` incremental run whose key set is
+unchanged is a **no-op that reports `OK`**. The model builds, dbt prints success,
+and your changed expression is never re-evaluated — so you inspect the *old*
+values believing they are new. `dim_course_run` did exactly this on PR #2403:
+`OK ... in 0.11s`, while the `semester` expression under test never ran.
+
+This is not "stale or wrong incremental state". The state is perfectly valid; it
+just does not reflect your new code. That is why "reserve `--full-refresh` for
+when the state is stale or wrong" does not warn you — by that test, nothing is
+wrong.
+
+Check the config block of every model in your selection for
+`materialized='incremental'` before deciding. A suspiciously fast success on one
+is a warning sign, not a good sign.
+
+#### `~/.ol-dbt/local.duckdb` is shared mutable state
+
+One DuckDB file backs `dev_local` for **every worktree, checkout and agent
+session on the machine**. Another session running `dbt run` will overwrite the
+tables you just built, with no warning and no lock you will notice.
+
+Observed while validating #2403: `dim_course_run.semester` measured 4,513 of
+4,513 populated at 18:22 UTC and 12 of 4,513 an hour later, because a concurrent
+session rebuilt the model from `main`. Nothing in either session reported a
+problem.
+
+Two consequences, and the first is why this skill insists on one invocation:
+
+1. **Never build a model in one step and measure it in a later step.**
+   Materialize both comparison sides as physical tables in a single `dbt run`.
+   Table-materialized output is immune once written — the #2403 comparison
+   survived the clobbering above precisely because both marts were already
+   physical tables.
+2. **Any figure read from this database is valid only at the instant it was
+   read.** Re-read anything you intend to put in a PR body, and prefer
+   `ol-dbt local snapshot` for a baseline you need to keep across a break.
+
+#### Test only your own models: `--indirect-selection=cautious`
+
+Use `dbt run` above, then test separately:
+
+```bash
+dbt test --select <model>_pre <dimensional_model> <model> \
+  -t dev_local --indirect-selection=cautious
+```
+
+dbt defaults to `--indirect-selection=eager`, which selects every test that
+merely **references** a selected model — including `relationships_*` tests
+**owned by other models**. Those compare your locally rebuilt model against fact
+tables still resolving to production Glue views, so they report orphans by
+construction and tell you nothing about your change. One of them on #2403 scans
+`tfact_grade` (42.7M rows) and runs for many minutes.
+
+Measured on #2403's two changed models:
+
+| mode | tests selected |
+|---|---|
+| `eager` (default) | 20 |
+| `buildable` | 12 |
+| `cautious` | 11 |
+
+The 9 that `eager` adds were all cross-model `relationships_*` tests, and
+included every failure the PR body had been documenting as expected noise.
+`cautious` also drops tests the changed model *does* own when their other parent
+is outside the selection (e.g. `dim_course_run` → `dim_date`); those also compare
+against production tables, so losing them is an acceptable trade. `buildable` is
+the middle ground.
+
+**Do not put expected-failure counts in a PR body.** They are a function of when
+you registered and how much you had built locally, not a property of the change.
+#2403's body documented 87/74/13 orphans; the same tests produced 861/178/150
+plus a fourth failure it never mentioned. Fix the selection instead of
+documenting the noise.
 
 ### 4. Choose the join key from the model's own uniqueness test
 
@@ -262,6 +336,8 @@ available locally and should not be implied.
   have one.
 - A column unpopulated on both sides is *unverified*, not *passing*.
 - Delete the `_pre` scaffold model before committing.
+- Treat `~/.ol-dbt/local.duckdb` as shared: build and measure without leaving a
+  gap, and re-read any number before quoting it.
 - Quote deltas between local builds, never absolute local row counts or fill
   rates, until `tk-...-c833a7` is fixed.
 
