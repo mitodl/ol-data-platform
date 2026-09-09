@@ -79,6 +79,36 @@ def test_get_client_openai_compatible_skips_vault() -> None:
     assert kv_v1.reads == 0
 
 
+def test_get_client_openai_compatible_uses_unused_api_key_by_default() -> None:
+    factory = LLMClientFactory(
+        vault=_build_vault(_FakeKvV1({})),
+        client_class="openai_compatible",
+        base_url="http://gpu-node.internal:8000/v1",
+    )
+
+    client = factory.get_client()
+
+    assert client.api_key == "unused"  # pragma: allowlist secret
+
+
+def test_get_client_openai_compatible_honors_api_key_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An authenticated gateway (e.g. an internal LLM proxy) needs a real bearer
+    token instead of the unauthenticated-server default.
+    """
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "sk-gateway-test")
+    factory = LLMClientFactory(
+        vault=_build_vault(_FakeKvV1({})),
+        client_class="openai_compatible",
+        base_url="https://gateway.internal/v1",
+    )
+
+    client = factory.get_client()
+
+    assert client.api_key == "sk-gateway-test"  # pragma: allowlist secret
+
+
 def test_get_client_openai_compatible_requires_base_url() -> None:
     kv_v1 = _FakeKvV1({})
     factory = LLMClientFactory(

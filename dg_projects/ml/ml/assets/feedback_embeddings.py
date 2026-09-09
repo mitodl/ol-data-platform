@@ -50,8 +50,19 @@ class FeedbackEmbeddingsConfig(Config):
     embedding_model_version: str | None = Field(
         default=None,
         description=(
-            "Override the embedding model id for this run. Unset uses "
-            "EMBEDDING_MODEL_VERSION (ml.lib.embed)."
+            "Override the embedding model id sent to the openai/openai_compatible/"
+            "azure_openai/gemini client classes. Unset uses EMBEDDING_MODEL_VERSION "
+            "(ml.lib.embed). Ignored when the embedding_llm resource's client_class "
+            "is 'bedrock_embeddings' -- see bedrock_model_version."
+        ),
+    )
+    bedrock_model_version: str | None = Field(
+        default=None,
+        description=(
+            "Same as embedding_model_version, but for client_class="
+            "'bedrock_embeddings' -- Bedrock has its own model id namespace (e.g. "
+            "'amazon.titan-embed-text-v2:0', 'cohere.embed-english-v3'), never an "
+            "OpenAI/Gemini id. Unset uses BEDROCK_EMBEDDING_MODEL_VERSION."
         ),
     )
     embedding_dim: int | None = Field(
@@ -137,7 +148,10 @@ def feedback_embeddings(
     # embedding_dim has since gone stale (a model change or dimension sweep), not
     # just a turn_count or embedding_input change.
     client = build_embedding_client(
-        embedding_llm, config.embedding_model_version, config.embedding_dim
+        embedding_llm,
+        config.embedding_model_version,
+        config.embedding_dim,
+        config.bedrock_model_version,
     )
     unembedded_df = filter_unembedded(
         resolved_df,

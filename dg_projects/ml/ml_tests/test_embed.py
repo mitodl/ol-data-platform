@@ -1,9 +1,14 @@
 """Tests for ml.lib.embed."""
 
+import json
+from typing import Any
+
+import boto3
 import httpx2
 import openai
 import polars as pl
 import pytest
+from google import genai
 from ml.lib import embed
 
 
@@ -244,7 +249,7 @@ def test_build_embedding_client_rejects_non_openai_clients() -> None:
         def get_client(self) -> object:
             return object()
 
-    with pytest.raises(TypeError, match="embeddings API"):
+    with pytest.raises(TypeError, match="embeddings adapter"):
         embed.build_embedding_client(_FakeLLM())
 
 
@@ -280,6 +285,131 @@ def test_build_embedding_client_honors_model_version_and_dim_override() -> None:
 
     assert client.model_version == "text-embedding-3-small"
     assert client.dim == 256
+
+
+def test_build_embedding_client_dispatches_to_gemini() -> None:
+    client = embed.build_embedding_client(
+        _FakeLLM(genai.Client(api_key="test")),  # pragma: allowlist secret
+        model_version="gemini-embedding-001",
+    )
+
+    assert isinstance(client, embed.GeminiEmbeddingClient)
+    assert client.model_version == "gemini-embedding-001"
+
+
+def test_build_embedding_client_dispatches_to_bedrock() -> None:
+    bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
+
+    client = embed.build_embedding_client(_FakeLLM(bedrock_client))
+
+    assert isinstance(client, embed.BedrockEmbeddingClient)
+    assert client.model_version == embed.BEDROCK_EMBEDDING_MODEL_VERSION
+
+
+def test_build_embedding_client_honors_bedrock_model_version_override() -> None:
+    """model_version is ignored for a Bedrock client -- only bedrock_model_version
+    applies, mirroring build_summary_client's model_version/bedrock_model_version
+    split.
+    """
+    bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
+
+    client = embed.build_embedding_client(
+        _FakeLLM(bedrock_client),
+        model_version="text-embedding-3-small",
+        bedrock_model_version="cohere.embed-english-v3",
+    )
+
+    assert client.model_version == "cohere.embed-english-v3"
+
+
+class _FakeGeminiEmbedding:
+    def __init__(self, values: list[float]) -> None:
+        self.values = values
+
+
+class _FakeGeminiModels:
+    def __init__(self, embeddings_by_call: list[list[list[float]]]) -> None:
+        self._calls = iter(embeddings_by_call)
+        self.last_contents: list[str] | None = None
+
+    def embed_content(
+        self, *, model: str, contents: list[str], config: object
+    ) -> "_FakeGeminiResponse":
+        self.last_model = model
+        self.last_contents = contents
+        self.last_config = config
+        vectors = next(self._calls)
+        return _FakeGeminiResponse([_FakeGeminiEmbedding(v) for v in vectors])
+
+
+class _FakeGeminiResponse:
+    def __init__(self, embeddings: list["_FakeGeminiEmbedding"]) -> None:
+        self.embeddings = embeddings
+
+
+def test_gemini_embedding_client_returns_values_in_response_order() -> None:
+    fake_models = _FakeGeminiModels([[[0.1, 0.2], [0.3, 0.4]]])
+
+    class _FakeGeminiClient:
+        models = fake_models
+
+    client = embed.GeminiEmbeddingClient(_FakeGeminiClient(), "gemini-embedding-001", 2)
+    result = client.embed_batch(["a", "b"])
+
+    assert result == [[0.1, 0.2], [0.3, 0.4]]
+    assert fake_models.last_contents == ["a", "b"]
+
+
+class _FakeBedrockBody:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._raw = json.dumps(payload).encode()
+
+    def read(self) -> bytes:
+        return self._raw
+
+
+class _FakeBedrockClient:
+    def __init__(self, responses: list[dict[str, Any]]) -> None:
+        self._responses = iter(responses)
+        self.calls: list[dict[str, Any]] = []
+
+    def invoke_model(self, *, modelId: str, body: str) -> dict[str, Any]:
+        self.calls.append({"modelId": modelId, **json.loads(body)})
+        return {"body": _FakeBedrockBody(next(self._responses))}
+
+
+def test_bedrock_embedding_client_titan_calls_once_per_text() -> None:
+    fake_client = _FakeBedrockClient(
+        [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]
+    )
+    client = embed.BedrockEmbeddingClient(
+        fake_client, "amazon.titan-embed-text-v2:0", 2
+    )
+
+    result = client.embed_batch(["a", "b"])
+
+    assert result == [[0.1, 0.2], [0.3, 0.4]]
+    assert len(fake_client.calls) == 2
+    assert fake_client.calls[0]["inputText"] == "a"
+    assert fake_client.calls[0]["dimensions"] == 2
+
+
+def test_bedrock_embedding_client_cohere_batches_in_one_call() -> None:
+    fake_client = _FakeBedrockClient([{"embeddings": [[0.1, 0.2], [0.3, 0.4]]}])
+    client = embed.BedrockEmbeddingClient(fake_client, "cohere.embed-english-v3", 2)
+
+    result = client.embed_batch(["a", "b"])
+
+    assert result == [[0.1, 0.2], [0.3, 0.4]]
+    assert len(fake_client.calls) == 1
+    assert fake_client.calls[0]["texts"] == ["a", "b"]
+
+
+def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
+    client = embed.BedrockEmbeddingClient(_FakeBedrockClient([]), "unknown.model", 2)
+
+    with pytest.raises(ValueError, match="No Bedrock embedding adapter"):
+        client.embed_batch(["a"])
 
 
 class _FakeTable:

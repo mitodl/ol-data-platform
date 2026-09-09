@@ -1,3 +1,5 @@
+import os
+
 from dagster import (
     AssetSelection,
     AutomationConditionSensorDefinition,
@@ -119,9 +121,15 @@ defs = Definitions(
         # Bedrock in production: IAM metadata auth, same as S3 access, no API
         # key/Vault secret. Everywhere else keeps the Vault-backed Anthropic
         # client (and ANTHROPIC_API_KEY still overrides it for local dev).
+        # SUMMARY_PROVIDER overrides the client_class picked here (try 'openai'/
+        # 'openai_compatible'/'azure_openai' locally) without touching the
+        # production default.
         "llm": LLMClientFactory(
             vault=vault,
-            client_class="bedrock" if DAGSTER_ENV == "production" else "anthropic",
+            client_class=os.environ.get(
+                "SUMMARY_PROVIDER",
+                "bedrock" if DAGSTER_ENV == "production" else "anthropic",
+            ),
         ),
         # Separate resource, not a reused "llm": the summary asset's default
         # provider (Anthropic/Bedrock) has no embeddings API at all, so this
@@ -129,8 +137,12 @@ defs = Definitions(
         # whatever the summarizer is configured with.
         "embedding_llm": LLMClientFactory(
             vault=vault,
-            client_class="openai",
+            client_class=os.environ.get("EMBEDDING_PROVIDER", "openai"),
             vault_secret_key="openai_api_key",  # noqa: S106 -- a Vault key name, not a secret  # pragma: allowlist secret
+            # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
+            # -- e.g. a local gateway like Parley that fronts multiple providers
+            # behind one OpenAI-shaped API.
+            base_url=os.environ.get("EMBEDDING_BASE_URL"),
         ),
     },
     assets=with_failure_hooks(

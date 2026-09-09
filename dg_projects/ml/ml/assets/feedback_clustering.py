@@ -7,7 +7,6 @@ from dagster import (
     AssetKey,
     AssetOut,
     Config,
-    Failure,
     MetadataValue,
     Output,
     multi_asset,
@@ -20,10 +19,12 @@ from ml.lib.cluster import (
     UMAP_N_COMPONENTS,
     UMAP_N_NEIGHBORS,
     cluster_embeddings,
+    failed_run_metadata,
 )
 from ml.lib.embed import EMBEDDING_DIM, EMBEDDING_MODEL_VERSION
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
@@ -106,6 +107,8 @@ class FeedbackClusteringConfig(Config):
             metadata={"schema": database_name, "write_mode": "append"},
             code_version="feedback_clustering_v1",
             automation_condition=upstream_or_code_changes(),
+            # Not required: a failed run writes feedback_cluster_run with no candidates.
+            is_required=False,
         ),
     },
     pool="feedback_clustering",
@@ -150,6 +153,7 @@ def feedback_clustering(
             "feedback_conversation_pk",
             "source_slug",
             "conversation_ref",
+            "embedding_input",
             "embedding_vector",
         ]
     ).collect()
@@ -158,18 +162,45 @@ def feedback_clustering(
         # Random, not head(): the table's row order isn't meaningful.
         embeddings_df = embeddings_df.sample(n=config.sample_limit, seed=RANDOM_STATE)
 
-    if embeddings_df.height < config.min_cluster_size:
+    # root_run_id, not run_id: stable across retries, so _clear_partial_run can match.
+    cluster_run_id = context.run.root_run_id or context.run.run_id
+    embedding_provenance = (
+        embedding_model_version,
+        embedding_dim,
+        config.embedding_input_filter,
+    )
+    umap_params = (config.umap_n_components, config.umap_n_neighbors)
+
+    # umap_n_components too: UMAP needs n_components < height or it raises TypeError.
+    if (
+        embeddings_df.height < config.min_cluster_size
+        or embeddings_df.height <= config.umap_n_components
+    ):
         msg = (
             f"Only {embeddings_df.height} embedded conversations available "
-            f"(min_cluster_size={config.min_cluster_size}); not enough to form "
-            "even one cluster. Run feedback_embeddings first, or lower "
-            "min_cluster_size for a small local test."
+            f"(min_cluster_size={config.min_cluster_size}, "
+            f"umap_n_components={config.umap_n_components}); not enough to form "
+            "even one cluster. Run feedback_embeddings first, or lower both for "
+            "a small local test."
         )
-        raise Failure(msg)
+        # A failed row, not silence: run_status='failed' is now distinguishable.
+        failed_metadata = failed_run_metadata(
+            cluster_run_id,
+            embedding_provenance,
+            umap_params,
+            config.min_cluster_size,
+            RANDOM_STATE,
+            embeddings_df.height,
+        )
+        failed_metadata["run_at"] = datetime.now(tz=UTC)
+        yield Output(
+            pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
+            output_name="feedback_cluster_run",
+            metadata={"cluster_run_id": MetadataValue.text(cluster_run_id)},
+        )
+        # Permanent, not Failure: run_retries retries a bare Failure forever.
+        raise permanent_failure(msg)
 
-    # context.run_id, not a fresh UUID: retry-stable so _clear_partial_run can
-    # repair a prior partial attempt instead of orphaning it.
-    cluster_run_id = context.run_id
     catalog = get_glue_catalog()
     _clear_partial_run(
         catalog, f"{database_name}.feedback_cluster_candidate", cluster_run_id
@@ -178,8 +209,8 @@ def feedback_clustering(
 
     candidates_df, run_metadata = cluster_embeddings(
         embeddings_df,
-        (embedding_model_version, embedding_dim, config.embedding_input_filter),
-        umap_params=(config.umap_n_components, config.umap_n_neighbors),
+        embedding_provenance,
+        umap_params=umap_params,
         min_cluster_size=config.min_cluster_size,
         cluster_run_id=cluster_run_id,
     )

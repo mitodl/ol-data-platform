@@ -1,6 +1,5 @@
 """UMAP + HDBSCAN clustering of feedback conversation embeddings."""
 
-import logging
 import os
 import uuid
 from typing import Any
@@ -17,7 +16,9 @@ from umap import UMAP
 
 JOIN_COLS = ["feedback_conversation_pk"]
 # Not part of the join key, but carried through for debugging without a join.
-DEBUG_COLS = ["source_slug", "conversation_ref"]
+# embedding_input specifically: a mixed-arm run's per-cluster raw-vs-summary
+# breakdown is unreconstructable from feedback_embeddings once it's upserted.
+DEBUG_COLS = ["source_slug", "conversation_ref", "embedding_input"]
 
 CLUSTER_RUN_SCHEMA = {
     "cluster_run_id": pl.String,
@@ -37,10 +38,12 @@ CLUSTER_RUN_SCHEMA = {
     "run_at": pl.Datetime(time_zone="UTC"),
 }
 
+# Column order matches how cluster_embeddings actually writes it: JOIN_COLS then
+# DEBUG_COLS then the added columns, not cluster_run_id first.
 CLUSTER_CANDIDATE_SCHEMA = {
-    "cluster_run_id": pl.String,
     **dict.fromkeys(JOIN_COLS, pl.String),
     **dict.fromkeys(DEBUG_COLS, pl.String),
+    "cluster_run_id": pl.String,
     "cluster_id": pl.Int64,
     "cluster_probability": pl.Float64,
 }
@@ -70,11 +73,44 @@ SILHOUETTE_MAX_SAMPLES = int(os.environ.get("SILHOUETTE_MAX_SAMPLES", "5000"))
 # only describe genuine clusters.
 NOISE_CLUSTER_ID = -1
 
-logger = logging.getLogger(__name__)
-
 
 def new_cluster_run_id() -> str:
     return str(uuid.uuid4())
+
+
+def failed_run_metadata(  # noqa: PLR0913 -- same shape as cluster_embeddings's args
+    cluster_run_id: str,
+    embedding_provenance: tuple[str, int, str | None],
+    umap_params: tuple[int, int],
+    min_cluster_size: int,
+    random_state: int,
+    total_conversations: int,
+) -> dict[str, Any]:
+    """Build a feedback_cluster_run row for an attempt that didn't complete.
+
+    Matches CLUSTER_RUN_SCHEMA minus run_at (the caller stamps that). The
+    caller raises after writing this -- it's a record, not error handling.
+    """
+    embedding_model_version, embedding_dim, embedding_input_filter = (
+        embedding_provenance
+    )
+    umap_n_components, umap_n_neighbors = umap_params
+    return {
+        "cluster_run_id": cluster_run_id,
+        "algorithm": "umap+hdbscan",
+        "embedding_model_version": embedding_model_version,
+        "embedding_dim": embedding_dim,
+        "embedding_input_filter": embedding_input_filter,
+        "umap_n_components": umap_n_components,
+        "umap_n_neighbors": umap_n_neighbors,
+        "hdbscan_min_cluster_size": min_cluster_size,
+        "random_state": random_state,
+        "cluster_count": 0,
+        "noise_count": 0,
+        "total_conversations": total_conversations,
+        "silhouette_score": None,
+        "run_status": "failed",
+    }
 
 
 def reduce_and_cluster(
@@ -101,6 +137,27 @@ def reduce_and_cluster(
     return labels, clusterer.probabilities_, reduced
 
 
+def _stratified_sample_indices(
+    labels: np.ndarray, max_samples: int, random_state: int
+) -> np.ndarray:
+    """Return indices of a <=max_samples subsample with every cluster represented.
+
+    Proportional per cluster, at least 1 index per cluster -- sklearn's own
+    silhouette_score(sample_size=...) samples uniformly at random instead, which
+    can (and at min_cluster_size scale, often does) exclude a whole small
+    cluster rather than just shrinking its contribution.
+    """
+    rng = np.random.default_rng(random_state)
+    total = len(labels)
+    selected = []
+    for cluster_id in np.unique(labels):
+        cluster_idx = np.flatnonzero(labels == cluster_id)
+        quota = max(1, round(max_samples * len(cluster_idx) / total))
+        take = min(quota, len(cluster_idx))
+        selected.append(rng.choice(cluster_idx, size=take, replace=False))
+    return np.concatenate(selected)
+
+
 def compute_silhouette(
     vectors: np.ndarray,
     labels: np.ndarray,
@@ -112,30 +169,30 @@ def compute_silhouette(
     Requires at least 2 genuine clusters with 2+ members each to be defined;
     returns None (not 0.0, which would misleadingly read as "bad but valid")
     when the run doesn't clear that bar -- e.g. everything landed in one
-    cluster, or everything is noise. Bounded to max_samples (a random subsample
-    via sklearn's own sample_size/random_state) once the non-noise population
-    exceeds it, since the score is O(n^2).
-
-    The subsample isn't stratified by cluster, so an unlucky draw can exclude
-    every member of a small cluster entirely -- at ~198K rows and
-    min_cluster_size=15, sklearn's own sample_size raises ValueError in this
-    case roughly 68% of the time. Treated the same as "not enough clusters":
-    the metric is optional, so an unrepresentative sample returns None rather
-    than failing the whole run.
+    cluster, or everything is noise. Bounded to max_samples once the non-noise
+    population exceeds it (the score is O(n^2)), via a stratified subsample so
+    a cluster near min_cluster_size still contributes rather than being
+    silently dropped from the run-comparison metric.
     """
     non_noise = labels != NOISE_CLUSTER_ID
     if non_noise.sum() < 2:  # noqa: PLR2004
         return None
-    distinct_clusters = np.unique(labels[non_noise])
+    non_noise_labels = labels[non_noise]
+    distinct_clusters = np.unique(non_noise_labels)
     if len(distinct_clusters) < 2:  # noqa: PLR2004
         return None
-    sample_size = max_samples if non_noise.sum() > max_samples else None
+    non_noise_vectors = vectors[non_noise]
+    if non_noise.sum() > max_samples:
+        sample_idx = _stratified_sample_indices(
+            non_noise_labels, max_samples, random_state
+        )
+        non_noise_vectors = non_noise_vectors[sample_idx]
+        non_noise_labels = non_noise_labels[sample_idx]
     try:
         return float(
             silhouette_score(
-                vectors[non_noise],
-                labels[non_noise],
-                sample_size=sample_size,
+                non_noise_vectors,
+                non_noise_labels,
                 random_state=random_state,
             )
         )

@@ -17,6 +17,7 @@ dependencies = [
     "umap-learn",
     "anthropic",
     "openai",
+    "google-genai",
     "presidio-analyzer",
     "presidio-anonymizer",
     "spacy>=3.7",

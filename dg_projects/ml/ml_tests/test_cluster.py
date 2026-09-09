@@ -99,6 +99,7 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
             "feedback_conversation_pk": [str(i) for i in range(n_per_cluster * 2)],
             "source_slug": ["zendesk"] * (n_per_cluster * 2),
             "conversation_ref": [str(i) for i in range(n_per_cluster * 2)],
+            "embedding_input": ["summary"] * (n_per_cluster * 2),
             "embedding_vector": vectors.tolist(),
         }
     )
