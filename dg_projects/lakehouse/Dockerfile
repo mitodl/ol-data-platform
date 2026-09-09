@@ -29,6 +29,11 @@ COPY src/ol_dbt src/ol_dbt
 # with `ol-dbt impact`, so the same hash-input parser decides what CI warns
 # about pre-merge and what the build full-refreshes afterwards.
 COPY src/ol_dbt_cli src/ol_dbt_cli
+# The inventory is data, not code, so nothing in the dependency graph pulls it
+# in -- but airbyte_inventory_drift reads it at run time, and the whole point of
+# that asset is to notice when the file stops describing the live workspace. It
+# has to be copied explicitly or the asset has nothing to compare against.
+COPY ingestion/inventory ingestion/inventory
 
 # Install dependencies from the lakehouse project
 WORKDIR /app/dg_projects/lakehouse
@@ -95,9 +100,16 @@ FROM python:3.13-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
-# Copy the application from the builder
+# Copy the application from the builder. Note this copies the project's
+# *contents* onto /app, so lakehouse/assets/foo.py sits two levels below /app
+# rather than the four it sits below the repo root in the source tree -- see
+# _find_inventory_dir in assets/airbyte_drift.py, which is why that resolves the
+# inventory by searching upward instead of indexing a fixed parent.
 COPY --from=builder /app/dg_projects/lakehouse /app
 COPY --from=builder /app/src/ol_dbt /app/ol_dbt
+# Keeps ingestion/inventory a sibling of the package, so the upward search from
+# /app/lakehouse/assets/ finds it at /app/ingestion/inventory.
+COPY --from=builder /app/ingestion/inventory /app/ingestion/inventory
 
 # Copy the dbt project from the builder
 COPY --from=builder /app/src/ol_dbt /opt/dbt
