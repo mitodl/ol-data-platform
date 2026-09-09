@@ -180,14 +180,17 @@ API keys come from **HashiCorp Vault via a `ConfigurableResource`**, not `EnvVar
 class LLMClientFactory(ConfigurableResource):
     vault: Vault = Field(...)
     vault_mount_point: str = Field(default="secret-data")
-    vault_secret_path: str = Field(default="pipelines/feedback-llm")  # NEW Vault path to provision
+    vault_secret_path: str = Field(
+        default="pipelines/feedback-llm"
+    )  # NEW Vault path to provision
     vault_secret_key: str = Field(default="api_key")
     _client: Anthropic | None = PrivateAttr(default=None)
 
     def get_client(self):
         if self._client is None:
             data = self.vault.client.secrets.kv.v1.read_secret(
-                mount_point=self.vault_mount_point, path=self.vault_secret_path)
+                mount_point=self.vault_mount_point, path=self.vault_secret_path
+            )
             self._client = Anthropic(api_key=data["data"][self.vault_secret_key])
         return self._client
 ```

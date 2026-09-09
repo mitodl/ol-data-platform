@@ -25,6 +25,10 @@ WORKDIR /app
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
 COPY dg_projects/lakehouse dg_projects/lakehouse
 COPY src/ol_dbt src/ol_dbt
+# The surrogate-key drift check in assets/lakehouse/dbt.py shares its detector
+# with `ol-dbt impact`, so the same hash-input parser decides what CI warns
+# about pre-merge and what the build full-refreshes afterwards.
+COPY src/ol_dbt_cli src/ol_dbt_cli
 
 # Install dependencies from the lakehouse project
 WORKDIR /app/dg_projects/lakehouse
@@ -35,6 +39,29 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Sync the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
+
+# OpenTelemetry auto-instrumentation agent, activated by PYTHONPATH (see the
+# /opt/otel symlink in the final stage).
+#
+# Installed with `uv pip install` rather than added to pyproject.toml so the
+# agent can be added or removed without a resolve across all ten code
+# locations. It has to come after the syncs above, which prune anything the
+# lockfile does not name. Only the HTTP OTLP exporter is installed -- the SDK
+# default "otlp" resolves to the gRPC exporter, which is why ol-infrastructure
+# sets OTEL_TRACES_EXPORTER=otlp_proto_http.
+#
+# The instrumentation list is explicit rather than whatever
+# opentelemetry-bootstrap would select, because bootstrap picks psycopg2
+# alongside sqlalchemy and that emits two spans for every query.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv \
+        opentelemetry-distro \
+        opentelemetry-exporter-otlp-proto-http \
+        opentelemetry-instrumentation-sqlalchemy \
+        opentelemetry-instrumentation-grpc \
+        opentelemetry-instrumentation-botocore \
+        opentelemetry-instrumentation-requests \
+        opentelemetry-instrumentation-urllib3
 
 # Compile dbt to generate manifest.json (CRITICAL for @dbt_assets)
 WORKDIR /app/src/ol_dbt
@@ -83,6 +110,23 @@ RUN apt-get update && \
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+
+# A stable path to the auto-instrumentation agent directory, so ol-infrastructure
+# can switch tracing on with PYTHONPATH without encoding this image's Python
+# version or venv layout. The directory holds a sitecustomize.py, which is the
+# whole of what `opentelemetry-instrument` does: it prepends this path and execs
+# the command.
+#
+# PYTHONPATH rather than an ENTRYPOINT because run worker pods share this image
+# and are deliberately NOT instrumented yet. An ENTRYPOINT applies to every
+# process the image starts, so there would be nothing left to switch off; a
+# variable can be stripped for one workload and not another. dagster_instance.yaml
+# in ol-infrastructure strips it from run workers by giving their container a
+# `command` of `env -u PYTHONPATH`, and the gRPC health-check probes prepend the
+# same thing for the same reason.
+RUN mkdir -p /opt/otel && \
+    ln -s "$(python -c 'import opentelemetry.instrumentation.auto_instrumentation as m, pathlib; print(pathlib.Path(m.__file__).parent)')" \
+        /opt/otel/auto_instrumentation
 
 WORKDIR /app
 

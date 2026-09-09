@@ -1,6 +1,9 @@
 """Schedules for data_loading ingest pipelines."""
 
 import dagster as dg
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+
+from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
 
 oll_ingest_schedule = dg.ScheduleDefinition(
     name="oll_ingest_daily_schedule",
@@ -48,6 +51,15 @@ podcast_rss_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# The four raw__youtube__api__* tables are materialized by a single @dlt_assets
+# run, so schedule the whole youtube source group rather than one table.
+youtube_ingest_schedule = dg.ScheduleDefinition(
+    name="youtube_ingest_daily_schedule",
+    target=dg.AssetSelection.groups("youtube"),
+    cron_schedule="15 4 * * *",
+    execution_timezone="Etc/UTC",
+)
+
 keycloak_ingest_schedule = dg.ScheduleDefinition(
     name="keycloak_ingest_daily_schedule",
     # Selected by group rather than by key so adding a table to KEYCLOAK_SPEC
@@ -57,6 +69,25 @@ keycloak_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# Defined only where the assets are (see MITXONLINE_APP_DLT_ENVIRONMENTS): a
+# schedule whose selection matches no asset fails the tick, it does not no-op.
+mitxonline_app_ingest_schedule = (
+    dg.ScheduleDefinition(
+        name="mitxonline_app_ingest_schedule",
+        # Selected by group rather than by key so adding a table to
+        # MITXONLINE_APP_SPEC does not also require editing this schedule.
+        target=dg.AssetSelection.groups("mitxonline"),
+        # Every six hours, matching the cadence of the Airbyte connection this
+        # replaces (inventory unit mitxonline/app_postgres,
+        # sync_interval_hours: 6). Offset off the hour so it does not start
+        # alongside the lakehouse dbt runs.
+        cron_schedule="20 */6 * * *",
+        execution_timezone="Etc/UTC",
+    )
+    if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    else None
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -64,6 +95,8 @@ defs = dg.Definitions(
         mit_climate_ingest_schedule,
         mit_edx_programs_ingest_schedule,
         podcast_rss_ingest_schedule,
+        youtube_ingest_schedule,
         keycloak_ingest_schedule,
+        *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
     ],
 )

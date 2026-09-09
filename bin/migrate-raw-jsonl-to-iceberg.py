@@ -24,6 +24,10 @@ Safety:
     table creation fails, the original JSONL entry is automatically restored in
     Glue so the table remains accessible.  JSONL files in S3 are never deleted
     by this script.
+
+    Each table is read fully into memory, so tables larger than
+    ``--max-table-bytes`` are reported and left as JSONL instead of being
+    attempted.  The check runs before the Glue entry is touched.
 """
 
 import logging
@@ -46,6 +50,18 @@ app = cyclopts.App(help="Migrate legacy JSONL raw-layer Glue tables to Iceberg f
 
 _RAW_DATABASE = "ol_warehouse_{env}_raw"
 _AWS_REGION = "us-east-1"
+
+# Migration reads a table's whole JSONL body into an Arrow table in memory, so
+# one oversized table can OOM a run that would otherwise convert thousands of
+# small ones. Tables above this are reported and left as JSONL rather than
+# attempted. 8 GiB of compressed JSON already expands well past that in Arrow;
+# raise it deliberately, on a machine sized for it, for a specific table.
+#
+# This is not hypothetical: in ol_warehouse_qa_raw (2026-09-08),
+# raw__irx__edxorg__s3__course_studentmodules is 652 GB across 3,114 files --
+# 97% of the 675 GB behind that database's whole legacy prefix, and read by no
+# dbt source. Without a guard it is the first table big enough to kill the run.
+_DEFAULT_MAX_TABLE_BYTES = 8 * 1024**3
 
 # Fields accepted by Glue CreateTable's TableInput (excludes server-managed fields
 # like CreateTime, UpdateTime, CreatedBy, IsRegisteredWithLakeFormation, etc.)
@@ -97,13 +113,18 @@ def _to_table_input(glue_table: dict[str, Any]) -> dict[str, Any]:
 def _list_json_files(
     s3_client: "botocore.client.S3",
     location: str,
-) -> list[str]:
-    """List JSON/JSONL files at location; returns '{bucket}/{key}' paths for pa.fs."""
+) -> tuple[list[str], int]:
+    """List JSON/JSONL files at location.
+
+    Returns '{bucket}/{key}' paths for pa.fs, plus their total size in bytes so
+    the caller can refuse a table too large to read into memory.
+    """
     path = location.removeprefix("s3://")
     bucket, _, prefix = path.partition("/")
     prefix = prefix.rstrip("/") + "/"
 
     files: list[str] = []
+    total_bytes = 0
     paginator = s3_client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
@@ -115,7 +136,8 @@ def _list_json_files(
                 and "/data/" not in key
             ):
                 files.append(f"{bucket}/{key}")
-    return files
+                total_bytes += obj["Size"]
+    return files, total_bytes
 
 
 def _schema_from_glue_columns(columns: list[dict[str, Any]]) -> pa.Schema:
@@ -138,7 +160,7 @@ def _restore_glue_table(
     log.info("  restored original JSONL Glue entry")
 
 
-def _migrate_one(  # noqa: PLR0913, C901, PLR0912
+def _migrate_one(  # noqa: PLR0913, C901, PLR0912, PLR0915
     *,
     glue: "botocore.client.Glue",
     s3: "botocore.client.S3",
@@ -147,14 +169,32 @@ def _migrate_one(  # noqa: PLR0913, C901, PLR0912
     database: str,
     table_name: str,
     dry_run: bool,
+    max_table_bytes: int,
 ) -> bool:
     """Migrate a single JSONL Glue table to Iceberg.  Returns True on success."""
     resp = glue.get_table(DatabaseName=database, Name=table_name)
     original_def = resp["Table"]
     location = original_def["StorageDescriptor"]["Location"].rstrip("/")
 
-    files = _list_json_files(s3, location)
-    log.info("%s  location=%s  files=%d", table_name, location, len(files))
+    files, total_bytes = _list_json_files(s3, location)
+    log.info(
+        "%s  location=%s  files=%d  bytes=%d",
+        table_name,
+        location,
+        len(files),
+        total_bytes,
+    )
+
+    # Checked before the Glue entry is deleted, so refusing costs nothing.
+    if total_bytes > max_table_bytes:
+        log.warning(
+            "  %.2f GB exceeds the %.2f GB limit — leaving as JSONL. "
+            "Re-run with --table %s --max-table-bytes N on a host sized for it.",
+            total_bytes / 1024**3,
+            max_table_bytes / 1024**3,
+            table_name,
+        )
+        return False
 
     if dry_run:
         log.info("  [dry-run] would migrate %d file(s)", len(files))
@@ -251,12 +291,25 @@ def main(
         str,
         cyclopts.Parameter(help="AWS region for Glue and S3"),
     ] = _AWS_REGION,
+    max_table_bytes: Annotated[
+        int,
+        cyclopts.Parameter(
+            help="Skip tables whose JSONL body exceeds this many bytes "
+            "(migration reads each table fully into memory)"
+        ),
+    ] = _DEFAULT_MAX_TABLE_BYTES,
 ) -> None:
     """Migrate legacy JSONL raw-layer Glue tables to Apache Iceberg format."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     database = _RAW_DATABASE.format(env=env)
-    log.info("database=%s  dry_run=%s  table=%s", database, dry_run, table or "(all)")
+    log.info(
+        "database=%s  dry_run=%s  table=%s  max_table_bytes=%d",
+        database,
+        dry_run,
+        table or "(all)",
+        max_table_bytes,
+    )
 
     glue = boto3.client("glue", region_name=aws_region)
     s3 = boto3.client("s3", region_name=aws_region)
@@ -308,6 +361,7 @@ def main(
                 database=database,
                 table_name=name,
                 dry_run=dry_run,
+                max_table_bytes=max_table_bytes,
             )
             if ok:
                 succeeded += 1

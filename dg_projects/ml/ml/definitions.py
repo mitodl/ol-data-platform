@@ -71,8 +71,8 @@ feedback_clustering_job = define_asset_job(
 # default_automation_condition_sensor. Stopped by default so a fresh deploy
 # doesn't auto-run against an unverified LLM credential; enable in the UI
 # once the Bedrock/API path is confirmed working.
-feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
-    name="feedback_pipeline_automation_sensor",
+feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
+    name="feedback_summaries_automation_sensor",
     target=AssetSelection.assets(
         feedback_summaries, feedback_embeddings, feedback_clustering
     ),
@@ -149,5 +149,5 @@ defs = Definitions(
         feedback_embeddings_job,
         feedback_clustering_job,
     ],
-    sensors=[feedback_pipeline_automation_sensor],
+    sensors=[feedback_summaries_automation_sensor],
 )

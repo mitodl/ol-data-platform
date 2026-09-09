@@ -51,9 +51,13 @@ wiring into four credential/engine-gated phases.
 - **JSON output convention:** build a flat `list[dict]`, `print(json.dumps(data, indent=2))`
   (plain `print`, never rich). Text mode uses `console.print` + a trailing rich `Summary:`
   line. Dual consoles: `console = Console()`, `err_console = Console(stderr=True)`.
-- **Severity enums:** `impact` uses `AlertLevel(StrEnum) = BREAKING|WARNING|INFO`; `validate`
-  uses `Severity(StrEnum) = ERROR|WARNING|INFO`. Exit `1` when the top severity is present,
-  bare `return` for the clean/no-op case.
+- **Severity enums:** `impact` uses `AlertLevel(StrEnum) = BREAKING|KEY_REGEN|WARNING|INFO`;
+  `validate` uses `Severity(StrEnum) = ERROR|WARNING|INFO`. Exit `1` when the top severity is
+  present, bare `return` for the clean/no-op case. `KEY_REGEN` is deliberately outside that
+  exit-code rule: it reports a full-refresh model whose `generate_surrogate_key` inputs
+  changed, orphaning the FK copies its incremental descendants hold. Nothing in the PR is
+  wrong — the follow-up is a production rebuild, which `lakehouse.lib.surrogate_key_drift`
+  performs on the first build after merge.
 - **dbt invocation:** always `subprocess.run([...], cwd=str(dbt_dir))`, argv list, no
   `dbtRunner`. `run.py` passes `--profiles-dir str(dbt_dir)`; `impact`/`validate` rely on
   cwd. `DBT_PROFILES_DIR` is not set by the CLI.
@@ -119,14 +123,22 @@ New file `src/ol_dbt_cli/ol_dbt_cli/commands/diff.py`; register in `cli.py` via
 
 ```python
 def diff(
-    old: Annotated[str, Parameter(name=["--old"], help="Baseline model/relation name.")],
-    new: Annotated[str, Parameter(name=["--new"], help="Candidate model/relation name.")],
+    old: Annotated[
+        str, Parameter(name=["--old"], help="Baseline model/relation name.")
+    ],
+    new: Annotated[
+        str, Parameter(name=["--new"], help="Candidate model/relation name.")
+    ],
     dbt_dir_path: Annotated[str | None, Parameter(name=["--dbt-dir", "-d"])] = None,
     target: Annotated[str, Parameter(name=["--target", "-t"])] = "dev_local",
-    primary_key: Annotated[tuple[str, ...], Parameter(name=["--primary-key", "-k"])] = (),
-    exclude_columns: Annotated[tuple[str, ...], Parameter(name=["--exclude-columns"])] = (),
+    primary_key: Annotated[
+        tuple[str, ...], Parameter(name=["--primary-key", "-k"])
+    ] = (),
+    exclude_columns: Annotated[
+        tuple[str, ...], Parameter(name=["--exclude-columns"])
+    ] = (),
     output_format: Annotated[str, Parameter(name=["--format", "-f"])] = "text",
-    limit: Annotated[int, Parameter(name=["--limit"])] = 20,   # cap sample rows
+    limit: Annotated[int, Parameter(name=["--limit"])] = 20,  # cap sample rows
     auto_build: Annotated[bool, Parameter(name=["--auto-build"])] = False,
 ) -> None: ...
 ```
@@ -249,7 +261,9 @@ run `dbt parse`/`compile` against `dev_local`, no warehouse network):
    the BREAKING/WARNING column-level blast radius as a **PR comment** (create-or-update a
    single sticky comment). BREAKING → non-zero (or convert to a required-review signal — decide
    at impl; default: annotate, do not hard-fail, to avoid blocking legitimate breaking changes
-   that are reviewed).
+   that are reviewed). KEY_REGEN alerts get their own section in that comment: they change no
+   column, so a reviewer scanning the collapsed details for a renamed field would not find
+   them.
 4. **dimensional-layering-lint** — see §5 (runs as `ol-dbt validate --only dimensional_layering`
    or a dedicated flag).
 5. **sqlfluff-lint** — run the same sqlfluff config used in pre-commit (today pre-commit only).
