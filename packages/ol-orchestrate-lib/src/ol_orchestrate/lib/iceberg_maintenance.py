@@ -229,6 +229,19 @@ def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]
             optimize_after_every_n_runs=1,
             analyze_after_every_n_runs=7,
         ),
+        TableMaintenanceConfig(
+            model_name="feedback_embeddings",
+            schema_name=f"ol_warehouse_{warehouse_env}_intermediate",
+            materialized="table",
+            # Asset key matches the Dagster asset in dg_projects/ml/ml/assets/
+            # feedback_embeddings.py. Same per-chunk upsert pattern as
+            # feedback_summaries -- one snapshot per chunk per run.
+            asset_key=["intermediate", "feedback_embeddings"],
+            snapshot_retention_days=7,
+            orphan_retention_days=7,
+            optimize_after_every_n_runs=1,
+            analyze_after_every_n_runs=7,
+        ),
     ]
 
 
