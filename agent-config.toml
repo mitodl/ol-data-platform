@@ -16,8 +16,9 @@
 scope = "project"
 
 [skills]
-ol-dbt-fast-validation = "skills/data/ol-dbt-fast-validation/SKILL.md"
-ol-dbt-local-dev       = "skills/data/ol-dbt-local-dev/SKILL.md"
+ol-dbt-fast-validation     = "skills/data/ol-dbt-fast-validation/SKILL.md"
+ol-dbt-local-dev           = "skills/data/ol-dbt-local-dev/SKILL.md"
+ol-dbt-migration-validation = "skills/data/ol-dbt-migration-validation/SKILL.md"
 
 # The `dbt` profile is the fast, credential-light dbt-warehouse QA loop:
 # stand up the local DuckDB+Iceberg env (ol-dbt-local-dev) and validate changes
@@ -26,4 +27,14 @@ ol-dbt-local-dev       = "skills/data/ol-dbt-local-dev/SKILL.md"
 skills = [
     "ol-dbt-fast-validation",
     "ol-dbt-local-dev",
+]
+
+# The `migration` profile adds the acceptance procedure for epic #2072 model
+# migrations on top of the QA loop: build the pre-migration and migrated models
+# side by side on one registration and decide on evidence.
+[profiles.migration]
+skills = [
+    "ol-dbt-local-dev",
+    "ol-dbt-fast-validation",
+    "ol-dbt-migration-validation",
 ]
