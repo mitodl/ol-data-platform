@@ -367,6 +367,46 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
+  column_name: order_created_date
+  datetime_format: null
+  description: null
+  expression: 'substring(order_created_on, 6, 2) || ''/'' || substring(order_created_on,
+    9, 2) || ''/'' || substring(order_created_on, 1, 4) '
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: null
+  verbose_name: null
+- advanced_data_type: null
+  column_name: year_of_order_created_date
+  datetime_format: null
+  description: null
+  expression: substring(order_created_on, 1, 4)
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: null
+  verbose_name: null
+- advanced_data_type: null
+  column_name: month_of_order_created_date
+  datetime_format: null
+  description: null
+  expression: substring(order_created_on, 6, 2)
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: null
+  verbose_name: null
+- advanced_data_type: null
   column_name: receipt_payment_method
   datetime_format: null
   description: null

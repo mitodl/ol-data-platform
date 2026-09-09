@@ -14,7 +14,7 @@ params:
   - product_type
   - product_readable_id
   - product_name
-  - order_created_on
+  - order_created_date
   - order_state
   - unit_price
   - discount
