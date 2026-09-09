@@ -127,17 +127,26 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # default_status at all.
     "instructor_onboarding_daily_schedule": frozenset({"production"}),
     # Reads the ingestion inventory and compares it to the live Airbyte
-    # workspace. Production-only, for the same reason as the schedule above:
-    # `check_drift` reconciles connections by the `environment` field they
-    # carry, taking the union across environments, so it is written to check ONE
-    # workspace holding every environment's connections -- not one workspace per
-    # Dagster environment. Ticking it in QA would re-check the same workspace a
-    # second time and report the same findings twice.
+    # workspace. Production-only because the comparison is not
+    # environment-aware and the inventory describes production.
+    #
+    # `airbyte_host_map` in definitions.py points qa (and dev/ci) at
+    # api-airbyte-qa and production at api-airbyte -- separate workspaces, not
+    # one shared one. `check_drift` takes a single snapshot and compares EVERY
+    # declared connection against it; `_declared_connections` flattens all units
+    # with no environment filter, and nothing in that path reads the rendered
+    # `environment` field. So a QA tick would check the production inventory
+    # against the QA workspace and report essentially every declaration missing
+    # -- a page's worth of false ERRORs, not a duplicate report.
+    #
+    # THIS IS THE CONSTRAINT TO REVISIT, not the environment set: if a QA
+    # inventory is ever added, widening this entry is not enough on its own.
+    # check_drift needs to filter declarations by environment first, or QA will
+    # compare the union against one host and be wrong in the other direction.
     #
     # Note this is narrower than `daily_sync_and_stage` above, which is qa as
     # well as production. That one is ingestion, which RFC 12711 wants running
-    # in QA; this is a report about configuration, and there is one
-    # configuration.
+    # in QA; this is a report, and it can only describe one workspace.
     "airbyte_inventory_drift_daily": frozenset({"production"}),
 }
 
