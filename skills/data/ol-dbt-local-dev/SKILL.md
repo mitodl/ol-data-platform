@@ -87,13 +87,26 @@ ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_mo
   when you specifically need the shared cluster.
 - `register` needs AWS creds; `setup`, `run` (on dev_local), and the validation
   commands do not.
-- Prefer incremental `ol-dbt run` over `--full-refresh` for fast iteration;
-  reserve `--full-refresh` for when the incremental state is stale or wrong.
+- Prefer incremental `ol-dbt run` while **iterating** — you want the fast loop and
+  only care that the model executes. Switch to `--full-refresh` as soon as you are
+  going to **read the model's contents and draw a conclusion** from them
+  (validating a change, diffing before/after, confirming a fix landed). An
+  incremental run whose key set is unchanged is a no-op that still reports `OK`,
+  so a changed expression is never re-evaluated and you inspect the old values
+  believing they are new. Measured: `dim_course_run` merged in 0.11s and did not
+  re-derive the column under test. This is not "stale or wrong state" — the state
+  is valid, it just does not reflect your new code.
+- `~/.ol-dbt/local.duckdb` is **shared by every worktree and session on the
+  machine**. Another checkout running `dbt run` overwrites your tables with no
+  warning, so do not build in one step and measure in a much later one; snapshot a
+  baseline you need to keep.
 - Never point `cleanup` at a shared/production schema; rely on `--dry-run` and the
   `PROTECTED_SCHEMAS` guard.
 - StarRocks-native `b2b_analytics` models are the exception — they are not
   representable on DuckDB and must be QA'd on StarRocks (see `ol-dbt starrocks`).
 
 Pair this with the `ol-dbt-fast-validation` skill (validate / impact / diff) to
-QA what you build. See `docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md` for the broader
-CI/QA plan and the zero-copy substrate details.
+QA what you build, and with `ol-dbt-migration-validation` when the question is
+whether a migrated model still holds the same data as its predecessor. See
+`docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md` for the broader CI/QA plan and the
+zero-copy substrate details.
