@@ -58,15 +58,32 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # The instrumentation list is explicit rather than whatever
 # opentelemetry-bootstrap would select, because bootstrap picks psycopg2
 # alongside sqlalchemy and that emits two spans for every query.
+#
+# PINNED, and the pins are load-bearing rather than routine hygiene. The
+# preemption budget ol-infrastructure sets for run workers
+# (dagster_instance.yaml: OTEL_BSP_SCHEDULE_DELAY, OTEL_EXPORTER_OTLP_TIMEOUT)
+# is derived from opentelemetry-sdk 1.44.0 internals, and two of them are not
+# stable API:
+#   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.44.0 -- BatchProcessor stores
+#     _export_timeout_millis and never reads it -- so the shutdown drain runs at
+#     a hardcoded 30s join. A release that wires it up changes the budget.
+#   - The Python HTTP exporter reads OTEL_EXPORTER_OTLP_TIMEOUT in SECONDS
+#     (DEFAULT_TIMEOUT = 10  # in seconds), contradicting the OTel spec, which
+#     defines it in milliseconds. An upstream fix would silently reinterpret
+#     ol-infrastructure's "2" as 2ms and fail every export.
+# opentelemetry-sdk is pinned explicitly rather than left to the distro's range
+# for that reason: it is the package the reasoning actually depends on.
+# Re-check that reasoning when bumping these, not just the test suite.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv \
-        opentelemetry-distro \
-        opentelemetry-exporter-otlp-proto-http \
-        opentelemetry-instrumentation-sqlalchemy \
-        opentelemetry-instrumentation-grpc \
-        opentelemetry-instrumentation-botocore \
-        opentelemetry-instrumentation-requests \
-        opentelemetry-instrumentation-urllib3
+        opentelemetry-distro==0.65b0 \
+        opentelemetry-sdk==1.44.0 \
+        opentelemetry-exporter-otlp-proto-http==1.44.0 \
+        opentelemetry-instrumentation-sqlalchemy==0.65b0 \
+        opentelemetry-instrumentation-grpc==0.65b0 \
+        opentelemetry-instrumentation-botocore==0.65b0 \
+        opentelemetry-instrumentation-requests==0.65b0 \
+        opentelemetry-instrumentation-urllib3==0.65b0
 
 # Compile dbt to generate manifest.json (CRITICAL for @dbt_assets)
 WORKDIR /app/src/ol_dbt
@@ -130,12 +147,15 @@ ENV PATH="/app/.venv/bin:$PATH"
 # the command.
 #
 # PYTHONPATH rather than an ENTRYPOINT because run worker pods share this image
-# and are deliberately NOT instrumented yet. An ENTRYPOINT applies to every
-# process the image starts, so there would be nothing left to switch off; a
-# variable can be stripped for one workload and not another. dagster_instance.yaml
-# in ol-infrastructure strips it from run workers by giving their container a
-# `command` of `env -u PYTHONPATH`, and the gRPC health-check probes prepend the
-# same thing for the same reason.
+# with the code server and the two are configured separately. An ENTRYPOINT
+# applies to every process the image starts, so there would be nothing left to
+# vary; a variable can be set for one workload and not another.
+#
+# ol-infrastructure now loads the agent on run workers too and silences the ones
+# it is not measuring with OTEL_SDK_DISABLED, opted in per code location -- it
+# used to strip PYTHONPATH from them with a `command` of `env -u PYTHONPATH`.
+# The gRPC health-check probes still prepend that, so a probe does not pay a full
+# SDK startup and emit a span for its own health check.
 RUN mkdir -p /opt/otel && \
     ln -s "$(python -c 'import opentelemetry.instrumentation.auto_instrumentation as m, pathlib; print(pathlib.Path(m.__file__).parent)')" \
         /opt/otel/auto_instrumentation
