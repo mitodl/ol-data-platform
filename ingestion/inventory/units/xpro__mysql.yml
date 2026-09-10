@@ -371,21 +371,21 @@ tables:
   namespace: edxapp
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: forum_comment
   raw_table: raw__xpro__openedx__mysql__forum_comment
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: forum_commentthread
   raw_table: raw__xpro__openedx__mysql__forum_commentthread
   sync_mode: full_refresh_overwrite
   namespace: edxapp
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: forum_coursestat
   raw_table: raw__xpro__openedx__mysql__forum_coursestat
   sync_mode: full_refresh_overwrite
@@ -413,7 +413,7 @@ tables:
   namespace: edxapp
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: forum_lastreadtime
   raw_table: raw__xpro__openedx__mysql__forum_lastreadtime
   sync_mode: full_refresh_overwrite
@@ -427,7 +427,7 @@ tables:
   namespace: edxapp
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: forum_readstate
   raw_table: raw__xpro__openedx__mysql__forum_readstate
   sync_mode: full_refresh_overwrite
@@ -448,7 +448,7 @@ tables:
   namespace: edxapp
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: grades_persistentcoursegrade
   raw_table: raw__xpro__openedx__mysql__grades_persistentcoursegrade
   sync_mode: incremental_deduped_history
