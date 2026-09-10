@@ -262,6 +262,9 @@ models:
   - name: summary_model_version
     description: str, which model produced conversation_summary. Null under the same
       conditions as conversation_summary.
+  - name: summarized_at
+    description: timestamp, when conversation_summary was generated. Null under the
+      same conditions as conversation_summary.
 
 - name: int__feedback__embedding
   description: feedback_embeddings' output, one row per conversation -- empty until
@@ -281,3 +284,5 @@ models:
   - name: embedding_input
     description: str, 'summary' or 'concatenated_turns' -- which text was actually
       embedded.
+  - name: embedded_at
+    description: timestamp, when embedding_vector was generated.

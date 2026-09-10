@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import polars as pl
@@ -18,6 +19,7 @@ SUMMARIZE_CHECKPOINT_SCHEMA = {
     "conversation_summary": pl.String,
     "summary_model_version": pl.String,
     "embedding_input": pl.String,
+    "summarized_at": pl.Datetime(time_zone="UTC"),
 }
 
 # Bounds how many LLM calls a crash can lose (feedback_dagster_asset_spec.md).
@@ -248,13 +250,14 @@ def summarize_conversations(
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
-            conversation_summary, summary_model_version, embedding_input, turn_count -
-            keyed by feedback_conversation_pk, for afact_feedback_conversation to
-            left-join. conversation_summary stays null for skipped rows;
-            summary_model_version is the "was this LLM-generated" signal. A
-            conversation whose LLM call raises is dropped from the output entirely
-            (#2542 checkpointing) rather than failing the batch -- absent from
-            feedback_summaries, it's picked up again as new on the next run.
+            conversation_summary, summary_model_version, embedding_input,
+            summarized_at, turn_count - keyed by feedback_conversation_pk, for
+            afact_feedback_conversation to left-join. conversation_summary and
+            summarized_at both stay null for skipped rows; summary_model_version
+            is the "was this LLM-generated" signal. A conversation whose LLM call
+            raises is dropped from the output entirely (#2542 checkpointing)
+            rather than failing the batch -- absent from feedback_summaries,
+            it's picked up again as new on the next run.
     """
     rows = df.to_dicts()
     feedback_conversation_pks: list[str] = []
@@ -264,6 +267,7 @@ def summarize_conversations(
     summaries: list[str | None] = []
     model_versions: list[str | None] = []
     embedding_inputs: list[str] = []
+    summarized_ats: list[datetime | None] = []
     for row in rows:
         if needs_summary(row):
             try:
@@ -297,10 +301,12 @@ def summarize_conversations(
             summaries.append(summary)
             model_versions.append(client.model_version)
             embedding_inputs.append("summary")
+            summarized_ats.append(datetime.now(tz=UTC))
         else:
             summaries.append(None)
             model_versions.append(None)
             embedding_inputs.append("concatenated_turns")
+            summarized_ats.append(None)
         feedback_conversation_pks.append(row["feedback_conversation_pk"])
         source_slugs.append(row["source_slug"])
         conversation_refs.append(row["conversation_ref"])
@@ -324,6 +330,7 @@ def summarize_conversations(
         pl.Series("conversation_summary", summaries, dtype=pl.String),
         pl.Series("summary_model_version", model_versions, dtype=pl.String),
         pl.Series("embedding_input", embedding_inputs, dtype=pl.String),
+        pl.Series("summarized_at", summarized_ats, dtype=pl.Datetime(time_zone="UTC")),
     )
 
 
@@ -349,6 +356,11 @@ def checkpoint_chunk(
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
+    # A table from before summarized_at existed has an older schema than chunk_df --
+    # union_by_name adds the new column (nulled on existing rows) instead of failing
+    # the upsert; a no-op once the table already has it.
+    with table.update_schema() as update:
+        update.union_by_name(chunk_df.to_arrow().schema)
     table.upsert(
         df=chunk_df.to_arrow(),
         join_cols=JOIN_COLS,

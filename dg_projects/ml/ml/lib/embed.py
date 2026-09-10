@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import openai
@@ -23,6 +24,7 @@ EMBEDDING_CHECKPOINT_SCHEMA = {
     "embedding_vector": pl.List(pl.Float32),
     "embedding_dim": pl.Int64,
     "embedding_model_version": pl.String,
+    "embedded_at": pl.Datetime(time_zone="UTC"),
 }
 
 # Abort after this many whole chunks in a row come back with zero successful
@@ -385,6 +387,9 @@ def _results_to_df(
         pl.Series("embedding_vector", vectors, dtype=pl.List(pl.Float32)),
         pl.lit(client.dim, dtype=pl.Int64).alias("embedding_dim"),
         pl.lit(client.model_version, dtype=pl.String).alias("embedding_model_version"),
+        pl.lit(datetime.now(tz=UTC), dtype=pl.Datetime(time_zone="UTC")).alias(
+            "embedded_at"
+        ),
     )
 
 
@@ -408,6 +413,11 @@ def checkpoint_embedding_chunk(
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
+    # A table from before embedded_at existed has an older schema than chunk_df --
+    # union_by_name adds the new column (nulled on existing rows) instead of failing
+    # the upsert; a no-op once the table already has it.
+    with table.update_schema() as update:
+        update.union_by_name(chunk_df.to_arrow().schema)
     table.upsert(
         df=chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
@@ -442,7 +452,7 @@ def embed_and_checkpoint(
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
             turn_count, embedding_vector, embedding_dim, embedding_model_version,
-            embedding_input - keyed by feedback_conversation_pk, for
+            embedding_input, embedded_at - keyed by feedback_conversation_pk, for
             afact_feedback_conversation to left-join. turn_count is carried through
             so a later run's filter_unembedded can detect a conversation that
             gained a turn.

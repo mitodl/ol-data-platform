@@ -142,6 +142,8 @@ sources:
       tests:
       - not_null
       - unique
+    - name: summarized_at
+      description: timestamp, when this row's summary was generated.
   - name: feedback_embeddings
     description: One row per conversation (upsert key feedback_conversation_pk --
       re-embedding overwrites in place, so only the latest model_version/dim/ embedding_input
@@ -152,3 +154,5 @@ sources:
       tests:
       - not_null
       - unique
+    - name: embedded_at
+      description: timestamp, when this row's embedding was generated.

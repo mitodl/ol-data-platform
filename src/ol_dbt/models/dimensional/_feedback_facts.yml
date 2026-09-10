@@ -229,8 +229,8 @@ models:
     description: str, which model and prompt produced the summary. Null means not
       summarized.
   - name: summarized_at
-    description: str, ISO8601 timestamp the summary was generated. Always null for
-      now - feedback_summaries doesn't track this yet.
+    description: timestamp, when the summary was generated. Null for a conversation
+      the skip rule excludes.
   - name: embedding_vector
     description: array, the conversation's embedding. Null until feedback_embeddings
       has materialized for this conversation.
@@ -241,8 +241,7 @@ models:
   - name: embedding_input
     description: str, what was actually embedded - 'summary' or 'concatenated_turns'.
   - name: embedded_at
-    description: str, ISO8601 timestamp the vector was generated. Always null for
-      now - feedback_embeddings doesn't track this yet.
+    description: timestamp, when the vector was generated.
   - name: category_fk
     description: str, foreign key to dim_feedback_category. Assigned at MVP from the
       conversation's dominant tag - the tag with the highest corpus frequency, tie-broken

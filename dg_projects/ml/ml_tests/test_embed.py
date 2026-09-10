@@ -1,7 +1,7 @@
 """Tests for ml.lib.embed."""
 
 import json
-from typing import Any
+from typing import Any, Self
 
 import boto3
 import httpx2
@@ -412,9 +412,23 @@ def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
         client.embed_batch(["a"])
 
 
+class _FakeSchemaUpdate:
+    def union_by_name(self, schema: object) -> None:
+        pass
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+
 class _FakeTable:
     def __init__(self) -> None:
         self.upserts: list[dict[str, object]] = []
+
+    def update_schema(self) -> _FakeSchemaUpdate:
+        return _FakeSchemaUpdate()
 
     def upsert(self, **kwargs: object) -> None:
         self.upserts.append(kwargs)

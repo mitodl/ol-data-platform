@@ -134,15 +134,12 @@ select
     end as sentiment_source
     , summary.conversation_summary
     , summary.summary_model_version
-    -- No computed-at timestamp exists upstream yet (neither feedback_summaries
-    -- nor feedback_embeddings' checkpoint schema tracks one) -- stays null
-    -- until that's added there, not a join miss here.
-    , cast(null as varchar) as summarized_at
+    , summary.summarized_at
     , embedding.embedding_vector
     , embedding.embedding_dim
     , embedding.embedding_model_version
     , embedding.embedding_input
-    , cast(null as varchar) as embedded_at
+    , embedding.embedded_at
     -- The tag-seed assignment; the ML asset reassigns from clusters later. A
     -- conversation with no tags stays null, the queryable unassigned state.
     , feedback_category.feedback_category_pk as category_fk

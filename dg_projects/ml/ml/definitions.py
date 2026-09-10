@@ -153,26 +153,34 @@ defs = Definitions(
         # client (and ANTHROPIC_API_KEY still overrides it for local dev).
         # SUMMARY_PROVIDER overrides the client_class picked here (try 'openai'/
         # 'openai_compatible'/'azure_openai' locally) without touching the
-        # production default.
+        # production default (Bedrock). LLM_BASE_URL/LLM_AZURE_ENDPOINT are only
+        # required (and only read) for 'openai_compatible'/'azure_openai'
+        # respectively -- shared with embedding_llm below on the assumption that
+        # local testing points both at the same gateway (e.g. Parley); set
+        # client_class independently per resource if that's ever not true.
         "llm": LLMClientFactory(
             vault=vault,
             client_class=os.environ.get(
                 "SUMMARY_PROVIDER",
                 "bedrock" if DAGSTER_ENV == "production" else "anthropic",
             ),
+            base_url=os.environ.get("LLM_BASE_URL"),
+            azure_endpoint=os.environ.get("LLM_AZURE_ENDPOINT"),
         ),
         # Separate resource, not a reused "llm": the summary asset's default
         # provider (Anthropic/Bedrock) has no embeddings API at all, so this
         # pipeline step needs its own client_class/secret independent of
-        # whatever the summarizer is configured with.
+        # whatever the summarizer is configured with. Unlike "llm", this one
+        # stays 'openai' in production too -- never Bedrock by default (§B: the
+        # embedding model choice is deferred to a not-yet-run bake-off).
         "embedding_llm": LLMClientFactory(
             vault=vault,
             client_class=os.environ.get("EMBEDDING_PROVIDER", "openai"),
             vault_secret_key="openai_api_key",  # noqa: S106 -- a Vault key name, not a secret  # pragma: allowlist secret
             # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
             # -- e.g. a local gateway like Parley that fronts multiple providers
-            # behind one OpenAI-shaped API.
-            base_url=os.environ.get("EMBEDDING_BASE_URL"),
+            # behind one OpenAI-shaped API. Shared var with "llm" above.
+            base_url=os.environ.get("LLM_BASE_URL"),
         ),
     },
     assets=with_failure_hooks(

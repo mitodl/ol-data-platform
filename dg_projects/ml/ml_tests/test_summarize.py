@@ -1,5 +1,7 @@
 """Tests for ml.lib.summarize."""
 
+from typing import Self
+
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import summarize
@@ -352,9 +354,23 @@ def _summary_row(**overrides: object) -> dict[str, object]:
     return row
 
 
+class _FakeSchemaUpdate:
+    def union_by_name(self, schema: object) -> None:
+        pass
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+
 class _FakeTable:
     def __init__(self) -> None:
         self.upserts: list[dict[str, object]] = []
+
+    def update_schema(self) -> _FakeSchemaUpdate:
+        return _FakeSchemaUpdate()
 
     def upsert(self, **kwargs: object) -> None:
         self.upserts.append(kwargs)
