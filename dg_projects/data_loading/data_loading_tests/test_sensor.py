@@ -14,6 +14,7 @@ from data_loading.defs.ingestion.sensor import (
     edxorg_upstream_changes_sensor,
 )
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
+from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 
 # Postgres run storage indexes run_tags(key, value) unconditionally (the
 # dagster schema's mysql_length hint on that index is MySQL-only); a btree
@@ -125,6 +126,34 @@ def test_failed_run_is_retried_with_a_fresh_run_key(
     third, _ = _evaluate(instance, cursor=cursor)
     assert isinstance(third, dg.RunRequest)
     assert third.run_key.endswith("__attempt2")
+
+
+def test_permanently_failed_run_consumes_the_batch_instead_of_retrying(
+    instance: dg.DagsterInstance,
+) -> None:
+    """stop_run_retries stamps a PermanentFailure's run with the no-retry tag.
+
+    For edxorg_s3 a retry would succeed past the files the failed run skipped
+    (dlt's cursor is already beyond them) and hide them, so the batch is
+    consumed instead of retried.
+    """
+    dg.materialize([_archive_table_a], instance=instance)
+    first, cursor = _evaluate(instance, cursor=None)
+    assert isinstance(first, dg.RunRequest)
+    create_run_for_test(
+        instance,
+        job_name=edxorg_s3_ingest_job.name,
+        tags={**first.tags, RETRY_ON_ASSET_OR_OP_FAILURE_TAG: "false"},
+        status=dg.DagsterRunStatus.FAILURE,
+    )
+
+    second, cursor = _evaluate(instance, cursor=cursor)
+    assert isinstance(second, dg.SkipReason)
+    assert "failed permanently" in (second.skip_message or "")
+
+    third, _ = _evaluate(instance, cursor=cursor)
+    assert isinstance(third, dg.SkipReason)
+    assert "No new upstream" in (third.skip_message or "")
 
 
 def test_successful_run_advances_cursor_and_stops_retrying(

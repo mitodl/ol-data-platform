@@ -4,6 +4,7 @@ import hashlib
 
 import dagster as dg
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
+from ol_orchestrate.lib.failures import RETRY_ON_ASSET_OR_OP_FAILURE_TAG
 
 _EDXORG_S3_ASSET_KEYS = [
     dg.AssetKey(["ol_warehouse_raw_data", f"raw__edxorg__s3__tables__{t}"])
@@ -134,7 +135,8 @@ def edxorg_upstream_changes_sensor(
     succeeded -- never at launch time -- so a failed or canceled run is
     retried on the very next tick instead of silently waiting for the next
     genuinely new upstream materialization (which, for a daily archive
-    process, can be a full day away).
+    process, can be a full day away). The exception is a run that failed
+    permanently: that batch is consumed rather than retried.
 
     Deliberately does not rely on ``context.last_run_key`` (the sensor
     daemon's own tick-history bookkeeping): whether the batch of
@@ -164,6 +166,20 @@ def edxorg_upstream_changes_sensor(
             context.advance_all_cursors()
             return dg.SkipReason(
                 "Most recent edxorg_s3 ingest attempt for this batch succeeded"
+            )
+        # stop_run_retries stamps this for a PermanentFailure. Retrying cannot
+        # change the outcome, and here it would hide it: dlt's incremental cursor
+        # is already past the files an EdxorgTSVUnreadable run skipped, so the
+        # retry would succeed without them.
+        if (
+            latest_attempt.dagster_run.tags.get(RETRY_ON_ASSET_OR_OP_FAILURE_TAG)
+            == "false"
+        ):
+            context.advance_all_cursors()
+            return dg.SkipReason(
+                f"edxorg_s3 ingest for this batch (run_id="
+                f"{latest_attempt.dagster_run.run_id}) failed permanently; "
+                "not retrying."
             )
         context.log.warning(
             "edxorg_s3 ingest attempt %d for this batch (run_id=%s) finished "
