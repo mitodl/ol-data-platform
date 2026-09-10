@@ -33,3 +33,122 @@ sources:
     - dbt_expectations.expect_compound_columns_to_be_unique:
         arguments:
           column_list: ["source_slug", "source_record_ref"]
+  - name: feedback_cluster_run
+    description: One row per clustering run (params, cluster/noise counts, silhouette),
+      materialized by the feedback_clustering Dagster asset. run_status here is whatever
+      the asset wrote (currently always 'proposed') -- promotion status comes from
+      feedback_cluster_run_promotion, not this column.
+    columns:
+    - name: cluster_run_id
+      description: str, uuid identifying this clustering run.
+      tests:
+      - not_null
+      - unique
+  - name: feedback_cluster_candidate
+    description: One row per (conversation, cluster_run_id) -- every clustered run's
+      assignments, promoted or not. Only the run(s) marked 'promoted' in feedback_cluster_run_promotion
+      should ever reach afact_feedback_conversation.
+    columns:
+    - name: cluster_run_id
+      description: str, uuid identifying which clustering run produced this assignment.
+      tests:
+      - not_null
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+      tests:
+      - not_null
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        arguments:
+          column_list: ["cluster_run_id", "feedback_conversation_pk"]
+  - name: feedback_category_approval
+    description: Append-only human decision log for dim_feedback_category rows, written
+      by the feedback_category_approval Dagster asset (materialized ad hoc via its
+      Launchpad Config form -- category_slug, category_status, approved_by). dim_feedback_category
+      takes the *latest* row per category_slug; a category with no row here stays
+      'proposed'.
+    columns:
+    - name: category_slug
+      description: str, the dim_feedback_category.category_slug being decided on.
+      tests:
+      - not_null
+    - name: category_status
+      description: str, the decision - approved, merged or deprecated.
+      tests:
+      - not_null
+      - accepted_values:
+          arguments:
+            values: ["approved", "merged", "deprecated"]
+    - name: approved_at
+      description: timestamp, when this decision was recorded.
+      tests:
+      - not_null
+  - name: feedback_cluster_run_promotion
+    description: Append-only human decision log for feedback_cluster_run rows, written
+      by the feedback_cluster_run_promotion Dagster asset (materialized ad hoc via
+      its Launchpad Config form -- cluster_run_id, run_status, promoted_by). int__feedback__cluster_assignment
+      takes the single most-recently-promoted cluster_run_id; a run with no 'promoted'
+      row here contributes nothing to afact_feedback_conversation.
+    columns:
+    - name: cluster_run_id
+      description: str, the feedback_cluster_run.cluster_run_id being decided on.
+      tests:
+      - not_null
+    - name: run_status
+      description: str, the decision - promoted or superseded.
+      tests:
+      - not_null
+      - accepted_values:
+          arguments:
+            values: ["promoted", "superseded"]
+    - name: promoted_at
+      description: timestamp, when this decision was recorded.
+      tests:
+      - not_null
+  - name: feedback_category_proposal
+    description: One row per cluster the feedback_category_proposals Dagster asset
+      labeled -- an LLM-proposed category_label/category_slug for that cluster_id,
+      always category_status='proposed' until a human approves it via feedback_category_approval.
+    columns:
+    - name: cluster_run_id
+      description: str, the cluster_run_id this proposal was generated from.
+      tests:
+      - not_null
+    - name: cluster_id
+      description: int, the HDBSCAN cluster id this proposal describes.
+      tests:
+      - not_null
+    - name: category_slug
+      description: str, deterministically slugified from category_label (ml.lib.categorize.new_category_slug)
+        -- never LLM-trusted directly.
+      tests:
+      - not_null
+    - name: category_label
+      description: str, the LLM-proposed display label.
+      tests:
+      - not_null
+    - name: proposed_at
+      description: timestamp, when this proposal was generated.
+      tests:
+      - not_null
+  - name: feedback_summaries
+    description: One row per conversation (upsert key feedback_conversation_pk), materialized
+      by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version
+      for a single-turn/short conversation, which the asset's skip rule never summarizes
+      (§A.1).
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+      tests:
+      - not_null
+      - unique
+  - name: feedback_embeddings
+    description: One row per conversation (upsert key feedback_conversation_pk --
+      re-embedding overwrites in place, so only the latest model_version/dim/ embedding_input
+      survives), materialized by the feedback_embeddings Dagster asset.
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+      tests:
+      - not_null
+      - unique

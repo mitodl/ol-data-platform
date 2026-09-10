@@ -222,15 +222,18 @@ models:
         arguments:
           values: ['explicit_rating', 'model']
   - name: conversation_summary
-    description: str, LLM abstract of the assembled redacted turns. Null until the
-      ML asset lands, and permanently null for conversations the skip rule excludes.
+    description: str, LLM abstract of the assembled redacted turns. Null until feedback_summaries
+      has materialized for this conversation, and permanently null for conversations
+      the skip rule excludes.
   - name: summary_model_version
     description: str, which model and prompt produced the summary. Null means not
       summarized.
   - name: summarized_at
-    description: str, ISO8601 timestamp the summary was generated.
+    description: str, ISO8601 timestamp the summary was generated. Always null for
+      now - feedback_summaries doesn't track this yet.
   - name: embedding_vector
-    description: array, the conversation's embedding. Null until the ML asset lands.
+    description: array, the conversation's embedding. Null until feedback_embeddings
+      has materialized for this conversation.
   - name: embedding_dim
     description: int, dimensionality of the embedding vector.
   - name: embedding_model_version
@@ -238,7 +241,8 @@ models:
   - name: embedding_input
     description: str, what was actually embedded - 'summary' or 'concatenated_turns'.
   - name: embedded_at
-    description: str, ISO8601 timestamp the vector was generated.
+    description: str, ISO8601 timestamp the vector was generated. Always null for
+      now - feedback_embeddings doesn't track this yet.
   - name: category_fk
     description: str, foreign key to dim_feedback_category. Assigned at MVP from the
       conversation's dominant tag - the tag with the highest corpus frequency, tie-broken

@@ -10,9 +10,15 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.feedback_approvals import (
+    feedback_category_approval,
+    feedback_cluster_run_promotion,
+)
+from ml.assets.feedback_category_proposals import feedback_category_proposals
 from ml.assets.feedback_clustering import feedback_clustering
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
+from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
@@ -67,6 +73,30 @@ feedback_embeddings_job = define_asset_job(
 feedback_clustering_job = define_asset_job(
     name="feedback_clustering_job",
     selection=[feedback_clustering],
+)
+
+# run after a human promotes a cluster run, not automatically on every upstream change.
+feedback_category_proposals_job = define_asset_job(
+    name="feedback_category_proposals_job",
+    selection=[feedback_category_proposals],
+)
+
+# Human-triggered only, a one-time (or occasional) decision aid -- not a
+# production pipeline step
+feedback_sentiment_eval_job = define_asset_job(
+    name="feedback_sentiment_eval_job",
+    selection=[feedback_sentiment_eval],
+)
+
+# Human-triggered only, via each asset's Launchpad Config form
+feedback_category_approval_job = define_asset_job(
+    name="feedback_category_approval_job",
+    selection=[feedback_category_approval],
+)
+
+feedback_cluster_run_promotion_job = define_asset_job(
+    name="feedback_cluster_run_promotion_job",
+    selection=[feedback_cluster_run_promotion],
 )
 
 # Scoped to just these assets, independent of the ml code location's shared
@@ -152,6 +182,10 @@ defs = Definitions(
             feedback_summaries,
             feedback_embeddings,
             feedback_clustering,
+            feedback_category_approval,
+            feedback_cluster_run_promotion,
+            feedback_category_proposals,
+            feedback_sentiment_eval,
         ]
     ),
     jobs=[
@@ -160,6 +194,10 @@ defs = Definitions(
         feedback_summaries_job,
         feedback_embeddings_job,
         feedback_clustering_job,
+        feedback_category_approval_job,
+        feedback_cluster_run_promotion_job,
+        feedback_category_proposals_job,
+        feedback_sentiment_eval_job,
     ],
     sensors=[feedback_summaries_automation_sensor],
 )
