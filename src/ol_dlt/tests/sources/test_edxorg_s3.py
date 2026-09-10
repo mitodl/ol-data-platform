@@ -245,14 +245,11 @@ class _FakeFileItem(dict[str, Any]):
         return io.BytesIO(self._content)
 
 
-_TABLE = "auth_userprofile"
-
-
 def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
     """Drive the reader's generator directly, past dlt's transformer wrapper."""
     return list(
         edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001
-            items, edxorg_table=_TABLE, **edxorg_s3._CSV_READER_OPTIONS
+            items, **edxorg_s3._CSV_READER_OPTIONS
         )
     )
 
@@ -286,11 +283,6 @@ def test_reader_skips_an_empty_file_instead_of_failing_the_table() -> None:
     assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
 
 
-@pytest.fixture(autouse=True)
-def _fresh_unreadable_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(edxorg_s3, "_unreadable_files", {})
-
-
 # A legacy unquoted dump, shaped like the auth_userprofile file behind
 # DAGSTER-30: every line is one record and the JSON quotes are literal text, but
 # one bio happens to start with `"`, which under the pinned quote character
@@ -315,36 +307,26 @@ def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
 
     assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
     assert rows[39]["bio"] == '"I love MIT'
-    assert edxorg_s3.pop_unreadable_files(_TABLE) == []
 
 
 def test_unquoted_fallback_counts_a_last_line_without_a_newline() -> None:
     data = _LEGACY_STRAY_QUOTE_TSV.rstrip(b"\n")
 
     assert len(_rows(_read([_FakeFileItem("s3://bucket/legacy.tsv", data)]))) == 79  # noqa: PLR2004
-    assert edxorg_s3.pop_unreadable_files(_TABLE) == []
 
 
-def test_reader_sets_aside_a_file_it_cannot_read_whole() -> None:
-    """One bad file must not keep the rest of the table from loading.
+def test_reader_names_the_s3_object_it_could_not_read() -> None:
+    """A file neither read can take whole fails loudly, naming the object.
 
     The pinned read cannot sniff this file, and the unquoted read silently drops
-    the short row, so the file is refused rather than partially loaded. It is
-    recorded by its S3 URL -- DAGSTER-1C..1V reported DuckDB's
-    ``DUCKDB_INTERNAL_OBJECTSTORE://...`` handle instead, which nobody can open.
+    the short row, so it is refused rather than partially loaded. DAGSTER-1C..1V
+    reported DuckDB's ``DUCKDB_INTERNAL_OBJECTSTORE://...`` handle instead of the
+    S3 URL, which nobody can open.
     """
     unreadable = b'id\tname\tbio\n1\t"open\tb\n2\n'
     url = "s3://bucket/db_table/auth_userprofile/prod/x/bad.tsv"
 
-    rows = _rows(
-        _read(
-            [
-                _FakeFileItem(url, unreadable),
-                _FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV),
-            ]
-        )
-    )
+    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
+        _read([_FakeFileItem(url, unreadable)])
 
-    assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
-    assert edxorg_s3.pop_unreadable_files(_TABLE) == [url]
-    assert edxorg_s3.pop_unreadable_files(_TABLE) == [], "popping forgets them"
+    assert url in str(raised.value)

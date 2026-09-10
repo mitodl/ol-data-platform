@@ -10,12 +10,7 @@ blocking the rest of the run behind it.
 from collections.abc import Iterable
 from typing import Any
 
-from dagster import (
-    AssetExecutionContext,
-    AssetsDefinition,
-    Definitions,
-    MetadataValue,
-)
+from dagster import AssetExecutionContext, AssetsDefinition, Definitions
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     edxorg_s3,
@@ -29,7 +24,7 @@ from ol_dlt.sources import (
     youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
-from ol_orchestrate.lib.failures import PermanentFailure, with_failure_hooks
+from ol_orchestrate.lib.failures import with_failure_hooks
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
@@ -135,10 +130,6 @@ youtube_assets = build_ingest_assets(
 _EDXORG_S3_POOL = "edxorg_s3"
 
 
-class EdxorgTSVUnreadable(PermanentFailure):
-    """Some edxorg TSVs could not be read; every other file in the table loaded."""
-
-
 def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     """Wrap one edxorg_s3 table as its own ``@dlt_assets`` op.
 
@@ -168,22 +159,6 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
             dlt_source=source,
             loader_file_format="parquet",
         )
-        # Permanent because the modification_date cursor has already moved past
-        # these files: a rerun would not see them and would pass, hiding them.
-        if unreadable := edxorg_s3.pop_unreadable_files(table_name):
-            raise EdxorgTSVUnreadable(
-                description=(
-                    f"{len(unreadable)} edxorg {table_name} TSV file(s) could not "
-                    "be read and were skipped; every other file loaded. The "
-                    "incremental cursor is already past them, so a rerun will not "
-                    "retry them."
-                ),
-                metadata={
-                    "retryable": False,
-                    "unreadable_files": MetadataValue.json(unreadable),
-                },
-                allow_retries=False,
-            )
 
     return _asset
 
