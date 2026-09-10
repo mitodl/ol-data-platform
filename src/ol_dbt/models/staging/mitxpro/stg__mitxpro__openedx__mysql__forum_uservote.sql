@@ -8,7 +8,7 @@ with source as (
 
     select
         id as forumuservote_id
-        , user_id as user_id
+        , user_id
         , vote as forumuservote_value
         , content_type_id as forumcontent_type_id
         , content_object_id as forumcontent_object_id

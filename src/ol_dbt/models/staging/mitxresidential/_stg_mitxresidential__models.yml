@@ -659,8 +659,7 @@ models:
   - name: user_id
     description: int, foreign key to auth_user for the voter
   - name: forumuservote_value
-    description: int, +1 for an upvote and -1 for a downvote. Only upvotes occur in
-      practice, since the Open edX forum UI does not offer a downvote
+    description: int, +1 for an upvote and -1 for a downvote
   - name: forumcontent_type_id
     description: int, Django content-type id identifying which forum table content_object_id
       points at. The value is assigned per deployment by migration order, so it is
