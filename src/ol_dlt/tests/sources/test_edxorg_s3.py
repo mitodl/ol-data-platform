@@ -245,13 +245,20 @@ class _FakeFileItem(dict[str, Any]):
         return io.BytesIO(self._content)
 
 
+_TABLE = "auth_userprofile"
+
+
 def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
     """Drive the reader's generator directly, past dlt's transformer wrapper."""
     return list(
         edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001
-            items, **edxorg_s3._CSV_READER_OPTIONS
+            items, edxorg_table=_TABLE, **edxorg_s3._CSV_READER_OPTIONS
         )
     )
+
+
+def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
+    return [row for batch in batches for row in batch.to_pylist()]
 
 
 def test_reader_returns_rows_for_a_well_formed_file() -> None:
@@ -279,21 +286,65 @@ def test_reader_skips_an_empty_file_instead_of_failing_the_table() -> None:
     assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
 
 
-def test_reader_names_the_s3_object_it_could_not_read() -> None:
-    """DAGSTER-1C..1V reported a sniffing failure against
-    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5`` -- DuckDB's handle for
-    the open file object, which maps to nothing anyone can go and look at.
+@pytest.fixture(autouse=True)
+def _fresh_unreadable_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(edxorg_s3, "_unreadable_files", {})
 
-    Whatever the underlying cause turns out to be, the error has to say which
-    object it was or nobody can reproduce it.
-    """
-    # Two header fields, a data row with far more -- unreadable under the pinned
-    # dialect with strict mode off and null padding deliberately unset.
-    unreadable = b'id\tname\n1\t"unterminated quote\n'
 
-    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
-        _read(
-            [_FakeFileItem("s3://bucket/db_table/auth_user/prod/x/bad.tsv", unreadable)]
+# A legacy unquoted dump, shaped like the auth_userprofile file behind
+# DAGSTER-30: every line is one record and the JSON quotes are literal text, but
+# one bio happens to start with `"`, which under the pinned quote character
+# opens a field that never closes.
+_LEGACY_STRAY_QUOTE_TSV = (
+    b"id\tbio\tmeta\n"
+    + b"".join(f'{i}\tbio {i}\t{{""k"": ""v{i}""}}\n'.encode() for i in range(1, 40))
+    + b'40\t"I love MIT\t{}\n'
+    + b"".join(f"{i}\tbio {i}\t{{}}\n".encode() for i in range(41, 80))
+)
+
+
+def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
+    with pytest.raises(duckdb.InvalidInputException, match="sniffing"):
+        duckdb.from_csv_auto(
+            io.BytesIO(_LEGACY_STRAY_QUOTE_TSV), **edxorg_s3._CSV_READER_OPTIONS
         )
 
-    assert "s3://bucket/db_table/auth_user/prod/x/bad.tsv" in str(raised.value)
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
+    assert rows[39]["bio"] == '"I love MIT'
+    assert edxorg_s3.pop_unreadable_files(_TABLE) == []
+
+
+def test_unquoted_fallback_counts_a_last_line_without_a_newline() -> None:
+    data = _LEGACY_STRAY_QUOTE_TSV.rstrip(b"\n")
+
+    assert len(_rows(_read([_FakeFileItem("s3://bucket/legacy.tsv", data)]))) == 79  # noqa: PLR2004
+    assert edxorg_s3.pop_unreadable_files(_TABLE) == []
+
+
+def test_reader_sets_aside_a_file_it_cannot_read_whole() -> None:
+    """One bad file must not keep the rest of the table from loading.
+
+    The pinned read cannot sniff this file, and the unquoted read silently drops
+    the short row, so the file is refused rather than partially loaded. It is
+    recorded by its S3 URL -- DAGSTER-1C..1V reported DuckDB's
+    ``DUCKDB_INTERNAL_OBJECTSTORE://...`` handle instead, which nobody can open.
+    """
+    unreadable = b'id\tname\tbio\n1\t"open\tb\n2\n'
+    url = "s3://bucket/db_table/auth_userprofile/prod/x/bad.tsv"
+
+    rows = _rows(
+        _read(
+            [
+                _FakeFileItem(url, unreadable),
+                _FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV),
+            ]
+        )
+    )
+
+    assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
+    assert edxorg_s3.pop_unreadable_files(_TABLE) == [url]
+    assert edxorg_s3.pop_unreadable_files(_TABLE) == [], "popping forgets them"

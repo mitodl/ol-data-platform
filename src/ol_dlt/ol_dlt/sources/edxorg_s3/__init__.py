@@ -67,9 +67,11 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
     # `he said "hi"` silently reads back as `he said ""hi""`. Setting escapechar
     # to the quote character makes the undoubling explicit.
     #
-    # This is also correct for the older, entirely unquoted files still sitting
-    # in the landing zone: with nothing quoted there is nothing to unescape, and
-    # they parse identically with or without these pinned.
+    # The older, entirely unquoted files still sitting in the landing zone parse
+    # identically under these pins, with one exception: a value that happens to
+    # begin with `"` opens a quoted field that never closes, swallowing the tabs
+    # and newlines after it until the sniffer gives up. read_edxorg_tsv falls
+    # back to reading such a file unquoted (see _read_unquoted_tsv).
     "quotechar": '"',
     "escapechar": '"',
     # Force all columns to VARCHAR to prevent pyarrow schema mismatches across
@@ -78,38 +80,110 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
     "all_varchar": True,
 }
 
+# Quoting off, for the legacy unquoted dumps. Their quotes are literal text
+# (auth_userprofile.meta's JSON, for one), so no quote character is what the
+# data actually means.
+_UNQUOTED_READER_OVERRIDES: dict[str, Any] = {"quotechar": "", "escapechar": ""}
 
-class EdxorgTSVUnreadableError(Exception):
-    """DuckDB could not read one edxorg TSV, named in the message."""
+# Files read_edxorg_tsv could not read, by table. Process-local, which is where
+# dlt extracts; the Dagster asset collects them after the load.
+_unreadable_files: dict[str, list[str]] = {}
+
+
+def pop_unreadable_files(edxorg_table: str) -> list[str]:
+    """Return, and forget, the URLs of ``edxorg_table`` files the reader skipped."""
+    return _unreadable_files.pop(edxorg_table, [])
+
+
+def _read_tsv(
+    item: FileItemDict, chunk_size: int, duckdb_kwargs: dict[str, Any]
+) -> list[Any]:
+    import duckdb  # noqa: PLC0415
+
+    with item.open() as file_handle:
+        relation = duckdb.from_csv_auto(file_handle, **duckdb_kwargs)
+        return list(fetch_arrow(relation, chunk_size))
+
+
+def _data_line_count(item: FileItemDict) -> int:
+    """Count the lines after the header, streaming so a large file stays cheap."""
+    newlines = 0
+    last = b""
+    with item.open() as file_handle:
+        while chunk := file_handle.read(1 << 20):
+            newlines += chunk.count(b"\n")
+            last = chunk[-1:]
+    return newlines - 1 + (last != b"\n")
+
+
+def _read_unquoted_tsv(
+    item: FileItemDict, chunk_size: int, duckdb_kwargs: dict[str, Any]
+) -> list[Any] | None:
+    """Read ``item`` with quoting off, or return None if that loses any rows.
+
+    Only right for the legacy dumps, where every line is exactly one record, so
+    that is checked rather than assumed. ``ignore_errors`` drops rows it cannot
+    parse without saying so, and a fallback that quietly loads part of a file is
+    worse than the loud failure it replaces: the production file behind
+    DAGSTER-30, read with explicit columns and quoting on, loaded 1,345 of its
+    23,699 rows and raised nothing.
+    """
+    import duckdb  # noqa: PLC0415
+
+    try:
+        batches = _read_tsv(
+            item, chunk_size, {**duckdb_kwargs, **_UNQUOTED_READER_OVERRIDES}
+        )
+    except duckdb.Error:
+        logger.exception("Unquoted read of edxorg TSV %s failed too.", item["file_url"])
+        return None
+
+    rows = sum(batch.num_rows for batch in batches)
+    expected = _data_line_count(item)
+    if rows != expected:
+        logger.error(
+            "Unquoted read of edxorg TSV %s kept %s of %s lines; not loading it.",
+            item["file_url"],
+            rows,
+            expected,
+        )
+        return None
+    return batches
 
 
 @dlt.transformer(standalone=True)
 def read_edxorg_tsv(
     items: Iterable[FileItemDict],
+    edxorg_table: str,
     chunk_size: int = 5000,
     **duckdb_kwargs: Any,
 ) -> Iterator[Any]:
-    """Read edxorg TSVs, naming the file when DuckDB cannot read one.
+    """Read edxorg TSVs, recovering legacy files and setting aside unreadable ones.
 
     Same work as ``dlt.sources.filesystem.read_csv_duckdb`` with
-    ``use_pyarrow=True``, wrapped for two reasons.
+    ``use_pyarrow=True``, wrapped for three reasons.
 
-    First, diagnosability. ``duckdb.from_csv_auto`` is handed an open file
-    object, so the file it names in an error is DuckDB's internal handle --
-    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5``. Eleven Sentry issues
-    (DAGSTER-1C and friends) reported a sniffing failure against a content hash
-    that maps to nothing anyone can open. The S3 URL is right here; putting it in
-    the exception is the difference between a reproducible bug and a shrug.
-
-    Second, empty files. ``from_csv_auto`` cannot infer a dialect from zero
+    First, empty files. ``from_csv_auto`` cannot infer a dialect from zero
     bytes and fails with the same "not possible to automatically detect the CSV
     parsing dialect" message as a genuinely malformed file. An empty export is
     not an error -- there is simply nothing in it -- so it is skipped and logged
     rather than failing the whole table.
 
+    Second, legacy unquoted dumps. One user-entered value starting with `"` is
+    enough to make the pinned dialect unreadable. The pinned read is still tried
+    first, because it is correct for everything the archive writes today; only
+    a file it rejects is re-read unquoted, and kept only if no row was lost.
+
+    Third, a file neither read can handle is skipped and recorded under
+    ``edxorg_table`` instead of raised. Raising here aborts the whole extract,
+    so one bad file out of thousands kept the entire table from loading. The
+    Dagster asset fails the step after the load, naming the files -- see
+    ``pop_unreadable_files``. What gets recorded is the S3 URL, not DuckDB's
+    ``DUCKDB_INTERNAL_OBJECTSTORE://...`` handle for the open file object, which
+    maps to nothing anyone can open (DAGSTER-1C and friends).
+
     Note that pinning the dialect does not remove the sniffer: DuckDB still runs
-    it to find the header and column count. The delimiter, quote and escape are
-    already pinned in ``_CSV_READER_OPTIONS`` and these failures happened anyway.
+    it to find the header and column count.
     """
     import duckdb  # noqa: PLC0415
 
@@ -120,16 +194,20 @@ def read_edxorg_tsv(
             )
             continue
 
-        with item.open() as file_handle:
-            try:
-                file_data = duckdb.from_csv_auto(file_handle, **duckdb_kwargs)
-                batches = list(fetch_arrow(file_data, chunk_size))
-            except duckdb.Error as error:
-                msg = (
-                    f"DuckDB could not read the edxorg TSV {item['file_url']} "
-                    f"({item.get('size_in_bytes')} bytes): {error}"
-                )
-                raise EdxorgTSVUnreadableError(msg) from error
+        batches: list[Any] | None
+        try:
+            batches = _read_tsv(item, chunk_size, duckdb_kwargs)
+        except duckdb.Error:
+            logger.warning(
+                "Pinned dialect could not read edxorg TSV %s; retrying unquoted.",
+                item["file_url"],
+                exc_info=True,
+            )
+            batches = _read_unquoted_tsv(item, chunk_size, duckdb_kwargs)
+
+        if batches is None:
+            _unreadable_files.setdefault(edxorg_table, []).append(item["file_url"])
+            continue
         yield from batches
 
 
@@ -270,7 +348,7 @@ def edxorg_s3_source(
         # *returns* another DltResource would replace the outer resource and
         # discard its name/hints; applying hints on the pipe avoids that.
         yield (
-            (files | read_edxorg_tsv(**_CSV_READER_OPTIONS))
+            (files | read_edxorg_tsv(edxorg_table=table_name, **_CSV_READER_OPTIONS))
             .with_name(resource_name)
             # Drop rows whose (row_hash, extracted_course_key) was already seen
             # earlier in this run (see _make_deduplicator docstring).
