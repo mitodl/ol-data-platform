@@ -254,6 +254,10 @@ def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
     )
 
 
+def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
+    return [row for batch in batches for row in batch.to_pylist()]
+
+
 def test_reader_returns_rows_for_a_well_formed_file() -> None:
     batches = _read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)])
 
@@ -279,21 +283,61 @@ def test_reader_skips_an_empty_file_instead_of_failing_the_table() -> None:
     assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
 
 
-def test_reader_names_the_s3_object_it_could_not_read() -> None:
-    """DAGSTER-1C..1V reported a sniffing failure against
-    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5`` -- DuckDB's handle for
-    the open file object, which maps to nothing anyone can go and look at.
+# A legacy unquoted dump, shaped like the auth_userprofile file behind
+# DAGSTER-30: every line is one record and the JSON quotes are literal text, but
+# one bio happens to start with `"`, which under the pinned quote character
+# opens a field that never closes.
+_LEGACY_STRAY_QUOTE_TSV = (
+    b"id\tbio\tmeta\n"
+    + b"".join(f'{i}\tbio {i}\t{{""k"": ""v{i}""}}\n'.encode() for i in range(1, 40))
+    + b'40\t"I love MIT\t{}\n'
+    + b"".join(f"{i}\tbio {i}\t{{}}\n".encode() for i in range(41, 80))
+)
 
-    Whatever the underlying cause turns out to be, the error has to say which
-    object it was or nobody can reproduce it.
-    """
-    # Two header fields, a data row with far more -- unreadable under the pinned
-    # dialect with strict mode off and null padding deliberately unset.
-    unreadable = b'id\tname\n1\t"unterminated quote\n'
 
-    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
-        _read(
-            [_FakeFileItem("s3://bucket/db_table/auth_user/prod/x/bad.tsv", unreadable)]
+def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
+    with pytest.raises(duckdb.InvalidInputException, match="sniffing"):
+        duckdb.from_csv_auto(
+            io.BytesIO(_LEGACY_STRAY_QUOTE_TSV), **edxorg_s3._CSV_READER_OPTIONS
         )
 
-    assert "s3://bucket/db_table/auth_user/prod/x/bad.tsv" in str(raised.value)
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
+    assert rows[39]["bio"] == '"I love MIT'
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV.rstrip(b"\n"), id="no_trailing_newline"),
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV + b"\n", id="trailing_blank_line"),
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV + b"\r\n", id="trailing_crlf_blank_line"),
+        pytest.param(
+            _LEGACY_STRAY_QUOTE_TSV.replace(b"50\tbio 50\t{}\n", b"50\tbio 50\t{}\n\n"),
+            id="mid_file_blank_line",
+        ),
+    ],
+)
+def test_unquoted_fallback_line_count_matches_what_duckdb_reads(data: bytes) -> None:
+    """DuckDB skips blank lines, so the row-count guard must not count them."""
+    assert len(_rows(_read([_FakeFileItem("s3://bucket/legacy.tsv", data)]))) == 79  # noqa: PLR2004
+
+
+def test_reader_names_the_s3_object_it_could_not_read() -> None:
+    """A file neither read can take whole fails loudly, naming the object.
+
+    The pinned read cannot sniff this file, and the unquoted read silently drops
+    the short row, so it is refused rather than partially loaded. DAGSTER-1C..1V
+    reported DuckDB's ``DUCKDB_INTERNAL_OBJECTSTORE://...`` handle instead of the
+    S3 URL, which nobody can open.
+    """
+    unreadable = b'id\tname\tbio\n1\t"open\tb\n2\n'
+    url = "s3://bucket/db_table/auth_userprofile/prod/x/bad.tsv"
+
+    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
+        _read([_FakeFileItem(url, unreadable)])
+
+    assert url in str(raised.value)
