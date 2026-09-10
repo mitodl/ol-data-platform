@@ -309,9 +309,20 @@ def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
     assert rows[39]["bio"] == '"I love MIT'
 
 
-def test_unquoted_fallback_counts_a_last_line_without_a_newline() -> None:
-    data = _LEGACY_STRAY_QUOTE_TSV.rstrip(b"\n")
-
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV.rstrip(b"\n"), id="no_trailing_newline"),
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV + b"\n", id="trailing_blank_line"),
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV + b"\r\n", id="trailing_crlf_blank_line"),
+        pytest.param(
+            _LEGACY_STRAY_QUOTE_TSV.replace(b"50\tbio 50\t{}\n", b"50\tbio 50\t{}\n\n"),
+            id="mid_file_blank_line",
+        ),
+    ],
+)
+def test_unquoted_fallback_line_count_matches_what_duckdb_reads(data: bytes) -> None:
+    """DuckDB skips blank lines, so the row-count guard must not count them."""
     assert len(_rows(_read([_FakeFileItem("s3://bucket/legacy.tsv", data)]))) == 79  # noqa: PLR2004
 
 

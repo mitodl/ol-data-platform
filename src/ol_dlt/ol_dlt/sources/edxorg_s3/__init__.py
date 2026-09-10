@@ -101,14 +101,14 @@ def _read_tsv(
 
 
 def _data_line_count(item: FileItemDict) -> int:
-    """Count the lines after the header, streaming so a large file stays cheap."""
-    newlines = 0
-    last = b""
+    """Count the non-blank lines after the header, streaming line by line.
+
+    Blank lines are excluded because DuckDB skips them: counting raw newlines
+    would reject a file with a trailing or stray blank line even though every
+    record in it was read.
+    """
     with item.open() as file_handle:
-        while chunk := file_handle.read(1 << 20):
-            newlines += chunk.count(b"\n")
-            last = chunk[-1:]
-    return newlines - 1 + (last != b"\n")
+        return sum(1 for line in file_handle if line.rstrip(b"\r\n")) - 1
 
 
 def _read_unquoted_tsv(
