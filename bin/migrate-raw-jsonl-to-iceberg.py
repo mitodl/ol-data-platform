@@ -144,9 +144,8 @@ def _list_json_files(
 
 # Every scalar Glue type found on the legacy JSONL tables in qa and production
 # raw (2026-09-10). array and struct columns are left to inference because
-# their Glue types are not trustworthy: production's
-# raw__thirdparty__github__workflow_runs declares pull_requests as
-# array<string> and holds objects.
+# their Glue types are not trustworthy: a production GitHub table declared
+# pull_requests as array<string> over a list of objects.
 _GLUE_SCALAR_TYPES = {
     "string": pa.large_utf8(),
     "boolean": pa.bool_(),
