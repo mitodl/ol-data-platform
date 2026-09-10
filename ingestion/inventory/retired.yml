@@ -631,3 +631,53 @@ retired:
     never been migrated to Iceberg (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a)
     — so this date is when the retirement was recorded, not one date on which all
     19 stopped arriving.
+- deployment: github
+  layer: api
+  raw_tables:
+  - raw__thirdparty__github__assignees
+  - raw__thirdparty__github__branches
+  - raw__thirdparty__github__collaborators
+  - raw__thirdparty__github__comments
+  - raw__thirdparty__github__commit_comment_reactions
+  - raw__thirdparty__github__commit_comments
+  - raw__thirdparty__github__commits
+  - raw__thirdparty__github__contributor_activity
+  - raw__thirdparty__github__deployments
+  - raw__thirdparty__github__events
+  - raw__thirdparty__github__issue_comment_reactions
+  - raw__thirdparty__github__issue_events
+  - raw__thirdparty__github__issue_labels
+  - raw__thirdparty__github__issue_milestones
+  - raw__thirdparty__github__issue_reactions
+  - raw__thirdparty__github__issue_timeline_events
+  - raw__thirdparty__github__issues
+  - raw__thirdparty__github__organizations
+  - raw__thirdparty__github__project_cards
+  - raw__thirdparty__github__project_columns
+  - raw__thirdparty__github__projects
+  - raw__thirdparty__github__projects_v2
+  - raw__thirdparty__github__pull_request_comment_reactions
+  - raw__thirdparty__github__pull_request_commits
+  - raw__thirdparty__github__pull_request_stats
+  - raw__thirdparty__github__pull_requests
+  - raw__thirdparty__github__releases
+  - raw__thirdparty__github__repositories
+  - raw__thirdparty__github__review_comments
+  - raw__thirdparty__github__reviews
+  - raw__thirdparty__github__stargazers
+  - raw__thirdparty__github__tags
+  - raw__thirdparty__github__team_members
+  - raw__thirdparty__github__team_memberships
+  - raw__thirdparty__github__teams
+  - raw__thirdparty__github__users
+  - raw__thirdparty__github__workflow_jobs
+  - raw__thirdparty__github__workflow_runs
+  - raw__thirdparty__github__workflows
+  retired_on: '2024-05-03'
+  reason: The GitHub API data was never fully ingested and never used; no dbt model
+    or other code in this repository read any of these tables. The Airbyte connection
+    (GitHub - MIT ODL → S3 Data Lake) was already inactive, and the newest data object
+    under any of these tables in production is from 2024-05-03 (measured 2026-09-10),
+    so that is the date loading stopped. contributor_activity and workflow_runs were
+    landed in Glue without ever being declared in the unit; they are listed so the
+    record is complete.
