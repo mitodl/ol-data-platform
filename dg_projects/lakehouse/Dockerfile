@@ -29,6 +29,11 @@ COPY src/ol_dbt src/ol_dbt
 # with `ol-dbt impact`, so the same hash-input parser decides what CI warns
 # about pre-merge and what the build full-refreshes afterwards.
 COPY src/ol_dbt_cli src/ol_dbt_cli
+# The inventory is data, not code, so nothing in the dependency graph pulls it
+# in -- but airbyte_inventory_drift reads it at run time, and the whole point of
+# that asset is to notice when the file stops describing the live workspace. It
+# has to be copied explicitly or the asset has nothing to compare against.
+COPY ingestion/inventory ingestion/inventory
 
 # Install dependencies from the lakehouse project
 WORKDIR /app/dg_projects/lakehouse
@@ -53,15 +58,32 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # The instrumentation list is explicit rather than whatever
 # opentelemetry-bootstrap would select, because bootstrap picks psycopg2
 # alongside sqlalchemy and that emits two spans for every query.
+#
+# PINNED, and the pins are load-bearing rather than routine hygiene. The
+# preemption budget ol-infrastructure sets for run workers
+# (dagster_instance.yaml: OTEL_BSP_SCHEDULE_DELAY, OTEL_EXPORTER_OTLP_TIMEOUT)
+# is derived from opentelemetry-sdk 1.44.0 internals, and two of them are not
+# stable API:
+#   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.44.0 -- BatchProcessor stores
+#     _export_timeout_millis and never reads it -- so the shutdown drain runs at
+#     a hardcoded 30s join. A release that wires it up changes the budget.
+#   - The Python HTTP exporter reads OTEL_EXPORTER_OTLP_TIMEOUT in SECONDS
+#     (DEFAULT_TIMEOUT = 10  # in seconds), contradicting the OTel spec, which
+#     defines it in milliseconds. An upstream fix would silently reinterpret
+#     ol-infrastructure's "2" as 2ms and fail every export.
+# opentelemetry-sdk is pinned explicitly rather than left to the distro's range
+# for that reason: it is the package the reasoning actually depends on.
+# Re-check that reasoning when bumping these, not just the test suite.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv \
-        opentelemetry-distro \
-        opentelemetry-exporter-otlp-proto-http \
-        opentelemetry-instrumentation-sqlalchemy \
-        opentelemetry-instrumentation-grpc \
-        opentelemetry-instrumentation-botocore \
-        opentelemetry-instrumentation-requests \
-        opentelemetry-instrumentation-urllib3
+        opentelemetry-distro==0.65b0 \
+        opentelemetry-sdk==1.44.0 \
+        opentelemetry-exporter-otlp-proto-http==1.44.0 \
+        opentelemetry-instrumentation-sqlalchemy==0.65b0 \
+        opentelemetry-instrumentation-grpc==0.65b0 \
+        opentelemetry-instrumentation-botocore==0.65b0 \
+        opentelemetry-instrumentation-requests==0.65b0 \
+        opentelemetry-instrumentation-urllib3==0.65b0
 
 # Compile dbt to generate manifest.json (CRITICAL for @dbt_assets)
 WORKDIR /app/src/ol_dbt
@@ -95,9 +117,16 @@ FROM python:3.13-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
-# Copy the application from the builder
+# Copy the application from the builder. Note this copies the project's
+# *contents* onto /app, so lakehouse/assets/foo.py sits two levels below /app
+# rather than the four it sits below the repo root in the source tree -- see
+# _find_inventory_dir in assets/airbyte_drift.py, which is why that resolves the
+# inventory by searching upward instead of indexing a fixed parent.
 COPY --from=builder /app/dg_projects/lakehouse /app
 COPY --from=builder /app/src/ol_dbt /app/ol_dbt
+# Keeps ingestion/inventory a sibling of the package, so the upward search from
+# /app/lakehouse/assets/ finds it at /app/ingestion/inventory.
+COPY --from=builder /app/ingestion/inventory /app/ingestion/inventory
 
 # Copy the dbt project from the builder
 COPY --from=builder /app/src/ol_dbt /opt/dbt
@@ -118,12 +147,15 @@ ENV PATH="/app/.venv/bin:$PATH"
 # the command.
 #
 # PYTHONPATH rather than an ENTRYPOINT because run worker pods share this image
-# and are deliberately NOT instrumented yet. An ENTRYPOINT applies to every
-# process the image starts, so there would be nothing left to switch off; a
-# variable can be stripped for one workload and not another. dagster_instance.yaml
-# in ol-infrastructure strips it from run workers by giving their container a
-# `command` of `env -u PYTHONPATH`, and the gRPC health-check probes prepend the
-# same thing for the same reason.
+# with the code server and the two are configured separately. An ENTRYPOINT
+# applies to every process the image starts, so there would be nothing left to
+# vary; a variable can be set for one workload and not another.
+#
+# ol-infrastructure now loads the agent on run workers too and silences the ones
+# it is not measuring with OTEL_SDK_DISABLED, opted in per code location -- it
+# used to strip PYTHONPATH from them with a `command` of `env -u PYTHONPATH`.
+# The gRPC health-check probes still prepend that, so a probe does not pay a full
+# SDK startup and emit a span for its own health check.
 RUN mkdir -p /opt/otel && \
     ln -s "$(python -c 'import opentelemetry.instrumentation.auto_instrumentation as m, pathlib; print(pathlib.Path(m.__file__).parent)')" \
         /opt/otel/auto_instrumentation

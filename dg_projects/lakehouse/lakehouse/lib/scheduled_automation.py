@@ -20,10 +20,11 @@ Dagster UI can start it. Dagster synthesizes sensors it was not given
 final in a way that stopping is not.
 
 That difference is also why this is not one boolean shared with the dbt map.
-Only three of these six schedules run dbt at all; the iceberg maintenance pair
-rewrites Iceberg metadata, and instructor onboarding pushes a commit to a GitHub
-repository. "May dbt materialize itself here" is the wrong question to ask of
-those, and answering it for them would have hidden the more interesting one.
+Only three of these seven schedules run dbt at all; the iceberg maintenance pair
+rewrites Iceberg metadata, instructor onboarding pushes a commit to a GitHub
+repository, and the Airbyte drift check only reads. "May dbt materialize itself
+here" is the wrong question to ask of those, and answering it for them would
+have hidden the more interesting one.
 
 What is and is not known to have fired
 -------------------------------------
@@ -52,11 +53,12 @@ single per-environment switch would have to be wrong about one of them.
 
 What omission also takes with it
 --------------------------------
-Four of these six build their job inline with ``define_asset_job`` inside the
+Five of these seven build their job inline with ``define_asset_job`` inside the
 ``ScheduleDefinition``, so dropping the schedule drops that job from the code
 location too -- ``iceberg_dbt_maintenance_job``, ``iceberg_raw_maintenance_job``,
-``b2b_analytics_starrocks_job`` and ``instructor_onboarding_daily_job`` are not
-manually launchable outside production. Their ASSETS stay registered everywhere
+``b2b_analytics_starrocks_job``, ``instructor_onboarding_daily_job`` and
+``airbyte_inventory_drift_daily_job`` are not manually launchable outside
+production. Their ASSETS stay registered everywhere
 and can still be materialized by hand from the asset graph, so nothing becomes
 unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
 the exception -- its job is registered separately in ``jobs`` and is unaffected.
@@ -124,6 +126,28 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # `ScheduleDefinition`'s implicit STOPPED default -- it passed no
     # default_status at all.
     "instructor_onboarding_daily_schedule": frozenset({"production"}),
+    # Reads the ingestion inventory and compares it to the live Airbyte
+    # workspace. Production-only because the comparison is not
+    # environment-aware and the inventory describes production.
+    #
+    # `airbyte_host_map` in definitions.py points qa (and dev/ci) at
+    # api-airbyte-qa and production at api-airbyte -- separate workspaces, not
+    # one shared one. `check_drift` takes a single snapshot and compares EVERY
+    # declared connection against it; `_declared_connections` flattens all units
+    # with no environment filter, and nothing in that path reads the rendered
+    # `environment` field. So a QA tick would check the production inventory
+    # against the QA workspace and report essentially every declaration missing
+    # -- a page's worth of false ERRORs, not a duplicate report.
+    #
+    # THIS IS THE CONSTRAINT TO REVISIT, not the environment set: if a QA
+    # inventory is ever added, widening this entry is not enough on its own.
+    # check_drift needs to filter declarations by environment first, or QA will
+    # compare the union against one host and be wrong in the other direction.
+    #
+    # Note this is narrower than `daily_sync_and_stage` above, which is qa as
+    # well as production. That one is ingestion, which RFC 12711 wants running
+    # in QA; this is a report, and it can only describe one workspace.
+    "airbyte_inventory_drift_daily": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {
