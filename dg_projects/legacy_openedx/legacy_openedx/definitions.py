@@ -210,10 +210,24 @@ _base_production_resources = {
 
 def _job_default_config(
     deployment: Literal["mitx", "mitxonline", "xpro"],
-) -> dict[str, object]:
-    """Return a default run config for the launchpad when Vault is available."""
+) -> dict[str, object] | None:
+    """Return a default run config for the launchpad when Vault is available.
+
+    Returns ``None`` -- not ``{}`` -- when there is no config to offer.
+    ``to_job(config={})`` does not mean "no default"; Dagster treats any
+    mapping as a default run config and validates it against the job's schema,
+    so an empty one fails with
+
+        Missing required config entries ['ops', 'resources'] at the root
+
+    That error is raised while the repository is being constructed, which
+    kills the gRPC server for the whole code location rather than just
+    leaving the launchpad blank. ``config=None`` skips the validation
+    entirely, which is the graceful degradation this function was written to
+    provide.
+    """
     if not vault_authenticated:
-        return {}
+        return None
     try:
         return open_edx_export_irx_job_config(deployment, DAGSTER_ENV)
     except Exception:
@@ -224,7 +238,7 @@ def _job_default_config(
             deployment,
             exc_info=True,
         )
-        return {}
+        return None
 
 
 residential_edx_job = edx_course_pipeline.to_job(
