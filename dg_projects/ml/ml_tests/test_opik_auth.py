@@ -265,7 +265,7 @@ def test_traced_wraps_with_opik_track_when_configured(
 
     monkeypatch.setattr(opik, "track", fake_track)
 
-    @opik_auth.traced("some-span")
+    @opik_auth.traced("some-span", tags=["feedback"])
     def add_one(x: int) -> int:
         return x + 1
 
@@ -275,6 +275,8 @@ def test_traced_wraps_with_opik_track_when_configured(
             "name": "some-span",
             "type": "llm",
             "project_name": opik_auth.OPIK_PROJECT_NAME,
+            "environment": opik_auth.DAGSTER_ENV,
+            "tags": ["feedback"],
         }
     ]
 

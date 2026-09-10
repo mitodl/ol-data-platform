@@ -15,7 +15,12 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import render_prompt, traced
+from ml.resources.opik_auth import (
+    attach_llm_usage,
+    infer_llm_provider,
+    render_prompt,
+    traced,
+)
 from openai import OpenAI
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
@@ -158,7 +163,7 @@ class AnthropicSentimentClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_sentiment_classify_anthropic")
+    @traced("feedback_sentiment_classify_anthropic", tags=["feedback"])
     def classify(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
@@ -170,6 +175,19 @@ class AnthropicSentimentClient:
                 }
             ],
         )
+        if message.usage is not None:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": message.usage.input_tokens,
+                    "completion_tokens": message.usage.output_tokens,
+                    "total_tokens": message.usage.input_tokens
+                    + message.usage.output_tokens,
+                },
+                model=self.model_version,
+                provider="bedrock"
+                if isinstance(self._client, AnthropicBedrock)
+                else "anthropic",
+            )
         if not message.content:
             return None
         return _extract_sentiment_word(message.content[0].text)
@@ -182,7 +200,7 @@ class OpenAISentimentClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_sentiment_classify_openai")
+    @traced("feedback_sentiment_classify_openai", tags=["feedback"])
     def classify(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,
@@ -193,6 +211,16 @@ class OpenAISentimentClient:
                 }
             ],
         )
+        if response.usage is not None:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                model=self.model_version,
+                provider=infer_llm_provider(self.model_version, default="openai"),
+            )
         content = response.choices[0].message.content
         if not content:
             return None

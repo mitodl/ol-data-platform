@@ -223,6 +223,7 @@ def test_build_summary_client_honors_bedrock_model_version_override() -> None:
 class _FakeMessage:
     def __init__(self, content: list[object]) -> None:
         self.content = content
+        self.usage = None
 
 
 class _FakeAnthropicClient:
@@ -248,6 +249,61 @@ def test_anthropic_summary_client_treats_empty_content_as_no_summary() -> None:
     )
 
     assert client.summarize("some conversation text") is None
+
+
+class _FakeUsage:
+    def __init__(self, input_tokens: int, output_tokens: int) -> None:
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
+class _FakeMessageWithUsage:
+    def __init__(self, content: list[object], usage: _FakeUsage) -> None:
+        self.content = content
+        self.usage = usage
+
+
+class _FakeContentBlock:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def test_anthropic_summary_client_attaches_usage_to_the_opik_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        summarize, "attach_llm_usage", lambda **kwargs: calls.append(kwargs)
+    )
+
+    class _Client:
+        def __init__(self) -> None:
+            self.messages = type(
+                "_Messages",
+                (),
+                {
+                    "create": lambda _self, **_kwargs: _FakeMessageWithUsage(
+                        [_FakeContentBlock("a summary")], _FakeUsage(10, 5)
+                    )
+                },
+            )()
+
+    client = summarize.AnthropicSummaryClient(_Client(), "claude-haiku-4-5")
+
+    result = client.summarize("some conversation text")
+
+    assert result == "a summary"
+    assert calls == [
+        {
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+            },
+            "model": "claude-haiku-4-5",
+            "provider": "anthropic",
+        }
+    ]
 
 
 def test_filter_unsummarized_resubmits_conversations_with_new_turns() -> None:

@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import httpx
 import opik
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+from opik import opik_context
 from opik.hooks import HttpxClientHook, add_httpx_client_hook
 
 if TYPE_CHECKING:
@@ -21,7 +23,7 @@ F = TypeVar("F", bound="Callable[..., Any]")
 
 log = logging.getLogger(__name__)
 
-OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "ml-feedback-pipeline")
+OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "dagster-ml")
 
 _REFRESH_SKEW_SECONDS = 30
 _TOKEN_REQUEST_TIMEOUT_SECONDS = 10
@@ -169,7 +171,7 @@ def get_opik_client() -> opik.Opik | None:
     return _opik_client
 
 
-def traced(name: str) -> Callable[[F], F]:
+def traced(name: str, tags: list[str] | None = None) -> Callable[[F], F]:
     """@opik.track, gated on OPIK_URL_OVERRIDE -- a plain no-op decorator otherwise.
 
     Checked at import/decoration time (an env var, stable for the process's
@@ -177,10 +179,40 @@ def traced(name: str) -> Callable[[F], F]:
     also require the Keycloak auth hook to have registered successfully.
     @opik.track itself only queues spans for a background worker, so a hook
     registration failure surfaces as failed/absent traces, not a raised error.
+
+    OPIK_PROJECT_NAME ("dagster-ml") is shared across every Dagster/LLM
+    integration in this repo, not just feedback -- tags is how a caller marks
+    which one a given call site belongs to (e.g. tags=["feedback"]).
     """
     if not is_opik_configured():
         return lambda func: func
-    return opik.track(name=name, type="llm", project_name=OPIK_PROJECT_NAME)
+    return opik.track(
+        name=name,
+        type="llm",
+        project_name=OPIK_PROJECT_NAME,
+        environment=DAGSTER_ENV,
+        tags=tags,
+    )
+
+
+def infer_llm_provider(model_version: str, default: str) -> str:
+    """Best-effort Opik pricing provider for model_version, else default.
+
+    A client_class="openai_compatible" gateway (e.g. Parley) can proxy Claude
+    models under an OpenAI-shaped API -- tagging those "openai" looks up the
+    wrong Opik price table and shows no cost.
+    """
+    return "anthropic" if model_version.startswith("claude") else default
+
+
+def attach_llm_usage(*, usage: dict[str, int], model: str, provider: str) -> None:
+    """Attach token usage (OpenAI-shaped keys) to the current @traced span for pricing.
+
+    No-op if Opik isn't configured (traced() never opened a span to attach to).
+    """
+    if not is_opik_configured():
+        return
+    opik_context.update_current_span(usage=usage, model=model, provider=provider)
 
 
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:

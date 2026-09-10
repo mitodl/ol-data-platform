@@ -14,7 +14,12 @@ from typing import Any, Protocol
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import render_prompt, traced
+from ml.resources.opik_auth import (
+    attach_llm_usage,
+    infer_llm_provider,
+    render_prompt,
+    traced,
+)
 from openai import OpenAI
 
 # HDBSCAN's noise label -- never worth labeling, it's the one-off-complaint bucket
@@ -137,7 +142,7 @@ class AnthropicCategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_anthropic")
+    @traced("feedback_category_propose_anthropic", tags=["feedback"])
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         message = self._client.messages.create(
             model=self.model_version,
@@ -149,6 +154,19 @@ class AnthropicCategoryLabelClient:
                 }
             ],
         )
+        if message.usage is not None:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": message.usage.input_tokens,
+                    "completion_tokens": message.usage.output_tokens,
+                    "total_tokens": message.usage.input_tokens
+                    + message.usage.output_tokens,
+                },
+                model=self.model_version,
+                provider="bedrock"
+                if isinstance(self._client, AnthropicBedrock)
+                else "anthropic",
+            )
         if not message.content:
             msg = (
                 "Empty response proposing a category label "
@@ -165,7 +183,7 @@ class OpenAICategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_openai")
+    @traced("feedback_category_propose_openai", tags=["feedback"])
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         response = self._client.chat.completions.create(
             model=self.model_version,
@@ -176,6 +194,16 @@ class OpenAICategoryLabelClient:
                 }
             ],
         )
+        if response.usage is not None:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                model=self.model_version,
+                provider=infer_llm_provider(self.model_version, default="openai"),
+            )
         content = response.choices[0].message.content
         if not content:
             msg = "Empty response proposing a category label."
