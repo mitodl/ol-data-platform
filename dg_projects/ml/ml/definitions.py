@@ -22,6 +22,7 @@ from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import configure_opik_keycloak_auth
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -49,6 +50,11 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     )
     vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
+
+# Must run before any Opik client/tracer/@opik.track call in this process --
+# see ml/resources/opik_auth.py. A no-op (returns False) wherever
+# OPIK_URL_OVERRIDE isn't set for this deployment.
+configure_opik_keycloak_auth(vault)
 
 data_export_job = define_asset_job(
     name="student_risk_probability_data_export_job",
@@ -149,8 +155,9 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
         # Bedrock in production: IAM metadata auth, same as S3 access, no API
-        # key/Vault secret. Everywhere else keeps the Vault-backed Anthropic
-        # client (and ANTHROPIC_API_KEY still overrides it for local dev).
+        # key at all. Everywhere else needs ANTHROPIC_API_KEY (or the
+        # matching env var for whatever SUMMARY_PROVIDER is set to) -- there is
+        # no Vault-backed fallback (no such secret is provisioned anywhere).
         # SUMMARY_PROVIDER overrides the client_class picked here (try 'openai'/
         # 'openai_compatible'/'azure_openai' locally) without touching the
         # production default (Bedrock). LLM_BASE_URL/LLM_AZURE_ENDPOINT are only
@@ -159,7 +166,6 @@ defs = Definitions(
         # local testing points both at the same gateway (e.g. Parley); set
         # client_class independently per resource if that's ever not true.
         "llm": LLMClientFactory(
-            vault=vault,
             client_class=os.environ.get(
                 "SUMMARY_PROVIDER",
                 "bedrock" if DAGSTER_ENV == "production" else "anthropic",
@@ -169,14 +175,12 @@ defs = Definitions(
         ),
         # Separate resource, not a reused "llm": the summary asset's default
         # provider (Anthropic/Bedrock) has no embeddings API at all, so this
-        # pipeline step needs its own client_class/secret independent of
-        # whatever the summarizer is configured with. Unlike "llm", this one
-        # stays 'openai' in production too -- never Bedrock by default (§B: the
+        # pipeline step needs its own client_class/key independent of whatever
+        # the summarizer is configured with. Unlike "llm", this one stays
+        # 'openai' in production too -- never Bedrock by default (§B: the
         # embedding model choice is deferred to a not-yet-run bake-off).
         "embedding_llm": LLMClientFactory(
-            vault=vault,
             client_class=os.environ.get("EMBEDDING_PROVIDER", "openai"),
-            vault_secret_key="openai_api_key",  # noqa: S106 -- a Vault key name, not a secret  # pragma: allowlist secret
             # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
             # -- e.g. a local gateway like Parley that fronts multiple providers
             # behind one OpenAI-shaped API. Shared var with "llm" above.

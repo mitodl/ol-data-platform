@@ -3,6 +3,7 @@
 from typing import Self
 
 import polars as pl
+import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import summarize
 from openai import OpenAI
@@ -120,10 +121,11 @@ def test_filter_unsummarized_drops_already_summarized_rows_with_same_turn_count(
 
 
 class _FakeLLM:
-    """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
+    """Stands in for LLMClientFactory: building a real one needs real credentials."""
 
-    def __init__(self, client: object) -> None:
+    def __init__(self, client: object, client_class: str = "openai") -> None:
         self._client = client
+        self.client_class = client_class
 
     def get_client(self) -> object:
         return self._client
@@ -171,6 +173,41 @@ def test_build_summary_client_honors_model_version_override_for_anthropic() -> N
 
     assert isinstance(client, summarize.AnthropicSummaryClient)
     assert client.model_version == "claude-sonnet-5"
+
+
+def test_build_summary_client_rejects_claude_model_for_real_openai() -> None:
+    """client_class="openai" is the real api.openai.com -- it can never serve a
+    Claude-namespaced model id, so a left-unset SUMMARY_MODEL_VERSION default is
+    caught here rather than failing later with an opaque 404 from OpenAI.
+    """
+    with pytest.raises(ValueError, match="looks like an Anthropic model id"):
+        summarize.build_summary_client(
+            _FakeLLM(
+                OpenAI(api_key="sk-test"),  # pragma: allowlist secret
+                client_class="openai",
+            ),
+            model_version="claude-haiku-4-5",
+        )
+
+
+def test_build_summary_client_allows_claude_model_for_openai_compatible() -> None:
+    """client_class="openai_compatible" is a configurable base_url (e.g. Parley)
+    that may legitimately proxy Claude models under this same id -- unlike plain
+    "openai", it gets no such guarantee to reject on.
+    """
+    client = summarize.build_summary_client(
+        _FakeLLM(
+            OpenAI(
+                api_key="sk-test",  # pragma: allowlist secret
+                base_url="https://parley.example.com",
+            ),
+            client_class="openai_compatible",
+        ),
+        model_version="claude-haiku-4-5",
+    )
+
+    assert isinstance(client, summarize.OpenAISummaryClient)
+    assert client.model_version == "claude-haiku-4-5"
 
 
 def test_build_summary_client_honors_bedrock_model_version_override() -> None:

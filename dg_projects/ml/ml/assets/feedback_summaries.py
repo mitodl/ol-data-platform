@@ -75,6 +75,7 @@ class FeedbackSummariesConfig(Config):
         "schema": database_name,
         "write_mode": "upsert",
         "upsert_options": {"join_cols": JOIN_COLS},
+        "schema_update_mode": "update",
     },
 )
 def feedback_summaries(
@@ -161,8 +162,11 @@ def feedback_summaries(
     if attempted_count > 0 and llm_call_count == 0:
         sample_errors = "; ".join(errors[:3])
         msg = (
-            f"All {attempted_count} attempted LLM calls failed; the summary "
-            f"client/credential is likely misconfigured. Sample errors: {sample_errors}"
+            f"All {attempted_count} attempted LLM calls failed via "
+            f"client_class={llm.client_class!r}, "
+            f"model_version={client.model_version!r}, base_url={llm.base_url!r} -- "
+            f"check these resolved to what you intended (a stale/mismatched "
+            f"client_class is a common cause). Sample errors: {sample_errors}"
         )
         raise Failure(msg)
 

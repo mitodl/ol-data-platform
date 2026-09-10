@@ -15,6 +15,7 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import render_prompt, traced
 from openai import OpenAI
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
@@ -40,10 +41,19 @@ SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "16"))
 SENTIMENT_PROMPT = (
     "Classify the sentiment of this support conversation from the requester's "
     "point of view, as expressed at the end of the conversation. Respond with "
-    "only one word: positive or negative.\n\n{conversation_text}"
+    "only one word: positive or negative.\n\n{{conversation_text}}"
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _sentiment_prompt(conversation_text: str) -> str:
+    """SENTIMENT_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
+    return render_prompt(
+        "feedback-sentiment-classify",
+        SENTIMENT_PROMPT,
+        conversation_text=conversation_text,
+    )
 
 
 def labeled_sentiment_sample(
@@ -148,6 +158,7 @@ class AnthropicSentimentClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_sentiment_classify_anthropic")
     def classify(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
@@ -155,9 +166,7 @@ class AnthropicSentimentClient:
             messages=[
                 {
                     "role": "user",
-                    "content": SENTIMENT_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
+                    "content": _sentiment_prompt(conversation_text),
                 }
             ],
         )
@@ -173,15 +182,14 @@ class OpenAISentimentClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_sentiment_classify_openai")
     def classify(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,
             messages=[
                 {
                     "role": "user",
-                    "content": SENTIMENT_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
+                    "content": _sentiment_prompt(conversation_text),
                 }
             ],
         )

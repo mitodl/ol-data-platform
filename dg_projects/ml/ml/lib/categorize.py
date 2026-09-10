@@ -14,6 +14,7 @@ from typing import Any, Protocol
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import render_prompt, traced
 from openai import OpenAI
 
 # HDBSCAN's noise label -- never worth labeling, it's the one-off-complaint bucket
@@ -61,17 +62,27 @@ CATEGORY_PROMPT = (
     "support-ticket taxonomy. Below are a sample of redacted conversations from "
     "this cluster, and the existing tags most commonly already applied to "
     "conversations in it.\n\n"
-    "Existing dominant tags for this cluster: {dominant_tags}\n\n"
-    "Sample conversations:\n{samples}\n\n"
+    "Existing dominant tags for this cluster: {{dominant_tags}}\n\n"
+    "Sample conversations:\n{{samples}}\n\n"
     "Propose a short category label for this cluster. Prefer reusing or "
     "lightly refining one of the existing dominant tags where it already fits; "
     "only propose something new if none of them describe the cluster's actual "
     "common theme.\n\n"
     "Respond with only a JSON object, no other text, in this exact shape: "
-    '{{"category_label": "...", "category_description": "one sentence"}}'
+    '{"category_label": "...", "category_description": "one sentence"}'
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _category_prompt(dominant_tags: list[str], samples: list[str]) -> str:
+    """CATEGORY_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
+    return render_prompt(
+        "feedback-category-proposal",
+        CATEGORY_PROMPT,
+        dominant_tags=", ".join(dominant_tags) or "(none)",
+        samples="\n---\n".join(samples),
+    )
 
 
 def new_category_slug(category_label: str) -> str:
@@ -126,6 +137,7 @@ class AnthropicCategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_category_propose_anthropic")
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         message = self._client.messages.create(
             model=self.model_version,
@@ -133,10 +145,7 @@ class AnthropicCategoryLabelClient:
             messages=[
                 {
                     "role": "user",
-                    "content": CATEGORY_PROMPT.format(
-                        dominant_tags=", ".join(dominant_tags) or "(none)",
-                        samples="\n---\n".join(samples),
-                    ),
+                    "content": _category_prompt(dominant_tags, samples),
                 }
             ],
         )
@@ -156,16 +165,14 @@ class OpenAICategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_category_propose_openai")
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         response = self._client.chat.completions.create(
             model=self.model_version,
             messages=[
                 {
                     "role": "user",
-                    "content": CATEGORY_PROMPT.format(
-                        dominant_tags=", ".join(dominant_tags) or "(none)",
-                        samples="\n---\n".join(samples),
-                    ),
+                    "content": _category_prompt(dominant_tags, samples),
                 }
             ],
         )

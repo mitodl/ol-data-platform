@@ -8,6 +8,7 @@ from typing import Any, Protocol
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import render_prompt, traced
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -69,10 +70,17 @@ SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
     "view. Focus on the problem reported and its resolution if one is present. "
-    "Do not include names or contact details.\n\n{conversation_text}"
+    "Do not include names or contact details.\n\n{{conversation_text}}"
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _summary_prompt(conversation_text: str) -> str:
+    """SUMMARY_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
+    return render_prompt(
+        "feedback-summary", SUMMARY_PROMPT, conversation_text=conversation_text
+    )
 
 
 class SummaryClient(Protocol):
@@ -94,6 +102,7 @@ class AnthropicSummaryClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_summarize_anthropic")
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
@@ -101,9 +110,7 @@ class AnthropicSummaryClient:
             messages=[
                 {
                     "role": "user",
-                    "content": SUMMARY_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
+                    "content": _summary_prompt(conversation_text),
                 }
             ],
         )
@@ -121,11 +128,16 @@ class AnthropicSummaryClient:
 class OpenAISummaryClient:
     """Adapts an OpenAI-compatible client to the SummaryClient protocol."""
 
-    def __init__(self, client: OpenAI, model_version: str) -> None:
-        if model_version.startswith("claude"):
-            # Can't validate a model id belongs to OpenAI in general, but a Claude
-            # id can never work here -- catches the default-left-unset case rather
-            # than failing later with an opaque error from OpenAI's API.
+    def __init__(
+        self, client: OpenAI, model_version: str, *, client_class: str = "openai"
+    ) -> None:
+        # Only for client_class="openai": that's the real api.openai.com, which
+        # can never serve an Anthropic-namespaced model id, so this is always a
+        # left-unset-default bug -- catch it here with a clear message instead
+        # of an opaque 404 from OpenAI. "openai_compatible" is a configurable
+        # base_url (e.g. Parley) that may legitimately proxy Claude models
+        # under this same id, so it gets no such guarantee to check.
+        if client_class == "openai" and model_version.startswith("claude"):
             msg = (
                 f"model_version={model_version!r} looks like an Anthropic model "
                 "id, but client_class='openai' is configured. Set "
@@ -136,15 +148,14 @@ class OpenAISummaryClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_summarize_openai")
     def summarize(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,
             messages=[
                 {
                     "role": "user",
-                    "content": SUMMARY_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
+                    "content": _summary_prompt(conversation_text),
                 }
             ],
         )
@@ -169,7 +180,11 @@ def build_summary_client(
         )
     if isinstance(client, Anthropic):
         return AnthropicSummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
-    return OpenAISummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
+    return OpenAISummaryClient(
+        client,
+        model_version or SUMMARY_MODEL_VERSION,
+        client_class=llm.client_class,
+    )
 
 
 def filter_unsummarized(
