@@ -86,10 +86,14 @@ models:
       bootcamp platforms.
   - name: semester
     description: >
-      Academic term identifier for a MicroMasters proctored exam run (e.g. "2T2022").
-      Populated only for MITxOnline course runs that correspond to a MicroMasters
-      exam
-      run. Null for all other platforms and non-exam MITxOnline course runs.
+      Academic term identifier for a course run (e.g. "2T2022"). For MITxOnline
+      course runs this is the MicroMasters proctored exam run's semester when the
+      run has a matching exams_examrun record, and otherwise falls back to the
+      course run's own courserun_tag — the same derivation
+      int__mitxonline__proctored_exam_grades used before this field moved into the
+      dimensional layer. It is therefore populated for effectively all MITxOnline
+      course runs, not only exam runs. Null for all other platforms (edxorg,
+      mitxpro, residential, bootcamps), which set it to null explicitly.
   - name: passing_grade
     description: >
       Passing score threshold (0.0–1.0) set per MicroMasters proctored exam run.
