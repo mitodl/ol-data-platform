@@ -337,6 +337,22 @@ def test_transport_errors_abort_but_timeouts_stay_per_document():
     assert [r["extraction_status"] for r in rows] == ["failed", "failed"]
 
 
+def test_gateway_timeout_stays_per_document():
+    """A 504 is the gateway timing out a slow parse, not a dead Tika.
+
+    It arrives as an HTTPStatusError rather than a TimeoutException, so it used
+    to hit the 5xx branch and fail the whole course partition over one slow file.
+    """
+
+    def gateway_timeout(_file_bytes, _content_type):
+        raise _http_error(504)
+
+    rows, counters = rows_for([("static/a.pdf", b"%PDF-fake")], extract=gateway_timeout)
+    assert counters["failed"] == 1
+    assert rows[0]["extraction_status"] == "failed"
+    assert rows[0]["content"] is None
+
+
 def test_document_level_failures_still_count_as_failures():
     """A 422 really is about this file, so it must not abort the course."""
 

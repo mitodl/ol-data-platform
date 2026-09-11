@@ -184,6 +184,9 @@ def _content_type(relative_path: str) -> str:
 # Vault read failure leaves behind -- produces exactly this.
 _TIKA_AUTH_STATUSES = frozenset({401, 403})
 _SERVER_ERROR_FLOOR = 500
+# The APISIX gateway in front of Tika answers 504 when Tika is slower than its
+# read timeout, so this is the same slow-document timeout reported by the proxy.
+_GATEWAY_TIMEOUT_STATUS = 504
 
 
 class TikaUnavailableError(RuntimeError):
@@ -204,13 +207,19 @@ def raise_if_service_failure(error: Exception, relative_path: str) -> None:
     timeout stays a document-level failure because one oversized PDF times out
     on a perfectly healthy service; a genuinely dead service produces enough of
     them to trip the guard, which now also fires when every candidate failed.
+
+    A 504 gets the same treatment. It is the gateway in front of Tika giving up
+    on a slow parse before the client's own timeout does, so it arrives as an
+    HTTP status rather than a timeout exception but means the same thing.
+    Promoting it failed whole course partitions over one slow document, and the
+    automation sensor kept relaunching them.
     """
     status: int | None = None
     if isinstance(error, httpx.HTTPStatusError):
         status = error.response.status_code
     elif not isinstance(error, httpx.TransportError):
         return
-    if isinstance(error, httpx.TimeoutException):
+    if isinstance(error, httpx.TimeoutException) or status == _GATEWAY_TIMEOUT_STATUS:
         return
 
     if status is None or status in _TIKA_AUTH_STATUSES or status >= _SERVER_ERROR_FLOOR:
