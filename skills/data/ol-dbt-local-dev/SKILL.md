@@ -60,9 +60,12 @@ shared schemas. Always `--dry-run` first when cleaning remote schemas.
 ## Typical use: materialize both sides for a diff
 ```bash
 ol-dbt local register --all-layers          # mount prod data
-ol-dbt run --select dim_user_old dim_user   # build both relations on dev_local
+ol-dbt run --select dim_user_old dim_user --full-refresh   # build both relations on dev_local
 ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 ```
+`--full-refresh` applies to the selection, so it re-derives both sides in full. Drop
+it only if neither model is `materialized='incremental'`; otherwise the diff can
+compare rows the incremental predicate never reselected.
 For a model whose grain is more than one column, pass the whole key —
 comma-separated (`-k a,b,c`) or by repeating the flag (`-k a -k b -k c`), which are
 equivalent. `-k a b c` does not work. A non-unique key pairs rows many-to-many and
@@ -74,9 +77,12 @@ pre-change build so the diff reflects only your change, not upstream data drift:
 ```bash
 ol-dbt local snapshot my_model --as my_model_baseline   # materialize a frozen copy
 # ...edit the SQL...
-ol-dbt run --select my_model
+ol-dbt run --select my_model --full-refresh
 ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_model_pk
 ```
+The snapshot is frozen, but the rebuild is not: without `--full-refresh` an
+incremental `my_model` may leave the edited rows untouched, and the diff then
+reports "no change" for a change that simply never ran.
 `--old-raw` is required because the snapshot is a literal table, not a dbt
 `ref()`-able model.
 
@@ -87,13 +93,29 @@ ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_mo
   when you specifically need the shared cluster.
 - `register` needs AWS creds; `setup`, `run` (on dev_local), and the validation
   commands do not.
-- Prefer incremental `ol-dbt run` over `--full-refresh` for fast iteration;
-  reserve `--full-refresh` for when the incremental state is stale or wrong.
+- Prefer incremental `ol-dbt run` while **iterating** — you want the fast loop and
+  only care that the model executes. Switch to `--full-refresh` as soon as you are
+  going to **read the model's contents and draw a conclusion** from them
+  (validating a change, diffing before/after, confirming a fix landed). An
+  incremental run does execute the model SQL, but the model's own
+  `is_incremental()` predicate decides **which rows get re-derived**; every row it
+  excludes keeps the value the *old* code produced, and the run still reports `OK`.
+  Read the whole relation afterwards and you are reading a mix of old-code and
+  new-code rows. Measured: `dim_course_run` merged in 0.11s because its
+  change-detection predicate found nothing to reselect, so the column under test
+  was never re-derived. This is not "stale or wrong state" — the state is valid, it
+  just does not reflect your new code.
+- `~/.ol-dbt/local.duckdb` is **shared by every worktree and session on the
+  machine**. Another checkout running `dbt run` overwrites your tables with no
+  warning, so do not build in one step and measure in a much later one; snapshot a
+  baseline you need to keep.
 - Never point `cleanup` at a shared/production schema; rely on `--dry-run` and the
   `PROTECTED_SCHEMAS` guard.
 - StarRocks-native `b2b_analytics` models are the exception — they are not
   representable on DuckDB and must be QA'd on StarRocks (see `ol-dbt starrocks`).
 
 Pair this with the `ol-dbt-fast-validation` skill (validate / impact / diff) to
-QA what you build. See `docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md` for the broader
-CI/QA plan and the zero-copy substrate details.
+QA what you build, and with `ol-dbt-migration-validation` when the question is
+whether a migrated model still holds the same data as its predecessor. See
+`docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md` for the broader CI/QA plan and the
+zero-copy substrate details.
