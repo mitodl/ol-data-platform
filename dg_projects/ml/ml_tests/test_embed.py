@@ -413,9 +413,22 @@ def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
         client.embed_batch(["a"])
 
 
+class _FakeSchema:
+    def __init__(self, column_names: list[str]) -> None:
+        self.column_names = column_names
+
+
 class _FakeSchemaUpdate:
-    def union_by_name(self, schema: object) -> None:
-        pass
+    def __init__(self, table: "_FakeTable") -> None:
+        self._table = table
+
+    def union_by_name(self, schema: Any) -> None:
+        # Mirrors real union_by_name: appends any not-yet-seen field at the end
+        # of the table's column order, never inserting it where the incoming
+        # schema happens to place it.
+        for name in schema.names:
+            if name not in self._table._column_names:
+                self._table._column_names.append(name)
 
     def __enter__(self) -> Self:
         return self
@@ -427,9 +440,13 @@ class _FakeSchemaUpdate:
 class _FakeTable:
     def __init__(self) -> None:
         self.upserts: list[dict[str, object]] = []
+        self._column_names: list[str] = []
 
     def update_schema(self) -> _FakeSchemaUpdate:
-        return _FakeSchemaUpdate()
+        return _FakeSchemaUpdate(self)
+
+    def schema(self) -> _FakeSchema:
+        return _FakeSchema(self._column_names)
 
     def upsert(self, **kwargs: object) -> None:
         self.upserts.append(kwargs)
@@ -443,9 +460,13 @@ class _FakeCatalog:
     def create_table_if_not_exists(
         self,
         identifier: str,
-        **kwargs: object,  # noqa: ARG002
+        **kwargs: Any,
     ) -> _FakeTable:
         self.create_calls.append(identifier)
+        if not self._table._column_names:
+            schema = kwargs.get("schema")
+            if schema is not None:
+                self._table._column_names = list(schema.names)
         return self._table
 
 

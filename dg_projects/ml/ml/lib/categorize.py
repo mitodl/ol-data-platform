@@ -142,9 +142,7 @@ class AnthropicCategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced(
-        "feedback_category_propose_anthropic", tags=["feedback", "feedback_category"]
-    )
+    @traced("feedback_category_propose_anthropic", tags=["feedback_category"])
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         message = self._client.messages.create(
             model=self.model_version,
@@ -198,7 +196,7 @@ class OpenAICategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_openai", tags=["feedback", "feedback_category"])
+    @traced("feedback_category_propose_openai", tags=["feedback_category"])
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         response = self._client.chat.completions.create(
             model=self.model_version,

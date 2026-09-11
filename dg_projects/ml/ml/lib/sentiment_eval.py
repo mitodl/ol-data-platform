@@ -172,9 +172,7 @@ class AnthropicSentimentClient:
         self._client = client
         self.model_version = model_version
 
-    @traced(
-        "feedback_sentiment_classify_anthropic", tags=["feedback", "feedback_sentiment"]
-    )
+    @traced("feedback_sentiment_classify_anthropic", tags=["feedback_sentiment"])
     def classify(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
@@ -224,9 +222,7 @@ class OpenAISentimentClient:
         self._client = client
         self.model_version = model_version
 
-    @traced(
-        "feedback_sentiment_classify_openai", tags=["feedback", "feedback_sentiment"]
-    )
+    @traced("feedback_sentiment_classify_openai", tags=["feedback_sentiment"])
     def classify(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,

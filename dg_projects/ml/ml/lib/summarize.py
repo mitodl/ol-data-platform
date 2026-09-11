@@ -112,7 +112,7 @@ class AnthropicSummaryClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_summarize_anthropic", tags=["feedback", "feedback_summary"])
+    @traced("feedback_summarize_anthropic", tags=["feedback_summary"])
     def summarize(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
@@ -171,7 +171,7 @@ class OpenAISummaryClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_summarize_openai", tags=["feedback", "feedback_summary"])
+    @traced("feedback_summarize_openai", tags=["feedback_summary"])
     def summarize(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,
@@ -421,13 +421,20 @@ def checkpoint_chunk(
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
-    # A table from before summarized_at existed has an older schema than chunk_df --
-    # union_by_name adds the new column (nulled on existing rows) instead of failing
-    # the upsert; a no-op once the table already has it.
+    # A table from before summarized_at/prompt_version existed has an older schema
+    # than chunk_df -- union_by_name adds the new column(s) (nulled on existing
+    # rows) instead of failing the upsert; a no-op once the table already has them.
     with table.update_schema() as update:
         update.union_by_name(chunk_df.to_arrow().schema)
+    # union_by_name always appends a new column at the *end* of the table's
+    # physical schema, regardless of where it falls in chunk_df -- pyiceberg's
+    # upsert does a strict positional pyarrow cast (same names, same order), which
+    # fails on a same-name-different-order schema, not just a missing column. So
+    # once a column's been added this way, every later upsert must match the
+    # table's current column order, not chunk_df's own declared order.
+    ordered_chunk_df = chunk_df.select(table.schema().column_names)
     table.upsert(
-        df=chunk_df.to_arrow(),
+        df=ordered_chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
         when_matched_update_all=True,
         when_not_matched_insert_all=True,

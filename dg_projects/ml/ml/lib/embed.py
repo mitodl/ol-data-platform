@@ -81,7 +81,7 @@ class OpenAIEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_openai", tags=["feedback", "feedback_embed"])
+    @traced("feedback_embed_openai", tags=["feedback_embedding"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         response = self._client.embeddings.create(
             model=self.model_version,
@@ -113,7 +113,7 @@ class GeminiEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_gemini", tags=["feedback", "feedback_embed"])
+    @traced("feedback_embed_gemini", tags=["feedback_embedding"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         # Order is the API's own contract (response.embeddings lines up with the
         # input contents list), unlike OpenAI's which documents an index field --
@@ -157,7 +157,7 @@ class BedrockEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_bedrock", tags=["feedback", "feedback_embed"])
+    @traced("feedback_embed_bedrock", tags=["feedback_embedding"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if self.model_version.startswith("amazon.titan-embed"):
             return self._embed_titan(texts)
@@ -449,8 +449,15 @@ def checkpoint_embedding_chunk(
     # the upsert; a no-op once the table already has it.
     with table.update_schema() as update:
         update.union_by_name(chunk_df.to_arrow().schema)
+    # union_by_name always appends a new column at the *end* of the table's
+    # physical schema, regardless of where it falls in chunk_df -- pyiceberg's
+    # upsert does a strict positional pyarrow cast (same names, same order), which
+    # fails on a same-name-different-order schema, not just a missing column. So
+    # once a column's been added this way, every later upsert must match the
+    # table's current column order, not chunk_df's own declared order.
+    ordered_chunk_df = chunk_df.select(table.schema().column_names)
     table.upsert(
-        df=chunk_df.to_arrow(),
+        df=ordered_chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
         when_matched_update_all=True,
         when_not_matched_insert_all=True,
