@@ -91,7 +91,8 @@ with video_days as (
       and courserun_readable_id is not null
       and user_fk is not null
     group by
-        user_fk
+        'mitxonline'
+        , user_fk
         , courserun_readable_id
         , cast(event_timestamp as date)
 )
