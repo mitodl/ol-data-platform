@@ -1,8 +1,8 @@
 # Feedback Aggregation — Dimensional Model Design
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-13 (rev. 4 — fixes from [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422);
-rev. 3 conversation-grain analysis fact; rev. 2 turn grain + conformance rule; original schema 2026-07-06) ·
+Date: 2026-09-11 (rev. 5, continuous cluster assignment; rev. 4 — fixes from
+[#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422); rev. 3 conversation-grain analysis fact; rev. 2 turn grain + conformance rule; original schema 2026-07-06) ·
 See [`README_feedback_aggregation.md`](./README_feedback_aggregation.md) for the full spec set.
 
 Conforms to the existing Kimball layer in `src/ol_dbt/models/dimensional` (`tfact_*` transactional facts,
@@ -287,6 +287,7 @@ category_parent_slug   -- optional hierarchy (cluster → category → theme)
 category_status        -- proposed | approved | merged | deprecated
 category_source        -- 'llm_discovered' | 'seed' | 'manual'
 cluster_run_id         -- provenance: which cluster run proposed this category (§4d)
+cluster_key            -- rev. 5: the stable cluster this category labels (null for seed/manual; §4f)
 first_seen_at / updated_at
 ```
 Bootstrapped, **not cold-start**: seed from Zendesk `ticket_tags` (2,354 distinct) + `group_name`, then LLM-label
@@ -367,33 +368,48 @@ unnest.
 aggregate fact *is* the sidecar, promoted to a first-class dimensional table under the existing `afact_`
 convention (precedent: `afact_discussion_engagement`).
 
-Two tables survive alongside it, because they are genuinely different grains:
+The clustering tables alongside it sit at genuinely different grains (rev. 5; mechanics in
+`feedback_ml_approach.md` §C.1):
 
 ```
-feedback_cluster_run       -- grain (cluster_run_id) — one row per clustering run
+feedback_cluster_run        -- grain (cluster_run_id): one row per clustering run, an audit record
     embedding_model_version, algorithm, run_params, cluster_count, noise_count, silhouette,
-    run_status ('candidate'|'approved'), run_at
+    run_status ('completed'|'failed'), run_at
 
-feedback_cluster_candidate -- grain (feedback_conversation_pk, cluster_run_id)
+feedback_cluster_candidate  -- grain (feedback_conversation_pk, cluster_run_id)
     cluster_id, cluster_probability
-    -- ONLY for runs still in 'candidate' status. Promoting a run copies its assignment onto
-    -- afact_feedback_conversation and the candidate rows are dropped.
+    -- one run's raw, run-local HDBSCAN output; the input to identity matching, kept for the last N runs
+
+feedback_cluster            -- grain (cluster_key): stable cluster identity across runs
+    centroid, radius, embedding_model_version, member_count,
+    cluster_status ('active'|'retired'), first_seen_run_id, last_seen_run_id
+
+feedback_cluster_lineage    -- grain (cluster_run_id, cluster_key, prior_cluster_key)
+    relation ('continued'|'split'|'merged'|'new'|'retired'), jaccard
+
+feedback_cluster_membership -- grain (feedback_conversation_pk): the live assignment the fact joins
+    cluster_key (null = noise, or not yet near any cluster), cluster_similarity,
+    cluster_assignment_method ('recluster'|'incremental'), cluster_run_id, assigned_at
 ```
 
-`feedback_cluster_candidate` exists for one reason: comparing a proposed run against the live one, which is
-what the embedding-model bake-off (`feedback_ml_approach.md` §B.1) and every subsequent re-tune need. It is
-not a consumption table and nothing outside the ML pipeline should read it.
+**No run is promoted** (rev. 5). Rev. 3 kept unpromoted runs in `feedback_cluster_candidate` until a human
+approved one, which then copied onto the fact. That put a person between every new conversation and its
+cluster, so assignment would lag the corpus by however long the queue was. Membership is now maintained
+continuously: new conversations are placed into the live clusters as they are embedded, and each automatic
+re-cluster carries `cluster_key`s forward by membership overlap. `feedback_cluster_candidate` survives as a
+run's raw output. None of these tables is a consumption table; consumers read the fact.
 
 **What this trades away, stated plainly.** Rev. 2 split the sidecar so that re-clustering could never rewrite
-vector rows. Collapsing onto one row per conversation gives that up: a promoted run rewrites the afact row,
+vector rows. Collapsing onto one row per conversation gives that up: a re-cluster rewrites the afact row,
 vector column included. The cost is real but small — the *vector value* is carried forward, not recomputed, so
 nothing is re-embedded; what is lost is the ability to hold several model generations live in production at
 once, which is a bake-off need, and the candidate table covers it off the critical path. What is bought is
 that a consumer reads one table instead of joining four, and that `tfact_feedback` becomes insert-only (§2).
 
 `dim_feedback_category` remains the *curated, stable* projection of clusters that a human approved; the
-aggregate fact is the *churny* generated layer. That decoupling is unchanged and is what still lets clustering
-re-run freely.
+aggregate fact is the *churny* generated layer. That decoupling is unchanged. As of rev. 5 it rests on stable
+`cluster_key`s rather than on a promotion gate: clustering re-runs freely, and an approved category follows
+its cluster across runs.
 
 ---
 
@@ -480,9 +496,11 @@ embedded_at
 category_fk                 -> dim_feedback_category (nullable; §4a)
 sentiment_fk                -> dim_sentiment         (nullable; §4b)
 sentiment_source            -- 'explicit_rating' | 'model' — which tier produced it (§4b)
-cluster_run_id              -> feedback_cluster_run  (which run produced the assignment below)
-cluster_id                  -- -1 = noise = one-off, not systemic
-cluster_probability         -- cohesion signal for ranking systemic issues
+cluster_key                 -> feedback_cluster      (rev. 5: stable across re-clusters; null = noise, or not
+                                                      yet near any cluster)
+cluster_similarity          -- cosine similarity to the cluster centroid; cohesion signal for ranking
+cluster_assignment_method   -- 'recluster' | 'incremental': placed by a full run, or by nearest centroid
+cluster_run_id              -> feedback_cluster_run  (the run whose clusters it was placed into)
 
 -- audit
 conversation_ingested_at
@@ -657,6 +675,20 @@ moves the business key (§6).
 ---
 
 ## 11. Change log
+
+**rev. 5 (2026-09-11)**: cluster assignment is continuous and no human promotes a clustering run. Raised in
+review of [#2662](https://github.com/mitodl/ol-data-platform/pull/2662):
+
+- **Run promotion withdrawn** (§4f). Runs are no longer `candidate`/`approved`;
+  `feedback_cluster_run.run_status` is `completed`/`failed`, an audit value.
+- **Added `feedback_cluster`, `feedback_cluster_lineage` and `feedback_cluster_membership`** (§4f): stable
+  `cluster_key`s carried across runs by membership overlap, and a live one-row-per-conversation assignment
+  table maintained on every embedding refresh.
+- **`afact_feedback_conversation` carries `cluster_key`, `cluster_similarity` and
+  `cluster_assignment_method`** (§5a) in place of the run-local `cluster_id` / `cluster_probability`, which
+  stay on `feedback_cluster_candidate`.
+- **`dim_feedback_category.cluster_key`** (§4a): a category labels a stable cluster, so its approval
+  survives re-clustering.
 
 **rev. 4 (2026-08-13)** — implementation-blocking fixes from
 [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422), no grain/key/shape changes:

@@ -1,8 +1,9 @@
 # Feedback Aggregation — Entity-Relationship Diagrams
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-13 (rev. 4 — fixes from [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422);
-rev. 3 conversation-grain analysis fact) · Companion to
+Date: 2026-09-11 (rev. 5, continuous cluster assignment; rev. 4 — fixes from
+[#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422); rev. 3 conversation-grain analysis fact) ·
+Companion to
 [`feedback_dimensional_model.md`](./feedback_dimensional_model.md),
 [`feedback_event_contract_spec.md`](./feedback_event_contract_spec.md) and
 [`feedback_ml_approach.md`](./feedback_ml_approach.md).
@@ -264,7 +265,7 @@ erDiagram
     dim_user              |o--o{ afact_feedback_conversation : "opened_by_user_fk"
     dim_feedback_category |o--o{ afact_feedback_conversation : "category_fk (generated)"
     dim_sentiment         |o--o{ afact_feedback_conversation : "sentiment_fk (generated)"
-    feedback_cluster_run  |o--o{ afact_feedback_conversation : "cluster_run_id (which run assigned it)"
+    feedback_cluster      |o--o{ afact_feedback_conversation : "cluster_key (stable across re-clusters)"
 
     afact_feedback_conversation {
         varchar feedback_conversation_pk PK "surrogate_key(source_slug, conversation_ref)"
@@ -293,9 +294,10 @@ erDiagram
         varchar category_fk FK "GENERATED - nullable, a valid queryable state"
         varchar sentiment_fk FK "GENERATED - nullable"
         varchar sentiment_source "explicit_rating or model - which tier produced it"
-        varchar cluster_run_id FK "GENERATED - the approved run"
-        integer cluster_id "-1 = noise = one-off complaint, not systemic"
-        float cluster_probability "cohesion signal for ranking systemic issues"
+        varchar cluster_key FK "GENERATED - stable across re-clusters; null = noise or not yet near a cluster"
+        float cluster_similarity "cosine similarity to the centroid - cohesion signal for ranking"
+        varchar cluster_assignment_method "recluster or incremental"
+        varchar cluster_run_id "the run whose clusters it was placed into"
         timestamp conversation_ingested_at
     }
 ```
@@ -327,14 +329,18 @@ move when any of them arrive.
 ## 5. Run provenance and the strategic rollup
 
 The per-turn ML sidecar from rev. 2 (`feedback_embeddings`, `feedback_cluster_assignment`) is **withdrawn** —
-its contents live on `afact_feedback_conversation` (§4). Two tables remain, both genuinely different grains
-from the conversation fact:
+its contents live on `afact_feedback_conversation` (§4). The clustering tables below remain, all genuinely
+different grains from the conversation fact (rev. 5; mechanics in `feedback_ml_approach.md` §C.1):
 
 ```mermaid
 erDiagram
     feedback_cluster_run        ||--o{ feedback_cluster_candidate : "cluster_run_id"
+    feedback_cluster_run        ||--o{ feedback_cluster_lineage : "cluster_run_id"
     feedback_cluster_run        |o--o{ dim_feedback_category : "cluster_run_id (provenance)"
-    afact_feedback_conversation ||--o{ feedback_cluster_candidate : "feedback_conversation_pk"
+    feedback_cluster            ||--o{ feedback_cluster_lineage : "cluster_key, prior_cluster_key"
+    feedback_cluster            |o--o{ feedback_cluster_membership : "cluster_key (null = noise or unplaced)"
+    feedback_cluster            |o--o{ dim_feedback_category : "cluster_key (the cluster a category labels)"
+    afact_feedback_conversation ||--|| feedback_cluster_membership : "feedback_conversation_pk"
     afact_feedback_conversation ||--o{ afact_feedback_cluster_daily : "aggregated"
 
     feedback_cluster_run {
@@ -345,15 +351,43 @@ erDiagram
         integer cluster_count
         integer noise_count "the one-off bucket"
         float silhouette "only if the algorithm produces it"
-        varchar run_status "candidate, approved"
+        varchar run_status "completed, failed - an audit value, not a promotion state"
         timestamp run_at
     }
 
     feedback_cluster_candidate {
         varchar feedback_conversation_pk PK "part of compound key"
         varchar cluster_run_id PK "part of compound key"
-        integer cluster_id
+        integer cluster_id "run-local - meaningless across runs"
         float cluster_probability
+    }
+
+    feedback_cluster {
+        varchar cluster_key PK "minted on first appearance, carried forward by membership overlap"
+        array centroid "per embedding_model_version"
+        float radius "placement threshold - low percentile of member similarity"
+        varchar embedding_model_version
+        integer member_count
+        varchar cluster_status "active, retired"
+        varchar first_seen_run_id
+        varchar last_seen_run_id
+    }
+
+    feedback_cluster_lineage {
+        varchar cluster_run_id PK "part of compound key"
+        varchar cluster_key PK "part of compound key"
+        varchar prior_cluster_key PK "part of compound key - null for new"
+        varchar relation "continued, split, merged, new, retired"
+        float jaccard "membership overlap with the prior key"
+    }
+
+    feedback_cluster_membership {
+        varchar feedback_conversation_pk PK
+        varchar cluster_key FK "null = noise or not yet near any cluster"
+        float cluster_similarity
+        varchar cluster_assignment_method "recluster or incremental"
+        varchar cluster_run_id "the run whose clusters it was placed into"
+        timestamp assigned_at
     }
 
     afact_feedback_cluster_daily {
@@ -362,20 +396,22 @@ erDiagram
         varchar feedback_channel_fk FK
         varchar category_fk FK
         varchar sentiment_fk FK
-        integer cluster_id
+        varchar cluster_key "rev. 5 - stable, so trends continue across re-clusters"
         integer conversation_count "at conversation grain this IS the cluster size"
         integer distinct_user_count
         integer rated_conversation_count "coverage only - count with a non-null explicit_rating; replaces avg_explicit_rating (rev. 4, see note below)"
     }
 ```
 
-`feedback_cluster_candidate` holds **only runs that have not been promoted**. Promoting a run copies its
-assignment onto `afact_feedback_conversation` and drops the candidate rows; it exists so a proposed run can
-be compared against the live one during the embedding-model bake-off, and nothing outside the ML pipeline
-should read it.
+**No run is promoted** (rev. 5). `feedback_cluster_membership` is the live assignment and is maintained
+continuously: newly embedded conversations are placed by nearest centroid, and each automatic re-cluster
+rewrites it after identity matching carries `cluster_key`s forward (`feedback_ml_approach.md` §C.1).
+`feedback_cluster_candidate` holds one run's raw output, the input to that matching; nothing outside the ML
+pipeline should read it.
 
-`dim_feedback_category` remains the *curated, stable* projection — only an approved run advances it, which is
-what still lets clustering re-run freely.
+`dim_feedback_category` remains the *curated, stable* projection. A category attaches to a `cluster_key`, so it
+survives every re-cluster in which its cluster continues. That, not a promotion gate, is what lets clustering
+re-run freely.
 
 **Conversation grain simplifies the rollup.** Rev. 2 had to carry both `feedback_count` and
 `distinct_conversation_count`, and had to warn that `min_cluster_size` counted turns rather than tickets so
@@ -437,7 +473,7 @@ flowchart TD
     M --> H
     M -.->|Fenic / sklearn, engine-external| N["summarize -> embed -> cluster -> sentiment"]
     N -.->|writes generated columns| H
-    N -.-> J["feedback_cluster_run<br/>feedback_cluster_candidate"]
+    N -.-> J["feedback_cluster_run / _candidate<br/>feedback_cluster / _lineage / _membership<br/>(continuous, no promotion - rev. 5)"]
     N -.->|LLM label, human approve| K["dim_feedback_category"]
     K -.->|category_fk| H
     H --> I["afact_feedback_cluster_daily<br/>(Phase 2)"]
@@ -470,6 +506,16 @@ regardless, because it moves the business key.
 ---
 
 ## 8. Change log
+
+**rev. 5 (2026-09-11)**: cluster assignment is continuous and no human promotes a clustering run. Raised in
+review of [#2662](https://github.com/mitodl/ol-data-platform/pull/2662):
+
+- **Run promotion withdrawn** (§5). `feedback_cluster_run.run_status` is `completed`/`failed`, an audit value;
+  `feedback_cluster_candidate` holds each run's raw output rather than only unpromoted runs.
+- **Added `feedback_cluster`, `feedback_cluster_lineage` and `feedback_cluster_membership`** (§5): stable
+  `cluster_key`s carried across runs by membership overlap, and a live assignment table the fact joins.
+- **`afact_feedback_conversation`** (§4) carries `cluster_key`, `cluster_similarity` and
+  `cluster_assignment_method` in place of the run-local `cluster_id` / `cluster_probability`.
 
 **rev. 4 (2026-08-13)** — implementation-blocking fixes from
 [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422), no grain/key/shape changes:

@@ -1,7 +1,8 @@
 # Feedback Aggregation — Dagster ML Asset Spec (MVP)
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-13 (rev. 5 — `feedback_clusters` is a `@multi_asset`; see
+Date: 2026-09-11 (rev. 6, continuous cluster assignment) · rev. 5 (2026-08-13, `feedback_clusters` is a
+`@multi_asset`; see
 [#2422 review](https://github.com/mitodl/ol-data-platform/pull/2422)) · rev. 4 (2026-08-10, conversation
 grain) · Companion to [`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md)
 and [`feedback_ml_approach.md`](./feedback_ml_approach.md)
@@ -11,6 +12,13 @@ LLM-proposed categories, and sentiment. Grounded in the existing repo orchestrat
 ships without this asset**; this is purely additive — it fills the generated columns on
 `afact_feedback_conversation` and writes `feedback_cluster_run` (see
 [`feedback_erd.md`](./feedback_erd.md) §4/§5).
+
+> **REVISED 2026-09-11 (rev. 6): no promotion step; cluster assignment is continuous**
+> (`feedback_ml_approach.md` §C.1). A new `feedback_cluster_assignment` asset places each newly embedded
+> conversation into the live clusters. `feedback_clusters` re-clusters on a schedule or trigger, and a new
+> `feedback_cluster_identity` asset carries stable `cluster_key`s across runs. The human "candidate → live"
+> promotion of a run is withdrawn, and `feedback_category_proposals` labels new, split and merged keys
+> without waiting on anyone.
 
 > **REVISED 2026-08-13 (rev. 5) — `feedback_clusters` is a `@multi_asset`.** §2 specified one stage
 > producing two target tables (`feedback_cluster_run`, `feedback_cluster_candidate`) through a single
@@ -90,19 +98,30 @@ feedback_summaries             @asset  → conversation_summary + summary_model_
    ▼
 feedback_embeddings            @asset  → embedding_vector, embedding_dim, embedding_input,
    │                                     embedding_model_version   [computed ONCE per version]
+   ├─────────────► feedback_sentiment           @asset → sentiment per conversation
+   │                                                     (explicit rating + kNN/classifier)
    ▼
-feedback_clusters              @multi_asset (two AssetOuts — fixed rev. 4, @copilot: a plain @asset has one
+feedback_clusters              @multi_asset (two AssetOuts, fixed rev. 4, @copilot: a plain @asset has one
    │                                     materialized output and cannot populate two target tables from one
-   │                                     DataFrame through PolarsIcebergIOManager)
+   │                                     DataFrame through PolarsIcebergIOManager). rev. 6: scheduled and
+   │                                     triggered (§6), not chained on every embedding refresh
    │           ├─ out: feedback_cluster_run       → one row: algorithm, params, cluster_count, noise_count,
-   │           │                                     silhouette   (UMAP→HDBSCAN, run-level)
-   │           └─ out: feedback_cluster_candidate → cluster_id / cluster_probability per conversation
-   │                                                 (per-conversation, this run only — §4f/design §4f)
-   ├─────────────► feedback_category_proposals  @asset → LLM-labels clusters → dim_feedback_category
-   │                                                     (category_source='llm_discovered', status='proposed',
-   │                                                      cluster_run_id = provenance)
-   └─────────────► feedback_sentiment           @asset → sentiment per conversation
-                                                          (explicit rating + kNN/classifier)
+   │           │                                     silhouette, run_status (completed | failed)
+   │           └─ out: feedback_cluster_candidate → run-local cluster_id / cluster_probability per conversation
+   │                                                 (this run only; the input to identity matching)
+   ▼
+feedback_cluster_identity      @multi_asset (rev. 6) → matches the run's clusters to existing cluster_keys by
+   │                                     membership overlap (ml §C.1)
+   │           ├─ out: feedback_cluster          → one row per cluster_key: centroid, radius, status
+   │           └─ out: feedback_cluster_lineage  → continued / split / merged / new / retired, per run
+   ▼
+feedback_cluster_assignment    @asset (rev. 6; also downstream of feedback_embeddings, runs on every refresh)
+   │                                     → feedback_cluster_membership, one row per conversation. After a new
+   │                                       run: rewritten from the run via lineage. Otherwise: newly embedded
+   │                                       conversations placed by nearest active centroid within its radius
+   └─────────────► feedback_category_proposals  @asset → LLM-labels new / split / merged cluster_keys
+                                                         → dim_feedback_category (category_source=
+                                                         'llm_discovered', status='proposed', cluster_key)
    ▼
 afact_feedback_conversation  ← the generated columns, one row per conversation
 ```
@@ -112,9 +131,11 @@ not turn) and the target (one fact table, not three sidecars). Each stage stamps
 re-running one stage does not invalidate the others: re-clustering reuses the stored vectors, and re-embedding
 reuses the stored summaries.
 
-**Unpromoted runs** go to `feedback_cluster_candidate`, not straight onto the fact — that is what lets a
-proposed run be compared against the live one during the embedding bake-off (`feedback_ml_approach.md` §B.1).
-Promotion copies the assignment onto `afact_feedback_conversation` and drops the candidate rows.
+**No promotion step** (rev. 6). Every completed run flows through identity matching into
+`feedback_cluster_membership` without a person in the loop. `feedback_cluster_candidate` keeps each run's raw
+output, for identity matching and for run-vs-run comparison when the configuration changes
+(`feedback_ml_approach.md` §B.1), retained for the last N runs. The human decisions are the configuration,
+made in code, and the category labels (`feedback_ml_approach.md` §D).
 
 - **Redaction placement (design §7 / MVP spec §3):** unchanged in substance — Presidio is Python, so
   redaction happens in a Python asset upstream of both the fact and this pipeline. **Decision for
@@ -139,10 +160,11 @@ Promotion copies the assignment onto `afact_feedback_conversation` and drops the
   (`PolarsIcebergIOManager`, configured in `definitions.py`) persists it to the target
   Iceberg table. `feedback_clusters` (§2) returns **two** DataFrames, one per `AssetOut`, since it is a
   `@multi_asset`. `feedback_cluster_run` and `feedback_cluster_candidate` are new Iceberg tables with the
-  schemas in `feedback_ml_approach.md` §A (ERD: [`feedback_erd.md`](./feedback_erd.md) §5).
+  schemas in `feedback_ml_approach.md` §A (ERD: [`feedback_erd.md`](./feedback_erd.md) §5), as are rev. 6's
+  `feedback_cluster`, `feedback_cluster_lineage` and `feedback_cluster_membership`.
 - **Getting the generated columns onto `afact_feedback_conversation`:** dbt owns that table, so the assets
   write per-stage Iceberg output tables (`feedback_summaries`, `feedback_embeddings`,
-  `feedback_cluster_assignments`, `feedback_sentiment_assignments`) keyed by `feedback_conversation_pk`, and
+  `feedback_cluster_membership`, `feedback_sentiment_assignments`) keyed by `feedback_conversation_pk`, and
   the dbt model left-joins them onto the conversation aggregate. Same pattern as rev. 3, one grain up — and
   because the target is a derived aggregate rather than a transactional fact, this join is a plain rebuild
   rather than an incremental `merge` into a fact with consumers.
@@ -218,6 +240,11 @@ Two options, both in use in the repo:
   data-driven triggering. MVP volume is ~198K Zendesk **conversations** (`feedback_ml_approach.md` §B.2),
   which runs comfortably in one nightly batch; only the first backfill is large, and it is bounded by the
   summarizer's throughput rather than the embedder's.
+- **Re-clustering is scheduled and triggered, not chained on every refresh** (rev. 6).
+  `feedback_cluster_assignment` runs on every embedding refresh (cheap: a centroid lookup per new
+  conversation). `feedback_clusters` runs on a cron (weekly as a starting point) plus a sensor that fires when
+  the unplaced share or the corpus growth since the last run crosses its threshold
+  (`feedback_ml_approach.md` §C.1). Neither needs a person to run or to take effect.
 
 ---
 
@@ -229,17 +256,20 @@ Two options, both in use in the repo:
 2. Scaffold `dg_projects/feedback_clustering/`; add deps; provision Vault path.
 3. `feedback_summaries` asset (multi-turn conversations only) — **sample-measure the cost first** (§4).
 4. `feedback_embeddings` asset → vectors keyed by `feedback_conversation_pk`.
-5. `feedback_clusters` asset (UMAP+HDBSCAN) → `feedback_cluster_run` + assignments.
+5. `feedback_clusters` (UMAP+HDBSCAN) → `feedback_cluster_run` + `feedback_cluster_candidate`; then
+   `feedback_cluster_identity` and `feedback_cluster_assignment` → stable keys and continuous membership
+   (rev. 6).
 6. `feedback_category_proposals` + `feedback_sentiment` assets → assignment tables.
 7. dbt join of the stage outputs onto `afact_feedback_conversation`'s generated columns.
-8. Human curation loop on `dim_feedback_category` (approve/merge proposed labels), and run promotion
-   (candidate → live cluster assignment).
+8. Human curation loop on `dim_feedback_category` (approve/merge proposed labels, keyed on `cluster_key`).
+   No run promotion: cluster assignment never waits on a person (rev. 6).
 
 ---
 
 ## 8. Explicit non-goals (MVP)
 
-- No online/real-time embedding or serving (batch only).
+- No online/real-time embedding or serving (batch only). "Continuous" cluster assignment (rev. 6) means every
+  batch refresh, not streaming.
 - No dedicated vector DB (Iceberg `ARRAY<float>` column on the conversation fact; revisit at Phase 2/serving
   need).
 - No GPU requirement (CPU batch at MVP scale; revisit at the full ~600K-conversation scale).

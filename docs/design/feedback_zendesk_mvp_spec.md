@@ -393,7 +393,8 @@ Two column groups:
   exception — sourced from the ticket's unfiltered comment history, not from `tfact_feedback`'s
   requester-only turns (§5 note above), since aggregating the kept turns alone would always yield one.
 - **Generated (rev. 3)** — `conversation_summary`, `embedding_vector`, `category_fk`, `sentiment_fk`,
-  `cluster_id` and their version stamps, left-joined from the ML asset's per-stage output tables
+  `cluster_key` (the stable cluster id, `feedback_ml_approach.md` §C.1) and their version stamps, left-joined
+  from the ML asset's per-stage output tables
   (`feedback_dagster_asset_spec.md` §3). All nullable; the table is queryable and useful before any of them
   are populated.
 
@@ -489,7 +490,7 @@ Mirror the `tfact_discussion_events` yml style:
   row must have at least one turn, so a conversation cannot go missing from the analysis fact and quietly
   drop its turns out of every cluster.
   Generated columns are all nullable (description-only): `conversation_summary`, `embedding_vector`,
-  `category_fk`, `sentiment_fk`, `cluster_id`. Two consistency tests worth having once the ML asset lands:
+  `category_fk`, `sentiment_fk`, `cluster_key`. Two consistency tests worth having once the ML asset lands:
   `embedding_model_version` is not null wherever `embedding_vector` is, and `summary_model_version` is null
   exactly where the §A.1 skip rule applies (`turn_count = 1` or under the length threshold) — that second one
   is the guard that a silent summarizer failure doesn't read as "short conversation".

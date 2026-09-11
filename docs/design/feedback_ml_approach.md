@@ -1,7 +1,8 @@
 # Feedback Aggregation — ML/LLM Approach Spec
 
 Status: **spec** · Project: `wp-feedback-aggregation-clustering-system-2e9750`
-Date: 2026-08-10 (rev. 3 — conversation-grain analysis) · Companion to
+Date: 2026-09-11 (rev. 4, continuous cluster assignment; rev. 3, 2026-08-10, conversation-grain analysis) ·
+Companion to
 [`feedback_dimensional_model.md`](./feedback_dimensional_model.md)
 
 Resolves the open items the dimensional-model design handed to downstream tasks:
@@ -15,6 +16,16 @@ The guiding principle from the RFC: **the durable artifact is the feedback fact;
 is a re-runnable derived layer.** Nothing here writes to `tfact_feedback` — as of rev. 3 that fact is
 insert-only and has no late-arriving update path at all. All ML output lands on
 `afact_feedback_conversation`.
+
+> **REVISED 2026-09-11 (rev. 4): cluster assignment is continuous, and no human promotes a clustering run**
+> (§C.1). A conversation is placed into the live clusters as soon as it is embedded. Re-clustering runs
+> automatically and carries cluster identity forward by membership overlap, so a cluster keeps a stable
+> `cluster_key` across runs and across embedding-model changes. The rev. 3 promotion step (a human approves
+> a run, which then copies its assignments onto the fact) is withdrawn: it put a person between every new
+> conversation and its cluster, which guarantees a backlog and stale assignments. People still choose the
+> clustering configuration, through code review, and curate category labels (§D). Labels now attach to
+> `cluster_key` instead of to one run's integer ids. Raised in review of
+> [#2662](https://github.com/mitodl/ol-data-platform/pull/2662).
 
 > **REVISED 2026-08-10 (rev. 3) — the analysis unit is the conversation, not the turn** (design §5a).
 > `tfact_feedback` keeps its turn grain, but summarization, embedding, sentiment and clustering all operate
@@ -37,8 +48,10 @@ insert-only and has no late-arriving update path at all. All ML output lands on
 int__feedback__conversation (redacted turns assembled per conversation) [dbt]
   → summarize    : turns → conversation_summary               [py; SKIPPED for single-turn/short — §A.1]
   → embed        : summary or turns → vector                  [py]
-  → cluster      : vectors → cluster_id per cluster_run       [py; + feedback_cluster_run]
-  → label        : cluster centroid/samples → category label  [py: dim_feedback_category (proposed)]
+  → assign       : new vector → nearest live cluster_key       [py; every embedding refresh, §C.1]
+  → recluster    : all vectors → new partition, matched to     [py; scheduled/triggered, + feedback_cluster_run]
+                   existing cluster_keys by membership overlap
+  → label        : new/split/merged cluster_key → label        [py: dim_feedback_category (proposed)]
   → sentiment    : rating or text/vector → sentiment_slug     [py]
   → write        : one row per conversation                   [afact_feedback_conversation]
 ```
@@ -50,13 +63,16 @@ overwrite of a derived row. **No stage writes to `tfact_feedback`.**
 **One target table, not a sidecar** (design §4f/§5a; ERD in [`feedback_erd.md`](./feedback_erd.md) §4). The
 rev. 2 sidecar split — `feedback_embeddings` at `(feedback_pk, model_version)` and
 `feedback_cluster_assignment` at `(feedback_pk, cluster_run_id)` — is withdrawn. All of it collapses onto one
-row per conversation, and two tables survive at genuinely different grains:
+row per conversation, and the clustering tables sit alongside it at genuinely different grains (rev. 4, §C.1):
 
 | Table | Grain | Holds |
 |---|---|---|
-| `afact_feedback_conversation` | `(feedback_conversation_pk)` | summary, `embedding_vector`, `embedding_dim`, `embedding_input`, `category_fk`, `sentiment_fk`, `cluster_id`, `cluster_probability` + version stamps |
-| `feedback_cluster_run` | `(cluster_run_id)` | `embedding_model_version`, `algorithm`, `run_params`, `cluster_count`, `noise_count`, `silhouette`, `run_status`, `run_at` |
-| `feedback_cluster_candidate` | `(feedback_conversation_pk, cluster_run_id)` | `cluster_id`, `cluster_probability` — **unpromoted runs only**, for run-vs-run comparison |
+| `afact_feedback_conversation` | `(feedback_conversation_pk)` | summary, `embedding_vector`, `embedding_dim`, `embedding_input`, `category_fk`, `sentiment_fk`, `cluster_key`, `cluster_similarity`, `cluster_assignment_method` + version stamps |
+| `feedback_cluster_run` | `(cluster_run_id)` | `embedding_model_version`, `algorithm`, `run_params`, `cluster_count`, `noise_count`, `silhouette`, `run_status` (`completed` \| `failed`, an audit value), `run_at` |
+| `feedback_cluster_candidate` | `(feedback_conversation_pk, cluster_run_id)` | run-local `cluster_id`, `cluster_probability`: one run's raw HDBSCAN output, the input to identity matching. Kept for the last N runs for run-vs-run comparison |
+| `feedback_cluster` | `(cluster_key)` | stable identity: `centroid`, `radius`, `embedding_model_version`, `member_count`, `cluster_status` (`active` \| `retired`), `first_seen_run_id`, `last_seen_run_id` |
+| `feedback_cluster_lineage` | `(cluster_run_id, cluster_key, prior_cluster_key)` | `relation` (`continued` \| `split` \| `merged` \| `new` \| `retired`), `jaccard` |
+| `feedback_cluster_membership` | `(feedback_conversation_pk)` | the live assignment: `cluster_key` (null = noise or not yet near a cluster), `cluster_similarity`, `cluster_assignment_method` (`recluster` \| `incremental`), `cluster_run_id`, `assigned_at` |
 
 **What the collapse costs, honestly.** Re-clustering now rewrites the afact row, vector column included — the
 property rev. 2's split was bought to preserve. The vector *value* is carried forward rather than recomputed,
@@ -247,21 +263,89 @@ cohesion signal that lets a human say "this is recurring."
   (silhouette + tag-agreement + human coherence). Adopt the summary as the embedding input only where the
   measured lift justifies its per-conversation LLM cost — expected to help most on long multi-turn Zendesk
   tickets and not at all on single-turn sources, which the §A.1 skip rule never summarizes anyway.
-- **Re-clustering is cheap and expected:** each run writes a new `cluster_run_id` to `feedback_cluster_run`;
-  an unpromoted run's assignments sit in `feedback_cluster_candidate` until approved, at which point they are
-  copied onto `afact_feedback_conversation`. `dim_feedback_category` (curated) only advances when a human
-  approves labels from a run (design §4a), decoupling churny clustering from the stable category dimension.
+- **Re-clustering is cheap, expected, and automatic** (rev. 4, §C.1): each run writes a new `cluster_run_id`
+  to `feedback_cluster_run` and its raw assignments to `feedback_cluster_candidate`. An identity-matching step
+  then maps the run's clusters onto the existing `cluster_key`s and rewrites `feedback_cluster_membership`.
+  No human approves a run. Stable keys, not a promotion gate, are what decouple churny clustering from the
+  curated category dimension: a cluster that continues across runs keeps its key, and therefore its category.
 - **Cross-source clustering (Phase 2):** because all sources share one embedding space in
   `int__feedback__conversation`, a cluster can span Zendesk + forum + tutor — this is the
   mechanism behind `afact_feedback_cluster_daily` (cluster × category × sentiment × date ×
   source). No algorithm change needed; just don't filter `source_slug` at cluster time.
 - **Deps:** `umap-learn`, `hdbscan` (or `scikit-learn`'s `HDBSCAN` ≥1.3 to avoid the
   separate compiled dep — decide at implementation based on the Dagster image's build
-  constraints). All CPU, no service.
+  constraints). All CPU, no service. (rev. 4: §C.1's incremental placement is nearest-centroid and needs
+  neither. If it is ever replaced by HDBSCAN's own out-of-sample prediction, that is `approximate_predict`
+  in the standalone `hdbscan` package; scikit-learn's `HDBSCAN` exposes only `fit_predict` as of 1.9.)
 
 **Cluster-quality columns** are added *only if the chosen algorithm produces them*:
-`cluster_id` + `cluster_probability` on `afact_feedback_conversation`; run-level `silhouette`,
-`cluster_count`, `noise_count` on `feedback_cluster_run` (§A) — persistence optional.
+`cluster_key` + `cluster_similarity` on `afact_feedback_conversation` (rev. 4; the run-local `cluster_id` and
+`cluster_probability` stay on `feedback_cluster_candidate`); run-level `silhouette`, `cluster_count`,
+`noise_count` on `feedback_cluster_run` (§A) — persistence optional.
+
+### C.1 Continuous assignment and stable cluster identity (rev. 4)
+
+**No human sits between a conversation and its cluster.** Assignment is a derived value, maintained as
+conversations are embedded and as the corpus grows. A human gate on assignment produces a backlog by
+construction, and every conversation embedded while the queue waits has no cluster. The decisions that need
+people are made elsewhere: the clustering configuration is chosen by the §B.1 bake-off and shipped as config
+through code review, and category labels are curated in §D.
+
+Three mechanisms keep assignment current:
+
+1. **Incremental placement.** A `feedback_cluster_assignment` asset runs on every `feedback_embeddings`
+   refresh. For each conversation whose embedding is newer than its membership row (new, re-embedded, or
+   never placed), it computes cosine similarity to every `active` centroid built from the same
+   `embedding_model_version` / `embedding_dim` / `embedding_input`, and assigns the nearest cluster if the
+   similarity clears that cluster's radius. Otherwise `cluster_key` stays null with
+   `cluster_assignment_method = 'incremental'`: the conversation is not near any live cluster yet. Placement
+   never moves an already-placed conversation, and needs no model state beyond `feedback_cluster`.
+   - *Radius* is per cluster: the similarity at a fixed low percentile of its members' similarities (p5 as a
+     starting point, so 95% of members are at least this close) as of the last re-cluster. A per-cluster
+     radius respects HDBSCAN's variable density, which one global threshold would not.
+   - *Why nearest centroid rather than out-of-sample HDBSCAN:* it is deterministic, explainable, and needs no
+     persisted UMAP/HDBSCAN models. A persisted UMAP `transform` plus `hdbscan.approximate_predict` is the
+     upgrade path if placement quality measurably needs it.
+2. **Automatic re-clustering.** `feedback_clusters` runs over the full embedded corpus on a schedule, and
+   early when either trigger fires: the share of conversations left unplaced since the last run crosses a
+   threshold, or the corpus has grown past a threshold since the last run. Unplaced conversations are where
+   new themes accumulate, and a re-cluster is what turns them into clusters. Runs use the configuration in
+   code; changing parameters or the embedding model is a PR, and the next run picks it up.
+3. **Identity matching.** After each completed run, the new partition is matched to the current
+   `cluster_key`s by membership, not by vectors:
+   - Build the contingency matrix of new clusters × current keys over conversations present in both, scoring
+     each pair by Jaccard overlap.
+   - A one-to-one best match above the match threshold (0.5 as a starting point) **continues** the old key.
+   - A new cluster drawn mostly from one old key whose best match continued elsewhere gets a new key, with
+     lineage `split` from that key.
+   - A new cluster holding the majority of two or more old keys gets a new key, with lineage `merged` from
+     each of them.
+   - Anything else gets a new key with lineage `new`. An old key with no successor is `retired`.
+   - `feedback_cluster_membership` is then rewritten for every conversation in the run
+     (`cluster_assignment_method = 'recluster'`; HDBSCAN noise gets a null `cluster_key`), and centroids and
+     radii are recomputed.
+
+   Matching compares members rather than vectors, so it works across an embedding-model change: re-embed,
+   re-cluster in the new space, and keys continue wherever the grouping does. Centroids are stored per
+   `embedding_model_version`, and placement only uses the current model's.
+
+**What a run is now.** A `feedback_cluster_run` row is an audit record: which configuration ran, over how many
+conversations, with what outcome (`completed` | `failed`). A failed run changes nothing downstream. There is
+no `candidate` / `approved` status to set.
+
+**Automated checks instead of a human gate.** Placement and re-clustering both emit asset metadata: the
+unplaced share, per-run continuity (the share of conversations that keep their key), and counts of
+continued / split / merged / new / retired keys. A blocking asset check holds the membership rewrite when
+continuity falls below a floor, so a bad configuration cannot silently reshuffle every cluster. The remedy is
+a configuration change, not a runtime approval.
+
+**A null `cluster_key` now means two things.** HDBSCAN noise from a re-cluster (the "one-off complaint"
+bucket) and a conversation that incremental placement could not put near any cluster both leave the key null.
+`cluster_assignment_method` tells them apart. Both are "not part of a systemic theme yet".
+
+**Open parameters**, calibrated on the labeled sample (§B.1): the radius percentile, the Jaccard match
+threshold, the re-cluster triggers and schedule, the continuity floor, and how many runs of
+`feedback_cluster_candidate` to retain.
 
 ---
 
@@ -273,7 +357,8 @@ cohesion signal that lets a human say "this is recurring."
    support `group_name` give an immediate, human-meaningful starter taxonomy. These become
    `category_source='seed'` rows with `category_status='proposed'`. This alone makes the
    MVP useful before any clustering runs.
-2. **LLM-label the clusters (§C output):** for each HDBSCAN cluster, sample N
+2. **LLM-label the clusters (§C output):** for each new, split or merged `cluster_key` (§C.1; a continued
+   key keeps its label and is not re-proposed), sample N
    representative (redacted) utterances near the centroid + the cluster's dominant seed
    tags, and prompt an LLM to propose a short `category_label` + a stable `category_slug`
    + a one-line description. `category_source='llm_discovered'`, `category_status='proposed'`
@@ -282,8 +367,14 @@ cohesion signal that lets a human say "this is recurring."
 **Key design invariants (from §4a):**
 - **SCD-lite on `category_slug`:** relabeling changes `category_label`, never the slug —
   so `category_fk` is stable across renames.
-- **Assignment lands on `afact_feedback_conversation`** (rev. 3), by mapping a conversation's `cluster_id` →
-  the approved category for that cluster. Uncategorized = `category_fk` null (a valid, queryable state).
+- **Assignment lands on `afact_feedback_conversation`** (rev. 3), by mapping a conversation's `cluster_key` →
+  the category for that key (rev. 4: the stable key replaces the run-local `cluster_id`, so an approval
+  survives every re-cluster in which its cluster continues; a split or merged key gets a fresh proposal, with
+  its predecessors' categories offered to the LLM as context). Uncategorized = `category_fk` null (a valid,
+  queryable state).
+- **Category approval never gates cluster assignment** (rev. 4). Open: whether `category_fk` is filled from a
+  `proposed` category or only from an `approved` one. The §C.1 backlog argument applies here too, and
+  `category_status` on the dimension already lets consumers filter to approved categories.
   This is no longer a "late-arriving update to the fact" — the fact has no update path; it is a rebuild of a
   derived column.
 - **LLM cost is bounded:** one LLM call *per cluster*, not per record (there are hundreds
@@ -294,7 +385,8 @@ cohesion signal that lets a human say "this is recurring."
 
 **Human-in-the-loop is required, not optional:** LLM proposes, a human curates the
 category dimension. The dimension is a *curated projection* of clusters (design §4d), which
-is why it is a dbt/warehouse dimension and not raw model output.
+is why it is a dbt/warehouse dimension and not raw model output. The loop curates *labels*; it never decides
+which cluster a conversation belongs to (§C.1).
 
 ---
 
