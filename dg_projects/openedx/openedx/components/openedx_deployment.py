@@ -4,17 +4,26 @@ from typing import Literal
 
 from dagster import (
     AssetsDefinition,
+    AssetSelection,
     AutomationConditionSensorDefinition,
     ConfigurableResource,
+    DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
     SensorDefinition,
     SourceAsset,
+    build_schedule_from_partitioned_job,
+    define_asset_job,
 )
+from dagster._core.definitions.partitions.partitioned_schedule import (
+    UnresolvedPartitionedAssetScheduleDefinition,
+)
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
 from openedx.assets.content_files import extract_course_document_text
+from openedx.assets.irx_export import build_irx_export_asset
 from openedx.assets.openedx import (
     build_courseware_source_asset,
     course_structure,
@@ -37,6 +46,7 @@ class OpenEdxDeploymentComponent:
     This component creates a complete set of Dagster definitions for a single OpenEdX
     deployment, including:
     - Assets for course data extraction (courseware, structure, XML, metadata)
+    - The nightly IRx drop and its schedule
     - Sensors for detecting new courses and course version changes
     - Resources for API client configuration
 
@@ -114,6 +124,7 @@ class OpenEdxDeploymentComponent:
             "course_content_webhook_asset": course_content_webhook_asset,
             "document_text_asset": document_text_asset,
             "transcript_text_asset": transcript_text_asset,
+            "irx_export_asset": build_irx_export_asset(self.deployment_name),
         }
 
     def build_sensors(
@@ -195,6 +206,50 @@ class OpenEdxDeploymentComponent:
             automation_sensor,
         ]
 
+    def build_schedules(
+        self, assets: dict[str, AssetsDefinition | SourceAsset]
+    ) -> list[UnresolvedPartitionedAssetScheduleDefinition]:
+        """Build the nightly IRx drop's schedule for the deployment.
+
+        Args:
+            assets: The deployment's assets, used to target the schedule.
+
+        Returns:
+            List of schedule definitions
+        """
+        irx_export_job = define_asset_job(
+            name=f"{self.deployment_name}_irx_export",
+            selection=AssetSelection.assets(assets["irx_export_asset"]),
+            tags={
+                # The ceiling legacy_openedx needed for loading studentmodule
+                # whole. The export streams it, so the real peak should be far
+                # lower; it has not been measured yet.
+                "dagster-k8s/config": {
+                    "container_config": {
+                        "resources": {
+                            "requests": {"memory": "2Gi"},
+                            "limits": {"memory": "32Gi"},
+                        }
+                    }
+                }
+            },
+        )
+        # Running by default in production rather than switched on by hand, so
+        # no instigator state is left behind if the drop moves to another code
+        # location. The files are only as fresh as the last edxapp sync and irx
+        # build, whatever the hour.
+        return [
+            build_schedule_from_partitioned_job(
+                irx_export_job,
+                hour_of_day=6,
+                default_status=(
+                    DefaultScheduleStatus.RUNNING
+                    if DAGSTER_ENV == "production"
+                    else DefaultScheduleStatus.STOPPED
+                ),
+            )
+        ]
+
     def build_resource(
         self,
     ) -> dict[str, ConfigurableResource[OpenEdxApiClientFactory]]:
@@ -222,7 +277,7 @@ class OpenEdxDeploymentComponent:
             shared_resources: Optional dict of shared resources to include.
 
         Returns:
-            Definitions object containing assets, sensors, and resources.
+            Definitions object containing assets, schedules, sensors, and resources.
         """
         assets = self.build_assets()
         sensors = self.build_sensors(assets)
@@ -235,6 +290,7 @@ class OpenEdxDeploymentComponent:
 
         return Definitions(
             assets=list(assets.values()),
+            schedules=self.build_schedules(assets),
             sensors=sensors,
             resources=all_resources,
         )
