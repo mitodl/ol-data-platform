@@ -22,6 +22,7 @@ dependencies = [
     "presidio-anonymizer",
     "spacy>=3.7",
     "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
+    "opik>=2.2.58",
 ]
 
 [project.entry-points]

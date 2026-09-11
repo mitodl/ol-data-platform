@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import openai
@@ -11,6 +12,7 @@ from botocore.client import BaseClient
 from google import genai
 from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import attach_llm_usage, traced
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -23,6 +25,7 @@ EMBEDDING_CHECKPOINT_SCHEMA = {
     "embedding_vector": pl.List(pl.Float32),
     "embedding_dim": pl.Int64,
     "embedding_model_version": pl.String,
+    "embedded_at": pl.Datetime(time_zone="UTC"),
 }
 
 # Abort after this many whole chunks in a row come back with zero successful
@@ -78,12 +81,23 @@ class OpenAIEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
+    @traced("feedback_embed_openai", tags=["feedback_embedding"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         response = self._client.embeddings.create(
             model=self.model_version,
             input=texts,
             dimensions=self.dim,
         )
+        if response.usage is not None:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": 0,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                model=self.model_version,
+                provider="openai",
+            )
         # The API documents response order as matching input order, but sorting by
         # the returned index costs nothing and removes the risk of a silently
         # mismatched embedding-to-conversation pairing if that ever isn't true.
@@ -99,6 +113,7 @@ class GeminiEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
+    @traced("feedback_embed_gemini", tags=["feedback_embedding"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         # Order is the API's own contract (response.embeddings lines up with the
         # input contents list), unlike OpenAI's which documents an index field --
@@ -108,6 +123,23 @@ class GeminiEmbeddingClient:
             contents=texts,
             config=genai_types.EmbedContentConfig(output_dimensionality=self.dim),
         )
+        # No response-level usage field -- token_count is per-embedding, so summed.
+        token_count = sum(
+            embedding.statistics.token_count
+            for embedding in response.embeddings
+            if embedding.statistics is not None
+            and embedding.statistics.token_count is not None
+        )
+        if token_count:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": token_count,
+                    "completion_tokens": 0,
+                    "total_tokens": token_count,
+                },
+                model=self.model_version,
+                provider="google_ai",
+            )
         return [embedding.values for embedding in response.embeddings]
 
 
@@ -125,6 +157,7 @@ class BedrockEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
+    @traced("feedback_embed_bedrock", tags=["feedback_embedding"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if self.model_version.startswith("amazon.titan-embed"):
             return self._embed_titan(texts)
@@ -385,6 +418,9 @@ def _results_to_df(
         pl.Series("embedding_vector", vectors, dtype=pl.List(pl.Float32)),
         pl.lit(client.dim, dtype=pl.Int64).alias("embedding_dim"),
         pl.lit(client.model_version, dtype=pl.String).alias("embedding_model_version"),
+        pl.lit(datetime.now(tz=UTC), dtype=pl.Datetime(time_zone="UTC")).alias(
+            "embedded_at"
+        ),
     )
 
 
@@ -408,8 +444,20 @@ def checkpoint_embedding_chunk(
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
+    # A table from before embedded_at existed has an older schema than chunk_df --
+    # union_by_name adds the new column (nulled on existing rows) instead of failing
+    # the upsert; a no-op once the table already has it.
+    with table.update_schema() as update:
+        update.union_by_name(chunk_df.to_arrow().schema)
+    # union_by_name always appends a new column at the *end* of the table's
+    # physical schema, regardless of where it falls in chunk_df -- pyiceberg's
+    # upsert does a strict positional pyarrow cast (same names, same order), which
+    # fails on a same-name-different-order schema, not just a missing column. So
+    # once a column's been added this way, every later upsert must match the
+    # table's current column order, not chunk_df's own declared order.
+    ordered_chunk_df = chunk_df.select(table.schema().column_names)
     table.upsert(
-        df=chunk_df.to_arrow(),
+        df=ordered_chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
         when_matched_update_all=True,
         when_not_matched_insert_all=True,
@@ -442,7 +490,7 @@ def embed_and_checkpoint(
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
             turn_count, embedding_vector, embedding_dim, embedding_model_version,
-            embedding_input - keyed by feedback_conversation_pk, for
+            embedding_input, embedded_at - keyed by feedback_conversation_pk, for
             afact_feedback_conversation to left-join. turn_count is carried through
             so a later run's filter_unembedded can detect a conversation that
             gained a turn.

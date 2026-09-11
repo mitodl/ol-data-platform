@@ -222,15 +222,21 @@ models:
         arguments:
           values: ['explicit_rating', 'model']
   - name: conversation_summary
-    description: str, LLM abstract of the assembled redacted turns. Null until the
-      ML asset lands, and permanently null for conversations the skip rule excludes.
+    description: str, LLM abstract of the assembled redacted turns. Null until feedback_summaries
+      has materialized for this conversation, and permanently null for conversations
+      the skip rule excludes.
   - name: summary_model_version
-    description: str, which model and prompt produced the summary. Null means not
-      summarized.
+    description: str, which model produced the summary. Null means not summarized.
+  - name: prompt_version
+    description: str, the Opik Prompt Library version of feedback-summary active when
+      the summary was generated (or "local" if Opik wasn't configured). Null means
+      not summarized.
   - name: summarized_at
-    description: str, ISO8601 timestamp the summary was generated.
+    description: timestamp, when the summary was generated. Null for a conversation
+      the skip rule excludes.
   - name: embedding_vector
-    description: array, the conversation's embedding. Null until the ML asset lands.
+    description: array, the conversation's embedding. Null until feedback_embeddings
+      has materialized for this conversation.
   - name: embedding_dim
     description: int, dimensionality of the embedding vector.
   - name: embedding_model_version
@@ -238,7 +244,7 @@ models:
   - name: embedding_input
     description: str, what was actually embedded - 'summary' or 'concatenated_turns'.
   - name: embedded_at
-    description: str, ISO8601 timestamp the vector was generated.
+    description: timestamp, when the vector was generated.
   - name: category_fk
     description: str, foreign key to dim_feedback_category. Assigned at MVP from the
       conversation's dominant tag - the tag with the highest corpus frequency, tie-broken

@@ -187,3 +187,109 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source_slug", "conversation_ref"]
+
+- name: int__feedback__cluster_assignment
+  description: The most-recently-promoted clustering run's per-conversation cluster
+    assignments -- empty until a human materializes feedback_cluster_run_promotion
+    with run_status='promoted' for some cluster_run_id.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: cluster_run_id
+    description: str, the promoted cluster_run_id that produced this assignment.
+    tests:
+    - not_null
+  - name: cluster_id
+    description: int, the HDBSCAN cluster id. -1 is the noise class (not systemic).
+  - name: cluster_probability
+    description: float, HDBSCAN's per-point cluster-membership strength. 0 for noise
+      points.
+
+- name: int__feedback__category_approval
+  description: The latest human decision per category_slug -- empty until a human
+    materializes feedback_category_approval for some slug.
+  columns:
+  - name: category_slug
+    description: str, the dim_feedback_category.category_slug being decided on.
+    tests:
+    - not_null
+    - unique
+  - name: category_status
+    description: str, the latest decision - approved or deprecated.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ["approved", "deprecated"]
+
+- name: int__feedback__category_proposal
+  description: Every LLM-proposed category from every clustering run that has been
+    labeled -- empty until a human materializes feedback_category_proposals.
+  columns:
+  - name: cluster_run_id
+    description: str, which clustering run this proposal was generated from.
+    tests:
+    - not_null
+  - name: cluster_id
+    description: int, the HDBSCAN cluster id this proposal describes.
+    tests:
+    - not_null
+  - name: category_slug
+    description: str, deterministically slugified from category_label.
+    tests:
+    - not_null
+  - name: category_label
+    description: str, the LLM-proposed display label.
+    tests:
+    - not_null
+  - name: proposed_at
+    description: timestamp, when this proposal was generated.
+    tests:
+    - not_null
+
+- name: int__feedback__summary
+  description: feedback_summaries' output, one row per conversation -- empty until
+    that asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_summary
+    description: str, the LLM-generated summary. Null for a single-turn/short conversation
+      (skipped by design, §A.1) or if the table doesn't exist yet.
+  - name: summary_model_version
+    description: str, which model produced conversation_summary. Null under the same
+      conditions as conversation_summary.
+  - name: prompt_version
+    description: str, the Opik Prompt Library version of feedback-summary active when
+      this row was summarized (or "local" if Opik wasn't configured). Null under the
+      same conditions as conversation_summary.
+  - name: summarized_at
+    description: timestamp, when conversation_summary was generated. Null under the
+      same conditions as conversation_summary.
+
+- name: int__feedback__embedding
+  description: feedback_embeddings' output, one row per conversation -- empty until
+    that asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: embedding_vector
+    description: array(double), the conversation's embedding.
+  - name: embedding_dim
+    description: int, embedding_vector's length.
+  - name: embedding_model_version
+    description: str, which model produced embedding_vector.
+  - name: embedding_input
+    description: str, 'summary' or 'concatenated_turns' -- which text was actually
+      embedded.
+  - name: embedded_at
+    description: timestamp, when embedding_vector was generated.

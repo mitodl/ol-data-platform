@@ -146,7 +146,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['proposed', 'approved', 'merged', 'deprecated']
+          values: ['proposed', 'approved', 'deprecated']
   - name: category_source
     description: str, where the category came from - seed, llm_discovered or manual.
     tests:

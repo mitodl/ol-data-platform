@@ -8,7 +8,6 @@ from anthropic import Anthropic, AnthropicBedrock
 from botocore.client import BaseClient
 from dagster import ConfigurableResource
 from google import genai
-from ol_orchestrate.resources.secrets.vault import Vault
 from openai import OpenAI
 from pydantic import Field, PrivateAttr
 
@@ -20,19 +19,8 @@ class LLMClientFactory(ConfigurableResource):
     labeling (feedback_category_proposals); feedback_redacted does not use it.
     """
 
-    vault: Vault = Field(description="Vault resource for retrieving the LLM API key")
     client_class: str = Field(
         default="anthropic", description="Which LLM client to instantiate"
-    )
-    vault_mount_point: str = Field(
-        default="secret-data", description="Vault mount point for secrets"
-    )
-    vault_secret_path: str = Field(
-        default="pipelines/feedback-llm",
-        description="Path to the LLM secret in Vault (without key name)",
-    )
-    vault_secret_key: str = Field(
-        default="api_key", description="Key name within the Vault secret"
     )
     base_url: str | None = Field(
         default=None,
@@ -109,7 +97,7 @@ class LLMClientFactory(ConfigurableResource):
             endpoint = self._require(self.azure_endpoint, "azure_endpoint")
             self._client = sdk_client_class(
                 base_url=f"{endpoint.rstrip('/')}/openai/v1/",
-                api_key=self._resolve_api_key("AZURE_OPENAI_API_KEY"),
+                api_key=self._require_env("AZURE_OPENAI_API_KEY"),
             )
             return self._client
 
@@ -122,15 +110,15 @@ class LLMClientFactory(ConfigurableResource):
             return self._client
 
         if self.client_class == "gemini":
-            self._client = genai.Client(api_key=self._resolve_api_key("GEMINI_API_KEY"))
+            self._client = genai.Client(api_key=self._require_env("GEMINI_API_KEY"))
             return self._client
 
-        # Local dev convenience: ANTHROPIC_API_KEY/OPENAI_API_KEY let a developer
-        # run `dagster dev` with their own key instead of Vault.
+        # anthropic/openai: the only two client_class values with no dedicated
+        # branch above, so this covers exactly those.
         env_key_var = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}[
             self.client_class
         ]
-        self._client = sdk_client_class(api_key=self._resolve_api_key(env_key_var))
+        self._client = sdk_client_class(api_key=self._require_env(env_key_var))
 
         return self._client
 
@@ -141,18 +129,16 @@ class LLMClientFactory(ConfigurableResource):
             raise ValueError(msg)
         return value
 
-    def _resolve_api_key(self, env_var: str) -> str:
-        """Return env_var's value if set, else the key from Vault.
+    def _require_env(self, env_var: str) -> str:
+        """Return env_var's value, or raise naming it and the client_class needing it.
 
-        Shared by every client_class branch below the openai_compatible/bedrock
-        special cases (those need no API key at all), so a Vault outage only
-        matters for a developer who hasn't set their own key locally.
+        No Vault fallback: there is no provisioned Vault secret for any of
+        these client classes in any environment (production uses IAM-authed
+        Bedrock/no key at all; every other environment sets this env var
+        directly) -- see git history for the removed fallback if that changes.
         """
         env_value = os.environ.get(env_var)
-        if env_value:
-            return env_value
-        # KV v1: secret_data["data"] contains the keys directly
-        secret_data = self.vault.client.secrets.kv.v1.read_secret(
-            mount_point=self.vault_mount_point, path=self.vault_secret_path
-        )
-        return secret_data["data"][self.vault_secret_key]
+        if not env_value:
+            msg = f"{env_var} must be set for client_class={self.client_class!r}"
+            raise ValueError(msg)
+        return env_value

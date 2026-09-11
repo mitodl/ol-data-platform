@@ -9,7 +9,7 @@ sources:
 - name: feedback_intermediate
   loader: dagster
   database: '{{ target.database | default(none) }}'
-  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_intermediate'
+  schema: '{{ target.schema }}_intermediate'
   tables:
   - name: feedback_redacted
     description: Presidio-masked title/text for every feedback turn, materialized
@@ -33,3 +33,96 @@ sources:
     - dbt_expectations.expect_compound_columns_to_be_unique:
         arguments:
           column_list: ["source_slug", "source_record_ref"]
+  - name: feedback_cluster_run
+    description: One row per clustering run (params, cluster/noise counts, silhouette),
+      materialized by the feedback_clustering Dagster asset. run_status here is whatever
+      the asset wrote (currently always 'proposed') -- promotion status comes from
+      feedback_cluster_run_promotion, not this column. No column tests here -- this
+      table may not exist yet in a clean schema, and a source-level test (unlike a
+      test on a guarded intermediate model) queries the raw relation directly and
+      fails outright rather than tolerating its absence.
+    columns:
+    - name: cluster_run_id
+      description: str, uuid identifying this clustering run.
+  - name: feedback_cluster_candidate
+    description: One row per (conversation, cluster_run_id) -- every clustered run's
+      assignments, promoted or not. Only the run(s) marked 'promoted' in feedback_cluster_run_promotion
+      should ever reach afact_feedback_conversation. No column/table tests here --
+      see feedback_cluster_run; not_null/unique coverage lives on int__feedback__cluster_assignment
+      instead, which tolerates this table not existing yet.
+    columns:
+    - name: cluster_run_id
+      description: str, uuid identifying which clustering run produced this assignment.
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+  - name: feedback_category_approval
+    description: Append-only human decision log for dim_feedback_category rows, written
+      by the feedback_category_approval Dagster asset (materialized ad hoc via its
+      Launchpad Config form -- category_slug, category_status, approved_by). dim_feedback_category
+      takes the *latest* row per category_slug; a category with no row here stays
+      'proposed'. No column tests here -- see feedback_cluster_run; not_null/unique/
+      accepted_values coverage lives on int__feedback__category_approval instead.
+    columns:
+    - name: category_slug
+      description: str, the dim_feedback_category.category_slug being decided on.
+    - name: category_status
+      description: str, the decision - approved or deprecated.
+    - name: approved_at
+      description: timestamp, when this decision was recorded.
+  - name: feedback_cluster_run_promotion
+    description: Append-only human decision log for feedback_cluster_run rows, written
+      by the feedback_cluster_run_promotion Dagster asset (materialized ad hoc via
+      its Launchpad Config form -- cluster_run_id, run_status, promoted_by). int__feedback__cluster_assignment
+      takes the single most-recently-promoted cluster_run_id; a run with no 'promoted'
+      row here contributes nothing to afact_feedback_conversation. No column tests
+      here -- see feedback_cluster_run.
+    columns:
+    - name: cluster_run_id
+      description: str, the feedback_cluster_run.cluster_run_id being decided on.
+    - name: run_status
+      description: str, the decision - promoted or superseded.
+    - name: promoted_at
+      description: timestamp, when this decision was recorded.
+  - name: feedback_category_proposal
+    description: One row per cluster the feedback_category_proposals Dagster asset
+      labeled -- an LLM-proposed category_label/category_slug for that cluster_id,
+      always category_status='proposed' until a human approves it via feedback_category_approval.
+      No column tests here -- see feedback_cluster_run; not_null coverage lives on
+      int__feedback__category_proposal instead.
+    columns:
+    - name: cluster_run_id
+      description: str, the cluster_run_id this proposal was generated from.
+    - name: cluster_id
+      description: int, the HDBSCAN cluster id this proposal describes.
+    - name: category_slug
+      description: str, deterministically slugified from category_label (ml.lib.categorize.new_category_slug)
+        -- never LLM-trusted directly.
+    - name: category_label
+      description: str, the LLM-proposed display label.
+    - name: proposed_at
+      description: timestamp, when this proposal was generated.
+  - name: feedback_summaries
+    description: One row per conversation (upsert key feedback_conversation_pk), materialized
+      by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version
+      for a single-turn/short conversation, which the asset's skip rule never summarizes
+      (§A.1). No column tests here -- see feedback_cluster_run; not_null/unique coverage
+      lives on int__feedback__summary instead.
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    - name: prompt_version
+      description: str, the Opik Prompt Library version of feedback-summary active
+        when this row was summarized (or "local" if Opik wasn't configured).
+    - name: summarized_at
+      description: timestamp, when this row's summary was generated.
+  - name: feedback_embeddings
+    description: One row per conversation (upsert key feedback_conversation_pk --
+      re-embedding overwrites in place, so only the latest model_version/dim/ embedding_input
+      survives), materialized by the feedback_embeddings Dagster asset. No column
+      tests here -- see feedback_cluster_run; not_null/unique coverage lives on int__feedback__embedding
+      instead.
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    - name: embedded_at
+      description: timestamp, when this row's embedding was generated.
