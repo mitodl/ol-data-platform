@@ -70,8 +70,8 @@ row per conversation, and the clustering tables sit alongside it at genuinely di
 | `afact_feedback_conversation` | `(feedback_conversation_pk)` | summary, `embedding_vector`, `embedding_dim`, `embedding_input`, `category_fk`, `sentiment_fk`, `cluster_key`, `cluster_similarity`, `cluster_assignment_method` + version stamps |
 | `feedback_cluster_run` | `(cluster_run_id)` | `embedding_model_version`, `algorithm`, `run_params`, `cluster_count`, `noise_count`, `silhouette`, `run_status` (`completed` \| `failed`, an audit value), `run_at` |
 | `feedback_cluster_candidate` | `(feedback_conversation_pk, cluster_run_id)` | run-local `cluster_id`, `cluster_probability`: one run's raw HDBSCAN output, the input to identity matching. Kept for the last N runs for run-vs-run comparison |
-| `feedback_cluster` | `(cluster_key)` | stable identity: `centroid`, `radius`, `embedding_model_version`, `member_count`, `cluster_status` (`active` \| `retired`), `first_seen_run_id`, `last_seen_run_id` |
-| `feedback_cluster_lineage` | `(cluster_run_id, cluster_key, prior_cluster_key)` | `relation` (`continued` \| `split` \| `merged` \| `new` \| `retired`), `jaccard` |
+| `feedback_cluster` | `(cluster_key)` | stable identity: `centroid`, `radius`, `embedding_model_version`, `embedding_dim`, `member_count`, `cluster_status` (`active` \| `retired`), `first_seen_run_id`, `last_seen_run_id` |
+| `feedback_cluster_lineage` | `(cluster_lineage_pk)`: one row per prior → successor edge in a run | `cluster_run_id`, `prior_cluster_key` (null for `new`), `cluster_key` (the successor; null for `retired`), `relation` (`continued` \| `split` \| `merged` \| `new` \| `retired`), `jaccard` (null for `new`/`retired`). `cluster_lineage_pk` hashes (`cluster_run_id`, `prior_cluster_key`, `cluster_key`) with nulls encoded as a fixed placeholder |
 | `feedback_cluster_membership` | `(feedback_conversation_pk)` | the live assignment: `cluster_key` (null = noise or not yet near a cluster), `cluster_similarity`, `cluster_assignment_method` (`recluster` \| `incremental`), `cluster_run_id`, `assigned_at` |
 
 **What the collapse costs, honestly.** Re-clustering now rewrites the afact row, vector column included — the
@@ -296,10 +296,16 @@ Three mechanisms keep assignment current:
 1. **Incremental placement.** A `feedback_cluster_assignment` asset runs on every `feedback_embeddings`
    refresh. For each conversation whose embedding is newer than its membership row (new, re-embedded, or
    never placed), it computes cosine similarity to every `active` centroid built from the same
-   `embedding_model_version` / `embedding_dim` / `embedding_input`, and assigns the nearest cluster if the
-   similarity clears that cluster's radius. Otherwise `cluster_key` stays null with
+   `embedding_model_version` and `embedding_dim`, and assigns the nearest cluster if the similarity clears
+   that cluster's radius. Centroids are not split by `embedding_input`. Summary and concatenated-turn vectors
+   from one model and dimension share one space, so a single-turn conversation, which is never summarized
+   (§A.1), is placed against the same clusters as a summarized one. `feedback_clusters`'
+   `embedding_input_filter` is a §B.1 bake-off knob; the live configuration clusters every conversation's
+   vector. Otherwise `cluster_key` stays null with
    `cluster_assignment_method = 'incremental'`: the conversation is not near any live cluster yet. Placement
-   never moves an already-placed conversation, and needs no model state beyond `feedback_cluster`.
+   never moves a conversation whose embedding is unchanged since it was placed. A re-embedded conversation
+   (new text, or a new model) is placed again against the current centroids, and only a re-cluster reassigns
+   unchanged conversations. Placement needs no model state beyond `feedback_cluster`.
    - *Radius* is per cluster: the similarity at a fixed low percentile of its members' similarities (p5 as a
      starting point, so 95% of members are at least this close) as of the last re-cluster. A per-cluster
      radius respects HDBSCAN's variable density, which one global threshold would not.
@@ -315,19 +321,33 @@ Three mechanisms keep assignment current:
    `cluster_key`s by membership, not by vectors:
    - Build the contingency matrix of new clusters × current keys over conversations present in both, scoring
      each pair by Jaccard overlap.
-   - A one-to-one best match above the match threshold (0.5 as a starting point) **continues** the old key.
-   - A new cluster drawn mostly from one old key whose best match continued elsewhere gets a new key, with
-     lineage `split` from that key.
-   - A new cluster holding the majority of two or more old keys gets a new key, with lineage `merged` from
-     each of them.
-   - Anything else gets a new key with lineage `new`. An old key with no successor is `retired`.
+   - The rules apply in this order, and each cluster takes the first one that fits:
+     1. **Continued.** Pairs at or above the match threshold (0.5 as a starting point) are assigned
+        one-to-one by global maximum total Jaccard (linear assignment over the thresholded matrix), not
+        greedily per cluster. Ties break on the larger intersection, then the old key's earlier
+        `first_seen_run_id`, then `cluster_key` order, so every implementation lands on the same keys. The
+        new cluster keeps the old key.
+     2. **Merged.** An old key that did not continue, and whose majority of members landed in one new
+        cluster, gets a `merged` edge to that cluster's key and its `cluster_status` becomes `retired`.
+        Continuation wins: if that new cluster continued another key, it keeps that key, so the continuing
+        cluster's category is preserved and the absorbed cluster's conversations inherit it. If it continued
+        nothing, it gets a new key, with a `merged` edge from every old key whose majority it holds.
+     3. **Split.** A new cluster that continued nothing and holds no old key's majority, but draws most of
+        its members from one old key, gets a new key with a `split` edge from that key.
+     4. **New.** Any other new cluster gets a new key.
+   - An old key that neither continued nor merged is `retired`.
    - `feedback_cluster_membership` is then rewritten for every conversation in the run
      (`cluster_assignment_method = 'recluster'`; HDBSCAN noise gets a null `cluster_key`), and centroids and
      radii are recomputed.
 
    Matching compares members rather than vectors, so it works across an embedding-model change: re-embed,
    re-cluster in the new space, and keys continue wherever the grouping does. Centroids are stored per
-   `embedding_model_version`, and placement only uses the current model's.
+   `embedding_model_version` and `embedding_dim`, and placement only uses the current configuration's.
+
+   Lineage is one `feedback_cluster_lineage` row per edge. `continued`, `split` and `merged` rows carry both
+   `prior_cluster_key` and `cluster_key`; a `new` row carries only `cluster_key`; a `retired` row carries only
+   `prior_cluster_key`. A merge writes one row per absorbed key, and a split one row per child. These shapes
+   are asset checks on the identity asset.
 
 **What a run is now.** A `feedback_cluster_run` row is an audit record: which configuration ran, over how many
 conversations, with what outcome (`completed` | `failed`). A failed run changes nothing downstream. There is
@@ -369,8 +389,9 @@ threshold, the re-cluster triggers and schedule, the continuity floor, and how m
   so `category_fk` is stable across renames.
 - **Assignment lands on `afact_feedback_conversation`** (rev. 3), by mapping a conversation's `cluster_key` →
   the category for that key (rev. 4: the stable key replaces the run-local `cluster_id`, so an approval
-  survives every re-cluster in which its cluster continues; a split or merged key gets a fresh proposal, with
-  its predecessors' categories offered to the LLM as context). Uncategorized = `category_fk` null (a valid,
+  survives every re-cluster in which its cluster continues. A newly minted split or merged key gets a fresh
+  proposal, with its predecessors' categories offered to the LLM as context. An old key absorbed into a
+  continuing cluster triggers none: its conversations take the continuing key's category). Uncategorized = `category_fk` null (a valid,
   queryable state).
 - **Category approval never gates cluster assignment** (rev. 4). Open: whether `category_fk` is filled from a
   `proposed` category or only from an `approved` one. The §C.1 backlog argument applies here too, and

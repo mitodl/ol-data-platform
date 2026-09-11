@@ -337,10 +337,10 @@ erDiagram
     feedback_cluster_run        ||--o{ feedback_cluster_candidate : "cluster_run_id"
     feedback_cluster_run        ||--o{ feedback_cluster_lineage : "cluster_run_id"
     feedback_cluster_run        |o--o{ dim_feedback_category : "cluster_run_id (provenance)"
-    feedback_cluster            ||--o{ feedback_cluster_lineage : "cluster_key, prior_cluster_key"
+    feedback_cluster            |o--o{ feedback_cluster_lineage : "cluster_key, prior_cluster_key (either may be null)"
     feedback_cluster            |o--o{ feedback_cluster_membership : "cluster_key (null = noise or unplaced)"
     feedback_cluster            |o--o{ dim_feedback_category : "cluster_key (the cluster a category labels)"
-    afact_feedback_conversation ||--|| feedback_cluster_membership : "feedback_conversation_pk"
+    afact_feedback_conversation ||--o| feedback_cluster_membership : "feedback_conversation_pk (none until embedded)"
     afact_feedback_conversation ||--o{ afact_feedback_cluster_daily : "aggregated"
 
     feedback_cluster_run {
@@ -367,6 +367,7 @@ erDiagram
         array centroid "per embedding_model_version"
         float radius "placement threshold - low percentile of member similarity"
         varchar embedding_model_version
+        integer embedding_dim "centroids are scoped by model and dim, not by embedding_input"
         integer member_count
         varchar cluster_status "active, retired"
         varchar first_seen_run_id
@@ -374,11 +375,12 @@ erDiagram
     }
 
     feedback_cluster_lineage {
-        varchar cluster_run_id PK "part of compound key"
-        varchar cluster_key PK "part of compound key"
-        varchar prior_cluster_key PK "part of compound key - null for new"
+        varchar cluster_lineage_pk PK "hash of run, prior key, successor key - nulls encoded"
+        varchar cluster_run_id FK
+        varchar prior_cluster_key FK "null for new"
+        varchar cluster_key FK "the successor - null for retired"
         varchar relation "continued, split, merged, new, retired"
-        float jaccard "membership overlap with the prior key"
+        float jaccard "membership overlap - null for new and retired"
     }
 
     feedback_cluster_membership {

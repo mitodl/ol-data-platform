@@ -229,8 +229,10 @@ Register in `Definitions.resources` alongside the `vault` resource
 Two options, both in use in the repo:
 - **(recommend) Declarative automation:** put `automation_condition=upstream_or_code_changes()`
   (`ol_orchestrate.lib.automation_policies`) on the `feedback_summaries` asset so it re-runs
-  when `int__feedback__conversation` refreshes or the code version changes. Downstream embed/cluster/
-  label/sentiment assets chain off it. This is what `student_risk_probability` and the dbt
+  when `int__feedback__conversation` refreshes or the code version changes. Downstream embed, incremental
+  assignment (`feedback_cluster_assignment`) and sentiment assets chain off it. Re-clustering
+  (`feedback_clusters`, `feedback_cluster_identity`) does not; it follows the schedule and triggers below
+  (rev. 6), and `feedback_category_proposals` follows the keys identity matching produces. This is what `student_risk_probability` and the dbt
   assets use — no cron to maintain. **Caveat now that summarization costs money per conversation:** make the
   summarizer incremental on `feedback_conversation_pk` (only unsummarized or changed conversations), or an
   upstream refresh re-pays for the whole corpus.

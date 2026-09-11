@@ -63,8 +63,9 @@ signals for four audiences (support, engineering, instructors, leadership).
 3. **ML is an additive consumer**, not a prerequisite: the warehouse layer ships useful with
    tag-seeded categories + CSAT-derived sentiment; summaries, embeddings and clustering fill nullable
    columns on `afact_feedback_conversation` later and touch nothing else (**superseded in part by 2d**:
-   the three-table per-turn sidecar is withdrawn; only `feedback_cluster_run` and a candidate table remain
-   alongside the aggregate fact). Embeddings persisted **once** (the one adopted lesson from prototype
+   the three-table per-turn sidecar is withdrawn; `feedback_cluster_run` and a candidate table remain
+   alongside the aggregate fact, joined on 2026-09-11 by `feedback_cluster`, `feedback_cluster_lineage` and
+   `feedback_cluster_membership` for continuous assignment). Embeddings persisted **once** (the one adopted lesson from prototype
    #10793).
 4. **Engine-portable AI compute via Fenic; embedding model chosen by effectiveness** (revised
    2026-07-10 rev. 4, ADR): because the strategic direction is to **retire Trino for StarRocks**,

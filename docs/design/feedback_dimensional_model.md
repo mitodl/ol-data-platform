@@ -381,11 +381,12 @@ feedback_cluster_candidate  -- grain (feedback_conversation_pk, cluster_run_id)
     -- one run's raw, run-local HDBSCAN output; the input to identity matching, kept for the last N runs
 
 feedback_cluster            -- grain (cluster_key): stable cluster identity across runs
-    centroid, radius, embedding_model_version, member_count,
+    centroid, radius, embedding_model_version, embedding_dim, member_count,
     cluster_status ('active'|'retired'), first_seen_run_id, last_seen_run_id
 
-feedback_cluster_lineage    -- grain (cluster_run_id, cluster_key, prior_cluster_key)
-    relation ('continued'|'split'|'merged'|'new'|'retired'), jaccard
+feedback_cluster_lineage    -- grain (cluster_lineage_pk): one row per prior → successor edge in a run
+    cluster_run_id, prior_cluster_key (null for 'new'), cluster_key (the successor; null for 'retired'),
+    relation ('continued'|'split'|'merged'|'new'|'retired'), jaccard (null for 'new'/'retired')
 
 feedback_cluster_membership -- grain (feedback_conversation_pk): the live assignment the fact joins
     cluster_key (null = noise, or not yet near any cluster), cluster_similarity,
