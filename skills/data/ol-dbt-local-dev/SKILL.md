@@ -60,9 +60,12 @@ shared schemas. Always `--dry-run` first when cleaning remote schemas.
 ## Typical use: materialize both sides for a diff
 ```bash
 ol-dbt local register --all-layers          # mount prod data
-ol-dbt run --select dim_user_old dim_user   # build both relations on dev_local
+ol-dbt run --select dim_user_old dim_user --full-refresh   # build both relations on dev_local
 ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 ```
+`--full-refresh` applies to the selection, so it re-derives both sides in full. Drop
+it only if neither model is `materialized='incremental'`; otherwise the diff can
+compare rows the incremental predicate never reselected.
 For a model whose grain is more than one column, pass the whole key —
 comma-separated (`-k a,b,c`) or by repeating the flag (`-k a -k b -k c`), which are
 equivalent. `-k a b c` does not work. A non-unique key pairs rows many-to-many and
@@ -74,9 +77,12 @@ pre-change build so the diff reflects only your change, not upstream data drift:
 ```bash
 ol-dbt local snapshot my_model --as my_model_baseline   # materialize a frozen copy
 # ...edit the SQL...
-ol-dbt run --select my_model
+ol-dbt run --select my_model --full-refresh
 ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_model_pk
 ```
+The snapshot is frozen, but the rebuild is not: without `--full-refresh` an
+incremental `my_model` may leave the edited rows untouched, and the diff then
+reports "no change" for a change that simply never ran.
 `--old-raw` is required because the snapshot is a literal table, not a dbt
 `ref()`-able model.
 
@@ -91,11 +97,14 @@ ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_mo
   only care that the model executes. Switch to `--full-refresh` as soon as you are
   going to **read the model's contents and draw a conclusion** from them
   (validating a change, diffing before/after, confirming a fix landed). An
-  incremental run whose key set is unchanged is a no-op that still reports `OK`,
-  so a changed expression is never re-evaluated and you inspect the old values
-  believing they are new. Measured: `dim_course_run` merged in 0.11s and did not
-  re-derive the column under test. This is not "stale or wrong state" — the state
-  is valid, it just does not reflect your new code.
+  incremental run does execute the model SQL, but the model's own
+  `is_incremental()` predicate decides **which rows get re-derived**; every row it
+  excludes keeps the value the *old* code produced, and the run still reports `OK`.
+  Read the whole relation afterwards and you are reading a mix of old-code and
+  new-code rows. Measured: `dim_course_run` merged in 0.11s because its
+  change-detection predicate found nothing to reselect, so the column under test
+  was never re-derived. This is not "stale or wrong state" — the state is valid, it
+  just does not reflect your new code.
 - `~/.ol-dbt/local.duckdb` is **shared by every worktree and session on the
   machine**. Another checkout running `dbt run` overwrites your tables with no
   warning, so do not build in one step and measure in a much later one; snapshot a

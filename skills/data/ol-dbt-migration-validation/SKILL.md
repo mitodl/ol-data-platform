@@ -60,13 +60,36 @@ The consequence, and the single most important rule in this skill:
 > unreliable, and several have already been quoted in PR bodies as if they were
 > production facts.
 >
-> **A difference between two locally-built sides of the same registration *is*
-> evidence**, because both sides read the identical polluted source and the
-> duplication cancels.
+> **A difference between two locally-built sides of the same registration is
+> evidence only where both sides read the same inputs.** One registration freezes
+> every Glue pointer for the duration, so a shared upstream contributes the same
+> polluted rows to both sides and its duplication cancels.
+
+**The dependency paths of a migration diverge by construction, and that is where
+the cancellation argument stops holding.** A #2072 migration re-points `ref()`
+from `int__`/`stg__` to the dimensional layer, so the two sides read *different*
+Glue views. `override_ref` resolves each unbuilt `ref()` to its own
+`glue__ol_warehouse_production_<layer>__<model>` view, and each of those carries an
+independent `__dbt_tmp` snapshot with its own mix of duplicated and missing rows.
+Joins and filters downstream mean the two pollutions do not offset even
+approximately. Before concluding anything about the divergent path:
+
+1. **Build the divergent upstreams locally too**, in the same invocation — add
+   both the old path's models and the new path's models to `--select`. Once a
+   model is built locally, `override_ref` prefers the local table over the Glue
+   view (`adapter.get_relation` hit), so both sides read stable inputs derived
+   from the common raw/staging layer. This is the only way to get a clean answer.
+2. If a divergent upstream is too expensive to build, **label every difference
+   attributable to it as unverified source noise**, not as a result. Do not accept
+   *or* reject the migration on it — that is deciding on the registration artifact
+   this section exists to warn about. Step 6's deduplicated mapping assertion is
+   the fallback: it cancels duplication, but not rows the polluted view is
+   *missing*, so a `pre_not_new` figure on a divergent path still needs (1).
 
 So the design of the comparison is what buys you trust, not the tooling. Never
 compare a local build against the production mart; compare a local build of the
-old code against a local build of the new code.
+old code against a local build of the new code, with the inputs to both built
+locally wherever the two paths differ.
 
 Tracked as `tk-ol-dbt-local-register-stores-dbt-tmp-metadata-po-c833a7`
 (open). Re-check it before quoting the table above — if it is fixed, absolute
@@ -114,16 +137,26 @@ it always is.
 ### 3. Build both sides in one invocation — and force-refresh anything incremental
 
 ```bash
-cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) dbt build \
+cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) dbt run \
   --select <model>_pre <dimensional_model> <model> \
   -t dev_local --full-refresh
 ```
 
+`dbt run`, not `dbt build`. `build` runs tests inline under dbt's default eager
+indirect selection — the cross-model `relationships_*` noise the section below
+tells you to avoid — and a failing test there can skip the downstream models you
+selected, leaving one comparison side unmaterialized. Test separately, cautiously,
+after both sides exist.
+
 **`--full-refresh` is not optional when the model under test is incremental.**
-An incremental model that already exists locally will `delete+insert`-merge in a
-fraction of a second and *not re-derive the changed column*, so the migration
-you are validating never actually runs. A suspiciously fast "success" on an
-incremental model is a warning sign, not a good one. Check for
+dbt does execute the model SQL on an incremental run — what it does *not* do is
+re-derive every row. The model's own `is_incremental()` predicate decides which
+rows are reselected, and any row it excludes keeps the value the **old** code
+produced. Read the relation afterwards and you are reading a mix of old-code and
+new-code rows — and comparing it against a `_pre` side that, being a brand-new
+model name, was built in full. The two sides are not comparable at all. A
+suspiciously fast "success" on an incremental model is a warning sign, not a good
+one. Check for
 `materialized='incremental'` in the config block of every model you selected.
 
 #### Incremental vs `--full-refresh`: which to use when
@@ -134,13 +167,34 @@ The distinction is **iterating** vs **concluding**, not "fresh" vs "stale".
 |---|---|---|
 | Re-running a model repeatedly while editing SQL | incremental (plain `dbt run`) | You want the 0.1s loop, and you only care that it executes |
 | About to read the model's contents and draw a conclusion | **`--full-refresh`** | Validation, before/after diffing, confirming a fix landed |
-| Checking that a changed *expression* now produces different values | **`--full-refresh`** | An incremental merge will not re-evaluate it |
+| Checking that a changed *expression* now produces different values | **`--full-refresh`** | `is_incremental()` re-derives only the rows it reselects |
 
-The trap is that a `delete+insert` or `merge` incremental run whose key set is
-unchanged is a **no-op that reports `OK`**. The model builds, dbt prints success,
-and your changed expression is never re-evaluated — so you inspect the *old*
-values believing they are new. `dim_course_run` did exactly this on PR #2403:
-`OK ... in 0.11s`, while the `semester` expression under test never ran.
+The trap is the **incremental predicate**, not key stability. Two distinct ways a
+changed expression fails to show up in the relation you then read:
+
+1. **The predicate excludes the rows.** Whatever `is_incremental()` filters on —
+   a watermark, a change-detection `not exists` — the excluded rows are never
+   re-derived. Historical rows in particular are usually out of scope by design,
+   so a migration that changes how a column is derived for *all* time is verified
+   against only the sliver the predicate happened to reselect.
+2. **The predicate finds nothing to reselect, and the run is a genuine no-op that
+   reports `OK`.** `dim_course_run` did exactly this on PR #2403: `OK ... in
+   0.11s`, and the `semester` expression under test never ran.
+
+   Worth knowing *why this one is not self-explanatory*: `dim_course_run`'s
+   predicate (the `{% if is_incremental() %}` block) is a SCD2 change-detection
+   `not exists` that compares `semester` and `passing_grade` among others, so on
+   paper it should have reselected any row whose semester changed. It reselected
+   nothing, and the reason was never established. **That is the lesson** — do not
+   reason from the predicate to "it must have re-derived". Confirm it by reading a
+   value that should have moved, or sidestep the question with `--full-refresh`.
+
+And even when rows *are* reselected, you do not get a clean replacement.
+`dim_course_run` is `delete+insert` on `unique_key=['courserun_pk',
+'effective_date']` with `effective_date = current_timestamp` for new rows: the
+prior row is expired and **retained**, the new derivation is appended alongside it.
+The relation grows a second generation rather than swapping the first one out, so
+even the columns that did re-derive are not readable by a plain `select *`.
 
 This is not "stale or wrong incremental state". The state is perfectly valid; it
 just does not reflect your new code. That is why "reserve `--full-refresh` for
@@ -148,8 +202,9 @@ when the state is stale or wrong" does not warn you — by that test, nothing is
 wrong.
 
 Check the config block of every model in your selection for
-`materialized='incremental'` before deciding. A suspiciously fast success on one
-is a warning sign, not a good sign.
+`materialized='incremental'` before deciding, and read its `is_incremental()`
+block to see what it would and would not have reselected. A suspiciously fast
+success on one is a warning sign, not a good sign.
 
 #### `~/.ol-dbt/local.duckdb` is shared mutable state
 
@@ -238,9 +293,20 @@ the sample rows, never the unmatched count.
 
 ### 5. Localise cheaply, in this order
 
-**(a) Row-count delta first.** Delta 0 means the grain is intact and per-column
-rates are interpretable. A nonzero delta means the grain moved, and every
-per-column number is suspect until you explain it.
+**(a) Row-count delta first.** A nonzero delta means the grain moved, and every
+per-column number is suspect until you explain it. A **zero** delta is only
+*count parity* — dropped rows offset by duplicates, or by newly added ones, net to
+zero just as readily as a clean migration does. Confirm the grain before reading
+per-column rates as interpretable, using the model's declared uniqueness key
+(step 4) on **both** relations:
+
+```sql
+select 'pre' side, count(*) rows, count(distinct (<key cols>)) distinct_keys from <pre>
+union all select 'new', count(*), count(distinct (<key cols>)) from <new>;
+```
+
+`rows = distinct_keys` on both sides, plus a zero delta, is grain intact. Anything
+else is a fan-out or a collapse that count parity was hiding.
 
 **(b) Per-column multiset diff — needs no join key at all.** Two queries per
 column tell you exactly which column moved:
@@ -303,6 +369,13 @@ select (select count(*) from (select * from p except select * from n)) as pre_no
 #2403 that read 0/0 over 104 pairs while the whole-row diff was inflated 16.7x
 by source duplication — the whole-row number was the misleading one.
 
+`select distinct` cancels *duplicated* rows; it cannot cancel rows a polluted
+`__dbt_tmp` view is **missing**. So this assertion is conclusive only over keys
+present on both sides, and only if the two sides' divergent upstreams were built
+locally (see the header section). A nonzero `pre_not_new` on a key the new path's
+Glue view simply lacks is source noise, not a regression — establish which it is
+by building that upstream, not by arguing about it.
+
 ### 7. Enumerate what legitimately differs
 
 Run step 5(b) over distinct rows and put the resulting table in the PR, so the
@@ -314,8 +387,9 @@ reasoning instead of re-deriving the whole comparison.
 
 State the claim at the strength you actually proved:
 
-- ✅ "Row-count delta 0; `semester` mapping identical over all N affected keys
-  (0/0 distinct-pair diff); no other column changed direction."
+- ✅ "Row-count delta 0 and `count(*) = count(distinct <key>)` on both sides;
+  `semester` mapping identical over all N affected keys (0/0 distinct-pair diff);
+  no other column changed direction."
 - ✅ "Fill-rate delta 0 on all 12 columns between the two local builds."
 - ❌ "Validated on dev_local, 20,908/20,908 rows identical, all columns match."
   That sentence has already been produced by a run that happened to read a
@@ -331,7 +405,14 @@ available locally and should not be implied.
 - Register once, before both builds; never between them.
 - Both sides of every comparison must be locally built from the same
   registration. A local-vs-production comparison is not valid on this substrate.
-- `--full-refresh` whenever the model under test is incremental.
+- Where the old and new dependency paths diverge, build those upstreams locally
+  too. Two sides reading two different `glue__` views are not a controlled
+  comparison, and the pollution does not cancel between them.
+- `--full-refresh` whenever the model under test is incremental — an incremental
+  run re-derives only what its `is_incremental()` predicate reselects.
+- A zero row-count delta is count parity, not grain integrity. Check
+  `count(*) = count(distinct <key>)` on both relations before trusting
+  per-column rates.
 - The join key comes from the model's own passing uniqueness test, or you do not
   have one.
 - A column unpopulated on both sides is *unverified*, not *passing*.
