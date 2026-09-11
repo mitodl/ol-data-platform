@@ -73,12 +73,16 @@ def test_summarize_conversations_applies_skip_rule() -> None:
     summarized = result.filter(pl.col("conversation_ref") == "1").row(0, named=True)
     assert summarized["conversation_summary"] == "summary of: turn one\n---\nturn two"
     assert summarized["summary_model_version"] == "test-model"
+    # "local": no OPIK_URL_OVERRIDE in tests, so get_prompt_version always falls
+    # back rather than trying to reach a real Opik instance.
+    assert summarized["prompt_version"] == "local"
     assert summarized["embedding_input"] == "summary"
     assert summarized["turn_count"] == 2
 
     skipped = result.filter(pl.col("conversation_ref") == "2").row(0, named=True)
     assert skipped["conversation_summary"] is None
     assert skipped["summary_model_version"] is None
+    assert skipped["prompt_version"] is None
     assert skipped["embedding_input"] == "concatenated_turns"
     assert skipped["turn_count"] == 1
 
@@ -95,6 +99,7 @@ def test_summarize_conversations_types_null_columns_when_batch_is_all_skipped() 
 
     assert result.schema["conversation_summary"] == pl.String
     assert result.schema["summary_model_version"] == pl.String
+    assert result.schema["prompt_version"] == pl.String
 
 
 def test_filter_unsummarized_drops_already_summarized_rows_with_same_turn_count() -> (
@@ -360,6 +365,50 @@ def test_filter_unsummarized_does_not_resubmit_skipped_rows_on_model_change() ->
 
     result = summarize.filter_unsummarized(
         source_df, already_summarized_df, current_model_version="new-model"
+    )
+
+    assert result.height == 0
+
+
+def test_filter_unsummarized_resubmits_on_stale_prompt_version() -> None:
+    """A conversation summarized under an old Opik prompt revision is
+    re-submitted even though the model id is unchanged.
+    """
+    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=2)])
+    already_summarized_df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1"],
+            "source_slug": ["zendesk"],
+            "conversation_ref": ["1"],
+            "turn_count": [2],
+            "prompt_version": ["v1"],
+        }
+    )
+
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, current_prompt_version="v2"
+    )
+
+    assert result["conversation_ref"].to_list() == ["1"]
+
+
+def test_filter_unsummarized_does_not_resubmit_skipped_rows_on_prompt_change() -> None:
+    """A row skipped last time (null prompt_version) isn't touched by a prompt
+    change -- the skip decision was never prompt-dependent.
+    """
+    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
+    already_summarized_df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1"],
+            "source_slug": ["zendesk"],
+            "conversation_ref": ["1"],
+            "turn_count": [1],
+            "prompt_version": [None],
+        }
+    )
+
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, current_prompt_version="v2"
     )
 
     assert result.height == 0

@@ -73,24 +73,51 @@ with ticket as (
 )
 
 -- A tag/group name/LLM proposal can slugify to the same value; collapse them so
--- category_slug stays unique. category_source/cluster_run_id take max(): a seed
--- ('seed') sorts after an LLM proposal ('llm_discovered'), so a slug seeded from
--- existing structure keeps reading as 'seed' even if a cluster also proposed it;
--- cluster_run_id then reflects whichever row won that same comparison.
+-- category_slug stays unique. category_label/category_source/cluster_run_id must
+-- come from the *same* row, not independent min()/max() picks across rows -- those
+-- can pair a 'seed' category_source with an unrelated proposal's cluster_run_id.
+-- 'seed' wins over 'llm_discovered' (existing structure over a fresh proposal);
+-- ties break on the most recently updated row.
+, ranked_combined as (
+    select
+        *
+        , row_number() over (
+            partition by category_slug
+            order by
+                case category_source when 'seed' then 0 else 1 end
+                , updated_at desc
+        ) as category_rank
+    from combined
+    where category_slug is not null
+        and category_slug != ''
+)
+
+, slug_dates as (
+    select
+        category_slug
+        , min(first_seen_at) as first_seen_at
+        , max(updated_at) as updated_at
+    from combined
+    where category_slug is not null
+        and category_slug != ''
+    group by category_slug
+)
+
 select
-    {{ dbt_utils.generate_surrogate_key(['combined.category_slug']) }} as feedback_category_pk
-    , combined.category_slug
-    , min(combined.category_label) as category_label
+    {{ dbt_utils.generate_surrogate_key(['ranked_combined.category_slug']) }}
+        as feedback_category_pk
+    , ranked_combined.category_slug
+    , ranked_combined.category_label
     , cast(null as varchar) as category_parent_slug
     -- coalesce, not a bare default: a slug with no approval row is still 'proposed'
-    , coalesce(min(approval.category_status), 'proposed') as category_status
-    , max(combined.category_source) as category_source
-    , max(combined.cluster_run_id) as cluster_run_id
-    , min(combined.first_seen_at) as first_seen_at
-    , max(combined.updated_at) as updated_at
-from combined
+    , coalesce(approval.category_status, 'proposed') as category_status
+    , ranked_combined.category_source
+    , ranked_combined.cluster_run_id
+    , slug_dates.first_seen_at
+    , slug_dates.updated_at
+from ranked_combined
+inner join slug_dates
+    on ranked_combined.category_slug = slug_dates.category_slug
 left join approval
-    on combined.category_slug = approval.category_slug
-where combined.category_slug is not null
-    and combined.category_slug != ''
-group by combined.category_slug
+    on ranked_combined.category_slug = approval.category_slug
+where ranked_combined.category_rank = 1

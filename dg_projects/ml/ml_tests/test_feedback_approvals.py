@@ -24,7 +24,7 @@ class _CapturingIOManager(IOManager):
 def test_batch_decisions_write_one_row_each_with_shared_approver() -> None:
     io_manager = _CapturingIOManager()
     config = CategoryApprovalConfig(
-        approved_by="rlougee",
+        approved_by="reviewer",
         decisions=[
             {"category_slug": "billing-refund", "category_status": "approved"},
             {"category_slug": "login-issue", "category_status": "approved"},
@@ -52,7 +52,7 @@ def test_batch_decisions_write_one_row_each_with_shared_approver() -> None:
         "login-issue",
         "junk-tag",
     ]
-    assert all(r["approved_by"] == "rlougee" for r in rows)
+    assert all(r["approved_by"] == "reviewer" for r in rows)
     # Same review pass, one timestamp -- not a per-row clock read.
     assert len({r["approved_at"] for r in rows}) == 1
 
@@ -64,7 +64,7 @@ def test_empty_decisions_fails() -> None:
             "ops": {
                 "intermediate__feedback_category_approval": {
                     "config": CategoryApprovalConfig(
-                        approved_by="rlougee", decisions=[]
+                        approved_by="reviewer", decisions=[]
                     ).model_dump()
                 }
             }
@@ -82,8 +82,55 @@ def test_invalid_category_status_fails() -> None:
             "ops": {
                 "intermediate__feedback_category_approval": {
                     "config": CategoryApprovalConfig(
-                        approved_by="rlougee",
+                        approved_by="reviewer",
                         decisions=[{"category_slug": "a", "category_status": "bogus"}],
+                    ).model_dump()
+                }
+            }
+        },
+        raise_on_error=False,
+    )
+
+    assert result.success is False
+
+
+def test_merged_status_is_rejected() -> None:
+    """'merged' has no way to record a merge target -- dropped as a valid status
+    rather than silently losing that information (see feedback_approvals.py).
+    """
+    result = materialize(
+        [feedback_category_approval],
+        run_config={
+            "ops": {
+                "intermediate__feedback_category_approval": {
+                    "config": CategoryApprovalConfig(
+                        approved_by="reviewer",
+                        decisions=[{"category_slug": "a", "category_status": "merged"}],
+                    ).model_dump()
+                }
+            }
+        },
+        raise_on_error=False,
+    )
+
+    assert result.success is False
+
+
+def test_duplicate_category_slug_in_one_batch_fails() -> None:
+    """Two conflicting decisions for the same slug in one batch share an
+    approved_at, so nothing downstream could pick a winner between them.
+    """
+    result = materialize(
+        [feedback_category_approval],
+        run_config={
+            "ops": {
+                "intermediate__feedback_category_approval": {
+                    "config": CategoryApprovalConfig(
+                        approved_by="reviewer",
+                        decisions=[
+                            {"category_slug": "a", "category_status": "approved"},
+                            {"category_slug": "a", "category_status": "deprecated"},
+                        ],
                     ).model_dump()
                 }
             }

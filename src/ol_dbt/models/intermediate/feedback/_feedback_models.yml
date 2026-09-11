@@ -218,9 +218,12 @@ models:
     - not_null
     - unique
   - name: category_status
-    description: str, the latest decision - approved, merged or deprecated.
+    description: str, the latest decision - approved or deprecated.
     tests:
     - not_null
+    - accepted_values:
+        arguments:
+          values: ["approved", "deprecated"]
 
 - name: int__feedback__category_proposal
   description: Every LLM-proposed category from every clustering run that has been
@@ -262,6 +265,10 @@ models:
   - name: summary_model_version
     description: str, which model produced conversation_summary. Null under the same
       conditions as conversation_summary.
+  - name: prompt_version
+    description: str, the Opik Prompt Library version of feedback-summary active when
+      this row was summarized (or "local" if Opik wasn't configured). Null under the
+      same conditions as conversation_summary.
   - name: summarized_at
     description: timestamp, when conversation_summary was generated. Null under the
       same conditions as conversation_summary.

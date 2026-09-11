@@ -142,7 +142,9 @@ class AnthropicCategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_anthropic", tags=["feedback"])
+    @traced(
+        "feedback_category_propose_anthropic", tags=["feedback", "feedback_category"]
+    )
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         message = self._client.messages.create(
             model=self.model_version,
@@ -179,11 +181,24 @@ class AnthropicCategoryLabelClient:
 class OpenAICategoryLabelClient:
     """Adapts an OpenAI-compatible client to CategoryLabelClient."""
 
-    def __init__(self, client: OpenAI, model_version: str) -> None:
+    def __init__(
+        self, client: OpenAI, model_version: str, *, client_class: str = "openai"
+    ) -> None:
+        # Same reasoning as ml.lib.summarize.OpenAISummaryClient: only real
+        # api.openai.com (client_class="openai") can never serve a Claude id;
+        # "openai_compatible" may legitimately proxy Claude under this same id.
+        if client_class == "openai" and model_version.startswith("claude"):
+            msg = (
+                f"model_version={model_version!r} looks like an Anthropic model "
+                "id, but client_class='openai' is configured. Set "
+                "FeedbackCategoryProposalsConfig.model_version (or "
+                "CATEGORY_MODEL_VERSION) to an OpenAI model id (e.g. 'gpt-4o-mini')."
+            )
+            raise ValueError(msg)
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_openai", tags=["feedback"])
+    @traced("feedback_category_propose_openai", tags=["feedback", "feedback_category"])
     def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
         response = self._client.chat.completions.create(
             model=self.model_version,
@@ -231,7 +246,11 @@ def build_category_label_client(
         return AnthropicCategoryLabelClient(
             client, model_version or CATEGORY_MODEL_VERSION
         )
-    return OpenAICategoryLabelClient(client, model_version or CATEGORY_MODEL_VERSION)
+    return OpenAICategoryLabelClient(
+        client,
+        model_version or CATEGORY_MODEL_VERSION,
+        client_class=llm.client_class,
+    )
 
 
 def build_cluster_prompt_inputs(

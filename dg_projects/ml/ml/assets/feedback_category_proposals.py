@@ -73,7 +73,14 @@ class FeedbackCategoryProposalsConfig(Config):
     deps=[AssetKey(["dimensional", "afact_feedback_conversation"])],
     io_manager_key="io_manager",
     pool="feedback_category_proposals",
-    metadata={"schema": intermediate_database_name, "write_mode": "append"},
+    metadata={
+        "schema": intermediate_database_name,
+        "write_mode": "upsert",
+        # Not append: re-materializing this asset (e.g. after tweaking config) must
+        # replace a cluster's prior proposal, not duplicate it -- one row per
+        # (cluster_run_id, cluster_id) is the documented grain.
+        "upsert_options": {"join_cols": ["cluster_run_id", "cluster_id"]},
+    },
 )
 def feedback_category_proposals(
     context: AssetExecutionContext,
@@ -170,10 +177,13 @@ def feedback_category_proposals(
             "model_version": MetadataValue.text(client.model_version),
         }
     )
-    if proposals_df.height:
-        # The caller stamps wall-clock time, not the pure function -- same
-        # convention as feedback_clustering.py's run_at.
-        proposals_df = proposals_df.with_columns(
-            pl.lit(datetime.now(tz=UTC)).alias("proposed_at")
+    # The caller stamps wall-clock time, not the pure function -- same convention
+    # as feedback_clustering.py's run_at. Unconditional, not gated on height: an
+    # empty result still needs every CATEGORY_PROPOSAL_SCHEMA column present for
+    # the cast below to succeed.
+    proposals_df = proposals_df.with_columns(
+        pl.lit(datetime.now(tz=UTC), dtype=pl.Datetime(time_zone="UTC")).alias(
+            "proposed_at"
         )
+    )
     return proposals_df.cast(CATEGORY_PROPOSAL_SCHEMA)

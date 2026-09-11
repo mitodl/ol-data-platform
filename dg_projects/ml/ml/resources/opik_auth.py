@@ -215,6 +215,25 @@ def attach_llm_usage(*, usage: dict[str, int], model: str, provider: str) -> Non
     opik_context.update_current_span(usage=usage, model=model, provider=provider)
 
 
+def get_prompt_version(name: str) -> str:
+    """Return name's currently-active Prompt Library version, or "local" if unavailable.
+
+    Lets a caller fold this into whatever it records as a call's model/prompt
+    provenance (e.g. summary_model_version) -- otherwise editing a prompt in
+    Opik changes behavior for new calls without that edit being visible in
+    what checkpointing already persisted as "the version that produced this".
+    """
+    client = get_opik_client()
+    if client is not None:
+        try:
+            prompt = client.get_prompt(name=name)
+            if prompt is not None:
+                return prompt.version or prompt.commit or "local"
+        except Exception:
+            log.warning("Opik prompt version fetch failed for %s", name, exc_info=True)
+    return "local"
+
+
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:
     """Render a Prompt Library entry (mustache {{var}} placeholders).
 

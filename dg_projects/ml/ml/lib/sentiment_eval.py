@@ -85,18 +85,27 @@ def labeled_sentiment_sample(
 
 
 def train_test_split_indices(
-    n: int, test_fraction: float = 0.2, random_state: int = 42
+    labels: np.ndarray, test_fraction: float = 0.2, random_state: int = 42
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return (train_idx, test_idx) -- a simple deterministic holdout split.
+    """Return (train_idx, test_idx) -- a stratified deterministic holdout split.
 
-    Not stratified: the labeled sample is a bake-off input the caller controls,
-    not a production training set, so a plain shuffle is enough to compare the
-    three methods on the same split.
+    Stratified per label value: a plain shuffle can put every example of the
+    minority class in the same partition (real CSAT samples skew heavily
+    positive), leaving LogisticRegression.fit a single-class training set to
+    crash on instead of producing the bake-off. A singleton class keeps its
+    one example in train rather than losing it to an empty split.
     """
     rng = np.random.default_rng(random_state)
-    indices = rng.permutation(n)
-    n_test = max(1, round(n * test_fraction))
-    return indices[n_test:], indices[:n_test]
+    train_idx: list[np.ndarray] = []
+    test_idx: list[np.ndarray] = []
+    for label in np.unique(labels):
+        shuffled = rng.permutation(np.flatnonzero(labels == label))
+        n_test = (
+            max(1, round(len(shuffled) * test_fraction)) if len(shuffled) > 1 else 0
+        )
+        train_idx.append(shuffled[n_test:])
+        test_idx.append(shuffled[:n_test])
+    return np.concatenate(train_idx), np.concatenate(test_idx)
 
 
 def embedding_knn_accuracy(
@@ -163,7 +172,9 @@ class AnthropicSentimentClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_sentiment_classify_anthropic", tags=["feedback"])
+    @traced(
+        "feedback_sentiment_classify_anthropic", tags=["feedback", "feedback_sentiment"]
+    )
     def classify(self, conversation_text: str) -> str | None:
         message = self._client.messages.create(
             model=self.model_version,
@@ -196,11 +207,26 @@ class AnthropicSentimentClient:
 class OpenAISentimentClient:
     """Adapts an OpenAI-compatible client to SentimentClient."""
 
-    def __init__(self, client: OpenAI, model_version: str) -> None:
+    def __init__(
+        self, client: OpenAI, model_version: str, *, client_class: str = "openai"
+    ) -> None:
+        # Same reasoning as ml.lib.summarize.OpenAISummaryClient: only real
+        # api.openai.com (client_class="openai") can never serve a Claude id;
+        # "openai_compatible" may legitimately proxy Claude under this same id.
+        if client_class == "openai" and model_version.startswith("claude"):
+            msg = (
+                f"model_version={model_version!r} looks like an Anthropic model "
+                "id, but client_class='openai' is configured. Set "
+                "FeedbackSentimentEvalConfig.model_version (or "
+                "SENTIMENT_MODEL_VERSION) to an OpenAI model id (e.g. 'gpt-4o-mini')."
+            )
+            raise ValueError(msg)
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_sentiment_classify_openai", tags=["feedback"])
+    @traced(
+        "feedback_sentiment_classify_openai", tags=["feedback", "feedback_sentiment"]
+    )
     def classify(self, conversation_text: str) -> str | None:
         response = self._client.chat.completions.create(
             model=self.model_version,
@@ -246,7 +272,11 @@ def build_sentiment_client(
         return AnthropicSentimentClient(
             client, model_version or SENTIMENT_MODEL_VERSION
         )
-    return OpenAISentimentClient(client, model_version or SENTIMENT_MODEL_VERSION)
+    return OpenAISentimentClient(
+        client,
+        model_version or SENTIMENT_MODEL_VERSION,
+        client_class=llm.client_class,
+    )
 
 
 def llm_classifier_accuracy(
@@ -299,7 +329,7 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
     labels = labeled_df["sentiment"].to_numpy()
     texts = labeled_df["conversation_text"].to_list()
     train_idx, test_idx = train_test_split_indices(
-        len(labeled_df), test_fraction=test_fraction, random_state=random_state
+        labels, test_fraction=test_fraction, random_state=random_state
     )
 
     methods: dict[str, dict[str, Any]] = {

@@ -1,6 +1,7 @@
 """Tests for ml.lib.categorize."""
 
 import polars as pl
+import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import categorize
 from openai import OpenAI
@@ -9,8 +10,9 @@ from openai import OpenAI
 class _FakeLLM:
     """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
 
-    def __init__(self, client: object) -> None:
+    def __init__(self, client: object, client_class: str = "openai") -> None:
         self._client = client
+        self.client_class = client_class
 
     def get_client(self) -> object:
         return self._client
@@ -72,6 +74,35 @@ def test_build_category_label_client_dispatches_to_openai() -> None:
 
     assert isinstance(client, categorize.OpenAICategoryLabelClient)
     assert client.model_version == "gpt-4o-mini"
+
+
+def test_build_category_label_client_rejects_claude_model_for_real_openai() -> None:
+    with pytest.raises(ValueError, match="looks like an Anthropic model id"):
+        categorize.build_category_label_client(
+            _FakeLLM(
+                OpenAI(api_key="sk-test"),  # pragma: allowlist secret
+                client_class="openai",
+            ),
+            model_version="claude-haiku-4-5",
+        )
+
+
+def test_build_category_label_client_allows_claude_model_for_openai_compatible() -> (
+    None
+):
+    client = categorize.build_category_label_client(
+        _FakeLLM(
+            OpenAI(
+                api_key="sk-test",  # pragma: allowlist secret
+                base_url="https://parley.example.com",
+            ),
+            client_class="openai_compatible",
+        ),
+        model_version="claude-haiku-4-5",
+    )
+
+    assert isinstance(client, categorize.OpenAICategoryLabelClient)
+    assert client.model_version == "claude-haiku-4-5"
 
 
 def _conversation_row(

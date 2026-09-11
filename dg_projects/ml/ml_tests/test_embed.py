@@ -325,6 +325,7 @@ def test_build_embedding_client_honors_bedrock_model_version_override() -> None:
 class _FakeGeminiEmbedding:
     def __init__(self, values: list[float]) -> None:
         self.values = values
+        self.statistics = None
 
 
 class _FakeGeminiModels:

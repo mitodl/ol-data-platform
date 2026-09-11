@@ -12,11 +12,13 @@ from dagster import (
 )
 from ml.lib.summarize import (
     JOIN_COLS,
+    SUMMARY_PROMPT_NAME,
     build_summary_client,
     filter_unsummarized,
     summarize_and_checkpoint,
 )
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import get_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
@@ -102,27 +104,36 @@ def feedback_summaries(
             **dict.fromkeys(JOIN_COLS, pl.String),
             "turn_count": pl.Int64,
             "summary_model_version": pl.String,
+            "prompt_version": pl.String,
         }
     )
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
-            already_summarized_df = (
-                get_dbt_model_as_dataframe(
-                    database_name=database_name,
-                    table_name="feedback_summaries",
-                )
-                .select([*JOIN_COLS, "turn_count", "summary_model_version"])
-                .collect()
+            already_summarized_lazy = get_dbt_model_as_dataframe(
+                database_name=database_name,
+                table_name="feedback_summaries",
             )
+            # prompt_version is a newer column -- a table upserted before it
+            # existed won't have it until the asset's own schema-evolution step
+            # (checkpoint_chunk) next runs; select only what's actually there.
+            select_cols = [*JOIN_COLS, "turn_count", "summary_model_version"]
+            if "prompt_version" in already_summarized_lazy.collect_schema().names():
+                select_cols.append("prompt_version")
+            already_summarized_df = already_summarized_lazy.select(
+                select_cols
+            ).collect()
 
-    # Built before filtering: filter_unsummarized needs the model actually in use
-    # to re-submit a conversation whose stored summary_model_version has since
-    # gone stale (a model/prompt change), not just a turn_count change.
+    # Built before filtering: filter_unsummarized needs the model/prompt actually
+    # in use to re-submit a conversation whose stored summary_model_version or
+    # prompt_version has since gone stale, not just a turn_count change.
     client = build_summary_client(
         llm, config.model_version, config.bedrock_model_version
     )
     unsummarized_df = filter_unsummarized(
-        source_df, already_summarized_df, current_model_version=client.model_version
+        source_df,
+        already_summarized_df,
+        current_model_version=client.model_version,
+        current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME),
     )
 
     errors: list[str] = []

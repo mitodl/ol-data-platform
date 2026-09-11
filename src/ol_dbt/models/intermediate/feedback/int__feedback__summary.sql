@@ -9,17 +9,20 @@
     schema=summary_source.schema,
     identifier=summary_source.identifier
 ) %}
-{# summarized_at is a newer column -- a table upserted before it existed won't
-   have it until the Dagster asset's own schema-evolution step next runs. #}
-{% set summarized_at_exists = summary_relation and 'summarized_at' in (
-    adapter.get_columns_in_relation(summary_relation) | map(attribute='name') | list
-) %}
+{# summarized_at/prompt_version are newer columns -- a table upserted before they
+   existed won't have them until the Dagster asset's own schema-evolution step
+   next runs. #}
+{% set summary_columns = adapter.get_columns_in_relation(summary_relation) | map(attribute='name') | list
+    if summary_relation else [] %}
+{% set summarized_at_exists = 'summarized_at' in summary_columns %}
+{% set prompt_version_exists = 'prompt_version' in summary_columns %}
 
 {% if execute and not summary_relation %}
 select
     cast(null as varchar) as feedback_conversation_pk
     , cast(null as varchar) as conversation_summary
     , cast(null as varchar) as summary_model_version
+    , cast(null as varchar) as prompt_version
     , cast(null as timestamp) as summarized_at
 where false
 {% else %}
@@ -27,6 +30,7 @@ select
     feedback_conversation_pk
     , conversation_summary
     , summary_model_version
+    , {{ 'prompt_version' if prompt_version_exists else 'cast(null as varchar)' }} as prompt_version
     , {{ 'summarized_at' if summarized_at_exists else 'cast(null as timestamp)' }} as summarized_at
 from {{ summary_source }}
 {% endif %}

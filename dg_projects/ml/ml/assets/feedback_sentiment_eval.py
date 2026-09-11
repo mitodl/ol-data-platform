@@ -137,6 +137,19 @@ def feedback_sentiment_eval(
             f"dim={embedding_dim}); too few for a meaningful eval."
         )
         raise Failure(msg)
+    # A total-count check alone doesn't guarantee both classes are represented --
+    # an all-positive sample, or one whose few negatives all land in an unstratified
+    # test split, leaves LogisticRegression.fit a single-class training set to crash
+    # on instead of producing the bake-off (train_test_split_indices stratifies the
+    # split, but only once both classes exist here to stratify).
+    class_counts = labeled_df["sentiment"].value_counts()
+    if class_counts.height < 2:  # noqa: PLR2004
+        msg = (
+            f"Only {class_counts.height} distinct sentiment label(s) "
+            f"({class_counts['sentiment'].to_list()}) among the CSAT-labeled sample; "
+            "need both positive and negative examples for a meaningful eval."
+        )
+        raise Failure(msg)
 
     sentiment_client = None
     if config.include_llm:

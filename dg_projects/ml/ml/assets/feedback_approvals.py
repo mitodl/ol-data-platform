@@ -21,7 +21,7 @@ if DAGSTER_ENV == "dev":
 else:
     database_name = "ol_warehouse_production_intermediate"
 
-CATEGORY_STATUSES = {"approved", "merged", "deprecated"}
+CATEGORY_STATUSES = {"approved", "deprecated"}
 RUN_STATUSES = {"promoted", "superseded"}
 
 
@@ -29,9 +29,7 @@ class CategoryDecision(Config):
     category_slug: str = Field(
         description="The dim_feedback_category.category_slug being decided on."
     )
-    category_status: str = Field(
-        description="The decision: approved, merged or deprecated."
-    )
+    category_status: str = Field(description="The decision: approved or deprecated.")
 
 
 class CategoryApprovalConfig(Config):
@@ -71,6 +69,17 @@ def feedback_category_approval(
         msg = (
             f"category_status must be one of {sorted(CATEGORY_STATUSES)}, got "
             f"invalid value(s): {invalid}"
+        )
+        raise Failure(msg)
+    slugs = [d.category_slug for d in config.decisions]
+    duplicates = sorted({slug for slug in slugs if slugs.count(slug) > 1})
+    if duplicates:
+        # All rows in this batch share one approved_at, so the downstream
+        # tie-break (latest approved_at) can't pick a winner between two
+        # conflicting decisions for the same slug in one batch -- reject outright.
+        msg = (
+            "decisions has more than one entry for the same category_slug: "
+            f"{duplicates}"
         )
         raise Failure(msg)
     approved_at = datetime.now(tz=UTC)

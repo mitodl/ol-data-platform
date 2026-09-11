@@ -2,6 +2,7 @@
 
 import numpy as np
 import polars as pl
+import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib import sentiment_eval
 from openai import OpenAI
@@ -10,8 +11,9 @@ from openai import OpenAI
 class _FakeLLM:
     """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
 
-    def __init__(self, client: object) -> None:
+    def __init__(self, client: object, client_class: str = "openai") -> None:
         self._client = client
+        self.client_class = client_class
 
     def get_client(self) -> object:
         return self._client
@@ -32,7 +34,10 @@ def test_labeled_sentiment_sample_maps_good_bad_and_drops_the_rest() -> None:
 
 
 def test_train_test_split_indices_covers_every_row_exactly_once() -> None:
-    train_idx, test_idx = sentiment_eval.train_test_split_indices(10, test_fraction=0.3)
+    labels = np.array(["positive"] * 5 + ["negative"] * 5)
+    train_idx, test_idx = sentiment_eval.train_test_split_indices(
+        labels, test_fraction=0.3
+    )
 
     assert len(train_idx) + len(test_idx) == 10
     assert set(train_idx.tolist()) | set(test_idx.tolist()) == set(range(10))
@@ -40,11 +45,26 @@ def test_train_test_split_indices_covers_every_row_exactly_once() -> None:
 
 
 def test_train_test_split_indices_is_deterministic() -> None:
-    first = sentiment_eval.train_test_split_indices(20, random_state=7)
-    second = sentiment_eval.train_test_split_indices(20, random_state=7)
+    labels = np.array(["positive"] * 10 + ["negative"] * 10)
+    first = sentiment_eval.train_test_split_indices(labels, random_state=7)
+    second = sentiment_eval.train_test_split_indices(labels, random_state=7)
 
     assert first[0].tolist() == second[0].tolist()
     assert first[1].tolist() == second[1].tolist()
+
+
+def test_train_test_split_indices_stratifies_the_minority_class() -> None:
+    """An unstratified shuffle can put every negative in the same partition --
+    stratifying per label guarantees both classes appear in train and test.
+    """
+    labels = np.array(["positive"] * 18 + ["negative"] * 2)
+
+    train_idx, test_idx = sentiment_eval.train_test_split_indices(
+        labels, test_fraction=0.3, random_state=1
+    )
+
+    assert "negative" in labels[train_idx]
+    assert "negative" in labels[test_idx]
 
 
 def _separable_dataset(n_per_class: int = 20, seed: int = 0):
@@ -58,7 +78,7 @@ def _separable_dataset(n_per_class: int = 20, seed: int = 0):
 
 def test_embedding_knn_accuracy_is_high_on_separable_classes() -> None:
     vectors, labels = _separable_dataset()
-    train_idx, test_idx = sentiment_eval.train_test_split_indices(len(labels))
+    train_idx, test_idx = sentiment_eval.train_test_split_indices(labels)
 
     accuracy = sentiment_eval.embedding_knn_accuracy(
         vectors[train_idx], labels[train_idx], vectors[test_idx], labels[test_idx]
@@ -69,7 +89,7 @@ def test_embedding_knn_accuracy_is_high_on_separable_classes() -> None:
 
 def test_local_classifier_accuracy_is_high_on_separable_classes() -> None:
     vectors, labels = _separable_dataset()
-    train_idx, test_idx = sentiment_eval.train_test_split_indices(len(labels))
+    train_idx, test_idx = sentiment_eval.train_test_split_indices(labels)
 
     accuracy = sentiment_eval.local_classifier_accuracy(
         vectors[train_idx], labels[train_idx], vectors[test_idx], labels[test_idx]
@@ -104,6 +124,33 @@ def test_build_sentiment_client_dispatches_to_openai() -> None:
 
     assert isinstance(client, sentiment_eval.OpenAISentimentClient)
     assert client.model_version == "gpt-4o-mini"
+
+
+def test_build_sentiment_client_rejects_claude_model_for_real_openai() -> None:
+    with pytest.raises(ValueError, match="looks like an Anthropic model id"):
+        sentiment_eval.build_sentiment_client(
+            _FakeLLM(
+                OpenAI(api_key="sk-test"),  # pragma: allowlist secret
+                client_class="openai",
+            ),
+            model_version="claude-haiku-4-5",
+        )
+
+
+def test_build_sentiment_client_allows_claude_model_for_openai_compatible() -> None:
+    client = sentiment_eval.build_sentiment_client(
+        _FakeLLM(
+            OpenAI(
+                api_key="sk-test",  # pragma: allowlist secret
+                base_url="https://parley.example.com",
+            ),
+            client_class="openai_compatible",
+        ),
+        model_version="claude-haiku-4-5",
+    )
+
+    assert isinstance(client, sentiment_eval.OpenAISentimentClient)
+    assert client.model_version == "claude-haiku-4-5"
 
 
 class _FakeSentimentClient:

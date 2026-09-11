@@ -29,16 +29,28 @@ select
     , cast(null as double) as cluster_probability
 where false
 {% else %}
-with promotion as (
+-- Rank every decision (any status) per run before filtering, not the other way
+-- around -- filtering to 'promoted' first would let an older promoted row keep
+-- winning even after a later 'superseded' row for that same run, since the
+-- superseded row (having no 'promoted' status) would simply be discarded rather
+-- than counted as that run's current, deactivating state.
+with latest_decision_per_run as (
     select
         cluster_run_id
-        , row_number() over (order by promoted_at desc) as decision_rank
+        , run_status
+        , promoted_at
+        , row_number() over (
+            partition by cluster_run_id order by promoted_at desc
+        ) as run_decision_rank
     from {{ promotion_source }}
-    where run_status = 'promoted'
 )
 
 , active_run as (
-    select cluster_run_id from promotion where decision_rank = 1
+    select cluster_run_id
+    from latest_decision_per_run
+    where run_decision_rank = 1 and run_status = 'promoted'
+    order by promoted_at desc
+    limit 1
 )
 
 select

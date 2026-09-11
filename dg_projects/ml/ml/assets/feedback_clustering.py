@@ -97,14 +97,22 @@ class FeedbackClusteringConfig(Config):
         "feedback_cluster_run": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_run"]),
             io_manager_key="io_manager",
-            metadata={"schema": database_name, "write_mode": "append"},
+            metadata={
+                "schema": database_name,
+                "write_mode": "append",
+                "schema_update_mode": "update",
+            },
             code_version="feedback_clustering_v1",
             automation_condition=upstream_or_code_changes(),
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
             io_manager_key="io_manager",
-            metadata={"schema": database_name, "write_mode": "append"},
+            metadata={
+                "schema": database_name,
+                "write_mode": "append",
+                "schema_update_mode": "update",
+            },
             code_version="feedback_clustering_v1",
             automation_condition=upstream_or_code_changes(),
             # Not required: a failed run writes feedback_cluster_run with no candidates.

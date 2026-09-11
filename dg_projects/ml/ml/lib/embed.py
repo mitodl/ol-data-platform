@@ -12,6 +12,7 @@ from botocore.client import BaseClient
 from google import genai
 from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import attach_llm_usage, traced
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -80,12 +81,23 @@ class OpenAIEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
+    @traced("feedback_embed_openai", tags=["feedback", "feedback_embed"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         response = self._client.embeddings.create(
             model=self.model_version,
             input=texts,
             dimensions=self.dim,
         )
+        if response.usage is not None:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": 0,
+                    "total_tokens": response.usage.total_tokens,
+                },
+                model=self.model_version,
+                provider="openai",
+            )
         # The API documents response order as matching input order, but sorting by
         # the returned index costs nothing and removes the risk of a silently
         # mismatched embedding-to-conversation pairing if that ever isn't true.
@@ -101,6 +113,7 @@ class GeminiEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
+    @traced("feedback_embed_gemini", tags=["feedback", "feedback_embed"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         # Order is the API's own contract (response.embeddings lines up with the
         # input contents list), unlike OpenAI's which documents an index field --
@@ -110,6 +123,23 @@ class GeminiEmbeddingClient:
             contents=texts,
             config=genai_types.EmbedContentConfig(output_dimensionality=self.dim),
         )
+        # No response-level usage field -- token_count is per-embedding, so summed.
+        token_count = sum(
+            embedding.statistics.token_count
+            for embedding in response.embeddings
+            if embedding.statistics is not None
+            and embedding.statistics.token_count is not None
+        )
+        if token_count:
+            attach_llm_usage(
+                usage={
+                    "prompt_tokens": token_count,
+                    "completion_tokens": 0,
+                    "total_tokens": token_count,
+                },
+                model=self.model_version,
+                provider="google_ai",
+            )
         return [embedding.values for embedding in response.embeddings]
 
 
@@ -127,6 +157,7 @@ class BedrockEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
+    @traced("feedback_embed_bedrock", tags=["feedback", "feedback_embed"])
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if self.model_version.startswith("amazon.titan-embed"):
             return self._embed_titan(texts)
