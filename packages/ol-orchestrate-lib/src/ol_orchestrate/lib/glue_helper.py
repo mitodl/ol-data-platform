@@ -4,8 +4,9 @@ import types
 
 import boto3
 import polars as pl
-from pyiceberg.catalog.glue import GlueCatalog
 from pyiceberg.table import Table
+
+from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 
 TYPE_RENAME = types.MappingProxyType(
     {
@@ -90,18 +91,6 @@ def create_or_update_table(
         glue_client.update_table(DatabaseName=database_name, TableInput=table_input)
 
 
-# Route pyiceberg I/O through fsspec/s3fs (aiobotocore) instead of the default
-# PyArrow S3 FileIO (aws-sdk-cpp). The native PyArrow reader leaves wedged
-# threads/connections on K8s that no S3 timeout interrupts, deadlocking the
-# run. fsspec honors the same s3.connect-timeout / s3.request-timeout keys.
-_PYICEBERG_S3_PROPERTIES = types.MappingProxyType(
-    {
-        "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
-        "s3.region": "us-east-1",
-        "s3.connect-timeout": "10",
-        "s3.request-timeout": "120",
-    }
-)
 # Polars 1.40+ maps s3.connect-timeout / s3.request-timeout to object_store's
 # `connect_timeout` / `timeout` for its native Rust S3 reader, preventing
 # CLOSE_WAIT connections from blocking Tokio runtime shutdown at process exit.
@@ -117,12 +106,7 @@ _POLARS_S3_STORAGE_OPTIONS = types.MappingProxyType(
 
 def load_dbt_model_table(database_name: str, table_name: str) -> Table:
     """Load a dbt model's Iceberg table from the Glue catalog."""
-    glue = GlueCatalog(
-        "default",
-        client=boto3.client("glue", region_name="us-east-1"),
-        **_PYICEBERG_S3_PROPERTIES,
-    )
-    return glue.load_table(f"{database_name}.{table_name}")
+    return get_glue_catalog().load_table(f"{database_name}.{table_name}")
 
 
 def scan_dbt_model_table(table: Table, snapshot_id: int | None = None) -> pl.LazyFrame:
