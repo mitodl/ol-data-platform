@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -107,8 +108,28 @@ TARGET_CONFIGS: dict[str, dict[str, str]] = {
 # ============================================================================
 
 
+# dbt materializes an Iceberg table by building `<name>__dbt_tmp` and renaming it,
+# leaving the previous relation behind as `<name>__dbt_backup`. Both are genuine
+# Iceberg tables that Glue reports with a real `metadata_location`, so they pass the
+# ICEBERG filter below and get registered like any other source — but they are build
+# artifacts. dbt deletes them on its next run, so a DuckDB view over one starts
+# returning `HTTP 404` reading its metadata JSON as soon as that happens, and the
+# table can disappear between `get_tables` and `CREATE VIEW` in a single register run.
+# Numbered variants (`__dbt_tmp1`) occur when a build is interrupted and retried.
+_DBT_SHADOW_TABLE_RE = re.compile(r"__dbt_(?:tmp|backup)\d*$")
+
+
+def _is_dbt_shadow_table(table_name: str) -> bool:
+    """Return True for dbt's create-temp-then-swap build artifacts, which must not be registered."""
+    return _DBT_SHADOW_TABLE_RE.search(table_name) is not None
+
+
 def _get_glue_tables(database: str) -> list[dict[str, Any]]:
-    """Fetch all Iceberg tables from an AWS Glue catalog database."""
+    """Fetch all Iceberg tables from an AWS Glue catalog database.
+
+    dbt build artifacts (`__dbt_tmp` / `__dbt_backup`) are excluded — see
+    ``_DBT_SHADOW_TABLE_RE``.
+    """
     glue = boto3.client("glue")
     tables: list[dict[str, Any]] = []
 
@@ -123,6 +144,10 @@ def _get_glue_tables(database: str) -> list[dict[str, Any]]:
             parameters = table.get("Parameters", {})
             metadata_location = parameters.get("metadata_location", "")
             table_type = parameters.get("table_type", "")
+
+            if _is_dbt_shadow_table(table_name):
+                print(f"  ⊘ {table_name} (dbt build artifact, not a real source)")
+                continue
 
             if table_type.upper() == "ICEBERG" and metadata_location:
                 tables.append(
