@@ -1,7 +1,7 @@
 with
     source as (select * from {{ source("ol_warehouse_raw_data", "raw__edxorg__s3__course_xml_blocks") }})
 
-    {{ deduplicate_raw_table(order_by="_airbyte_extracted_at", partition_columns="course_id, block_id, block_type") }},
+    {{ deduplicate_raw_table(raw_table="raw__edxorg__s3__course_xml_blocks", partition_columns="course_id, block_id, block_type") }},
     cleaned as (
         select
             course_id as courserun_readable_id,

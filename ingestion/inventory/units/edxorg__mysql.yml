@@ -10,6 +10,21 @@ strategies:
   qa: omit
   local: fixture
 loader: dlt
+# TRANSITIONAL — remove once this unit has run once with
+# `normalize.parquet_normalizer.add_dlt_load_id = true` (src/ol_dlt/.dlt/config.toml).
+#
+# These tables were loaded before that flag existed, so they carry no
+# `_dlt_load_id` column and the 7 staging models that read them cannot order by
+# it: dropping this line before a reload reinstates the exact COLUMN_NOT_FOUND
+# that ol-data-platform#2443 was filed for. Explicit null means "no metadata
+# column, do not deduplicate", which is what the tables actually support today.
+#
+# Deleting the line restores the loader default (`_dlt_load_id`). Safe to do the
+# first time an edxorg_s3 load completes on the new config: the disposition is
+# `merge`, so rows that predate the flag keep a null load id, and Trino orders
+# NULLS LAST by default in both directions -- freshly stamped rows win the
+# dedup, and a key with only old rows still yields its single row.
+raw_metadata_column:
 table_prefix: raw__edxorg__s3__tables__
 dlt:
   source_module: ol_dlt.sources.edxorg_s3

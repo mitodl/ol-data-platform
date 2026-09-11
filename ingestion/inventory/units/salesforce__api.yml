@@ -33,6 +33,10 @@ tables:
   modeled: false
 - name: Opportunity
   raw_table: raw__thirdparty__salesforce___destination_v2__Opportunity
+  # Still on the Airbyte v1 destination's column pair (_airbyte_ab_id /
+  # _airbyte_emitted_at), not the current _airbyte_extracted_at. Declared
+  # here so the dedup macro resolves it instead of the loader default.
+  raw_metadata_column: _airbyte_emitted_at
   sync_mode: incremental_deduped_history
   cursor_field:
   - SystemModstamp
@@ -41,6 +45,10 @@ tables:
   modeled: true
 - name: OpportunityLineItem
   raw_table: raw__thirdparty__salesforce___destination_v2__OpportunityLineItem
+  # Still on the Airbyte v1 destination's column pair (_airbyte_ab_id /
+  # _airbyte_emitted_at), not the current _airbyte_extracted_at. Declared
+  # here so the dedup macro resolves it instead of the loader default.
+  raw_metadata_column: _airbyte_emitted_at
   sync_mode: incremental_deduped_history
   cursor_field:
   - SystemModstamp

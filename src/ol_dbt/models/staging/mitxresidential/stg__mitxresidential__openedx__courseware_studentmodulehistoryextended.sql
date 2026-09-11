@@ -31,7 +31,9 @@ with source as (
 )
 
 --- this is needed for the initial dbt run to deduplicate the data from raw table
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'id') }}
+--- Both branches of the union above belong to the mitx/mysql unit, so either name
+--- resolves to the same ordering column; the incremental branch's table is named.
+{{ deduplicate_raw_table(raw_table='raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended' , partition_columns = 'id') }}
 , cleaned as (
 
     select

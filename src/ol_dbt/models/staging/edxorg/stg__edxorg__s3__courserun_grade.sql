@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__tables__grades_persistentcoursegrade') }}
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'course_id, user_id') }}
+{{ deduplicate_raw_table(raw_table='raw__edxorg__s3__tables__grades_persistentcoursegrade', partition_columns = 'course_id, user_id') }}
 , cleaned as (
     select
         ---all values are ingested as string, so we need to cast here to match other data sources
