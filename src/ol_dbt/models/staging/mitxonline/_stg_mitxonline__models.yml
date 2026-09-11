@@ -2427,3 +2427,85 @@ models:
     description: int, id of the row in the table named by content_type_id. Comment
       and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
       together with content_type_id
+- name: stg__mitxonline__openedx__mysql__django_content_type
+  description: MITx Online open edX Django content types. Use to resolve the content_type_id
+    of a generic foreign key by app_label and model rather than by a hardcoded id.
+  columns:
+  - name: contenttype_id
+    description: int, primary key. Differs per deployment for the same model.
+    tests:
+    - unique
+    - not_null
+  - name: contenttype_app_label
+    description: str, Django app the model belongs to, e.g. forum
+    tests:
+    - not_null
+  - name: contenttype_model
+    description: str, lowercased model name, e.g. commentthread or comment
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["contenttype_app_label", "contenttype_model"]
+
+- name: stg__mitxonline__openedx__mysql__organizations_organization
+  description: MITx Online open edX organizations from the edx-organizations app
+  columns:
+  - name: organization_id
+    description: int, primary key
+    tests:
+    - unique
+    - not_null
+  - name: organization_name
+    description: str, display name of the organization
+    tests:
+    - not_null
+  - name: organization_short_name
+    description: str, short name of the organization, used in course keys
+    tests:
+    - unique
+    - not_null
+  - name: organization_description
+    description: str, description of the organization
+  - name: organization_logo
+    description: str, storage path of the organization logo
+  - name: organization_is_active
+    description: boolean, whether the organization is active
+  - name: organization_created_on
+    description: timestamp, when the row was created
+  - name: organization_updated_on
+    description: timestamp, when the row was last modified
+
+- name: stg__mitxonline__openedx__mysql__organizations_organizationcourse
+  description: MITx Online open edX links between course runs and organizations. The
+    authoritative source for a course run's organization, which is not always the
+    org segment of its course key.
+  columns:
+  - name: organizationcourse_id
+    description: int, primary key
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: organization_id
+    description: int, foreign key to stg__mitxonline__openedx__mysql__organizations_organization
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__openedx__mysql__organizations_organization')
+          field: organization_id
+  - name: organizationcourse_is_active
+    description: boolean, whether the link is active
+  - name: organizationcourse_created_on
+    description: timestamp, when the row was created
+  - name: organizationcourse_updated_on
+    description: timestamp, when the row was last modified
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_readable_id", "organization_id"]

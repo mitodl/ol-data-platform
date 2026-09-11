@@ -2567,3 +2567,52 @@ sources:
       description: int, id of the row in the table named by content_type_id. Comment
         and CommentThread ids both start at 1 and overlap heavily, so this is only
         meaningful together with content_type_id
+
+  - name: raw__xpro__openedx__mysql__django_content_type
+    description: xPro open edX Django content types. Maps a content_type_id used by
+      Django generic foreign keys (e.g. on the forum-v2 tables) to its app and model.
+    columns:
+    - name: id
+      description: int, primary key. Assigned by migration order, so the same model
+        has a different id on each deployment.
+    - name: app_label
+      description: str, Django app the model belongs to, e.g. forum
+    - name: model
+      description: str, lowercased model name, e.g. commentthread or comment
+
+  - name: raw__xpro__openedx__mysql__organizations_organization
+    description: xPro open edX organizations from the edx-organizations app
+    columns:
+    - name: id
+      description: int, primary key
+    - name: name
+      description: str, display name of the organization
+    - name: short_name
+      description: str, short name of the organization, used in course keys
+    - name: description
+      description: str, description of the organization
+    - name: logo
+      description: str, storage path of the organization logo
+    - name: active
+      description: boolean, whether the organization is active
+    - name: created
+      description: timestamp, when the row was created
+    - name: modified
+      description: timestamp, when the row was last modified
+
+  - name: raw__xpro__openedx__mysql__organizations_organizationcourse
+    description: xPro open edX links between course runs and organizations from the
+      edx-organizations app
+    columns:
+    - name: id
+      description: int, primary key
+    - name: course_id
+      description: str, open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: organization_id
+      description: int, foreign key to organizations_organization
+    - name: active
+      description: boolean, whether the link is active
+    - name: created
+      description: timestamp, when the row was created
+    - name: modified
+      description: timestamp, when the row was last modified

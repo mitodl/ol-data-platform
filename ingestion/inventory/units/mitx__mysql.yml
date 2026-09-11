@@ -63,6 +63,7 @@ airbyte:
     - django_comment_common_coursediscussionsettings
     - django_comment_common_discussionsidmapping
     - django_comment_common_forumsconfig
+    - django_content_type
     - edxval_coursevideo
     - edxval_video
     - forum_abuseflagger
@@ -81,6 +82,8 @@ airbyte:
     - grades_persistentsubsectiongrade
     - grades_persistentsubsectiongradeoverride
     - grades_visibleblocks
+    - organizations_organization
+    - organizations_organizationcourse
     - student_anonymoususerid
     - student_courseaccessrole
     - student_courseenrollment
@@ -383,6 +386,13 @@ tables:
   primary_key:
   - - id
   modeled: false
+- name: django_content_type
+  raw_table: raw__mitx__openedx__mysql__django_content_type
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
 - name: edxval_coursevideo
   raw_table: raw__mitx__openedx__mysql__edxval_coursevideo
   sync_mode: full_refresh_overwrite
@@ -515,6 +525,20 @@ tables:
   primary_key:
   - - id
   modeled: false
+- name: organizations_organization
+  raw_table: raw__mitx__openedx__mysql__organizations_organization
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
+- name: organizations_organizationcourse
+  raw_table: raw__mitx__openedx__mysql__organizations_organizationcourse
+  sync_mode: full_refresh_overwrite
+  namespace: edxapp
+  primary_key:
+  - - id
+  modeled: true
 - name: student_anonymoususerid
   raw_table: raw__mitx__openedx__mysql__student_anonymoususerid
   sync_mode: full_refresh_overwrite
