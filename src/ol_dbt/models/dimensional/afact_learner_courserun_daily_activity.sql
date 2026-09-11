@@ -4,14 +4,19 @@
 -- it. Rebuilt in full (the dimensional default) rather than incremental because
 -- user_pk can still re-key, and an incremental table would keep old days under the
 -- stale key.
--- Day boundary and metric definitions follow organization_administration_report,
--- except where noted below.
+-- The day comes from each event's date_fk, the dim_date key the event facts derive
+-- from event_timestamp_iso8601 in the source's own timezone. `cast(event_timestamp as
+-- date)` would read the same on Trino but not on DuckDB, which buckets a
+-- timestamp-with-timezone by the session zone: 15.2M of tfact_discussion_events' 17.5M
+-- rows carry a local offset rather than Z, and 2.9M of them fall on a different day
+-- under UTC.
+-- Metric definitions follow organization_administration_report, except where noted.
 with video_days as (
     select
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date) as activity_date
+        , date_fk as activity_date_key
         , count(distinct video_block_fk) as videos_played
     from {{ ref('tfact_video_events') }}
     where event_type = 'play_video'
@@ -20,7 +25,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date)
+        , date_fk
 )
 
 -- problem_check only: showanswer is viewing a solution, not attempting the problem.
@@ -30,7 +35,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date) as activity_date
+        , date_fk as activity_date_key
         , count(distinct problem_block_fk) as problems_attempted
     from {{ ref('tfact_problem_events') }}
     where event_type = 'problem_check'
@@ -39,7 +44,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date)
+        , date_fk
 )
 
 , navigation_days as (
@@ -47,7 +52,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date) as activity_date
+        , date_fk as activity_date_key
         , count(*) as navigation_events
     from {{ ref('tfact_course_navigation_events') }}
     where user_fk is not null
@@ -55,7 +60,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date)
+        , date_fk
 )
 
 , discussion_days as (
@@ -63,7 +68,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date) as activity_date
+        , date_fk as activity_date_key
         , count(*) as discussion_events
     from {{ ref('tfact_discussion_events') }}
     where user_fk is not null
@@ -71,7 +76,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date)
+        , date_fk
 )
 
 -- Open edX chatbot events only, which all come from MITx Online's Open edX (see
@@ -83,7 +88,7 @@ with video_days as (
         'mitxonline' as platform
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date) as activity_date
+        , date_fk as activity_date_key
         , count(distinct concat(session_id, '|', coalesce(block_id, ''))) as chatbot_interactions
     from {{ ref('tfact_chatbot_events') }}
     where event_type = 'ol_openedx_chat.drawer.submit'
@@ -94,33 +99,33 @@ with video_days as (
         'mitxonline'
         , user_fk
         , courserun_readable_id
-        , cast(event_timestamp as date)
+        , date_fk
 )
 
 , activity as (
     select
-        platform, user_fk, courserun_readable_id, activity_date
+        platform, user_fk, courserun_readable_id, activity_date_key
         , videos_played, 0 as problems_attempted, 0 as navigation_events
         , 0 as discussion_events, 0 as chatbot_interactions
     from video_days
     union all
     select
-        platform, user_fk, courserun_readable_id, activity_date
+        platform, user_fk, courserun_readable_id, activity_date_key
         , 0, problems_attempted, 0, 0, 0
     from problem_days
     union all
     select
-        platform, user_fk, courserun_readable_id, activity_date
+        platform, user_fk, courserun_readable_id, activity_date_key
         , 0, 0, navigation_events, 0, 0
     from navigation_days
     union all
     select
-        platform, user_fk, courserun_readable_id, activity_date
+        platform, user_fk, courserun_readable_id, activity_date_key
         , 0, 0, 0, discussion_events, 0
     from discussion_days
     union all
     select
-        platform, user_fk, courserun_readable_id, activity_date
+        platform, user_fk, courserun_readable_id, activity_date_key
         , 0, 0, 0, 0, chatbot_interactions
     from chatbot_days
 )
@@ -130,7 +135,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , activity_date
+        , activity_date_key
         , sum(videos_played) as videos_played
         , sum(problems_attempted) as problems_attempted
         , sum(navigation_events) as navigation_events
@@ -141,7 +146,7 @@ with video_days as (
         platform
         , user_fk
         , courserun_readable_id
-        , activity_date
+        , activity_date_key
 )
 
 , dim_course_run as (
@@ -155,13 +160,13 @@ select
         'activity_days.platform',
         'activity_days.user_fk',
         'activity_days.courserun_readable_id',
-        'activity_days.activity_date'
+        'activity_days.activity_date_key'
     ]) }} as activity_key
     , activity_days.user_fk
     , dim_course_run.courserun_pk as courserun_fk
     , activity_days.platform
     , activity_days.courserun_readable_id
-    , activity_days.activity_date
+    , activity_days.activity_date_key
     , activity_days.videos_played
     , activity_days.problems_attempted
     , activity_days.navigation_events

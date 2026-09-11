@@ -1225,7 +1225,7 @@ models:
         - platform
         - user_fk
         - courserun_readable_id
-        - activity_date
+        - activity_date_key
   columns:
   - name: activity_key
     description: string, surrogate key over (platform, user_fk, courserun_readable_id,
@@ -1255,11 +1255,18 @@ models:
     description: string, course run id as recorded on the event.
     tests:
     - not_null
-  - name: activity_date
-    description: date, cast(event_timestamp as date) -- the same day boundary organization_administration_report
-      uses.
+  - name: activity_date_key
+    description: >
+      integer, foreign key to dim_date in YYYYMMDD format -- the event's own
+      date_fk, which the event facts derive from event_timestamp_iso8601 in the
+      source's timezone. Not a UTC day: 15.2M of tfact_discussion_events' rows
+      carry a local offset, and 2.9M of those fall on a different UTC day. Read
+      as a date via dim_date rather than casting the integer.
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
   - name: videos_played
     description: int, distinct video blocks with a play_video event that day. Same
       definition as the report's videos_watched.
