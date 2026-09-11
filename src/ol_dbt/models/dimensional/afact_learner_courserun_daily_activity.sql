@@ -89,6 +89,7 @@ with video_days as (
     where event_type = 'ol_openedx_chat.drawer.submit'
       and chatbot_source = 'open_edx'
       and courserun_readable_id is not null
+      and user_fk is not null
     group by
         user_fk
         , courserun_readable_id
