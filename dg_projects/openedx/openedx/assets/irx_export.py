@@ -239,7 +239,15 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
             table = load_dbt_model_table(IRX_GLUE_DATABASE, table_name)
             # Pinned so the row count and the file are read from the same
             # snapshot even if dbt rebuilds the model mid-export.
-            snapshot_id = table.current_snapshot().snapshot_id
+            snapshot = table.current_snapshot()
+            if snapshot is None:
+                raise Failure(
+                    description=(
+                        f"{IRX_GLUE_DATABASE}.{table_name} has no snapshot, so "
+                        "there is nothing to export."
+                    )
+                )
+            snapshot_id = snapshot.snapshot_id
             frame = (
                 scan_dbt_model_table(table, snapshot_id)
                 .rename(dict(export.renames))
