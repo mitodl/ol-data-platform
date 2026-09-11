@@ -66,7 +66,8 @@ program_certificates as (
     select
         ae.organization_fk,
         ae.user_fk,
-        count(distinct cert.program_fk)                                                 as program_certificates_earned
+        count(distinct cert.program_fk)                                                 as program_certificates_earned,
+        max(cert.certificate_updated_on)                                                as program_certificate_updated_on
     from active_enrollments ae
     join {{ source('dimensional', 'bridge_program_course') }} bpc
         on ae.course_fk = bpc.course_fk
@@ -129,7 +130,13 @@ select
     coalesce(er.courses_passed, 0)                                                      as courses_passed,
     coalesce(er.courses_certified, 0)                                                   as courses_certified,
     coalesce(pc.program_certificates_earned, 0)                                         as program_certificates_earned,
-    er.record_updated_on
+    -- A program certificate row exists only alongside an active enrollment, so
+    -- er.record_updated_on is non-null whenever pc is; the coalesce only keeps
+    -- greatest() from going null when there is no program certificate.
+    greatest(
+        er.record_updated_on,
+        coalesce(pc.program_certificate_updated_on, er.record_updated_on)
+    )                                                                                   as record_updated_on
 from memberships m
 join {{ source('dimensional', 'dim_organization') }} org
     on m.organization_fk = org.organization_pk
