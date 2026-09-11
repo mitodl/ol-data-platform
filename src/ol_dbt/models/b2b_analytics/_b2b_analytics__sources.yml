@@ -44,6 +44,15 @@ sources:
     description: "Certificate fact. Grain: one row per certificate."
   - name: tfact_grade
     description: "Grade fact. Grain: one row per (user, course_run)."
+  - name: dim_user
+    description: >
+      User dimension. Grain: one row per person across platforms. Read only by
+      the learner-grain views; user_global_id, not user_pk, is the stable
+      learner identifier.
+  - name: bridge_user_organization
+    description: >
+      MITx Online organization membership roster. Grain: one row per (user,
+      organization). Includes members with no enrollments.
 - name: reporting
   description: >
     Reporting-layer Iceberg tables, accessed from StarRocks via the
