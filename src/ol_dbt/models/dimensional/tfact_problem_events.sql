@@ -268,6 +268,11 @@ with mitxonline_problem_events as (
 -- equality rather than an OR across every platform's key pair.
 -- Restricted to rows at or below the watermark so an event the source CTEs also
 -- re-select cannot arrive twice and double-insert.
+-- `users.user_pk is not null` matters: the join is a left join, so a learner who
+-- no longer resolves (removed from dim_user, or a username change that moves the
+-- join keys) would otherwise be "distinct from" the stored key and get re-inserted
+-- with a null user_fk, replacing a good key with nothing. A row can be corrected
+-- here, never nulled.
 , stale_key_mitxonline as (
     select
         stored.platform
@@ -296,6 +301,7 @@ with mitxonline_problem_events as (
     where
         stored.platform = 'mitxonline'
         and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
         and users.user_pk is distinct from stored.user_fk
 )
 
@@ -327,6 +333,7 @@ with mitxonline_problem_events as (
     where
         stored.platform = 'mitxpro'
         and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
         and users.user_pk is distinct from stored.user_fk
 )
 
@@ -358,6 +365,7 @@ with mitxonline_problem_events as (
     where
         stored.platform = 'residential'
         and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
         and users.user_pk is distinct from stored.user_fk
 )
 
@@ -389,6 +397,7 @@ with mitxonline_problem_events as (
     where
         stored.platform = 'edxorg'
         and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
         and users.user_pk is distinct from stored.user_fk
 )
 
