@@ -257,6 +257,161 @@ with mitxonline_problem_events as (
     select * from {{ ref('dim_platform') }}
 )
 
+{% if is_incremental() %}
+-- Rows already in the target whose stored user_fk no longer matches what dim_user
+-- resolves today. The watermarks above only re-select events newer than the last run,
+-- so without this a dim_user re-key strands historical activity under the obsolete
+-- key -- the same hazard tfact_grade and tfact_certificate guard against with their
+-- stale_user_fk_lookup. delete+insert on event_id replaces the row in place.
+-- One CTE per platform because the dim_user join keys differ per platform; each
+-- prunes to one partition (the model is partitioned by platform) and joins by
+-- equality rather than an OR across every platform's key pair.
+-- Restricted to rows at or below the watermark so an event the source CTEs also
+-- re-select cannot arrive twice and double-insert.
+-- `users.user_pk is not null` matters: the join is a left join, so a learner who
+-- no longer resolves (removed from dim_user, or a username change that moves the
+-- join keys) would otherwise be "distinct from" the stored key and get re-inserted
+-- with a null user_fk, replacing a good key with nothing. A row can be corrected
+-- here, never nulled.
+, stale_key_mitxonline as (
+    select
+        stored.platform
+        , users.user_pk as user_fk
+        , stored.openedx_user_id
+        , stored.user_username
+        , stored.courserun_readable_id
+        , stored.event_type
+        , stored.event_json
+        , stored.problem_block_fk as problem_block_id
+        , stored.answers
+        , stored.attempt
+        , stored.success
+        , stored.grade
+        , stored.max_grade
+        , stored.event_timestamp
+        , stored.event_timestamp_iso8601
+        , stored.time_fk
+        , stored.date_fk
+    from {{ this }} as stored
+    inner join watermarks on watermarks.platform = stored.platform
+    left join users
+        on
+            stored.openedx_user_id = users.mitxonline_openedx_user_id
+            and stored.user_username = users.user_mitxonline_username
+    where
+        stored.platform = 'mitxonline'
+        and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
+        and users.user_pk is distinct from stored.user_fk
+)
+
+, stale_key_mitxpro as (
+    select
+        stored.platform
+        , users.user_pk as user_fk
+        , stored.openedx_user_id
+        , stored.user_username
+        , stored.courserun_readable_id
+        , stored.event_type
+        , stored.event_json
+        , stored.problem_block_fk as problem_block_id
+        , stored.answers
+        , stored.attempt
+        , stored.success
+        , stored.grade
+        , stored.max_grade
+        , stored.event_timestamp
+        , stored.event_timestamp_iso8601
+        , stored.time_fk
+        , stored.date_fk
+    from {{ this }} as stored
+    inner join watermarks on watermarks.platform = stored.platform
+    left join users
+        on
+            stored.openedx_user_id = users.mitxpro_openedx_user_id
+            and stored.user_username = users.user_mitxpro_username
+    where
+        stored.platform = 'mitxpro'
+        and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
+        and users.user_pk is distinct from stored.user_fk
+)
+
+, stale_key_residential as (
+    select
+        stored.platform
+        , users.user_pk as user_fk
+        , stored.openedx_user_id
+        , stored.user_username
+        , stored.courserun_readable_id
+        , stored.event_type
+        , stored.event_json
+        , stored.problem_block_fk as problem_block_id
+        , stored.answers
+        , stored.attempt
+        , stored.success
+        , stored.grade
+        , stored.max_grade
+        , stored.event_timestamp
+        , stored.event_timestamp_iso8601
+        , stored.time_fk
+        , stored.date_fk
+    from {{ this }} as stored
+    inner join watermarks on watermarks.platform = stored.platform
+    left join users
+        on
+            stored.openedx_user_id = users.residential_openedx_user_id
+            and stored.user_username = users.user_residential_username
+    where
+        stored.platform = 'residential'
+        and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
+        and users.user_pk is distinct from stored.user_fk
+)
+
+, stale_key_edxorg as (
+    select
+        stored.platform
+        , users.user_pk as user_fk
+        , stored.openedx_user_id
+        , stored.user_username
+        , stored.courserun_readable_id
+        , stored.event_type
+        , stored.event_json
+        , stored.problem_block_fk as problem_block_id
+        , stored.answers
+        , stored.attempt
+        , stored.success
+        , stored.grade
+        , stored.max_grade
+        , stored.event_timestamp
+        , stored.event_timestamp_iso8601
+        , stored.time_fk
+        , stored.date_fk
+    from {{ this }} as stored
+    inner join watermarks on watermarks.platform = stored.platform
+    left join users
+        on
+            stored.openedx_user_id = users.edxorg_openedx_user_id
+            and stored.user_username = users.user_edxorg_username
+    where
+        stored.platform = 'edxorg'
+        and stored.event_timestamp <= watermarks.max_ts
+        and users.user_pk is not null
+        and users.user_pk is distinct from stored.user_fk
+)
+
+, stale_key_rows as (
+    select * from stale_key_mitxonline
+    union all
+    select * from stale_key_mitxpro
+    union all
+    select * from stale_key_residential
+    union all
+    select * from stale_key_edxorg
+)
+{% endif %}
+
 -- Studentmodule rows pre-aggregated to one row per (platform, user, course, problem, attempt)
 -- before the union. tfact_studentmodule_problems is at per-submission grain (one row per
 -- history record); aggregating here collapses multiple submissions for the same attempt to
@@ -442,6 +597,30 @@ with mitxonline_problem_events as (
         , time_fk
         , date_fk
     from combined_studentmodule
+
+    {% if is_incremental() %}
+    union all
+
+    select
+        platform
+        , user_fk
+        , openedx_user_id
+        , user_username
+        , courserun_readable_id
+        , event_type
+        , event_json
+        , problem_block_id
+        , answers
+        , attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+        , event_timestamp_iso8601
+        , time_fk
+        , date_fk
+    from stale_key_rows
+    {% endif %}
 )
 
 -- Deduplicate on (platform, user, course, problem, attempt):
