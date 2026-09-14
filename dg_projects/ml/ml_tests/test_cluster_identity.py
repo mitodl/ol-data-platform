@@ -188,6 +188,35 @@ def test_match_clusters_bootstrap_with_no_active_clusters() -> None:
     assert all(row["relation"] == "new" for row in lineage)
 
 
+def test_compute_continuity_all_continued_is_one() -> None:
+    new_cluster_members = {0: _members("1", "2", "3")}
+    matches, _lineage = cluster_identity.match_clusters(
+        new_cluster_members, {"k1": _members("1", "2", "3")}
+    )
+    assert cluster_identity.compute_continuity(matches, new_cluster_members) == 1.0
+
+
+def test_compute_continuity_all_new_is_zero() -> None:
+    new_cluster_members = {0: _members("1", "2", "3")}
+    matches, _lineage = cluster_identity.match_clusters(new_cluster_members, {})
+    assert cluster_identity.compute_continuity(matches, new_cluster_members) == 0.0
+
+
+def test_compute_continuity_weights_by_member_count() -> None:
+    new_cluster_members = {
+        0: _members("1", "2", "3"),  # continued
+        1: _members("4"),  # new
+    }
+    matches, _lineage = cluster_identity.match_clusters(
+        new_cluster_members, {"k1": _members("1", "2", "3")}
+    )
+    assert cluster_identity.compute_continuity(matches, new_cluster_members) == 0.75
+
+
+def test_compute_continuity_empty_run_is_one() -> None:
+    assert cluster_identity.compute_continuity([], {}) == 1.0
+
+
 def test_compute_cluster_stats_centroid_and_radius() -> None:
     vectors = np.array(
         [

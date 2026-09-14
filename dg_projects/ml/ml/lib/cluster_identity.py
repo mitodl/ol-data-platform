@@ -22,6 +22,7 @@ JACCARD_MATCH_THRESHOLD = float(
     os.environ.get("CLUSTER_JACCARD_MATCH_THRESHOLD", "0.5")
 )
 CLUSTER_RADIUS_PERCENTILE = float(os.environ.get("CLUSTER_RADIUS_PERCENTILE", "5"))
+CONTINUITY_FLOOR = float(os.environ.get("CLUSTER_CONTINUITY_FLOOR", "0.5"))
 
 ClusterRelation = Literal["continued", "merged", "split", "new", "retired"]
 
@@ -299,6 +300,25 @@ def match_clusters(
     )
 
     return matches, lineage_rows
+
+
+def compute_continuity(
+    matches: list[ClusterMatch], new_cluster_members: dict[int, frozenset[str]]
+) -> float:
+    """Share of this run's conversations whose cluster kept its prior cluster_key.
+
+    1.0 when new_cluster_members is empty (nothing to disagree about).
+    """
+    total = sum(len(members) for members in new_cluster_members.values())
+    if total == 0:
+        return 1.0
+    continued_ids = {m.new_cluster_id for m in matches if m.relation == "continued"}
+    continued = sum(
+        len(members)
+        for cluster_id, members in new_cluster_members.items()
+        if cluster_id in continued_ids
+    )
+    return continued / total
 
 
 def compute_cluster_stats(

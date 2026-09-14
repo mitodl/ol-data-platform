@@ -4,10 +4,13 @@ from typing import Any
 import numpy as np
 import polars as pl
 from dagster import (
+    AssetCheckResult,
+    AssetCheckSpec,
     AssetExecutionContext,
     AssetKey,
     AssetOut,
     Config,
+    Failure,
     MetadataValue,
     Output,
     multi_asset,
@@ -16,9 +19,11 @@ from ml.lib.cluster import NOISE_CLUSTER_ID
 from ml.lib.cluster_identity import (
     CLUSTER_LINEAGE_SCHEMA,
     CLUSTER_SCHEMA,
+    CONTINUITY_FLOOR,
     JACCARD_MATCH_THRESHOLD,
     cluster_lineage_pk,
     compute_cluster_stats,
+    compute_continuity,
     match_clusters,
 )
 from ml.lib.iceberg_helpers import table_exists
@@ -166,6 +171,13 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
             is_required=False,
         ),
     },
+    check_specs=[
+        AssetCheckSpec(
+            name="continuity_floor",
+            asset=AssetKey(["intermediate", "feedback_cluster_lineage"]),
+            blocking=True,
+        )
+    ],
     pool="feedback_cluster_identity",
 )
 def feedback_cluster_identity(
@@ -181,7 +193,9 @@ def feedback_cluster_identity(
     to continued/merged/split/new (ml.lib.cluster_identity.match_clusters), writing
     one feedback_cluster row per resolved key and one feedback_cluster_lineage row
     per edge (plus one 'retired' row per active key that didn't survive). No human
-    approves this.
+    approves this; a `continuity_floor` asset check blocks the write instead when
+    too few conversations kept their cluster_key, since that means the run's
+    configuration needs fixing rather than a rerun.
     """
     catalog = get_glue_catalog()
     cluster_run_id = _select_run_to_process(catalog, config)
@@ -190,6 +204,7 @@ def feedback_cluster_identity(
         yield Output(
             pl.DataFrame(schema=CLUSTER_SCHEMA), output_name="feedback_cluster"
         )
+        yield AssetCheckResult(passed=True, check_name="continuity_floor")
         return
 
     run_row = (
@@ -225,6 +240,27 @@ def feedback_cluster_identity(
     matches, lineage_rows = match_clusters(
         new_cluster_members, active_cluster_members, config.match_threshold
     )
+
+    continuity = compute_continuity(matches, new_cluster_members)
+    yield AssetCheckResult(
+        passed=continuity >= CONTINUITY_FLOOR,
+        check_name="continuity_floor",
+        metadata={
+            "continuity": MetadataValue.float(continuity),
+            "floor": MetadataValue.float(CONTINUITY_FLOOR),
+            "cluster_run_id": MetadataValue.text(cluster_run_id),
+        },
+    )
+    if continuity < CONTINUITY_FLOOR:
+        # Fail before writing either output -- feedback_cluster_assignment only
+        # rewrites from a run that has lineage rows, so leaving this run
+        # unresolved keeps it on the prior, still-good cluster_key set.
+        msg = (
+            f"Run {cluster_run_id} continuity {continuity:.2f} is below the "
+            f"floor {CONTINUITY_FLOOR:.2f}; a configuration change is needed, "
+            "not a rerun."
+        )
+        raise Failure(msg)
 
     embeddings_df = (
         get_dbt_model_as_dataframe(
@@ -312,6 +348,7 @@ def feedback_cluster_identity(
             "cluster_run_id": MetadataValue.text(cluster_run_id),
             "clusters_resolved": MetadataValue.int(len(matches)),
             "clusters_retired": MetadataValue.int(len(retired_keys)),
+            "continuity": MetadataValue.float(continuity),
         },
         output_name="feedback_cluster",
     )
