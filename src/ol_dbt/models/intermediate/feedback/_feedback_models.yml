@@ -274,6 +274,8 @@ models:
     description: str, the LLM-proposed display label.
     tests:
     - not_null
+  - name: category_description
+    description: str, the LLM-proposed one-line description of the category.
   - name: proposed_at
     description: timestamp, when this proposal was generated.
     tests:

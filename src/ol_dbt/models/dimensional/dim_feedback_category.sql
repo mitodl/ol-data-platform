@@ -20,6 +20,7 @@ with ticket as (
         , feedback_tag.tag_label as category_label
         , 'seed' as category_source
         , cast(null as varchar) as cluster_key
+        , cast(null as varchar) as category_description
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
     from ticket
@@ -37,6 +38,7 @@ with ticket as (
         , min(ticket.group_name) as category_label
         , 'seed' as category_source
         , cast(null as varchar) as cluster_key
+        , cast(null as varchar) as category_description
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
     from ticket
@@ -53,6 +55,7 @@ with ticket as (
         , category_label
         , 'llm_discovered' as category_source
         , cluster_key
+        , category_description
         -- varchar, matching tag_seeds/group_seeds' ticket_created_at/updated_at
         -- (ISO8601 strings throughout this layer, never a native timestamp).
         , {{ cast_timestamp_to_iso8601('proposed_at') }} as first_seen_at
@@ -107,6 +110,7 @@ select
     , 'proposed' as category_status
     , ranked_combined.category_source
     , ranked_combined.cluster_key
+    , ranked_combined.category_description
     , slug_dates.first_seen_at
     , slug_dates.updated_at
 from ranked_combined
