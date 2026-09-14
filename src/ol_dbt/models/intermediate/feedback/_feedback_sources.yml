@@ -35,21 +35,18 @@ sources:
           column_list: ["source_slug", "source_record_ref"]
   - name: feedback_cluster_run
     description: One row per clustering run (params, cluster/noise counts, silhouette),
-      materialized by the feedback_clustering Dagster asset. run_status here is whatever
-      the asset wrote (currently always 'proposed') -- promotion status comes from
-      feedback_cluster_run_promotion, not this column. No column tests here -- this
-      table may not exist yet in a clean schema, and a source-level test (unlike a
-      test on a guarded intermediate model) queries the raw relation directly and
-      fails outright rather than tolerating its absence.
+      materialized by the feedback_clustering Dagster asset. Not currently consumed
+      downstream. No column tests here -- this table may not exist yet in a clean
+      schema, and a source-level test (unlike a test on a guarded intermediate model)
+      queries the raw relation directly and fails outright rather than tolerating
+      its absence.
     columns:
     - name: cluster_run_id
       description: str, uuid identifying this clustering run.
   - name: feedback_cluster_candidate
     description: One row per (conversation, cluster_run_id) -- every clustered run's
-      assignments, promoted or not. Only the run(s) marked 'promoted' in feedback_cluster_run_promotion
-      should ever reach afact_feedback_conversation. No column/table tests here --
-      see feedback_cluster_run; not_null/unique coverage lives on int__feedback__cluster_assignment
-      instead, which tolerates this table not existing yet.
+      assignments. Not currently consumed downstream -- see feedback_cluster_run.
+      No column/table tests here.
     columns:
     - name: cluster_run_id
       description: str, uuid identifying which clustering run produced this assignment.
@@ -69,38 +66,6 @@ sources:
       description: str, the decision - approved or deprecated.
     - name: approved_at
       description: timestamp, when this decision was recorded.
-  - name: feedback_cluster_run_promotion
-    description: Append-only human decision log for feedback_cluster_run rows, written
-      by the feedback_cluster_run_promotion Dagster asset (materialized ad hoc via
-      its Launchpad Config form -- cluster_run_id, run_status, promoted_by). int__feedback__cluster_assignment
-      takes the single most-recently-promoted cluster_run_id; a run with no 'promoted'
-      row here contributes nothing to afact_feedback_conversation. No column tests
-      here -- see feedback_cluster_run.
-    columns:
-    - name: cluster_run_id
-      description: str, the feedback_cluster_run.cluster_run_id being decided on.
-    - name: run_status
-      description: str, the decision - promoted or superseded.
-    - name: promoted_at
-      description: timestamp, when this decision was recorded.
-  - name: feedback_category_proposal
-    description: One row per cluster the feedback_category_proposals Dagster asset
-      labeled -- an LLM-proposed category_label/category_slug for that cluster_id,
-      always category_status='proposed' until a human approves it via feedback_category_approval.
-      No column tests here -- see feedback_cluster_run; not_null coverage lives on
-      int__feedback__category_proposal instead.
-    columns:
-    - name: cluster_run_id
-      description: str, the cluster_run_id this proposal was generated from.
-    - name: cluster_id
-      description: int, the HDBSCAN cluster id this proposal describes.
-    - name: category_slug
-      description: str, deterministically slugified from category_label (ml.lib.categorize.new_category_slug)
-        -- never LLM-trusted directly.
-    - name: category_label
-      description: str, the LLM-proposed display label.
-    - name: proposed_at
-      description: timestamp, when this proposal was generated.
   - name: feedback_summaries
     description: One row per conversation (upsert key feedback_conversation_pk), materialized
       by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version

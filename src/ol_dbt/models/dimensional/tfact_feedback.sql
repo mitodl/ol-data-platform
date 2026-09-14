@@ -19,8 +19,39 @@ with unioned as (
     where email is not null
 )
 
+-- feedback_redacted is per-dev-schema in dev. Prefer that schema; fall back to the
+-- suffix-stripped (shared) schema so a build unrelated to feedback doesn't fail on
+-- a source only the feedback developer's own schema has. Skipped for unit tests --
+-- dbt substitutes the source's fixture regardless of what this guard would find.
+{% set redacted_source = source('feedback_intermediate', 'feedback_redacted') %}
+{% set is_unit_test = model.resource_type == 'unit_test' %}
+{% if not is_unit_test %}
+    {% set redacted_relation = adapter.get_relation(
+        database=redacted_source.database,
+        schema=redacted_source.schema,
+        identifier=redacted_source.identifier
+    ) %}
+    {% set fallback_schema = redacted_source.schema.replace(var("schema_suffix", ""), "").rstrip("_") %}
+    {% set fallback_relation = adapter.get_relation(
+        database=redacted_source.database,
+        schema=fallback_schema,
+        identifier=redacted_source.identifier
+    ) if not redacted_relation and fallback_schema != redacted_source.schema else none %}
+{% endif %}
+
 , redacted as (
-    select * from {{ source('feedback_intermediate', 'feedback_redacted') }}
+{% if not is_unit_test and execute and not redacted_relation and not fallback_relation %}
+    select
+        cast(null as varchar) as source_slug
+        , cast(null as varchar) as source_record_ref
+        , cast(null as varchar) as title_redacted
+        , cast(null as varchar) as text_redacted
+    where false
+{% elif not is_unit_test and execute and not redacted_relation and fallback_relation %}
+    select * from {{ fallback_relation }}
+{% else %}
+    select * from {{ redacted_source }}
+{% endif %}
 )
 
 select

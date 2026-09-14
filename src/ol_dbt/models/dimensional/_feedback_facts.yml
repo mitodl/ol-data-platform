@@ -232,7 +232,7 @@ models:
       the summary was generated (or "local" if Opik wasn't configured). Null means
       not summarized.
   - name: summarized_at
-    description: timestamp, when the summary was generated. Null for a conversation
+    description: ISO8601 varchar, when the summary was generated. Null for a conversation
       the skip rule excludes.
   - name: embedding_vector
     description: array, the conversation's embedding. Null until feedback_embeddings
@@ -244,18 +244,11 @@ models:
   - name: embedding_input
     description: str, what was actually embedded - 'summary' or 'concatenated_turns'.
   - name: embedded_at
-    description: timestamp, when the vector was generated.
+    description: ISO8601 varchar, when the vector was generated.
   - name: category_fk
     description: str, foreign key to dim_feedback_category. Assigned at MVP from the
       conversation's dominant tag - the tag with the highest corpus frequency, tie-broken
       on tag_slug. Null for a conversation with no tags.
-  - name: cluster_run_id
-    description: str, which clustering run produced the assignment below.
-  - name: cluster_id
-    description: int, cluster membership. -1 is the noise class - a conversation nothing
-      else resembles.
-  - name: cluster_probability
-    description: double, cohesion signal for ranking systemic issues.
   - name: conversation_ingested_at
     description: str, ISO8601 timestamp this row was materialized.
 

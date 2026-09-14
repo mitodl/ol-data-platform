@@ -23,7 +23,7 @@ select
     , cast(null as varchar) as conversation_summary
     , cast(null as varchar) as summary_model_version
     , cast(null as varchar) as prompt_version
-    , cast(null as timestamp) as summarized_at
+    , cast(null as varchar) as summarized_at
 where false
 {% else %}
 select
@@ -31,6 +31,8 @@ select
     , conversation_summary
     , summary_model_version
     , {{ 'prompt_version' if prompt_version_exists else 'cast(null as varchar)' }} as prompt_version
-    , {{ 'summarized_at' if summarized_at_exists else 'cast(null as timestamp)' }} as summarized_at
+    -- This layer stores timestamps as ISO8601 varchar; summarized_at arrives as a
+    -- native timestamp from Iceberg, so it needs converting, not a passthrough.
+    , {{ cast_timestamp_to_iso8601('summarized_at') if summarized_at_exists else 'cast(null as varchar)' }} as summarized_at
 from {{ summary_source }}
 {% endif %}

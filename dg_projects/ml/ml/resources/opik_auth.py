@@ -215,18 +215,26 @@ def attach_llm_usage(*, usage: dict[str, int], model: str, provider: str) -> Non
     opik_context.update_current_span(usage=usage, model=model, provider=provider)
 
 
-def get_prompt_version(name: str) -> str:
+def get_prompt_version(name: str, default_template: str | None = None) -> str:
     """Return name's currently-active Prompt Library version, or "local" if unavailable.
 
     Lets a caller fold this into whatever it records as a call's model/prompt
     provenance (e.g. summary_model_version) -- otherwise editing a prompt in
     Opik changes behavior for new calls without that edit being visible in
     what checkpointing already persisted as "the version that produced this".
+
+    Pass default_template when the caller also render_prompt(name, ...)s in the
+    same run, so this create-if-missing's the same as render_prompt's own
+    get-or-create -- otherwise a prompt's first run reads "local" here, then a
+    later run sees the version render_prompt created and wrongly treats it as
+    a prompt change.
     """
     client = get_opik_client()
     if client is not None:
         try:
             prompt = client.get_prompt(name=name)
+            if prompt is None and default_template is not None:
+                prompt = client.create_prompt(name=name, prompt=default_template)
             if prompt is not None:
                 return prompt.version or prompt.commit or "local"
         except Exception:

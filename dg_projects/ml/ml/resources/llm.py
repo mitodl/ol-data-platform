@@ -15,8 +15,8 @@ from pydantic import Field, PrivateAttr
 class LLMClientFactory(ConfigurableResource):
     """Factory for creating an authenticated LLM client.
 
-    Backs conversation summarization (feedback_summaries) and LLM cluster
-    labeling (feedback_category_proposals); feedback_redacted does not use it.
+    Backs conversation summarization (feedback_summaries) and sentiment
+    classification (feedback_sentiment_eval); feedback_redacted does not use it.
     """
 
     client_class: str = Field(

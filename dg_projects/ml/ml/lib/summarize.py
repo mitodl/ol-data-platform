@@ -7,14 +7,14 @@ from typing import Any, Protocol
 
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
-from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import (
-    attach_llm_usage,
-    get_prompt_version,
-    infer_llm_provider,
-    render_prompt,
-    traced,
+from ml.lib.llm_client_adapters import (
+    build_llm_client,
+    call_anthropic,
+    call_openai,
+    raise_if_claude_model_on_openai,
 )
+from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import get_prompt_version, render_prompt, traced
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -114,29 +114,12 @@ class AnthropicSummaryClient:
 
     @traced("feedback_summarize_anthropic", tags=["feedback_summary"])
     def summarize(self, conversation_text: str) -> str | None:
-        message = self._client.messages.create(
-            model=self.model_version,
+        message = call_anthropic(
+            self._client,
+            self.model_version,
             max_tokens=SUMMARY_MAX_TOKENS,
-            messages=[
-                {
-                    "role": "user",
-                    "content": _summary_prompt(conversation_text),
-                }
-            ],
+            prompt=_summary_prompt(conversation_text),
         )
-        if message.usage is not None:
-            attach_llm_usage(
-                usage={
-                    "prompt_tokens": message.usage.input_tokens,
-                    "completion_tokens": message.usage.output_tokens,
-                    "total_tokens": message.usage.input_tokens
-                    + message.usage.output_tokens,
-                },
-                model=self.model_version,
-                provider="bedrock"
-                if isinstance(self._client, AnthropicBedrock)
-                else "anthropic",
-            )
         if not message.content:
             # A model with thinking on by default can spend the whole max_tokens
             # budget on hidden thinking and return no visible output at all
@@ -154,44 +137,21 @@ class OpenAISummaryClient:
     def __init__(
         self, client: OpenAI, model_version: str, *, client_class: str = "openai"
     ) -> None:
-        # Only for client_class="openai": that's the real api.openai.com, which
-        # can never serve an Anthropic-namespaced model id, so this is always a
-        # left-unset-default bug -- catch it here with a clear message instead
-        # of an opaque 404 from OpenAI. "openai_compatible" is a configurable
-        # base_url (e.g. Parley) that may legitimately proxy Claude models
-        # under this same id, so it gets no such guarantee to check.
-        if client_class == "openai" and model_version.startswith("claude"):
-            msg = (
-                f"model_version={model_version!r} looks like an Anthropic model "
-                "id, but client_class='openai' is configured. Set "
-                "FeedbackSummariesConfig.model_version (or SUMMARY_MODEL_VERSION) "
-                "to an OpenAI model id (e.g. 'gpt-4o-mini')."
-            )
-            raise ValueError(msg)
+        raise_if_claude_model_on_openai(
+            client_class=client_class,
+            model_version=model_version,
+            config_hint=(
+                "FeedbackSummariesConfig.model_version (or SUMMARY_MODEL_VERSION)"
+            ),
+        )
         self._client = client
         self.model_version = model_version
 
     @traced("feedback_summarize_openai", tags=["feedback_summary"])
     def summarize(self, conversation_text: str) -> str | None:
-        response = self._client.chat.completions.create(
-            model=self.model_version,
-            messages=[
-                {
-                    "role": "user",
-                    "content": _summary_prompt(conversation_text),
-                }
-            ],
+        response = call_openai(
+            self._client, self.model_version, prompt=_summary_prompt(conversation_text)
         )
-        if response.usage is not None:
-            attach_llm_usage(
-                usage={
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens,
-                },
-                model=self.model_version,
-                provider=infer_llm_provider(self.model_version, default="openai"),
-            )
         return response.choices[0].message.content
 
 
@@ -206,17 +166,14 @@ def build_summary_client(
     per-run Config fields (FeedbackSummariesConfig) -- None means the run didn't
     override them, so SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION apply.
     """
-    client = llm.get_client()
-    if isinstance(client, AnthropicBedrock):
-        return AnthropicSummaryClient(
-            client, bedrock_model_version or BEDROCK_SUMMARY_MODEL_VERSION
-        )
-    if isinstance(client, Anthropic):
-        return AnthropicSummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
-    return OpenAISummaryClient(
-        client,
-        model_version or SUMMARY_MODEL_VERSION,
-        client_class=llm.client_class,
+    return build_llm_client(
+        llm,
+        anthropic_client_cls=AnthropicSummaryClient,
+        openai_client_cls=OpenAISummaryClient,
+        model_version=model_version,
+        bedrock_model_version=bedrock_model_version,
+        default_model_version=SUMMARY_MODEL_VERSION,
+        default_bedrock_model_version=BEDROCK_SUMMARY_MODEL_VERSION,
     )
 
 
@@ -315,11 +272,11 @@ def summarize_conversations(
             failing the batch -- absent from feedback_summaries, it's picked up
             again as new on the next run.
     """
-    # Computed once per batch, not per-row: this is the same Opik Prompt Library
-    # lookup (client-side cached) regardless of which conversation is being
-    # summarized. "local" when Opik isn't configured or the prompt was never
-    # edited from its hardcoded default.
-    prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME)
+    # Once per batch, not per-row. SUMMARY_PROMPT makes this create-if-missing
+    # like render_prompt below, so both agree on the version -- otherwise a
+    # prompt's first run reads "local" here and the next run wrongly resubmits
+    # everything as "prompt changed".
+    prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     rows = df.to_dicts()
     feedback_conversation_pks: list[str] = []
     source_slugs: list[str] = []
@@ -426,12 +383,9 @@ def checkpoint_chunk(
     # rows) instead of failing the upsert; a no-op once the table already has them.
     with table.update_schema() as update:
         update.union_by_name(chunk_df.to_arrow().schema)
-    # union_by_name always appends a new column at the *end* of the table's
-    # physical schema, regardless of where it falls in chunk_df -- pyiceberg's
-    # upsert does a strict positional pyarrow cast (same names, same order), which
-    # fails on a same-name-different-order schema, not just a missing column. So
-    # once a column's been added this way, every later upsert must match the
-    # table's current column order, not chunk_df's own declared order.
+    # union_by_name appends new columns at the table's end regardless of chunk_df's
+    # order, and upsert's pyarrow cast is positional -- so it must be reordered
+    # to match the table, not chunk_df.
     ordered_chunk_df = chunk_df.select(table.schema().column_names)
     table.upsert(
         df=ordered_chunk_df.to_arrow(),

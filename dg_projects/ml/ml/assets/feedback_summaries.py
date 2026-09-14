@@ -12,6 +12,7 @@ from dagster import (
 )
 from ml.lib.summarize import (
     JOIN_COLS,
+    SUMMARY_PROMPT,
     SUMMARY_PROMPT_NAME,
     build_summary_client,
     filter_unsummarized,
@@ -133,7 +134,7 @@ def feedback_summaries(
         source_df,
         already_summarized_df,
         current_model_version=client.model_version,
-        current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME),
+        current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT),
     )
 
     errors: list[str] = []

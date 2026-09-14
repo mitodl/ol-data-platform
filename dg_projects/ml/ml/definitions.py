@@ -10,11 +10,7 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
-from ml.assets.feedback_approvals import (
-    feedback_category_approval,
-    feedback_cluster_run_promotion,
-)
-from ml.assets.feedback_category_proposals import feedback_category_proposals
+from ml.assets.feedback_approvals import feedback_category_approval
 from ml.assets.feedback_clustering import feedback_clustering
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
@@ -81,12 +77,6 @@ feedback_clustering_job = define_asset_job(
     selection=[feedback_clustering],
 )
 
-# run after a human promotes a cluster run, not automatically on every upstream change.
-feedback_category_proposals_job = define_asset_job(
-    name="feedback_category_proposals_job",
-    selection=[feedback_category_proposals],
-)
-
 # Human-triggered only, a one-time (or occasional) decision aid -- not a
 # production pipeline step
 feedback_sentiment_eval_job = define_asset_job(
@@ -98,11 +88,6 @@ feedback_sentiment_eval_job = define_asset_job(
 feedback_category_approval_job = define_asset_job(
     name="feedback_category_approval_job",
     selection=[feedback_category_approval],
-)
-
-feedback_cluster_run_promotion_job = define_asset_job(
-    name="feedback_cluster_run_promotion_job",
-    selection=[feedback_cluster_run_promotion],
 )
 
 # Scoped to just these assets, independent of the ml code location's shared
@@ -154,33 +139,30 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        # Bedrock in production: IAM metadata auth, same as S3 access, no API
-        # key at all. Everywhere else needs ANTHROPIC_API_KEY (or the
-        # matching env var for whatever SUMMARY_PROVIDER is set to) -- there is
-        # no Vault-backed fallback (no such secret is provisioned anywhere).
-        # SUMMARY_PROVIDER overrides the client_class picked here (try 'openai'/
-        # 'openai_compatible'/'azure_openai' locally) without touching the
-        # production default (Bedrock). LLM_BASE_URL/LLM_AZURE_ENDPOINT are only
-        # required (and only read) for 'openai_compatible'/'azure_openai'
-        # respectively -- shared with embedding_llm below on the assumption that
-        # local testing points both at the same gateway (e.g. Parley); set
-        # client_class independently per resource if that's ever not true.
+        # Bedrock in every deployed env (IAM metadata auth, no API key needed) --
+        # only "dev" lacks the Bedrock IAM role, so it needs an API key there.
+        # SUMMARY_PROVIDER/EMBEDDING_PROVIDER override the client_class picked here.
+        # LLM_BASE_URL/LLM_AZURE_ENDPOINT are only required for
+        # 'openai_compatible'/'azure_openai' -- shared with embedding_llm below on
+        # the assumption local testing points both at the same gateway (e.g.
+        # Parley); set client_class independently per resource if that's not true.
         "llm": LLMClientFactory(
             client_class=os.environ.get(
                 "SUMMARY_PROVIDER",
-                "bedrock" if DAGSTER_ENV == "production" else "anthropic",
+                "anthropic" if DAGSTER_ENV == "dev" else "bedrock",
             ),
             base_url=os.environ.get("LLM_BASE_URL"),
             azure_endpoint=os.environ.get("LLM_AZURE_ENDPOINT"),
         ),
-        # Separate resource, not a reused "llm": the summary asset's default
-        # provider (Anthropic/Bedrock) has no embeddings API at all, so this
-        # pipeline step needs its own client_class/key independent of whatever
-        # the summarizer is configured with. Unlike "llm", this one stays
-        # 'openai' in production too -- never Bedrock by default (§B: the
-        # embedding model choice is deferred to a not-yet-run bake-off).
+        # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
+        # API, so this needs its own client_class/key. Which Bedrock embedding
+        # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
+        # default deployed envs need since no OPENAI_API_KEY is provisioned there.
         "embedding_llm": LLMClientFactory(
-            client_class=os.environ.get("EMBEDDING_PROVIDER", "openai"),
+            client_class=os.environ.get(
+                "EMBEDDING_PROVIDER",
+                "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings",
+            ),
             # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
             # -- e.g. a local gateway like Parley that fronts multiple providers
             # behind one OpenAI-shaped API. Shared var with "llm" above.
@@ -195,8 +177,6 @@ defs = Definitions(
             feedback_embeddings,
             feedback_clustering,
             feedback_category_approval,
-            feedback_cluster_run_promotion,
-            feedback_category_proposals,
             feedback_sentiment_eval,
         ]
     ),
@@ -207,8 +187,6 @@ defs = Definitions(
         feedback_embeddings_job,
         feedback_clustering_job,
         feedback_category_approval_job,
-        feedback_cluster_run_promotion_job,
-        feedback_category_proposals_job,
         feedback_sentiment_eval_job,
     ],
     sensors=[feedback_summaries_automation_sensor],

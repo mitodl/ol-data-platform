@@ -5,7 +5,7 @@ from typing import Any, Self
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
-from ml.lib import summarize
+from ml.lib import llm_client_adapters, summarize
 from openai import OpenAI
 
 
@@ -278,7 +278,7 @@ def test_anthropic_summary_client_attaches_usage_to_the_opik_span(
 ) -> None:
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
-        summarize, "attach_llm_usage", lambda **kwargs: calls.append(kwargs)
+        llm_client_adapters, "attach_llm_usage", lambda **kwargs: calls.append(kwargs)
     )
 
     class _Client:

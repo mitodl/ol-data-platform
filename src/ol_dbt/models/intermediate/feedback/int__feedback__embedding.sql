@@ -21,15 +21,17 @@ select
     , cast(null as integer) as embedding_dim
     , cast(null as varchar) as embedding_model_version
     , cast(null as varchar) as embedding_input
-    , cast(null as timestamp) as embedded_at
+    , cast(null as varchar) as embedded_at
 where false
 {% else %}
 select
     feedback_conversation_pk
-    , cast(embedding_vector as array(double)) as embedding_vector
+    , {{ cast_double_array('embedding_vector') }} as embedding_vector
     , embedding_dim
     , embedding_model_version
     , embedding_input
-    , {{ 'embedded_at' if embedded_at_exists else 'cast(null as timestamp)' }} as embedded_at
+    -- This layer stores timestamps as ISO8601 varchar; embedded_at arrives as a
+    -- native timestamp from Iceberg, so it needs converting, not a passthrough.
+    , {{ cast_timestamp_to_iso8601('embedded_at') if embedded_at_exists else 'cast(null as varchar)' }} as embedded_at
 from {{ embedding_source }}
 {% endif %}

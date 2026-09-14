@@ -14,13 +14,14 @@ from typing import Any, Protocol
 import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
-from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import (
-    attach_llm_usage,
-    infer_llm_provider,
-    render_prompt,
-    traced,
+from ml.lib.llm_client_adapters import (
+    build_llm_client,
+    call_anthropic,
+    call_openai,
+    raise_if_claude_model_on_openai,
 )
+from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import render_prompt, traced
 from openai import OpenAI
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
@@ -174,29 +175,12 @@ class AnthropicSentimentClient:
 
     @traced("feedback_sentiment_classify_anthropic", tags=["feedback_sentiment"])
     def classify(self, conversation_text: str) -> str | None:
-        message = self._client.messages.create(
-            model=self.model_version,
+        message = call_anthropic(
+            self._client,
+            self.model_version,
             max_tokens=SENTIMENT_MAX_TOKENS,
-            messages=[
-                {
-                    "role": "user",
-                    "content": _sentiment_prompt(conversation_text),
-                }
-            ],
+            prompt=_sentiment_prompt(conversation_text),
         )
-        if message.usage is not None:
-            attach_llm_usage(
-                usage={
-                    "prompt_tokens": message.usage.input_tokens,
-                    "completion_tokens": message.usage.output_tokens,
-                    "total_tokens": message.usage.input_tokens
-                    + message.usage.output_tokens,
-                },
-                model=self.model_version,
-                provider="bedrock"
-                if isinstance(self._client, AnthropicBedrock)
-                else "anthropic",
-            )
         if not message.content:
             return None
         return _extract_sentiment_word(message.content[0].text)
@@ -208,41 +192,23 @@ class OpenAISentimentClient:
     def __init__(
         self, client: OpenAI, model_version: str, *, client_class: str = "openai"
     ) -> None:
-        # Same reasoning as ml.lib.summarize.OpenAISummaryClient: only real
-        # api.openai.com (client_class="openai") can never serve a Claude id;
-        # "openai_compatible" may legitimately proxy Claude under this same id.
-        if client_class == "openai" and model_version.startswith("claude"):
-            msg = (
-                f"model_version={model_version!r} looks like an Anthropic model "
-                "id, but client_class='openai' is configured. Set "
-                "FeedbackSentimentEvalConfig.model_version (or "
-                "SENTIMENT_MODEL_VERSION) to an OpenAI model id (e.g. 'gpt-4o-mini')."
-            )
-            raise ValueError(msg)
+        raise_if_claude_model_on_openai(
+            client_class=client_class,
+            model_version=model_version,
+            config_hint=(
+                "FeedbackSentimentEvalConfig.model_version (or SENTIMENT_MODEL_VERSION)"
+            ),
+        )
         self._client = client
         self.model_version = model_version
 
     @traced("feedback_sentiment_classify_openai", tags=["feedback_sentiment"])
     def classify(self, conversation_text: str) -> str | None:
-        response = self._client.chat.completions.create(
-            model=self.model_version,
-            messages=[
-                {
-                    "role": "user",
-                    "content": _sentiment_prompt(conversation_text),
-                }
-            ],
+        response = call_openai(
+            self._client,
+            self.model_version,
+            prompt=_sentiment_prompt(conversation_text),
         )
-        if response.usage is not None:
-            attach_llm_usage(
-                usage={
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens,
-                },
-                model=self.model_version,
-                provider=infer_llm_provider(self.model_version, default="openai"),
-            )
         content = response.choices[0].message.content
         if not content:
             return None
@@ -259,19 +225,14 @@ def build_sentiment_client(
     Mirrors ml.lib.summarize.build_summary_client's dispatch and
     model_version/bedrock_model_version split.
     """
-    client = llm.get_client()
-    if isinstance(client, AnthropicBedrock):
-        return AnthropicSentimentClient(
-            client, bedrock_model_version or BEDROCK_SENTIMENT_MODEL_VERSION
-        )
-    if isinstance(client, Anthropic):
-        return AnthropicSentimentClient(
-            client, model_version or SENTIMENT_MODEL_VERSION
-        )
-    return OpenAISentimentClient(
-        client,
-        model_version or SENTIMENT_MODEL_VERSION,
-        client_class=llm.client_class,
+    return build_llm_client(
+        llm,
+        anthropic_client_cls=AnthropicSentimentClient,
+        openai_client_cls=OpenAISentimentClient,
+        model_version=model_version,
+        bedrock_model_version=bedrock_model_version,
+        default_model_version=SENTIMENT_MODEL_VERSION,
+        default_bedrock_model_version=BEDROCK_SENTIMENT_MODEL_VERSION,
     )
 
 

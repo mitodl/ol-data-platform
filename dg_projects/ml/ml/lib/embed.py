@@ -449,12 +449,9 @@ def checkpoint_embedding_chunk(
     # the upsert; a no-op once the table already has it.
     with table.update_schema() as update:
         update.union_by_name(chunk_df.to_arrow().schema)
-    # union_by_name always appends a new column at the *end* of the table's
-    # physical schema, regardless of where it falls in chunk_df -- pyiceberg's
-    # upsert does a strict positional pyarrow cast (same names, same order), which
-    # fails on a same-name-different-order schema, not just a missing column. So
-    # once a column's been added this way, every later upsert must match the
-    # table's current column order, not chunk_df's own declared order.
+    # union_by_name appends new columns at the table's end regardless of chunk_df's
+    # order, and upsert's pyarrow cast is positional -- so it must be reordered
+    # to match the table, not chunk_df.
     ordered_chunk_df = chunk_df.select(table.schema().column_names)
     table.upsert(
         df=ordered_chunk_df.to_arrow(),

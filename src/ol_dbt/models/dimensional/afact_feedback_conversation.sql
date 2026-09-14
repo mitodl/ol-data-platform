@@ -97,36 +97,6 @@ with conversation as (
     from {{ ref('dim_feedback_category') }}
 )
 
-, cluster_assignment as (
-    select * from {{ ref('int__feedback__cluster_assignment') }}
-)
-
-, category_proposal as (
-    select cluster_run_id, cluster_id, category_slug
-    from {{ ref('int__feedback__category_proposal') }}
-)
-
--- Only 'approved' -- a still-proposed or deprecated cluster-derived category never
--- gets assigned to a conversation, unlike the tag-seed fallback below (already-trusted
--- existing structure, not gated on this new approval mechanism).
-, approved_category as (
-    select feedback_category_pk, category_slug
-    from {{ ref('dim_feedback_category') }}
-    where category_status = 'approved'
-)
-
-, cluster_category as (
-    select
-        cluster_assignment.feedback_conversation_pk
-        , approved_category.feedback_category_pk
-    from cluster_assignment
-    inner join category_proposal
-        on cluster_assignment.cluster_run_id = category_proposal.cluster_run_id
-        and cluster_assignment.cluster_id = category_proposal.cluster_id
-    inner join approved_category
-        on category_proposal.category_slug = approved_category.category_slug
-)
-
 , summary as (
     select * from {{ ref('int__feedback__summary') }}
 )
@@ -167,13 +137,9 @@ select
     , embedding.embedding_model_version
     , embedding.embedding_input
     , embedding.embedded_at
-    -- An approved cluster-derived category wins over the tag-seed guess; a
-    -- conversation with neither stays null, the queryable unassigned state.
-    , coalesce(cluster_category.feedback_category_pk, feedback_category.feedback_category_pk)
-        as category_fk
-    , cluster_assignment.cluster_run_id
-    , cluster_assignment.cluster_id
-    , cluster_assignment.cluster_probability
+    -- The conversation's dominant existing tag's category; a conversation with no
+    -- tag stays null, the queryable unassigned state.
+    , feedback_category.feedback_category_pk as category_fk
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as conversation_ingested_at
 from conversation
 inner join turn_aggregates
@@ -193,10 +159,6 @@ left join dominant_tag
     and turn_aggregates.feedback_source_fk = dominant_tag.feedback_source_fk
 left join feedback_category
     on dominant_tag.tag_slug = feedback_category.category_slug
-left join cluster_assignment
-    on conversation.feedback_conversation_pk = cluster_assignment.feedback_conversation_pk
-left join cluster_category
-    on conversation.feedback_conversation_pk = cluster_category.feedback_conversation_pk
 left join summary
     on conversation.feedback_conversation_pk = summary.feedback_conversation_pk
 left join embedding
