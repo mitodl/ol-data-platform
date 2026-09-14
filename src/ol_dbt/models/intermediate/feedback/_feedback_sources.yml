@@ -36,23 +36,42 @@ sources:
   - name: feedback_cluster_run
     description: One row per clustering run (params, cluster/noise counts, silhouette,
       run_status='completed'|'failed' -- an audit value, not a promotion gate), materialized
-      by the feedback_clusters Dagster asset. Not yet consumed downstream -- feedback_cluster_identity
-      (which matches this run's clusters onto stable cluster_keys) isn't built yet.
-      No column tests here -- this table may not exist yet in a clean schema, and
-      a source-level test (unlike a test on a guarded intermediate model) queries
-      the raw relation directly and fails outright rather than tolerating its absence.
+      by the feedback_clusters Dagster asset. Consumed by feedback_cluster_identity,
+      which matches each completed run's clusters onto stable cluster_keys. No column
+      tests here -- this table may not exist yet in a clean schema, and a source-level
+      test (unlike a test on a guarded intermediate model) queries the raw relation
+      directly and fails outright rather than tolerating its absence.
     columns:
     - name: cluster_run_id
       description: str, uuid identifying this clustering run.
   - name: feedback_cluster_candidate
     description: One row per (conversation, cluster_run_id) -- every clustered run's
-      run-local assignments, the input to identity matching. Not yet consumed downstream
-      -- see feedback_cluster_run. No column/table tests here.
+      run-local assignments, the input to feedback_cluster_identity's matching. See
+      feedback_cluster_run. No column/table tests here.
     columns:
     - name: cluster_run_id
       description: str, uuid identifying which clustering run produced this assignment.
     - name: feedback_conversation_pk
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+  - name: feedback_cluster
+    description: One row per cluster_key, materialized by the feedback_cluster_identity
+      Dagster asset. Carries the same identity across every clustering run in which
+      that cluster continues. No column tests here.
+    columns:
+    - name: cluster_key
+      description: str, uuid identifying this cluster's stable identity.
+    - name: cluster_status
+      description: str, active or retired.
+  - name: feedback_cluster_lineage
+    description: One row per continued/merged/split/new/retired edge, materialized
+      by the feedback_cluster_identity Dagster asset for every clustering run it processes.
+      No column tests here.
+    columns:
+    - name: cluster_lineage_pk
+      description: str, deterministic hash of (cluster_run_id, prior_cluster_key,
+        cluster_key).
+    - name: cluster_run_id
+      description: str, which clustering run produced this edge.
   - name: feedback_summaries
     description: One row per conversation (upsert key feedback_conversation_pk), materialized
       by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version

@@ -63,9 +63,8 @@ HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "15"))
 # comparison the §B.1 bake-off depends on.
 RANDOM_STATE = int(os.environ.get("CLUSTER_RANDOM_STATE", "42"))
 
-# feedback_ml_approach.md §C.1: an early re-cluster trigger alongside the cron
-# schedule -- corpus growth (in embedded conversations) since the last completed
-# run. Starting point, not a value calibrated on the labeled sample yet.
+# Early re-cluster trigger alongside the cron schedule -- corpus growth (in
+# embedded conversations) since the last completed run.
 CORPUS_GROWTH_TRIGGER = int(os.environ.get("CLUSTER_CORPUS_GROWTH_TRIGGER", "5000"))
 
 # silhouette_score is O(n^2) (pairwise distances) -- at the ~198K-conversation

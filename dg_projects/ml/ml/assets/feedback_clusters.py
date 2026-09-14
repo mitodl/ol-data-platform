@@ -125,7 +125,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     One row lands in feedback_cluster_run describing the run as a whole (params,
     cluster/noise counts, silhouette, run_status='completed'|'failed' -- an audit
     value, not a promotion gate); one row per clustered conversation lands in
-    feedback_cluster_candidate (feedback_ml_approach.md §C.1). Both are append-only:
+    feedback_cluster_candidate. Both are append-only:
     every run gets its own cluster_run_id. Scheduled/triggered (see
     feedback_clusters_schedule/feedback_clusters_growth_sensor in definitions.py),
     not chained on every feedback_embeddings refresh -- a full re-cluster is
