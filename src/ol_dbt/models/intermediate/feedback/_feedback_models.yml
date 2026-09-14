@@ -263,6 +263,9 @@ models:
     tests:
     - not_null
     - unique
+  - name: cluster_run_id
+    description: str, which clustering run this cluster_key was resolved from when
+      the proposal was generated.
   - name: category_slug
     description: str, deterministically slugified from category_label.
     tests:
