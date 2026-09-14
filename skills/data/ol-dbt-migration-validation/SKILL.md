@@ -48,10 +48,28 @@ each table. For any dbt-materialized Iceberg table that location is a
 | **non-raw total** | **640** | **624 (97.5%)** |
 
 Re-registering does **not** fix this — it is the steady state, not a race you
-lost. A `__dbt_tmp` view either 404s (loud) or silently returns the temp table's
+lost. Re-measured 2026-09-14, five days later: 651 of 667 non-raw views (97.6%),
+with every layer but staging identical to the table above.
+
+A `__dbt_tmp` view either 404s (loud) or silently returns the temp table's
 **accumulated snapshots**: duplicated *and* partially missing rows. Two measured
 examples: `int__mitxonline__proctored_exam_grades` read 292,704 rows for 9,442
 distinct (31x), `int__micromasters__dedp_proctored_exam_grades` 5.4x.
+
+**The duplication factor is per-view and wildly heterogeneous.** Measured
+2026-09-14 across all 29 registered `dim_` views in *one* registration:
+
+| view | rows | distinct pk | ratio |
+|---|---|---|---|
+| `dim_ocw_resource` | 179,863 | 2,908 | **61.85x** |
+| `dim_course_run` | 10,884 | 8,508 | 1.28x |
+| `dim_course` | 4,321 | 4,071 | 1.06x |
+| 24 others | — | — | 1.00x |
+| `dim_discussion_topic`, `dim_video` | — | — | 404, pointer rot |
+
+Two views in the same layer and the same registration, one at 1.00x and one at
+61.85x. That spread is the whole reason the next rule has to be scoped to
+*shared* inputs: identical views cancel, different views do not.
 
 The consequence, and the single most important rule in this skill:
 
@@ -144,9 +162,17 @@ cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) dbt run \
 
 `dbt run`, not `dbt build`. `build` runs tests inline under dbt's default eager
 indirect selection — the cross-model `relationships_*` noise the section below
-tells you to avoid — and a failing test there can skip the downstream models you
+tells you to avoid — and a failing test there skips the downstream models you
 selected, leaving one comparison side unmaterialized. Test separately, cautiously,
 after both sides exist.
+
+The skip is **intermittent in this project**, which is worse than consistent.
+`dbt_project.yml` sets `tests: open_learning: +error_if: ">10"`, so a test with 10
+or fewer failing rows only WARNs and the downstream model still builds. Verified
+2026-09-14 on dev_local: 4 failing rows → `WARN`, downstream built; 24 failing
+rows → `FAIL`, `SKIP relation ..._downstream`. So `dbt build` appears to work
+until a test crosses the threshold, and then a comparison side silently does not
+exist.
 
 **`--full-refresh` is not optional when the model under test is incremental.**
 dbt does execute the model SQL on an incremental run — what it does *not* do is
