@@ -38,6 +38,7 @@ from ol_dbt_cli.lib.inventory import (
     reconcile_warehouse,
     render_airbyte,
     render_dagster_intervals,
+    render_dbt_metadata_columns,
     validate_inventory,
 )
 from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
@@ -214,6 +215,51 @@ def render(
         console.print(f"Wrote {escape(str(output))}")
     else:
         print(text, end="")  # noqa: T201
+
+
+DBT_METADATA_MACRO_PATH = Path("src/ol_dbt/macros/_raw_metadata_columns.sql")
+
+
+@inventory_app.command(name="metadata-columns")
+def metadata_columns(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/."),
+    ] = DEFAULT_INVENTORY_DIR,
+    output: Annotated[
+        Path,
+        Parameter(name=["--output", "-o"], help="Macro file to render."),
+    ] = DBT_METADATA_MACRO_PATH,
+    write: Annotated[
+        bool,
+        Parameter(help="Write the file. Without it, check it is current and exit 1 if not."),
+    ] = False,
+) -> None:
+    """Render the raw-metadata column map the dedup macro resolves through.
+
+    Check mode is the point of the command, not an afterthought: the generated
+    macro is committed, so the failure to guard against is an inventory edit
+    that lands without regenerating it — after which dbt silently keeps
+    deduplicating a cutover source on a column it no longer has. Run without
+    `--write` in CI.
+    """
+    rendered = render_dbt_metadata_columns(load_units(inventory_dir))
+
+    if write:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered)
+        console.print(f"Wrote {escape(str(output))}")
+        return
+
+    current = output.read_text() if output.exists() else None
+    if current == rendered:
+        console.print(f"{escape(str(output))} is current.")
+        return
+    err_console.print(
+        f"[bold red]{escape(str(output))} is stale. Regenerate with `ol-dbt inventory metadata-columns --write`."
+    )
+    sys.exit(1)
 
 
 RAW_SOURCE_NAME = "ol_warehouse_raw_data"

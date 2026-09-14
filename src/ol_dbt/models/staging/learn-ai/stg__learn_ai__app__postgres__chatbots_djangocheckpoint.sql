@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint') }}
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'id') }}
+{{ deduplicate_raw_table(raw_table='raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint', partition_columns = 'id') }}
 , cleaned as (
     select
         id as djangocheckpoint_id

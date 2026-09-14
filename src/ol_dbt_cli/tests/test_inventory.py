@@ -15,7 +15,14 @@ from typing import Any
 import pytest
 import yaml
 
-from ol_dbt_cli.lib.inventory import validate_inventory
+from ol_dbt_cli.lib.inventory import (
+    Unit,
+    load_units,
+    raw_metadata_column,
+    raw_metadata_columns,
+    render_dbt_metadata_columns,
+    validate_inventory,
+)
 from ol_dbt_cli.lib.validation import ValidationReport
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -460,3 +467,101 @@ class TestCrossUnit:
         _write(inventory, "edxorg__s3_again", clone)
         report = _run(inventory)
         assert "already defined by" in _messages(report)
+
+
+class TestRawMetadataColumn:
+    """The loader-agnostic dedup seam (ol-data-platform#2443).
+
+    The bug being fixed was silent: staging models ordered by
+    `_airbyte_extracted_at` against dlt-produced tables that never had it, so
+    these assert the None case as hard as the Airbyte one.
+    """
+
+    def test_airbyte_unit_resolves_to_the_airbyte_column(self) -> None:
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=copy.deepcopy(APP_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+
+    def test_dlt_unit_resolves_to_the_dlt_load_id(self) -> None:
+        # ol_dlt enables normalize.parquet_normalizer.add_dlt_load_id for every
+        # pipeline, so a dlt unit stamps a monotonic load id to order by.
+        unit = Unit(path=Path("edxorg__s3.yml"), data=copy.deepcopy(DLT_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0]) == "_dlt_load_id"
+
+    def test_dagster_unit_resolves_to_none(self) -> None:
+        data = copy.deepcopy(DLT_UNIT)
+        data["loader"] = "dagster"
+        del data["dlt"]
+        unit = Unit(path=Path("openedx__s3.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_table_override_wins_over_the_loader_default(self) -> None:
+        # The two Salesforce tables still on Airbyte v1's column pair.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = "_airbyte_emitted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_emitted_at"
+
+    def test_unit_override_applies_to_every_table(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["raw_metadata_column"] = "_airbyte_emitted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert all(raw_metadata_column(unit, table) == "_airbyte_emitted_at" for table in unit.tables)
+
+    def test_table_override_wins_over_the_unit_override(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["raw_metadata_column"] = "_airbyte_emitted_at"
+        data["tables"][0]["raw_metadata_column"] = "_airbyte_extracted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+
+    def test_explicit_null_override_beats_an_airbyte_loader(self) -> None:
+        # `raw_metadata_column:` with no value is a declaration, not an omission,
+        # so it must not fall through to the loader default.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = None
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_map_covers_every_declared_table(self, inventory: Path) -> None:
+        units = load_units(inventory)
+        mapping = raw_metadata_columns(units)
+        declared = {table["raw_table"] for unit in units for table in unit.tables}
+        assert set(mapping) == declared
+
+    def test_real_inventory_keeps_edxorg_undeduplicatable_until_it_reloads(self) -> None:
+        # edxorg/mysql declares `raw_metadata_column: null` because its tables
+        # predate add_dlt_load_id. Ordering them by a column they do not carry is
+        # the exact regression this seam was filed for, so the explicit null has
+        # to beat the loader default until that unit reloads.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__tables__auth_user"] is None
+
+    def test_real_inventory_gives_reloaded_dlt_units_the_load_id(self) -> None:
+        # A dlt unit carrying no override takes the new default, which is what
+        # makes the edxorg entry above removable rather than permanent.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
+
+    def test_real_inventory_keeps_salesforce_on_the_v1_column(self) -> None:
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        opportunity = "raw__thirdparty__salesforce___destination_v2__Opportunity"
+        assert mapping[opportunity] == "_airbyte_emitted_at"
+
+
+class TestGeneratedMetadataMacro:
+    def test_generated_macro_is_current(self) -> None:
+        """The committed macro must match the inventory it is generated from.
+
+        Without this the failure is silent in the worst way: an inventory edit
+        lands, the macro keeps the old answer, and dbt goes on deduplicating a
+        cutover source on a column it no longer has.
+        """
+        expected = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        macro = REPO_ROOT / "src" / "ol_dbt" / "macros" / "_raw_metadata_columns.sql"
+        assert macro.read_text() == expected, "Run `ol-dbt inventory metadata-columns --write`."
+
+    def test_rendered_macro_emits_none_unquoted(self) -> None:
+        # `'none'` would be a truthy string in Jinja and silently order by a
+        # column named none; the bare literal is what makes the pass-through fire.
+        rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        assert "'raw__edxorg__s3__tables__auth_user': none," in rendered
