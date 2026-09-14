@@ -87,6 +87,21 @@ mitxonline_app_ingest_schedule = (
     if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
     else None
 )
+# PostHog writes an hour's export object after that hour closes. Across the 168
+# objects written 2026-08-28 to 2026-09-03 the lag ran 1.4 to 15.1 minutes,
+# median 8.3, so :20 clears the measured maximum. Landing later than that costs
+# nothing. An hour that misses its tick entirely is still picked up, because the
+# source reads from CURSOR_LOOKBACK behind its cursor rather than trusting the
+# high-water mark alone; a window that lands after a later one is not stepped
+# over.
+posthog_events_ingest_schedule = dg.ScheduleDefinition(
+    name="posthog_events_ingest_hourly_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__posthog__learn__s3__events"]
+    ),
+    cron_schedule="20 * * * *",
+    execution_timezone="Etc/UTC",
+)
 
 defs = dg.Definitions(
     schedules=[
@@ -98,5 +113,6 @@ defs = dg.Definitions(
         youtube_ingest_schedule,
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
+        posthog_events_ingest_schedule,
     ],
 )
