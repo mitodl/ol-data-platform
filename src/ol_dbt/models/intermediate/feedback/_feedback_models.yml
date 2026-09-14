@@ -187,3 +187,47 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source_slug", "conversation_ref"]
+
+- name: int__feedback__summary
+  description: feedback_summaries' output, one row per conversation -- empty until
+    that asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_summary
+    description: str, the LLM-generated summary. Null for a single-turn/short conversation
+      (skipped by design, §A.1) or if the table doesn't exist yet.
+  - name: summary_model_version
+    description: str, which model produced conversation_summary. Null under the same
+      conditions as conversation_summary.
+  - name: prompt_version
+    description: str, the Opik Prompt Library version of feedback-summary active when
+      this row was summarized (or "local" if Opik wasn't configured). Null under the
+      same conditions as conversation_summary.
+  - name: summarized_at
+    description: ISO8601 varchar, when conversation_summary was generated. Null under
+      the same conditions as conversation_summary.
+
+- name: int__feedback__embedding
+  description: feedback_embeddings' output, one row per conversation -- empty until
+    that asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: embedding_vector
+    description: array(double), the conversation's embedding.
+  - name: embedding_dim
+    description: int, embedding_vector's length.
+  - name: embedding_model_version
+    description: str, which model produced embedding_vector.
+  - name: embedding_input
+    description: str, 'summary' or 'concatenated_turns' -- which text was actually
+      embedded.
+  - name: embedded_at
+    description: ISO8601 varchar, when embedding_vector was generated.

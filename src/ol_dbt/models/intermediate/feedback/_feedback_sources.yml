@@ -9,7 +9,7 @@ sources:
 - name: feedback_intermediate
   loader: dagster
   database: '{{ target.database | default(none) }}'
-  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_intermediate'
+  schema: '{{ target.schema }}_intermediate'
   tables:
   - name: feedback_redacted
     description: Presidio-masked title/text for every feedback turn, materialized
@@ -33,3 +33,47 @@ sources:
     - dbt_expectations.expect_compound_columns_to_be_unique:
         arguments:
           column_list: ["source_slug", "source_record_ref"]
+  - name: feedback_cluster_run
+    description: One row per clustering run (params, cluster/noise counts, silhouette),
+      materialized by the feedback_clustering Dagster asset. Not currently consumed
+      downstream. No column tests here -- this table may not exist yet in a clean
+      schema, and a source-level test (unlike a test on a guarded intermediate model)
+      queries the raw relation directly and fails outright rather than tolerating
+      its absence.
+    columns:
+    - name: cluster_run_id
+      description: str, uuid identifying this clustering run.
+  - name: feedback_cluster_candidate
+    description: One row per (conversation, cluster_run_id) -- every clustered run's
+      assignments. Not currently consumed downstream -- see feedback_cluster_run.
+      No column/table tests here.
+    columns:
+    - name: cluster_run_id
+      description: str, uuid identifying which clustering run produced this assignment.
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+  - name: feedback_summaries
+    description: One row per conversation (upsert key feedback_conversation_pk), materialized
+      by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version
+      for a single-turn/short conversation, which the asset's skip rule never summarizes
+      (§A.1). No column tests here -- see feedback_cluster_run; not_null/unique coverage
+      lives on int__feedback__summary instead.
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    - name: prompt_version
+      description: str, the Opik Prompt Library version of feedback-summary active
+        when this row was summarized (or "local" if Opik wasn't configured).
+    - name: summarized_at
+      description: timestamp, when this row's summary was generated.
+  - name: feedback_embeddings
+    description: One row per conversation (upsert key feedback_conversation_pk --
+      re-embedding overwrites in place, so only the latest model_version/dim/ embedding_input
+      survives), materialized by the feedback_embeddings Dagster asset. No column
+      tests here -- see feedback_cluster_run; not_null/unique coverage lives on int__feedback__embedding
+      instead.
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    - name: embedded_at
+      description: timestamp, when this row's embedding was generated.

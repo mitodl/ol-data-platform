@@ -89,6 +89,7 @@ class FeedbackEmbeddingsConfig(Config):
         "schema": database_name,
         "write_mode": "upsert",
         "upsert_options": {"join_cols": JOIN_COLS},
+        "schema_update_mode": "update",
     },
 )
 def feedback_embeddings(
@@ -194,9 +195,12 @@ def feedback_embeddings(
     if attempted_count > 0 and embeddings_df.height == 0:
         sample_errors = "; ".join(errors[:3])
         msg = (
-            f"All {attempted_count} attempted embedding calls failed; the "
-            f"embedding client/credential is likely misconfigured. Sample "
-            f"errors: {sample_errors}"
+            f"All {attempted_count} attempted embedding calls failed via "
+            f"client_class={embedding_llm.client_class!r}, "
+            f"model_version={client.model_version!r}, "
+            f"base_url={embedding_llm.base_url!r} -- check these resolved to what "
+            f"you intended (a stale/mismatched client_class is a common cause). "
+            f"Sample errors: {sample_errors}"
         )
         raise Failure(msg)
 

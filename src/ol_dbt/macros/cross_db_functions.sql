@@ -663,3 +663,16 @@
 {% macro duckdb__null_double_array() -%}cast(null as double[]){%- endmacro %}
 
 {% macro starrocks__null_double_array() -%}cast(null as array<double>){%- endmacro %}
+
+{# Trino's array(double) syntax is rejected by DuckDB's parser (double[] there) --
+   same per-adapter split as null_double_array, for casting a real column instead
+   of a literal null. #}
+{% macro cast_double_array(column_name) -%}
+    {{ adapter.dispatch('cast_double_array', 'open_learning')(column_name) }}
+{%- endmacro %}
+
+{% macro default__cast_double_array(column_name) -%}cast({{ column_name }} as array(double)){%- endmacro %}
+
+{% macro duckdb__cast_double_array(column_name) -%}cast({{ column_name }} as double[]){%- endmacro %}
+
+{% macro starrocks__cast_double_array(column_name) -%}cast({{ column_name }} as array<double>){%- endmacro %}
