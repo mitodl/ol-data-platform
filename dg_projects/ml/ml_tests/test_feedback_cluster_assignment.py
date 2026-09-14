@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import polars as pl
 from dagster import IOManager, materialize
-from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
+from ml.assets.feedback_cluster_assignment import (
+    _active_clusters,
+    _current_active_embedding_config,
+    _run_embedding_config,
+    feedback_cluster_assignment,
+)
 from ml.lib import cluster_run_lookup
 
 
@@ -49,6 +54,98 @@ def test_bootstrap_with_no_upstream_tables_produces_empty_membership() -> None:
 
 def _lazyframe(data: dict[str, list[Any]]) -> pl.LazyFrame:
     return pl.DataFrame(data).lazy()
+
+
+def test_run_embedding_config_reads_from_feedback_cluster_run() -> None:
+    runs_lf = _lazyframe(
+        {
+            "cluster_run_id": ["run-1"],
+            "embedding_model_version": ["text-embedding-3-small"],
+            "embedding_dim": [1024],
+        }
+    )
+    with patch(
+        "ml.assets.feedback_cluster_assignment.get_dbt_model_as_dataframe",
+        return_value=runs_lf,
+    ):
+        result = _run_embedding_config("run-1")
+    assert result == ("text-embedding-3-small", 1024)
+
+
+def test_current_active_embedding_config_none_when_table_missing() -> None:
+    with patch(
+        "ml.assets.feedback_cluster_assignment.table_exists", return_value=False
+    ):
+        result = _current_active_embedding_config(MagicMock())
+    assert result is None
+
+
+def test_current_active_embedding_config_returns_single_active_config() -> None:
+    clusters_lf = _lazyframe(
+        {
+            "cluster_key": ["a", "b"],
+            "cluster_status": ["active", "active"],
+            "embedding_model_version": ["text-embedding-3-small"] * 2,
+            "embedding_dim": [1024, 1024],
+        }
+    )
+    with (
+        patch("ml.assets.feedback_cluster_assignment.table_exists", return_value=True),
+        patch(
+            "ml.assets.feedback_cluster_assignment.get_dbt_model_as_dataframe",
+            return_value=clusters_lf,
+        ),
+    ):
+        result = _current_active_embedding_config(MagicMock())
+    assert result == ("text-embedding-3-small", 1024)
+
+
+def test_current_active_embedding_config_none_when_two_configs_active() -> None:
+    # A transitional window before feedback_cluster_identity retires the old
+    # config's actives -- placement should skip rather than guess.
+    clusters_lf = _lazyframe(
+        {
+            "cluster_key": ["a", "b"],
+            "cluster_status": ["active", "active"],
+            "embedding_model_version": [
+                "text-embedding-3-small",
+                "text-embedding-3-large",
+            ],
+            "embedding_dim": [1024, 1024],
+        }
+    )
+    with (
+        patch("ml.assets.feedback_cluster_assignment.table_exists", return_value=True),
+        patch(
+            "ml.assets.feedback_cluster_assignment.get_dbt_model_as_dataframe",
+            return_value=clusters_lf,
+        ),
+    ):
+        result = _current_active_embedding_config(MagicMock())
+    assert result is None
+
+
+def test_active_clusters_scoped_to_config_and_active_status() -> None:
+    clusters_lf = _lazyframe(
+        {
+            "cluster_key": ["a", "b", "c"],
+            "cluster_status": ["active", "active", "retired"],
+            "embedding_model_version": ["text-embedding-3-small"] * 3,
+            "embedding_dim": [1024, 512, 1024],
+            "centroid": [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]],
+            "radius": [0.5, 0.5, 0.5],
+        }
+    )
+    with (
+        patch("ml.assets.feedback_cluster_assignment.table_exists", return_value=True),
+        patch(
+            "ml.assets.feedback_cluster_assignment.get_dbt_model_as_dataframe",
+            return_value=clusters_lf,
+        ),
+    ):
+        result = _active_clusters(MagicMock(), "text-embedding-3-small", 1024)
+    # "b" is the wrong dim and "c" is retired -- only "a" qualifies.
+    assert [c["cluster_key"] for c in result] == ["a"]
 
 
 def test_latest_identity_processed_run_none_when_lineage_table_missing() -> None:
