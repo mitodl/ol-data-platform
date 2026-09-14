@@ -144,7 +144,7 @@ def _active_cluster_members(
     )
     return {
         cluster_key: frozenset(group["feedback_conversation_pk"])
-        for cluster_key, group in membership_df.group_by("cluster_key")
+        for (cluster_key,), group in membership_df.group_by("cluster_key")
     }
 
 
