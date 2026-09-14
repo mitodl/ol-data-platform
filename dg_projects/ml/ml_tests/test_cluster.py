@@ -126,3 +126,23 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["random_state"] == 42
     # Two well-separated blobs must not collapse into a single cluster.
     assert run_metadata["cluster_count"] >= 2
+
+
+def test_should_trigger_early_recluster_with_no_prior_completed_run() -> None:
+    assert cluster.should_trigger_early_recluster(1, None) is True
+    assert cluster.should_trigger_early_recluster(0, None) is False
+
+
+def test_should_trigger_early_recluster_below_growth_threshold() -> None:
+    assert (
+        cluster.should_trigger_early_recluster(1_000, 900, growth_trigger=200) is False
+    )
+
+
+def test_should_trigger_early_recluster_at_or_above_growth_threshold() -> None:
+    assert (
+        cluster.should_trigger_early_recluster(1_100, 900, growth_trigger=200) is True
+    )
+    assert (
+        cluster.should_trigger_early_recluster(1_200, 900, growth_trigger=200) is True
+    )

@@ -1,10 +1,10 @@
-"""Tests for the feedback_clustering asset's small-N failure path."""
+"""Tests for the feedback_clusters asset's small-N failure path."""
 
 from unittest.mock import MagicMock, patch
 
 import polars as pl
 from dagster import IOManager, materialize
-from ml.assets.feedback_clustering import FeedbackClusteringConfig, feedback_clustering
+from ml.assets.feedback_clusters import FeedbackClustersConfig, feedback_clusters
 
 
 class _CapturingIOManager(IOManager):
@@ -38,21 +38,21 @@ def test_small_run_writes_a_failed_run_row_with_no_candidates() -> None:
     io_manager = _CapturingIOManager()
     with (
         patch(
-            "ml.assets.feedback_clustering.get_dbt_model_as_dataframe",
+            "ml.assets.feedback_clusters.get_dbt_model_as_dataframe",
             return_value=_small_embeddings_lazyframe(3),
         ),
         patch(
-            "ml.assets.feedback_clustering.get_glue_catalog",
+            "ml.assets.feedback_clusters.get_glue_catalog",
             return_value=MagicMock(),
         ),
     ):
         result = materialize(
-            [feedback_clustering],
+            [feedback_clusters],
             resources={"io_manager": io_manager},
             run_config={
                 "ops": {
-                    "feedback_clustering": {
-                        "config": FeedbackClusteringConfig(
+                    "feedback_clusters": {
+                        "config": FeedbackClustersConfig(
                             min_cluster_size=5,
                             umap_n_components=5,
                             embedding_model_version="text-embedding-3-small",

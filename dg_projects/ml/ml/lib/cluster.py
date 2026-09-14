@@ -60,8 +60,13 @@ HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "15"))
 
 # Fixed rather than left to UMAP/HDBSCAN's own default (None -- a fresh random
 # state per call): a clustering run must be reproducible for the run-vs-run
-# comparison the promotion loop depends on.
+# comparison the §B.1 bake-off depends on.
 RANDOM_STATE = int(os.environ.get("CLUSTER_RANDOM_STATE", "42"))
+
+# feedback_ml_approach.md §C.1: an early re-cluster trigger alongside the cron
+# schedule -- corpus growth (in embedded conversations) since the last completed
+# run. Starting point, not a value calibrated on the labeled sample yet.
+CORPUS_GROWTH_TRIGGER = int(os.environ.get("CLUSTER_CORPUS_GROWTH_TRIGGER", "5000"))
 
 # silhouette_score is O(n^2) (pairwise distances) -- at the ~198K-conversation
 # MVP scale that's tens of billions of distance calculations after clustering
@@ -76,6 +81,24 @@ NOISE_CLUSTER_ID = -1
 
 def new_cluster_run_id() -> str:
     return str(uuid.uuid4())
+
+
+def should_trigger_early_recluster(
+    current_embedding_count: int,
+    last_completed_run_total_conversations: int | None,
+    growth_trigger: int = CORPUS_GROWTH_TRIGGER,
+) -> bool:
+    """Decide whether the corpus has grown enough to recluster before the cron schedule.
+
+    last_completed_run_total_conversations=None means no completed run exists yet
+    (feedback_cluster_run doesn't exist, or has never recorded run_status='completed')
+    -- always trigger once there's anything to cluster, rather than waiting for the
+    cron schedule's first tick.
+    """
+    if last_completed_run_total_conversations is None:
+        return current_embedding_count > 0
+    growth = current_embedding_count - last_completed_run_total_conversations
+    return growth >= growth_trigger
 
 
 def failed_run_metadata(  # noqa: PLR0913 -- same shape as cluster_embeddings's args

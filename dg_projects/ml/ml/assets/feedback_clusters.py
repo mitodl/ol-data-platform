@@ -22,7 +22,6 @@ from ml.lib.cluster import (
     failed_run_metadata,
 )
 from ml.lib.embed import EMBEDDING_DIM, EMBEDDING_MODEL_VERSION
-from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import (
@@ -49,7 +48,7 @@ def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> N
     table.delete(EqualTo("cluster_run_id", cluster_run_id))
 
 
-class FeedbackClusteringConfig(Config):
+class FeedbackClustersConfig(Config):
     sample_limit: int | None = Field(
         default=None,
         description="Cap the number of embedded conversations clustered, for fast "
@@ -102,8 +101,7 @@ class FeedbackClusteringConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clustering_v1",
-            automation_condition=upstream_or_code_changes(),
+            code_version="feedback_clusters_v1",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -113,26 +111,28 @@ class FeedbackClusteringConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clustering_v1",
-            automation_condition=upstream_or_code_changes(),
+            code_version="feedback_clusters_v1",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
     },
-    pool="feedback_clustering",
+    pool="feedback_clusters",
 )
-def feedback_clustering(
-    context: AssetExecutionContext, config: FeedbackClusteringConfig
-):
+def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersConfig):
     """
     Reduce (UMAP) and cluster (HDBSCAN) feedback conversation embeddings.
 
     One row lands in feedback_cluster_run describing the run as a whole (params,
-    cluster/noise counts, silhouette); one row per clustered conversation lands in
-    feedback_cluster_candidate (feedback_ml_approach.md §C). Both are append-only:
-    every run gets its own cluster_run_id, so a proposed run can be compared
-    against the live one before a human promotes it onto afact_feedback_conversation
-    -- that promotion step is not part of this asset.
+    cluster/noise counts, silhouette, run_status='completed'|'failed' -- an audit
+    value, not a promotion gate); one row per clustered conversation lands in
+    feedback_cluster_candidate (feedback_ml_approach.md §C.1). Both are append-only:
+    every run gets its own cluster_run_id. Scheduled/triggered (see
+    feedback_clusters_schedule/feedback_clusters_growth_sensor in definitions.py),
+    not chained on every feedback_embeddings refresh -- a full re-cluster is
+    expensive relative to how often new conversations show up, and
+    feedback_cluster_assignment (incremental placement) handles those between
+    runs. feedback_cluster_identity matches this run's clusters onto stable
+    cluster_keys immediately after; no human approves a run.
     """
     embedding_model_version = config.embedding_model_version or EMBEDDING_MODEL_VERSION
     embedding_dim = config.embedding_dim or EMBEDDING_DIM
