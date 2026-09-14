@@ -95,12 +95,12 @@ def feedback_category_proposals(
     llm: LLMClientFactory,
 ) -> pl.DataFrame:
     """
-    Propose a category label for each new/split/merged cluster_key from the most
-    recently identity-matched clustering run.
+    Propose a category label for every active cluster_key that doesn't have one
+    yet.
 
-    A continued cluster_key keeps its existing label and is never re-proposed --
-    only genuinely new or changed clusters cost an LLM call
-    (ml.lib.cluster_identity.match_clusters). Samples representative conversation
+    A cluster_key that already has a proposal row is never re-proposed -- only a
+    genuinely new/split/merged key, or one an earlier LLM call failed for, costs a
+    call. Samples representative conversation
     text per cluster_key (feedback_cluster_membership + int__feedback__conversation)
     and each cluster's dominant existing tag category (afact_feedback_conversation.
     category_fk, resolved via dim_feedback_category) as prompt context. Output is
@@ -117,25 +117,23 @@ def feedback_category_proposals(
         )
         return pl.DataFrame(schema=dict(CATEGORY_PROPOSAL_SCHEMA))
 
-    new_cluster_keys = (
+    # Every currently-active cluster_key without a proposal row needs one --
+    # not just the latest run's new/split/merged keys. A key minted by an
+    # earlier run whose LLM call failed (propose_categories swallows the
+    # failure) never becomes 'new' again once a later run continues it, so
+    # scoping to the latest run's lineage would silently strand it on the
+    # tag-seed fallback forever. A key still 'active' with no proposal row
+    # needs one regardless of which run minted it or last continued it.
+    active_cluster_keys = (
         get_dbt_model_as_dataframe(
-            database_name=intermediate_database_name,
-            table_name="feedback_cluster_lineage",
+            database_name=intermediate_database_name, table_name="feedback_cluster"
         )
-        .filter(
-            (pl.col("cluster_run_id") == cluster_run_id)
-            & pl.col("relation").is_in(["new", "split", "merged"])
-        )
+        .filter(pl.col("cluster_status") == "active")
         .select("cluster_key")
         .unique()
         .collect()["cluster_key"]
         .to_list()
     )
-    # Every cluster_key gets proposed exactly once, ever -- a re-proposal would
-    # both waste an LLM call and silently overwrite a label a human may already
-    # have corrected. Only keys missing from feedback_category_proposal (this
-    # run's new ones, or an earlier run's that failed and were never retried)
-    # go through propose_categories.
     already_proposed: set[str] = set()
     if table_exists(
         catalog, f"{intermediate_database_name}.feedback_category_proposal"
@@ -150,11 +148,11 @@ def feedback_category_proposals(
             .collect()["cluster_key"]
         )
     cluster_keys_needing_proposal = [
-        key for key in new_cluster_keys if key not in already_proposed
+        key for key in active_cluster_keys if key not in already_proposed
     ]
     if not cluster_keys_needing_proposal:
         context.log.info(
-            "No new/split/merged cluster_keys in run %s still need a proposal.",
+            "Every active cluster_key already has a proposal as of run %s.",
             cluster_run_id,
         )
         return pl.DataFrame(schema=dict(CATEGORY_PROPOSAL_SCHEMA))
@@ -177,11 +175,16 @@ def feedback_category_proposals(
         .select(["feedback_category_pk", "category_label"])
         .collect()
     )
+    member_pks = membership_df["feedback_conversation_pk"]
+    # Filtered to just this batch's cluster members before collect() -- the
+    # corpus (~198K conversations) is much larger than the handful of clusters
+    # needing a proposal here.
     afact_df = (
         get_dbt_model_as_dataframe(
             database_name=dimensional_database_name,
             table_name="afact_feedback_conversation",
         )
+        .filter(pl.col("feedback_conversation_pk").is_in(member_pks))
         .select(["feedback_conversation_pk", "category_fk"])
         .collect()
     )
@@ -190,6 +193,7 @@ def feedback_category_proposals(
             database_name=intermediate_database_name,
             table_name="int__feedback__conversation",
         )
+        .filter(pl.col("feedback_conversation_pk").is_in(member_pks))
         .select(["feedback_conversation_pk", "conversation_text"])
         .collect()
     )

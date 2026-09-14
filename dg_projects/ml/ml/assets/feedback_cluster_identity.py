@@ -11,7 +11,6 @@ from dagster import (
     AssetKey,
     AssetOut,
     Config,
-    Failure,
     MetadataValue,
     Output,
     multi_asset,
@@ -30,6 +29,7 @@ from ml.lib.cluster_identity import (
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
@@ -148,6 +148,30 @@ def _active_cluster_members(
     }
 
 
+def _other_config_active_keys(
+    catalog, embedding_model_version: str, embedding_dim: int
+) -> set[str]:
+    """Active cluster_keys under a different embedding config than this run --
+    otherwise an embedding-model change leaves the old config's clusters
+    'active' forever, since no future run can ever match against them.
+    """
+    if not table_exists(catalog, f"{database_name}.feedback_cluster"):
+        return set()
+    return set(
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster"
+        )
+        .filter(
+            (pl.col("cluster_status") == "active")
+            & (
+                (pl.col("embedding_model_version") != embedding_model_version)
+                | (pl.col("embedding_dim") != embedding_dim)
+            )
+        )
+        .collect()["cluster_key"]
+    )
+
+
 def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
     """cluster_key -> its current feedback_cluster row, for carrying
     first_seen_run_id forward on a continued/merged key.
@@ -230,9 +254,12 @@ def feedback_cluster_identity(
     feedback_cluster_membership) by Jaccard overlap, and resolves each new cluster
     to continued/merged/split/new (ml.lib.cluster_identity.match_clusters), writing
     one feedback_cluster row per resolved key and one feedback_cluster_lineage row
-    per edge (plus one 'retired' row per active key that didn't survive). No human
-    approves this; a `continuity_floor` asset check blocks the write instead when
-    too few conversations kept their cluster_key, since that means the run's
+    per edge (plus one 'retired' row per active key that didn't survive, and one
+    per active key from a *different* embedding_model_version/embedding_dim --
+    those can never be matched against the run's own config, so a model/dim
+    change would otherwise leave them 'active' forever). No human approves this;
+    a `continuity_floor` asset check blocks the write instead when too few
+    conversations kept their cluster_key, since that means the run's
     configuration needs fixing rather than a rerun.
     """
     catalog = get_glue_catalog()
@@ -280,6 +307,18 @@ def feedback_cluster_identity(
     matches, lineage_rows = match_clusters(
         new_cluster_members, active_cluster_members, config.match_threshold
     )
+    lineage_rows.extend(
+        {
+            "prior_cluster_key": other_config_key,
+            "cluster_key": None,
+            "cluster_id": None,
+            "relation": "retired",
+            "jaccard": None,
+        }
+        for other_config_key in _other_config_active_keys(
+            catalog, embedding_model_version, embedding_dim
+        )
+    )
 
     # A bootstrap run (no active clusters yet) has every match resolve to 'new' by
     # construction -- that's the expected first run, not a bad configuration, so
@@ -307,7 +346,7 @@ def feedback_cluster_identity(
             f"floor {CONTINUITY_FLOOR:.2f}; a configuration change is needed, "
             "not a rerun."
         )
-        raise Failure(msg)
+        raise permanent_failure(msg)
 
     embeddings_df = (
         get_dbt_model_as_dataframe(

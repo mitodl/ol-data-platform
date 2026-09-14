@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -59,7 +60,86 @@ def _vector_lookup(embedding_dim: int, pks: pl.Series) -> dict[str, np.ndarray]:
     )
 
 
-def _rewrite_from_run(cluster_run_id: str, now: datetime) -> pl.DataFrame:
+def _run_embedding_config(cluster_run_id: str) -> tuple[str, int]:
+    """Return the embedding_model_version/embedding_dim feedback_cluster_run
+    recorded for this specific completed run -- the authoritative source,
+    unlike inferring it from whichever feedback_cluster row happens to come
+    first (which can span more than one config after a model/dim change, until
+    feedback_cluster_identity retires the old config's actives).
+    """
+    run_row = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster_run"
+        )
+        .filter(pl.col("cluster_run_id") == cluster_run_id)
+        .select(["embedding_model_version", "embedding_dim"])
+        .collect()
+        .to_dicts()[0]
+    )
+    return run_row["embedding_model_version"], run_row["embedding_dim"]
+
+
+def _current_active_embedding_config(catalog) -> tuple[str, int] | None:
+    """Return the embedding_model_version/embedding_dim of every currently-
+    active cluster, or None if there are no active clusters or (transiently,
+    before feedback_cluster_identity retires the old config) more than one
+    config is active at once -- either way, incremental placement has no
+    single config to compare against yet.
+    """
+    if not table_exists(catalog, f"{database_name}.feedback_cluster"):
+        return None
+    configs_df = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster"
+        )
+        .filter(pl.col("cluster_status") == "active")
+        .select(["embedding_model_version", "embedding_dim"])
+        .unique()
+        .collect()
+    )
+    if configs_df.height != 1:
+        return None
+    row = configs_df.to_dicts()[0]
+    return row["embedding_model_version"], row["embedding_dim"]
+
+
+def _active_clusters(
+    catalog, embedding_model_version: str, embedding_dim: int
+) -> list[dict[str, Any]]:
+    """Active feedback_cluster rows scoped to one embedding config, shaped for
+    ml.lib.cluster_identity.nearest_active_cluster.
+    """
+    if not table_exists(catalog, f"{database_name}.feedback_cluster"):
+        return []
+    clusters_df = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster"
+        )
+        .filter(
+            (pl.col("cluster_status") == "active")
+            & (pl.col("embedding_model_version") == embedding_model_version)
+            & (pl.col("embedding_dim") == embedding_dim)
+        )
+        .select(["cluster_key", "centroid", "radius"])
+        .collect()
+    )
+    return [
+        {
+            "cluster_key": row["cluster_key"],
+            "centroid": np.array(row["centroid"]),
+            "radius": row["radius"],
+        }
+        for row in clusters_df.to_dicts()
+    ]
+
+
+def _rewrite_from_run(
+    cluster_run_id: str,
+    now: datetime,
+    catalog,
+    embedding_model_version: str,
+    embedding_dim: int,
+) -> pl.DataFrame:
     """Full membership rewrite for every conversation in cluster_run_id's candidates.
 
     cluster_id -> cluster_key comes from feedback_cluster_lineage (this run's
@@ -90,21 +170,12 @@ def _rewrite_from_run(cluster_run_id: str, now: datetime) -> pl.DataFrame:
         zip(lineage_df["cluster_id"], lineage_df["cluster_key"], strict=True)
     )
 
-    clusters_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_cluster"
-        )
-        .select(["cluster_key", "centroid", "embedding_dim"])
-        .collect()
-    )
-    centroid_by_key = dict(
-        zip(clusters_df["cluster_key"], clusters_df["centroid"], strict=True)
-    )
-    embedding_dim = clusters_df["embedding_dim"][0] if clusters_df.height else None
-    vector_by_pk = (
-        _vector_lookup(embedding_dim, candidates_df["feedback_conversation_pk"])
-        if embedding_dim
-        else {}
+    centroid_by_key = {
+        cluster["cluster_key"]: cluster["centroid"]
+        for cluster in _active_clusters(catalog, embedding_model_version, embedding_dim)
+    }
+    vector_by_pk = _vector_lookup(
+        embedding_dim, candidates_df["feedback_conversation_pk"]
     )
 
     rows = []
@@ -140,52 +211,28 @@ def _rewrite_from_run(cluster_run_id: str, now: datetime) -> pl.DataFrame:
 
 
 def _incrementally_place_new_embeddings(
-    catalog, exclude_pks: set[str], cluster_run_id: str | None, now: datetime
+    catalog,
+    exclude_pks: set[str],
+    cluster_run_id: str | None,
+    now: datetime,
+    embedding_config: tuple[str, int],
 ) -> pl.DataFrame:
-    """Place every conversation whose embedding is newer than its current
-    membership row (or that has none), against the current active clusters.
+    """Place every conversation that needs (re-)placement against the current
+    active clusters, scoped to one embedding_config (embedding_model_version,
+    embedding_dim).
 
-    exclude_pks were just handled by _rewrite_from_run in this same execution.
+    "Needs (re-)placement" is: no membership row yet, an embedding newer than
+    its current membership row, or a membership row still pointing at a
+    cluster_key that isn't active anymore (retired, merged away, or from a
+    prior embedding config) -- a conversation the last rewrite/placement never
+    revisited otherwise keeps a stale key forever. exclude_pks were just
+    handled by _rewrite_from_run in this same execution.
     """
-    clusters_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_cluster"
-        )
-        .filter(pl.col("cluster_status") == "active")
-        .select(
-            [
-                "cluster_key",
-                "centroid",
-                "radius",
-                "embedding_model_version",
-                "embedding_dim",
-            ]
-        )
-        .collect()
-        if table_exists(catalog, f"{database_name}.feedback_cluster")
-        else pl.DataFrame(
-            schema={
-                "cluster_key": pl.String,
-                "centroid": pl.List(pl.Float32),
-                "radius": pl.Float64,
-                "embedding_model_version": pl.String,
-                "embedding_dim": pl.Int64,
-            }
-        )
-    )
-    if clusters_df.height == 0:
+    embedding_model_version, embedding_dim = embedding_config
+    active_clusters = _active_clusters(catalog, embedding_model_version, embedding_dim)
+    if not active_clusters:
         return pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
-
-    embedding_model_version = clusters_df["embedding_model_version"][0]
-    embedding_dim = clusters_df["embedding_dim"][0]
-    active_clusters = [
-        {
-            "cluster_key": row["cluster_key"],
-            "centroid": np.array(row["centroid"]),
-            "radius": row["radius"],
-        }
-        for row in clusters_df.to_dicts()
-    ]
+    active_keys = [cluster["cluster_key"] for cluster in active_clusters]
 
     embeddings_lf = get_dbt_model_as_dataframe(
         database_name=database_name, table_name="feedback_embeddings"
@@ -198,25 +245,30 @@ def _incrementally_place_new_embeddings(
     membership_lf = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_membership"
-        ).select(["feedback_conversation_pk", "assigned_at"])
+        ).select(["feedback_conversation_pk", "cluster_key", "assigned_at"])
         if table_exists(catalog, f"{database_name}.feedback_cluster_membership")
         else pl.LazyFrame(
             schema={
                 "feedback_conversation_pk": pl.String,
+                "cluster_key": pl.String,
                 "assigned_at": pl.Datetime(time_zone="UTC"),
             }
         )
     )
 
     # Push the join and the "needs (re-)placement" predicate into the lazy plan
-    # so only conversations that are new or newly re-embedded are ever collected
-    # -- an incremental run shouldn't materialize the whole corpus just to find
-    # the handful of rows it actually needs to place.
+    # so only conversations that are new, newly re-embedded, or stale-keyed are
+    # ever collected -- an incremental run shouldn't materialize the whole
+    # corpus just to find the handful of rows it actually needs to place.
     to_place_df = (
         embeddings_lf.join(membership_lf, on="feedback_conversation_pk", how="left")
         .filter(
             pl.col("assigned_at").is_null()
             | (pl.col("assigned_at") < pl.col("embedded_at"))
+            | (
+                pl.col("cluster_key").is_not_null()
+                & ~pl.col("cluster_key").is_in(active_keys)
+            )
         )
         .select(["feedback_conversation_pk", "embedding_vector", "embedded_at"])
         .collect()
@@ -273,21 +325,41 @@ def feedback_cluster_assignment(context: AssetExecutionContext) -> pl.DataFrame:
     Two paths: after a new clustering run (one feedback_cluster_identity has
     matched but this asset hasn't applied yet), every conversation in that run is
     rewritten from its resolved cluster_key (cluster_assignment_method='recluster').
-    Otherwise, every embedded conversation whose embedding is newer than its
-    current membership row (or that has none) is placed by nearest active
-    centroid within its radius (cluster_assignment_method='incremental'). No
-    human approves either path.
+    Otherwise, every conversation that's new, newly re-embedded, or still
+    pointing at a cluster_key that's no longer active is placed by nearest
+    active centroid within its radius (cluster_assignment_method='incremental').
+    Both paths are scoped to one embedding_model_version/embedding_dim -- the
+    just-processed run's config, or the config of whatever's currently active
+    if nothing new was processed this execution. No human approves either path.
     """
     catalog = get_glue_catalog()
     now = datetime.now(tz=UTC)
 
     cluster_run_id = latest_identity_processed_run(catalog, database_name)
-    rewrite_df = pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
-    if cluster_run_id is not None and not _run_already_applied(catalog, cluster_run_id):
-        rewrite_df = _rewrite_from_run(cluster_run_id, now)
+    embedding_config = (
+        _run_embedding_config(cluster_run_id)
+        if cluster_run_id is not None
+        else _current_active_embedding_config(catalog)
+    )
 
-    incremental_df = _incrementally_place_new_embeddings(
-        catalog, set(rewrite_df["feedback_conversation_pk"]), cluster_run_id, now
+    rewrite_df = pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
+    if (
+        cluster_run_id is not None
+        and embedding_config is not None
+        and not _run_already_applied(catalog, cluster_run_id)
+    ):
+        rewrite_df = _rewrite_from_run(cluster_run_id, now, catalog, *embedding_config)
+
+    incremental_df = (
+        _incrementally_place_new_embeddings(
+            catalog,
+            set(rewrite_df["feedback_conversation_pk"]),
+            cluster_run_id,
+            now,
+            embedding_config,
+        )
+        if embedding_config is not None
+        else pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
     )
 
     result_df = pl.concat([rewrite_df, incremental_df])
