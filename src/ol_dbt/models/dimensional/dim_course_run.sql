@@ -45,6 +45,17 @@ with micromasters_courseruns as (
     where _row_num = 1
 )
 
+-- Not every proctored exam gets its own MicroMasters exam-run course object. Some are a
+-- unit embedded inside an ordinary course run, and those have no micromasters_examruns
+-- match at all. int__mitxonline__proctored_exam_grades identifies them by a course
+-- structure block titled 'proctored exam' (see its exam_unit_grades CTE); we use the same
+-- predicate here so the semester fallback below applies to exactly those runs and no others.
+, mitxonline_courseruns_with_exam_unit as (
+    select distinct courserun_readable_id
+    from {{ ref('int__mitxonline__course_structure') }}
+    where lower(coursestructure_block_title) = 'proctored exam'
+)
+
 , mitxonline_courseruns as (
     select
         cr.courserun_readable_id
@@ -58,17 +69,24 @@ with micromasters_courseruns as (
         , cr.courserun_is_live
         , cr.courserun_created_on
         , cs.course_readable_id
-        -- Course runs with an embedded proctored-exam unit (rather than a dedicated
-        -- MicroMasters exam-run course object) have no micromasters_examruns match at all;
-        -- fall back to the course run's own tag, matching the semester derivation that
+        -- Course runs with an embedded proctored-exam unit have no micromasters_examruns
+        -- match, so fall back to the course run's own tag — the same derivation
         -- int__mitxonline__proctored_exam_grades used before this field moved here.
-        , coalesce(er.examrun_semester, cr.courserun_tag) as semester
+        -- The fallback is deliberately gated on xu: applying it unconditionally would
+        -- populate semester for every MITxOnline course run, including the thousands that
+        -- have no proctored exam and for which a term label is meaningless.
+        , coalesce(
+            er.examrun_semester
+            , case when xu.courserun_readable_id is not null then cr.courserun_tag end
+        ) as semester
         , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
         , cr.courserun_upgrade_deadline
     from {{ ref('int__mitxonline__course_runs') }} as cr
     left join micromasters_examruns as er
         on cr.courserun_readable_id = er.examrun_readable_id
+    left join mitxonline_courseruns_with_exam_unit as xu
+        on cr.courserun_readable_id = xu.courserun_readable_id
     left join {{ ref('stg__mitxonline__app__postgres__courses_course') }} as cs
         on cr.course_id = cs.course_id
 )
