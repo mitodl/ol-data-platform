@@ -290,4 +290,4 @@ def build_source() -> Any:  # noqa: ANN401
     ``posthog_events_source(start_date=...)`` call, so a stray environment
     variable cannot turn every hourly run into a 600-day replay.
     """
-    return posthog_events_source()
+    return config.with_nullable_load_id(posthog_events_source())
