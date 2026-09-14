@@ -233,6 +233,21 @@ def _has_case_collision(schema: pa.Schema) -> bool:
     return len({name.lower() for name in schema.names}) < len(schema.names)
 
 
+def _read_inferred(files: list[str], arrow_fs: pafs.FileSystem) -> pa.Table:
+    """Read each file on its own and widen the differences on concat."""
+    tables = []
+    for path in files:
+        with arrow_fs.open_input_stream(path) as stream:
+            tables.append(pj.read_json(stream))
+    return pa.concat_tables(tables, promote_options="permissive")
+
+
+# Errors that mean "this strategy cannot parse the table", so the next one is
+# worth trying. An OSError is not here on purpose: an archived or unreadable
+# object fails the table outright rather than being fetched twice more.
+_READ_ERRORS = (pa.ArrowInvalid, pa.ArrowNotImplementedError, pa.ArrowTypeError)
+
+
 def _read_jsonl(
     files: list[str],
     columns: list[dict[str, Any]],
@@ -241,28 +256,48 @@ def _read_jsonl(
     """Read a table with Glue's column types, falling back to inference.
 
     Glue's types beat inference on most tables but are sometimes wrong, and a
-    declared type the data contradicts fails the read outright. Falling back to
-    plain inference, which is all this script did before, keeps every table
-    that converted before converting. Salesforce tables take the fallback too:
-    their JSON keys (Id) differ from Glue's lowercased names (id) only by case,
-    so a typed read yields both columns.
+    declared type the data contradicts fails the read outright. Salesforce
+    tables fail it too: their JSON keys (Id) differ from Glue's lowercased
+    names (id) only by case, so a typed read yields both columns.
+
+    The two inference strategies fail on different tables and neither replaces
+    the other. Reading the whole table as one dataset applies the first file's
+    schema to every file, which is what lets production
+    salesforce contracthistory read a column that is a string in one file and a
+    timestamp in another. Reading file by file infers each file separately,
+    which is what lets salesforce matchingrule read a column that is null for a
+    whole block and a string later on. So each strategy is tried in turn and
+    the first table returned wins.
     """
-    table = None
-    try:
-        table = _read_typed(files, columns, arrow_fs)
-    except (pa.ArrowInvalid, pa.ArrowNotImplementedError) as exc:
-        log.info("  Glue-typed read failed, inferring types instead: %s", exc)
-    if table is not None and _has_case_collision(table.schema):
-        log.info("  JSON keys match Glue columns only by case; inferring types")
-        table = None
-    if table is None:
-        table = ds.dataset(files, format="json", filesystem=arrow_fs).to_table()
-    # A key Glue never declared, or a field nested in an array or struct, can
-    # still be null in every row and infer as pa.null(); give it the same
-    # string type as a Glue null column.
-    return table.cast(
-        pa.schema([f.with_type(_without_null(f.type)) for f in table.schema])
+    attempts = (
+        ("Glue types", lambda: _read_typed(files, columns, arrow_fs)),
+        (
+            "types inferred across the table",
+            lambda: ds.dataset(files, format="json", filesystem=arrow_fs).to_table(),
+        ),
+        ("types inferred file by file", lambda: _read_inferred(files, arrow_fs)),
     )
+    last_error: Exception | None = None
+    for label, read in attempts:
+        try:
+            table = read()
+        except _READ_ERRORS as exc:
+            last_error = exc
+            log.info("  read with %s failed: %s", label, exc)
+            continue
+        if _has_case_collision(table.schema):
+            log.info("  read with %s gave columns differing only by case", label)
+            continue
+        # A key Glue never declared, or a field nested in an array or struct,
+        # can still be null in every row and infer as pa.null(); give it the
+        # same string type as a Glue null column.
+        return table.cast(
+            pa.schema([f.with_type(_without_null(f.type)) for f in table.schema])
+        )
+    if last_error is not None:
+        raise last_error
+    msg = "every read produced columns that differ only by case"
+    raise ValueError(msg)
 
 
 def _restore_glue_table(
