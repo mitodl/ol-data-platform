@@ -20,6 +20,7 @@ from datetime import date
 
 from cyclopts import App
 
+from ol_dlt import config
 from ol_dlt.sources.posthog_events import (
     posthog_events_backfill_pipeline,
     posthog_events_source,
@@ -47,10 +48,12 @@ def run(
     """
     logging.basicConfig(level=logging.INFO)
     load_info = posthog_events_backfill_pipeline.run(
-        posthog_events_source(
-            start_date=start_date,
-            end_date=end_date,
-            max_objects=max_objects,
+        config.with_nullable_load_id(
+            posthog_events_source(
+                start_date=start_date,
+                end_date=end_date,
+                max_objects=max_objects,
+            )
         ),
         loader_file_format="parquet",
     )
