@@ -18,6 +18,7 @@ from ml.lib.categorize import (
     propose_categories,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
+from ml.lib.iceberg_helpers import table_exists
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -85,6 +86,7 @@ class FeedbackCategoryProposalsConfig(Config):
         # re-examine it.
         "write_mode": "upsert",
         "upsert_options": {"join_cols": ["cluster_key"]},
+        "schema_update_mode": "update",
     },
 )
 def feedback_category_proposals(
@@ -115,7 +117,7 @@ def feedback_category_proposals(
         )
         return pl.DataFrame(schema=dict(CATEGORY_PROPOSAL_SCHEMA))
 
-    cluster_keys_needing_proposal = (
+    new_cluster_keys = (
         get_dbt_model_as_dataframe(
             database_name=intermediate_database_name,
             table_name="feedback_cluster_lineage",
@@ -129,9 +131,30 @@ def feedback_category_proposals(
         .collect()["cluster_key"]
         .to_list()
     )
+    # Every cluster_key gets proposed exactly once, ever -- a re-proposal would
+    # both waste an LLM call and silently overwrite a label a human may already
+    # have corrected. Only keys missing from feedback_category_proposal (this
+    # run's new ones, or an earlier run's that failed and were never retried)
+    # go through propose_categories.
+    already_proposed: set[str] = set()
+    if table_exists(
+        catalog, f"{intermediate_database_name}.feedback_category_proposal"
+    ):
+        already_proposed = set(
+            get_dbt_model_as_dataframe(
+                database_name=intermediate_database_name,
+                table_name="feedback_category_proposal",
+            )
+            .select("cluster_key")
+            .unique()
+            .collect()["cluster_key"]
+        )
+    cluster_keys_needing_proposal = [
+        key for key in new_cluster_keys if key not in already_proposed
+    ]
     if not cluster_keys_needing_proposal:
         context.log.info(
-            "No new/split/merged cluster_keys in run %s; nothing to propose.",
+            "No new/split/merged cluster_keys in run %s still need a proposal.",
             cluster_run_id,
         )
         return pl.DataFrame(schema=dict(CATEGORY_PROPOSAL_SCHEMA))

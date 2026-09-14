@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -53,10 +54,23 @@ class FeedbackClusterIdentityConfig(Config):
     )
 
 
+IDENTITY_RUN_SCHEMA = {
+    "cluster_run_id": pl.String,
+    "processed_at": pl.Datetime(time_zone="UTC"),
+}
+
+
 def _select_run_to_process(
     catalog, config: FeedbackClusterIdentityConfig
 ) -> str | None:
-    """Return the completed cluster_run_id to match, or None if there's nothing new."""
+    """Return the completed cluster_run_id to match, or None if there's nothing new.
+
+    "Already processed" is tracked in feedback_cluster_identity_run rather than by
+    the presence of feedback_cluster_lineage rows for the run -- a completed run
+    whose clusters are all noise (or whose only clusters are 'new', with none
+    retired) produces zero lineage rows, so lineage-row existence alone can never
+    mark it processed and it would be reselected on every tick.
+    """
     if config.cluster_run_id is not None:
         return config.cluster_run_id
     if not table_exists(catalog, f"{database_name}.feedback_cluster_run"):
@@ -72,10 +86,11 @@ def _select_run_to_process(
     if runs_df.height == 0:
         return None
     already_processed: set[str] = set()
-    if table_exists(catalog, f"{database_name}.feedback_cluster_lineage"):
+    if table_exists(catalog, f"{database_name}.feedback_cluster_identity_run"):
         already_processed = set(
             get_dbt_model_as_dataframe(
-                database_name=database_name, table_name="feedback_cluster_lineage"
+                database_name=database_name,
+                table_name="feedback_cluster_identity_run",
             )
             .select("cluster_run_id")
             .unique()
@@ -89,11 +104,17 @@ def _select_run_to_process(
     return unprocessed["cluster_run_id"][0]
 
 
-def _active_cluster_members(catalog) -> dict[str, frozenset[str]]:
-    """cluster_key -> its live member pks, for every currently-active key.
+def _active_cluster_members(
+    catalog, embedding_model_version: str, embedding_dim: int
+) -> dict[str, frozenset[str]]:
+    """cluster_key -> its live member pks, for every currently-active key whose
+    centroid was computed from the same embedding_model_version/embedding_dim
+    as the run being matched.
 
     Empty if feedback_cluster_membership has no rows, in which case every new
-    cluster resolves to 'new'.
+    cluster resolves to 'new'. Scoping by embedding config keeps a cluster from
+    a different model/dim (or member rows placed under a different config) out
+    of this run's Jaccard comparison.
     """
     if not table_exists(
         catalog, f"{database_name}.feedback_cluster_membership"
@@ -103,7 +124,11 @@ def _active_cluster_members(catalog) -> dict[str, frozenset[str]]:
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster"
         )
-        .filter(pl.col("cluster_status") == "active")
+        .filter(
+            (pl.col("cluster_status") == "active")
+            & (pl.col("embedding_model_version") == embedding_model_version)
+            & (pl.col("embedding_dim") == embedding_dim)
+        )
         .collect()["cluster_key"]
     )
     membership_df = (
@@ -164,6 +189,19 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
             metadata={
                 "schema": database_name,
                 "write_mode": "append",
+                "schema_update_mode": "update",
+            },
+            code_version="feedback_cluster_identity_v1",
+            automation_condition=upstream_or_code_changes(),
+            is_required=False,
+        ),
+        "feedback_cluster_identity_run": AssetOut(
+            key=AssetKey(["intermediate", "feedback_cluster_identity_run"]),
+            io_manager_key="io_manager",
+            metadata={
+                "schema": database_name,
+                "write_mode": "upsert",
+                "upsert_options": {"join_cols": ["cluster_run_id"]},
                 "schema_update_mode": "update",
             },
             code_version="feedback_cluster_identity_v1",
@@ -234,14 +272,23 @@ def feedback_cluster_identity(
         for (cluster_id,), group in candidates_df.group_by("cluster_id")
     }
 
-    active_cluster_members = _active_cluster_members(catalog)
+    active_cluster_members = _active_cluster_members(
+        catalog, embedding_model_version, embedding_dim
+    )
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
     matches, lineage_rows = match_clusters(
         new_cluster_members, active_cluster_members, config.match_threshold
     )
 
-    continuity = compute_continuity(matches, new_cluster_members)
+    # A bootstrap run (no active clusters yet) has every match resolve to 'new' by
+    # construction -- that's the expected first run, not a bad configuration, so
+    # the floor only applies once there's a prior cluster set to compare against.
+    continuity = (
+        1.0
+        if not active_cluster_members
+        else compute_continuity(matches, new_cluster_members)
+    )
     yield AssetCheckResult(
         passed=continuity >= CONTINUITY_FLOOR,
         check_name="continuity_floor",
@@ -306,9 +353,15 @@ def feedback_cluster_identity(
             }
         )
 
+    # A merged-away old key is absorbed into another cluster's key, same as a
+    # retired one -- both need cluster_status='retired' so incremental placement
+    # stops assigning new conversations to their now-obsolete centroid.
+    resolved_keys = {match.cluster_key for match in matches}
     retired_keys = {
-        row["prior_cluster_key"] for row in lineage_rows if row["relation"] == "retired"
-    }
+        row["prior_cluster_key"]
+        for row in lineage_rows
+        if row["relation"] in ("retired", "merged")
+    } - resolved_keys
     for cluster_key in retired_keys:
         existing = existing_cluster_rows[cluster_key]
         cluster_rows.append(
@@ -362,4 +415,11 @@ def feedback_cluster_identity(
         lineage_df,
         output_name="feedback_cluster_lineage",
         metadata={"row_count": MetadataValue.int(lineage_df.height)},
+    )
+    yield Output(
+        pl.DataFrame(
+            [{"cluster_run_id": cluster_run_id, "processed_at": datetime.now(UTC)}],
+            schema=IDENTITY_RUN_SCHEMA,
+        ),
+        output_name="feedback_cluster_identity_run",
     )

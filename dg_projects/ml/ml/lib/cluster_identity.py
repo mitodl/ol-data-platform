@@ -371,8 +371,8 @@ def nearest_active_cluster(
     best_cluster, best_similarity = None, -1.0
     for cluster in active_clusters:
         similarity = float(unit_vector @ cluster["centroid"])
-        if similarity > best_similarity:
+        if similarity >= cluster["radius"] and similarity > best_similarity:
             best_cluster, best_similarity = cluster, similarity
-    if best_cluster is not None and best_similarity >= best_cluster["radius"]:
+    if best_cluster is not None:
         return best_cluster["cluster_key"], best_similarity
     return None, None

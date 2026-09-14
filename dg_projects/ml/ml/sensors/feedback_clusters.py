@@ -8,6 +8,7 @@ from dagster import (
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
 from ml.lib.cluster import should_trigger_early_recluster
+from ml.lib.embed import EMBEDDING_DIM, EMBEDDING_MODEL_VERSION
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
@@ -29,9 +30,18 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     catalog = get_glue_catalog()
     if not table_exists(catalog, f"{cluster_database_name}.feedback_embeddings"):
         return SkipReason("feedback_embeddings hasn't materialized yet")
+    # Scoped to match feedback_clusters' own defaults (embedding_input="summary",
+    # EMBEDDING_MODEL_VERSION/EMBEDDING_DIM) -- counting every arm/model/dim would
+    # inflate this past what a completed run's total_conversations actually
+    # measures, and could trigger on growth in rows the next run won't even see.
     embedding_count = (
         get_dbt_model_as_dataframe(
             database_name=cluster_database_name, table_name="feedback_embeddings"
+        )
+        .filter(
+            (pl.col("embedding_input") == "summary")
+            & (pl.col("embedding_model_version") == EMBEDDING_MODEL_VERSION)
+            & (pl.col("embedding_dim") == EMBEDDING_DIM)
         )
         .select(pl.len())
         .collect()

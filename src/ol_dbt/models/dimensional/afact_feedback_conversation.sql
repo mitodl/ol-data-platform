@@ -101,15 +101,22 @@ with conversation as (
     select * from {{ ref('int__feedback__cluster_membership') }}
 )
 
+-- Joined through the proposal, not dim_feedback_category.cluster_key: two
+-- clusters can propose labels that slugify to the same category_slug, and
+-- dim_feedback_category keeps only one row per slug, which would silently drop
+-- every other cluster_key's mapping. int__feedback__category_proposal keeps one
+-- row per cluster_key uncollapsed, so joining through it here (by category_slug)
+-- preserves every cluster's resolution even when several share one category.
 -- Not filtered to an approval status -- an LLM-proposed category is assigned as
 -- soon as its cluster_key resolves one, and a human correction (approve/merge/
 -- deprecate) is applied afterward rather than gating this join.
 , cluster_category as (
     select
-        feedback_category_pk
-        , cluster_key
-    from {{ ref('dim_feedback_category') }}
-    where cluster_key is not null
+        dim_feedback_category.feedback_category_pk
+        , category_proposal.cluster_key
+    from {{ ref('int__feedback__category_proposal') }} as category_proposal
+    inner join {{ ref('dim_feedback_category') }}
+        on category_proposal.category_slug = dim_feedback_category.category_slug
 )
 
 , summary as (

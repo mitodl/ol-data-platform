@@ -61,25 +61,27 @@ def test_match_clusters_below_threshold_is_new_not_continued() -> None:
 
 
 def test_match_clusters_picks_globally_best_pairing_not_greedy() -> None:
-    # new 0 overlaps best with key-a (0.9) and okay with key-b (0.6);
-    # new 1 overlaps only with key-b (0.7). A greedy per-row pick would give
-    # new0->key-a, new1->key-b -- which is also the global optimum here, so
-    # construct a case where the naive "take the best row match first" would
-    # collide: both new clusters prefer key-a, only one can have it.
+    # new 0's best option is key-a (jaccard 0.9), with key-b as a weaker second
+    # choice (0.6). new 1 overlaps well with key-a (~0.78) but only weakly with
+    # key-b (0.3, below the 0.5 threshold -- ineligible). A greedy row-by-row
+    # pick (new 0 first) grabs its favorite, key-a, leaving new 1 with only the
+    # ineligible key-b and stranding it unmatched (total jaccard 0.9). The
+    # global optimum instead gives key-a to new 1 (its only viable option) and
+    # key-b to new 0 (still above threshold), matching both (total ~1.38).
     new_cluster_members = {
-        0: _members(*[str(i) for i in range(9)]),  # 9 members
-        1: _members(*[str(i) for i in range(9, 18)]),  # 9 members, disjoint
+        0: _members(*[str(i) for i in range(1, 11)]),  # "1".."10"
+        1: _members("3", "4", "5", "6", "7", "8", "9"),
     }
     active_cluster_members = {
-        "key-a": _members(*[str(i) for i in range(9)]),  # perfect match with new 0
-        "key-b": _members(*[str(i) for i in range(9, 18)]),  # perfect match with new 1
+        "key-a": _members(*[str(i) for i in range(1, 10)]),  # "1".."9"
+        "key-b": _members("1", "2", "10", "3", "4", "5"),
     }
     matches, _ = cluster_identity.match_clusters(
         new_cluster_members, active_cluster_members, match_threshold=0.5
     )
     by_new_id = {m.new_cluster_id: m for m in matches}
-    assert by_new_id[0].cluster_key == "key-a"
-    assert by_new_id[1].cluster_key == "key-b"
+    assert by_new_id[0].cluster_key == "key-b"
+    assert by_new_id[1].cluster_key == "key-a"
 
 
 def test_match_clusters_merge_absorbed_into_continued_cluster_keeps_its_key() -> None:
@@ -257,6 +259,25 @@ def test_nearest_active_cluster_none_when_radius_not_cleared() -> None:
     )
     assert key is None
     assert similarity is None
+
+
+def test_nearest_active_cluster_prefers_a_farther_cluster_that_clears_its_radius() -> (
+    None
+):
+    # "a" is the globally closest centroid (similarity 0.8) but its own radius
+    # (0.9) isn't cleared; "b" is farther (0.6) but clears its looser radius
+    # (0.5). The right answer is "b", not None -- picking the closest centroid
+    # first and only checking its radius would wrongly reject the vector.
+    active_clusters = [
+        {"cluster_key": "a", "centroid": np.array([1.0, 0.0]), "radius": 0.9},
+        {"cluster_key": "b", "centroid": np.array([0.0, 1.0]), "radius": 0.5},
+    ]
+    key, similarity = cluster_identity.nearest_active_cluster(
+        np.array([0.8, 0.6]), active_clusters
+    )
+    assert key == "b"
+    assert similarity is not None
+    assert similarity == 0.6
 
 
 def test_nearest_active_cluster_none_when_no_active_clusters() -> None:

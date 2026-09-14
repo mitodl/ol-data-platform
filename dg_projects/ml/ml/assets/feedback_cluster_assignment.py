@@ -187,53 +187,49 @@ def _incrementally_place_new_embeddings(
         for row in clusters_df.to_dicts()
     ]
 
-    embeddings_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_embeddings"
-        )
-        .filter(
-            (pl.col("embedding_model_version") == embedding_model_version)
-            & (pl.col("embedding_dim") == embedding_dim)
-            & ~pl.col("feedback_conversation_pk").is_in(list(exclude_pks))
-        )
-        .select(["feedback_conversation_pk", "embedding_vector", "embedded_at"])
-        .collect()
+    embeddings_lf = get_dbt_model_as_dataframe(
+        database_name=database_name, table_name="feedback_embeddings"
+    ).filter(
+        (pl.col("embedding_model_version") == embedding_model_version)
+        & (pl.col("embedding_dim") == embedding_dim)
+        & ~pl.col("feedback_conversation_pk").is_in(list(exclude_pks))
     )
-    if embeddings_df.height == 0:
-        return pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
 
-    membership_df = (
+    membership_lf = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_membership"
-        )
-        .select(["feedback_conversation_pk", "assigned_at"])
-        .collect()
+        ).select(["feedback_conversation_pk", "assigned_at"])
         if table_exists(catalog, f"{database_name}.feedback_cluster_membership")
-        else pl.DataFrame(
+        else pl.LazyFrame(
             schema={
                 "feedback_conversation_pk": pl.String,
                 "assigned_at": pl.Datetime(time_zone="UTC"),
             }
         )
     )
-    assigned_at_by_pk = dict(
-        zip(
-            membership_df["feedback_conversation_pk"],
-            membership_df["assigned_at"],
-            strict=True,
+
+    # Push the join and the "needs (re-)placement" predicate into the lazy plan
+    # so only conversations that are new or newly re-embedded are ever collected
+    # -- an incremental run shouldn't materialize the whole corpus just to find
+    # the handful of rows it actually needs to place.
+    to_place_df = (
+        embeddings_lf.join(membership_lf, on="feedback_conversation_pk", how="left")
+        .filter(
+            pl.col("assigned_at").is_null()
+            | (pl.col("assigned_at") < pl.col("embedded_at"))
         )
+        .select(["feedback_conversation_pk", "embedding_vector", "embedded_at"])
+        .collect()
     )
+    if to_place_df.height == 0:
+        return pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
 
     rows = []
-    for pk, vector_list, embedded_at in zip(
-        embeddings_df["feedback_conversation_pk"],
-        embeddings_df["embedding_vector"],
-        embeddings_df["embedded_at"],
+    for pk, vector_list in zip(
+        to_place_df["feedback_conversation_pk"],
+        to_place_df["embedding_vector"],
         strict=True,
     ):
-        prior_assigned_at = assigned_at_by_pk.get(pk)
-        if prior_assigned_at is not None and prior_assigned_at >= embedded_at:
-            continue
         cluster_key, similarity = nearest_active_cluster(
             np.array(vector_list), active_clusters
         )
