@@ -19,20 +19,18 @@ with unioned as (
     where email is not null
 )
 
-{% set redacted = resolve_dev_source_with_fallback('feedback_intermediate', 'feedback_redacted') %}
+{% set redacted = dev_schema_source('feedback_intermediate', 'feedback_redacted') %}
 
 , redacted as (
-{% if not redacted.is_unit_test and execute and not redacted.primary_relation and not redacted.fallback_relation %}
+{% if not redacted.is_unit_test and execute and not redacted.resolved_relation %}
     select
         cast(null as varchar) as source_slug
         , cast(null as varchar) as source_record_ref
         , cast(null as varchar) as title_redacted
         , cast(null as varchar) as text_redacted
     where false
-{% elif not redacted.is_unit_test and execute and not redacted.primary_relation and redacted.fallback_relation %}
-    select * from {{ redacted.fallback_relation }}
 {% else %}
-    select * from {{ redacted.source_ref }}
+    select * from {{ redacted.relation_ref }}
 {% endif %}
 )
 

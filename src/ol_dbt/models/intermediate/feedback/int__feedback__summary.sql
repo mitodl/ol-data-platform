@@ -3,21 +3,16 @@
 -- materialized in this schema. conversation_summary/summary_model_version stay
 -- null for a single-turn/short conversation regardless (the asset's own skip
 -- rule, §A.1), not just when the table is missing.
-{% set summary_source = source('feedback_intermediate', 'feedback_summaries') %}
-{% set summary_relation = adapter.get_relation(
-    database=summary_source.database,
-    schema=summary_source.schema,
-    identifier=summary_source.identifier
-) %}
+{% set summary = dev_schema_source('feedback_intermediate', 'feedback_summaries') %}
 {# summarized_at/prompt_version are newer columns -- a table upserted before they
    existed won't have them until the Dagster asset's own schema-evolution step
    next runs. #}
-{% set summary_columns = adapter.get_columns_in_relation(summary_relation) | map(attribute='name') | list
-    if summary_relation else [] %}
+{% set summary_columns = adapter.get_columns_in_relation(summary.resolved_relation) | map(attribute='name') | list
+    if summary.resolved_relation else [] %}
 {% set summarized_at_exists = 'summarized_at' in summary_columns %}
 {% set prompt_version_exists = 'prompt_version' in summary_columns %}
 
-{% if execute and not summary_relation %}
+{% if not summary.is_unit_test and execute and not summary.resolved_relation %}
 select
     cast(null as varchar) as feedback_conversation_pk
     , cast(null as varchar) as conversation_summary
@@ -34,5 +29,5 @@ select
     -- This layer stores timestamps as ISO8601 varchar; summarized_at arrives as a
     -- native timestamp from Iceberg, so it needs converting, not a passthrough.
     , {{ cast_timestamp_to_iso8601('summarized_at') if summarized_at_exists else 'cast(null as varchar)' }} as summarized_at
-from {{ summary_source }}
+from {{ summary.relation_ref }}
 {% endif %}

@@ -2,15 +2,14 @@
 -- feedback_conversation_pk, so a re-embed overwrites in place -- there is never
 -- more than one arm/model live per conversation at once) -- empty until the
 -- feedback_embeddings asset has materialized in this schema.
-{% set embedding = resolve_dev_source_with_fallback('feedback_intermediate', 'feedback_embeddings') %}
-{% set embedding_relation = embedding.primary_relation or embedding.fallback_relation %}
+{% set embedding = dev_schema_source('feedback_intermediate', 'feedback_embeddings') %}
 {# embedded_at is a newer column -- a table upserted before it existed won't
    have it until the Dagster asset's own schema-evolution step next runs. #}
-{% set embedded_at_exists = embedding_relation and 'embedded_at' in (
-    adapter.get_columns_in_relation(embedding_relation) | map(attribute='name') | list
+{% set embedded_at_exists = embedding.resolved_relation and 'embedded_at' in (
+    adapter.get_columns_in_relation(embedding.resolved_relation) | map(attribute='name') | list
 ) %}
 
-{% if not embedding.is_unit_test and execute and not embedding_relation %}
+{% if not embedding.is_unit_test and execute and not embedding.resolved_relation %}
 select
     cast(null as varchar) as feedback_conversation_pk
     , {{ null_double_array() }} as embedding_vector
@@ -29,5 +28,5 @@ select
     -- This layer stores timestamps as ISO8601 varchar; embedded_at arrives as a
     -- native timestamp from Iceberg, so it needs converting, not a passthrough.
     , {{ cast_timestamp_to_iso8601('embedded_at') if embedded_at_exists else 'cast(null as varchar)' }} as embedded_at
-from {{ embedding.fallback_relation if (not embedding.is_unit_test and not embedding.primary_relation and embedding.fallback_relation) else embedding.source_ref }}
+from {{ embedding.relation_ref }}
 {% endif %}
