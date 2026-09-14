@@ -188,23 +188,6 @@ models:
       arguments:
         column_list: ["source_slug", "conversation_ref"]
 
-- name: int__feedback__category_approval
-  description: The latest human decision per category_slug -- empty until a human
-    materializes feedback_category_approval for some slug.
-  columns:
-  - name: category_slug
-    description: str, the dim_feedback_category.category_slug being decided on.
-    tests:
-    - not_null
-    - unique
-  - name: category_status
-    description: str, the latest decision - approved or deprecated.
-    tests:
-    - not_null
-    - accepted_values:
-        arguments:
-          values: ["approved", "deprecated"]
-
 - name: int__feedback__summary
   description: feedback_summaries' output, one row per conversation -- empty until
     that asset has materialized in this schema.

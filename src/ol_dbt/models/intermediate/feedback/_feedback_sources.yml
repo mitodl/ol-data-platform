@@ -52,20 +52,6 @@ sources:
       description: str, uuid identifying which clustering run produced this assignment.
     - name: feedback_conversation_pk
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
-  - name: feedback_category_approval
-    description: Append-only human decision log for dim_feedback_category rows, written
-      by the feedback_category_approval Dagster asset (materialized ad hoc via its
-      Launchpad Config form -- category_slug, category_status, approved_by). dim_feedback_category
-      takes the *latest* row per category_slug; a category with no row here stays
-      'proposed'. No column tests here -- see feedback_cluster_run; not_null/unique/
-      accepted_values coverage lives on int__feedback__category_approval instead.
-    columns:
-    - name: category_slug
-      description: str, the dim_feedback_category.category_slug being decided on.
-    - name: category_status
-      description: str, the decision - approved or deprecated.
-    - name: approved_at
-      description: timestamp, when this decision was recorded.
   - name: feedback_summaries
     description: One row per conversation (upsert key feedback_conversation_pk), materialized
       by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version

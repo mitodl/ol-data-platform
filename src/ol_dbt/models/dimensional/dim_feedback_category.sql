@@ -1,8 +1,5 @@
 -- Seeded from Zendesk ticket tags plus group_name. Relabeling changes category_label,
--- never category_slug. category_status defaults to 'proposed' until a human
--- materializes the feedback_category_approval Dagster asset for a slug -- that
--- decision log is the only place a category's status can change; dbt has no other
--- approval input.
+-- never category_slug. category_status is always 'proposed' -- no approval input yet.
 with ticket as (
     select
         *
@@ -48,10 +45,6 @@ with ticket as (
     select * from group_seeds
 )
 
-, approval as (
-    select * from {{ ref('int__feedback__category_approval') }}
-)
-
 -- A tag name and its group name can slugify to the same value; collapse them so
 -- category_slug stays unique. category_label/category_source must come from the
 -- *same* row, not independent min()/max() picks across rows. Ties break on the
@@ -85,14 +78,11 @@ select
     , ranked_combined.category_slug
     , ranked_combined.category_label
     , cast(null as varchar) as category_parent_slug
-    -- coalesce, not a bare default: a slug with no approval row is still 'proposed'
-    , coalesce(approval.category_status, 'proposed') as category_status
+    , 'proposed' as category_status
     , ranked_combined.category_source
     , slug_dates.first_seen_at
     , slug_dates.updated_at
 from ranked_combined
 inner join slug_dates
     on ranked_combined.category_slug = slug_dates.category_slug
-left join approval
-    on ranked_combined.category_slug = approval.category_slug
 where ranked_combined.category_rank = 1
