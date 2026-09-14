@@ -97,6 +97,21 @@ with conversation as (
     from {{ ref('dim_feedback_category') }}
 )
 
+, cluster_assignment as (
+    select * from {{ ref('int__feedback__cluster_membership') }}
+)
+
+-- Not filtered to an approval status -- an LLM-proposed category is assigned as
+-- soon as its cluster_key resolves one, and a human correction (approve/merge/
+-- deprecate) is applied afterward rather than gating this join.
+, cluster_category as (
+    select
+        feedback_category_pk
+        , cluster_key
+    from {{ ref('dim_feedback_category') }}
+    where cluster_key is not null
+)
+
 , summary as (
     select * from {{ ref('int__feedback__summary') }}
 )
@@ -137,9 +152,14 @@ select
     , embedding.embedding_model_version
     , embedding.embedding_input
     , embedding.embedded_at
-    -- The conversation's dominant existing tag's category; a conversation with no
-    -- tag stays null, the queryable unassigned state.
-    , feedback_category.feedback_category_pk as category_fk
+    -- A cluster-derived category wins over the tag-seed guess when both exist; a
+    -- conversation with neither stays null, the queryable unassigned state.
+    , coalesce(cluster_category.feedback_category_pk, feedback_category.feedback_category_pk)
+        as category_fk
+    , cluster_assignment.cluster_key
+    , cluster_assignment.cluster_similarity
+    , cluster_assignment.cluster_assignment_method
+    , cluster_assignment.cluster_run_id
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as conversation_ingested_at
 from conversation
 inner join turn_aggregates
@@ -159,6 +179,10 @@ left join dominant_tag
     and turn_aggregates.feedback_source_fk = dominant_tag.feedback_source_fk
 left join feedback_category
     on dominant_tag.tag_slug = feedback_category.category_slug
+left join cluster_assignment
+    on conversation.feedback_conversation_pk = cluster_assignment.feedback_conversation_pk
+left join cluster_category
+    on cluster_assignment.cluster_key = cluster_category.cluster_key
 left join summary
     on conversation.feedback_conversation_pk = summary.feedback_conversation_pk
 left join embedding

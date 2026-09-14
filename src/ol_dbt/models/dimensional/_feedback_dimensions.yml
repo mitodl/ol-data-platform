@@ -154,6 +154,9 @@ models:
     - accepted_values:
         arguments:
           values: ['seed', 'llm_discovered', 'manual']
+  - name: cluster_key
+    description: str, the stable cluster this category labels. Null for seed/manual
+      rows.
   - name: first_seen_at
     description: str, ISO8601 timestamp of the earliest ticket carrying this category.
   - name: updated_at
