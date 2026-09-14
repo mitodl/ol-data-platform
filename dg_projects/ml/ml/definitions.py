@@ -10,6 +10,8 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.feedback_category_proposals import feedback_category_proposals
+from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
 from ml.assets.feedback_cluster_identity import feedback_cluster_identity
 from ml.assets.feedback_clusters import feedback_clusters
 from ml.assets.feedback_embeddings import feedback_embeddings
@@ -174,6 +176,8 @@ defs = Definitions(
             feedback_embeddings,
             feedback_clusters,
             feedback_cluster_identity,
+            feedback_cluster_assignment,
+            feedback_category_proposals,
             feedback_sentiment_eval,
         ]
     ),

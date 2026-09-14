@@ -8,9 +8,9 @@ from dagster import (
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
 from ml.lib.cluster import should_trigger_early_recluster
+from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
-from pyiceberg.exceptions import NoSuchTableError
 
 
 @sensor(
@@ -27,9 +27,7 @@ from pyiceberg.exceptions import NoSuchTableError
 )
 def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     catalog = get_glue_catalog()
-    try:
-        catalog.load_table(f"{cluster_database_name}.feedback_embeddings")
-    except NoSuchTableError:
+    if not table_exists(catalog, f"{cluster_database_name}.feedback_embeddings"):
         return SkipReason("feedback_embeddings hasn't materialized yet")
     embedding_count = (
         get_dbt_model_as_dataframe(
@@ -41,11 +39,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     )
 
     last_completed_total_conversations = None
-    try:
-        catalog.load_table(f"{cluster_database_name}.feedback_cluster_run")
-    except NoSuchTableError:
-        pass
-    else:
+    if table_exists(catalog, f"{cluster_database_name}.feedback_cluster_run"):
         last_run_df = (
             get_dbt_model_as_dataframe(
                 database_name=cluster_database_name, table_name="feedback_cluster_run"

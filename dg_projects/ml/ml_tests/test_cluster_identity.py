@@ -33,6 +33,7 @@ def test_match_clusters_continued_when_membership_mostly_overlaps() -> None:
         {
             "prior_cluster_key": "key-a",
             "cluster_key": "key-a",
+            "cluster_id": 0,
             "relation": "continued",
             "jaccard": 3 / 4,
         }
@@ -53,6 +54,7 @@ def test_match_clusters_below_threshold_is_new_not_continued() -> None:
     assert {
         "prior_cluster_key": "key-a",
         "cluster_key": None,
+        "cluster_id": None,
         "relation": "retired",
         "jaccard": None,
     } in lineage
@@ -99,6 +101,7 @@ def test_match_clusters_merge_absorbed_into_continued_cluster_keeps_its_key() ->
     assert {
         "prior_cluster_key": "key-b",
         "cluster_key": "key-a",
+        "cluster_id": 0,
         "relation": "merged",
         "jaccard": None,
     } in lineage
@@ -148,6 +151,7 @@ def test_match_clusters_split_when_new_cluster_draws_most_from_one_old_key() -> 
         {
             "prior_cluster_key": "key-a",
             "cluster_key": None,
+            "cluster_id": None,
             "relation": "retired",
             "jaccard": None,
         }
@@ -164,12 +168,14 @@ def test_match_clusters_new_when_no_overlap_with_anything() -> None:
     assert {
         "prior_cluster_key": None,
         "cluster_key": matches[0].cluster_key,
+        "cluster_id": 0,
         "relation": "new",
         "jaccard": None,
     } in lineage
     assert {
         "prior_cluster_key": "key-a",
         "cluster_key": None,
+        "cluster_id": None,
         "relation": "retired",
         "jaccard": None,
     } in lineage
@@ -198,3 +204,44 @@ def test_compute_cluster_stats_centroid_and_radius() -> None:
     assert abs(np.linalg.norm(centroid) - 1.0) < 1e-6
     # radius is a valid cosine similarity
     assert -1.0 <= radius <= 1.0
+
+
+def test_nearest_active_cluster_picks_closest_and_clears_radius() -> None:
+    active_clusters = [
+        {"cluster_key": "a", "centroid": np.array([1.0, 0.0]), "radius": 0.5},
+        {"cluster_key": "b", "centroid": np.array([0.0, 1.0]), "radius": 0.5},
+    ]
+    key, similarity = cluster_identity.nearest_active_cluster(
+        np.array([0.9, 0.1]), active_clusters
+    )
+    assert key == "a"
+    assert similarity is not None
+    assert similarity > 0.9
+
+
+def test_nearest_active_cluster_none_when_radius_not_cleared() -> None:
+    active_clusters = [
+        {"cluster_key": "a", "centroid": np.array([1.0, 0.0]), "radius": 0.99},
+    ]
+    key, similarity = cluster_identity.nearest_active_cluster(
+        np.array([0.5, 0.5]), active_clusters
+    )
+    assert key is None
+    assert similarity is None
+
+
+def test_nearest_active_cluster_none_when_no_active_clusters() -> None:
+    key, similarity = cluster_identity.nearest_active_cluster(np.array([1.0, 0.0]), [])
+    assert key is None
+    assert similarity is None
+
+
+def test_nearest_active_cluster_zero_vector_is_unplaced() -> None:
+    active_clusters = [
+        {"cluster_key": "a", "centroid": np.array([1.0, 0.0]), "radius": -1.0}
+    ]
+    key, similarity = cluster_identity.nearest_active_cluster(
+        np.array([0.0, 0.0]), active_clusters
+    )
+    assert key is None
+    assert similarity is None

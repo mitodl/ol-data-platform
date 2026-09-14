@@ -42,6 +42,11 @@ CLUSTER_LINEAGE_SCHEMA = {
     "cluster_run_id": pl.String,
     "prior_cluster_key": pl.String,
     "cluster_key": pl.String,
+    # This run's run-local cluster_id that produced the row -- null for 'retired'
+    # (an old key with no corresponding new cluster). feedback_cluster_assignment
+    # joins feedback_cluster_candidate.cluster_id to this to place the run's
+    # conversations onto their resolved cluster_key.
+    "cluster_id": pl.Int64,
     "relation": pl.String,
     "jaccard": pl.Float64,
 }
@@ -199,6 +204,7 @@ def match_clusters(
             {
                 "prior_cluster_key": old_key,
                 "cluster_key": old_key,
+                "cluster_id": new_id,
                 "relation": "continued",
                 "jaccard": score,
             }
@@ -229,6 +235,7 @@ def match_clusters(
             {
                 "prior_cluster_key": old_key,
                 "cluster_key": target_key,
+                "cluster_id": new_id,
                 "relation": "merged",
                 "jaccard": None,
             }
@@ -253,6 +260,7 @@ def match_clusters(
                 {
                     "prior_cluster_key": best_old_key,
                     "cluster_key": key,
+                    "cluster_id": new_id,
                     "relation": "split",
                     "jaccard": None,
                 }
@@ -269,6 +277,7 @@ def match_clusters(
             {
                 "prior_cluster_key": None,
                 "cluster_key": key,
+                "cluster_id": new_id,
                 "relation": "new",
                 "jaccard": None,
             }
@@ -281,6 +290,7 @@ def match_clusters(
         {
             "prior_cluster_key": old_key,
             "cluster_key": None,
+            "cluster_id": None,
             "relation": "retired",
             "jaccard": None,
         }
@@ -311,3 +321,38 @@ def compute_cluster_stats(
     similarities = normalized @ centroid
     radius = float(np.percentile(similarities, radius_percentile))
     return centroid, radius
+
+
+MEMBERSHIP_SCHEMA = {
+    "feedback_conversation_pk": pl.String,
+    "cluster_key": pl.String,
+    "cluster_similarity": pl.Float64,
+    "cluster_assignment_method": pl.String,
+    "cluster_run_id": pl.String,
+    "assigned_at": pl.Datetime(time_zone="UTC"),
+}
+
+
+def nearest_active_cluster(
+    vector: np.ndarray, active_clusters: list[dict[str, Any]]
+) -> tuple[str | None, float | None]:
+    """Return the nearest active cluster's key and cosine similarity, if its own
+    radius is cleared; (None, None) if not near any live cluster yet.
+
+    active_clusters: [{"cluster_key": ..., "centroid": unit-normalized np.ndarray,
+    "radius": float}, ...], already scoped to one embedding_model_version/dim.
+    """
+    if not active_clusters:
+        return None, None
+    norm = np.linalg.norm(vector)
+    if norm == 0:
+        return None, None
+    unit_vector = vector / norm
+    best_cluster, best_similarity = None, -1.0
+    for cluster in active_clusters:
+        similarity = float(unit_vector @ cluster["centroid"])
+        if similarity > best_similarity:
+            best_cluster, best_similarity = cluster, similarity
+    if best_cluster is not None and best_similarity >= best_cluster["radius"]:
+        return best_cluster["cluster_key"], best_similarity
+    return None, None

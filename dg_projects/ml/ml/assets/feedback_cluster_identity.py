@@ -21,12 +21,12 @@ from ml.lib.cluster_identity import (
     compute_cluster_stats,
     match_clusters,
 )
+from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
-from pyiceberg.exceptions import NoSuchTableError
 
 if DAGSTER_ENV == "dev":
     _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
@@ -48,21 +48,13 @@ class FeedbackClusterIdentityConfig(Config):
     )
 
 
-def _table_exists(catalog, table_identifier: str) -> bool:
-    try:
-        catalog.load_table(table_identifier)
-    except NoSuchTableError:
-        return False
-    return True
-
-
 def _select_run_to_process(
     catalog, config: FeedbackClusterIdentityConfig
 ) -> str | None:
     """Return the completed cluster_run_id to match, or None if there's nothing new."""
     if config.cluster_run_id is not None:
         return config.cluster_run_id
-    if not _table_exists(catalog, f"{database_name}.feedback_cluster_run"):
+    if not table_exists(catalog, f"{database_name}.feedback_cluster_run"):
         return None
     runs_df = (
         get_dbt_model_as_dataframe(
@@ -75,7 +67,7 @@ def _select_run_to_process(
     if runs_df.height == 0:
         return None
     already_processed: set[str] = set()
-    if _table_exists(catalog, f"{database_name}.feedback_cluster_lineage"):
+    if table_exists(catalog, f"{database_name}.feedback_cluster_lineage"):
         already_processed = set(
             get_dbt_model_as_dataframe(
                 database_name=database_name, table_name="feedback_cluster_lineage"
@@ -98,9 +90,9 @@ def _active_cluster_members(catalog) -> dict[str, frozenset[str]]:
     Empty if feedback_cluster_membership has no rows, in which case every new
     cluster resolves to 'new'.
     """
-    if not _table_exists(
+    if not table_exists(
         catalog, f"{database_name}.feedback_cluster_membership"
-    ) or not _table_exists(catalog, f"{database_name}.feedback_cluster"):
+    ) or not table_exists(catalog, f"{database_name}.feedback_cluster"):
         return {}
     active_keys = set(
         get_dbt_model_as_dataframe(
@@ -130,7 +122,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
     """cluster_key -> its current feedback_cluster row, for carrying
     first_seen_run_id forward on a continued/merged key.
     """
-    if not _table_exists(catalog, f"{database_name}.feedback_cluster"):
+    if not table_exists(catalog, f"{database_name}.feedback_cluster"):
         return {}
     return {
         row["cluster_key"]: row
