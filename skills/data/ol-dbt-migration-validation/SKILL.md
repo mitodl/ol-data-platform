@@ -171,9 +171,21 @@ it always is.
 First find what actually diverges — the refs that differ between the two sides:
 
 ```bash
-diff <(grep -o "ref('[^']*')" <model>_pre.sql | sort -u) \
-     <(grep -o "ref('[^']*')" <model>.sql     | sort -u)
+refs() { grep -oE "ref\([\"'][^\"')]*[\"']\)" "$1" | tr -d "\"'" \
+         | sed 's/^ref(//; s/)$//' | sort -u; }
+diff <(refs <model>_pre.sql) <(refs <model>.sql)
 ```
+
+**Match both quote styles.** `ref("x")` is rarer but real — 13 occurrences across
+5 models as of 2026-09-15, three of them in `reporting/`, which is exactly what
+#2072 migrates (e.g. `models/reporting/data_detail_problems.sql`). A
+single-quote-only pattern returns *nothing* on those files, so the diff shows no
+divergent refs, you omit the upstreams, and the comparison is uncontrolled —
+failing silently, in the direction that looks clean.
+
+Stripping the quotes and the `ref(...)` wrapper matters too: it compares bare
+model names, so re-quoting a `ref()` between the two versions cannot show up as a
+false divergence.
 
 Then build both sides **and both divergent ancestor paths** in one invocation:
 
@@ -284,9 +296,23 @@ Two consequences, and the first is why this skill insists on one invocation:
 
 1. **Never build a model in one step and measure it in a later step.**
    Materialize both comparison sides as physical tables in a single `dbt run`.
-   Table-materialized output is immune once written — the #2403 comparison
-   survived the clobbering above precisely because both marts were already
-   physical tables.
+
+   A physical table is immune to **pointer rot** — unlike a `glue__` view it does
+   not depend on a metadata pointer that can go stale under it. It is **not**
+   immune to another `dbt run`, which will happily rebuild it; the first sentence
+   of this section says exactly that. The #2403 marts survived because the
+   concurrent session rebuilt `dim_course_run`, their *upstream*, and never
+   selected the marts themselves. That is targeting, not immunity.
+
+   So one invocation narrows the window; it does not make build-plus-measure
+   atomic. Before you conclude anything: confirm you have `dev_local` to yourself
+   (`git worktree list`, and check claimed witan tasks), and measure immediately
+   after the build rather than after a break. If a comparison genuinely must be
+   protected, `HOME=/tmp/iso-validation` points `dev_local` at a private DuckDB
+   file — verified 2026-09-15, the real 19GB warehouse is untouched — but that
+   database starts empty, so you pay a full `ol-dbt local register` (AWS creds)
+   to use it. Worth it for a result you are going to publish; overkill while
+   iterating.
 2. **Any figure read from this database is valid only at the instant it was
    read.** Re-read anything you intend to put in a PR body, and prefer
    `ol-dbt local snapshot` for a baseline you need to keep across a break.
