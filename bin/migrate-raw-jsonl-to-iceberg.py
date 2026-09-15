@@ -346,11 +346,13 @@ def _roll_back(  # noqa: PLR0913
         current = glue.get_table(DatabaseName=database, Name=table_name)["Table"]
     except glue.exceptions.EntityNotFoundException:
         current = None
+    restored = False
     try:
         if current is not None and _is_iceberg(current):
             glue.delete_table(DatabaseName=database, Name=table_name)
             log.info("  dropped the Iceberg entry the failed attempt created")
         _restore_glue_table(glue, database, original_def)
+        restored = True
     except Exception:
         log.exception(
             "  CRITICAL: could not restore %s.%s — "
@@ -360,13 +362,21 @@ def _roll_back(  # noqa: PLR0913
             _to_table_input(original_def),
             location,
         )
-        return
 
     # create_table writes a metadata file before registering in Glue, and a
     # failed append can leave data files behind. No snapshot references them,
     # and _list_json_files skips both dirs, so nothing else would find them.
-    bucket = location.removeprefix("s3://").partition("/")[0]
     written = sorted(_list_iceberg_objects(s3, location) - objects_before)
+    if not restored:
+        # Once a restore has failed, delete nothing more. If the drop was what
+        # failed, the Iceberg entry still points at these metadata files.
+        log.error(
+            "  left %d object(s) the failed attempt wrote, for manual repair: %s",
+            len(written),
+            written,
+        )
+        return
+    bucket = location.removeprefix("s3://").partition("/")[0]
     for key in written:
         s3.delete_object(Bucket=bucket, Key=key)
     log.info("  deleted %d object(s) the failed attempt wrote", len(written))
