@@ -1,5 +1,6 @@
 """Tests for ml.lib.summarize."""
 
+import time
 from typing import Any, Self
 
 import polars as pl
@@ -85,6 +86,73 @@ def test_summarize_conversations_applies_skip_rule() -> None:
     assert skipped["prompt_version"] is None
     assert skipped["embedding_input"] == "concatenated_turns"
     assert skipped["turn_count"] == 1
+
+
+def test_summarize_conversations_runs_calls_concurrently() -> None:
+    """max_concurrency > 1 should let several summarize() calls overlap, not
+    run strictly one after another.
+    """
+    call_delay = 0.2
+
+    class _SlowSummaryClient:
+        model_version = "test-model"
+
+        def summarize(self, conversation_text: str) -> str:
+            time.sleep(call_delay)
+            return f"summary of: {conversation_text}"
+
+    row_count = 8
+    df = pl.DataFrame(
+        [_conversation_row(conversation_ref=str(i)) for i in range(row_count)]
+    )
+
+    start = time.monotonic()
+    result = summarize.summarize_conversations(
+        df, _SlowSummaryClient(), max_concurrency=row_count
+    )
+    elapsed = time.monotonic() - start
+
+    assert result.height == row_count
+    # Serial would take row_count * call_delay (1.6s); running them all at once
+    # should land close to one call_delay, with generous headroom for CI jitter.
+    assert elapsed < row_count * call_delay / 2
+
+
+def test_summarize_conversations_preserves_row_order_and_error_handling() -> None:
+    """Concurrent execution must not scramble row order or the per-row error
+    handling (a raising call is dropped; the rest still succeed).
+    """
+
+    class _FlakySummaryClient:
+        model_version = "test-model"
+
+        def summarize(self, conversation_text: str) -> str:
+            if "2" in conversation_text:
+                msg = "simulated failure"
+                raise ValueError(msg)
+            return f"summary of: {conversation_text}"
+
+    df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref=str(i), conversation_text=f"text {i}")
+            for i in range(5)
+        ]
+    )
+    errors: list[str] = []
+
+    result = summarize.summarize_conversations(
+        df, _FlakySummaryClient(), errors=errors, max_concurrency=5
+    )
+
+    assert result["conversation_ref"].to_list() == ["0", "1", "3", "4"]
+    assert result["conversation_summary"].to_list() == [
+        "summary of: text 0",
+        "summary of: text 1",
+        "summary of: text 3",
+        "summary of: text 4",
+    ]
+    assert len(errors) == 1
+    assert "simulated failure" in errors[0]
 
 
 def test_summarize_conversations_types_null_columns_when_batch_is_all_skipped() -> None:
