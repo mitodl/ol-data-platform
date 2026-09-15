@@ -15,7 +15,21 @@
 -- organization's contracts, so reclaiming a seat does not take back a completion a
 -- partner was already sent. A contract_id or include_inactive request is recomputed
 -- from mv_b2b_learner_enrollment.
-with contract_enrollments as (
+-- last_active_on and courses_in_progress also count active enrollments only: they
+-- describe current engagement, not an outcome already sent. Activity does not move
+-- record_updated_on; see mv_b2b_learner_enrollment.
+-- Pre-aggregated to the (user, course run) join key so it cannot fan out.
+with activity as (
+    select
+        user_fk,
+        courserun_fk,
+        max(activity_date_key)                                                          as last_active_date_key
+    from {{ source('dimensional', 'afact_learner_courserun_daily_activity') }}
+    where platform = 'mitxonline'
+    group by user_fk, courserun_fk
+),
+
+contract_enrollments as (
     select
         c.organization_fk,
         e.user_fk,
@@ -24,7 +38,9 @@ with contract_enrollments as (
         e.enrollment_created_on,
         e.enrollment_is_active,
         g.is_passing,
+        g.grade_value,
         cert.certificate_is_revoked,
+        a.last_active_date_key,
         -- StarRocks' greatest() returns null if any argument is null; '' sorts below
         -- any ISO-8601 date.
         greatest(
@@ -44,6 +60,8 @@ with contract_enrollments as (
         on e.user_fk = g.user_fk and e.courserun_fk = g.courserun_fk
     left join {{ source('dimensional', 'tfact_certificate') }} cert
         on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
+    left join activity a
+        on e.user_fk = a.user_fk and e.courserun_fk = a.courserun_fk
     where cr.is_current = true
       and e.user_fk is not null
 ),
@@ -61,6 +79,14 @@ enrollment_rollup as (
         count(distinct case when is_passing then courserun_fk end)                      as courses_passed,
         count(distinct case when certificate_is_revoked = false
             then courserun_fk end)                                                      as courses_certified,
+        max(case when enrollment_is_active then last_active_date_key end)               as last_active_date_key,
+        -- The API's completion_status = in_progress, restricted to active enrollments:
+        -- no unrevoked certificate, not passing, and a nonzero grade or any activity.
+        count(distinct case when enrollment_is_active
+            and coalesce(certificate_is_revoked, true)
+            and not coalesce(is_passing, false)
+            and (grade_value > 0 or last_active_date_key is not null)
+            then courserun_fk end)                                                      as courses_in_progress,
         max(record_updated_on)                                                          as record_updated_on
     from contract_enrollments
     group by organization_fk, user_fk
@@ -144,6 +170,8 @@ select
     coalesce(er.courses_passed, 0)                                                      as courses_passed,
     coalesce(er.courses_certified, 0)                                                   as courses_certified,
     coalesce(pc.program_certificates_earned, 0)                                         as program_certificates_earned,
+    cast(d.date as date)                                                                as last_active_on,
+    coalesce(er.courses_in_progress, 0)                                                 as courses_in_progress,
     nullif(greatest(
         coalesce(er.record_updated_on, ''),
         coalesce(pc.program_certificate_updated_on, '')
@@ -157,6 +185,8 @@ left join enrollment_rollup er
     on m.organization_fk = er.organization_fk and m.user_fk = er.user_fk
 left join program_certificates pc
     on m.organization_fk = pc.organization_fk and m.user_fk = pc.user_fk
+left join {{ source('dimensional', 'dim_date') }} d
+    on er.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'
   -- The API's learner_id is required; see mv_b2b_learner_enrollment.
   and u.user_global_id is not null

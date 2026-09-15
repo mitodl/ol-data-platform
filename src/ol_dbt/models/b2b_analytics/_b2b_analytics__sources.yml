@@ -53,6 +53,14 @@ sources:
     description: >
       MITx Online organization membership roster. Grain: one row per (user,
       organization). Includes members with no enrollments.
+  - name: afact_learner_courserun_daily_activity
+    description: >
+      Per-learner course activity. Grain: one row per (platform, user, course
+      run, day) with any tracked activity. activity_date_key is a dim_date key
+      for the event's source-local day, not a UTC day. Read only by the
+      learner-grain views.
+  - name: dim_date
+    description: "Date dimension. Grain: one row per day, keyed on date_key (YYYYMMDD)."
 - name: reporting
   description: >
     Reporting-layer Iceberg tables, accessed from StarRocks via the
