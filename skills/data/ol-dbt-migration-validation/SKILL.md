@@ -126,10 +126,21 @@ fill rates become meaningful and this skill's step 5 can assert much more.
 ### 1. Register immediately before the build, and never between the two sides
 
 ```bash
-uv run --frozen ol-dbt local register --database ol_warehouse_production_staging
-uv run --frozen ol-dbt local register --database ol_warehouse_production_intermediate
-uv run --frozen ol-dbt local register --database ol_warehouse_production_dimensional
+for db in staging intermediate dimensional; do
+  uv run --frozen ol-dbt local register --database "ol_warehouse_production_$db" \
+    | tee "/tmp/reg_$db.log"
+  grep -q '✗ Errors: 0' "/tmp/reg_$db.log" \
+    || { echo "STOP: $db registration had errors — do not build"; break; }
+done
 ```
+
+**Check for zero errors; `register` will not tell you.** It catches per-table
+failures, counts them, prints `✗ Errors: N` in the summary, and still **exits 0**
+(`commands/local_dev.py` — no `raise` or non-zero exit on that path). A table that
+fails to re-register keeps its *previous* view, so the very pointer you re-registered
+to refresh can still be the stale one, and an unattended run proceeds against it.
+That defeats the freshness requirement below without any visible failure, so gate
+the build on the count rather than on the exit status.
 
 Two requirements pull in different directions here, and both have to hold.
 
@@ -383,16 +394,32 @@ documenting the noise.
 
 ### 4. Choose the join key from the model's own uniqueness test
 
-Never guess the grain from column names. Grep the model's schema YAML:
+Never guess the grain from column names. Ask dbt which file documents the model,
+then read its uniqueness tests:
 
 ```bash
-grep -rn -A6 'expect_compound_columns_to_be_unique\|unique' \
-  src/ol_dbt/models/**/_<area>__models.yml
+yml=$(uv run --frozen dbt ls --select <model> --resource-type model \
+        --output json --output-keys patch_path -t dev_local \
+        | grep '^{' | sed 's/.*models\//models\//; s/".*//' | head -1)
+grep -n -A8 'unique_combination_of_columns\|expect_compound_columns_to_be_unique\|- unique' "src/ol_dbt/$yml"
 ```
 
-- A passing `dbt_expectations.expect_compound_columns_to_be_unique` **is** the
-  key — use its column list verbatim. (Grep the dotted spelling; the underscored
-  form only appears in compiled test names.)
+**Do not glob for the schema file.** Two reasons, both measured 2026-09-15. A
+`models/**/_<area>__models.yml` pattern does not recurse in bash without
+`globstar` — it matches one directory level, while 31 of 35 model schema files sit
+two or three deep (`models/marts/micromasters/...`), so it silently expands to
+nothing for most marts, the primary migration scope. It works in zsh, which is
+exactly the kind of difference that makes a documented command fail for the next
+person. And the filename convention is not uniform: `dim_course_run`'s schema is
+`_dim_course_run.yml`, not `_<area>__models.yml`. `patch_path` is authoritative for
+both shapes.
+
+- A passing compound-uniqueness test **is** the key — use its column list verbatim.
+  Two spellings are in use here: `dbt_expectations.expect_compound_columns_to_be_unique`
+  (231 occurrences) and `dbt_utils.unique_combination_of_columns` (19, including
+  `dim_course_run` itself, whose key is `platform + courserun_readable_id +
+  is_current` under `where: is_current = true`). Grep the dotted spellings; the
+  underscored forms only appear in compiled test names.
 - A single column is safe alone only with **both** `unique` and `not_null`
   passing. `unique` ignores NULLs and a single-column join cannot pair NULL keys.
 - Pass a composite key as `-k a,b,c` or `-k a -k b -k c`. `-k a b c` does **not**

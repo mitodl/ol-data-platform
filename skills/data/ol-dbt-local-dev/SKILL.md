@@ -106,6 +106,12 @@ uv run --frozen ol-dbt local register --database ol_warehouse_production_interme
 uv run --frozen ol-dbt local register --database ol_warehouse_production_dimensional
 ```
 
+**Read the `✗ Errors:` line — a non-zero count does not fail the command.**
+`register` catches per-table failures, prints the tally, and still exits 0. A table
+that fails to re-register keeps its previous view, so a run that *looks* successful
+can leave you on exactly the stale pointer you were trying to replace. Treat
+`✗ Errors: 0` as the success condition, not the exit status.
+
 **One exception, and it is not really an exception.** When you are building two
 relations to compare against each other, both sides must come from the *same*
 registration — re-register between them and the difference you measure is drift,
