@@ -252,7 +252,9 @@ models:
   - name: b2b_contract_end_date
     description: Contract end date. Null when the contract has none.
   - name: seat_limit
-    description: b2b_contract_max_learners. Null means uncapped, not zero.
+    description: >
+      b2b_contract_max_learners, with 0 folded into null: MITx Online documents
+      both 0 and null as unlimited. Null means uncapped.
   - name: courserun_pk
     description: Surrogate key of the course run.
   - name: courserun_readable_id
