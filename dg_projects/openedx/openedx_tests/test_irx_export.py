@@ -59,7 +59,7 @@ def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
     )
     destination = UPath(tmp_path / "out.csv")
 
-    sha256, size = write_legacy_csv(
+    sha256, size, row_count = write_legacy_csv(
         frame.select(legacy_csv_columns(frame.collect_schema(), COLUMNS)),
         destination,
     )
@@ -68,6 +68,7 @@ def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
     assert written == _legacy_bytes()
     assert sha256 == hashlib.sha256(written).hexdigest()
     assert size == len(written)
+    assert row_count == len(ROWS)
 
 
 def test_role_users_projects_name_to_the_role_header() -> None:

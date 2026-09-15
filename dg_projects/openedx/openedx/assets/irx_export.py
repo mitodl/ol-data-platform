@@ -148,12 +148,14 @@ def legacy_csv_columns(schema: pl.Schema, columns: Sequence[str]) -> list[pl.Exp
 
 
 class _DigestingWriter(io.RawIOBase):
-    """Hash and count bytes on their way to the object store."""
+    """Hash and count bytes and rows on their way to the object store."""
 
-    def __init__(self, sink: Any):
+    def __init__(self, sink: Any, line_terminator: bytes):
         self._sink = sink
+        self._line_terminator = line_terminator
         self.digest = hashlib.sha256()
         self.size = 0
+        self.lines = 0
 
     def writable(self) -> bool:
         return True
@@ -161,19 +163,23 @@ class _DigestingWriter(io.RawIOBase):
     def write(self, data: Any) -> int:
         self.digest.update(data)
         self.size += len(data)
+        self.lines += data.count(self._line_terminator)
         return self._sink.write(data)
 
 
-def write_legacy_csv(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int]:
-    """Stream a frame to the drop as CSV and return its sha256 and size in bytes.
+def write_legacy_csv(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int, int]:
+    """Stream a frame to the drop as CSV; return its sha256, size, and row count.
 
     Streamed, never collected: studentmodule_query.csv runs to 59 GB for mitx,
-    and legacy_openedx needed a 32Gi memory limit for loading it whole.
+    and legacy_openedx needed a 32Gi memory limit for loading it whole. Row
+    count is counted off the bytes as they're written (minus the header line)
+    rather than from a second full scan of the frame.
     """
+    line_terminator = "\r\n"
     with destination.open("wb") as sink:
-        writer = _DigestingWriter(sink)
-        frame.sink_csv(writer, line_terminator="\r\n")
-    return writer.digest.hexdigest(), writer.size
+        writer = _DigestingWriter(sink, line_terminator.encode())
+        frame.sink_csv(writer, line_terminator=line_terminator)
+    return writer.digest.hexdigest(), writer.size, writer.lines - 1
 
 
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
@@ -231,7 +237,7 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
             course_ids_key,
             pl.LazyFrame({"course_id": course_ids}, schema={"course_id": pl.String}),
             drop / "course_ids.csv",
-            {"row_count": len(course_ids)},
+            {},
         )
 
         for export in IRX_EXPORT_FILES:
@@ -261,7 +267,6 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                 ),
                 drop / f"{export.name}.csv",
                 {
-                    "row_count": frame.select(pl.len()).collect().item(),
                     "source_table": f"{IRX_GLUE_DATABASE}.{table_name}",
                     "source_snapshot_id": str(snapshot_id),
                 },
@@ -276,15 +281,16 @@ def _export(
     destination: UPath,
     metadata: Mapping[str, Any],
 ) -> MaterializeResult:
-    sha256, size = write_legacy_csv(frame, destination)
+    sha256, size, row_count = write_legacy_csv(frame, destination)
     get_dagster_logger().info(
-        "Wrote %s rows (%d bytes) to %s", metadata["row_count"], size, destination
+        "Wrote %s rows (%d bytes) to %s", row_count, size, destination
     )
     return MaterializeResult(
         asset_key=key,
         data_version=DataVersion(sha256),
         metadata={
             **metadata,
+            "row_count": row_count,
             "path": MetadataValue.path(str(destination)),
             "size_bytes": size,
             "sha256": sha256,
