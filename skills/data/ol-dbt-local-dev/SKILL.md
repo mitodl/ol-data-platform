@@ -69,6 +69,43 @@ ol-dbt local list-sources               # show what's currently registered
 validation commands, which are fully offline). It is incremental by default and
 parallelized; use `--dry-run` to preview.
 
+**Re-register the layers you are about to read, immediately before every build —
+not when the staleness warning tells you to.** `list-sources` warns at ">1 day
+old", and that threshold is tuned for the wrong failure. `register` stores the
+Iceberg `metadata_location` that Glue reports at that instant, and for a dbt-built
+table Glue routinely points the canonical name at a `__dbt_tmp` directory. The next
+production materialization of that model swaps and deletes the directory, so a
+registration that was correct an hour ago now resolves to nothing:
+
+```
+HTTP Error: HTTP GET error reading
+  's3://ol-data-lake-intermediate-production/<model>__dbt_tmp-<hash>/metadata/<n>.metadata.json'
+  (HTTP 404 Not Found)
+```
+
+Measured 2026-09-14: a registry refreshed **60 minutes** earlier failed exactly this
+way on `int__micromasters__dedp_proctored_exam_grades`, killing two mart models.
+Re-registering only the intermediate layer (41 pointers moved, 118 unchanged) fixed
+it. Sixty minutes, not the day the warning implies. Re-registering the same three
+layers 26 hours later moved another **336** pointers (184 staging, 108 intermediate,
+44 dimensional) — that is the churn rate you are racing.
+
+**The 404 is the lucky outcome.** When the `__dbt_tmp` directory still exists but
+holds a mid-build snapshot, the view returns duplicated or partial rows and *nothing
+fails* — a clean run and wrong numbers, which is far worse when you are about to
+quote those numbers in a PR. That is why the rule is unconditional re-registration
+rather than a reaction to an error you can see. #2660 stopped `__dbt_tmp` tables
+being registered as sources in their own right, but deliberately did **not** fix
+canonical names pointing at `__dbt_tmp` locations — 621 of 636 dbt-built tables at
+last count. Until that is fixed, freshness is your responsibility:
+
+```bash
+# re-register only the layers the models you are about to build actually read
+uv run --frozen ol-dbt local register --database ol_warehouse_production_staging
+uv run --frozen ol-dbt local register --database ol_warehouse_production_intermediate
+uv run --frozen ol-dbt local register --database ol_warehouse_production_dimensional
+```
+
 ### 3. Iterate on models
 ```bash
 ol-dbt run                  # incremental: rebuild only changed/errored models (state:modified+ result:error+/fail+ --defer)
@@ -130,6 +167,10 @@ reports "no change" for a change that simply never ran.
   when you specifically need the shared cluster.
 - `register` needs AWS creds; `setup`, `run` (on dev_local), and the validation
   commands do not.
+- **Re-register immediately before every build**, not when the staleness warning
+  fires. Glue points dbt-built tables at `__dbt_tmp` locations that production
+  deletes on its next run; this bites within the hour, and its silent form returns
+  duplicated or partial rows with no error at all. See step 2.
 - Prefer incremental `ol-dbt run` while **iterating** — you want the fast loop and
   only care that the model executes. Switch to `--full-refresh` as soon as you are
   going to **read the model's contents and draw a conclusion** from them
