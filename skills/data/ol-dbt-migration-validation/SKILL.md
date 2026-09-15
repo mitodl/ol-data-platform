@@ -154,11 +154,32 @@ it always is.
 
 ### 3. Build both sides in one invocation — and force-refresh anything incremental
 
+First find what actually diverges — the refs that differ between the two sides:
+
+```bash
+diff <(grep -o "ref('[^']*')" <model>_pre.sql | sort -u) \
+     <(grep -o "ref('[^']*')" <model>.sql     | sort -u)
+```
+
+Then build both sides **and both divergent ancestor paths** in one invocation:
+
 ```bash
 cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) dbt run \
-  --select <model>_pre <dimensional_model> <model> \
+  --select <model>_pre <model> +<old_upstream> +<new_upstream> \
   -t dev_local --full-refresh
 ```
+
+**Selecting only the new upstream is not enough**, and that is the easy mistake:
+`<model>_pre` still refs the old `int__`/`stg__` model, which — left out of the
+selection — resolves to its own independently polluted Glue view, and the
+comparison is uncontrolled in exactly the way the header section describes. Every
+divergent ancestor has to be in the selection, on both sides, back to the point
+where the two paths meet.
+
+`+X` pulls X's whole ancestor tree back to the sources; `1+X` stops at X's
+immediate parents. Measured on `dim_course_run`: `+` selects 53 models, `1+`
+selects 7. Use `1+` when the divergence is one hop and `+` when you need the
+guarantee — and remember that anything you leave out is silently reading Glue.
 
 `dbt run`, not `dbt build`. `build` runs tests inline under dbt's default eager
 indirect selection — the cross-model `relationships_*` noise the section below
@@ -350,7 +371,16 @@ risk. Reading the direction is diagnostic:
 |---|---|
 | both directions non-zero | values genuinely changed in place |
 | pre-only, new side zero | the *pre* side has rows the new side lacks — often partial source data, not a code change |
-| `count(*)` >> `count(distinct)` on a source | accumulated `__dbt_tmp` snapshots; divide to get the generation count |
+| `count(*)` >> `count(distinct)` on a source | accumulated `__dbt_tmp` snapshots — see below, the ratio is not a generation count |
+
+On that last row: `count(*) / count(distinct <key>)` is **average key
+multiplicity**, and nothing more. It would equal the number of accumulated
+generations only if every snapshot held exactly the same key set — and these
+snapshots are partially *missing* rows as well as duplicating them, so it does
+not. Measured 2026-09-14: `dim_course_run` 1.28x and `dim_ocw_resource` 61.85x are
+smells of accumulation, not counts of anything. Use the ratio to decide *whether*
+a view is polluted; never quote it as a generation count or divide by it to
+"recover" a true row count.
 
 **(c) Fill-rate parity per column**, as a *paired* comparison:
 

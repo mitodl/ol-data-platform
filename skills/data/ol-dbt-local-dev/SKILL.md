@@ -60,9 +60,16 @@ shared schemas. Always `--dry-run` first when cleaning remote schemas.
 ## Typical use: materialize both sides for a diff
 ```bash
 ol-dbt local register --all-layers          # mount prod data
-ol-dbt run --select dim_user_old dim_user --full-refresh   # build both relations on dev_local
+ol-dbt run --select "dim_user_old dim_user" --full-refresh   # build both relations on dev_local
 ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 ```
+**Quote a multi-model selector.** `ol-dbt run` declares `--select` as a single
+`str`, so an unquoted second model binds to the `SUBCOMMAND` positional and the
+command dies with `Invalid value "dim_user" for SUBCOMMAND. Choose from: "build",
+"run", "test"` — it never reaches dbt. Note the asymmetry with `ol-dbt diff`, whose
+`-k`/`--exclude-columns` are `list[str]` and *do* take repeated or comma-separated
+values; that inconsistency is what makes this easy to get wrong.
+
 `--full-refresh` applies to the selection, so it re-derives both sides in full. Drop
 it only if neither model is `materialized='incremental'`; otherwise the diff can
 compare rows the incremental predicate never reselected.
