@@ -105,16 +105,20 @@ def _select_run_to_process(
 
 
 def _active_cluster_members(
-    catalog, embedding_model_version: str, embedding_dim: int
+    catalog,
+    embedding_model_version: str,
+    embedding_dim: int,
+    embedding_input_filter: str | None,
 ) -> dict[str, frozenset[str]]:
-    """cluster_key -> its live member pks, for every currently-active key whose
-    centroid was computed from the same embedding_model_version/embedding_dim
+    """cluster_key -> its live member pks, for every currently-active key built
+    from the same embedding_model_version/embedding_dim/embedding_input_filter
     as the run being matched.
 
     Empty if feedback_cluster_membership has no rows, in which case every new
-    cluster resolves to 'new'. Scoping by embedding config keeps a cluster from
-    a different model/dim (or member rows placed under a different config) out
-    of this run's Jaccard comparison.
+    cluster resolves to 'new'. Scoping by the full config -- including which
+    arm (summary vs concatenated_turns) was clustered -- keeps a cluster from a
+    different config, or conversations incrementally placed from a different
+    arm, out of this run's Jaccard comparison.
     """
     if not table_exists(
         catalog, f"{database_name}.feedback_cluster_membership"
@@ -128,6 +132,11 @@ def _active_cluster_members(
             (pl.col("cluster_status") == "active")
             & (pl.col("embedding_model_version") == embedding_model_version)
             & (pl.col("embedding_dim") == embedding_dim)
+            & (
+                pl.col("embedding_input_filter").eq_missing(
+                    pl.lit(embedding_input_filter)
+                )
+            )
         )
         .collect()["cluster_key"]
     )
@@ -149,11 +158,14 @@ def _active_cluster_members(
 
 
 def _other_config_active_keys(
-    catalog, embedding_model_version: str, embedding_dim: int
+    catalog,
+    embedding_model_version: str,
+    embedding_dim: int,
+    embedding_input_filter: str | None,
 ) -> set[str]:
     """Active cluster_keys under a different embedding config than this run --
-    otherwise an embedding-model change leaves the old config's clusters
-    'active' forever, since no future run can ever match against them.
+    otherwise an embedding-model/dim/arm change leaves the old config's
+    clusters 'active' forever, since no future run can ever match against them.
     """
     if not table_exists(catalog, f"{database_name}.feedback_cluster"):
         return set()
@@ -166,6 +178,9 @@ def _other_config_active_keys(
             & (
                 (pl.col("embedding_model_version") != embedding_model_version)
                 | (pl.col("embedding_dim") != embedding_dim)
+                | ~pl.col("embedding_input_filter").eq_missing(
+                    pl.lit(embedding_input_filter)
+                )
             )
         )
         .collect()["cluster_key"]
@@ -255,9 +270,10 @@ def feedback_cluster_identity(
     to continued/merged/split/new (ml.lib.cluster_identity.match_clusters), writing
     one feedback_cluster row per resolved key and one feedback_cluster_lineage row
     per edge (plus one 'retired' row per active key that didn't survive, and one
-    per active key from a *different* embedding_model_version/embedding_dim --
-    those can never be matched against the run's own config, so a model/dim
-    change would otherwise leave them 'active' forever). No human approves this;
+    per active key from a *different* embedding_model_version/embedding_dim/
+    embedding_input_filter -- those can never be matched against the run's own
+    config, so a model/dim/arm change would otherwise leave them 'active'
+    forever). No human approves this;
     a `continuity_floor` asset check blocks the write instead when too few
     conversations kept their cluster_key, since that means the run's
     configuration needs fixing rather than a rerun.
@@ -282,6 +298,7 @@ def feedback_cluster_identity(
     )
     embedding_model_version = run_row["embedding_model_version"]
     embedding_dim = run_row["embedding_dim"]
+    embedding_input_filter = run_row["embedding_input_filter"]
 
     candidates_df = (
         get_dbt_model_as_dataframe(
@@ -300,7 +317,7 @@ def feedback_cluster_identity(
     }
 
     active_cluster_members = _active_cluster_members(
-        catalog, embedding_model_version, embedding_dim
+        catalog, embedding_model_version, embedding_dim, embedding_input_filter
     )
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
@@ -316,7 +333,7 @@ def feedback_cluster_identity(
             "jaccard": None,
         }
         for other_config_key in _other_config_active_keys(
-            catalog, embedding_model_version, embedding_dim
+            catalog, embedding_model_version, embedding_dim, embedding_input_filter
         )
     )
 
@@ -383,6 +400,7 @@ def feedback_cluster_identity(
                 "radius": radius,
                 "embedding_model_version": embedding_model_version,
                 "embedding_dim": embedding_dim,
+                "embedding_input_filter": embedding_input_filter,
                 "member_count": len(members),
                 "cluster_status": "active",
                 "first_seen_run_id": existing["first_seen_run_id"]

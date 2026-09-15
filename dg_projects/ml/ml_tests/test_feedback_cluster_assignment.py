@@ -62,6 +62,7 @@ def test_run_embedding_config_reads_from_feedback_cluster_run() -> None:
             "cluster_run_id": ["run-1"],
             "embedding_model_version": ["text-embedding-3-small"],
             "embedding_dim": [1024],
+            "embedding_input_filter": ["summary"],
         }
     )
     with patch(
@@ -69,7 +70,7 @@ def test_run_embedding_config_reads_from_feedback_cluster_run() -> None:
         return_value=runs_lf,
     ):
         result = _run_embedding_config("run-1")
-    assert result == ("text-embedding-3-small", 1024)
+    assert result == ("text-embedding-3-small", 1024, "summary")
 
 
 def test_current_active_embedding_config_none_when_table_missing() -> None:
@@ -87,6 +88,7 @@ def test_current_active_embedding_config_returns_single_active_config() -> None:
             "cluster_status": ["active", "active"],
             "embedding_model_version": ["text-embedding-3-small"] * 2,
             "embedding_dim": [1024, 1024],
+            "embedding_input_filter": ["summary", "summary"],
         }
     )
     with (
@@ -97,7 +99,7 @@ def test_current_active_embedding_config_returns_single_active_config() -> None:
         ),
     ):
         result = _current_active_embedding_config(MagicMock())
-    assert result == ("text-embedding-3-small", 1024)
+    assert result == ("text-embedding-3-small", 1024, "summary")
 
 
 def test_current_active_embedding_config_none_when_two_configs_active() -> None:
@@ -112,6 +114,7 @@ def test_current_active_embedding_config_none_when_two_configs_active() -> None:
                 "text-embedding-3-large",
             ],
             "embedding_dim": [1024, 1024],
+            "embedding_input_filter": ["summary", "summary"],
         }
     )
     with (
@@ -128,12 +131,18 @@ def test_current_active_embedding_config_none_when_two_configs_active() -> None:
 def test_active_clusters_scoped_to_config_and_active_status() -> None:
     clusters_lf = _lazyframe(
         {
-            "cluster_key": ["a", "b", "c"],
-            "cluster_status": ["active", "active", "retired"],
-            "embedding_model_version": ["text-embedding-3-small"] * 3,
-            "embedding_dim": [1024, 512, 1024],
-            "centroid": [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]],
-            "radius": [0.5, 0.5, 0.5],
+            "cluster_key": ["a", "b", "c", "d"],
+            "cluster_status": ["active", "active", "retired", "active"],
+            "embedding_model_version": ["text-embedding-3-small"] * 4,
+            "embedding_dim": [1024, 512, 1024, 1024],
+            "embedding_input_filter": [
+                "summary",
+                "summary",
+                "summary",
+                "concatenated_turns",
+            ],
+            "centroid": [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0]],
+            "radius": [0.5, 0.5, 0.5, 0.5],
         }
     )
     with (
@@ -143,8 +152,10 @@ def test_active_clusters_scoped_to_config_and_active_status() -> None:
             return_value=clusters_lf,
         ),
     ):
-        result = _active_clusters(MagicMock(), "text-embedding-3-small", 1024)
-    # "b" is the wrong dim and "c" is retired -- only "a" qualifies.
+        result = _active_clusters(
+            MagicMock(), "text-embedding-3-small", 1024, "summary"
+        )
+    # "b" is the wrong dim, "c" is retired, "d" is the wrong arm -- only "a" qualifies.
     assert [c["cluster_key"] for c in result] == ["a"]
 
 

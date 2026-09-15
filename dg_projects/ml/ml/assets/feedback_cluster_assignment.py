@@ -60,31 +60,36 @@ def _vector_lookup(embedding_dim: int, pks: pl.Series) -> dict[str, np.ndarray]:
     )
 
 
-def _run_embedding_config(cluster_run_id: str) -> tuple[str, int]:
-    """Return the embedding_model_version/embedding_dim feedback_cluster_run
-    recorded for this specific completed run -- the authoritative source,
-    unlike inferring it from whichever feedback_cluster row happens to come
-    first (which can span more than one config after a model/dim change, until
-    feedback_cluster_identity retires the old config's actives).
+def _run_embedding_config(cluster_run_id: str) -> tuple[str, int, str | None]:
+    """Return the (embedding_model_version, embedding_dim, embedding_input_filter)
+    feedback_cluster_run recorded for this specific completed run -- the
+    authoritative source, unlike inferring it from whichever feedback_cluster
+    row happens to come first (which can span more than one config after a
+    model/dim/arm change, until feedback_cluster_identity retires the old
+    config's actives).
     """
     run_row = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_run"
         )
         .filter(pl.col("cluster_run_id") == cluster_run_id)
-        .select(["embedding_model_version", "embedding_dim"])
+        .select(["embedding_model_version", "embedding_dim", "embedding_input_filter"])
         .collect()
         .to_dicts()[0]
     )
-    return run_row["embedding_model_version"], run_row["embedding_dim"]
+    return (
+        run_row["embedding_model_version"],
+        run_row["embedding_dim"],
+        run_row["embedding_input_filter"],
+    )
 
 
-def _current_active_embedding_config(catalog) -> tuple[str, int] | None:
-    """Return the embedding_model_version/embedding_dim of every currently-
-    active cluster, or None if there are no active clusters or (transiently,
-    before feedback_cluster_identity retires the old config) more than one
-    config is active at once -- either way, incremental placement has no
-    single config to compare against yet.
+def _current_active_embedding_config(catalog) -> tuple[str, int, str | None] | None:
+    """Return the (embedding_model_version, embedding_dim, embedding_input_filter)
+    of every currently-active cluster, or None if there are no active clusters
+    or (transiently, before feedback_cluster_identity retires the old config)
+    more than one config is active at once -- either way, incremental
+    placement has no single config to compare against yet.
     """
     if not table_exists(catalog, f"{database_name}.feedback_cluster"):
         return None
@@ -93,18 +98,25 @@ def _current_active_embedding_config(catalog) -> tuple[str, int] | None:
             database_name=database_name, table_name="feedback_cluster"
         )
         .filter(pl.col("cluster_status") == "active")
-        .select(["embedding_model_version", "embedding_dim"])
+        .select(["embedding_model_version", "embedding_dim", "embedding_input_filter"])
         .unique()
         .collect()
     )
     if configs_df.height != 1:
         return None
     row = configs_df.to_dicts()[0]
-    return row["embedding_model_version"], row["embedding_dim"]
+    return (
+        row["embedding_model_version"],
+        row["embedding_dim"],
+        row["embedding_input_filter"],
+    )
 
 
 def _active_clusters(
-    catalog, embedding_model_version: str, embedding_dim: int
+    catalog,
+    embedding_model_version: str,
+    embedding_dim: int,
+    embedding_input_filter: str | None,
 ) -> list[dict[str, Any]]:
     """Active feedback_cluster rows scoped to one embedding config, shaped for
     ml.lib.cluster_identity.nearest_active_cluster.
@@ -119,6 +131,11 @@ def _active_clusters(
             (pl.col("cluster_status") == "active")
             & (pl.col("embedding_model_version") == embedding_model_version)
             & (pl.col("embedding_dim") == embedding_dim)
+            & (
+                pl.col("embedding_input_filter").eq_missing(
+                    pl.lit(embedding_input_filter)
+                )
+            )
         )
         .select(["cluster_key", "centroid", "radius"])
         .collect()
@@ -137,8 +154,7 @@ def _rewrite_from_run(
     cluster_run_id: str,
     now: datetime,
     catalog,
-    embedding_model_version: str,
-    embedding_dim: int,
+    embedding_config: tuple[str, int, str | None],
 ) -> pl.DataFrame:
     """Full membership rewrite for every conversation in cluster_run_id's candidates.
 
@@ -146,6 +162,7 @@ def _rewrite_from_run(
     resolved matches); noise (-1) and any cluster_id absent from lineage (i.e.
     retired-only, no successor) resolve to a null cluster_key.
     """
+    _embedding_model_version, embedding_dim, _embedding_input_filter = embedding_config
     candidates_df = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_candidate"
@@ -172,7 +189,7 @@ def _rewrite_from_run(
 
     centroid_by_key = {
         cluster["cluster_key"]: cluster["centroid"]
-        for cluster in _active_clusters(catalog, embedding_model_version, embedding_dim)
+        for cluster in _active_clusters(catalog, *embedding_config)
     }
     vector_by_pk = _vector_lookup(
         embedding_dim, candidates_df["feedback_conversation_pk"]
@@ -215,11 +232,11 @@ def _incrementally_place_new_embeddings(
     exclude_pks: set[str],
     cluster_run_id: str | None,
     now: datetime,
-    embedding_config: tuple[str, int],
+    embedding_config: tuple[str, int, str | None],
 ) -> pl.DataFrame:
     """Place every conversation that needs (re-)placement against the current
     active clusters, scoped to one embedding_config (embedding_model_version,
-    embedding_dim).
+    embedding_dim, embedding_input_filter).
 
     "Needs (re-)placement" is: no membership row yet, an embedding newer than
     its current membership row, or a membership row still pointing at a
@@ -227,9 +244,17 @@ def _incrementally_place_new_embeddings(
     prior embedding config) -- a conversation the last rewrite/placement never
     revisited otherwise keeps a stale key forever. exclude_pks were just
     handled by _rewrite_from_run in this same execution.
+
+    A conversation whose embedding_input arm doesn't match the active
+    clusters' own arm (e.g. a concatenated_turns embedding when the clusters
+    were built from summary embeddings) is out of scope for clustering under
+    the current configuration and is never compared against them -- it's
+    unassigned, not mismatched.
     """
-    embedding_model_version, embedding_dim = embedding_config
-    active_clusters = _active_clusters(catalog, embedding_model_version, embedding_dim)
+    embedding_model_version, embedding_dim, embedding_input_filter = embedding_config
+    active_clusters = _active_clusters(
+        catalog, embedding_model_version, embedding_dim, embedding_input_filter
+    )
     if not active_clusters:
         return pl.DataFrame(schema=MEMBERSHIP_SCHEMA)
     active_keys = [cluster["cluster_key"] for cluster in active_clusters]
@@ -241,6 +266,10 @@ def _incrementally_place_new_embeddings(
         & (pl.col("embedding_dim") == embedding_dim)
         & ~pl.col("feedback_conversation_pk").is_in(list(exclude_pks))
     )
+    if embedding_input_filter is not None:
+        embeddings_lf = embeddings_lf.filter(
+            pl.col("embedding_input") == embedding_input_filter
+        )
 
     membership_lf = (
         get_dbt_model_as_dataframe(
@@ -328,9 +357,13 @@ def feedback_cluster_assignment(context: AssetExecutionContext) -> pl.DataFrame:
     Otherwise, every conversation that's new, newly re-embedded, or still
     pointing at a cluster_key that's no longer active is placed by nearest
     active centroid within its radius (cluster_assignment_method='incremental').
-    Both paths are scoped to one embedding_model_version/embedding_dim -- the
-    just-processed run's config, or the config of whatever's currently active
-    if nothing new was processed this execution. No human approves either path.
+    Both paths are scoped to one embedding config (embedding_model_version,
+    embedding_dim, embedding_input_filter) -- the just-processed run's config,
+    or the config of whatever's currently active if nothing new was processed
+    this execution. A conversation embedded under a different arm than the
+    active clusters (e.g. concatenated_turns when the clusters are
+    summary-based) is out of scope for placement, not mismatched against it.
+    No human approves either path.
     """
     catalog = get_glue_catalog()
     now = datetime.now(tz=UTC)
@@ -348,7 +381,7 @@ def feedback_cluster_assignment(context: AssetExecutionContext) -> pl.DataFrame:
         and embedding_config is not None
         and not _run_already_applied(catalog, cluster_run_id)
     ):
-        rewrite_df = _rewrite_from_run(cluster_run_id, now, catalog, *embedding_config)
+        rewrite_df = _rewrite_from_run(cluster_run_id, now, catalog, embedding_config)
 
     incremental_df = (
         _incrementally_place_new_embeddings(

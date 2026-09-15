@@ -32,6 +32,11 @@ CLUSTER_SCHEMA = {
     "radius": pl.Float64,
     "embedding_model_version": pl.String,
     "embedding_dim": pl.Int64,
+    # Null means the run that produced this cluster clustered every arm
+    # together (feedback_clusters' embedding_input_filter=None); otherwise
+    # 'summary' or 'concatenated_turns' -- the only population this cluster's
+    # centroid and membership comparisons are valid against.
+    "embedding_input_filter": pl.String,
     "member_count": pl.Int64,
     "cluster_status": pl.String,
     "first_seen_run_id": pl.String,

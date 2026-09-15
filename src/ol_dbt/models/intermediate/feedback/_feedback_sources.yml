@@ -62,6 +62,9 @@ sources:
       description: str, uuid identifying this cluster's stable identity.
     - name: cluster_status
       description: str, active or retired.
+    - name: embedding_input_filter
+      description: str, which embedding_input arm ('summary' or 'concatenated_turns')
+        this cluster was built from. Null means every arm was clustered together.
   - name: feedback_cluster_lineage
     description: One row per continued/merged/split/new/retired edge, materialized
       by the feedback_cluster_identity Dagster asset for every clustering run it processes.
