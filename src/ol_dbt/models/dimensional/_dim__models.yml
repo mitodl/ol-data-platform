@@ -1207,17 +1207,18 @@ models:
 
 - name: afact_learner_courserun_daily_activity
   description: >
-    One row per (platform, learner, course run, day) with any tracked course
-    activity -- video plays, problem checks, course navigation, discussion
-    events, and Open edX chatbot submits. The user_fk-keyed replacement for the
-    per-learner activity in organization_administration_report, which groups
-    by dim_user.email and so drops or mis-attributes learners whose coalesced
-    email moves. A learner's last_active_on is max(activity_date) and
-    days_active is count(distinct activity_date) over this table. Days with no
-    tracked activity have no row. Certificates and enrollments are not activity
-    here, although the report's active_count counts them. Rebuilt in full every
-    run, because user_pk can still re-key and an incremental table would keep
-    old days under a stale key.
+    One row per (platform, learner, course run, day) with tracked course
+    activity: video plays, problem checks, course navigation, discussion
+    events, or Open edX chatbot submits. Days with no activity have no row, so
+    last_active_on is max(activity_date) and days_active is
+    count(distinct activity_date) over this table. Certificates and
+    enrollments don't count as activity here.
+
+    Keyed on user_fk instead of email, unlike organization_administration_report,
+    so a learner's rows don't split or drop when their account email changes.
+    Rebuilt in full every run, since a learner's user_fk can still be
+    re-resolved and an incremental table would leave old days under the
+    stale key.
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
