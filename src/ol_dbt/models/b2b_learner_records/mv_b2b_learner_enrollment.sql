@@ -11,6 +11,9 @@
 -- The organization is reached through the contract that owns the course run, never
 -- organization_administration_report's free-text organization_key fallback, which
 -- would show a partner learners who aren't theirs.
+-- Not filtered to the organization's current roster: a learner removed from the
+-- organization keeps their enrollment in its contract runs. Roster history is kept in
+-- snapshot_mitxonline_b2b_userorganization.
 select
     org.organization_key,
     org.sso_organization_id,
@@ -37,13 +40,14 @@ select
     cert.certificate_issued_on,
     cert.certificate_is_revoked,
     -- Every mitxonline timestamp here is an ISO-8601 string from the same macro, so
-    -- greatest() compares them correctly. Grade and certificate floor to the
-    -- enrollment's own timestamp when absent.
-    greatest(
-        coalesce(e.enrollment_updated_on, e.enrollment_created_on),
-        coalesce(g.grade_updated_on, e.enrollment_created_on),
-        coalesce(cert.certificate_updated_on, e.enrollment_created_on)
-    )                                                                                   as record_updated_on
+    -- greatest() compares them correctly. StarRocks' greatest() returns null if any
+    -- argument is null, so each is coalesced to '', which sorts below any real date.
+    nullif(greatest(
+        coalesce(e.enrollment_updated_on, ''),
+        coalesce(e.enrollment_created_on, ''),
+        coalesce(g.grade_updated_on, ''),
+        coalesce(cert.certificate_updated_on, '')
+    ), '')                                                                              as record_updated_on
 from {{ source('dimensional', 'bridge_organization_courserun') }} boc
 join {{ source('dimensional', 'dim_contract') }} c
     on boc.contract_fk = c.contract_pk
@@ -61,3 +65,6 @@ left join {{ source('dimensional', 'tfact_certificate') }} cert
     on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
 where org.platform = 'mitxonline'
   and cr.is_current = true
+  -- The API's learner_id is required. Filtered here rather than asserted by a dbt
+  -- test, which would run against the previous refresh and block every MV's refresh.
+  and u.user_global_id is not null
