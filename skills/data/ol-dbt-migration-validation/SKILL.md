@@ -399,13 +399,32 @@ grep -rn -A6 'expect_compound_columns_to_be_unique\|unique' \
   work — only the first token is read as a key and the rest become positional
   args, producing a confusing `--dbt-dir` error.
 
-Why a wrong key is worse than no key: `audit_helper` pairs rows with a full
-outer join, so a non-unique or nullable key fans out or fails to pair, and
-reports the damage as "rows without an exact match on the other side" — a
-number that reads like a catastrophic regression and is pure artifact. One
-measured case reported 17,782 unmatched of 20,908 rows, all of it join noise
-from a guessed key. Under a weak key, trust the per-column mismatch *rate* and
-the sample rows, never the unmatched count.
+**Why a wrong key is worse than no key — and which number it actually breaks.**
+The two figures `ol-dbt diff` prints do not depend on the key equally, and the
+intuition is backwards:
+
+| figure | how it is computed | key-sensitive? |
+|---|---|---|
+| per-column mismatch rate | `compare_column_values`: `full outer join b_query on a_query.<pk> = b_query.<pk>` | **yes — corrupted by a weak key** |
+| "rows without an exact match" | `compare_queries`: `EXCEPT` on full row content; `primary_key` appears only in an `order by` | no |
+| sample mismatch rows | same `EXCEPT` branch (`summarize=false`) | no |
+
+So a non-unique or nullable key fans out the per-column join and **manufactures
+mismatches that do not exist**. Measured 2026-09-15 on two byte-identical 4-row
+tables whose key repeated once: `0 unmatched row-side(s)` — correct — alongside
+`val: 33.33% (2 rows)`, entirely an artifact of 2x2 pairing on the duplicated key.
+Trusting the rate there means reporting a 33% regression on identical data.
+
+**If the key is not proven, do not run the keyed diff at all.** Use the keyless
+multiset check in step 5(b), which needs no key and cannot fan out. That is the
+honest fallback — not "run it anyway and squint at the rate".
+
+Two related notes. A single-column `--primary-key` drops NULL-keyed rows, while
+the composite path hashes through `diff_composite_key`, which encodes nulls so
+those rows still pair (tracked as
+`tk-ol-dbt-diff-single-column-primary-key-drops-null-1d1a40`). And the unmatched
+count, though key-independent, is still inflated by **source duplication** — the
+16.7x on #2403 was that, not key noise.
 
 ### 5. Localise cheaply, in this order
 
