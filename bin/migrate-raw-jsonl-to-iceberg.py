@@ -342,12 +342,12 @@ def _roll_back(  # noqa: PLR0913
     dropped before the JSONL entry can be restored, and it would otherwise hide
     the table from a retry, which only converts JSONL entries.
     """
-    try:
-        current = glue.get_table(DatabaseName=database, Name=table_name)["Table"]
-    except glue.exceptions.EntityNotFoundException:
-        current = None
     restored = False
     try:
+        try:
+            current = glue.get_table(DatabaseName=database, Name=table_name)["Table"]
+        except glue.exceptions.EntityNotFoundException:
+            current = None
         if current is not None and _is_iceberg(current):
             glue.delete_table(DatabaseName=database, Name=table_name)
             log.info("  dropped the Iceberg entry the failed attempt created")
