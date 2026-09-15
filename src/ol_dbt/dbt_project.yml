@@ -233,6 +233,17 @@ models:
         optimize_after_every_n_runs: 1
         analyze_after_every_n_runs: 7
 
+snapshots:
+  open_learning:
+    +grants:
+      select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+        'ol_business_analyst', 'reverse_etl']
+      all privileges: ["accountadmin", "ol_platform_admin"]
+    +properties:
+      format: "'PARQUET'"
+    +meta:
+      required_docs: true
+
 # Test severity config
 # default for error_if and warn_if are !=0
 tests:

@@ -1,0 +1,50 @@
+---
+version: 2
+snapshots:
+- name: snapshot_mitxonline_b2b_userorganization
+  relation: ref('stg__mitxonline__app__postgres__b2b_userorganization')
+  description: >
+    History of MITx Online organization memberships, one row per version of a
+    membership. b2b_userorganization has no timestamps and its raw table is
+    replaced on every load, so without this a removed membership, or a
+    keep_until_seen or is_manager change, leaves no trace. Snapshotted from the
+    staging model so the history does not depend on the raw loader's metadata
+    columns (Airbyte, then dlt). Keyed on mitxonline ids rather than
+    dim_user/dim_organization surrogates, which can re-key. Resolution is one
+    run: a membership added and removed between two runs is never recorded, and
+    history starts at the first run. A membership deleted upstream has its
+    current version closed (dbt_valid_to set), not a tombstone row.
+  config:
+    schema: dimensional
+    unique_key: userorganization_id
+    strategy: check
+    check_cols:
+    - user_id
+    - organization_id
+    - userorganization_keep_until_seen
+    - userorganization_is_manager
+    hard_deletes: invalidate
+  columns:
+  - name: userorganization_id
+    description: mitxonline b2b_userorganization.id.
+  - name: user_id
+    description: mitxonline users_user.id (dim_user.mitxonline_application_user_id).
+  - name: organization_id
+    description: mitxonline b2b_organizationpage id (dim_organization.organization_id).
+  - name: userorganization_keep_until_seen
+    description: >
+      True for a membership mitxonline created itself (enrollment-code
+      redemption, contract-run enrollment) that SSO reconciliation has not yet
+      confirmed; reconciliation never removes these and clears the flag once
+      the organization appears in the user's SSO data.
+  - name: userorganization_is_manager
+    description: Whether the user manages the organization.
+  - name: dbt_scd_id
+    description: Unique id of this version of the membership.
+  - name: dbt_updated_at
+    description: When dbt recorded this version.
+  - name: dbt_valid_from
+    description: When this version was first observed.
+  - name: dbt_valid_to
+    description: When this version stopped being current (changed or deleted upstream).
+      Null for the current version.
