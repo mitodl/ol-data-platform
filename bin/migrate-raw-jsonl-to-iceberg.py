@@ -21,9 +21,10 @@ Usage::
 Safety:
 
     The original Glue table definition is saved before deletion.  If Iceberg
-    table creation fails, the original JSONL entry is automatically restored in
-    Glue so the table remains accessible.  JSONL files in S3 are never deleted
-    by this script.
+    table creation or the data append fails, the Iceberg entry is dropped, the
+    Iceberg data and metadata objects that attempt wrote are deleted, and the
+    original JSONL entry is restored in Glue so the table remains accessible.
+    JSONL files in S3 are never deleted by this script.
 
     Each table is read fully into memory, so tables larger than
     ``--max-table-bytes`` are reported and left as JSONL instead of being
@@ -45,6 +46,7 @@ from pyiceberg.catalog.glue import GlueCatalog
 
 if TYPE_CHECKING:
     import botocore.client
+    from pyiceberg.table import Table
 
 log = logging.getLogger(__name__)
 
@@ -300,6 +302,19 @@ def _read_jsonl(
     raise ValueError(msg)
 
 
+def _list_iceberg_objects(s3_client: "botocore.client.S3", location: str) -> set[str]:
+    """List the keys under a table location's Iceberg data/ and metadata/ dirs."""
+    bucket, _, prefix = location.removeprefix("s3://").partition("/")
+    paginator = s3_client.get_paginator("list_objects_v2")
+    keys: set[str] = set()
+    for subdir in ("data/", "metadata/"):
+        for page in paginator.paginate(
+            Bucket=bucket, Prefix=f"{prefix.rstrip('/')}/{subdir}"
+        ):
+            keys.update(obj["Key"] for obj in page.get("Contents", []))
+    return keys
+
+
 def _restore_glue_table(
     glue: "botocore.client.Glue",
     database: str,
@@ -310,7 +325,76 @@ def _restore_glue_table(
     log.info("  restored original JSONL Glue entry")
 
 
-def _migrate_one(  # noqa: PLR0913, C901, PLR0912
+def _roll_back(  # noqa: PLR0913
+    *,
+    glue: "botocore.client.Glue",
+    s3: "botocore.client.S3",
+    database: str,
+    table_name: str,
+    original_def: dict[str, Any],
+    location: str,
+    objects_before: set[str],
+) -> None:
+    """Return a table whose cutover failed to its JSONL state.
+
+    If create_table succeeded and the append failed, the name is held by an
+    Iceberg entry with no snapshot, which scans as an empty table. It has to be
+    dropped before the JSONL entry can be restored, and it would otherwise hide
+    the table from a retry, which only converts JSONL entries.
+    """
+    try:
+        current = glue.get_table(DatabaseName=database, Name=table_name)["Table"]
+    except glue.exceptions.EntityNotFoundException:
+        current = None
+    try:
+        if current is not None and _is_iceberg(current):
+            glue.delete_table(DatabaseName=database, Name=table_name)
+            log.info("  dropped the Iceberg entry the failed attempt created")
+        _restore_glue_table(glue, database, original_def)
+    except Exception:
+        log.exception(
+            "  CRITICAL: could not restore %s.%s — "
+            "table definition: %s  data still at: %s",
+            database,
+            table_name,
+            _to_table_input(original_def),
+            location,
+        )
+        return
+
+    # create_table writes a metadata file before registering in Glue, and a
+    # failed append can leave data files behind. No snapshot references them,
+    # and _list_json_files skips both dirs, so nothing else would find them.
+    bucket = location.removeprefix("s3://").partition("/")[0]
+    written = sorted(_list_iceberg_objects(s3, location) - objects_before)
+    for key in written:
+        s3.delete_object(Bucket=bucket, Key=key)
+    log.info("  deleted %d object(s) the failed attempt wrote", len(written))
+
+
+def _validate_snapshot(iceberg: "Table", source_count: int) -> None:
+    """Check the committed snapshot against the rows that were read.
+
+    A table with rows to write but no snapshot scans as empty rather than
+    failing, so it raises instead of counting as converted.
+    """
+    snapshot = iceberg.current_snapshot()
+    if snapshot is None or not snapshot.summary:
+        if source_count:
+            msg = f"append of {source_count} row(s) committed no snapshot"
+            raise RuntimeError(msg)
+        log.info("  created Iceberg table (empty)")
+        return
+    iceberg_count = int(snapshot.summary.get("total-records", "0"))
+    if iceberg_count != source_count:
+        log.warning(
+            "  row count mismatch: source=%d iceberg=%d", source_count, iceberg_count
+        )
+    else:
+        log.info("  validated: %d rows written", iceberg_count)
+
+
+def _migrate_one(  # noqa: PLR0913
     *,
     glue: "botocore.client.Glue",
     s3: "botocore.client.S3",
@@ -376,8 +460,9 @@ def _migrate_one(  # noqa: PLR0913, C901, PLR0912
         log.info("  read %d row(s), %d field(s)", len(arrow_table), len(arrow_schema))
 
     source_count = len(arrow_table)
+    objects_before = _list_iceberg_objects(s3, location)
 
-    # ── Safe cutover: delete JSONL entry, create Iceberg, restore on failure ──
+    # ── Safe cutover: delete JSONL entry, create Iceberg, roll back on failure ─
     glue.delete_table(DatabaseName=database, Name=table_name)
     log.info("  deleted JSONL Glue entry")
 
@@ -389,37 +474,18 @@ def _migrate_one(  # noqa: PLR0913, C901, PLR0912
         )
         if source_count:
             iceberg.append(arrow_table)
-
-        # Validate row count from Iceberg snapshot metadata
-        snapshot = iceberg.current_snapshot()
-        if snapshot and snapshot.summary:
-            iceberg_count = int(snapshot.summary.get("total-records", "0"))
-            if iceberg_count != source_count:
-                log.warning(
-                    "  row count mismatch: source=%d iceberg=%d",
-                    source_count,
-                    iceberg_count,
-                )
-            else:
-                log.info("  validated: %d rows written", iceberg_count)
-        else:
-            log.info("  created Iceberg table (empty)")
-
+        _validate_snapshot(iceberg, source_count)
     except Exception:
-        log.exception(
-            "  Iceberg creation failed — attempting to restore original entry"
+        log.exception("  Iceberg creation failed — rolling back")
+        _roll_back(
+            glue=glue,
+            s3=s3,
+            database=database,
+            table_name=table_name,
+            original_def=original_def,
+            location=location,
+            objects_before=objects_before,
         )
-        try:
-            _restore_glue_table(glue, database, original_def)
-        except Exception:
-            log.exception(
-                "  CRITICAL: could not restore %s.%s — "
-                "table definition: %s  data still at: %s",
-                database,
-                table_name,
-                _to_table_input(original_def),
-                location,
-            )
         return False
 
     return True
