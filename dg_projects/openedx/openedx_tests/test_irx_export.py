@@ -87,6 +87,9 @@ def test_every_file_depends_on_its_irx_model() -> None:
     }
 
     assert deps.pop("course_ids") == set()
+    assert deps.pop("forum_contents") == {
+        AssetKey(["external", "irx__mitxonline__openedx__mysql__forum_contents"])
+    }
     assert deps == {
         export.name: {
             AssetKey(["external", f"irx__mitxonline__openedx__mysql__{export.model}"])
