@@ -12,7 +12,7 @@ from botocore.client import BaseClient
 from google import genai
 from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import attach_llm_usage, traced
+from ml.resources.opik_auth import attach_llm_usage, attach_span_metadata, traced
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -70,7 +70,9 @@ class EmbeddingClient(Protocol):
     model_version: str
     dim: int
 
-    def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
+    def embed_batch(
+        self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
+    ) -> list[list[float]]: ...
 
 
 class OpenAIEmbeddingClient:
@@ -81,8 +83,16 @@ class OpenAIEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_openai", tags=["feedback_embedding"])
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    @traced(
+        "feedback_embed_openai",
+        tags=["feedback_embedding"],
+        ignore_arguments=["trace_metadata"],
+    )
+    def embed_batch(
+        self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
+    ) -> list[list[float]]:
+        if trace_metadata is not None:
+            attach_span_metadata(trace_metadata)
         response = self._client.embeddings.create(
             model=self.model_version,
             input=texts,
@@ -113,8 +123,16 @@ class GeminiEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_gemini", tags=["feedback_embedding"])
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    @traced(
+        "feedback_embed_gemini",
+        tags=["feedback_embedding"],
+        ignore_arguments=["trace_metadata"],
+    )
+    def embed_batch(
+        self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
+    ) -> list[list[float]]:
+        if trace_metadata is not None:
+            attach_span_metadata(trace_metadata)
         # Order is the API's own contract (response.embeddings lines up with the
         # input contents list), unlike OpenAI's which documents an index field --
         # nothing to sort by here.
@@ -157,8 +175,16 @@ class BedrockEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_bedrock", tags=["feedback_embedding"])
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    @traced(
+        "feedback_embed_bedrock",
+        tags=["feedback_embedding"],
+        ignore_arguments=["trace_metadata"],
+    )
+    def embed_batch(
+        self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
+    ) -> list[list[float]]:
+        if trace_metadata is not None:
+            attach_span_metadata(trace_metadata)
         if self.model_version.startswith("amazon.titan-embed"):
             return self._embed_titan(texts)
         if self.model_version.startswith("cohere.embed"):
@@ -349,7 +375,16 @@ def _embed_chunk(
     function's return type.
     """
     try:
-        vectors = client.embed_batch([row["resolved_text"] for row in chunk])
+        vectors = client.embed_batch(
+            [row["resolved_text"] for row in chunk],
+            trace_metadata={
+                "feedback_conversation_pks": [
+                    row["feedback_conversation_pk"] for row in chunk
+                ],
+                "conversation_refs": [row["conversation_ref"] for row in chunk],
+                "embedding_inputs": [row["embedding_input"] for row in chunk],
+            },
+        )
     except openai.BadRequestError:
         logger.warning(
             "Batch embed failed for %d conversations; retrying individually",
@@ -359,7 +394,14 @@ def _embed_chunk(
         results = []
         for row in chunk:
             try:
-                vector = client.embed_batch([row["resolved_text"]])[0]
+                vector = client.embed_batch(
+                    [row["resolved_text"]],
+                    trace_metadata={
+                        "feedback_conversation_pks": [row["feedback_conversation_pk"]],
+                        "conversation_refs": [row["conversation_ref"]],
+                        "embedding_inputs": [row["embedding_input"]],
+                    },
+                )[0]
             except Exception as e:
                 logger.warning(
                     "Failed to embed conversation %s/%s; will retry next run",

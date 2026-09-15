@@ -13,7 +13,13 @@ from openai import OpenAI
 class _FakeSummaryClient:
     model_version = "test-model"
 
-    def summarize(self, conversation_text: str) -> str:
+    def __init__(self) -> None:
+        self.trace_metadata_calls: list[dict[str, object]] = []
+
+    def summarize(
+        self, conversation_text: str, *, trace_metadata: dict[str, object]
+    ) -> str:
+        self.trace_metadata_calls.append(trace_metadata)
         return f"summary of: {conversation_text}"
 
 
@@ -88,6 +94,27 @@ def test_summarize_conversations_applies_skip_rule() -> None:
     assert skipped["turn_count"] == 1
 
 
+def test_summarize_conversations_passes_identifying_trace_metadata() -> None:
+    """The Opik span for a summarize() call must carry enough to trace it back
+    to its source conversation -- regression guard for the metadata itself,
+    not just that a call happened.
+    """
+    client = _FakeSummaryClient()
+    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
+
+    summarize.summarize_conversations(df, client)
+
+    assert client.trace_metadata_calls == [
+        {
+            "feedback_conversation_pk": "pk-1",
+            "source_slug": "zendesk",
+            "conversation_ref": "1",
+            "turn_count": 2,
+            "conversation_text_chars": 600,
+        }
+    ]
+
+
 def test_summarize_conversations_runs_calls_concurrently() -> None:
     """max_concurrency > 1 should let several summarize() calls overlap, not
     run strictly one after another.
@@ -97,7 +124,12 @@ def test_summarize_conversations_runs_calls_concurrently() -> None:
     class _SlowSummaryClient:
         model_version = "test-model"
 
-        def summarize(self, conversation_text: str) -> str:
+        def summarize(
+            self,
+            conversation_text: str,
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+        ) -> str:
             time.sleep(call_delay)
             return f"summary of: {conversation_text}"
 
@@ -126,7 +158,12 @@ def test_summarize_conversations_preserves_row_order_and_error_handling() -> Non
     class _FlakySummaryClient:
         model_version = "test-model"
 
-        def summarize(self, conversation_text: str) -> str:
+        def summarize(
+            self,
+            conversation_text: str,
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+        ) -> str:
             if "2" in conversation_text:
                 msg = "simulated failure"
                 raise ValueError(msg)
@@ -321,7 +358,7 @@ def test_anthropic_summary_client_treats_empty_content_as_no_summary() -> None:
         _FakeAnthropicClient(content=[]), "claude-sonnet-5"
     )
 
-    assert client.summarize("some conversation text") is None
+    assert client.summarize("some conversation text", trace_metadata={}) is None
 
 
 class _FakeUsage:
@@ -363,7 +400,7 @@ def test_anthropic_summary_client_attaches_usage_to_the_opik_span(
 
     client = summarize.AnthropicSummaryClient(_Client(), "claude-haiku-4-5")
 
-    result = client.summarize("some conversation text")
+    result = client.summarize("some conversation text", trace_metadata={})
 
     assert result == "a summary"
     assert calls == [
@@ -485,7 +522,12 @@ def test_filter_unsummarized_does_not_resubmit_skipped_rows_on_prompt_change() -
 class _FailingSummaryClient:
     model_version = "test-model"
 
-    def summarize(self, conversation_text: str) -> str:  # noqa: ARG002
+    def summarize(
+        self,
+        conversation_text: str,  # noqa: ARG002
+        *,
+        trace_metadata: dict[str, object],  # noqa: ARG002
+    ) -> str:
         msg = "simulated API failure"
         raise RuntimeError(msg)
 
@@ -510,7 +552,12 @@ def test_summarize_conversations_keeps_successful_rows_when_one_fails() -> None:
     class _PartiallyFailingClient:
         model_version = "test-model"
 
-        def summarize(self, conversation_text: str) -> str:
+        def summarize(
+            self,
+            conversation_text: str,
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+        ) -> str:
             if conversation_text == "fail me":
                 msg = "simulated API failure"
                 raise RuntimeError(msg)
@@ -539,7 +586,12 @@ def test_summarize_conversations_treats_a_none_summary_as_a_failure() -> None:
     class _RefusingClient:
         model_version = "test-model"
 
-        def summarize(self, conversation_text: str) -> str | None:  # noqa: ARG002
+        def summarize(
+            self,
+            conversation_text: str,  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+        ) -> str | None:
             return None
 
     df = pl.DataFrame([_conversation_row(conversation_ref="1")])
@@ -676,7 +728,12 @@ def test_summarize_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
     class _AlwaysFailingClient:
         model_version = "test-model"
 
-        def summarize(self, conversation_text: str) -> str:  # noqa: ARG002
+        def summarize(
+            self,
+            conversation_text: str,  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+        ) -> str:
             msg = "simulated auth failure"
             raise RuntimeError(msg)
 

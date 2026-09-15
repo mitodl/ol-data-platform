@@ -15,7 +15,12 @@ from ml.lib.llm_client_adapters import (
     raise_if_claude_model_on_openai,
 )
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import get_prompt_version, render_prompt, traced
+from ml.resources.opik_auth import (
+    attach_span_metadata,
+    get_prompt_version,
+    render_prompt,
+    traced,
+)
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -104,7 +109,9 @@ def _summary_prompt(conversation_text: str) -> str:
 class SummaryClient(Protocol):
     model_version: str
 
-    def summarize(self, conversation_text: str) -> str | None: ...
+    def summarize(
+        self, conversation_text: str, *, trace_metadata: dict[str, Any]
+    ) -> str | None: ...
 
 
 class AnthropicSummaryClient:
@@ -120,8 +127,15 @@ class AnthropicSummaryClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_summarize_anthropic", tags=["feedback_summary"])
-    def summarize(self, conversation_text: str) -> str | None:
+    @traced(
+        "feedback_summarize_anthropic",
+        tags=["feedback_summary"],
+        ignore_arguments=["trace_metadata"],
+    )
+    def summarize(
+        self, conversation_text: str, *, trace_metadata: dict[str, Any]
+    ) -> str | None:
+        attach_span_metadata(trace_metadata)
         message = call_anthropic(
             self._client,
             self.model_version,
@@ -155,8 +169,15 @@ class OpenAISummaryClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_summarize_openai", tags=["feedback_summary"])
-    def summarize(self, conversation_text: str) -> str | None:
+    @traced(
+        "feedback_summarize_openai",
+        tags=["feedback_summary"],
+        ignore_arguments=["trace_metadata"],
+    )
+    def summarize(
+        self, conversation_text: str, *, trace_metadata: dict[str, Any]
+    ) -> str | None:
+        attach_span_metadata(trace_metadata)
         response = call_openai(
             self._client, self.model_version, prompt=_summary_prompt(conversation_text)
         )
@@ -267,12 +288,21 @@ class _SummarizeOutcome(NamedTuple):
     exception: Exception | None
 
 
-def _call_summarize(client: "SummaryClient", text: str) -> _SummarizeOutcome:
+def _call_summarize(client: "SummaryClient", row: dict[str, Any]) -> _SummarizeOutcome:
     """Run one summarize() call, translating a raised exception into a
     _SummarizeOutcome instead of letting it propagate.
     """
     try:
-        summary = client.summarize(text)
+        summary = client.summarize(
+            row["conversation_text"],
+            trace_metadata={
+                "feedback_conversation_pk": row["feedback_conversation_pk"],
+                "source_slug": row["source_slug"],
+                "conversation_ref": row["conversation_ref"],
+                "turn_count": row["turn_count"],
+                "conversation_text_chars": row["conversation_text_chars"],
+            },
+        )
     except Exception as e:  # noqa: BLE001 -- translated to a return value, not swallowed
         return _SummarizeOutcome(None, f"{type(e).__name__}: {e}", e)
     if not summary:
@@ -327,9 +357,7 @@ def summarize_conversations(
     if needs_summary_indices:
         with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
             future_to_index = {
-                executor.submit(
-                    _call_summarize, client, rows[i]["conversation_text"]
-                ): i
+                executor.submit(_call_summarize, client, rows[i]): i
                 for i in needs_summary_indices
             }
             for future, i in future_to_index.items():

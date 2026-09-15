@@ -33,9 +33,13 @@ class _FakeEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
         self.batch_calls: list[list[str]] = []
+        self.trace_metadata_calls: list[dict[str, object] | None] = []
 
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    def embed_batch(
+        self, texts: list[str], *, trace_metadata: dict[str, object] | None = None
+    ) -> list[list[float]]:
         self.batch_calls.append(texts)
+        self.trace_metadata_calls.append(trace_metadata)
         if "boom" in texts:
             msg = "simulated bad row"
             raise openai.BadRequestError(msg, response=_fake_response(400), body=None)
@@ -536,6 +540,14 @@ def test_embed_and_checkpoint_batches_calls() -> None:
     assert sorted(result["conversation_ref"].to_list()) == ["1", "2", "3"]
     # one batch call carrying all three texts, not three separate calls
     assert client.batch_calls == [["hi", "hello", "hey"]]
+    # metadata lists stay aligned with the batch's text order, not resorted
+    assert client.trace_metadata_calls == [
+        {
+            "feedback_conversation_pks": ["pk-1", "pk-2", "pk-3"],
+            "conversation_refs": ["1", "2", "3"],
+            "embedding_inputs": ["summary", "summary", "summary"],
+        }
+    ]
 
 
 def test_embed_and_checkpoint_retries_individually_on_batch_failure() -> None:
@@ -564,6 +576,28 @@ def test_embed_and_checkpoint_retries_individually_on_batch_failure() -> None:
     # after the batch fails, each row is retried one at a time
     assert ["hello"] in client.batch_calls
     assert ["boom"] in client.batch_calls
+    # the failed batch's metadata still lists all three rows together
+    assert client.trace_metadata_calls[0] == {
+        "feedback_conversation_pks": ["pk-1", "pk-2", "pk-3"],
+        "conversation_refs": ["1", "2", "3"],
+        "embedding_inputs": ["summary", "summary", "summary"],
+    }
+    # each solo retry's metadata is a single-row list matching that one row
+    assert {
+        "feedback_conversation_pks": ["pk-1"],
+        "conversation_refs": ["1"],
+        "embedding_inputs": ["summary"],
+    } in client.trace_metadata_calls
+    assert {
+        "feedback_conversation_pks": ["pk-2"],
+        "conversation_refs": ["2"],
+        "embedding_inputs": ["summary"],
+    } in client.trace_metadata_calls
+    assert {
+        "feedback_conversation_pks": ["pk-3"],
+        "conversation_refs": ["3"],
+        "embedding_inputs": ["summary"],
+    } in client.trace_metadata_calls
     assert ["world"] in client.batch_calls
 
 
@@ -668,7 +702,12 @@ def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
         model_version = "test-model"
         dim = 3
 
-        def embed_batch(self, texts: list[str]) -> list[list[float]]:  # noqa: ARG002
+        def embed_batch(
+            self,
+            texts: list[str],  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
+        ) -> list[list[float]]:
             msg = "simulated auth failure"
             raise RuntimeError(msg)
 

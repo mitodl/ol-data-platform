@@ -277,8 +277,27 @@ def test_traced_wraps_with_opik_track_when_configured(
             "project_name": opik_auth.OPIK_PROJECT_NAME,
             "environment": opik_auth.DAGSTER_ENV,
             "tags": ["feedback"],
+            "ignore_arguments": None,
         }
     ]
+
+
+def test_traced_forwards_ignore_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    track_calls: list[dict[str, Any]] = []
+
+    def fake_track(**kwargs: Any):
+        track_calls.append(kwargs)
+        return lambda func: func
+
+    monkeypatch.setattr(opik, "track", fake_track)
+
+    @opik_auth.traced("some-span", ignore_arguments=["trace_metadata"])
+    def add_one(x: int, *, trace_metadata: dict[str, Any]) -> int:  # noqa: ARG001
+        return x + 1
+
+    assert add_one(1, trace_metadata={}) == 2
+    assert track_calls[0]["ignore_arguments"] == ["trace_metadata"]
 
 
 class _FakeTokenResponse:
