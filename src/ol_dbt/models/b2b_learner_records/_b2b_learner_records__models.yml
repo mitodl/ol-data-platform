@@ -28,9 +28,9 @@ models:
     snapshot_mitxonline_b2b_userorganization records membership history. Carries
     no consent column yet: until the learner data-sharing consent field lands,
     the API treats every row as outcomes_shared = false and nulls the grade and
-    certificate columns. Carries no activity columns: last_active_on and the
-    per-run counters wait on a user_fk-keyed activity fact. Manual-refresh
-    materialized view.
+    certificate columns. Activity columns come from
+    afact_learner_courserun_daily_activity, pre-aggregated to (user, course
+    run). Manual-refresh materialized view.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -71,8 +71,8 @@ models:
   - name: user_pk
     description: >
       dim_user surrogate. Internal join key only -- it can still re-key, so the
-      API must not expose it. Join target for a future user_fk-keyed activity
-      fact.
+      API must not expose it. Join key for
+      afact_learner_courserun_daily_activity.
   - name: user_global_id
     description: >
       Keycloak user id (dim_user.user_global_id) -- the API's learner_id, stable
@@ -110,6 +110,26 @@ models:
       Whether the course certificate was revoked. Null where no certificate
       exists. Revoked certificates are kept so the API can report a revoked run
       as passed rather than certified.
+  - name: last_active_on
+    description: >
+      Date of the latest day with tracked activity in this course run (video
+      play, problem check, navigation, discussion or Open edX chatbot submit).
+      The event's source-local day, not a UTC day. Null when the learner has
+      no activity in the run.
+  - name: days_active
+    description: Distinct days with tracked activity in this course run. 0 when none.
+  - name: videos_played
+    description: >
+      Sum over active days of distinct video blocks played that day, so a
+      block played on two days counts twice. The API's videos_watched.
+  - name: problems_attempted
+    description: >
+      Sum over active days of distinct problem blocks with a problem_check that
+      day, so a problem attempted on two days counts twice. Excludes
+      showanswer.
+  - name: chatbot_interactions
+    description: Distinct (session, block) Open edX chatbot submits in this course
+      run.
   - name: record_updated_on
     description: >
       Latest of the enrollment, grade and certificate update timestamps,
@@ -118,7 +138,11 @@ models:
       deactivation and revocation. Null only when every one of those
       timestamps is missing. dim_user (email, name) and course-run metadata
       carry no change timestamp, so edits to them do not move it; a partner
-      picks those up from a full reload of the bulk export.
+      picks those up from a full reload of the bulk export. Activity does not
+      move it either. A day's activity first appears at a refresh after that
+      day has begun, and partners pass the previous refresh's as_of as
+      updated_since, so a cursor taken from last_active_on would already sort
+      below the bound and the change would never be sent.
 
 - name: mv_b2b_learner
   description: >
@@ -135,8 +159,9 @@ models:
     memberships it creates itself (enrollment-code redemption, contract-run
     enrollment) so SSO reconciliation does not remove them before Keycloak
     reflects them. snapshot_mitxonline_b2b_userorganization records membership
-    history. Carries no consent or activity columns, for the same reasons as
-    mv_b2b_learner_enrollment. Manual-refresh materialized view.
+    history. Carries no consent column, for the same reason as
+    mv_b2b_learner_enrollment. last_active_on and courses_in_progress count
+    active enrollments only. Manual-refresh materialized view.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -198,6 +223,17 @@ models:
       organization's contracts. Bounded that way so a certificate earned
       outside the licence is not reported. The API's certificates_earned is
       courses_certified + program_certificates_earned.
+  - name: last_active_on
+    description: >
+      Latest last_active_on across the learner's ACTIVE enrollments under the
+      organization's contracts. Source-local day. Null when none of them has
+      activity.
+  - name: courses_in_progress
+    description: >
+      Distinct course runs with an active enrollment under the organization's
+      contracts that have no unrevoked certificate, are not passing, and have
+      a nonzero grade or any tracked activity. Matches the API's
+      completion_status = in_progress on those enrollments.
   - name: record_updated_on
     description: >
       Latest update timestamp across all of the learner's enrollments under the
