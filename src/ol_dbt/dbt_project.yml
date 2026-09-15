@@ -182,6 +182,26 @@ models:
         required_docs: true
         iceberg_maintenance:
           enabled: false
+    # Same engine config as b2b_analytics above (see the comments there); only
+    # the schema differs. These views identify individual learners, so they get
+    # their own StarRocks database, provisioned in ol-infrastructure
+    # substructure/starrocks, and can be granted apart from the aggregate views.
+    b2b_learner_records:
+      +enabled: "{{ target.type == 'starrocks' }}"
+      +materialized: table
+      +tags: ["starrocks"]
+      +schema: b2b_learner_records
+      +grants:
+        select: []
+        insert: []
+        update: []
+        delete: []
+        all privileges: []
+      +properties: {}
+      +meta:
+        required_docs: true
+        iceberg_maintenance:
+          enabled: false
     external:
       +materialized: table
       +schema: external
@@ -212,6 +232,17 @@ models:
         orphan_retention_days: 7
         optimize_after_every_n_runs: 1
         analyze_after_every_n_runs: 7
+
+snapshots:
+  open_learning:
+    +grants:
+      select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+        'ol_business_analyst', 'reverse_etl']
+      all privileges: ["accountadmin", "ol_platform_admin"]
+    +properties:
+      format: "'PARQUET'"
+    +meta:
+      required_docs: true
 
 # Test severity config
 # default for error_if and warn_if are !=0
