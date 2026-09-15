@@ -2,6 +2,7 @@
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -34,6 +35,13 @@ SUMMARIZE_CHECKPOINT_SCHEMA = {
 SUMMARIZE_CHECKPOINT_BATCH_SIZE = int(
     os.environ.get("SUMMARIZE_CHECKPOINT_BATCH_SIZE", "25")
 )
+
+# Each summarize() call is one blocking, independent network request -- unlike
+# embed_batch (one request covers many conversations), so wall-clock time here
+# scales with call count unless several run at once. Concurrent, not batched:
+# still one request per conversation, just not waiting for each to finish
+# before starting the next.
+SUMMARIZE_MAX_CONCURRENCY = int(os.environ.get("SUMMARIZE_MAX_CONCURRENCY", "20"))
 
 # Abort after this many whole chunks in a row come back with zero successful LLM
 # calls, rather than burning through every remaining chunk with the same (e.g.
@@ -245,8 +253,31 @@ def needs_summary(row: dict[str, Any]) -> bool:
     return text_chars is not None and text_chars >= SKIP_CHAR_THRESHOLD
 
 
+def _call_summarize(
+    client: "SummaryClient", text: str
+) -> tuple[str | None, str | None, Exception | None]:
+    """Run one summarize() call, translating an exception into a return value
+    instead of raising -- lets the caller run these concurrently via a thread
+    pool without needing to unwrap each future's exception itself.
+
+    Returns (summary, error_message, exception): error_message/exception are
+    both None on success; exception is only set when the call itself raised
+    (not for an empty/refused summary), so the caller can still log exc_info.
+    """
+    try:
+        summary = client.summarize(text)
+    except Exception as e:  # noqa: BLE001 -- translated to a return value, not swallowed
+        return None, f"{type(e).__name__}: {e}", e
+    if not summary:
+        return None, "empty/null summary (refusal or content filter)", None
+    return summary, None, None
+
+
 def summarize_conversations(
-    df: pl.DataFrame, client: SummaryClient, errors: list[str] | None = None
+    df: pl.DataFrame,
+    client: SummaryClient,
+    errors: list[str] | None = None,
+    max_concurrency: int = SUMMARIZE_MAX_CONCURRENCY,
 ) -> pl.DataFrame:
     """Summarize each conversation that clears the skip rule.
 
@@ -259,6 +290,10 @@ def summarize_conversations(
         errors: if given, each failure's message is appended here -- lets a caller
             surface *why* calls failed (e.g. in a Failure message) without changing
             this function's return type.
+        max_concurrency: how many summarize() calls run at once. Each is an
+            independent, blocking network request, so this is the lever for
+            wall-clock time at scale -- unlike embed_batch, there's no way to
+            cover several conversations in one request here.
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
@@ -278,6 +313,19 @@ def summarize_conversations(
     # everything as "prompt changed".
     prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     rows = df.to_dicts()
+    needs_summary_indices = [i for i, row in enumerate(rows) if needs_summary(row)]
+    results: dict[int, tuple[str | None, str | None, Exception | None]] = {}
+    if needs_summary_indices:
+        with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+            future_to_index = {
+                executor.submit(
+                    _call_summarize, client, rows[i]["conversation_text"]
+                ): i
+                for i in needs_summary_indices
+            }
+            for future, i in future_to_index.items():
+                results[i] = future.result()
+
     feedback_conversation_pks: list[str] = []
     source_slugs: list[str] = []
     conversation_refs: list[str] = []
@@ -287,34 +335,20 @@ def summarize_conversations(
     prompt_versions: list[str | None] = []
     embedding_inputs: list[str] = []
     summarized_ats: list[datetime | None] = []
-    for row in rows:
-        if needs_summary(row):
-            try:
-                summary = client.summarize(row["conversation_text"])
-            except Exception as e:
+    for i, row in enumerate(rows):
+        if i in results:
+            summary, error_message, exc = results[i]
+            if error_message is not None:
                 logger.warning(
                     "Failed to summarize conversation %s/%s; will retry next run",
                     row["source_slug"],
                     row["conversation_ref"],
-                    exc_info=True,
+                    exc_info=exc,
                 )
                 if errors is not None:
                     errors.append(
                         f"{row['source_slug']}/{row['conversation_ref']}: "
-                        f"{type(e).__name__}: {e}"
-                    )
-                continue
-
-            if not summary:
-                logger.warning(
-                    "Empty summary for conversation %s/%s; will retry next run",
-                    row["source_slug"],
-                    row["conversation_ref"],
-                )
-                if errors is not None:
-                    errors.append(
-                        f"{row['source_slug']}/{row['conversation_ref']}: "
-                        "empty/null summary (refusal or content filter)"
+                        f"{error_message}"
                     )
                 continue
             summaries.append(summary)
@@ -395,12 +429,13 @@ def checkpoint_chunk(
     )
 
 
-def summarize_and_checkpoint(
+def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     unsummarized_df: pl.DataFrame,
     client: SummaryClient,
     checkpoint_target: tuple[Catalog, str],
     batch_size: int = SUMMARIZE_CHECKPOINT_BATCH_SIZE,
     errors: list[str] | None = None,
+    max_concurrency: int = SUMMARIZE_MAX_CONCURRENCY,
 ) -> pl.DataFrame:
     """Summarize unsummarized_df in chunks, upserting each as it completes.
 
@@ -425,7 +460,9 @@ def summarize_and_checkpoint(
     total_chunks = len(chunk_starts)
     for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
         chunk = unsummarized_df.slice(chunk_start, batch_size)
-        chunk_summaries = summarize_conversations(chunk, client, errors=errors)
+        chunk_summaries = summarize_conversations(
+            chunk, client, errors=errors, max_concurrency=max_concurrency
+        )
         summary_chunks.append(chunk_summaries)
         checkpoint_chunk(catalog, table_identifier, chunk_summaries)
         logger.info(

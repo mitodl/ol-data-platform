@@ -12,6 +12,7 @@ from dagster import (
 )
 from ml.lib.summarize import (
     JOIN_COLS,
+    SUMMARIZE_MAX_CONCURRENCY,
     SUMMARY_PROMPT,
     SUMMARY_PROMPT_NAME,
     build_summary_client,
@@ -62,6 +63,14 @@ class FeedbackSummariesConfig(Config):
             "its own model/inference-profile id namespace (e.g. "
             "'global.anthropic.claude-haiku-4-5-20251001-v1:0'), never a plain "
             "Anthropic API id. Unset uses BEDROCK_SUMMARY_MODEL_VERSION."
+        ),
+    )
+    max_concurrency: int = Field(
+        default=SUMMARIZE_MAX_CONCURRENCY,
+        description=(
+            "How many summarize() calls run at once -- each is an independent "
+            "blocking network request, so this is the lever for wall-clock time "
+            "at scale. Unset uses SUMMARIZE_MAX_CONCURRENCY (ml.lib.summarize)."
         ),
     )
 
@@ -145,6 +154,7 @@ def feedback_summaries(
         client,
         (catalog, table_identifier),
         errors=errors,
+        max_concurrency=config.max_concurrency,
     )
 
     llm_call_count = summaries_df.filter(
