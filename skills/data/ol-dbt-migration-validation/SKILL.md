@@ -123,18 +123,41 @@ fill rates become meaningful and this skill's step 5 can assert much more.
 
 ## The procedure
 
-### 1. Register once, then do not touch the registry
+### 1. Register immediately before the build, and never between the two sides
 
 ```bash
-ol-dbt local register --database ol_warehouse_production_staging
-ol-dbt local register --database ol_warehouse_production_intermediate
-ol-dbt local register --database ol_warehouse_production_dimensional
+uv run --frozen ol-dbt local register --database ol_warehouse_production_staging
+uv run --frozen ol-dbt local register --database ol_warehouse_production_intermediate
+uv run --frozen ol-dbt local register --database ol_warehouse_production_dimensional
 ```
 
-Register **before** both builds and not again between them. Pointer churn is
-roughly 90% of a layer per day, so re-registering mid-validation silently swaps
-the sources under one side of your comparison and every difference you then
-measure is drift, not code. Build both sides back to back for the same reason.
+Two requirements pull in different directions here, and both have to hold.
+
+**Freshness.** Register *immediately* before the invocation, not the night before.
+Pointers rot fast: a registry refreshed 60 minutes earlier already 404'd on
+`int__micromasters__dedp_proctored_exam_grades` and killed two mart models
+(measured 2026-09-14). Over 26 hours, 336 pointers moved across three layers —
+184 of 283 staging (65%), 108 of 159 intermediate (68%), 44 of 56 dimensional
+(79%). The 404 is the *lucky* outcome; the silent one returns duplicated or
+partial rows and reports success. See `ol-dbt-local-dev` step 2 for the full
+mechanism.
+
+**Stability.** Both sides of a comparison must come from **one** registration.
+Re-registering between them swaps the sources under one side, and every difference
+you then measure is drift, not code.
+
+These are compatible only because step 3 builds both sides in a single
+invocation — register just before it and you get both properties at once. So the
+rule is not "register once and never again":
+
+> Register immediately before the invocation that builds both sides. Never
+> re-register between the two sides of one comparison. **If you need to rebuild,
+> re-register and rebuild both sides together — never one.**
+
+That last clause is the one to get right. Fixing a bug in your `_pre` copy and
+rebuilding only that side against a fresher registry silently compares two
+substrates; a validation that runs long enough to need a rebuild is also long
+enough for the registry to have rotted underneath it.
 
 Only register the layers the model actually reads. `--all-layers` pulls 1,388
 raw views you do not need.
@@ -508,7 +531,8 @@ available locally and should not be implied.
 
 ## Rules
 
-- Register once, before both builds; never between them.
+- Register immediately before the invocation that builds both sides; never
+  between the two sides. Rebuild means re-register and rebuild *both*.
 - Both sides of every comparison must be locally built from the same
   registration. A local-vs-production comparison is not valid on this substrate.
 - Where the old and new dependency paths diverge, build those upstreams locally

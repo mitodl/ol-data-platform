@@ -106,6 +106,14 @@ uv run --frozen ol-dbt local register --database ol_warehouse_production_interme
 uv run --frozen ol-dbt local register --database ol_warehouse_production_dimensional
 ```
 
+**One exception, and it is not really an exception.** When you are building two
+relations to compare against each other, both sides must come from the *same*
+registration — re-register between them and the difference you measure is drift,
+not code. That is compatible with the rule above because you build both sides in
+one invocation: register immediately before it. If you need to rebuild, re-register
+and rebuild **both** sides, never one. `ol-dbt-migration-validation` step 1 states
+this as the acceptance rule.
+
 ### 3. Iterate on models
 ```bash
 ol-dbt run                  # incremental: rebuild only changed/errored models (state:modified+ result:error+/fail+ --defer)
