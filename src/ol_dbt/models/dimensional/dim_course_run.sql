@@ -45,6 +45,40 @@ with micromasters_courseruns as (
     where _row_num = 1
 )
 
+-- Not every proctored exam gets its own MicroMasters exam-run course object. Some are a
+-- unit embedded inside an ordinary course run, and those have no micromasters_examruns
+-- match at all. int__mitxonline__proctored_exam_grades identifies them by a course
+-- structure block titled 'proctored exam' (see its exam_unit_grades CTE); we reproduce
+-- that predicate here so the semester fallback below applies to exactly those runs and no
+-- others.
+--
+-- int__mitxonline__course_structure keeps every retrieval, so the title has to be read
+-- from the current snapshot only. The upstream reaches this model through
+-- int__mitxonline__courserun_subsection_grades, which takes the newest snapshot PER BLOCK
+-- (partition by courserun_readable_id, coursestructure_block_id ... where row_num = 1) and
+-- matches the title on that. We mirror that dedup exactly rather than filtering on
+-- coursestructure_is_latest: is_latest keeps only blocks present in the newest whole-course
+-- retrieval, which silently drops a run whose exam block has since been removed from the
+-- structure but whose graded attempts still exist. Measured on production 2026-09-15,
+-- is_latest would have dropped one such run that has proctored exam grades and a semester,
+-- nulling a value the pre-migration mart populated; per-block dedup drops none.
+, mitxonline_course_structure_current_blocks as (
+    select
+        courserun_readable_id
+        , coursestructure_block_title
+        , row_number() over (
+            partition by courserun_readable_id, coursestructure_block_id
+            order by coursestructure_retrieved_at desc
+        ) as row_num
+    from {{ ref('int__mitxonline__course_structure') }}
+)
+
+, mitxonline_courseruns_with_exam_unit as (
+    select distinct courserun_readable_id
+    from mitxonline_course_structure_current_blocks
+    where lower(coursestructure_block_title) = 'proctored exam' and row_num = 1
+)
+
 , mitxonline_courseruns as (
     select
         cr.courserun_readable_id
@@ -58,13 +92,24 @@ with micromasters_courseruns as (
         , cr.courserun_is_live
         , cr.courserun_created_on
         , cs.course_readable_id
-        , er.examrun_semester as semester
+        -- Course runs with an embedded proctored-exam unit have no micromasters_examruns
+        -- match, so fall back to the course run's own tag — the same derivation
+        -- int__mitxonline__proctored_exam_grades used before this field moved here.
+        -- The fallback is deliberately gated on xu: applying it unconditionally would
+        -- populate semester for every MITxOnline course run, including the thousands that
+        -- have no proctored exam and for which a term label is meaningless.
+        , coalesce(
+            er.examrun_semester
+            , case when xu.courserun_readable_id is not null then cr.courserun_tag end
+        ) as semester
         , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
         , cr.courserun_upgrade_deadline
     from {{ ref('int__mitxonline__course_runs') }} as cr
     left join micromasters_examruns as er
         on cr.courserun_readable_id = er.examrun_readable_id
+    left join mitxonline_courseruns_with_exam_unit as xu
+        on cr.courserun_readable_id = xu.courserun_readable_id
     left join {{ ref('stg__mitxonline__app__postgres__courses_course') }} as cs
         on cr.course_id = cs.course_id
 )
