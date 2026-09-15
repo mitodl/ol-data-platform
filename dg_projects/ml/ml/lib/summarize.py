@@ -4,7 +4,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
@@ -253,24 +253,33 @@ def needs_summary(row: dict[str, Any]) -> bool:
     return text_chars is not None and text_chars >= SKIP_CHAR_THRESHOLD
 
 
-def _call_summarize(
-    client: "SummaryClient", text: str
-) -> tuple[str | None, str | None, Exception | None]:
-    """Run one summarize() call, translating an exception into a return value
-    instead of raising -- lets the caller run these concurrently via a thread
-    pool without needing to unwrap each future's exception itself.
+class _SummarizeOutcome(NamedTuple):
+    """Result of one summarize() call, with any failure captured as data
+    instead of a raised exception -- lets the caller run these concurrently
+    via a thread pool without needing to unwrap each future's exception
+    itself. summary is None on failure; error_message is None on success.
+    exception is only set when the call itself raised (not for an empty/
+    refused summary), so the caller can still log exc_info.
+    """
 
-    Returns (summary, error_message, exception): error_message/exception are
-    both None on success; exception is only set when the call itself raised
-    (not for an empty/refused summary), so the caller can still log exc_info.
+    summary: str | None
+    error_message: str | None
+    exception: Exception | None
+
+
+def _call_summarize(client: "SummaryClient", text: str) -> _SummarizeOutcome:
+    """Run one summarize() call, translating a raised exception into a
+    _SummarizeOutcome instead of letting it propagate.
     """
     try:
         summary = client.summarize(text)
     except Exception as e:  # noqa: BLE001 -- translated to a return value, not swallowed
-        return None, f"{type(e).__name__}: {e}", e
+        return _SummarizeOutcome(None, f"{type(e).__name__}: {e}", e)
     if not summary:
-        return None, "empty/null summary (refusal or content filter)", None
-    return summary, None, None
+        return _SummarizeOutcome(
+            None, "empty/null summary (refusal or content filter)", None
+        )
+    return _SummarizeOutcome(summary, None, None)
 
 
 def summarize_conversations(
@@ -314,7 +323,7 @@ def summarize_conversations(
     prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     rows = df.to_dicts()
     needs_summary_indices = [i for i, row in enumerate(rows) if needs_summary(row)]
-    results: dict[int, tuple[str | None, str | None, Exception | None]] = {}
+    results: dict[int, _SummarizeOutcome] = {}
     if needs_summary_indices:
         with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
             future_to_index = {
@@ -337,21 +346,21 @@ def summarize_conversations(
     summarized_ats: list[datetime | None] = []
     for i, row in enumerate(rows):
         if i in results:
-            summary, error_message, exc = results[i]
-            if error_message is not None:
+            outcome = results[i]
+            if outcome.error_message is not None:
                 logger.warning(
                     "Failed to summarize conversation %s/%s; will retry next run",
                     row["source_slug"],
                     row["conversation_ref"],
-                    exc_info=exc,
+                    exc_info=outcome.exception,
                 )
                 if errors is not None:
                     errors.append(
                         f"{row['source_slug']}/{row['conversation_ref']}: "
-                        f"{error_message}"
+                        f"{outcome.error_message}"
                     )
                 continue
-            summaries.append(summary)
+            summaries.append(outcome.summary)
             model_versions.append(client.model_version)
             prompt_versions.append(prompt_version)
             embedding_inputs.append("summary")

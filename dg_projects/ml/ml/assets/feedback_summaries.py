@@ -67,6 +67,7 @@ class FeedbackSummariesConfig(Config):
     )
     max_concurrency: int = Field(
         default=SUMMARIZE_MAX_CONCURRENCY,
+        ge=1,
         description=(
             "How many summarize() calls run at once -- each is an independent "
             "blocking network request, so this is the lever for wall-clock time "
