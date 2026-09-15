@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import sentry_sdk
-from dagster import AssetsDefinition, HookContext, failure_hook
+from dagster import AssetsDefinition, Failure, HookContext, failure_hook
 from sentry_sdk.integrations.logging import LoggingIntegration, ignore_logger
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -197,6 +197,14 @@ def capture_exception_to_sentry(context: HookContext) -> None:
             context.step_key,
             type(exception).__name__,
         )
+        # capture_exception sends the message and frames, not a Failure's
+        # metadata -- which is where http_failure puts the server's reason for
+        # rejecting the request. Without this it is visible only in Dagster.
+        if isinstance(exception, Failure) and exception.metadata:
+            scope.set_context(
+                "dagster_failure_metadata",
+                {key: entry.value for key, entry in exception.metadata.items()},
+            )
         sentry_sdk.capture_exception(exception)
 
     sentry_sdk.flush(timeout=SENTRY_FLUSH_TIMEOUT_SECONDS)

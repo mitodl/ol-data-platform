@@ -171,6 +171,54 @@ def test_failing_asset_reports_real_exception_to_sentry(
     )
 
 
+def test_failure_metadata_reaches_the_sentry_event(
+    recorded_events: RecordingTransport,
+) -> None:
+    """http_failure keeps the response body in metadata; Sentry has to see it.
+
+    Otherwise a rejected webhook reports "HTTP 400" and nothing about which
+    field MIT Learn refused.
+    """
+
+    @asset
+    def rejected_webhook() -> None:
+        raise dg.Failure(
+            description="OVS video webhook notification failed: HTTP 400",
+            metadata={
+                "status_code": 400,
+                "response_body": dg.MetadataValue.text('{"video_id": ["Invalid."]}'),
+            },
+        )
+
+    defs = Definitions(assets=sentry_lib.with_sentry_hooks([rejected_webhook]))
+    defs.resolve_implicit_global_asset_job_def().execute_in_process(
+        raise_on_error=False
+    )
+
+    (event,) = recorded_events.events()
+    assert event["contexts"]["dagster_failure_metadata"] == {
+        "status_code": 400,
+        "response_body": '{"video_id": ["Invalid."]}',
+    }
+
+
+def test_a_plain_exception_adds_no_failure_metadata_context(
+    recorded_events: RecordingTransport,
+) -> None:
+    @asset
+    def exploding_asset() -> None:
+        message = "no metadata here"
+        raise ValueError(message)
+
+    defs = Definitions(assets=sentry_lib.with_sentry_hooks([exploding_asset]))
+    defs.resolve_implicit_global_asset_job_def().execute_in_process(
+        raise_on_error=False
+    )
+
+    (event,) = recorded_events.events()
+    assert "dagster_failure_metadata" not in event.get("contexts", {})
+
+
 def test_qa_and_production_do_not_share_an_issue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
