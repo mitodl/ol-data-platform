@@ -11,11 +11,21 @@
 -- Scoped to runs that already have a semester upstream: a run whose own source semester is
 -- NULL is not evidence of a broken gate, and would make this test fire on pre-existing gaps
 -- rather than on drift.
+--
+-- error_if is overridden because the project sets `+error_if: ">10"` (dbt_project.yml), and
+-- this query returns one row per affected course run. Inheriting that default would
+-- downgrade a regression touching up to ten runs to a warning, which is the exact silent
+-- failure the test exists to prevent.
+{{ config(error_if = '!= 0', warn_if = '!= 0') }}
+
+-- The join is deliberately a LEFT join: a proctored-exam run with no current dim_course_run
+-- row at all does the same downstream damage as one with a NULL semester, because the mart
+-- left-joins the dimension. An inner join would drop exactly those rows and pass.
 select
     exam_grades.courserun_readable_id
     , count(*) as proctored_exam_grade_rows
 from {{ ref('int__mitxonline__proctored_exam_grades') }} as exam_grades
-inner join {{ ref('dim_course_run') }} as course_run
+left join {{ ref('dim_course_run') }} as course_run
     on
         exam_grades.courserun_readable_id = course_run.courserun_readable_id
         and course_run.platform = 'mitxonline'
