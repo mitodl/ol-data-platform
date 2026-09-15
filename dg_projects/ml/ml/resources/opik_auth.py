@@ -215,6 +215,21 @@ def attach_llm_usage(*, usage: dict[str, int], model: str, provider: str) -> Non
     opik_context.update_current_span(usage=usage, model=model, provider=provider)
 
 
+def attach_span_metadata(metadata: dict[str, Any]) -> None:
+    """Attach arbitrary metadata (e.g. which record a call was for) to the
+    current @traced span, so a trace can be traced back to its source record
+    without changing what's shown as the call's actual input/output.
+
+    No-op if Opik isn't configured (traced() never opened a span to attach to).
+    Thread-safe under concurrent calls: opik_context tracks the current span
+    per-thread, so each concurrently-running @traced call attaches its own
+    metadata to its own span, not a shared/leaked one.
+    """
+    if not is_opik_configured():
+        return
+    opik_context.update_current_span(metadata=metadata)
+
+
 def get_prompt_version(name: str, default_template: str | None = None) -> str:
     """Return name's currently-active Prompt Library version, or "local" if unavailable.
 

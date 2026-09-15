@@ -23,7 +23,7 @@ from ml.lib.llm_client_adapters import (
     raise_if_claude_model_on_openai,
 )
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import render_prompt, traced
+from ml.resources.opik_auth import attach_span_metadata, render_prompt, traced
 from openai import OpenAI
 
 CATEGORY_PROPOSAL_SCHEMA = {
@@ -136,7 +136,14 @@ class AnthropicCategoryLabelClient:
         self.model_version = model_version
 
     @traced("feedback_category_propose_anthropic", tags=["feedback_category"])
-    def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
+    def propose(
+        self,
+        dominant_tags: list[str],
+        samples: list[str],
+        *,
+        trace_metadata: dict[str, Any],
+    ) -> dict[str, str]:
+        attach_span_metadata(trace_metadata)
         message = call_anthropic(
             self._client,
             self.model_version,
@@ -170,7 +177,14 @@ class OpenAICategoryLabelClient:
         self.model_version = model_version
 
     @traced("feedback_category_propose_openai", tags=["feedback_category"])
-    def propose(self, dominant_tags: list[str], samples: list[str]) -> dict[str, str]:
+    def propose(
+        self,
+        dominant_tags: list[str],
+        samples: list[str],
+        *,
+        trace_metadata: dict[str, Any],
+    ) -> dict[str, str]:
+        attach_span_metadata(trace_metadata)
         response = call_openai(
             self._client,
             self.model_version,
@@ -271,7 +285,14 @@ def propose_categories(
             )
             continue
         try:
-            proposal = client.propose(inputs["dominant_tags"], inputs["samples"])
+            proposal = client.propose(
+                inputs["dominant_tags"],
+                inputs["samples"],
+                trace_metadata={
+                    "cluster_key": cluster_key,
+                    "cluster_run_id": cluster_run_id,
+                },
+            )
         except Exception:
             logger.warning(
                 "Failed to propose a category for cluster %s",

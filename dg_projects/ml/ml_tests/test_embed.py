@@ -34,7 +34,12 @@ class _FakeEmbeddingClient:
         self.dim = dim
         self.batch_calls: list[list[str]] = []
 
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    def embed_batch(
+        self,
+        texts: list[str],
+        *,
+        trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
+    ) -> list[list[float]]:
         self.batch_calls.append(texts)
         if "boom" in texts:
             msg = "simulated bad row"
@@ -668,7 +673,12 @@ def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
         model_version = "test-model"
         dim = 3
 
-        def embed_batch(self, texts: list[str]) -> list[list[float]]:  # noqa: ARG002
+        def embed_batch(
+            self,
+            texts: list[str],  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
+        ) -> list[list[float]]:
             msg = "simulated auth failure"
             raise RuntimeError(msg)
 

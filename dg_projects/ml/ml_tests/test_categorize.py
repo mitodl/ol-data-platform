@@ -176,6 +176,8 @@ class _FakeCategoryClient:
         self,
         dominant_tags: list[str],  # noqa: ARG002
         samples: list[str],
+        *,
+        trace_metadata: dict[str, object],  # noqa: ARG002
     ) -> dict[str, str]:
         # Keyed by sample count so each test cluster gets a distinct canned reply.
         return self._responses[len(samples)]
@@ -224,6 +226,8 @@ def test_propose_categories_skips_a_cluster_whose_call_fails() -> None:
             self,
             dominant_tags: list[str],  # noqa: ARG002
             samples: list[str],  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
         ) -> dict[str, str]:
             msg = "boom"
             raise ValueError(msg)
