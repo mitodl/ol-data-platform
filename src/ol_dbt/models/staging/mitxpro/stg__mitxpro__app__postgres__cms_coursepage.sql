@@ -2,33 +2,19 @@ with coursepage as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_coursepage') }}
 )
 
-, coursepage_sorted as (
-    select
-        *
-        , row_number() over (partition by course_id order by _airbyte_extracted_at desc) as row_num
-    from coursepage
-)
-
-, most_recent_coursepage as (
-    select * from coursepage_sorted
-    where row_num = 1
-)
+{{ deduplicate_raw_table(
+    raw_table='raw__xpro__app__postgres__cms_coursepage', partition_columns='course_id', source_cte='coursepage'
+) }}
 
 , externalcoursepage as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_externalcoursepage') }}
 )
 
-, externalcoursepage_sorted as (
-    select
-        *
-        , row_number() over (partition by course_id order by _airbyte_extracted_at desc) as row_num
-    from externalcoursepage
-)
-
-, most_recent_externalcoursepage as (
-    select * from externalcoursepage_sorted
-    where row_num = 1
-)
+{{ deduplicate_raw_table(
+    raw_table='raw__xpro__app__postgres__cms_externalcoursepage'
+    , partition_columns='course_id'
+    , source_cte='externalcoursepage'
+) }}
 
 select
     page_ptr_id as wagtail_page_id
