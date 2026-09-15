@@ -50,8 +50,19 @@ class FeedbackEmbeddingsConfig(Config):
     embedding_model_version: str | None = Field(
         default=None,
         description=(
-            "Override the embedding model id for this run. Unset uses "
-            "EMBEDDING_MODEL_VERSION (ml.lib.embed)."
+            "Override the embedding model id sent to the openai/openai_compatible/"
+            "azure_openai/gemini client classes. Unset uses EMBEDDING_MODEL_VERSION "
+            "(ml.lib.embed). Ignored when the embedding_llm resource's client_class "
+            "is 'bedrock_embeddings' -- see bedrock_model_version."
+        ),
+    )
+    bedrock_model_version: str | None = Field(
+        default=None,
+        description=(
+            "Same as embedding_model_version, but for client_class="
+            "'bedrock_embeddings' -- Bedrock has its own model id namespace (e.g. "
+            "'amazon.titan-embed-text-v2:0', 'cohere.embed-english-v3'), never an "
+            "OpenAI/Gemini id. Unset uses BEDROCK_EMBEDDING_MODEL_VERSION."
         ),
     )
     embedding_dim: int | None = Field(
@@ -78,6 +89,7 @@ class FeedbackEmbeddingsConfig(Config):
         "schema": database_name,
         "write_mode": "upsert",
         "upsert_options": {"join_cols": JOIN_COLS},
+        "schema_update_mode": "update",
     },
 )
 def feedback_embeddings(
@@ -137,7 +149,10 @@ def feedback_embeddings(
     # embedding_dim has since gone stale (a model change or dimension sweep), not
     # just a turn_count or embedding_input change.
     client = build_embedding_client(
-        embedding_llm, config.embedding_model_version, config.embedding_dim
+        embedding_llm,
+        config.embedding_model_version,
+        config.embedding_dim,
+        config.bedrock_model_version,
     )
     unembedded_df = filter_unembedded(
         resolved_df,
@@ -180,9 +195,12 @@ def feedback_embeddings(
     if attempted_count > 0 and embeddings_df.height == 0:
         sample_errors = "; ".join(errors[:3])
         msg = (
-            f"All {attempted_count} attempted embedding calls failed; the "
-            f"embedding client/credential is likely misconfigured. Sample "
-            f"errors: {sample_errors}"
+            f"All {attempted_count} attempted embedding calls failed via "
+            f"client_class={embedding_llm.client_class!r}, "
+            f"model_version={client.model_version!r}, "
+            f"base_url={embedding_llm.base_url!r} -- check these resolved to what "
+            f"you intended (a stale/mismatched client_class is a common cause). "
+            f"Sample errors: {sample_errors}"
         )
         raise Failure(msg)
 

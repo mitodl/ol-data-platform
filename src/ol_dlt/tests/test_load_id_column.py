@@ -49,6 +49,7 @@ def test_every_source_package_is_covered() -> None:
         "mitxonline_app",
         "oll",
         "podcast_rss",
+        "posthog_events",
         "youtube",
     }
     assert set(_source_modules()) == known, (

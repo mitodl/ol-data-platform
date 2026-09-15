@@ -25,6 +25,16 @@ def _():
 
 
 @app.cell
+def _():
+    import altair as alt
+    import numpy as np
+    import pandas as pd
+    import polars as pl
+
+    return
+
+
+@app.cell
 def _(mo):
     mo.md(r"""
     # Warehouse notebook
@@ -222,16 +232,6 @@ def _(mo, warehouse):
         """,
         engine=warehouse,
     )
-    return
-
-
-@app.cell
-def _():
-    import altair as alt
-    import numpy as np
-    import pandas as pd
-    import polars as pl
-
     return
 
 

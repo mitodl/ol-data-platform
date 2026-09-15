@@ -43,7 +43,10 @@ signals for four audiences (support, engineering, instructors, leadership).
    `sentiment_fk` are **removed from `tfact_feedback`**, which makes that fact **insert-only** — there is no
    post-insert write path to it at all. The per-turn ML sidecar (`feedback_embeddings`,
    `feedback_cluster_assignment`) is withdrawn; `feedback_cluster_run` survives and a small
-   `feedback_cluster_candidate` covers run-vs-run comparison.
+   `feedback_cluster_candidate` covers run-vs-run comparison. (Revised 2026-09-11: cluster assignment is
+   continuous. New conversations are placed into the live clusters as they are embedded, re-clustering is
+   automatic, and stable `cluster_key`s carry clusters and their categories across runs. No human promotes a
+   run; see `feedback_ml_approach.md` §C.1.)
    Rationale: a complaint usually emerges across several turns, so embedding turns independently splits one
    issue into several weak cluster members and scores sentiment off a fragment. This is *not* a return to
    ticket grain — the fact still records every turn, and the assembled conversation is built from all of
@@ -60,8 +63,9 @@ signals for four audiences (support, engineering, instructors, leadership).
 3. **ML is an additive consumer**, not a prerequisite: the warehouse layer ships useful with
    tag-seeded categories + CSAT-derived sentiment; summaries, embeddings and clustering fill nullable
    columns on `afact_feedback_conversation` later and touch nothing else (**superseded in part by 2d**:
-   the three-table per-turn sidecar is withdrawn; only `feedback_cluster_run` and a candidate table remain
-   alongside the aggregate fact). Embeddings persisted **once** (the one adopted lesson from prototype
+   the three-table per-turn sidecar is withdrawn; `feedback_cluster_run` and a candidate table remain
+   alongside the aggregate fact, joined on 2026-09-11 by `feedback_cluster`, `feedback_cluster_lineage` and
+   `feedback_cluster_membership` for continuous assignment). Embeddings persisted **once** (the one adopted lesson from prototype
    #10793).
 4. **Engine-portable AI compute via Fenic; embedding model chosen by effectiveness** (revised
    2026-07-10 rev. 4, ADR): because the strategic direction is to **retire Trino for StarRocks**,
@@ -158,6 +162,12 @@ analysis fact (2d) and cut to a ~1,500-word read. Three rounds of feedback have 
   `@multi_asset`; `dim_user.user_pk`'s formula corrected to match current `main`; and `subject_user_ref`
   retained on `tfact_feedback` so identity can be re-matched later without a rebuild. Detail and rationale
   are in each doc's own rev. 4/5 changelog entry.
+- **Owner direction (2026-09-11)** ([#2662 review](https://github.com/mitodl/ol-data-platform/pull/2662)) —
+  assigning a conversation to a cluster must never wait on a person, since a human gate there guarantees a
+  backlog and stale data. The run-promotion step is withdrawn: new conversations are placed into the live
+  clusters as they are embedded, re-clustering is automatic, and stable `cluster_key`s carry clusters (and
+  their approved categories) across runs. Produced `feedback_ml_approach.md` rev. 4 (§C.1) and matching
+  revisions of the ERD, dimensional model and Dagster asset spec.
 
 Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the
 `comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts

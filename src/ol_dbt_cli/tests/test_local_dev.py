@@ -12,6 +12,8 @@ from ol_dbt_cli.commands.local_dev import (
     REGISTRY_STALE_AFTER_DAYS,
     _classify_registration,
     _describe_registry_age,
+    _get_glue_tables,
+    _is_dbt_shadow_table,
     _register_single_table,
     _registry_last_refreshed,
     _show_registry,
@@ -484,3 +486,100 @@ class TestRegisterTablesInDuckdbDryRun:
         assert results["success"] == 0
         assert results["new"] == 0
         assert results["updated"] == 0
+
+
+def _glue_table(name: str, *, iceberg: bool = True) -> dict[str, object]:
+    """Build a Glue get_tables entry shaped like the real API response."""
+    params: dict[str, str] = {}
+    if iceberg:
+        params = {
+            "table_type": "ICEBERG",
+            "metadata_location": f"s3://bucket/{name}/metadata/00000-abc.metadata.json",
+        }
+    return {"Name": name, "StorageDescriptor": {"Location": f"s3://bucket/{name}"}, "Parameters": params}
+
+
+class TestIsDbtShadowTable:
+    """dbt's create-temp-then-swap artifacts must never be registered as sources."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # Measured in ol_warehouse_production_staging on 2026-09-09: all seven
+            # registered views whose Glue entry had already disappeared.
+            "stg__edxorg__bigquery__mitx_user_email_opt_in__dbt_tmp",
+            "stg__edxorg__bigquery__mitx_user_email_opt_in__dbt_backup",
+            "stg__edxorg__bigquery__mitx_user_info_combo__dbt_tmp",
+            "stg__edxorg__bigquery__mitx_user_info_combo__dbt_backup",
+            "stg__mitxpro__app__postgres__courses_coursetopic__dbt_tmp",
+            "stg__mitxpro__app__postgres__courses_platform__dbt_tmp",
+            "stg__mitxpro__app__postgres__courses_program__dbt_tmp",
+            # Numbered variants appear when a build is interrupted and retried.
+            "marts__combined_course_enrollment_detail__dbt_tmp1",
+            "some_model__dbt_backup2",
+        ],
+    )
+    def test_identifies_shadow_tables(self, name: str) -> None:
+        assert _is_dbt_shadow_table(name) is True
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "dim_course_run",
+            "marts__micromasters_dedp_exam_grades",
+            "stg__mitxonline__app__postgres__courses_courserun",
+            # The suffix only counts at the END of the name — a real table whose name
+            # merely contains the token must still be registered.
+            "int__dbt_tmp_usage_metrics",
+            "model__dbt_tmpfiles__summary",
+            # Near-misses that are not dbt's suffixes.
+            "model_dbt_tmp",
+            "model__dbt_temp",
+            "model__dbt_tmp_",
+        ],
+    )
+    def test_leaves_real_tables_alone(self, name: str) -> None:
+        assert _is_dbt_shadow_table(name) is False
+
+
+class TestGetGlueTablesFiltersShadowTables:
+    def test_excludes_shadow_tables_and_keeps_real_ones(self) -> None:
+        pages = [
+            {
+                "TableList": [
+                    _glue_table("dim_course_run"),
+                    _glue_table("dim_course_run__dbt_tmp"),
+                    _glue_table("dim_course_run__dbt_backup"),
+                    _glue_table("tfact_grade"),
+                    _glue_table("tfact_grade__dbt_tmp1"),
+                ]
+            }
+        ]
+        glue = MagicMock()
+        glue.get_paginator.return_value.paginate.return_value = pages
+
+        with patch("ol_dbt_cli.commands.local_dev.boto3.client", return_value=glue):
+            tables = _get_glue_tables("ol_warehouse_production_dimensional")
+
+        assert [t["name"] for t in tables] == ["dim_course_run", "tfact_grade"]
+
+    def test_shadow_table_is_filtered_before_the_iceberg_check(self) -> None:
+        """A shadow table with no Iceberg parameters must not be double-counted."""
+        pages = [{"TableList": [_glue_table("dim_course_run__dbt_tmp", iceberg=False)]}]
+        glue = MagicMock()
+        glue.get_paginator.return_value.paginate.return_value = pages
+
+        with patch("ol_dbt_cli.commands.local_dev.boto3.client", return_value=glue):
+            tables = _get_glue_tables("ol_warehouse_production_dimensional")
+
+        assert tables == []
+
+    def test_non_iceberg_tables_are_still_excluded(self) -> None:
+        pages = [{"TableList": [_glue_table("legacy_csv_table", iceberg=False), _glue_table("dim_course")]}]
+        glue = MagicMock()
+        glue.get_paginator.return_value.paginate.return_value = pages
+
+        with patch("ol_dbt_cli.commands.local_dev.boto3.client", return_value=glue):
+            tables = _get_glue_tables("ol_warehouse_production_dimensional")
+
+        assert [t["name"] for t in tables] == ["dim_course"]

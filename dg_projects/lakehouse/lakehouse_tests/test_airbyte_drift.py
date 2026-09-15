@@ -12,7 +12,12 @@ from typing import Any
 
 import pytest
 from dagster import Failure, build_asset_context
-from lakehouse.assets.airbyte_drift import _fetch_workspace, airbyte_inventory_drift
+from lakehouse.assets.airbyte_drift import (
+    _INVENTORY_FALLBACK,
+    _fetch_workspace,
+    _find_inventory_dir,
+    airbyte_inventory_drift,
+)
 
 PREFIX = "raw__mitxonline__openedx__mysql__"
 CONNECTION_NAME = "MITx Online Open edX DB → S3 Data Lake"
@@ -201,3 +206,44 @@ class TestOutcome:
         result = _materialise(FakeClient([connection(), extra], [SOURCE]))
         assert result.value["errors"] == 0
         assert result.value["warnings"] == 1
+
+
+class TestInventoryResolution:
+    """The one part every other test here monkeypatches away.
+
+    `INVENTORY_DIR` is module-level, so getting it wrong is an import error, not
+    a test failure -- which is exactly how a version that indexed a fixed parent
+    reached production and crash-looped the whole lakehouse code location. These
+    exercise the real resolver.
+    """
+
+    def test_resolves_the_real_inventory_from_the_source_tree(self) -> None:
+        found = _find_inventory_dir()
+        assert found.is_dir()
+        assert (found / "units").is_dir()
+
+    def test_finds_the_inventory_at_any_depth_above_the_module(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The image lays the package out two levels below the root where the
+        # source tree lays it out four, so the resolver must not assume either.
+        module = tmp_path / "app" / "lakehouse" / "assets" / "airbyte_drift.py"
+        module.parent.mkdir(parents=True)
+        module.touch()
+        expected = tmp_path / "app" / "ingestion" / "inventory"
+        expected.mkdir(parents=True)
+        monkeypatch.setattr("lakehouse.assets.airbyte_drift.__file__", str(module))
+
+        assert _find_inventory_dir() == expected
+
+    def test_returns_a_path_rather_than_raising_when_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A missing inventory has to stay a runtime failure with a message, not
+        # an unimportable module that takes the code location down with it.
+        module = tmp_path / "nowhere" / "airbyte_drift.py"
+        module.parent.mkdir(parents=True)
+        module.touch()
+        monkeypatch.setattr("lakehouse.assets.airbyte_drift.__file__", str(module))
+
+        assert _find_inventory_dir() == _INVENTORY_FALLBACK

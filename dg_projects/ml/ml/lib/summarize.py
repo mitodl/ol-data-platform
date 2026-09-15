@@ -2,11 +2,19 @@
 
 import logging
 import os
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
+from ml.lib.llm_client_adapters import (
+    build_llm_client,
+    call_anthropic,
+    call_openai,
+    raise_if_claude_model_on_openai,
+)
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import get_prompt_version, render_prompt, traced
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -17,7 +25,9 @@ SUMMARIZE_CHECKPOINT_SCHEMA = {
     "turn_count": pl.Int64,
     "conversation_summary": pl.String,
     "summary_model_version": pl.String,
+    "prompt_version": pl.String,
     "embedding_input": pl.String,
+    "summarized_at": pl.Datetime(time_zone="UTC"),
 }
 
 # Bounds how many LLM calls a crash can lose (feedback_dagster_asset_spec.md).
@@ -67,10 +77,20 @@ SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 SUMMARY_PROMPT = (
     "Summarize the following support conversation from the requester's point of "
     "view. Focus on the problem reported and its resolution if one is present. "
-    "Do not include names or contact details.\n\n{conversation_text}"
+    "Do not include names or contact details.\n\n{{conversation_text}}"
 )
 
 logger = logging.getLogger(__name__)
+
+
+SUMMARY_PROMPT_NAME = "feedback-summary"
+
+
+def _summary_prompt(conversation_text: str) -> str:
+    """SUMMARY_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
+    return render_prompt(
+        SUMMARY_PROMPT_NAME, SUMMARY_PROMPT, conversation_text=conversation_text
+    )
 
 
 class SummaryClient(Protocol):
@@ -92,18 +112,13 @@ class AnthropicSummaryClient:
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_summarize_anthropic", tags=["feedback_summary"])
     def summarize(self, conversation_text: str) -> str | None:
-        message = self._client.messages.create(
-            model=self.model_version,
+        message = call_anthropic(
+            self._client,
+            self.model_version,
             max_tokens=SUMMARY_MAX_TOKENS,
-            messages=[
-                {
-                    "role": "user",
-                    "content": SUMMARY_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
-                }
-            ],
+            prompt=_summary_prompt(conversation_text),
         )
         if not message.content:
             # A model with thinking on by default can spend the whole max_tokens
@@ -119,32 +134,23 @@ class AnthropicSummaryClient:
 class OpenAISummaryClient:
     """Adapts an OpenAI-compatible client to the SummaryClient protocol."""
 
-    def __init__(self, client: OpenAI, model_version: str) -> None:
-        if model_version.startswith("claude"):
-            # Can't validate a model id belongs to OpenAI in general, but a Claude
-            # id can never work here -- catches the default-left-unset case rather
-            # than failing later with an opaque error from OpenAI's API.
-            msg = (
-                f"model_version={model_version!r} looks like an Anthropic model "
-                "id, but client_class='openai' is configured. Set "
-                "FeedbackSummariesConfig.model_version (or SUMMARY_MODEL_VERSION) "
-                "to an OpenAI model id (e.g. 'gpt-4o-mini')."
-            )
-            raise ValueError(msg)
+    def __init__(
+        self, client: OpenAI, model_version: str, *, client_class: str = "openai"
+    ) -> None:
+        raise_if_claude_model_on_openai(
+            client_class=client_class,
+            model_version=model_version,
+            config_hint=(
+                "FeedbackSummariesConfig.model_version (or SUMMARY_MODEL_VERSION)"
+            ),
+        )
         self._client = client
         self.model_version = model_version
 
+    @traced("feedback_summarize_openai", tags=["feedback_summary"])
     def summarize(self, conversation_text: str) -> str | None:
-        response = self._client.chat.completions.create(
-            model=self.model_version,
-            messages=[
-                {
-                    "role": "user",
-                    "content": SUMMARY_PROMPT.format(
-                        conversation_text=conversation_text
-                    ),
-                }
-            ],
+        response = call_openai(
+            self._client, self.model_version, prompt=_summary_prompt(conversation_text)
         )
         return response.choices[0].message.content
 
@@ -160,43 +166,51 @@ def build_summary_client(
     per-run Config fields (FeedbackSummariesConfig) -- None means the run didn't
     override them, so SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION apply.
     """
-    client = llm.get_client()
-    if isinstance(client, AnthropicBedrock):
-        return AnthropicSummaryClient(
-            client, bedrock_model_version or BEDROCK_SUMMARY_MODEL_VERSION
-        )
-    if isinstance(client, Anthropic):
-        return AnthropicSummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
-    return OpenAISummaryClient(client, model_version or SUMMARY_MODEL_VERSION)
+    return build_llm_client(
+        llm,
+        anthropic_client_cls=AnthropicSummaryClient,
+        openai_client_cls=OpenAISummaryClient,
+        model_version=model_version,
+        bedrock_model_version=bedrock_model_version,
+        default_model_version=SUMMARY_MODEL_VERSION,
+        default_bedrock_model_version=BEDROCK_SUMMARY_MODEL_VERSION,
+    )
 
 
 def filter_unsummarized(
     source_df: pl.DataFrame,
     already_summarized_df: pl.DataFrame,
     current_model_version: str | None = None,
+    current_prompt_version: str | None = None,
 ) -> pl.DataFrame:
-    """Drop conversations already summarized with their current turn_count and model.
+    """Drop conversations already summarized with their current turn_count/model/prompt.
 
-    Re-submits a conversation whose turn_count grew (a new comment) or whose stored
-    summary_model_version is stale (a model/prompt change) -- but a row skipped last
-    time (summary_model_version null there) isn't touched by a model change, since
-    the skip decision was never model-dependent. current_model_version=None disables
-    the model check.
+    Re-submits a conversation whose turn_count grew (a new comment), whose stored
+    summary_model_version is stale (a model change), or whose stored prompt_version
+    is stale (a Prompt Library edit) -- but a row skipped last time (both columns
+    null there) isn't touched by either change, since the skip decision was never
+    model/prompt-dependent. current_model_version/current_prompt_version=None
+    disables the respective check.
     """
     already_summarized_cols = [*JOIN_COLS, "turn_count"]
-    has_model_version_col = "summary_model_version" in already_summarized_df.columns
-    check_model_version = current_model_version is not None and has_model_version_col
-    if check_model_version:
-        already_summarized_cols.append("summary_model_version")
+    checks = [
+        ("summary_model_version", current_model_version),
+        ("prompt_version", current_prompt_version),
+    ]
+    active_checks = [
+        (col, current)
+        for col, current in checks
+        if current is not None and col in already_summarized_df.columns
+    ]
+    already_summarized_cols += [col for col, _ in active_checks]
 
     already_summarized_selected = already_summarized_df.select(already_summarized_cols)
-    if check_model_version:
-        # join(suffix=...) only applies where source_df has a same-named column to
-        # collide with (true for turn_count, not summary_model_version), so this
-        # needs an explicit rename to get a predictable joined column name.
-        already_summarized_selected = already_summarized_selected.rename(
-            {"summary_model_version": "summary_model_version_summarized"}
-        )
+    # join(suffix=...) only applies where source_df has a same-named column to
+    # collide with (true for turn_count, not these version columns), so this
+    # needs an explicit rename to get a predictable joined column name.
+    already_summarized_selected = already_summarized_selected.rename(
+        {col: f"{col}_summarized" for col, _ in active_checks}
+    )
 
     joined = source_df.join(
         already_summarized_selected,
@@ -207,10 +221,10 @@ def filter_unsummarized(
     is_new_or_changed = pl.col("turn_count_summarized").is_null() | (
         pl.col("turn_count") != pl.col("turn_count_summarized")
     )
-    if check_model_version:
+    for col, current in active_checks:
         is_new_or_changed = is_new_or_changed | (
-            pl.col("summary_model_version_summarized").is_not_null()
-            & (pl.col("summary_model_version_summarized") != current_model_version)
+            pl.col(f"{col}_summarized").is_not_null()
+            & (pl.col(f"{col}_summarized") != current)
         )
     return joined.filter(is_new_or_changed).select(source_df.columns)
 
@@ -248,14 +262,21 @@ def summarize_conversations(
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
-            conversation_summary, summary_model_version, embedding_input, turn_count -
-            keyed by feedback_conversation_pk, for afact_feedback_conversation to
-            left-join. conversation_summary stays null for skipped rows;
-            summary_model_version is the "was this LLM-generated" signal. A
-            conversation whose LLM call raises is dropped from the output entirely
-            (#2542 checkpointing) rather than failing the batch -- absent from
-            feedback_summaries, it's picked up again as new on the next run.
+            conversation_summary, summary_model_version, prompt_version,
+            embedding_input, summarized_at, turn_count - keyed by
+            feedback_conversation_pk, for afact_feedback_conversation to
+            left-join. conversation_summary/summarized_at/prompt_version all
+            stay null for skipped rows; summary_model_version is the "was this
+            LLM-generated" signal. A conversation whose LLM call raises is
+            dropped from the output entirely (#2542 checkpointing) rather than
+            failing the batch -- absent from feedback_summaries, it's picked up
+            again as new on the next run.
     """
+    # Once per batch, not per-row. SUMMARY_PROMPT makes this create-if-missing
+    # like render_prompt below, so both agree on the version -- otherwise a
+    # prompt's first run reads "local" here and the next run wrongly resubmits
+    # everything as "prompt changed".
+    prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     rows = df.to_dicts()
     feedback_conversation_pks: list[str] = []
     source_slugs: list[str] = []
@@ -263,7 +284,9 @@ def summarize_conversations(
     turn_counts: list[int] = []
     summaries: list[str | None] = []
     model_versions: list[str | None] = []
+    prompt_versions: list[str | None] = []
     embedding_inputs: list[str] = []
+    summarized_ats: list[datetime | None] = []
     for row in rows:
         if needs_summary(row):
             try:
@@ -296,11 +319,15 @@ def summarize_conversations(
                 continue
             summaries.append(summary)
             model_versions.append(client.model_version)
+            prompt_versions.append(prompt_version)
             embedding_inputs.append("summary")
+            summarized_ats.append(datetime.now(tz=UTC))
         else:
             summaries.append(None)
             model_versions.append(None)
+            prompt_versions.append(None)
             embedding_inputs.append("concatenated_turns")
+            summarized_ats.append(None)
         feedback_conversation_pks.append(row["feedback_conversation_pk"])
         source_slugs.append(row["source_slug"])
         conversation_refs.append(row["conversation_ref"])
@@ -323,7 +350,9 @@ def summarize_conversations(
         # dtype -- Iceberg (format v2) rejects a null-typed column outright.
         pl.Series("conversation_summary", summaries, dtype=pl.String),
         pl.Series("summary_model_version", model_versions, dtype=pl.String),
+        pl.Series("prompt_version", prompt_versions, dtype=pl.String),
         pl.Series("embedding_input", embedding_inputs, dtype=pl.String),
+        pl.Series("summarized_at", summarized_ats, dtype=pl.Datetime(time_zone="UTC")),
     )
 
 
@@ -349,8 +378,17 @@ def checkpoint_chunk(
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
+    # A table from before summarized_at/prompt_version existed has an older schema
+    # than chunk_df -- union_by_name adds the new column(s) (nulled on existing
+    # rows) instead of failing the upsert; a no-op once the table already has them.
+    with table.update_schema() as update:
+        update.union_by_name(chunk_df.to_arrow().schema)
+    # union_by_name appends new columns at the table's end regardless of chunk_df's
+    # order, and upsert's pyarrow cast is positional -- so it must be reordered
+    # to match the table, not chunk_df.
+    ordered_chunk_df = chunk_df.select(table.schema().column_names)
     table.upsert(
-        df=chunk_df.to_arrow(),
+        df=ordered_chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
         when_matched_update_all=True,
         when_not_matched_insert_all=True,

@@ -59,6 +59,5 @@ select
     , products.product_name
 from orders
 left join products
-    on 
-        orders.product_readable_id = products.product_readable_id
-        and orders.platform = products.platform
+    on orders.product_readable_id = products.product_readable_id
+    and orders.platform = products.platform

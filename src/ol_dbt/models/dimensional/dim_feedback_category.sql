@@ -1,5 +1,5 @@
--- Seeded from Zendesk ticket tags plus group_name; LLM-labeled cluster rows upsert
--- alongside these later. Relabeling changes category_label, never category_slug.
+-- Seeded from Zendesk ticket tags plus group_name. Relabeling changes category_label,
+-- never category_slug. category_status is always 'proposed' -- no approval input yet.
 with ticket as (
     select
         *
@@ -15,6 +15,7 @@ with ticket as (
     select
         feedback_tag.tag_slug as category_slug
         , feedback_tag.tag_label as category_label
+        , 'seed' as category_source
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
     from ticket
@@ -30,6 +31,7 @@ with ticket as (
     select
         ticket.group_slug as category_slug
         , min(ticket.group_name) as category_label
+        , 'seed' as category_source
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
     from ticket
@@ -43,19 +45,44 @@ with ticket as (
     select * from group_seeds
 )
 
--- a tag and a group name can slugify to the same value; collapse them so category_slug
--- stays unique
+-- A tag name and its group name can slugify to the same value; collapse them so
+-- category_slug stays unique. category_label/category_source must come from the
+-- *same* row, not independent min()/max() picks across rows. Ties break on the
+-- most recently updated row.
+, ranked_combined as (
+    select
+        *
+        , row_number() over (
+            partition by category_slug
+            order by updated_at desc
+        ) as category_rank
+    from combined
+    where category_slug is not null
+        and category_slug != ''
+)
+
+, slug_dates as (
+    select
+        category_slug
+        , min(first_seen_at) as first_seen_at
+        , max(updated_at) as updated_at
+    from combined
+    where category_slug is not null
+        and category_slug != ''
+    group by category_slug
+)
+
 select
-    {{ dbt_utils.generate_surrogate_key(['combined.category_slug']) }} as feedback_category_pk
-    , combined.category_slug
-    , min(combined.category_label) as category_label
+    {{ dbt_utils.generate_surrogate_key(['ranked_combined.category_slug']) }}
+        as feedback_category_pk
+    , ranked_combined.category_slug
+    , ranked_combined.category_label
     , cast(null as varchar) as category_parent_slug
     , 'proposed' as category_status
-    , 'seed' as category_source
-    , cast(null as varchar) as cluster_run_id
-    , min(combined.first_seen_at) as first_seen_at
-    , max(combined.updated_at) as updated_at
-from combined
-where combined.category_slug is not null
-    and combined.category_slug != ''
-group by combined.category_slug
+    , ranked_combined.category_source
+    , slug_dates.first_seen_at
+    , slug_dates.updated_at
+from ranked_combined
+inner join slug_dates
+    on ranked_combined.category_slug = slug_dates.category_slug
+where ranked_combined.category_rank = 1

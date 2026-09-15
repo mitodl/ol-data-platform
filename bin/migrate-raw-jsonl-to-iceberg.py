@@ -31,6 +31,7 @@ Safety:
 """
 
 import logging
+import re
 import sys
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -39,6 +40,7 @@ import cyclopts
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.fs as pafs
+import pyarrow.json as pj
 from pyiceberg.catalog.glue import GlueCatalog
 
 if TYPE_CHECKING:
@@ -140,14 +142,162 @@ def _list_json_files(
     return files, total_bytes
 
 
-def _schema_from_glue_columns(columns: list[dict[str, Any]]) -> pa.Schema:
-    """Build a minimal PyArrow schema from Glue column definitions.
+# Every scalar Glue type found on the legacy JSONL tables in qa and production
+# raw (2026-09-10). array and struct columns are left to inference because
+# their Glue types are not trustworthy: a production GitHub table declared
+# pull_requests as array<string> over a list of objects.
+_GLUE_SCALAR_TYPES = {
+    "string": pa.large_utf8(),
+    "boolean": pa.bool_(),
+    "int": pa.int32(),
+    "bigint": pa.int64(),
+    # Glue could only type the column as null, so it holds no values; Iceberg
+    # v2 has no null type, and string is the least committal concrete one.
+    "null": pa.large_utf8(),
+}
+# An omitted scale means 0; two QA columns are declared as decimal(38).
+_GLUE_DECIMAL = re.compile(r"decimal\((\d+)(?:,\s*(\d+))?\)")
 
-    Used only for empty tables that have no data files to infer a schema from.
-    Every field defaults to large_utf8 (string) since Glue type fidelity for
-    legacy JSONL tables is often poor.
+
+def _arrow_type(glue_type: str) -> pa.DataType | None:
+    if match := _GLUE_DECIMAL.fullmatch(glue_type):
+        return pa.decimal128(int(match[1]), int(match[2] or 0))
+    return _GLUE_SCALAR_TYPES.get(glue_type)
+
+
+def _empty_schema(columns: list[dict[str, Any]]) -> pa.Schema:
+    """Build the schema for a table with no data files to infer one from."""
+    return pa.schema(
+        [
+            pa.field(c["Name"], _arrow_type(c["Type"]) or pa.large_utf8())
+            for c in columns
+        ]
+    )
+
+
+def _parse_options(columns: list[dict[str, Any]]) -> pj.ParseOptions:
+    """Build parse options that take scalar column types from Glue, not inference.
+
+    pyarrow infers a column's type from the first block it reads. A decimal
+    column whose early rows are whole numbers becomes int64 and fails on the
+    first fractional value ("couldn't parse: 987.65"), and a column that is null
+    in every row becomes pa.null(), which Iceberg v2 rejects. Glue already
+    carries each column's type, so the scalar ones are declared up front.
+
+    Declaring every column as string would be simpler and does not work: the
+    reader refuses a JSON number or boolean in a string column.
     """
-    return pa.schema([pa.field(col["Name"], pa.large_utf8()) for col in columns])
+    declared = pa.schema(
+        [pa.field(c["Name"], t) for c in columns if (t := _arrow_type(c["Type"]))]
+    )
+    return pj.ParseOptions(explicit_schema=declared, unexpected_field_behavior="infer")
+
+
+def _without_null(arrow_type: pa.DataType) -> pa.DataType:
+    """Replace pa.null() with string, including inside structs and lists."""
+    if pa.types.is_null(arrow_type):
+        return pa.large_utf8()
+    if pa.types.is_struct(arrow_type):
+        return pa.struct(
+            [f.with_type(_without_null(f.type)) for f in arrow_type.fields]
+        )
+    if pa.types.is_large_list(arrow_type):
+        return pa.large_list(
+            arrow_type.value_field.with_type(_without_null(arrow_type.value_type))
+        )
+    if pa.types.is_list(arrow_type):
+        return pa.list_(
+            arrow_type.value_field.with_type(_without_null(arrow_type.value_type))
+        )
+    return arrow_type
+
+
+def _read_typed(
+    files: list[str],
+    columns: list[dict[str, Any]],
+    arrow_fs: pafs.FileSystem,
+) -> pa.Table:
+    # File by file: pyarrow.dataset's JsonFileFormat ignores explicit_schema
+    # (pyarrow 25), so a dataset scan would infer every column regardless. A
+    # key Glue never declared can infer differently per file; permissive
+    # concat widens it.
+    options = _parse_options(columns)
+    tables = []
+    for path in files:
+        with arrow_fs.open_input_stream(path) as stream:
+            tables.append(pj.read_json(stream, parse_options=options))
+    return pa.concat_tables(tables, promote_options="permissive")
+
+
+def _has_case_collision(schema: pa.Schema) -> bool:
+    return len({name.lower() for name in schema.names}) < len(schema.names)
+
+
+def _read_inferred(files: list[str], arrow_fs: pafs.FileSystem) -> pa.Table:
+    """Read each file on its own and widen the differences on concat."""
+    tables = []
+    for path in files:
+        with arrow_fs.open_input_stream(path) as stream:
+            tables.append(pj.read_json(stream))
+    return pa.concat_tables(tables, promote_options="permissive")
+
+
+# Errors that mean "this strategy cannot parse the table", so the next one is
+# worth trying. An OSError is not here on purpose: an archived or unreadable
+# object fails the table outright rather than being fetched twice more.
+_READ_ERRORS = (pa.ArrowInvalid, pa.ArrowNotImplementedError, pa.ArrowTypeError)
+
+
+def _read_jsonl(
+    files: list[str],
+    columns: list[dict[str, Any]],
+    arrow_fs: pafs.FileSystem,
+) -> pa.Table:
+    """Read a table with Glue's column types, falling back to inference.
+
+    Glue's types beat inference on most tables but are sometimes wrong, and a
+    declared type the data contradicts fails the read outright. Salesforce
+    tables fail it too: their JSON keys (Id) differ from Glue's lowercased
+    names (id) only by case, so a typed read yields both columns.
+
+    The two inference strategies fail on different tables and neither replaces
+    the other. Reading the whole table as one dataset applies the first file's
+    schema to every file, which is what lets production
+    salesforce contracthistory read a column that is a string in one file and a
+    timestamp in another. Reading file by file infers each file separately,
+    which is what lets salesforce matchingrule read a column that is null for a
+    whole block and a string later on. So each strategy is tried in turn and
+    the first table returned wins.
+    """
+    attempts = (
+        ("Glue types", lambda: _read_typed(files, columns, arrow_fs)),
+        (
+            "types inferred across the table",
+            lambda: ds.dataset(files, format="json", filesystem=arrow_fs).to_table(),
+        ),
+        ("types inferred file by file", lambda: _read_inferred(files, arrow_fs)),
+    )
+    last_error: Exception | None = None
+    for label, read in attempts:
+        try:
+            table = read()
+        except _READ_ERRORS as exc:
+            last_error = exc
+            log.info("  read with %s failed: %s", label, exc)
+            continue
+        if _has_case_collision(table.schema):
+            log.info("  read with %s gave columns differing only by case", label)
+            continue
+        # A key Glue never declared, or a field nested in an array or struct,
+        # can still be null in every row and infer as pa.null(); give it the
+        # same string type as a Glue null column.
+        return table.cast(
+            pa.schema([f.with_type(_without_null(f.type)) for f in table.schema])
+        )
+    if last_error is not None:
+        raise last_error
+    msg = "every read produced columns that differ only by case"
+    raise ValueError(msg)
 
 
 def _restore_glue_table(
@@ -160,7 +310,7 @@ def _restore_glue_table(
     log.info("  restored original JSONL Glue entry")
 
 
-def _migrate_one(  # noqa: PLR0913, C901, PLR0912, PLR0915
+def _migrate_one(  # noqa: PLR0913, C901, PLR0912
     *,
     glue: "botocore.client.Glue",
     s3: "botocore.client.S3",
@@ -196,30 +346,30 @@ def _migrate_one(  # noqa: PLR0913, C901, PLR0912, PLR0915
         )
         return False
 
+    glue_cols = original_def["StorageDescriptor"].get("Columns", [])
+
     if dry_run:
         log.info("  [dry-run] would migrate %d file(s)", len(files))
         if files:
-            sample = ds.dataset(files[:1], format="json", filesystem=arrow_fs)
-            log.info("  [dry-run] inferred schema from sample: %s", sample.schema)
-            log.info("  [dry-run] estimated rows: %d", sample.count_rows())
+            sample = _read_jsonl(files[:1], glue_cols, arrow_fs)
+            log.info("  [dry-run] schema from first file: %s", sample.schema)
+            log.info("  [dry-run] rows in first file: %d", len(sample))
         return True
 
     # ── Read ──────────────────────────────────────────────────────────────────
     if not files:
-        glue_cols = original_def["StorageDescriptor"].get("Columns", [])
         if not glue_cols:
             log.warning("  no data files and no column definitions — skipping")
             return False
         log.info(
             "  empty table; building schema from %d Glue column(s)", len(glue_cols)
         )
-        arrow_schema = _schema_from_glue_columns(glue_cols)
+        arrow_schema = _empty_schema(glue_cols)
         arrow_table = arrow_schema.empty_table()
     else:
         try:
-            dataset = ds.dataset(files, format="json", filesystem=arrow_fs)
-            arrow_schema = dataset.schema
-            arrow_table = dataset.to_table()
+            arrow_table = _read_jsonl(files, glue_cols, arrow_fs)
+            arrow_schema = arrow_table.schema
         except Exception:
             log.exception("  failed to read JSONL data — skipping table")
             return False
