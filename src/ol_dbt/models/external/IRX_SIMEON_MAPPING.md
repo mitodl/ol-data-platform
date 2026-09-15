@@ -72,9 +72,10 @@ transform: `irx__{deployment}__openedx__mysql__{table}` → `{table}-analytics.s
 | `user_id_map-analytics.sql` | `user_id_map` | ✅ | ✅ | ✅ |
 | `course-analytics.xml.tar.gz` | — (openedx `course_xml` asset) | ✅ | ✅ | ✅ |
 | `course_structure-analytics.json` | — (openedx `course_structure` asset) | ✅ | ✅ | ✅ |
-| `forum.mongo` | — (see the forum track) | ❌ | ❌ | ❌ |
+| `forum.mongo` | `forum_contents`, delivered as `forum/contents.bson` | ✅ | ✅ | ✅ |
 
-Eleven of the thirteen are one rename away. The `assessment_*`, `submissions_*` and `workflow_*`
+Eleven of the thirteen are one rename away. `forum.mongo` is the forum `contents` collection as JSON
+lines; the facade delivers the same documents in the BSON dump format legacy shipped (see below). The `assessment_*`, `submissions_*` and `workflow_*`
 models map into `ora/` in the same way; no Simeon report query reads them, so they are carried, not
 consumed.
 
@@ -176,6 +177,36 @@ pipeline builds it from the Open edX course API via `list_courses`, and the faca
 dynamic partition set, even though `course_run_sensor` fills it from the same API: that sensor only
 ever adds partitions, so the set accumulates course runs the LMS no longer lists.
 
+### `forum/contents.bson`
+Legacy mongodumps the forum database into `forum/`. Every deployment's Mongo forum moved to MySQL
+(forum-v2) in 2025–26, so that dump has been byte-identical since the day after each cutover, and
+nothing posted since has been delivered. Simeon reads only the `contents` collection, so the facade
+delivers only `contents.bson`, at the same path and in the same format: the documents' BSON back to
+back, unfiltered by course list as the dump was.
+
+`irx__{d}__openedx__mysql__forum_contents` unions `forum_commentthread` and `forum_comment` and
+aggregates votes and abuse flags onto them. The export (`openedx/assets/irx_export.py`) rebuilds each
+row as the Mongo document. Two things matter for Simeon:
+- `comment_thread_id` and `parent_id` are the **ObjectId of the post they point at**, as in Mongo,
+  not the MySQL bigint. Simeon's `forum_posts.sql` joins them to `mongoid` and drops unmatched rows
+  silently.
+- `forum_mongocontent` carries the ObjectId of every migrated post (content type resolved by name,
+  never by id). Posts created after the cutover get a minted ObjectId whose timestamp field is zero
+  (`00000000` + a thread/comment byte + the id), which cannot collide with a real one.
+
+Diffed by `_id` against the last legacy `contents.bson` (20260915): xpro 170,911 of 170,911 legacy
+posts present, mitx 17,758 of 17,809, mitxonline 103,585 of 103,590; no dangling thread or parent
+reference in any deployment. Differences are forum-v2's, and are delivered as they are:
+- `created_at`/`updated_at` were reset to the migration date for 3,976 mitx and ~97,600 mitxonline
+  posts.
+- `author_username` is null for 4,078 mitx and 96,655 mitxonline posts; `author_id` still joins to
+  `users_query.csv`.
+- `group_id` is null everywhere, and endorsement details survive only for post-cutover
+  endorsements.
+- `tags_array` and `edit_history` have no forum-v2 column; `at_position_list` is always empty.
+- About 1.2% of pre-cutover mitxonline posts have no ObjectId bridge row, so they and replies to them
+  carry minted ids.
+
 ## Summary of gaps
 
 | gap | kind | status |
@@ -187,7 +218,7 @@ ever adds partitions, so the set accumulates course runs the LMS no longer lists
 | `django_comment_client_role_users` missing `id` | modelling | **closed**; `name`→`role` is a projection the export applies, not a model change |
 | `django_comment_client_role_users` missing `org` | ingestion | **closed** — both organizations tables ingested (#2665); the model left-joins them, the export drops rows with no organization as legacy's inner join did |
 | `course_ids.csv` has no warehouse source | none | not a gap — the export makes the same course API call legacy makes |
-| `forum.mongo` replacement | modelling | open — 12 `forum_*` tables are ingested but all `modeled: false` |
+| `forum.mongo` replacement | modelling | **closed** — `forum_contents` models, delivered as `forum/contents.bson` |
 
 The added columns are all additive: `ol-dbt impact` reports 0 breaking and 0 warnings across the 15
 changed models. Column order in the models is not the delivery order — the export projects the
