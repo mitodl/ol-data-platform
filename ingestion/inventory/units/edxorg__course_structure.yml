@@ -14,10 +14,15 @@ mirror_max_age_days: 90
 loader: dagster
 table_prefix: raw__edxorg__s3__course_
 tables:
+# The pipeline writes files; an Airbyte S3 connection loads them into the four
+# course_structure tables, which carry _airbyte_extracted_at and
+# _ab_source_file_* (production Glue, 2026-09-15). The dagster default of null
+# would switch their dedup off.
 - name: raw__edxorg__s3__course_structure__course_certificate_signatory
   raw_table: raw__edxorg__s3__course_structure__course_certificate_signatory
   sync_mode: full_refresh_overwrite
   modeled: true
+  raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:
       _airbyte_extracted_at: copy
@@ -33,7 +38,6 @@ tables:
   raw_table: raw__edxorg__s3__course_structure__course_metadata
   sync_mode: full_refresh_overwrite
   modeled: true
-  # Dagster writes the files, but an Airbyte S3 connection appends them into raw.
   raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:
@@ -53,6 +57,7 @@ tables:
   raw_table: raw__edxorg__s3__course_structure__course_policy
   sync_mode: full_refresh_overwrite
   modeled: true
+  raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:
       tabs: copy
@@ -65,7 +70,6 @@ tables:
   raw_table: raw__edxorg__s3__course_structure__course_video
   sync_mode: full_refresh_overwrite
   modeled: true
-  # Dagster writes the files, but an Airbyte S3 connection appends them into raw.
   raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:

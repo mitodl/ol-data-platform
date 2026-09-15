@@ -518,12 +518,12 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
 # ---------------------------------------------------------------------------
 
 
-def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | None:
-    """Resolve the raw-metadata ordering column for one declared table.
+def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | list[str] | None:
+    """Resolve the raw-metadata ordering column(s) for one declared table.
 
-    Returns the column name, or None meaning "this table has no metadata column,
-    so do not deduplicate it". Precedence: the table's own declaration, then the
-    unit's, then the loader default.
+    Returns the column name, a list of names in precedence order, or None meaning
+    "this table has no metadata column, so do not deduplicate it". Precedence: the
+    table's own declaration, then the unit's, then the loader default.
 
     Resolution is per TABLE rather than per source because a dbt source mixes
     tables from units with different loaders — dbt's own `source.loader` is not
@@ -535,18 +535,18 @@ def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | None:
             declared = holder["raw_metadata_column"]
             # `raw_metadata_column: null` is a real answer ("no column"), which
             # is why this tests for the KEY rather than for truthiness.
-            return declared if isinstance(declared, str) else None
+            return declared if isinstance(declared, (str, list)) else None
     loader = unit.data.get("loader")
     return LOADER_METADATA_COLUMNS.get(loader) if isinstance(loader, str) else None
 
 
-def raw_metadata_columns(units: list[Unit]) -> dict[str, str | None]:
-    """Map every declared raw table to its metadata column (or None).
+def raw_metadata_columns(units: list[Unit]) -> dict[str, str | list[str] | None]:
+    """Map every declared raw table to its metadata column(s) (or None).
 
     Keyed on `raw_table`, which §3.3 rule 8 guarantees names exactly one unit,
     so the mapping is unambiguous even where prefixes nest.
     """
-    resolved: dict[str, str | None] = {}
+    resolved: dict[str, str | list[str] | None] = {}
     for unit in units:
         for table in unit.tables:
             raw_table = table.get("raw_table")
@@ -575,15 +575,21 @@ def render_dbt_metadata_columns(units: list[Unit]) -> str:
         "    this file and ingestion/inventory/ disagree.",
         "",
         "    Maps each declared raw table to the column a staging model orders by to",
-        "    pick the newest copy of a record key. `none` means the table carries no",
-        "    metadata column, so it must not be deduplicated.",
+        "    pick the newest copy of a record key, or a list of columns in precedence",
+        "    order. `none` means the table carries no metadata column, so it must not",
+        "    be deduplicated.",
         "-#}",
         "{% macro raw_metadata_column_map() %}",
         "    {% do return({",
     ]
     for raw_table in sorted(mapping):
         column = mapping[raw_table]
-        rendered = "none" if column is None else f"'{column}'"
+        if column is None:
+            rendered = "none"
+        elif isinstance(column, str):
+            rendered = f"'{column}'"
+        else:
+            rendered = "[" + ", ".join(f"'{name}'" for name in column) + "]"
         lines.append(f"        '{raw_table}': {rendered},")
     lines += ["    }) %}", "{% endmacro %}", ""]
     return "\n".join(lines)

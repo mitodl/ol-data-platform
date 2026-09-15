@@ -1,8 +1,14 @@
 {% macro raw_extracted_at(raw_table) %}
     {#
         Resolve the raw-metadata column a staging model orders by to pick the newest
-        copy of a record key. Returns none when the table has no such column, which
-        means "do not deduplicate this table".
+        copy of a record key. Returns a column name, a list of them in precedence
+        order, or none when the table has no such column, which means "do not
+        deduplicate this table".
+
+        A list is for tables whose models break ties on a second loader column,
+        such as `_ab_source_file_last_modified` on Airbyte S3-source tables. Keeping
+        that column in the inventory rather than in model SQL is what lets it
+        change with the unit's loader.
 
         Resolved per RAW TABLE through the ingestion inventory, not per dbt source and
         not from `source.loader`. One dbt source mixes tables from units with different
@@ -31,15 +37,22 @@
 {% endmacro %}
 
 
-{% macro deduplicate_raw_table(raw_table=none, order_by=none, partition_columns='id') %}
+{% macro deduplicate_raw_table(raw_table=none, order_by=none, partition_columns='id', then_by=none, source_cte='source') %}
     {#
         Collapse duplicate raw rows to the most recent copy per record key, emitting a
-        `most_recent_source` CTE for the model to select from.
+        `most_recent_<source_cte>` CTE (`most_recent_source` by default) for the model
+        to select from.
 
         Pass `raw_table` and the ordering column is resolved from the inventory. Pass
         `order_by` to override it, which is what the models ordering by a business
         column (modified, updated_on, systemmodstamp, ...) already do -- those are
         loader-agnostic and need no inventory entry.
+
+        `then_by` appends a business-column tie-breaker after the resolved ordering,
+        so a model can keep one without naming the loader's columns itself.
+
+        `source_cte` names the CTE to read, for a model that deduplicates more than
+        one raw table.
 
         Where the resolved column is none, this emits a PASS-THROUGH: the raw table
         carries no metadata column, so there is nothing to order by and nothing to
@@ -63,11 +76,12 @@
     {%- set resolved = order_by if order_by is not none else raw_extracted_at(raw_table) -%}
 
     {%- if resolved is none %}
-    , most_recent_source as (
-        select * from source
+    , most_recent_{{ source_cte }} as (
+        select * from {{ source_cte }}
     )
     {%- else %}
-    , source_sorted as (
+    {%- set ordering = ([resolved] if resolved is string else resolved) + ([then_by] if then_by is not none else []) %}
+    , {{ source_cte }}_sorted as (
         select
             *
             {#-
@@ -80,12 +94,12 @@
             -#}
             , row_number() over (
                 partition by {{ partition_columns }}
-                order by {{ resolved }} desc nulls last
+                order by {% for column in ordering %}{{ column }} desc nulls last{% if not loop.last %}, {% endif %}{% endfor %}
             ) as row_num
-        from source
+        from {{ source_cte }}
     )
-    , most_recent_source as (
-        select * from source_sorted
+    , most_recent_{{ source_cte }} as (
+        select * from {{ source_cte }}_sorted
         where row_num = 1
     )
     {%- endif %}
