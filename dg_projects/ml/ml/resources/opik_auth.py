@@ -171,7 +171,9 @@ def get_opik_client() -> opik.Opik | None:
     return _opik_client
 
 
-def traced(name: str, tags: list[str] | None = None) -> Callable[[F], F]:
+def traced(
+    name: str, tags: list[str] | None = None, ignore_arguments: list[str] | None = None
+) -> Callable[[F], F]:
     """@opik.track, gated on OPIK_URL_OVERRIDE -- a plain no-op decorator otherwise.
 
     Checked at import/decoration time (an env var, stable for the process's
@@ -183,6 +185,11 @@ def traced(name: str, tags: list[str] | None = None) -> Callable[[F], F]:
     OPIK_PROJECT_NAME ("dagster-ml") is shared across every Dagster/LLM
     integration in this repo, not just feedback -- tags is how a caller marks
     which one a given call site belongs to (e.g. tags=["feedback"]).
+
+    ignore_arguments excludes named parameters from the auto-captured input --
+    pass the same name a caller also hands to attach_span_metadata (e.g.
+    "trace_metadata") so identifying info lands once, as metadata, instead of
+    also duplicating into the span's input.
     """
     if not is_opik_configured():
         return lambda func: func
@@ -192,6 +199,7 @@ def traced(name: str, tags: list[str] | None = None) -> Callable[[F], F]:
         project_name=OPIK_PROJECT_NAME,
         environment=DAGSTER_ENV,
         tags=tags,
+        ignore_arguments=ignore_arguments,
     )
 
 

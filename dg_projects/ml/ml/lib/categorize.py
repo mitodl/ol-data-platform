@@ -135,7 +135,11 @@ class AnthropicCategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_anthropic", tags=["feedback_category"])
+    @traced(
+        "feedback_category_propose_anthropic",
+        tags=["feedback_category"],
+        ignore_arguments=["trace_metadata"],
+    )
     def propose(
         self,
         dominant_tags: list[str],
@@ -176,7 +180,11 @@ class OpenAICategoryLabelClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_category_propose_openai", tags=["feedback_category"])
+    @traced(
+        "feedback_category_propose_openai",
+        tags=["feedback_category"],
+        ignore_arguments=["trace_metadata"],
+    )
     def propose(
         self,
         dominant_tags: list[str],

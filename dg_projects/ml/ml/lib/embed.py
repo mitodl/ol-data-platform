@@ -83,7 +83,11 @@ class OpenAIEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_openai", tags=["feedback_embedding"])
+    @traced(
+        "feedback_embed_openai",
+        tags=["feedback_embedding"],
+        ignore_arguments=["trace_metadata"],
+    )
     def embed_batch(
         self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
     ) -> list[list[float]]:
@@ -119,7 +123,11 @@ class GeminiEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_gemini", tags=["feedback_embedding"])
+    @traced(
+        "feedback_embed_gemini",
+        tags=["feedback_embedding"],
+        ignore_arguments=["trace_metadata"],
+    )
     def embed_batch(
         self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
     ) -> list[list[float]]:
@@ -167,7 +175,11 @@ class BedrockEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
 
-    @traced("feedback_embed_bedrock", tags=["feedback_embedding"])
+    @traced(
+        "feedback_embed_bedrock",
+        tags=["feedback_embedding"],
+        ignore_arguments=["trace_metadata"],
+    )
     def embed_batch(
         self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
     ) -> list[list[float]]:
@@ -366,6 +378,9 @@ def _embed_chunk(
         vectors = client.embed_batch(
             [row["resolved_text"] for row in chunk],
             trace_metadata={
+                "feedback_conversation_pks": [
+                    row["feedback_conversation_pk"] for row in chunk
+                ],
                 "conversation_refs": [row["conversation_ref"] for row in chunk],
                 "embedding_inputs": [row["embedding_input"] for row in chunk],
             },
@@ -382,6 +397,7 @@ def _embed_chunk(
                 vector = client.embed_batch(
                     [row["resolved_text"]],
                     trace_metadata={
+                        "feedback_conversation_pks": [row["feedback_conversation_pk"]],
                         "conversation_refs": [row["conversation_ref"]],
                         "embedding_inputs": [row["embedding_input"]],
                     },

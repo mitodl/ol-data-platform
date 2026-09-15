@@ -171,15 +171,17 @@ class _FakeCategoryClient:
 
     def __init__(self, responses: dict[int, dict[str, str]]) -> None:
         self._responses = responses
+        self.trace_metadata_calls: list[dict[str, object]] = []
 
     def propose(
         self,
         dominant_tags: list[str],  # noqa: ARG002
         samples: list[str],
         *,
-        trace_metadata: dict[str, object],  # noqa: ARG002
+        trace_metadata: dict[str, object],
     ) -> dict[str, str]:
         # Keyed by sample count so each test cluster gets a distinct canned reply.
+        self.trace_metadata_calls.append(trace_metadata)
         return self._responses[len(samples)]
 
 
@@ -205,6 +207,13 @@ def test_propose_categories_builds_one_row_per_cluster() -> None:
     assert set(result["category_slug"].to_list()) == {"billing_issue", "login_issue"}
     assert result["cluster_run_id"].to_list() == ["run-1", "run-1"]
     assert set(result["cluster_key"].to_list()) == {"key-a", "key-b"}
+    # each call is tagged with the cluster it was proposing a category for
+    assert {"cluster_key": "key-a", "cluster_run_id": "run-1"} in (
+        client.trace_metadata_calls
+    )
+    assert {"cluster_key": "key-b", "cluster_run_id": "run-1"} in (
+        client.trace_metadata_calls
+    )
 
 
 def test_propose_categories_skips_a_cluster_with_no_samples() -> None:

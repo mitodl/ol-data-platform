@@ -127,7 +127,11 @@ class AnthropicSummaryClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_summarize_anthropic", tags=["feedback_summary"])
+    @traced(
+        "feedback_summarize_anthropic",
+        tags=["feedback_summary"],
+        ignore_arguments=["trace_metadata"],
+    )
     def summarize(
         self, conversation_text: str, *, trace_metadata: dict[str, Any]
     ) -> str | None:
@@ -165,7 +169,11 @@ class OpenAISummaryClient:
         self._client = client
         self.model_version = model_version
 
-    @traced("feedback_summarize_openai", tags=["feedback_summary"])
+    @traced(
+        "feedback_summarize_openai",
+        tags=["feedback_summary"],
+        ignore_arguments=["trace_metadata"],
+    )
     def summarize(
         self, conversation_text: str, *, trace_metadata: dict[str, Any]
     ) -> str | None:
