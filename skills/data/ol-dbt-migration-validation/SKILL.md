@@ -29,12 +29,18 @@ skills: `ol-dbt-local-dev` (register + build) and `ol-dbt-fast-validation`
 (validate / impact / diff). Read this one when the question is *"is the data the
 same?"* rather than *"does it compile?"*.
 
+Run every command here through `uv run --frozen` (`uv run --frozen ol-dbt ...`,
+`uv run --frozen dbt ...`) or from an activated venv — see the prerequisite at the
+top of `ol-dbt-local-dev`. A stray dbt earlier on `PATH` is picked up instead and
+fails with `Could not find adapter type duckdb!`, which reads like a broken
+install rather than a `PATH` problem.
+
 ## Read this first: what dev_local can and cannot prove
 
 `ol-dbt local register` stores the `metadata_location` that Glue reports for
 each table. For any dbt-materialized Iceberg table that location is a
 `__dbt_tmp-<uuid>` path, an artifact of dbt's create-temp-then-swap. Measured
-2026-09-09 immediately after a fresh register of all three layers:
+2026-09-09 immediately after a fresh register of every layer:
 
 | layer | views | on `__dbt_tmp` |
 |---|---|---|
@@ -54,7 +60,9 @@ with every layer but staging identical to the table above.
 A `__dbt_tmp` view either 404s (loud) or silently returns the temp table's
 **accumulated snapshots**: duplicated *and* partially missing rows. Two measured
 examples: `int__mitxonline__proctored_exam_grades` read 292,704 rows for 9,442
-distinct (31x), `int__micromasters__dedp_proctored_exam_grades` 5.4x.
+distinct (31x), `int__micromasters__dedp_proctored_exam_grades` 5.4x. By
+2026-09-14 the first of those had flipped to the 404 mode — its `__dbt_tmp` path
+was cleaned up in the interim, which is the churn described below, observed.
 
 **The duplication factor is per-view and wildly heterogeneous.** Measured
 2026-09-14 across all 29 registered `dim_` views in *one* registration:
@@ -131,6 +139,12 @@ measure is drift, not code. Build both sides back to back for the same reason.
 Only register the layers the model actually reads. `--all-layers` pulls 1,388
 raw views you do not need.
 
+**But if step 3 selects `+<upstream>`, register `raw` as well.** A full ancestor
+tree bottoms out in models that read `source()`, and those resolve to raw tables —
+unregistered, the build fails at the leaves. Either add
+`--database ol_warehouse_production_raw`, or keep the selection shallow with `1+`
+so it stops at models you have already registered a layer for.
+
 ### 2. Materialize the pre-migration model *alongside* the new one
 
 Do not check out the old code, build, snapshot, then check the new code back
@@ -164,10 +178,14 @@ diff <(grep -o "ref('[^']*')" <model>_pre.sql | sort -u) \
 Then build both sides **and both divergent ancestor paths** in one invocation:
 
 ```bash
-cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) dbt run \
-  --select <model>_pre <model> +<old_upstream> +<new_upstream> \
+cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) uv run --frozen dbt run \
+  --select "<model>_pre <model> +<old_upstream> +<new_upstream>" \
   -t dev_local --full-refresh
 ```
+
+`uv run --frozen dbt`, not bare `dbt` — see the prerequisite in
+`ol-dbt-local-dev`; a stray global dbt on `PATH` will be picked up instead and
+fails with `No module named 'dbt.adapters.duckdb'`.
 
 **Selecting only the new upstream is not enough**, and that is the easy mistake:
 `<model>_pre` still refs the old `int__`/`stg__` model, which — left out of the
@@ -201,9 +219,7 @@ re-derive every row. The model's own `is_incremental()` predicate decides which
 rows are reselected, and any row it excludes keeps the value the **old** code
 produced. Read the relation afterwards and you are reading a mix of old-code and
 new-code rows — and comparing it against a `_pre` side that, being a brand-new
-model name, was built in full. The two sides are not comparable at all. A
-suspiciously fast "success" on an incremental model is a warning sign, not a good
-one. Check for
+model name, was built in full. The two sides are not comparable at all. Check for
 `materialized='incremental'` in the config block of every model you selected.
 
 #### Incremental vs `--full-refresh`: which to use when
@@ -280,9 +296,13 @@ Two consequences, and the first is why this skill insists on one invocation:
 Use `dbt run` above, then test separately:
 
 ```bash
-dbt test --select <model>_pre <dimensional_model> <model> \
+uv run --frozen dbt test \
+  --select "<model>_pre <model> +<old_upstream> +<new_upstream>" \
   -t dev_local --indirect-selection=cautious
 ```
+
+Keep this selection identical to the one you built in step 3 — if they drift, you
+are testing a different set of models than you compared.
 
 dbt defaults to `--indirect-selection=eager`, which selects every test that
 merely **references** a selected model — including `relationships_*` tests
@@ -348,11 +368,15 @@ per-column rates as interpretable, using the model's declared uniqueness key
 (step 4) on **both** relations:
 
 ```sql
-select 'pre' side, count(*) rows, count(distinct (<key cols>)) distinct_keys from <pre>
+select 'pre' as side, count(*) as n_rows, count(distinct (<key cols>)) as distinct_keys from <pre>
 union all select 'new', count(*), count(distinct (<key cols>)) from <new>;
 ```
 
-`rows = distinct_keys` on both sides, plus a zero delta, is grain intact. Anything
+`as n_rows`, not `rows` — `rows` is a reserved word in DuckDB and the query will
+not parse. Pass a composite key to `count(distinct ...)` parenthesised as
+`(a, b)`; `count(distinct a, b)` is a binder error.
+
+`n_rows = distinct_keys` on both sides, plus a zero delta, is grain intact. Anything
 else is a fan-out or a collapse that count parity was hiding.
 
 **(b) Per-column multiset diff — needs no join key at all.** Two queries per
@@ -385,8 +409,8 @@ a view is polluted; never quote it as a generation count or divide by it to
 **(c) Fill-rate parity per column**, as a *paired* comparison:
 
 ```sql
-select 'pre' side, count(*) rows,
-       count("<col>") non_null, round(100.0*count("<col>")/count(*),2) pct
+select 'pre' as side, count(*) as n_rows,
+       count("<col>") as non_null, round(100.0*count("<col>")/count(*),2) as pct
 from <pre>
 union all select 'new', count(*), count("<col>"), round(100.0*count("<col>")/count(*),2) from <new>;
 ```
@@ -405,7 +429,7 @@ sides must be called out as *unverified*, never as *passing*.
 **(d) Only then** reach for the keyed row-level diff:
 
 ```bash
-ol-dbt diff --old <model>_pre --new <model> -k <key cols> --exclude-columns <load timestamps>
+ol-dbt diff --old <model>_pre --new <model> -k <a,b,c> --exclude-columns <load timestamps>
 ```
 
 ### 6. Accept on the distinct functional mapping, not the whole row

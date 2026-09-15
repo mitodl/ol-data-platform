@@ -21,11 +21,41 @@ those views for models you haven't built. So you can build old + new models
 side-by-side against real prod data — without copying it or writing to the
 warehouse. The default dbt target for all of this is **`dev_local`** (DuckDB).
 
+## Prerequisite: run everything through `uv run --frozen`
+
+Every command below — and every `dbt` command in `ol-dbt-migration-validation` —
+must resolve `dbt` from this project's venv:
+
+```bash
+uv sync                                   # once, to create/refresh .venv
+uv run --frozen dbt --version             # expect: dbt 1.12.4, plugin duckdb 1.11.x
+uv run --frozen ol-dbt local register ...
+```
+
+**Why this is not optional.** `ol-dbt` shells out to bare `"dbt"`
+(`commands/run.py`: `cmd = ["dbt", subcommand, ...]`), resolved through `PATH`
+rather than from the venv `ol-dbt` itself lives in. Any other dbt earlier on
+`PATH` wins. A `pipx`/`pip --user` dbt is the usual culprit — one at
+`~/Library/Python/3.9/bin/dbt` (dbt 1.8.1, no duckdb adapter) shadowed the
+project's 1.12.4 here, and every `dev_local` command died with:
+
+```
+Error importing adapter: No module named 'dbt.adapters.duckdb'
+Runtime Error  Credentials in profile "open_learning", target "dev_local" invalid:
+  Could not find adapter type duckdb!
+```
+
+That error names the adapter, not the `PATH`, so it reads like a broken install.
+Check with `which -a dbt` — if the first hit is not this repo's `.venv/bin/dbt`,
+prefix with `uv run --frozen`. Activating the venv (`source .venv/bin/activate`)
+works too. `--frozen` keeps `uv` from re-resolving and rewriting `uv.lock` as a
+side effect of running a command.
+
 ## Workflow
 
 ### 1. One-time setup
 ```bash
-ol-dbt local setup          # bootstrap the local DuckDB + Iceberg env (installs deps, dbt debug)
+uv run --frozen ol-dbt local setup   # bootstrap the local DuckDB + Iceberg env (installs deps, dbt debug)
 ```
 
 ### 2. Register production tables as DuckDB views

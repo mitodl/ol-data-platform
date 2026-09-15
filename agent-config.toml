@@ -16,8 +16,8 @@
 scope = "project"
 
 [skills]
-ol-dbt-fast-validation     = "skills/data/ol-dbt-fast-validation/SKILL.md"
-ol-dbt-local-dev           = "skills/data/ol-dbt-local-dev/SKILL.md"
+ol-dbt-fast-validation      = "skills/data/ol-dbt-fast-validation/SKILL.md"
+ol-dbt-local-dev            = "skills/data/ol-dbt-local-dev/SKILL.md"
 ol-dbt-migration-validation = "skills/data/ol-dbt-migration-validation/SKILL.md"
 
 # The `dbt` profile is the fast, credential-light dbt-warehouse QA loop:
