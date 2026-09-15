@@ -209,3 +209,58 @@ models:
       removals and manager changes, and dim_user edits, carry no change
       timestamp and do not move it; a partner picks those up from a full
       reload of the bulk export.
+
+- name: mv_b2b_contract_courserun
+  description: >
+    One row per course run covered by one of an organization's contracts --
+    grain org x contract x course_run. Backs ol-analytics-api's
+    b2b_learner_records /courses collection. Carries no personal data; it sits
+    in this database so the tenant reads a single schema. Includes runs with no
+    enrollments, which is why it is not derived from mv_b2b_learner_enrollment.
+    A course run belongs to at most one contract
+    (courses_courserun.b2b_contract_id is a single FK), so the grain cannot fan
+    out. Manual-refresh materialized view.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - contract_pk
+      - courserun_pk
+      config:
+        severity: warn
+  columns:
+  - name: organization_key
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
+  - name: sso_organization_id
+    description: >
+      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
+      identifier the ol-analytics-api filters organizations on.
+  - name: organization_name
+    description: Display name of the organization.
+  - name: contract_pk
+    description: Surrogate key of the B2B contract.
+  - name: contract_id
+    description: >
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
+      contract identifier the API exposes.
+  - name: b2b_contract_name
+    description: Display name of the contract -- the API's contract_name.
+  - name: b2b_contract_is_active
+    description: Whether the contract is currently active -- the API's contract_is_active.
+  - name: b2b_contract_start_date
+    description: Contract start date. Null when the contract has none.
+  - name: b2b_contract_end_date
+    description: Contract end date. Null when the contract has none.
+  - name: seat_limit
+    description: b2b_contract_max_learners. Null means uncapped, not zero.
+  - name: courserun_pk
+    description: Surrogate key of the course run.
+  - name: courserun_readable_id
+    description: Course run identifier (e.g. course-v1:MITxT+14.310x+2T2026) -- the
+      API's courserun_id.
+  - name: courserun_title
+    description: Display title of the course run. Mutable; key on courserun_readable_id.
+  - name: courserun_start_on
+    description: Course run start, ISO-8601.
+  - name: courserun_end_on
+    description: Course run end, ISO-8601. Null for self-paced runs.
