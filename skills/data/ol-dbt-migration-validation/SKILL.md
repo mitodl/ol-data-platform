@@ -123,16 +123,32 @@ fill rates become meaningful and this skill's step 5 can assert much more.
 
 ## The procedure
 
+**Run every command in this procedure from the repository root.** dbt is anchored
+with `--project-dir src/ol_dbt` and file paths are written `src/ol_dbt/...`, so
+nothing depends on a `cd` you may or may not have done. Mixing the two — repo-root
+paths for the files created in step 2, a project-dir shell for dbt — is how the
+discovery commands below end up silently producing no output.
+
 ### 1. Register immediately before the build, and never between the two sides
 
 ```bash
+#!/usr/bin/env bash
+set -euo pipefail
 for db in staging intermediate dimensional; do
   uv run --frozen ol-dbt local register --database "ol_warehouse_production_$db" \
     | tee "/tmp/reg_$db.log"
-  grep -q '✗ Errors: 0' "/tmp/reg_$db.log" \
-    || { echo "STOP: $db registration had errors — do not build"; break; }
+  grep -q '✗ Errors: 0' "/tmp/reg_$db.log" || {
+    echo "STOP: $db registration had errors — do not build" >&2
+    exit 1
+  }
 done
 ```
+
+`exit 1`, not `break`. `break` only leaves the loop and the snippet still finishes
+successfully, so an unattended run prints `STOP` and then builds anyway — a gate
+that reports its own failure and does not gate. Run this as a script (hence the
+shebang and `set -euo pipefail`); pasting it into an interactive shell will close
+that shell on error.
 
 **Check for zero errors; `register` will not tell you.** It catches per-table
 failures, counts them, prints `✗ Errors: N` in the summary, and still **exits 0**
@@ -173,11 +189,20 @@ enough for the registry to have rotted underneath it.
 Only register the layers the model actually reads. `--all-layers` pulls 1,388
 raw views you do not need.
 
-**But if step 3 selects `+<upstream>`, register `raw` as well.** A full ancestor
-tree bottoms out in models that read `source()`, and those resolve to raw tables —
-unregistered, the build fails at the leaves. Either add
-`--database ol_warehouse_production_raw`, or keep the selection shallow with `1+`
-so it stops at models you have already registered a layer for.
+**If step 3 selects `+<upstream>`, register every source layer that tree reaches —
+not just `raw`.** A full ancestor tree bottoms out in models that read `source()`,
+and `override_source` derives each one's Glue database from its *declared schema*,
+which is not always raw: this project declares `dimensional` and `reporting`
+sources alongside `ol_warehouse_raw_data`. Any of them left unregistered fails the
+build at the leaves. Check what your selection actually reaches:
+
+```bash
+DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt ls --project-dir src/ol_dbt \
+  --select +<upstream> --resource-type source -t dev_local | grep '^source:'
+```
+
+and register a layer for each. Or keep the selection shallow with `1+`, which stops
+at models you have already registered a layer for.
 
 ### 2. Materialize the pre-migration model *alongside* the new one
 
@@ -205,10 +230,17 @@ it always is.
 First find what actually diverges — the refs that differ between the two sides:
 
 ```bash
+m=src/ol_dbt/models/marts/<area>/<model>     # the paths step 2 created
 refs() { grep -oE "ref\([\"'][^\"')]*[\"']\)" "$1" | tr -d "\"'" \
          | sed 's/^ref(//; s/)$//' | sort -u; }
-diff <(refs <model>_pre.sql) <(refs <model>.sql)
+diff <(refs "${m}_pre.sql") <(refs "${m}.sql")
 ```
+
+**Full paths, not basenames.** Step 2 writes these files under
+`src/ol_dbt/models/...`; passing bare basenames makes both `grep` calls fail, and
+two failed greps produce two empty outputs that `diff` reports as identical. You
+read that as "no divergent refs" and omit the upstreams — the same silent,
+looks-clean failure the quote-style bug had.
 
 **Match both quote styles.** `ref("x")` is rarer but real — 13 occurrences across
 5 models as of 2026-09-15, three of them in `reporting/`, which is exactly what
@@ -398,11 +430,18 @@ Never guess the grain from column names. Ask dbt which file documents the model,
 then read its uniqueness tests:
 
 ```bash
-yml=$(uv run --frozen dbt ls --select <model> --resource-type model \
+yml=$(DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt ls --project-dir src/ol_dbt \
+        --select <model> --resource-type model \
         --output json --output-keys patch_path -t dev_local \
         | grep '^{' | sed 's/.*models\//models\//; s/".*//' | head -1)
 grep -n -A8 'unique_combination_of_columns\|expect_compound_columns_to_be_unique\|- unique' "src/ol_dbt/$yml"
 ```
+
+`--project-dir` (and `DBT_PROFILES_DIR`) so this runs from the repository root like
+everything else: `patch_path` comes back project-relative, and `src/ol_dbt/$yml`
+rejoins it. Without the anchor there is no directory that works — from the root
+`dbt ls` cannot find `dbt_project.yml`, and from `src/ol_dbt` the join doubles the
+prefix.
 
 **Do not glob for the schema file.** Two reasons, both measured 2026-09-15. A
 `models/**/_<area>__models.yml` pattern does not recurse in bash without
@@ -414,7 +453,19 @@ person. And the filename convention is not uniform: `dim_course_run`'s schema is
 `_dim_course_run.yml`, not `_<area>__models.yml`. `patch_path` is authoritative for
 both shapes.
 
-- A passing compound-uniqueness test **is** the key — use its column list verbatim.
+**Carry the test's `where` clause into every check.** A uniqueness test proves the
+key only over the rows it filters to. `dim_course_run`'s is
+`where: "is_current = true"`, so the key is proven for current rows and says
+nothing about expired ones — and an SCD2 relation accumulates several expired rows
+per business key, all sharing `is_current = false`. Run step 5's grain check
+unfiltered and they collide: demonstrated on the SCD2 shape, two changes to one
+key give `6 rows / 5 distinct keys`, which reads as a fan-out and is ordinary
+history. With the predicate applied it is `3 / 3`. So apply the same `where` to the
+grain check, the fill-rate comparison and the diff — or pick a key proven unique
+across the whole relation, and say which you did.
+
+- A passing compound-uniqueness test **is** the key — use its column list verbatim,
+  together with its `where` clause if it has one.
   Two spellings are in use here: `dbt_expectations.expect_compound_columns_to_be_unique`
   (231 occurrences) and `dbt_utils.unique_combination_of_columns` (19, including
   `dim_course_run` itself, whose key is `platform + courserun_readable_id +

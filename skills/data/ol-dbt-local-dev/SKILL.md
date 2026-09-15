@@ -27,10 +27,18 @@ Every command below — and every `dbt` command in `ol-dbt-migration-validation`
 must resolve `dbt` from this project's venv:
 
 ```bash
-uv sync                                   # once, to create/refresh .venv
-uv run --frozen dbt --version             # expect: dbt 1.12.4, plugin duckdb 1.11.x
-uv run --frozen ol-dbt local register ...
+uv sync                          # once, to create/refresh .venv
+source .venv/bin/activate        # then every bare command on this page works
+dbt --version                    # expect: dbt 1.12.4, plugin duckdb 1.11.x
 ```
+
+**The examples below are written bare (`ol-dbt run`, `ol-dbt diff`) and assume you
+activated the venv.** Activation is what puts `.venv/bin` first on `PATH`, which is
+the whole fix — verified: after `source .venv/bin/activate`, `which dbt` resolves to
+this repo's 1.12.4. If you would rather not activate, prefix **every** command with
+`uv run --frozen` (`uv run --frozen ol-dbt run ...`); what does not work is doing
+neither, because `ol-dbt run` and `ol-dbt diff` both shell out to `dbt` and will
+pick up whatever is on your `PATH`.
 
 **Why this is not optional.** `ol-dbt` shells out to bare `"dbt"`
 (`commands/run.py`: `cmd = ["dbt", subcommand, ...]`), resolved through `PATH`
