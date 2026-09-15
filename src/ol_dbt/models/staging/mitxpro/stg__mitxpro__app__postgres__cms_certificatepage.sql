@@ -2,13 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_certificatepage') }}
 )
 
-, source_deduped as (
-    select
-        *
-        , row_number() over (partition by page_ptr_id order by _airbyte_extracted_at desc) as row_num
-    from source
-)
-
+{{ deduplicate_raw_table(raw_table='raw__xpro__app__postgres__cms_certificatepage', partition_columns='page_ptr_id') }}
 , cleaned as (
     select
         page_ptr_id as wagtail_page_id
@@ -18,8 +12,7 @@ with source as (
             as cms_certificate_signitory_ids
         , institute_text as cms_certificate_institute_text
         , overrides as cms_certificate_overrides
-    from source_deduped
-    where row_num = 1
+    from most_recent_source
 )
 
 select * from cleaned
