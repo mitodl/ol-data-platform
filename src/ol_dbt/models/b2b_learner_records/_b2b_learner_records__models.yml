@@ -181,6 +181,7 @@ models:
       Null when the learner has no active enrollment.
   - name: last_enrolled_on
     description: Latest active enrollment under the organization's contracts, ISO-8601.
+      Null when the learner has no active enrollment.
   - name: courses_enrolled
     description: Distinct course runs with an active enrollment under the organization's
       contracts.
