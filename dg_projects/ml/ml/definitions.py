@@ -10,7 +10,10 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
-from ml.assets.feedback_clustering import feedback_clustering
+from ml.assets.feedback_category_proposals import feedback_category_proposals
+from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
+from ml.assets.feedback_cluster_identity import feedback_cluster_identity
+from ml.assets.feedback_clusters import feedback_clusters
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
@@ -18,6 +21,8 @@ from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import configure_opik_keycloak_auth
+from ml.schedules.feedback_clusters import feedback_clusters_schedule
+from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -71,9 +76,9 @@ feedback_embeddings_job = define_asset_job(
     selection=[feedback_embeddings],
 )
 
-feedback_clustering_job = define_asset_job(
-    name="feedback_clustering_job",
-    selection=[feedback_clustering],
+feedback_clusters_job = define_asset_job(
+    name="feedback_clusters_job",
+    selection=[feedback_clusters],
 )
 
 # Human-triggered only, a one-time (or occasional) decision aid -- not a
@@ -86,12 +91,13 @@ feedback_sentiment_eval_job = define_asset_job(
 # Scoped to just these assets, independent of the ml code location's shared
 # default_automation_condition_sensor. Stopped by default so a fresh deploy
 # doesn't auto-run against an unverified LLM credential; enable in the UI
-# once the Bedrock/API path is confirmed working.
+# once the Bedrock/API path is confirmed working. feedback_clusters runs on
+# feedback_clusters_schedule/feedback_clusters_growth_sensor instead (ml/schedules,
+# ml/sensors), not chained here -- a full re-cluster is too expensive to run on
+# every embedding refresh.
 feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
     name="feedback_summaries_automation_sensor",
-    target=AssetSelection.assets(
-        feedback_summaries, feedback_embeddings, feedback_clustering
-    ),
+    target=AssetSelection.assets(feedback_summaries, feedback_embeddings),
     default_status=DefaultSensorStatus.STOPPED,
 )
 
@@ -168,7 +174,10 @@ defs = Definitions(
             feedback_redacted,
             feedback_summaries,
             feedback_embeddings,
-            feedback_clustering,
+            feedback_clusters,
+            feedback_cluster_identity,
+            feedback_cluster_assignment,
+            feedback_category_proposals,
             feedback_sentiment_eval,
         ]
     ),
@@ -177,8 +186,9 @@ defs = Definitions(
         feedback_redacted_job,
         feedback_summaries_job,
         feedback_embeddings_job,
-        feedback_clustering_job,
+        feedback_clusters_job,
         feedback_sentiment_eval_job,
     ],
-    sensors=[feedback_summaries_automation_sensor],
+    schedules=[feedback_clusters_schedule],
+    sensors=[feedback_summaries_automation_sensor, feedback_clusters_growth_sensor],
 )

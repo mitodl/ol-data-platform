@@ -231,3 +231,52 @@ models:
       embedded.
   - name: embedded_at
     description: ISO8601 varchar, when embedding_vector was generated.
+
+- name: int__feedback__cluster_membership
+  description: feedback_cluster_membership's output, one row per conversation -- the
+    live cluster assignment. Empty until feedback_cluster_assignment has materialized
+    in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: cluster_key
+    description: str, null if not near any active cluster (noise or unplaced).
+  - name: cluster_similarity
+    description: double, cosine similarity to the cluster's centroid.
+  - name: cluster_assignment_method
+    description: str, recluster or incremental.
+  - name: cluster_run_id
+    description: str, which clustering run produced this assignment.
+  - name: assigned_at
+    description: ISO8601 varchar, when this row's placement was computed.
+
+- name: int__feedback__category_proposal
+  description: Every LLM-proposed category, one row per cluster_key that has ever
+    been labeled -- empty until feedback_category_proposals has materialized in this
+    schema.
+  columns:
+  - name: cluster_key
+    description: str, the stable cluster this proposal labels.
+    tests:
+    - not_null
+    - unique
+  - name: cluster_run_id
+    description: str, which clustering run this cluster_key was resolved from when
+      the proposal was generated.
+  - name: category_slug
+    description: str, deterministically slugified from category_label.
+    tests:
+    - not_null
+  - name: category_label
+    description: str, the LLM-proposed display label.
+    tests:
+    - not_null
+  - name: category_description
+    description: str, the LLM-proposed one-line description of the category.
+  - name: proposed_at
+    description: timestamp, when this proposal was generated.
+    tests:
+    - not_null

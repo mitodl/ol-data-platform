@@ -246,9 +246,20 @@ models:
   - name: embedded_at
     description: ISO8601 varchar, when the vector was generated.
   - name: category_fk
-    description: str, foreign key to dim_feedback_category. Assigned at MVP from the
-      conversation's dominant tag - the tag with the highest corpus frequency, tie-broken
-      on tag_slug. Null for a conversation with no tags.
+    description: str, foreign key to dim_feedback_category. A cluster-derived category
+      wins over the tag-seed guess (the tag with the highest corpus frequency, tie-broken
+      on tag_slug) when both exist. Null for a conversation with neither.
+  - name: cluster_key
+    description: str, the stable cluster this conversation belongs to (survives re-clustering).
+      Null if the conversation isn't near any active cluster (noise or unplaced).
+  - name: cluster_similarity
+    description: double, cosine similarity to the cluster's centroid - cohesion signal
+      for ranking systemic issues.
+  - name: cluster_assignment_method
+    description: str, recluster (rewritten from a completed clustering run) or incremental
+      (placed by nearest active centroid).
+  - name: cluster_run_id
+    description: str, which clustering run produced this assignment.
   - name: conversation_ingested_at
     description: str, ISO8601 timestamp this row was materialized.
 
