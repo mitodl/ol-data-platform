@@ -585,6 +585,12 @@ class TestRawMetadataColumn:
         unit = Unit(path=Path("mitxonline__mysql.yml"), data=data)
         assert raw_metadata_column(unit, unit.tables[0]) is None
 
+    def test_list_declaration_keeps_its_precedence_order(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+        unit = Unit(path=Path("edxorg__tracking_logs.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+
     def test_map_covers_every_declared_table(self, inventory: Path) -> None:
         units = load_units(inventory)
         mapping = raw_metadata_columns(units)
@@ -616,6 +622,13 @@ class TestRawMetadataColumn:
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
         assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
 
+    def test_real_inventory_dedups_airbyte_loaded_course_structure_tables(self) -> None:
+        # The unit is a Dagster pipeline, but an Airbyte S3 connection loads the
+        # files it writes, so the tables carry Airbyte's columns. The dagster
+        # default of None would silently switch their dedup off.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__course_structure__course_video"] == "_airbyte_extracted_at"
+
 
 class TestGeneratedMetadataMacro:
     def test_generated_macro_is_current(self) -> None:
@@ -634,3 +647,8 @@ class TestGeneratedMetadataMacro:
         # column named none; the bare literal is what makes the pass-through fire.
         rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
         assert "'raw__edxorg__s3__course_xml_blocks': none," in rendered
+
+    def test_rendered_macro_emits_a_list_as_a_jinja_list(self) -> None:
+        rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        expected = "'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
+        assert expected in rendered
