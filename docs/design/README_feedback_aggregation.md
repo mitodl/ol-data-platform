@@ -1,7 +1,7 @@
 # Feedback Aggregation & Clustering System — Spec Index
 
-Project: `wp-feedback-aggregation-clustering-system-2e9750` · Phase: **spec** (2026-07-10)
-RFC (team review): [mitodl/hq#12210](https://github.com/mitodl/hq/discussions/12210)
+Project: `wp-feedback-aggregation-clustering-system-2e9750` · Phase: **implementation** (2026-09-15)
+RFC (accepted 2026-09-15): [mitodl/hq#12210](https://github.com/mitodl/hq/discussions/12210)
 (supersedes [#10793](https://github.com/mitodl/hq/discussions/10793)).
 
 A feedback aggregation system that ingests free-text feedback from multiple sources
@@ -106,22 +106,23 @@ signals for four audiences (support, engineering, instructors, leadership).
   as the ML asset lands) + support/eng cluster dashboards. Batch. Both volumes are measured (2026-08-14,
   #2536): the conversation fact is **190,826 rows** and the turn fact **282,470 rows**.
 - **Phase 2:** add forum/tutor/ORA (additive CTEs); `afact_feedback_cluster_daily`; instructor course views;
-  conversation duration measures once `ticket_metrics` is synced.
+  conversation duration measures once `ticket_metrics` is modeled (the stream is already enabled in Airbyte,
+  #2539).
 - **Phase 3:** migrate ingress to the data bus (gated on the write path existing + sink-topology decision).
 
 ## Prerequisites (from the 2026-08-07 revision)
 
-- Carry `comment_author_user_id` through `int__zendesk__ticket_comment` — **blocking** for the turn grain
-  (classifies requester-vs-agent turns and resolves `user_fk`). Verified against the repo: the column exists
-  in `stg__zendesk__ticket_comment` and the int model joins it away, exposing only `comment_author` as a name.
-- Carry `ticket_requester_user_id` through `int__zendesk__ticket` (added 2026-08-13) — **blocking**, same
-  reason: the requester-vs-agent filter compares ids, and the int model exposes only `ticket_requester`
-  (a name), even though the join it needs already exists in the model.
+- ~~Carry `comment_author_user_id` through `int__zendesk__ticket_comment`~~ **Done** in #2556 (2026-08-13).
+  It was blocking for the turn grain: it classifies requester-vs-agent turns and resolves `user_fk`.
+- ~~Carry `ticket_requester_user_id` through `int__zendesk__ticket`~~ **Done** in #2576 (2026-08-21).
+  Blocking for the same reason: the requester-vs-agent filter compares ids.
 - ~~Measure public, requester-authored comments per ticket **and the multi-turn share**~~ — **done**
   (2026-08-14, #2536): 200,485 tickets give 190,826 conversations and 282,470 turn-grain rows, of which
   52,218 (27.4%) are multi-turn. This sizes the turn fact and sets the summarization budget (2d).
-- Add the `ticket_metrics` Airbyte stream — non-blocking; unblocks conversation duration measures.
-- Confirm the conformed `channel_slug` value set against each source's actual channel values.
+- ~~Add the `ticket_metrics` Airbyte stream~~ Already enabled on the Zendesk connection (#2539). Not modeled
+  in dbt yet, so the conversation duration measures stay in Phase 2.
+- ~~Confirm the conformed `channel_slug` value set against each source's actual channel values~~ **Done** in
+  #2576 (`seeds/feedback_channels.csv`).
 - Decide `embedding_input` (summary vs. concatenated turns) via the bake-off — non-blocking for the schema.
 
 ## Open questions carried to team / platform (non-blocking for MVP)
@@ -136,8 +137,8 @@ signals for four audiences (support, engineering, instructors, leadership).
 
 ## Status / next
 
-RFC #12210 is posted for team review (Draft). It was rewritten on 2026-08-10 to carry the conversation-grain
-analysis fact (2d) and cut to a ~1,500-word read. Three rounds of feedback have been folded in:
+RFC #12210 was accepted on 2026-09-15. It was rewritten on 2026-08-10 to carry the conversation-grain
+analysis fact (2d) and cut to a ~1,500-word read. Feedback folded in before acceptance:
 
 - **@pdpinch** ([#2422](https://github.com/mitodl/ol-data-platform/pull/2422#issuecomment-5169778966)) — the
   subject reference (`feedback_dimensional_model.md` §2a) and Zendesk brand/group
@@ -169,6 +170,23 @@ analysis fact (2d) and cut to a ~1,500-word read. Three rounds of feedback have 
   their approved categories) across runs. Produced `feedback_ml_approach.md` rev. 4 (§C.1) and matching
   revisions of the ERD, dimensional model and Dagster asset spec.
 
-Before flipping RFC → Accepted, the prerequisites above should be closed — particularly the
-`comment_author_user_id`/`ticket_requester_user_id` changes, both of which gate the turn grain. Then begin implementation per the build order in `feedback_dagster_asset_spec.md` §7 (dbt facts
-first, ML asset additive).
+### Phase 1 on `main` (as of 2026-09-15)
+
+- dbt layer: the `int__feedback__*` models, `tfact_feedback`, `afact_feedback_conversation`, the feedback
+  dimensions and `bridge_feedback_tag` (#2576), with follow-ups #2603, #2621 and #2635.
+- `feedback_redacted`, the Presidio asset (#2592). The ML assets live in the shared `dg_projects/ml` code
+  location; the dedicated `feedback_clustering` location described in `feedback_dagster_asset_spec.md` was
+  not created.
+- `feedback_summaries` (#2604), with a per-run summary model config (#2641) and concurrent LLM calls (#2682).
+- `feedback_embeddings` (#2622). Deployed environments default to Bedrock `amazon.titan-embed-text-v2:0`;
+  dev defaults to OpenAI `text-embedding-3-large`.
+- UMAP+HDBSCAN clustering (#2648), Opik tracing and the sentiment eval harness (#2662, #2683), and continuous
+  cluster assignment (#2678).
+
+### Remaining for Phase 1
+
+- The embedding bake-off (#2543). Fix the per-run model/dim override on `feedback_embeddings` first: the
+  upsert key is `feedback_conversation_pk` alone, so an override overwrites the existing vectors instead of
+  keeping both arms, and an override combined with `sample_limit` leaves two models in one table.
+- Consumption surfaces (#2545). No Superset asset or Marimo notebook reads the feedback tables yet.
+- PII classification and Lakekeeper/Cedar authz on the feedback tables (#2546).
