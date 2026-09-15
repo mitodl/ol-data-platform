@@ -277,6 +277,7 @@ def _create_deployment_repository(
     return create_repository_using_definitions_args(
         name=f"{deployment_name}_openedx",
         assets=with_failure_hooks(deployment_defs.assets or []),
+        schedules=deployment_defs.schedules,
         sensors=deployment_defs.sensors,
         resources=deployment_defs.resources,
     )
