@@ -84,8 +84,8 @@ models:
         column_list: ["conversation_ref", "turn_index"]
 
 - name: int__feedback__learn_ai_tutor
-  description: One row per human-authored Learn AI tutor checkpoint, conformed to
-    the common feedback event contract. Agent-authored checkpoints are dropped.
+  description: One row per user message sent to the Learn AI tutor chatbot. Bot replies
+    are excluded.
   columns:
   - name: source_slug
     description: str, the feedback source this row came from. Always 'learn_ai_tutor'
@@ -124,8 +124,9 @@ models:
   - name: subject_user_ref
     description: str, the chatter's global openedx user id.
   - name: subject_type
-    description: str, discriminator for what the feedback is about, mapped from chatsession_agent.
-      Null for an unmapped agent value.
+    description: str, what the chat concerns. 'courseware_block' for TutorBot and
+      VideoGPTBot, 'course' for SyllabusBot, 'resource' for ResourceRecommendationBot.
+      Null for any other chatsession_agent value.
   - name: subject_ref
     description: str, the chatsession_object_id - a course id, video transcript asset
       id, or edX module id depending on chatsession_agent.
@@ -134,8 +135,8 @@ models:
   - name: explicit_rating
     description: str, the chat response's rating, where given.
   - name: source_metadata
-    description: str, JSON of the attributes that have not earned a conformed column
-      - chatsession_agent, checkpoint_source, checkpoint_type.
+    description: str, JSON of fields specific to Learn AI tutor, not shared with other
+      sources - chatsession_agent, checkpoint_source, checkpoint_type.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
