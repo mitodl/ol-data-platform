@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from ol_dbt_cli.commands.validate import _check_qa_branch_contract
 from ol_dbt_cli.lib.inventory import Unit
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry, registry_from_manifest
 from ol_dbt_cli.lib.qa_contract import check_qa_contracts, upstream_units
@@ -202,3 +203,19 @@ def test_manifest_reads_identifier_and_config_meta() -> None:
     )
     assert registry.nodes["model.pkg.dim_user"].meta == {"qa_buildable": False}
     assert registry.nodes["source.pkg.raw.users"].identifier == "raw__mitxonline__app__postgres__users_user"
+
+
+class TestValidateWiring:
+    def test_missing_manifest_warns(self, tmp_path: Path) -> None:
+        report = ValidationReport()
+        _check_qa_branch_contract(None, tmp_path, report)
+        assert [(i.severity, i.message) for i in report.issues] == [
+            (Severity.WARNING, "Skipped: QA branch contracts need manifest lineage")
+        ]
+
+    def test_missing_inventory_warns_instead_of_passing(self, tmp_path: Path) -> None:
+        report = ValidationReport()
+        _check_qa_branch_contract(_dag(None), tmp_path / "ingestion" / "inventory", report)
+        assert len(report.issues) == 1
+        assert report.issues[0].severity == Severity.WARNING
+        assert report.issues[0].message.startswith("Skipped: no ingestion inventory units found under")

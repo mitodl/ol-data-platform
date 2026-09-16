@@ -582,6 +582,44 @@ def _check_dimensional_layering(
 
 
 # ---------------------------------------------------------------------------
+# Check 10: QA branch contract (RFC 12711)
+# ---------------------------------------------------------------------------
+
+
+def _check_qa_branch_contract(
+    manifest: ManifestRegistry | None,
+    inventory_dir: Path,
+    report: ValidationReport,
+) -> None:
+    """Run the QA branch contract, or say why it cannot run.
+
+    Without a manifest or without inventory units every model reads zero units,
+    so no model counts as a union and a missing declaration would pass silently.
+    """
+    if manifest is None:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            "Skipped: QA branch contracts need manifest lineage",
+            "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
+        )
+        return
+    units = load_units(inventory_dir)
+    if not units:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            f"Skipped: no ingestion inventory units found under {inventory_dir}",
+            "The check maps sources to units through the inventory. It expects the dbt "
+            "project at <repo>/src/ol_dbt, with the inventory at <repo>/ingestion/inventory.",
+        )
+        return
+    check_qa_contracts(manifest, units, report)
+
+
+# ---------------------------------------------------------------------------
 # Registry-aware SELECT * resolution
 # ---------------------------------------------------------------------------
 
@@ -1342,16 +1380,7 @@ def validate(
     # Global like dimensional_layering: a union model gains a branch by an edit to
     # one of its ancestors, which --changed-only would never select.
     if QA_CONTRACT_CHECK not in skipped:
-        if manifest is None:
-            report.add(
-                QA_CONTRACT_CHECK,
-                Severity.WARNING,
-                "(all models)",
-                "Skipped: QA branch contracts need manifest lineage",
-                "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
-            )
-        else:
-            check_qa_contracts(manifest, load_units(dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR), report)
+        _check_qa_branch_contract(manifest, dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR, report)
 
     # Output
     if output_format == "json":
