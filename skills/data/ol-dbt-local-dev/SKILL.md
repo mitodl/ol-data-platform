@@ -63,7 +63,7 @@ side effect of running a command.
 
 ### 1. One-time setup
 ```bash
-uv run --frozen ol-dbt local setup   # bootstrap the local DuckDB + Iceberg env (installs deps, dbt debug)
+ol-dbt local setup          # bootstrap the local DuckDB + Iceberg env (installs deps, dbt debug)
 ```
 
 ### 2. Register production tables as DuckDB views
@@ -109,9 +109,9 @@ last count. Until that is fixed, freshness is your responsibility:
 
 ```bash
 # re-register only the layers the models you are about to build actually read
-uv run --frozen ol-dbt local register --database ol_warehouse_production_staging
-uv run --frozen ol-dbt local register --database ol_warehouse_production_intermediate
-uv run --frozen ol-dbt local register --database ol_warehouse_production_dimensional
+ol-dbt local register --database ol_warehouse_production_staging
+ol-dbt local register --database ol_warehouse_production_intermediate
+ol-dbt local register --database ol_warehouse_production_dimensional
 ```
 
 **Read the `✗ Errors:` line — a non-zero count does not fail the command.**

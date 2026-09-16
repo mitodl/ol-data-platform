@@ -134,7 +134,7 @@ discovery commands below end up silently producing no output.
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-for db in staging intermediate dimensional; do
+for db in staging intermediate dimensional; do   # adjust to the layers YOUR selection reaches
   uv run --frozen ol-dbt local register --database "ol_warehouse_production_$db" \
     | tee "/tmp/reg_$db.log"
   grep -q '✗ Errors: 0' "/tmp/reg_$db.log" || {
@@ -211,9 +211,16 @@ out — that costs two dbt invocations and lets the registry drift between them.
 Copy the pre-migration SQL to a second model file instead:
 
 ```bash
-git show origin/main:src/ol_dbt/models/marts/<area>/<model>.sql \
-  > src/ol_dbt/models/marts/<area>/<model>_pre.sql
+base=$(git merge-base HEAD origin/main)          # not origin/main itself
+git show "$base:src/ol_dbt/models/<layer>/<area>/<model>.sql" \
+  > "src/ol_dbt/models/<layer>/<area>/<model>_pre.sql"
 ```
+
+**The merge-base, not `origin/main`.** Main moves while a PR is open — measured on
+this branch: 3 commits touching 7 model files — so `origin/main:<model>.sql` can
+hand you someone else's edit to the same model, and your diff then reports their
+change as yours. `<layer>` because reporting migrations live under
+`models/reporting/`, not `models/marts/`.
 
 Both models now exist in one graph and build in one invocation against one
 registration. Delete the `_pre` file before committing — it is scaffolding, and
@@ -529,9 +536,14 @@ per-column rates as interpretable, using the model's declared uniqueness key
 (step 4) on **both** relations:
 
 ```sql
-select 'pre' as side, count(*) as n_rows, count(distinct (<key cols>)) as distinct_keys from <pre>
-union all select 'new', count(*), count(distinct (<key cols>)) from <new>;
+-- <pred> is the uniqueness test's `where` clause, or `true` if it has none
+select 'pre' as side, count(*) as n_rows, count(distinct (<key cols>)) as distinct_keys
+from <pre> where <pred>
+union all select 'new', count(*), count(distinct (<key cols>)) from <new> where <pred>;
 ```
+
+Carry that same `<pred>` into every query in this step and into step 6 — a key
+proven only under a predicate tells you nothing about the rows it excludes.
 
 `as n_rows`, not `rows` — `rows` is a reserved word in DuckDB and the query will
 not parse. Pass a composite key to `count(distinct ...)` parenthesised as
@@ -612,8 +624,9 @@ model. Assert exactly that mapping, deduplicated, so source duplication and
 time-mixing cancel:
 
 ```sql
-with p as (select distinct <key> as k, <changed_col> as v from <pre>),
-     n as (select distinct <key> as k, <changed_col> as v from <new>)
+-- list the key columns bare; `<key> as k` would alias only the last one
+with p as (select distinct <key cols>, <changed_col> as v from <pre> where <pred>),
+     n as (select distinct <key cols>, <changed_col> as v from <new> where <pred>)
 select (select count(*) from (select * from p except select * from n)) as pre_not_new,
        (select count(*) from (select * from n except select * from p)) as new_not_pre;
 ```
