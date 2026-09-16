@@ -213,7 +213,12 @@ def report(
 
     if rows:
         with (out_dir / "orphan_prefixes.csv").open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+            # \n, not csv's default \r\n: this file gets grepped and awked by
+            # hand on the way to becoming a delete manifest, and a trailing \r
+            # silently breaks a match on the last column.
+            writer = csv.DictWriter(
+                handle, fieldnames=list(rows[0]), lineterminator="\n"
+            )
             writer.writeheader()
             writer.writerows(sorted(rows, key=lambda r: (r["bucket"], -r["bytes"])))
 
