@@ -279,10 +279,64 @@ comparison is uncontrolled in exactly the way the header section describes. Ever
 divergent ancestor has to be in the selection, on both sides, back to the point
 where the two paths meet.
 
+#### When a divergent ancestor will not build on DuckDB
+
+**For the most common #2072 target this instruction cannot be followed.**
+`+dim_course_run` and `+dim_course` fail on `dev_local`: `dim_course_run.sql:191`
+calls `regexp_like` raw rather than through the cross-db macro, and that is a Trino
+builtin DuckDB does not have. Measured on #2686: `ERROR=3 SKIP=5`, with the model
+under test among the skipped — so you are left with only the `_pre` side. Tracked
+as `tk-t1-unblock-local-validation-dim-course-run-sql-1-20b1b3`; check it before
+assuming you are blocked.
+
+When an ancestor cannot build, you have not lost the validation, but you have to
+narrow the claim:
+
+1. **Reconstruct the slice you need from ancestors that do build.** Select the
+   buildable part of the tree and assemble the platform slice the change touches,
+   rather than the whole dimensional model.
+2. **Say what that proves.** You are then verifying *the derivation* — that the new
+   expression maps the same inputs to the same outputs — not the built relation.
+   That is a weaker claim than a full side-by-side, and the PR body has to state it
+   as such. It is still worth doing: on #2686 exactly this caught a real error.
+
+Do not substitute a Glue view for the unbuildable ancestor and call it controlled.
+That is the divergent-path case from the header section, and the comparison is
+uncontrolled no matter how clean the numbers look.
+
 `+X` pulls X's whole ancestor tree back to the sources; `1+X` stops at X's
 immediate parents. Measured on `dim_course_run`: `+` selects 53 models, `1+`
 selects 7. Use `1+` when the divergence is one hop and `+` when you need the
 guarantee — and remember that anything you leave out is silently reading Glue.
+
+#### Verify the build from `run_results.json`, not the log
+
+A selected model can be **skipped** while the command looks fine. Check the
+artifact, not the output:
+
+```bash
+python3 -c "
+import json; d=json.load(open('src/ol_dbt/target/run_results.json'))
+BAD={'error','fail','skipped','runtime error'}
+bad=[(r['status'], r['unique_id'].split('.')[-1]) for r in d['results'] if r['status'] in BAD]
+print('NOT OK:', bad or 'none')
+"
+```
+
+Two ways the log lies, both measured 2026-09-16 while validating #2686:
+
+1. **`| tail` hides the per-model lines.** The deprecation summary dbt prints at
+   the end is longer than most `tail -n` windows, so the `ERROR creating` and
+   `SKIP relation` lines scroll past and you see only deprecation noise.
+2. **`| tail` also masks the exit status.** `dbt run ... | tail -3` exits **0**
+   even when dbt exited 1 — you get `tail`'s status. Verified: bare run `exit=1`,
+   piped `exit=0`, piped under `set -o pipefail` `exit=1`. If you must pipe, use
+   `pipefail`; note `${PIPESTATUS[0]}` is a bash-ism and is empty in zsh, where the
+   spelling is `${pipestatus[1]}`.
+
+An `ERROR` in an ancestor `SKIP`s everything downstream of it, which includes the
+model under test — so this failure leaves you holding only the `_pre` side, and a
+comparison against a relation that was never rebuilt.
 
 `dbt run`, not `dbt build`. `build` runs tests inline under dbt's default eager
 indirect selection — the cross-model `relationships_*` noise the section below
