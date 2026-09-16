@@ -83,9 +83,67 @@ models:
       arguments:
         column_list: ["conversation_ref", "turn_index"]
 
+- name: int__feedback__learn_ai_tutor
+  description: One row per human-authored Learn AI tutor checkpoint, conformed to
+    the common feedback event contract. Agent-authored checkpoints are dropped.
+  columns:
+  - name: source_slug
+    description: str, the feedback source this row came from. Always 'learn_ai_tutor'
+      here.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the djangocheckpoint_id - the turn's stable business key.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_ref
+    description: str, the chatsession_thread_id. Groups a conversation's turns together.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, ordinal of this human turn within its conversation, ordered
+      by checkpoint_step with djangocheckpoint_id as the tie-break.
+    tests:
+    - not_null
+  - name: is_conversation_opening
+    description: boolean, whether this is the first kept turn of the conversation.
+    tests:
+    - not_null
+  - name: occurred_at
+    description: str, ISO8601 timestamp the checkpoint was created, falling back to
+      the chat session's created_at where the checkpoint's own timestamp is null.
+    tests:
+    - not_null
+  - name: text
+    description: str, the human_message
+  - name: title
+    description: str, the chat session title.
+  - name: channel_slug
+    description: str, always 'chat'.
+  - name: subject_user_ref
+    description: str, the chatter's global openedx user id.
+  - name: subject_type
+    description: str, discriminator for what the feedback is about, mapped from chatsession_agent.
+      Null for an unmapped agent value.
+  - name: subject_ref
+    description: str, the chatsession_object_id - a course id, video transcript asset
+      id, or edX module id depending on chatsession_agent.
+  - name: courserun_readable_id
+    description: str, the course run the chat concerns.
+  - name: explicit_rating
+    description: str, the chat response's rating, where given.
+  - name: source_metadata
+    description: str, JSON of the attributes that have not earned a conformed column
+      - chatsession_agent, checkpoint_source, checkpoint_type.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["conversation_ref", "turn_index"]
+
 - name: int__feedback__unioned
   description: >
-    One row per feedback turn, from every source. Zendesk only at MVP.
+    One row per feedback turn, from every source: Zendesk, Learn AI tutor.
 
     PII: this model carries raw, unredacted feedback text under the intermediate
     schema's grants. Presidio masking happens in the feedback_redacted Dagster asset

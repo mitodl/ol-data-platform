@@ -676,3 +676,13 @@
 {% macro duckdb__cast_double_array(column_name) -%}cast({{ column_name }} as double[]){%- endmacro %}
 
 {% macro starrocks__cast_double_array(column_name) -%}cast({{ column_name }} as array<double>){%- endmacro %}
+
+{% macro null_varchar_array() -%}
+    {{ adapter.dispatch('null_varchar_array', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__null_varchar_array() -%}cast(null as array(varchar)){%- endmacro %}
+
+{% macro duckdb__null_varchar_array() -%}cast(null as varchar[]){%- endmacro %}
+
+{% macro starrocks__null_varchar_array() -%}cast(null as array<varchar>){%- endmacro %}
