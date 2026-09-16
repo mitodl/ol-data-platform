@@ -6,9 +6,9 @@ deduplication logic and on the DuckDB CSV reader options, which are where the
 subtle correctness bugs lived.
 """
 
-import inspect
 import io
 import json
+from collections.abc import Iterator
 from typing import Any
 
 import duckdb
@@ -259,18 +259,65 @@ def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
     return [row for batch in batches for row in batch.to_pylist()]
 
 
-def test_read_tsv_streams_instead_of_buffering_the_whole_file() -> None:
+def test_read_tsv_streams_instead_of_buffering_the_whole_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Regression guard for the OOMKills this streaming rewrite fixed.
 
-    ``_read_tsv`` must stay a generator: ``list(fetch_arrow(...))`` held an
-    entire multi-GB file's decoded rows in memory before yielding a single
-    row, which is what drove the edxorg_s3 OOMKills once #2663 stopped
-    previously-failing files from short-circuiting the read. If this
-    regresses back to a plain function returning a list, this test catches it
-    even though the smaller fixtures in this file wouldn't show a memory
-    difference either way.
+    ``isgeneratorfunction`` alone would not catch a regression to
+    ``yield from list(fetch_arrow(...))``, which still contains a ``yield``
+    but buffers the whole file before producing anything -- exactly the
+    OOMKill this rewrite fixed on courseware_studentmodule and
+    auth_user/auth_userprofile once #2663 stopped those files' dialect
+    failures from short-circuiting the read. Driving a fake ``fetch_arrow``
+    through ``_read_tsv`` and checking what has been pulled after each
+    ``next()`` proves the second batch is not produced until asked for.
     """
-    assert inspect.isgeneratorfunction(edxorg_s3._read_tsv)  # noqa: SLF001
+    pulled: list[int] = []
+
+    def fake_fetch_arrow(_relation: object, _chunk_size: int) -> Iterator[int]:
+        for i in range(2):
+            pulled.append(i)
+            yield i
+
+    monkeypatch.setattr(edxorg_s3, "fetch_arrow", fake_fetch_arrow)
+
+    reader = edxorg_s3._read_tsv(  # noqa: SLF001
+        _FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV),
+        5000,
+        edxorg_s3._CSV_READER_OPTIONS,  # noqa: SLF001
+    )
+
+    assert next(reader) == 0
+    assert pulled == [0], "the second batch must not be pulled until requested"
+
+    assert next(reader) == 1
+    assert pulled == [0, 1]
+
+
+def test_reader_does_not_retry_unquoted_after_streaming_has_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A duckdb.Error after the first batch must fail loudly, not retry.
+
+    Retrying unquoted here would re-read the whole file under a different
+    dialect and splice it onto rows already yielded downstream from the
+    pinned-dialect attempt -- duplicated, inconsistently parsed data reaching
+    the destination instead of the loud failure the module otherwise insists
+    on (see _read_unquoted_tsv's docstring).
+    """
+
+    def fake_fetch_arrow(
+        _relation: object, _chunk_size: int
+    ) -> Iterator[pa.RecordBatch]:
+        yield _table([{"id": "1"}]).to_batches()[0]
+        msg = "simulated mid-scan failure"
+        raise duckdb.Error(msg)
+
+    monkeypatch.setattr(edxorg_s3, "fetch_arrow", fake_fetch_arrow)
+
+    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError, match="partway"):
+        _read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)])
 
 
 def test_reader_returns_rows_for_a_well_formed_file() -> None:

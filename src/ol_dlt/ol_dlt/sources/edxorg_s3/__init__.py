@@ -95,18 +95,25 @@ def _read_tsv(
 ) -> Iterator[Any]:
     """Stream ``item`` as Arrow batches instead of materializing the whole file.
 
-    Safe to stream (rather than buffer-then-return) only because CSV dialect
-    sniffing happens inside ``from_csv_auto`` itself, before this function's
-    first ``yield`` -- confirmed by triggering a sniff failure against a real
-    DuckDB relation, which raised at relation construction with zero batches
-    fetched. A caller iterating this generator inside a ``try`` therefore never
-    observes a partial file: the first ``next()`` either raises (nothing was
-    yielded) or the file was already accepted. Reintroducing full materialization
-    here defeats the whole point -- one edxorg export can be multiple GB, and
-    the previous ``list(fetch_arrow(...))`` held an entire file's decoded rows
-    in memory at once, which is what drove the OOMKills on courseware_studentmodule
-    and auth_user/auth_userprofile once #2663 stopped those files' dialect
-    failures from short-circuiting the read.
+    CSV dialect sniffing happens inside ``from_csv_auto`` itself, before this
+    function's first ``yield`` -- confirmed by triggering a sniff failure
+    against a real DuckDB relation, which raised at relation construction with
+    zero batches fetched. That only makes the FIRST ``next()`` call safe to
+    retry, though: a ``duckdb.Error`` raised while consuming a LATER batch
+    (mid-scan corruption, an I/O hiccup) is a real possibility this function
+    does not rule out, and by then some rows have already left this generator.
+    Callers must not blanket-retry on any ``duckdb.Error`` the way they safely
+    could when this returned a fully-materialized list -- see the priming
+    pattern in ``read_edxorg_tsv``, which only allows the pinned-vs-unquoted
+    fallback before the first batch is yielded and surfaces anything after
+    that as a hard failure instead.
+
+    Streaming (rather than buffer-then-return) still matters: one edxorg
+    export can be multiple GB, and the previous ``list(fetch_arrow(...))``
+    held an entire file's decoded rows in memory at once, which is what drove
+    the OOMKills on courseware_studentmodule and auth_user/auth_userprofile
+    once #2663 stopped those files' dialect failures from short-circuiting
+    the read.
     """
     import duckdb  # noqa: PLC0415
 
@@ -197,6 +204,15 @@ def read_edxorg_tsv(
 
     Note that pinning the dialect does not remove the sniffer: DuckDB still runs
     it to find the header and column count.
+
+    The pinned read is only retried unquoted before its first batch has been
+    yielded. Priming the generator this way still catches every sniff failure
+    (see ``_read_tsv``'s docstring for why those are guaranteed to raise
+    before any row is produced) without letting a LATER duckdb.Error trigger
+    the same fallback -- retrying then would re-read the whole file under a
+    different dialect and splice it onto rows already sent downstream from
+    the first attempt, corrupting the load with duplicated/inconsistently
+    parsed data instead of recovering it.
     """
     import duckdb  # noqa: PLC0415
 
@@ -207,11 +223,11 @@ def read_edxorg_tsv(
             )
             continue
 
+        reader = _read_tsv(item, chunk_size, duckdb_kwargs)
         try:
-            # yield from, not an intermediate list: the try/except boundary
-            # still covers the whole read (see _read_tsv's docstring for why
-            # that is safe to stream), it just no longer buffers the file.
-            yield from _read_tsv(item, chunk_size, duckdb_kwargs)
+            first_batch = next(reader)
+        except StopIteration:
+            continue  # pinned dialect read the whole file; it just had no rows
         except duckdb.Error as error:
             logger.warning(
                 "Pinned dialect could not read edxorg TSV %s; retrying unquoted.",
@@ -225,6 +241,19 @@ def read_edxorg_tsv(
                 )
                 raise EdxorgTSVUnreadableError(msg) from error
             yield from unquoted
+            continue
+
+        yield first_batch
+        try:
+            yield from reader
+        except duckdb.Error as error:
+            msg = (
+                f"DuckDB failed partway through the edxorg TSV {item['file_url']} "
+                f"({item.get('size_in_bytes')} bytes) after already yielding rows "
+                "read under the pinned dialect, so it cannot be safely retried "
+                f"unquoted: {error}"
+            )
+            raise EdxorgTSVUnreadableError(msg) from error
 
 
 def _make_deduplicator():  # noqa: ANN202
