@@ -3,8 +3,9 @@ with source as (
 )
 
 {{ deduplicate_raw_table(
-    order_by="_airbyte_extracted_at desc, cast(date_parse(\"purchase date\", '%m/%d/%Y') as date)",
-    partition_columns='"program title", email'
+    raw_table='raw__edxorg__program_entitlement',
+    partition_columns='"program title", email',
+    then_by="cast(date_parse(\"purchase date\", '%m/%d/%Y') as date)"
 ) }}
 
 , cleaned as (
