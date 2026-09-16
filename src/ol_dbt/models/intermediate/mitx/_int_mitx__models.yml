@@ -4,6 +4,11 @@ version: 2
 models:
 - name: int__mitx__programs
   description: Intermediate model for combined MITxOnline and edxorg programs
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: program_title
     description: str, title of the program.
@@ -36,6 +41,11 @@ models:
 
 - name: int__mitx__courses
   description: Intermediate model for combined MITxOnline and edxorg courses
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -59,6 +69,11 @@ models:
     description: int, primary key representing the course in the MicroMasters database
 
 - name: int__mitx__program_requirements
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: micromasters_program_id
     description: int, foreign key to courses_program representing a single program
@@ -127,6 +142,12 @@ models:
       arguments:
         column_list: ["user_edxorg_username", "user_micromasters_id"]
         row_condition: "user_edxorg_username is not null"
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_hashed_id
     description: str, primary key for this table to identify the user
@@ -227,6 +248,12 @@ models:
 
 - name: int__mitx__courserun_enrollments
   description: MITx courserun enrollments combined from MITx Online and edX.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: platform
     description: str, indicating the platform where course runs on. It's either MITx
@@ -323,6 +350,12 @@ models:
     courses that satisfy the requirements for multiple programs, the same enrollment
     will have multiple rows. User's profile fields are chosen in the order of MITx
     Online, MicroMasters, and edX.org, whichever is not null.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: platform
     description: str, indicating the platform where course runs on. It's either MITx
@@ -411,6 +444,12 @@ models:
   description: MITx course certificates combined from MITx Online and edX.org. It
     includes certificates that are not revoked from MITx Online, and downloadable
     certificates for courses run on edx.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: platform
     description: str, indicating the platform where course runs on. It's either MITx
@@ -467,6 +506,12 @@ models:
 
 - name: int__mitx__courserun_grades
   description: MITx course grades combined from MITx Online and edX.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: platform
     description: str, indicating the platform where course runs on. It's either MITx
@@ -515,6 +560,12 @@ models:
 
 - name: int__mitx__program_certificates
   description: MITx program certificates combined from MicroMasters and MITx Online
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of the program

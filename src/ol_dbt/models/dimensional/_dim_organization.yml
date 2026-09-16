@@ -8,6 +8,11 @@ models:
     (accessed via the B2B contract/organization page system) and xPro corporate
     clients (companies that purchase bulk access). Grain: one row per unique
     organization per platform.
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: organization_pk
     description: Surrogate primary key (platform + source_id).
@@ -50,6 +55,14 @@ models:
       - organization_fk
       - contract_fk
       - courserun_fk
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
   columns:
   - name: organization_fk
     description: Foreign key to dim_organization.organization_pk.

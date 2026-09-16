@@ -11,6 +11,12 @@ models:
     data has no such key; its instructors still dedupe on name alone, so two distinct
     mitxpro faculty sharing an exact name will collapse into a single row — an accepted,
     documented limitation rather than a fix.
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
   columns:
   - name: instructor_pk
     description: Primary key - surrogate key generated from (instructor_source_id,
@@ -39,6 +45,12 @@ models:
   description: Topic taxonomy dimension with hierarchical structure. Grain is (topic_name,
     primary_platform) — same topic name from different platforms are kept as separate
     rows with platform-scoped parent-child relationships.
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
   columns:
   - name: topic_pk
     description: Primary key - surrogate key generated from (topic_name, primary_platform)
@@ -60,6 +72,11 @@ models:
 - name: dim_department
   description: MIT department dimension. Grain is (department_name, primary_platform)
     — same department name from different platforms are kept as separate rows.
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+      - ocw/app_postgres
   columns:
   - name: department_pk
     description: Primary key - surrogate key generated from (department_name, primary_platform)

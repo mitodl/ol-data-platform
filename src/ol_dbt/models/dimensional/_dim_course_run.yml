@@ -15,6 +15,14 @@ models:
       - courserun_readable_id
       - is_current
       where: "is_current = true"
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
   columns:
   - name: courserun_pk
     description: >

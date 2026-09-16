@@ -155,6 +155,16 @@ models:
 - name: int__feedback__conversation
   description: One row per conversation, its kept turns assembled in turn_index order.
     This is the text the summarization and embedding assets send to the LLM.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: feedback_conversation_pk
     description: str, surrogate key hashed from (source_slug, conversation_ref), computed

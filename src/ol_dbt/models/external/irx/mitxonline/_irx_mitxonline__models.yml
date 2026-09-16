@@ -190,6 +190,11 @@ models:
 - name: irx__mitxonline__openedx__bigquery__email_opt_in
   description: Stores data on the email preferences of unique users.
   config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
     grants:
       select: ['mit_irx']
   columns:

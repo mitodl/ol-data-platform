@@ -140,6 +140,28 @@ exactly — and `meta.qa_buildable: false` suppresses the check entirely for mod
 QA-buildable form. A model that is `qa_buildable: false` must not also declare `qa_branches`;
 that combination is itself an unbaselineable `ERROR`.
 
+### Step 4 as built (2026-09-16)
+
+The keys live in `config.meta`. A model is a union, and so must declare one of them, when it
+sits outside `staging/` and its manifest lineage reaches more than one inventory unit (a source
+maps to the unit declaring its `raw_table`; retired and dbt-built sources map to none). The
+`qa_branch_contract` check in `ol-dbt validate` enforces that, plus the shape rules above and one
+more: a declared branch must be upstream of the model. It runs globally in `dbt_pr_ci.yaml`,
+because a union gains a branch through an edit to an ancestor that `--changed-only` never selects.
+Checking declarations against `strategies.qa` and against what QA holds is still step 5's, and
+extends the same check.
+
+The initial 168 declarations list each model's upstream `scoped` units, singletons excluded.
+That is the RFC's intended QA topology, not the measured one. Nearly every unit is still
+`strategies.qa: omit`, so most declarations contradict the inventory today, on purpose: step 5's
+unbaselineable finding is what forces step 3 to decide each branch, either by marking the unit
+`ingest`/`mirror` from measured state or by dropping the branch from the models that declare it.
+
+`irx/bigquery` was reclassified `scoped` → `singleton` in the same change. Its tables are
+`raw__irx__edxorg__bigquery__*`, staged under `staging/edxorg`: edX.org data delivered through
+IRx's BigQuery, with no QA counterpart. Left `scoped`, it would have been declared a QA branch
+of 135 models.
+
 ---
 
 ## 3. Specified: per-environment strategy map (task Local-1)

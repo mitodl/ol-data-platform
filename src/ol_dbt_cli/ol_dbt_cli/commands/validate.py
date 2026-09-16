@@ -10,6 +10,7 @@ Checks:
   7. YAML integrity: YAML entries for models that have no corresponding .sql file
   8. SELECT *: models using SELECT * that hides column-level lineage
   9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
+ 10. QA branch contract: union models must declare their expected QA branches (RFC 12711)
 """
 
 from __future__ import annotations
@@ -38,7 +39,9 @@ from ol_dbt_cli.lib.git_utils import (
     get_changed_yaml_models,
     get_repo_root,
 )
+from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
+from ol_dbt_cli.lib.qa_contract import QA_CONTRACT_CHECK, check_qa_contracts
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
     consumed_columns_by_ref_via_scope,
@@ -967,7 +970,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs nine checks:
+    Runs ten checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -979,6 +982,8 @@ def validate(
     8. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
     9. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
                                (#2072 DoD); new violations error, known ones are baselined
+    10. qa_branch_contract   — models unioning several ingestion units declare config.meta
+                               qa_branches or qa_buildable: false (RFC 12711)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1044,6 +1049,7 @@ def validate(
         "yaml_integrity",
         "select_star",
         "dimensional_layering",
+        QA_CONTRACT_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1332,6 +1338,20 @@ def validate(
     if "dimensional_layering" not in skipped:
         baseline = load_baseline(baseline_path)
         _check_dimensional_layering(manifest, sql_models_by_name, sql_file_map_all, baseline, report)
+
+    # Global like dimensional_layering: a union model gains a branch by an edit to
+    # one of its ancestors, which --changed-only would never select.
+    if QA_CONTRACT_CHECK not in skipped:
+        if manifest is None:
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.WARNING,
+                "(all models)",
+                "Skipped: QA branch contracts need manifest lineage",
+                "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
+            )
+        else:
+            check_qa_contracts(manifest, load_units(dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR), report)
 
     # Output
     if output_format == "json":

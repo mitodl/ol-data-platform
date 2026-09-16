@@ -5,6 +5,10 @@ models:
 - name: __micromasters__users
   description: MicroMasters users according to the micromasters database. Does not
     include users who have a login on mitxonline only
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: user_id
     description: int, sequential ID representing a user in MicroMasters
@@ -117,6 +121,11 @@ models:
         compare_model: ref('stg__micromasters__app__postgres__auth_user')
 - name: __micromasters_program_certificates_dedp_from_micromasters
   description: DEDP program certificate earners according to the micromasters database
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
@@ -143,6 +152,12 @@ models:
 
 - name: __micromasters_program_certificates_dedp_from_mitxonline
   description: DEDP program certificate earners according to the mitxonline database
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_mitxonline_username
     description: str, username on MITx Online
@@ -176,6 +191,11 @@ models:
     from edX.org with deduplication. If learners have records in both 'Statistics
     and Data Science (General track)' and 'Statistics and Data Science', they only
     appear once in this table
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
@@ -208,6 +228,11 @@ models:
 
 - name: __micromasters_course_certificates_dedp_from_micromasters
   description: DEDP course certificates from MicroMasters database
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: program_title
     description: str, title of program the course is part of
@@ -270,6 +295,12 @@ models:
         compare_model: ref('stg__micromasters__app__postgres__grades_coursecertificate')
 - name: __micromasters_course_certificates_dedp_from_mitxonline
   description: DEDP course certificates earned (excluded revoked) on MITxOnline
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of program the course is part of
@@ -330,6 +361,11 @@ models:
 
 - name: __micromasters_course_certificates_non_dedp_from_edxorg
   description: Non-DEDP program course certificates earned on edX.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: program_title
     description: str, title of program the course is part of
@@ -385,6 +421,11 @@ models:
 
 - name: __micromasters_course_grades_dedp_from_micromasters
   description: DEDP course grades from MicroMasters database
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: program_title
     description: str, title of program the course is part of
@@ -430,6 +471,12 @@ models:
         compare_model: ref('stg__micromasters__app__postgres__grades_combinedcoursegrade')
 - name: __micromasters_course_grades_dedp_from_mitxonline
   description: DEDP course grades on MITx Online
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of program the course is part of
@@ -483,6 +530,11 @@ models:
 
 - name: __micromasters_course_grades_non_dedp_from_edxorg
   description: Non-DEDP program course certificates on edX.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: program_title
     description: str, title of program the course is part of

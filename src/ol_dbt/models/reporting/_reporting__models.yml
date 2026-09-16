@@ -5,6 +5,15 @@ models:
   description: MITx and xPro Program Summary report. A count of all users, enrollments
     (audit and verified), certificates and program credentials aggregated for each
     program.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: program_name
     description: str, name of the program. If program is split over multiple tracks,
@@ -62,6 +71,23 @@ models:
     A count of posts replied, posts created, average percent grade, percent problems
     attempted, number of problems, problems attempted, video duration, estimated time
     played, and number of page views.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, name of the platform
@@ -124,6 +150,17 @@ models:
   description: Enrollment detail report for MITxOnline, xPro and edX.org courses.
     A detailed view of enrollments, course runs, course certificates, orders, and
     user information for each enrollment.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - ocw/app_postgres
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: enrollment_key
     description: string, surrogate key from tfact_enrollment identifying a specific
@@ -277,6 +314,22 @@ models:
   description: Learners video engagement - play, pause, seek, or stop video actions
     from MITx Online, xPro, edX.org, Residential MITx with calculated counts for total
     video events, distinct videos watched, and max video index.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: str, user email on the corresponding platform
@@ -312,6 +365,22 @@ models:
 - name: cheating_detection_report
   description: Problem and grade information that is associated with a particular
     course run, platform, and learner that is used for cheating detection analysis.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
@@ -388,6 +457,22 @@ models:
 
 - name: student_risk_probability_report
   description: A report that contains student risk probability scores and course grade
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, name of the platform
@@ -416,6 +501,16 @@ models:
   description: AI chatbot interactions from Learn AI application including TutorBot,
     ResourceRecommendationBot, SyllabusBot and VideoGPTBot. No personal information
     is included in this report.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - mitx/api
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/tracking_logs
   columns:
   - name: ai_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
@@ -445,6 +540,21 @@ models:
 - name: organization_administration_report
   description: A report showing certificates/completions for later roll-up at the
     organizational level.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: courserun_readable_id
     description: string, unique string to identify a course run
@@ -481,6 +591,24 @@ models:
 
 - name: instructor_module_report
   description: A report showing chatbot data for later roll-up at the instructor level.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -523,6 +651,15 @@ models:
 
 - name: mitxonline_video_engagements_w_video_counts
   description: A report that contains mitxonline video engagement data.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -550,6 +687,15 @@ models:
 
 - name: Enrollment_Activity_Counts_Dataset
   description: A report that contains enrollment activity metrics
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -599,6 +745,16 @@ models:
 
 - name: learner_demographics_and_cert_info
   description: A report that contains learner demographics and cerificate information
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_hashed_id
     description: str, user primary key
@@ -655,6 +811,16 @@ models:
 - name: combined_enrollments_with_gender_and_date
   description: A report that contains learner enrollment details with demographic
     information
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: platform
     description: str, name of the platform
@@ -788,6 +954,22 @@ models:
 - name: engagement_problem_completion_summary
   description: A report that contains learner engagement details with problem completion
     information
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -819,6 +1001,22 @@ models:
 
 - name: engagement_problem_completion_raw
   description: A report that contains learner engagement info with problem data
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, name of the platform
@@ -859,6 +1057,22 @@ models:
   description: Page engagement report showing user activity at the unit, subsection,
     and section level across course runs. Joins page engagement facts with course
     content hierarchy and user information.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, email address of the user. May be null when user_fk is null.
@@ -914,6 +1128,16 @@ models:
   description: Program enrollment report enriched with user demographic data and course
     completion details. Extends marts__combined_program_enrollment_detail with user
     profile information, capstone completion indicator, and program completion duration.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: platform_name
     description: string, name of the platform (e.g. edX.org, MITx Online, xPRO)
@@ -1038,6 +1262,22 @@ models:
   description: Problem engagement detail report showing user performance at the problem
     level across course runs. Includes attempt counts, grade information, and course
     content hierarchy.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform
@@ -1101,6 +1341,13 @@ models:
     and course identification fields. Shows user engagement metrics including course
     events, problem submissions, video plays, and discussion participation aggregated
     by date, user, and course run.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: courseactivity_date
     description: date, the date when the course activity occurred
@@ -1157,6 +1404,22 @@ models:
   description: Combined video engagement report across all platforms with video counts
     per chapter. Shows user video watching activity including total videos available
     in each chapter and how many the user has watched.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, user email address. May be null for some xPRO Emeritus learners.
@@ -1202,6 +1465,20 @@ models:
 - name: course_staff_report
   description: Report of course staff members (instructors, staff, etc.) across all
     platforms and their last course activity date
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, platform code identifying the source platform (e.g. mitxonline,
@@ -1243,6 +1520,19 @@ models:
 
 - name: data_detail_nav
   description: Report of navigatation events
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform (e.g. MITx Online, xPro, edX.org, Residential
@@ -1275,6 +1565,22 @@ models:
 - name: data_detail_problems
   description: Report of problem events enriched with problem metadata and course
     title
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
@@ -1319,6 +1625,22 @@ models:
 
 - name: data_detail_video
   description: Report of video events enriched with video metadata and course title
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
@@ -1351,6 +1673,12 @@ models:
 
 - name: dedp_financial_assistance
   description: Report of users and their financial assistance status for DEDP programs
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_email
     description: string, email address of the user
@@ -1393,6 +1721,16 @@ models:
   - dbt_utils.expression_is_true:
       expression: edxorg_user_id is not null or mitlearn_application_user_id is not
         null
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: mitxonline_openedx_user_id
     description: string, Open edX user ID of the MITx Online account. May be null.
@@ -1417,6 +1755,14 @@ models:
 
 - name: orders_with_product_report
   description: Combined orders mart table with product name added
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: combined_orders_hash_id
     description: int, primary key for this table. At the grain of order id, line id,

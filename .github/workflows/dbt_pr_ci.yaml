@@ -15,6 +15,7 @@ on:
     paths:
     - "src/ol_dbt/**"
     - "src/ol_dbt_cli/**"
+    - "ingestion/inventory/**"
     - ".github/workflows/dbt_pr_ci.yaml"
   workflow_dispatch:
 
@@ -67,10 +68,16 @@ jobs:
       working-directory: src/ol_dbt
       run: python3 "${{ github.workspace }}/.github/scripts/assert_manifest_has_source_lineage.py"
 
-    # Dimensional-layering gate (#2072 DoD): global, baselined — fails only on
-    # NEW marts/reporting → staging/intermediate references.
-    - name: Dimensional-layering lint
-      run: uv run ol-dbt validate --only dimensional_layering --format json
+    # Global gates. Dimensional layering (#2072 DoD) is baselined and fails only
+    # on NEW marts/reporting → staging/intermediate references. The QA branch
+    # contract (RFC 12711) fails when a model unioning several ingestion units
+    # declares no qa_branches/qa_buildable, or declares a branch it cannot read;
+    # an inventory edit that moves a raw table between units can cause the latter.
+    - name: Dimensional-layering and QA branch contract lint
+      run: |
+        uv run ol-dbt validate \
+          --only dimensional_layering,qa_branch_contract \
+          --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
     # models so pre-existing issues elsewhere don't block unrelated PRs; a
@@ -81,7 +88,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering \
+          --skip dimensional_layering,qa_branch_contract \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.
