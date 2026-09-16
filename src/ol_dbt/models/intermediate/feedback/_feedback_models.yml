@@ -137,7 +137,7 @@ models:
   - name: courserun_readable_id
     description: str, the course run the chat concerns.
   - name: platform
-    description: str, null. Not resolved at this stage.
+    description: str, the platform readable id the course run belongs to, e.g. 'mitxonline'.
   - name: explicit_rating
     description: str, the chat response's rating, where given.
   - name: created_at

@@ -115,6 +115,19 @@ with chatbot as (
     select * from tutorbot_turns
 )
 
+-- courserun_readable_id alone isn't a unique key on dim_course_run (its surrogate
+-- key is platform + courserun_readable_id), so pick one deterministically rather
+-- than fan out a turn across every platform sharing that readable_id.
+, course_run as (
+    select
+        courserun_readable_id
+        , platform
+        , row_number() over (
+            partition by courserun_readable_id order by platform
+        ) as platform_rank
+    from {{ ref('dim_course_run') }}
+)
+
 select
     'learn_ai_tutor' as source_slug
     , human_turns.occurred_at
@@ -128,7 +141,7 @@ select
     , cast(null as varchar) as source_url
     , 'chat' as channel_slug
     , human_turns.courserun_readable_id
-    , cast(null as varchar) as platform
+    , course_run.platform
     , case human_turns.chatsession_agent
         when 'TutorBot' then 'courseware_block'
         when 'VideoGPTBot' then 'courseware_block'
@@ -147,3 +160,6 @@ select
         , 'checkpoint_type': human_turns.checkpoint_type
     ) as source_metadata
 from human_turns
+left join course_run
+    on human_turns.courserun_readable_id = course_run.courserun_readable_id
+    and course_run.platform_rank = 1
