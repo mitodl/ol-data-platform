@@ -1,16 +1,28 @@
--- dim_course_run populates `semester` for MITxOnline runs from the MicroMasters exam-run
--- record, falling back to the run's own courserun_tag ONLY for runs carrying an embedded
--- proctored-exam unit. That gate is a live lookup against course structure
--- (coursestructure_block_title = 'proctored exam'), not a static property of the run.
+-- Guards the boundary between dim_course_run's `semester` and the derivation it replaced in
+-- int__mitxonline__proctored_exam_grades: every course run that the upstream reports with a
+-- semester must carry that semester on its current dimension row.
 --
--- So if course structure stops reporting that block for a run that genuinely has proctored
--- exam grades, `semester` silently becomes NULL and marts__micromasters_dedp_exam_grades
--- loses values with no error anywhere — exactly the 8,137-null regression seen on #2403
--- before the fallback existed. This test makes that failure loud instead.
+-- WHAT THIS CATCHES: divergence between the dimension's gate and the upstream derivation.
+-- dim_course_run reproduces two upstream paths by hand — the MicroMasters exams_examrun
+-- match, and the embedded-exam-unit fallback keyed on a course structure block titled
+-- 'proctored exam', deduped to the newest snapshot per block. Any edit that moves one of
+-- those out of step with the upstream (a changed dedup, a changed predicate, a dropped join)
+-- shows up here as a populated upstream semester against a null dimension semester. A run
+-- with no current dimension row at all is caught too, via the left join.
 --
--- Scoped to runs that already have a semester upstream: a run whose own source semester is
--- NULL is not evidence of a broken gate, and would make this test fire on pre-existing gaps
--- rather than on drift.
+-- WHAT THIS DOES NOT CATCH, and why: source drift in course structure. If a 'proctored exam'
+-- block is renamed or removed upstream, the dimension's gate and the upstream's own
+-- exam_unit_grades CTE both read that same predicate, so the rows leave BOTH sides at once.
+-- int__mitxonline__proctored_exam_grades simply stops reporting the run, this query has
+-- nothing left to select, and it passes. Measured on production 2026-09-15: 72 of the 79
+-- course runs with a semester depend on that shared predicate; only the 7 with a
+-- MicroMasters exams_examrun record are independent of course structure.
+--
+-- Drift of that kind is a bigger failure than a null semester — it removes the grade rows
+-- from marts__micromasters_dedp_exam_grades entirely — and it has to be detected upstream,
+-- against a signal that does not itself depend on the current block title (graded attempts
+-- on block ids that have historically carried it). That belongs on the intermediate model,
+-- not here. Do not read this test as covering it.
 --
 -- error_if is overridden because the project sets `+error_if: ">10"` (dbt_project.yml), and
 -- this query returns one row per affected course run. Inheriting that default would
