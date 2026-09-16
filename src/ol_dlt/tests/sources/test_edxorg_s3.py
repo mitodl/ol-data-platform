@@ -6,6 +6,7 @@ deduplication logic and on the DuckDB CSV reader options, which are where the
 subtle correctness bugs lived.
 """
 
+import inspect
 import io
 import json
 from typing import Any
@@ -256,6 +257,20 @@ def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
 
 def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
     return [row for batch in batches for row in batch.to_pylist()]
+
+
+def test_read_tsv_streams_instead_of_buffering_the_whole_file() -> None:
+    """Regression guard for the OOMKills this streaming rewrite fixed.
+
+    ``_read_tsv`` must stay a generator: ``list(fetch_arrow(...))`` held an
+    entire multi-GB file's decoded rows in memory before yielding a single
+    row, which is what drove the edxorg_s3 OOMKills once #2663 stopped
+    previously-failing files from short-circuiting the read. If this
+    regresses back to a plain function returning a list, this test catches it
+    even though the smaller fixtures in this file wouldn't show a memory
+    difference either way.
+    """
+    assert inspect.isgeneratorfunction(edxorg_s3._read_tsv)  # noqa: SLF001
 
 
 def test_reader_returns_rows_for_a_well_formed_file() -> None:

@@ -92,12 +92,27 @@ class EdxorgTSVUnreadableError(Exception):
 
 def _read_tsv(
     item: FileItemDict, chunk_size: int, duckdb_kwargs: dict[str, Any]
-) -> list[Any]:
+) -> Iterator[Any]:
+    """Stream ``item`` as Arrow batches instead of materializing the whole file.
+
+    Safe to stream (rather than buffer-then-return) only because CSV dialect
+    sniffing happens inside ``from_csv_auto`` itself, before this function's
+    first ``yield`` -- confirmed by triggering a sniff failure against a real
+    DuckDB relation, which raised at relation construction with zero batches
+    fetched. A caller iterating this generator inside a ``try`` therefore never
+    observes a partial file: the first ``next()`` either raises (nothing was
+    yielded) or the file was already accepted. Reintroducing full materialization
+    here defeats the whole point -- one edxorg export can be multiple GB, and
+    the previous ``list(fetch_arrow(...))`` held an entire file's decoded rows
+    in memory at once, which is what drove the OOMKills on courseware_studentmodule
+    and auth_user/auth_userprofile once #2663 stopped those files' dialect
+    failures from short-circuiting the read.
+    """
     import duckdb  # noqa: PLC0415
 
     with item.open() as file_handle:
         relation = duckdb.from_csv_auto(file_handle, **duckdb_kwargs)
-        return list(fetch_arrow(relation, chunk_size))
+        yield from fetch_arrow(relation, chunk_size)
 
 
 def _data_line_count(item: FileItemDict) -> int:
@@ -126,8 +141,13 @@ def _read_unquoted_tsv(
     import duckdb  # noqa: PLC0415
 
     try:
-        batches = _read_tsv(
-            item, chunk_size, {**duckdb_kwargs, **_UNQUOTED_READER_OVERRIDES}
+        # Eager here, unlike the pinned-dialect path: this fallback needs the
+        # full row count up front to validate against _data_line_count below,
+        # and it only runs for the rare legacy files that fail the pinned
+        # read, so buffering the whole file is not the routine-case cost that
+        # streaming _read_tsv avoids.
+        batches = list(
+            _read_tsv(item, chunk_size, {**duckdb_kwargs, **_UNQUOTED_READER_OVERRIDES})
         )
     except duckdb.Error:
         logger.exception("Unquoted read of edxorg TSV %s failed too.", item["file_url"])
@@ -188,7 +208,10 @@ def read_edxorg_tsv(
             continue
 
         try:
-            batches = _read_tsv(item, chunk_size, duckdb_kwargs)
+            # yield from, not an intermediate list: the try/except boundary
+            # still covers the whole read (see _read_tsv's docstring for why
+            # that is safe to stream), it just no longer buffers the file.
+            yield from _read_tsv(item, chunk_size, duckdb_kwargs)
         except duckdb.Error as error:
             logger.warning(
                 "Pinned dialect could not read edxorg TSV %s; retrying unquoted.",
@@ -201,8 +224,7 @@ def read_edxorg_tsv(
                     f"({item.get('size_in_bytes')} bytes): {error}"
                 )
                 raise EdxorgTSVUnreadableError(msg) from error
-            batches = unquoted
-        yield from batches
+            yield from unquoted
 
 
 def _make_deduplicator():  # noqa: ANN202
