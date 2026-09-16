@@ -21,7 +21,6 @@ models:
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
   columns:
@@ -70,7 +69,6 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitxonline/app_postgres
-      - ocw/app_postgres
       - xpro/app_postgres
   columns:
   - name: program_fk
@@ -99,7 +97,6 @@ models:
   config:
     meta:
       qa_branches:
-      - micromasters/app_postgres
       - mitxonline/app_postgres
       - ocw/app_postgres
       - xpro/app_postgres
@@ -129,9 +126,7 @@ models:
   config:
     meta:
       qa_branches:
-      - micromasters/app_postgres
       - mitxonline/app_postgres
-      - ocw/app_postgres
       - xpro/app_postgres
   columns:
   - name: course_fk
@@ -159,10 +154,7 @@ models:
   config:
     meta:
       qa_branches:
-      - micromasters/app_postgres
       - mitxonline/app_postgres
-      - ocw/app_postgres
-      - xpro/app_postgres
   columns:
   - name: course_fk
     description: Foreign key to dim_course

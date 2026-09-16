@@ -20,7 +20,6 @@ models:
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
   columns:
@@ -146,7 +145,6 @@ models:
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
   columns:
@@ -222,7 +220,6 @@ models:
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
   columns:
@@ -437,7 +434,6 @@ models:
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
   columns:
@@ -547,7 +543,6 @@ models:
       - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
   columns:

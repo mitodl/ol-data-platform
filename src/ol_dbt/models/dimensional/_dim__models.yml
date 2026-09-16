@@ -866,7 +866,6 @@ models:
       - mitxonline/app_postgres
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
       - xpro/tracking_logs
@@ -1100,7 +1099,6 @@ models:
       - mitxonline/app_postgres
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - ocw/app_postgres
       - xpro/api
       - xpro/app_postgres
       - xpro/mysql
@@ -1424,7 +1422,6 @@ models:
       - mitxonline/app_postgres
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - ocw/app_postgres
       - xpro/app_postgres
       - xpro/mysql
       - xpro/tracking_logs

@@ -10,7 +10,6 @@ models:
     meta:
       qa_branches:
       - mitxonline/app_postgres
-      - xpro/app_postgres
   columns:
   - name: contract_pk
     description: Surrogate primary key derived from b2b_contract_id.

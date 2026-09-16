@@ -151,8 +151,16 @@ because a union gains a branch through an edit to an ancestor that `--changed-on
 Checking declarations against `strategies.qa` and against what QA holds is still step 5's, and
 extends the same check.
 
-The initial 168 declarations list each model's upstream `scoped` units, singletons excluded.
-That is the RFC's intended QA topology, not the measured one. Nearly every unit is still
+The initial 168 declarations list the `scoped` units that can reach each model's output,
+singletons excluded. Table lineage alone over-counts: `dim_contract` reads `dim_organization`
+but keeps only `platform = 'mitxonline'`, so xPro rows never reach it. Each model's SQL was
+read for its union arms, platform filters and platform-keyed joins (including joins on
+platform-hashed keys such as `course_pk` and `instructor_pk`), and those facts were propagated
+per platform through the DAG. That narrowed 25 models. A unit that only enriches columns still
+counts: MicroMasters exam runs set semester and passing grade on MITx Online rows of
+`dim_course_run`, so an empty MicroMasters branch changes that model's output. Joins the review
+could not show to be platform-scoped were kept, so the lists err toward over-declaring. This is
+the RFC's intended QA topology, not the measured one. Nearly every unit is still
 `strategies.qa: omit`, so most declarations contradict the inventory today, on purpose: step 5's
 unbaselineable finding is what forces step 3 to decide each branch, either by marking the unit
 `ingest`/`mirror` from measured state or by dropping the branch from the models that declare it.

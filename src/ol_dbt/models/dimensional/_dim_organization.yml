@@ -59,10 +59,7 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/mysql
       - mitxonline/app_postgres
-      - ocw/app_postgres
-      - xpro/app_postgres
   columns:
   - name: organization_fk
     description: Foreign key to dim_organization.organization_pk.

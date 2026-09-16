@@ -21,7 +21,6 @@ models:
       - micromasters/app_postgres
       - mitx/mysql
       - mitxonline/app_postgres
-      - ocw/app_postgres
       - xpro/app_postgres
   columns:
   - name: courserun_pk

@@ -66,7 +66,6 @@ models:
       - mitxonline/app_postgres
       - mitxonline/mysql
       - xpro/app_postgres
-      - xpro/mysql
   columns:
   - name: user_edxorg_id
     description: int, user ID on the edxorg platform.
@@ -137,7 +136,6 @@ models:
       - mitxonline/app_postgres
       - mitxonline/mysql
       - xpro/app_postgres
-      - xpro/mysql
   columns:
   - name: user_email
     description: string, user email that user registered on edX.org platform.
