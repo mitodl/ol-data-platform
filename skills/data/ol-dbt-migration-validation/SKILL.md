@@ -454,7 +454,7 @@ Observed while validating #2403: `dim_course_run.semester` measured 4,513 of
 session rebuilt the model from `main`. Nothing in either session reported a
 problem.
 
-Two consequences, and the first is why this skill insists on one invocation:
+Three consequences, and the first is why this skill insists on one invocation:
 
 1. **Never build a model in one step and measure it in a later step.**
    Materialize both comparison sides as physical tables in a single `dbt run`.
@@ -475,7 +475,13 @@ Two consequences, and the first is why this skill insists on one invocation:
    database starts empty, so you pay a full `ol-dbt local register` (AWS creds)
    to use it. Worth it for a result you are going to publish; overkill while
    iterating.
-2. **Any figure read from this database is valid only at the instant it was
+2. **It can also stop you outright.** With another session holding the file,
+   `ol-dbt diff` dies on `_duckdb.IOException: Could not set lock on file ...
+   Conflicting lock is held`. On #2403 it took 5 retries at ~20s to get through.
+   That is contention, not a defect in the change under review — do not report it as
+   one, and do not start a comparison you cannot finish in one sitting. `git worktree
+   list` plus the claimed witan tasks will tell you who else is in there.
+3. **Any figure read from this database is valid only at the instant it was
    read.** Re-read anything you intend to put in a PR body, and prefer
    `ol-dbt local snapshot` for a baseline you need to keep across a break.
 
@@ -734,6 +740,22 @@ You lose nothing by skipping it. Step 5(b)'s multiset diff needs no key at all, 
 step 6's mapping assertion is hand-written SQL — both take a `where` directly, so
 together they cover what 5(d) would have told you, on a key you can actually
 defend. Reach for `ol-dbt diff` when the key is proven across the whole relation.
+
+#### Negative-control the diff before you believe a MATCH
+
+A clean `MATCH` proves nothing until you have seen the same command fail. Break the
+`_pre` side on purpose, rebuild just that model, rerun the diff:
+
+```bash
+# replace the column under test with a literal in <model>_pre.sql, then
+uv run --frozen dbt run -t dev_local --full-refresh --select "<model>_pre"
+uv run --frozen ol-dbt diff --old <model>_pre --new <model> -k <a,b,c>
+```
+
+Verified on #2403: perturbing `semester` produced `mismatch — 17888 unmatched
+row-side(s), 1 column value mismatch(es)`, exit 1, with the offending rows listed.
+Put the one-line recipe in the PR body too — without it a reviewer cannot tell your
+`MATCH` from a diff that silently compared nothing.
 
 ### 6. Accept on the distinct functional mapping, not the whole row
 
