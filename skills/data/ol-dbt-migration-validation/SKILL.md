@@ -173,6 +173,15 @@ mechanism.
 Re-registering between them swaps the sources under one side, and every difference
 you then measure is drift, not code.
 
+This is not hypothetical, and the failure mode is worse than noise. On #2686 a
+staging layer registered a few hours earlier read **4,513** rows where a fresh
+registration read **4,996**; the 483-row gap was published as a finding and then
+retracted. What made it convincing was that the stale side was internally
+*consistent* — the `_pre` model and the locally built dim had both come from it, so
+the end-to-end diff was a clean 0/0. The divergence only appeared where the
+comparison reached past the build to a differently-aged Glue view. A stale
+registration does not look stale; it looks like agreement.
+
 These are compatible only because step 3 builds both sides in a single
 invocation — register just before it and you get both properties at once. So the
 rule is not "register once and never again":
@@ -282,12 +291,25 @@ where the two paths meet.
 #### When a divergent ancestor will not build on DuckDB
 
 **For the most common #2072 target this instruction cannot be followed.**
-`+dim_course_run` and `+dim_course` fail on `dev_local`: `dim_course_run.sql:191`
-calls `regexp_like` raw rather than through the cross-db macro, and that is a Trino
-builtin DuckDB does not have. Measured on #2686: `ERROR=3 SKIP=5`, with the model
-under test among the skipped — so you are left with only the `_pre` side. Tracked
-as `tk-t1-unblock-local-validation-dim-course-run-sql-1-20b1b3`; check it before
-assuming you are blocked.
+`+dim_course_run` and `+dim_course` fail on `dev_local`. Not because of the dims
+themselves — three *ancestors* carry Trino-only JSON SQL DuckDB will not parse:
+
+| model | line | construct |
+|---|---|---|
+| `staging/edxorg/stg__edxorg__api__course.sql` | 20 | `json_query(subjects, 'lax $.name' with array wrapper)` |
+| `staging/mitxpro/stg__mitxpro__app__postgres__cms_certificatepage.sql` | 17 | `json_query(signatories, 'lax $[*].value' with array wrapper)` |
+| `intermediate/mitxpro/int__mitxpro__coursesfaculty.sql` | 9 | `cast(json_parse(...) as array (json))` |
+
+The cascade is what makes it total: those three error, so
+`int__edxorg__mitx_courseruns` and `int__mitxpro__courses` skip, and because the
+dims `union all` every platform **one broken branch skips the whole dim** — taking
+the model under test with it. Measured on #2686: `PASS=48 ERROR=3 SKIP=5 TOTAL=56`,
+with only the `_pre` side materialised.
+
+Tracked as `tk-three-trino-only-json-models-block-building-dim--59c2db`; check it
+before assuming you are blocked. (`dim_course_run`'s own raw `regexp_like` was a
+separate instance of this class and was fixed in #2658, merged 2026-09-11 — do not
+go looking for it.)
 
 When an ancestor cannot build, you have not lost the validation, but you have to
 narrow the claim:
@@ -337,6 +359,10 @@ Two ways the log lies, both measured 2026-09-16 while validating #2686:
 An `ERROR` in an ancestor `SKIP`s everything downstream of it, which includes the
 model under test — so this failure leaves you holding only the `_pre` side, and a
 comparison against a relation that was never rebuilt.
+
+**The gate: both comparison sides must appear with `status: success` before you
+measure anything.** Not "the run finished", not "no errors scrolled past" — both
+names present and successful in the artifact.
 
 `dbt run`, not `dbt build`. `build` runs tests inline under dbt's default eager
 indirect selection — the cross-model `relationships_*` noise the section below
