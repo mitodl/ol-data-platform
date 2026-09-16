@@ -134,8 +134,9 @@ models:
       day, so a problem attempted on two days counts twice. Excludes
       showanswer.
   - name: chatbot_interactions
-    description: Distinct (session, block) Open edX chatbot submits in this course
-      run.
+    description: >
+      Sum over active days of distinct (session, block) Open edX chatbot submits
+      that day, so a pair submitted on two days counts twice.
   - name: record_updated_on
     description: >
       Latest of the enrollment, grade and certificate update timestamps,
