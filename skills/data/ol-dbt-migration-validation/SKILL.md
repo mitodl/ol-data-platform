@@ -256,7 +256,7 @@ false divergence.
 Then build both sides **and both divergent ancestor paths** in one invocation:
 
 ```bash
-cd src/ol_dbt && DBT_PROFILES_DIR=$(pwd) uv run --frozen dbt run \
+DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt run --project-dir src/ol_dbt \
   --select "<model>_pre <model> +<old_upstream> +<new_upstream>" \
   -t dev_local --full-refresh
 ```
@@ -388,13 +388,19 @@ Two consequences, and the first is why this skill insists on one invocation:
 Use `dbt run` above, then test separately:
 
 ```bash
-uv run --frozen dbt test \
-  --select "<model>_pre <model> +<old_upstream> +<new_upstream>" \
+DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt test --project-dir src/ol_dbt \
+  --select "<model>_pre <model>" \
   -t dev_local --indirect-selection=cautious
 ```
 
-Keep this selection identical to the one you built in step 3 — if they drift, you
-are testing a different set of models than you compared.
+**Test only the two comparison models — do not reuse step 3's selection.** That
+selection deliberately includes `+<upstream>` ancestor trees so the *inputs* are
+built locally; repeating it here selects every ancestor's own tests too, and
+`cautious` cannot save you from tests that belong to models you explicitly named.
+Measured on `dim_course_run`: `--select dim_course_run` runs **7** tests under
+`cautious`, `--select "dim_course_run +dim_course_run"` runs **365**. The build and
+test selections are supposed to differ — what has to match is that you *built* both
+sides, not that you test the same set.
 
 dbt defaults to `--indirect-selection=eager`, which selects every test that
 merely **references** a selected model — including `relationships_*` tests
@@ -434,8 +440,17 @@ yml=$(DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt ls --project-dir src/ol_db
         --select <model> --resource-type model \
         --output json --output-keys patch_path -t dev_local \
         | grep '^{' | sed 's/.*models\//models\//; s/".*//' | head -1)
-grep -n -A8 'unique_combination_of_columns\|expect_compound_columns_to_be_unique\|- unique' "src/ol_dbt/$yml"
+awk -v m="<model>" '$0=="- name: "m {f=1; print; next} f && /^- name: / {exit} f' \
+  "src/ol_dbt/$yml" \
+  | grep -nE 'unique_combination_of_columns|expect_compound_columns_to_be_unique|combination_of_columns|column_list|where:'
 ```
+
+**Scope the extraction to your model's block.** A shared schema file documents many
+models — `_marts__combined__models.yml` declares 11 models and 14 uniqueness tests —
+so grepping the file tells you that *some* key exists, not which one is yours, and
+picking the wrong one lands you straight in the weak-key fan-out below. The `awk`
+prints from your model's `- name:` to the next one; the first uniqueness test it
+shows is the model-level key, with its `where` clause if it has one.
 
 `--project-dir` (and `DBT_PROFILES_DIR`) so this runs from the repository root like
 everything else: `patch_path` comes back project-relative, and `src/ol_dbt/$yml`
@@ -577,6 +592,18 @@ sides must be called out as *unverified*, never as *passing*.
 ```bash
 ol-dbt diff --old <model>_pre --new <model> -k <a,b,c> --exclude-columns <load timestamps>
 ```
+
+**Skip this step if the uniqueness test has a `where` clause.** `ol-dbt diff` has
+no filter option — `--limit` only caps how many sample rows print — so there is no
+way to apply the predicate, and it compares the full relations. On a conditionally
+proven key that is the weak-key case above: `dim_course_run`'s key is unique only
+among `is_current = true` rows, so the expired ones duplicate the join key and the
+per-column rates it prints are fan-out artifacts.
+
+You lose nothing by skipping it. Step 5(b)'s multiset diff needs no key at all, and
+step 6's mapping assertion is hand-written SQL — both take a `where` directly, so
+together they cover what 5(d) would have told you, on a key you can actually
+defend. Reach for `ol-dbt diff` when the key is proven across the whole relation.
 
 ### 6. Accept on the distinct functional mapping, not the whole row
 
