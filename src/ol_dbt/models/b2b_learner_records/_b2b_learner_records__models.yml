@@ -65,9 +65,15 @@ models:
   - name: courserun_title
     description: Display title of the course run. Mutable; key on courserun_readable_id.
   - name: courserun_start_on
-    description: Course run start, ISO-8601.
+    description: >
+      Course run start, ISO-8601 in UTC with no offset (e.g. 2026-02-09T15:00:00.000).
+      Trino's cast_timestamp_to_iso8601 drops the zone; ol-analytics-api attaches
+      UTC.
   - name: courserun_end_on
-    description: Course run end, ISO-8601. Null for self-paced runs.
+    description: >
+      Course run end, ISO-8601 in UTC with no offset, as courserun_start_on. Null
+      for
+      self-paced runs.
   - name: user_pk
     description: >
       dim_user surrogate. Internal join key only -- it can still re-key, so the
@@ -246,7 +252,10 @@ models:
   - name: b2b_contract_name
     description: Display name of the contract -- the API's contract_name.
   - name: b2b_contract_is_active
-    description: Whether the contract is currently active -- the API's contract_is_active.
+    description: >
+      Whether the contract is marked active in MITx Online -- the API's
+      contract_is_active. A manual flag: the end date is not applied, so combine it
+      with b2b_contract_end_date.
   - name: b2b_contract_start_date
     description: Contract start date. Null when the contract has none.
   - name: b2b_contract_end_date
@@ -263,6 +272,12 @@ models:
   - name: courserun_title
     description: Display title of the course run. Mutable; key on courserun_readable_id.
   - name: courserun_start_on
-    description: Course run start, ISO-8601.
+    description: >
+      Course run start, ISO-8601 in UTC with no offset (e.g. 2026-02-09T15:00:00.000).
+      Trino's cast_timestamp_to_iso8601 drops the zone; ol-analytics-api attaches
+      UTC.
   - name: courserun_end_on
-    description: Course run end, ISO-8601. Null for self-paced runs.
+    description: >
+      Course run end, ISO-8601 in UTC with no offset, as courserun_start_on. Null
+      for
+      self-paced runs.
