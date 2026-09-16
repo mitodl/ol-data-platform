@@ -481,12 +481,8 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     errors, if given, collects every failure's message (see summarize_conversations)
     so a caller can surface *why* calls failed, e.g. in a Failure message.
 
-    context, if given, logs per-chunk progress via context.log.info -- lands in
-    Dagster's own structured per-run event log, unlike the plain module logger,
-    whose stdout capture can miss lines across a step retry/resume (e.g. after
-    a pod eviction). Optional so this stays callable outside a Dagster run
-    (tests, scripts) -- same pattern as canvas.py's context-taking lib
-    functions, just optional here since summarize_and_checkpoint predates it.
+    context, if given, logs per-chunk progress via context.log.info instead of
+    the plain module logger.
 
     Stops the whole loop (not just the current chunk) after
     MAX_CONSECUTIVE_FAILED_CHUNKS chunks in a row come back with zero successful
