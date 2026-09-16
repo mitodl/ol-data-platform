@@ -612,8 +612,8 @@ def _check_qa_branch_contract(
             Severity.WARNING,
             "(all models)",
             f"Skipped: no ingestion inventory units found under {inventory_dir}",
-            "The check maps sources to units through the inventory. It expects the dbt "
-            "project at <repo>/src/ol_dbt, with the inventory at <repo>/ingestion/inventory.",
+            "The check maps sources to units through the inventory. Pass --inventory-dir when "
+            "the dbt project is not at <repo>/src/ol_dbt.",
         )
         return
     check_qa_contracts(manifest, units, report)
@@ -984,6 +984,16 @@ def validate(
             ),
         ),
     ] = "dev_local",
+    inventory_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--inventory-dir"],
+            help=(
+                "Ingestion inventory directory for the qa_branch_contract check. "
+                "Defaults to <repo>/ingestion/inventory, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     baseline_file: Annotated[
         str | None,
         Parameter(
@@ -1380,7 +1390,10 @@ def validate(
     # Global like dimensional_layering: a union model gains a branch by an edit to
     # one of its ancestors, which --changed-only would never select.
     if QA_CONTRACT_CHECK not in skipped:
-        _check_qa_branch_contract(manifest, dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR, report)
+        inventory_dir = (
+            Path(inventory_dir_path).resolve() if inventory_dir_path else dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR
+        )
+        _check_qa_branch_contract(manifest, inventory_dir, report)
 
     # Output
     if output_format == "json":
