@@ -1,5 +1,6 @@
 """Tests for ml.lib.summarize."""
 
+import logging
 import time
 from typing import Any, Self
 
@@ -717,6 +718,56 @@ def test_summarize_and_checkpoint_upserts_each_chunk() -> None:
     assert result.height == 5
     # 3 chunks of size 2, 2, 1 -- one upsert call per chunk
     assert len(table.upserts) == 3
+
+
+class _FakeLog:
+    def __init__(self) -> None:
+        self.info_calls: list[tuple[object, ...]] = []
+
+    def info(self, *args: object) -> None:
+        self.info_calls.append(args)
+
+
+class _FakeContext:
+    def __init__(self) -> None:
+        self.log = _FakeLog()
+
+
+def test_summarize_and_checkpoint_logs_via_context_when_given() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(5)])
+    context = _FakeContext()
+
+    summarize.summarize_and_checkpoint(
+        df,
+        _FakeSummaryClient(),
+        (catalog, "some_db.feedback_summaries"),
+        batch_size=2,
+        context=context,
+    )
+
+    # 3 chunks of size 2, 2, 1 -- one context.log.info call per chunk
+    assert len(context.log.info_calls) == 3
+
+
+def test_summarize_and_checkpoint_falls_back_to_module_logger_without_context(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(5)])
+
+    with caplog.at_level(logging.INFO, logger="ml.lib.summarize"):
+        summarize.summarize_and_checkpoint(
+            df,
+            _FakeSummaryClient(),
+            (catalog, "some_db.feedback_summaries"),
+            batch_size=2,
+        )
+
+    upserted_logs = [r for r in caplog.records if "Upserted chunk" in r.message]
+    assert len(upserted_logs) == 3
 
 
 def test_summarize_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:

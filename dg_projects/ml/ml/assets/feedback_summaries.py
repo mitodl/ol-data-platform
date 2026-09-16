@@ -12,6 +12,7 @@ from dagster import (
 )
 from ml.lib.summarize import (
     JOIN_COLS,
+    SUMMARIZE_CHECKPOINT_BATCH_SIZE,
     SUMMARIZE_MAX_CONCURRENCY,
     SUMMARY_PROMPT,
     SUMMARY_PROMPT_NAME,
@@ -72,6 +73,16 @@ class FeedbackSummariesConfig(Config):
             "How many summarize() calls run at once -- each is an independent "
             "blocking network request, so this is the lever for wall-clock time "
             "at scale. Unset uses SUMMARIZE_MAX_CONCURRENCY (ml.lib.summarize)."
+        ),
+    )
+    batch_size: int = Field(
+        default=SUMMARIZE_CHECKPOINT_BATCH_SIZE,
+        ge=1,
+        description=(
+            "How many rows are summarized and checkpointed together. A larger "
+            "value means fewer, cheaper checkpoint commits, at the cost of "
+            "redoing more LLM calls on a mid-chunk crash. Unset uses "
+            "SUMMARIZE_CHECKPOINT_BATCH_SIZE (ml.lib.summarize)."
         ),
     )
 
@@ -154,8 +165,10 @@ def feedback_summaries(
         unsummarized_df,
         client,
         (catalog, table_identifier),
+        batch_size=config.batch_size,
         errors=errors,
         max_concurrency=config.max_concurrency,
+        context=context,
     )
 
     llm_call_count = summaries_df.filter(
