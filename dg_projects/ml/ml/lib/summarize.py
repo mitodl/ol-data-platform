@@ -8,6 +8,7 @@ from typing import Any, NamedTuple, Protocol
 
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
+from dagster import AssetExecutionContext
 from ml.lib.llm_client_adapters import (
     build_llm_client,
     call_anthropic,
@@ -38,7 +39,7 @@ SUMMARIZE_CHECKPOINT_SCHEMA = {
 
 # Bounds how many LLM calls a crash can lose (feedback_dagster_asset_spec.md).
 SUMMARIZE_CHECKPOINT_BATCH_SIZE = int(
-    os.environ.get("SUMMARIZE_CHECKPOINT_BATCH_SIZE", "25")
+    os.environ.get("SUMMARIZE_CHECKPOINT_BATCH_SIZE", "200")
 )
 
 # Each summarize() call is one blocking, independent network request -- unlike
@@ -473,11 +474,19 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     batch_size: int = SUMMARIZE_CHECKPOINT_BATCH_SIZE,
     errors: list[str] | None = None,
     max_concurrency: int = SUMMARIZE_MAX_CONCURRENCY,
+    context: AssetExecutionContext | None = None,
 ) -> pl.DataFrame:
     """Summarize unsummarized_df in chunks, upserting each as it completes.
 
     errors, if given, collects every failure's message (see summarize_conversations)
     so a caller can surface *why* calls failed, e.g. in a Failure message.
+
+    context, if given, logs per-chunk progress via context.log.info -- lands in
+    Dagster's own structured per-run event log, unlike the plain module logger,
+    whose stdout capture can miss lines across a step retry/resume (e.g. after
+    a pod eviction). Optional so this stays callable outside a Dagster run
+    (tests, scripts) -- same pattern as canvas.py's context-taking lib
+    functions, just optional here since summarize_and_checkpoint predates it.
 
     Stops the whole loop (not just the current chunk) after
     MAX_CONSECUTIVE_FAILED_CHUNKS chunks in a row come back with zero successful
@@ -490,6 +499,7 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     handling -- the caller's own write of this (e.g. via the io_manager) upserts
     the same rows again, which is a harmless no-op since they're already there.
     """
+    log = context.log if context is not None else logger
     catalog, table_identifier = checkpoint_target
     consecutive_failed_chunks = 0
     summary_chunks: list[pl.DataFrame] = []
@@ -502,7 +512,7 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
         )
         summary_chunks.append(chunk_summaries)
         checkpoint_chunk(catalog, table_identifier, chunk_summaries)
-        logger.info(
+        log.info(
             "Upserted chunk %d/%d (%d rows) into %s",
             chunk_index,
             total_chunks,

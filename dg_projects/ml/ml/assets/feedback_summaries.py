@@ -156,6 +156,7 @@ def feedback_summaries(
         (catalog, table_identifier),
         errors=errors,
         max_concurrency=config.max_concurrency,
+        context=context,
     )
 
     llm_call_count = summaries_df.filter(
