@@ -123,17 +123,28 @@ models:
     description: str, always 'chat'.
   - name: subject_user_ref
     description: str, the chatter's global openedx user id.
+  - name: source_url
+    description: str, null. Not exposed by the connector.
   - name: subject_type
     description: str, what the chat concerns. 'courseware_block' for TutorBot and
-      VideoGPTBot, 'course' for SyllabusBot, 'resource' for ResourceRecommendationBot.
-      Null for any other chatsession_agent value.
+      VideoGPTBot, 'course' for SyllabusBot and CanvasSyllabusBot, 'resource' for
+      ResourceRecommendationBot. Null for any other chatsession_agent value.
   - name: subject_ref
     description: str, the chatsession_object_id - a course id, video transcript asset
       id, or edX module id depending on chatsession_agent.
+  - name: subject_url
+    description: str, null. Not resolved at this stage.
   - name: courserun_readable_id
     description: str, the course run the chat concerns.
+  - name: platform
+    description: str, null. Not resolved at this stage.
   - name: explicit_rating
     description: str, the chat response's rating, where given.
+  - name: created_at
+    description: str, same as occurred_at - the checkpoint's creation timestamp, falling
+      back to the chat session's created_at.
+  - name: updated_at
+    description: str, the chat session's updated_at.
   - name: source_metadata
     description: str, JSON of fields specific to Learn AI tutor, not shared with other
       sources - chatsession_agent, checkpoint_source, checkpoint_type.

@@ -30,6 +30,7 @@ with conversation as (
         -- the opening turn's author, not min() over the group: an arbitrary pick
         -- disagrees wherever one turn resolves an identity and another does not
         , max(case when is_conversation_opening then user_fk end) as opened_by_user_fk
+        , max(nullif(explicit_rating, '')) as explicit_rating
     from feedback
     group by conversation_id, feedback_source_fk
 )
@@ -139,16 +140,20 @@ select
     , conversation.conversation_text_chars
     , ticket.ticket_status as final_status
     , ticket.ticket_priority as final_priority
-    , ticket.ticket_satisfaction_rating_score as explicit_rating
-    -- Tier 1 of the sentiment ladder. Only 'good' and 'bad' are verdicts; 'unoffered'
-    -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence rather than
-    -- neutral ratings, so both stay null for the model tier to fill.
-    , case ticket.ticket_satisfaction_rating_score
+    , turn_aggregates.explicit_rating
+    -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad' and tutor 'like'/'dislike'
+    -- are verdicts; Zendesk's 'unoffered' (no survey sent) and 'offered' (sent,
+    -- unanswered) are kinds of absence rather than neutral ratings, so both stay
+    -- null for the model tier to fill.
+    , case turn_aggregates.explicit_rating
         when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
+        when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+        when 'dislike' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
     end as sentiment_fk
     , case
-        when ticket.ticket_satisfaction_rating_score in ('good', 'bad') then 'explicit_rating'
+        when turn_aggregates.explicit_rating in ('good', 'bad', 'like', 'dislike')
+            then 'explicit_rating'
     end as sentiment_source
     , summary.conversation_summary
     , summary.summary_model_version
@@ -172,10 +177,9 @@ from conversation
 inner join turn_aggregates
     on conversation.conversation_ref = turn_aggregates.conversation_id
     and {{ dbt_utils.generate_surrogate_key(['conversation.source_slug']) }} = turn_aggregates.feedback_source_fk
--- inner join, not left: a ticket whose only public comments are agent-authored
--- contributes no turns, and a conversation row with no turns fails the bidirectional
--- turn coverage tests
-inner join ticket
+-- final_status/final_priority are Zendesk-only concepts, so this enrichment only
+-- ever matches Zendesk rows; every other source keeps both columns null.
+left join ticket
     on conversation.conversation_ref = cast(ticket.ticket_id as varchar)
     and conversation.source_slug = 'zendesk'
 left join participants
