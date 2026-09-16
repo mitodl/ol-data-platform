@@ -79,12 +79,10 @@ class FeedbackSummariesConfig(Config):
         default=SUMMARIZE_CHECKPOINT_BATCH_SIZE,
         ge=1,
         description=(
-            "How many rows are summarized and upserted together as one Iceberg "
-            "checkpoint commit. A larger value means fewer checkpoint commits "
-            "(each adds a new table snapshot, and a table with many snapshots "
-            "gets slower to write to), at the cost of redoing more LLM calls if "
-            "a crash lands mid-chunk. Unset uses SUMMARIZE_CHECKPOINT_BATCH_SIZE "
-            "(ml.lib.summarize)."
+            "How many rows are summarized and checkpointed together. A larger "
+            "value means fewer, cheaper checkpoint commits, at the cost of "
+            "redoing more LLM calls on a mid-chunk crash. Unset uses "
+            "SUMMARIZE_CHECKPOINT_BATCH_SIZE (ml.lib.summarize)."
         ),
     )
 
