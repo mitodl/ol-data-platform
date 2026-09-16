@@ -171,7 +171,16 @@ def test_failing_asset_reports_real_exception_to_sentry(
     )
 
 
-def test_failure_metadata_reaches_the_sentry_event(
+def _only_event_for(failing_asset: Any, recorded_events: RecordingTransport) -> Any:
+    defs = Definitions(assets=sentry_lib.with_sentry_hooks([failing_asset]))
+    defs.resolve_implicit_global_asset_job_def().execute_in_process(
+        raise_on_error=False
+    )
+    (event,) = recorded_events.events()
+    return event
+
+
+def test_http_failure_metadata_reaches_the_sentry_event(
     recorded_events: RecordingTransport,
 ) -> None:
     """http_failure keeps the response body in metadata; Sentry has to see it.
@@ -187,22 +196,44 @@ def test_failure_metadata_reaches_the_sentry_event(
             metadata={
                 "status_code": 400,
                 "response_body": dg.MetadataValue.text('{"video_id": ["Invalid."]}'),
+                "video_id": "d3e8cb8477314177ae2d1d23341ae3cd",
             },
         )
 
-    defs = Definitions(assets=sentry_lib.with_sentry_hooks([rejected_webhook]))
-    defs.resolve_implicit_global_asset_job_def().execute_in_process(
-        raise_on_error=False
-    )
-
-    (event,) = recorded_events.events()
-    assert event["contexts"]["dagster_failure_metadata"] == {
+    event = _only_event_for(rejected_webhook, recorded_events)
+    assert event["contexts"]["http_failure"] == {
         "status_code": 400,
         "response_body": '{"video_id": ["Invalid."]}',
     }
 
 
-def test_a_plain_exception_adds_no_failure_metadata_context(
+def test_other_failure_metadata_stays_out_of_sentry(
+    recorded_events: RecordingTransport,
+) -> None:
+    """Metadata is free text, and some of it carries credentials.
+
+    The legacy Open edX forum export puts its mongodump command line,
+    ``--password`` included, into Failure metadata. Only the keys http_failure
+    writes may leave the cluster.
+    """
+
+    @asset
+    def failed_mongodump() -> None:
+        raise dg.Failure(
+            description="The mongodump command failed.",
+            metadata={
+                "mongodump_command": dg.MetadataValue.text(
+                    "mongodump --uri mongodb://host --password hunter2"
+                ),
+            },
+        )
+
+    event = _only_event_for(failed_mongodump, recorded_events)
+    assert "http_failure" not in event.get("contexts", {})
+    assert "hunter2" not in str(event.get("contexts", {}))
+
+
+def test_a_plain_exception_adds_no_http_failure_context(
     recorded_events: RecordingTransport,
 ) -> None:
     @asset
@@ -210,13 +241,8 @@ def test_a_plain_exception_adds_no_failure_metadata_context(
         message = "no metadata here"
         raise ValueError(message)
 
-    defs = Definitions(assets=sentry_lib.with_sentry_hooks([exploding_asset]))
-    defs.resolve_implicit_global_asset_job_def().execute_in_process(
-        raise_on_error=False
-    )
-
-    (event,) = recorded_events.events()
-    assert "dagster_failure_metadata" not in event.get("contexts", {})
+    event = _only_event_for(exploding_asset, recorded_events)
+    assert "http_failure" not in event.get("contexts", {})
 
 
 def test_qa_and_production_do_not_share_an_issue(
