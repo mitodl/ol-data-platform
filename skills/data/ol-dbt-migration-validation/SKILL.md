@@ -1,16 +1,18 @@
 ---
 name: ol-dbt-migration-validation
 description: >
-  Prove a dbt model migration preserved its data before merging — build the
-  pre-migration model and the migrated model side by side on one dev_local
-  DuckDB registration, then accept or reject on evidence. Use this skill for any
-  epic #2072 dimensional/mart/reporting migration, or whenever a PR re-sources a
-  column from a different upstream model and a reviewer asks "are we dropping
-  records?", "did the fill rate change?", or "is this 1:1?". Covers choosing the
-  join key from the model's own uniqueness test, the per-column multiset diff
-  that needs no key at all, fill-rate parity, and — critically — which local
-  numbers are trustworthy given that ~98% of registered non-raw Glue views point
-  at __dbt_tmp locations.
+  The end-to-end local validation workflow for a dbt model migration — register,
+  build both sides, test, diff, and decide — for proving on dev_local that the
+  migration preserved the data before it merges. Use this skill for any epic #2072
+  dimensional/mart/reporting migration, when self-testing your own migration PR, or
+  when reviewing someone else's and a reviewer asks "are we dropping records?",
+  "did the fill rate change?", or "is this 1:1?". Covers the four steps in order
+  (register immediately before the build; build the pre-migration and migrated
+  models side by side in one invocation; test with --indirect-selection=buildable;
+  then diff every changed model against a per-model expected verdict), how to read
+  what ol-dbt diff prints, what to do when a divergent ancestor will not build on
+  DuckDB, and — critically — which local numbers are trustworthy given that ~98% of
+  registered non-raw Glue views point at __dbt_tmp locations.
 license: BSD-3-Clause
 metadata:
   category: data
@@ -24,10 +26,17 @@ A migration PR moves a column's derivation from one upstream model to another
 rows dropped, a column nulled out, a grain that fans out. `dbt build` passing
 tells you nothing about any of that.
 
-This skill is the acceptance procedure. It sits on top of two tool-driver
-skills: `ol-dbt-local-dev` (register + build) and `ol-dbt-fast-validation`
-(validate / impact / diff). Read this one when the question is *"is the data the
-same?"* rather than *"does it compile?"*.
+**This skill is the whole local validation workflow, in order: register → build
+both sides → test → diff and decide.** It sits on top of two tool-driver skills —
+`ol-dbt-local-dev` (register + build mechanics) and `ol-dbt-fast-validation`
+(validate / impact / diff usage) — and its job is the part neither of those
+covers: what to run in what order, and how to read the result. Read this one when
+the question is *"is the data the same?"* rather than *"does it compile?"*, whether
+you are self-testing your own migration PR or reviewing someone else's.
+
+Steps 1–3 are the setup that makes a comparison mean anything; steps 4–7 are the
+comparison and the decision. Most of the ways this goes wrong are silent and look
+clean, which is why the setup gets three times the wordcount of the diff.
 
 Run every command here through `uv run --frozen` (`uv run --frozen ol-dbt ...`,
 `uv run --frozen dbt ...`) or from an activated venv — see the prerequisite at the
@@ -367,8 +376,8 @@ names present and successful in the artifact.
 `dbt run`, not `dbt build`. `build` runs tests inline under dbt's default eager
 indirect selection — the cross-model `relationships_*` noise the section below
 tells you to avoid — and a failing test there skips the downstream models you
-selected, leaving one comparison side unmaterialized. Test separately, cautiously,
-after both sides exist.
+selected, leaving one comparison side unmaterialized. Test in a separate invocation
+once both sides exist, with the selection and mode below.
 
 The skip is **intermittent in this project**, which is worse than consistent.
 `dbt_project.yml` sets `tests: open_learning: +error_if: ">10"`, so a test with 10
@@ -470,24 +479,33 @@ Two consequences, and the first is why this skill insists on one invocation:
    read.** Re-read anything you intend to put in a PR body, and prefer
    `ol-dbt local snapshot` for a baseline you need to keep across a break.
 
-#### Test only your own models: `--indirect-selection=cautious`
+#### Test only your own models: `--indirect-selection=buildable`
 
-Use `dbt run` above, then test separately:
+Run the tests **before** the diff. A named failing test is far more diagnostic
+than a 20k-row mismatch report, and a broken model makes a `MATCH` uninterpretable
+— you cannot tell agreement from two identically-wrong sides.
 
 ```bash
 DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt test --project-dir src/ol_dbt \
   --select "<model>_pre <model>" \
-  -t dev_local --indirect-selection=cautious
+  -t dev_local --indirect-selection=buildable
 ```
+
+**`buildable`, not `cautious`.** `cautious` only includes a test when *every* model
+the test references is in the selection — so a new singular test the PR itself adds,
+referencing both the changed model and something outside the selection, is silently
+dropped. That happened on #2403: `cautious` excluded the PR's own new test, which is
+the one test you most need to see. `buildable` relaxes exactly that condition while
+still excluding the `eager` noise below.
 
 **Test only the two comparison models — do not reuse step 3's selection.** That
 selection deliberately includes `+<upstream>` ancestor trees so the *inputs* are
 built locally; repeating it here selects every ancestor's own tests too, and
-`cautious` cannot save you from tests that belong to models you explicitly named.
-Measured on `dim_course_run`: `--select dim_course_run` runs **7** tests under
-`cautious`, `--select "dim_course_run +dim_course_run"` runs **365**. The build and
-test selections are supposed to differ — what has to match is that you *built* both
-sides, not that you test the same set.
+neither `buildable` nor `cautious` can save you from tests that belong to models you
+explicitly named. Measured 2026-09-16 under `buildable`: `--select dim_course_run`
+runs **8** tests, `--select "dim_course_run +dim_course_run"` runs **365**. The build
+and test selections are supposed to differ — what has to match is that you *built*
+both sides, not that you test the same set.
 
 dbt defaults to `--indirect-selection=eager`, which selects every test that
 merely **references** a selected model — including `relationships_*` tests
@@ -496,20 +514,20 @@ tables still resolving to production Glue views, so they report orphans by
 construction and tell you nothing about your change. One of them on #2403 scans
 `tfact_grade` (42.7M rows) and runs for many minutes.
 
-Measured on #2403's two changed models:
+Measured on #2403's two changed models, and again on `dim_course_run` alone
+2026-09-16:
 
-| mode | tests selected |
-|---|---|
-| `eager` (default) | 20 |
-| `buildable` | 12 |
-| `cautious` | 11 |
+| mode | #2403 (2 models) | `dim_course_run` |
+|---|---|---|
+| `eager` (default) | 20 | 17 |
+| `buildable` | 13 | 8 |
+| `cautious` | 11 | 8 |
 
-The 9 that `eager` adds were all cross-model `relationships_*` tests, and
-included every failure the PR body had been documenting as expected noise.
-`cautious` also drops tests the changed model *does* own when their other parent
-is outside the selection (e.g. `dim_course_run` → `dim_date`); those also compare
-against production tables, so losing them is an acceptable trade. `buildable` is
-the middle ground.
+Everything `eager` adds is a cross-model `relationships_*` test, and on #2403 that
+set included every failure the PR body had been documenting as expected noise. The
+`buildable`/`cautious` gap is small but it is the wrong small: on `dim_course_run`
+the one test `buildable` adds is the `course_fk → dim_course` relationship, and on
+#2403 it was the PR's own new test. Pay the extra test.
 
 **Do not put expected-failure counts in a PR body.** They are a function of when
 you registered and how much you had built locally, not a property of the change.
@@ -679,7 +697,27 @@ validated at all — it is invisible. `passing_grade` did this on #2403 while
 being just as broken as `semester`. Any column whose fill rate is ~0% on both
 sides must be called out as *unverified*, never as *passing*.
 
-**(d) Only then** reach for the keyed row-level diff:
+**(d) Only then** reach for the keyed row-level diff — and diff **every** changed
+model in the PR, not only the one whose expression you edited.
+
+Give each one an expected verdict before you run it, because the verdict is the
+assertion:
+
+| model | expect | what makes it a pass |
+|---|---|---|
+| changed only by re-sourcing, values should be identical | `MATCH`, exit 0 | nothing to read; the exit code is the result |
+| intentionally changed | `MISMATCH`, exit 1 | the **shape**: row Δ 0, only the intended columns listed, and the sample rows moving in the intended direction (e.g. `None → 'value'`, not the reverse) |
+| unchanged by this PR but downstream of it | `MATCH`, exit 0 | a `MISMATCH` here is a regression, not a result |
+
+A `MISMATCH` is therefore not a failure and a `MATCH` is not automatically a pass —
+the question is always whether the report matches the verdict you wrote down first.
+On #2403 this is what turned an asserted claim into a measured one: the dimension
+diff showed `semester` going 12 → 99 non-null across 87 re-versioned rows (the PR
+body had said "~100"), `passing_grade` unmoved, and zero row delta.
+
+**SCD2 models need `--exclude-columns effective_date,end_date`.** Those are
+`current_timestamp` at build time, so every row differs on them by construction and
+the report is unreadable without excluding them.
 
 ```bash
 ol-dbt diff --old <model>_pre --new <model> -k <a,b,c> --exclude-columns <load timestamps>
