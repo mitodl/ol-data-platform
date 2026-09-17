@@ -188,16 +188,17 @@ class BedrockEmbeddingClient:
     """
 
     # Cohere's Bedrock invoke_model accepts up to 96 texts per request. Titan has
-    # no batch endpoint at all (_embed_titan already loops one invoke_model call
-    # per text, no matter the sub-batch size), so it has no real cap. Cohere's
-    # invoke_model does have one: 96 texts per call. Titan gets Cohere's number
-    # too -- it's not a real limit for Titan, just a harmless, arbitrary size to
-    # sub-batch by, rather than inventing a second "no limit" concept.
+    # no batch endpoint at all -- _embed_titan loops one invoke_model call per
+    # text regardless of sub-batch size, so its sub-batch size must be 1, or
+    # _embed_chunk's concurrency (one future per sub-batch) never actually
+    # parallelizes Titan's real API calls.
     def __init__(self, client: BaseClient, model_version: str, dim: int) -> None:
         self._client = client
         self.model_version = model_version
         self.dim = dim
-        self.max_request_batch_size = 96
+        self.max_request_batch_size = (
+            1 if model_version.startswith("amazon.titan-embed") else 96
+        )
 
     @traced(
         "feedback_embed_bedrock",

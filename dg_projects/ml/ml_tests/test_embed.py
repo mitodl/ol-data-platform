@@ -331,6 +331,31 @@ def test_build_embedding_client_honors_bedrock_model_version_override() -> None:
     assert client.model_version == "cohere.embed-english-v3"
 
 
+def test_bedrock_client_sub_batches_titan_by_single_text() -> None:
+    """Titan has no batch endpoint (_embed_titan loops one invoke_model call per
+    text), so its sub-batch size must be 1 -- otherwise _embed_chunk's one
+    future per sub-batch never actually parallelizes Titan's real API calls,
+    regardless of max_concurrency.
+    """
+    client = embed.BedrockEmbeddingClient(
+        boto3.client("bedrock-runtime", region_name="us-east-1"),
+        "amazon.titan-embed-text-v2:0",
+        1024,
+    )
+
+    assert client.max_request_batch_size == 1
+
+
+def test_bedrock_client_sub_batches_cohere_by_96() -> None:
+    client = embed.BedrockEmbeddingClient(
+        boto3.client("bedrock-runtime", region_name="us-east-1"),
+        "cohere.embed-english-v3",
+        1024,
+    )
+
+    assert client.max_request_batch_size == 96
+
+
 class _FakeGeminiEmbedding:
     def __init__(self, values: list[float]) -> None:
         self.values = values
