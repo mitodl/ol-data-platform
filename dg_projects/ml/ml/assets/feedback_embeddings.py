@@ -194,6 +194,7 @@ def feedback_embeddings(
         batch_size=config.batch_size,
         errors=errors,
         max_concurrency=config.max_concurrency,
+        context=context,
     )
 
     # A null resolved_text or a failed API call is dropped from embeddings_df
