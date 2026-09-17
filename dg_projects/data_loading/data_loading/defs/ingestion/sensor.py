@@ -47,12 +47,20 @@ edxorg_s3_ingest_job = dg.define_asset_job(
     name="edxorg_s3_ingest_job",
     selection=dg.AssetSelection.keys(*_EDXORG_S3_ASSET_KEYS),
     executor_def=dg.multiprocess_executor.configured({"max_concurrent": 4}),
+    # ephemeral-storage, because the reader downloads each TSV to a local temp
+    # file before DuckDB parses it (see ol_dlt.sources.edxorg_s3._local_copy).
+    # Four ops run concurrently and the largest export in the landing zone is
+    # 14.5 GB, so the worst case is ~58 GB of downloads plus dlt's normalized
+    # parquet. Without a limit the kubelet evicts this pod on node DiskPressure
+    # -- and takes whatever else is on that node with it -- instead of failing
+    # the one job that overran. Worker nodes are m8i-flex.4xlarge with 500 GB
+    # root volumes.
     tags={
         "dagster-k8s/config": {
             "container_config": {
                 "resources": {
-                    "requests": {"memory": "2Gi"},
-                    "limits": {"memory": "32Gi"},
+                    "requests": {"memory": "2Gi", "ephemeral-storage": "16Gi"},
+                    "limits": {"memory": "32Gi", "ephemeral-storage": "96Gi"},
                 }
             }
         }

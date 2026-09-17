@@ -12,17 +12,27 @@ strategies:
 loader: dlt
 # TRANSITIONAL — set this to `_file_modified_at` once the backfill has loaded.
 #
-# Explicit null means "no metadata column, do not deduplicate", which is what
-# these tables support today: nothing has ever loaded into them, and the rows a
-# backfill writes are the first to carry `_file_modified_at`. Naming the column
-# before those rows exist reinstates the COLUMN_NOT_FOUND that
-# ol-data-platform#2443 was filed for.
+# Explicit null means "no metadata column, do not deduplicate". No row in these
+# tables carries `_file_modified_at` yet, and naming it before the backfill
+# writes those rows reinstates the COLUMN_NOT_FOUND that
+# ol-data-platform#2443 was filed for. Measured in s3://ol-data-lake-raw-
+# production/edxorg/ol_warehouse_production_raw on 2026-09-17: auth_user holds
+# only the empty table dlt created on 2026-07-03; auth_userprofile,
+# courseware_studentmodule, student_courseenrollment and
+# student_courseaccessrole do not exist; certificates_generatedcertificate
+# (925 MB, 1,450 metadata versions, last written during the 2026-09-16 failed
+# runs) and grades_persistentcoursegrade (711 KB) hold rows written under the
+# old merge disposition, which carry a null there and lose the dedup to
+# freshly stamped rows (Trino orders NULLS LAST in both directions).
 #
 # `_file_modified_at` rather than `_dlt_load_id`: the load appends and the
 # backfill walks the landing zone in whatever order it likes, so the load id
 # records when a row was ingested, not which export it came from. Ordering
 # staging by the source file's mtime is what picks the newest version of a
 # record.
+#
+# Until this flips, nothing deduplicates at either layer and raw holds every
+# row of every export.
 raw_metadata_column:
 table_prefix: raw__edxorg__s3__tables__
 dlt:

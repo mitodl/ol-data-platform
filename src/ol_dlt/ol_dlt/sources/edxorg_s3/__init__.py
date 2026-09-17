@@ -159,9 +159,12 @@ def _data_line_count(path: Path) -> int:
 
 
 def _read_unquoted_tsv(
-    item: FileItemDict, path: Path, chunk_size: int, duckdb_kwargs: dict[str, Any]
+    path: Path, file_url: str, chunk_size: int, duckdb_kwargs: dict[str, Any]
 ) -> list[Any] | None:
-    """Read ``item`` with quoting off, or return None if that loses any rows.
+    """Read ``path`` with quoting off, or return None if that loses any rows.
+
+    ``file_url`` is only for the log lines: the local copy's name is a content
+    hash that maps to nothing anyone can open.
 
     Only right for the legacy dumps, where every line is exactly one record, so
     that is checked rather than assumed. ``ignore_errors`` drops rows it cannot
@@ -182,7 +185,7 @@ def _read_unquoted_tsv(
             _read_tsv(path, chunk_size, {**duckdb_kwargs, **_UNQUOTED_READER_OVERRIDES})
         )
     except duckdb.Error:
-        logger.exception("Unquoted read of edxorg TSV %s failed too.", item["file_url"])
+        logger.exception("Unquoted read of edxorg TSV %s failed too.", file_url)
         return None
 
     rows = sum(batch.num_rows for batch in batches)
@@ -190,7 +193,7 @@ def _read_unquoted_tsv(
     if rows != expected:
         logger.error(
             "Unquoted read of edxorg TSV %s kept %s of %s lines; not loading it.",
-            item["file_url"],
+            file_url,
             rows,
             expected,
         )
@@ -270,7 +273,9 @@ def read_edxorg_tsv(
                     "Pinned dialect could not read edxorg TSV %s; retrying unquoted.",
                     item["file_url"],
                 )
-                unquoted = _read_unquoted_tsv(item, path, chunk_size, duckdb_kwargs)
+                unquoted = _read_unquoted_tsv(
+                    path, item["file_url"], chunk_size, duckdb_kwargs
+                )
                 if unquoted is None:
                     msg = (
                         f"DuckDB could not read the edxorg TSV {item['file_url']} "
@@ -335,8 +340,10 @@ def edxorg_s3_source(
         # pipeline can run indefinitely.
         #
         # Do NOT pass extract_content=True: that reads the whole file into bytes
-        # in one blocking request (can exceed a token lifetime for big tables).
-        # Leaving it False lets read_csv_duckdb stream chunk-by-chunk.
+        # in one blocking request (can exceed a token lifetime for big tables),
+        # and _local_copy would then copy those bytes back out of memory --
+        # reinstating the whole-file-in-RAM read it exists to avoid. Leaving it
+        # False lets item.open() stream chunk-by-chunk.
         fs = s3fs.S3FileSystem()
 
         # Pass incremental directly to filesystem() so dlt tracks the
@@ -349,7 +356,7 @@ def edxorg_s3_source(
             incremental=incremental("modification_date"),
         )
 
-        # Pipe filesystem items through read_csv_duckdb, then rename and
+        # Pipe filesystem items through read_edxorg_tsv, then rename and
         # configure via with_name() + apply_hints(). A @dlt.resource wrapper that
         # *returns* another DltResource would replace the outer resource and
         # discard its name/hints; applying hints on the pipe avoids that.
@@ -358,16 +365,32 @@ def edxorg_s3_source(
             .with_name(resource_name)
             .apply_hints(
                 table_name=resource_name,
-                # Append, not merge. row_hash is a hash of EVERY column, so a
-                # match on (row_hash, extracted_course_key) is a byte-identical
-                # row and the merge's update half can never change anything: it
-                # only costs one Iceberg commit per 1,000 rows and holds the
-                # whole load in memory to do it. A record that changed between
-                # exports hashes differently and is kept as a separate row
-                # either way, so merge never gave one row per business key
-                # either. Duplicates are removed downstream instead --
-                # `deduplicate_raw_table` in staging, ordering by
-                # _file_modified_at, and a compaction pass over the raw layer.
+                # Append, not merge, and this trades storage for a load that
+                # can actually finish.
+                #
+                # What merge bought: row_hash is a sha256 over the original CSV
+                # columns (edxorg_archive.py), so a match on (row_hash,
+                # extracted_course_key) is a row whose content did not change
+                # between two exports of a course. Merge UPDATED those in place
+                # rather than inserting them, which is what kept re-exports
+                # from multiplying the table -- courses are exported over and
+                # over (543 of 1,647 courseware_studentmodule courses have 50+
+                # exports of near-identical size), so append inserts an entire
+                # export where merge inserted only its changed rows.
+                #
+                # What it cost: dlt drives pyiceberg's upsert at 1,000 rows per
+                # Iceberg commit and holds the whole load in memory to do it,
+                # which is a load that does not complete at this table's size.
+                # The update half of the merge was also always a no-op, since a
+                # matched row is identical; a record that DID change hashes
+                # differently and was inserted as a second row regardless, so
+                # merge never produced one row per business key either.
+                #
+                # The duplicates come out after the load instead:
+                # `deduplicate_raw_table` in staging once this unit's
+                # `raw_metadata_column` names _file_modified_at, and a
+                # compaction pass over the raw layer. Until both exist, raw
+                # holds every row of every export.
                 write_disposition="append",
                 # Kept as documentation of the grain (and read by the ingestion
                 # inventory); append does not deduplicate on it. Composite
@@ -376,10 +399,10 @@ def edxorg_s3_source(
                 # alone.
                 primary_key=_EDXORG_PRIMARY_KEY,
                 table_format=resolved_format,
-                # Nullable, overriding dlt's required default -- see
+                # All three nullable, overriding dlt's required default -- see
                 # config.DLT_LOAD_ID_COLUMN. This source has no build_source()
                 # to route through config.with_nullable_load_id, so it declares
-                # the column on the resource directly.
+                # them on the resource directly.
                 columns={**config.DLT_LOAD_ID_COLUMN, **FILE_METADATA_COLUMNS},
             )
         )
