@@ -216,6 +216,22 @@ class TestRules:
         report = _run(inventory)
         assert "mirror_max_age_days is not set" in _messages(report)
 
+    def test_scoped_unit_cannot_mirror(self, inventory: Path) -> None:
+        _mutate(
+            inventory,
+            "mitxonline__mysql",
+            APP_UNIT,
+            strategies={"qa": "mirror", "local": "fixture"},
+            mirror_max_age_days=30,
+        )
+        report = _run(inventory)
+        assert "strategies.qa is `mirror` but the unit is scoped" in _messages(report)
+
+    def test_singleton_cannot_ingest_in_qa(self, inventory: Path) -> None:
+        _mutate(inventory, "edxorg__s3", DLT_UNIT, strategies={"qa": "ingest", "local": "fixture"})
+        report = _run(inventory)
+        assert "strategies.qa is `ingest` but the unit is singleton" in _messages(report)
+
     def test_max_age_without_mirror_is_rejected(self, inventory: Path) -> None:
         _mutate(inventory, "mitxonline__mysql", APP_UNIT, mirror_max_age_days=30)
         report = _run(inventory)

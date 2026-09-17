@@ -6,7 +6,7 @@ deployment: xpro
 layer: tracking_logs
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__xpro__openedx__tracking_logs

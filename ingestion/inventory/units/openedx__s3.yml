@@ -6,7 +6,7 @@ deployment: openedx
 layer: s3
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dagster
 table_prefix: raw__openedx__s3__

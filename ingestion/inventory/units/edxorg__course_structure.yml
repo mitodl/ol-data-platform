@@ -8,8 +8,9 @@ deployment: edxorg
 scope: singleton
 layer: course_structure
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: dagster
 table_prefix: raw__edxorg__s3__course_
 tables:
