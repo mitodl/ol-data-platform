@@ -10,10 +10,12 @@ from typing import Any, Protocol
 import openai
 import polars as pl
 from botocore.client import BaseClient
+from dagster import AssetExecutionContext
 from google import genai
 from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import attach_llm_usage, attach_span_metadata, traced
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -279,6 +281,20 @@ def build_embedding_client(
         "'openai_compatible', 'azure_openai', 'gemini', or 'bedrock_embeddings'."
     )
     raise TypeError(msg)
+
+
+def default_embedding_model_version() -> str:
+    """Return the model_version a default feedback_embeddings run writes, so a
+    reader can filter on what was actually written instead of assuming
+    EMBEDDING_MODEL_VERSION (#2689). Mirrors definitions.py's embedding_llm
+    resource default.
+    """
+    provider = os.environ.get(
+        "EMBEDDING_PROVIDER", "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings"
+    )
+    if provider == "bedrock_embeddings":
+        return BEDROCK_EMBEDDING_MODEL_VERSION
+    return EMBEDDING_MODEL_VERSION
 
 
 def resolve_embedding_text(
@@ -560,6 +576,7 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     batch_size: int = EMBEDDING_BATCH_SIZE,
     errors: list[str] | None = None,
     max_concurrency: int = EMBEDDING_MAX_CONCURRENCY,
+    context: AssetExecutionContext | None = None,
 ) -> pl.DataFrame:
     """Embed df in chunks, upserting each into feedback_embeddings as it completes.
 
@@ -578,6 +595,8 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
         errors: if given, collects every failure's message (see _embed_chunk) so a
             caller can surface *why* calls failed, e.g. in a Failure message.
         max_concurrency: how many of those embed_batch calls run at once.
+        context: if given, logs per-chunk progress via context.log.info instead
+            of the plain module logger.
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
@@ -599,12 +618,15 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     handling -- the caller's own write of this (e.g. via the io_manager) upserts
     the same rows again, which is a harmless no-op since they're already there.
     """
+    log = context.log if context is not None else logger
     catalog, table_identifier = checkpoint_target
     rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
 
     consecutive_failed_chunks = 0
     chunk_dfs: list[pl.DataFrame] = []
-    for chunk_start in range(0, len(rows), batch_size):
+    chunk_starts = range(0, len(rows), batch_size)
+    total_chunks = len(chunk_starts)
+    for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
         chunk = rows[chunk_start : chunk_start + batch_size]
         results = _embed_chunk(
             chunk, client, errors=errors, max_concurrency=max_concurrency
@@ -612,6 +634,13 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
         chunk_df = _results_to_df(results, client)
         chunk_dfs.append(chunk_df)
         checkpoint_embedding_chunk(catalog, table_identifier, chunk_df)
+        log.info(
+            "Upserted chunk %d/%d (%d rows) into %s",
+            chunk_index,
+            total_chunks,
+            chunk_df.height,
+            table_identifier,
+        )
 
         if len(chunk) > 0 and len(results) == 0:
             consecutive_failed_chunks += 1

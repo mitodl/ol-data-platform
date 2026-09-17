@@ -10,7 +10,7 @@ from dagster import (
     MetadataValue,
     asset,
 )
-from ml.lib.embed import EMBEDDING_DIM, EMBEDDING_MODEL_VERSION
+from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.sentiment_eval import (
     build_sentiment_client,
     labeled_sentiment_sample,
@@ -58,8 +58,9 @@ class FeedbackSentimentEvalConfig(Config):
     embedding_model_version: str | None = Field(
         default=None,
         description=(
-            "Which feedback_embeddings model/dim to evaluate against. Unset "
-            "uses EMBEDDING_MODEL_VERSION (ml.lib.embed)."
+            "Which feedback_embeddings model/dim to evaluate against. Unset uses "
+            "whichever model feedback_embeddings' default config would write "
+            "(see default_embedding_model_version, ml.lib.embed)."
         ),
     )
     embedding_dim: int | None = Field(default=None, description="See above.")
@@ -93,7 +94,9 @@ def feedback_sentiment_eval(
     Zendesk-CSAT-labeled sample. Whichever method wins gets its own production
     asset later; this just records the comparison so the choice is auditable.
     """
-    embedding_model_version = config.embedding_model_version or EMBEDDING_MODEL_VERSION
+    embedding_model_version = (
+        config.embedding_model_version or default_embedding_model_version()
+    )
     embedding_dim = config.embedding_dim or EMBEDDING_DIM
 
     afact_df = (
