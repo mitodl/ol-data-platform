@@ -356,6 +356,36 @@ def test_bedrock_client_sub_batches_cohere_by_96() -> None:
     assert client.max_request_batch_size == 96
 
 
+def test_default_embedding_model_version_matches_bedrock_outside_dev(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#2689: outside dev, embedding_llm defaults to bedrock_embeddings."""
+    monkeypatch.setattr(embed, "DAGSTER_ENV", "production")
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+
+    assert (
+        embed.default_embedding_model_version() == embed.BEDROCK_EMBEDDING_MODEL_VERSION
+    )
+
+
+def test_default_embedding_model_version_matches_openai_in_dev(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embed, "DAGSTER_ENV", "dev")
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+
+    assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
+
+
+def test_default_embedding_model_version_honors_explicit_provider_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embed, "DAGSTER_ENV", "production")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
+
+    assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
+
+
 class _FakeGeminiEmbedding:
     def __init__(self, values: list[float]) -> None:
         self.values = values

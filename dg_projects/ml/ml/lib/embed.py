@@ -14,6 +14,7 @@ from google import genai
 from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import attach_llm_usage, attach_span_metadata, traced
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -279,6 +280,20 @@ def build_embedding_client(
         "'openai_compatible', 'azure_openai', 'gemini', or 'bedrock_embeddings'."
     )
     raise TypeError(msg)
+
+
+def default_embedding_model_version() -> str:
+    """Return the model_version a default feedback_embeddings run writes, so a
+    reader can filter on what was actually written instead of assuming
+    EMBEDDING_MODEL_VERSION (#2689). Mirrors definitions.py's embedding_llm
+    resource default.
+    """
+    provider = os.environ.get(
+        "EMBEDDING_PROVIDER", "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings"
+    )
+    if provider == "bedrock_embeddings":
+        return BEDROCK_EMBEDDING_MODEL_VERSION
+    return EMBEDDING_MODEL_VERSION
 
 
 def resolve_embedding_text(

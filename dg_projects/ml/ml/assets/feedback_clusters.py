@@ -21,7 +21,7 @@ from ml.lib.cluster import (
     cluster_embeddings,
     failed_run_metadata,
 )
-from ml.lib.embed import EMBEDDING_DIM, EMBEDDING_MODEL_VERSION
+from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import (
@@ -76,8 +76,9 @@ class FeedbackClustersConfig(Config):
     embedding_model_version: str | None = Field(
         default=None,
         description=(
-            "Override the embedding model id to cluster. Unset uses "
-            "EMBEDDING_MODEL_VERSION (ml.lib.embed)."
+            "Override the embedding model id to cluster. Unset uses whichever "
+            "model feedback_embeddings' default config would write (see "
+            "default_embedding_model_version, ml.lib.embed)."
         ),
     )
     embedding_dim: int | None = Field(
@@ -134,7 +135,9 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     runs. feedback_cluster_identity matches this run's clusters onto stable
     cluster_keys immediately after; no human approves a run.
     """
-    embedding_model_version = config.embedding_model_version or EMBEDDING_MODEL_VERSION
+    embedding_model_version = (
+        config.embedding_model_version or default_embedding_model_version()
+    )
     embedding_dim = config.embedding_dim or EMBEDDING_DIM
     embeddings_lazy = (
         get_dbt_model_as_dataframe(
