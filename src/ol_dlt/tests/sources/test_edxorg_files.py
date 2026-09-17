@@ -95,18 +95,14 @@ def pipeline(tmp_path: Any) -> dlt.Pipeline:
 def test_batch_stops_at_the_budget(listed: Any, pipeline: dlt.Pipeline) -> None:
     """The budget bounds a batch even though dlt pages the resource.
 
-    Ten 10-byte files against a 25-byte budget is three files: the file that
-    crosses the line is still yielded whole, and the rest are left for the
-    next batch.
+    Ten 10-byte files against a 25-byte budget is two files: the third would
+    take the batch to 30, so it is left for the next one. The budget is a
+    ceiling, not a target.
     """
     items = _file_items([10] * 10)
     listed(items)
 
-    assert _urls_read(pipeline, items) == [
-        "s3://bucket/0.tsv",
-        "s3://bucket/1.tsv",
-        "s3://bucket/2.tsv",
-    ]
+    assert _urls_read(pipeline, items) == ["s3://bucket/0.tsv", "s3://bucket/1.tsv"]
 
 
 def test_next_batch_resumes_where_the_last_one_stopped(
@@ -123,8 +119,8 @@ def test_next_batch_resumes_where_the_last_one_stopped(
     first = _urls_read(pipeline, items)
     second = _urls_read(pipeline, items)
 
-    assert first == ["s3://bucket/0.tsv", "s3://bucket/1.tsv", "s3://bucket/2.tsv"]
-    assert second == ["s3://bucket/3.tsv", "s3://bucket/4.tsv", "s3://bucket/5.tsv"]
+    assert first == ["s3://bucket/0.tsv", "s3://bucket/1.tsv"]
+    assert second == ["s3://bucket/2.tsv", "s3://bucket/3.tsv"]
     assert not set(first) & set(second), "a file must not be read by two batches"
 
 
@@ -146,40 +142,79 @@ def test_files_are_read_oldest_first(listed: Any, pipeline: dlt.Pipeline) -> Non
     items = _file_items([10] * 5, newest_first=True)
     listed(items)
 
-    assert _urls_read(pipeline, items) == [
+    assert _urls_read(pipeline, items) == ["s3://bucket/0.tsv", "s3://bucket/1.tsv"]
+
+
+@pytest.mark.parametrize(
+    ("sizes", "first", "second"),
+    [
+        pytest.param([100, 10], ["0.tsv"], ["1.tsv"], id="oversized_file_first"),
+        pytest.param([10, 100], ["0.tsv"], ["1.tsv"], id="oversized_file_second"),
+    ],
+)
+def test_a_file_bigger_than_the_budget_is_a_batch_of_its_own(
+    listed: Any,
+    pipeline: dlt.Pipeline,
+    sizes: list[int],
+    first: list[str],
+    second: list[str],
+) -> None:
+    """The largest export is 14.5 GB against a 4 GiB budget. It loads as a
+    batch of its own rather than being skipped, split, or stacked on top of an
+    already-full batch.
+
+    The oversized-second case is the one that matters: charging a file after
+    yielding it means a batch can reach its budget plus that file's whole
+    weight, which in production is 4 GiB + 14.5 GB against a limit sized for
+    4 GiB + one file.
+    """
+    items = _file_items(sizes)
+    listed(items)
+
+    assert _urls_read(pipeline, items) == [f"s3://bucket/{name}" for name in first]
+    assert _urls_read(pipeline, items) == [f"s3://bucket/{name}" for name in second]
+
+
+def test_unread_files_sharing_the_boundary_second_are_still_read(
+    listed: Any, pipeline: dlt.Pipeline
+) -> None:
+    """S3 stamps whole seconds, so a batch can stop mid-second.
+
+    The files left in that second are not covered by the cursor even though it
+    equals their mtime, so they have to come back on the next batch rather
+    than being skipped as already-read.
+    """
+    items = _file_items([10, 10, 10])
+    for item in items:
+        item["modification_date"] = _START  # one second, three files
+    listed(items)
+
+    first = _urls_read(pipeline, items)
+    second = _urls_read(pipeline, items)
+
+    assert first, "the first batch reads something"
+    assert sorted(first + second) == [
         "s3://bucket/0.tsv",
         "s3://bucket/1.tsv",
         "s3://bucket/2.tsv",
     ]
+    assert not set(first) & set(second)
 
 
-def test_an_already_read_file_on_the_boundary_does_not_spend_the_budget(
+def test_every_batch_makes_progress_past_the_boundary(
     listed: Any, pipeline: dlt.Pipeline
 ) -> None:
-    """A batch must not come back empty because of the file it resumes on.
+    """An already-read boundary file must never consume the whole batch.
 
-    dlt's cursor boundary is inclusive, so the last file of the previous batch
-    is listed again and deduped. Charging it to the budget means one oversized
-    already-read file (the landing zone's largest export is 14.5 GB against a
-    4 GiB budget) exhausts the batch before any new file is yielded, and the
-    caller reads that empty batch as a drained backlog.
+    With the 14.5 GB export on the boundary and a 4 GiB budget, charging it
+    would end the batch before any new file was yielded; the caller reads an
+    empty batch as a drained backlog and the backfill stalls silently.
     """
     items = _file_items([100, 10, 10])
     listed(items)
 
     assert _urls_read(pipeline, items) == ["s3://bucket/0.tsv"]
-    # 0.tsv is on the boundary and comes back deduped; the batch must still
-    # make progress rather than stopping on its budget.
+    # The 100-byte file is back on the boundary and deduped. The batch must
+    # still move: both remaining files fit the budget behind it.
     assert _urls_read(pipeline, items) == ["s3://bucket/1.tsv", "s3://bucket/2.tsv"]
-
-
-def test_a_file_bigger_than_the_budget_is_a_batch_of_its_own(
-    listed: Any, pipeline: dlt.Pipeline
-) -> None:
-    """The largest export is 14.5 GB against a 4 GiB budget. It has to load as
-    one batch rather than being skipped or split."""
-    items = _file_items([100, 10])
-    listed(items)
-
-    assert _urls_read(pipeline, items) == ["s3://bucket/0.tsv"]
-    assert _urls_read(pipeline, items) == ["s3://bucket/1.tsv"]
+    assert _urls_read(pipeline, items) == []

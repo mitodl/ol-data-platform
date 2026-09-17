@@ -214,15 +214,12 @@ class _FakeFileItem(dict[str, Any]):
         return io.BytesIO(self._content)
 
 
-def _read(
-    items: Iterable[_FakeFileItem], budget_bytes: int | None = None
-) -> list[pa.Table]:
+def _read(items: Iterable[_FakeFileItem]) -> list[pa.Table]:
     """Drive the reader's generator directly, past dlt's transformer wrapper."""
-    kwargs: dict[str, Any] = dict(edxorg_s3._CSV_READER_OPTIONS)  # noqa: SLF001
-    if budget_bytes is not None:
-        kwargs["budget_bytes"] = budget_bytes
     return list(
-        edxorg_s3.read_edxorg_tsv._pipe.gen(items, **kwargs)  # noqa: SLF001
+        edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001
+            items, **edxorg_s3._CSV_READER_OPTIONS
+        )
     )
 
 
