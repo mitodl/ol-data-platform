@@ -47,11 +47,13 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
 # (4 GiB) of source TSV at a time, and dlt's Iceberg writer materializes a
 # whole load as one Arrow table: measured 2.70 GB peak for a 1.1 GB batch and
 # 6.34 GB for 3.34 GB, about 0.9 GB + 1.6x the batch, so a full 4 GiB batch is
-# ~7.8 GB. The binding case is the batch holding the 14.5 GB export, a batch of
-# its own at ~24 GB; alongside one other op that is ~32 GB, and 48Gi leaves
-# room for the files that share its cursor second (the largest single second
-# in courseware_studentmodule holds 14.48 GB). At max_concurrent 4 the same
-# case is ~47 GB, which is inside 48Gi only if every estimate holds.
+# ~7.8 GB. The binding case is a batch carrying the 14.5 GB export: on its own
+# that is ~24 GB, and ~32 GB for the pair of ops. It can be larger, because the
+# files sharing a batch's cursor second are exempt from the budget (see
+# edxorg_files) -- 14.48 GB is the largest single second in
+# courseware_studentmodule, which puts that batch near 31 GB and the pair near
+# 39 GB, still inside 48Gi. At max_concurrent 4 the same case is ~54 GB, over
+# the limit, which is why this is 2 and not 4.
 #
 # The limit is not a scheduling input: the pod requests 2Gi, so the scheduler
 # places it as if it were small either way, and what 48Gi buys is a higher

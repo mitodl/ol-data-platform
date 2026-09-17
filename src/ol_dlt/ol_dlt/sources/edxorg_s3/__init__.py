@@ -332,7 +332,13 @@ def edxorg_files(
         "modification_date"
     ),
 ) -> Iterator[list[FileItemDict]]:
-    """List one batch of unread TSVs, oldest first, up to ``budget_bytes``.
+    """List one batch of unread TSVs, oldest first.
+
+    ``budget_bytes`` caps the files this batch yields past the cursor's
+    second. The cursor's own second is deliberately exempt and is NOT capped
+    (see the boundary branch below), so a batch's true ceiling is the unread
+    bytes in that one second plus ``budget_bytes`` plus, when the first unread
+    file is larger than the whole budget, that file.
 
     This is where the budget has to live. A dlt transformer is invoked once
     per page, so a running total kept in ``read_edxorg_tsv`` restarts at zero
@@ -360,7 +366,10 @@ def edxorg_files(
     cursor_value = modification_date.last_value
     batch_bytes = 0
     boundary_bytes = 0
-    yielded_unread = False
+    # "Definitely unread", not merely "unread": a boundary file may be a
+    # re-listing of the file this batch resumes on, which dedups upstream of
+    # the reader, so it cannot be counted as progress.
+    yielded_definitely_unread = False
 
     for file_item in listed:
         modified_at = file_item["modification_date"]
@@ -385,11 +394,12 @@ def edxorg_files(
             boundary_bytes += size
             continue
 
-        # Check before yielding, so a batch is at most its budget rather than
-        # its budget plus whatever the file that crossed the line happens to
-        # weigh. `yielded_unread` keeps a file larger than the entire budget
-        # from being skipped forever: it becomes a batch of its own.
-        if yielded_unread and batch_bytes + size > budget_bytes:
+        # Check before yielding, so the files past the boundary second come
+        # to at most the budget rather than the budget plus whatever the file
+        # that crossed the line happens to weigh. The flag keeps a file larger
+        # than the entire budget from being skipped forever: it becomes a
+        # batch of its own.
+        if yielded_definitely_unread and batch_bytes + size > budget_bytes:
             logger.info(
                 "Listed %s bytes of edxorg TSV for %s against a %s byte "
                 "budget (%s more on the cursor boundary); ending this batch.",
@@ -403,7 +413,7 @@ def edxorg_files(
         # A page of one: the cursor advances over a page as a whole, so a
         # larger page would carry it past files this batch stops before.
         yield [FileItemDict(file_item, credentials)]
-        yielded_unread = True
+        yielded_definitely_unread = True
         batch_bytes += size
 
 

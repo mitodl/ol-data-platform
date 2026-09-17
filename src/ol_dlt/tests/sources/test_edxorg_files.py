@@ -201,6 +201,39 @@ def test_unread_files_sharing_the_boundary_second_are_still_read(
     assert not set(first) & set(second)
 
 
+def test_the_boundary_second_is_exempt_from_the_budget(
+    listed: Any, pipeline: dlt.Pipeline
+) -> None:
+    """The one place the budget is deliberately not a ceiling.
+
+    Files sharing the cursor's second cannot be told apart from the already-
+    read file the batch resumes on, so the whole group is yielded and dedup
+    sorts it out. That group is not capped: capping it would strand unread
+    files behind a cursor that already equals their mtime. The exposure is
+    bounded by what one second of archive output holds -- measured across
+    courseware_studentmodule's 58,378 files, the largest single second holds
+    14.48 GB and only 8 seconds hold more than 4 GiB.
+    """
+    items = _file_items([10] * 6)
+    for item in items[:5]:
+        item["modification_date"] = _START  # five files in one second
+    listed(items)
+
+    first = _urls_read(pipeline, items)
+    second = _urls_read(pipeline, items)
+
+    # The first batch stops at the budget, two files in.
+    assert first == ["s3://bucket/0.tsv", "s3://bucket/1.tsv"]
+    # The second re-lists that whole second and keeps the three unread files,
+    # 30 bytes against a 25 byte budget, because none of them can be skipped.
+    assert second == [
+        "s3://bucket/2.tsv",
+        "s3://bucket/3.tsv",
+        "s3://bucket/4.tsv",
+        "s3://bucket/5.tsv",
+    ]
+
+
 def test_every_batch_makes_progress_past_the_boundary(
     listed: Any, pipeline: dlt.Pipeline
 ) -> None:
