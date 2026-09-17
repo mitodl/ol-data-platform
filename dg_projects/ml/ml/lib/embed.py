@@ -71,6 +71,11 @@ logger = logging.getLogger(__name__)
 class EmbeddingClient(Protocol):
     model_version: str
     dim: int
+    # The largest number of texts this provider accepts in one embed_batch call --
+    # independent of EMBEDDING_BATCH_SIZE/config.batch_size, which only controls
+    # how many rows are checkpointed together. _embed_chunk splits a checkpoint
+    # chunk into sub-batches of this size before calling embed_batch.
+    max_request_batch_size: int
 
     def embed_batch(
         self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
@@ -79,6 +84,9 @@ class EmbeddingClient(Protocol):
 
 class OpenAIEmbeddingClient:
     """Adapts an OpenAI-compatible client to the EmbeddingClient protocol."""
+
+    # OpenAI's embeddings API accepts up to 2048 inputs per request.
+    max_request_batch_size = 2048
 
     def __init__(self, client: OpenAI, model_version: str, dim: int) -> None:
         self._client = client
@@ -119,6 +127,9 @@ class OpenAIEmbeddingClient:
 
 class GeminiEmbeddingClient:
     """Adapts a google-genai client to the EmbeddingClient protocol."""
+
+    # Gemini's embed_content accepts up to 250 texts per request.
+    max_request_batch_size = 250
 
     def __init__(self, client: genai.Client, model_version: str, dim: int) -> None:
         self._client = client
@@ -172,10 +183,17 @@ class BedrockEmbeddingClient:
     contract to adapt to, so this dispatches on model_version's prefix.
     """
 
+    # Cohere's Bedrock invoke_model accepts up to 96 texts per request. Titan has
+    # no batch endpoint at all (_embed_titan already loops one invoke_model call
+    # per text, no matter the sub-batch size), so it has no real cap. Cohere's
+    # invoke_model does have one: 96 texts per call. Titan gets Cohere's number
+    # too -- it's not a real limit for Titan, just a harmless, arbitrary size to
+    # sub-batch by, rather than inventing a second "no limit" concept.
     def __init__(self, client: BaseClient, model_version: str, dim: int) -> None:
         self._client = client
         self.model_version = model_version
         self.dim = dim
+        self.max_request_batch_size = 96
 
     @traced(
         "feedback_embed_bedrock",
@@ -354,12 +372,12 @@ def filter_unembedded(
     return joined.filter(is_new_or_changed).select(source_df.columns)
 
 
-def _embed_chunk(
+def _embed_request_batch(
     chunk: list[dict[str, Any]],
     client: EmbeddingClient,
     errors: list[str] | None = None,
 ) -> list[tuple[dict[str, Any], list[float]]]:
-    """Embed one chunk via a single batched API call, falling back row-by-row.
+    """Embed one request-sized batch via a single API call, falling back row-by-row.
 
     A single bad row (e.g. a length/encoding issue the API rejects) fails the whole
     batch call as openai.BadRequestError -- retrying one at a time isolates it
@@ -430,6 +448,22 @@ def _embed_chunk(
             errors.append(f"chunk of {len(chunk)}: {type(e).__name__}: {e}")
         return []
     return list(zip(chunk, vectors, strict=True))
+
+
+def _embed_chunk(
+    chunk: list[dict[str, Any]],
+    client: EmbeddingClient,
+    errors: list[str] | None = None,
+) -> list[tuple[dict[str, Any], list[float]]]:
+    """Embed one checkpoint chunk, split into client.max_request_batch_size-sized
+    API calls -- keeps a large checkpoint chunk from being sent as one oversized,
+    guaranteed-to-fail request.
+    """
+    results: list[tuple[dict[str, Any], list[float]]] = []
+    for start in range(0, len(chunk), client.max_request_batch_size):
+        request_batch = chunk[start : start + client.max_request_batch_size]
+        results.extend(_embed_request_batch(request_batch, client, errors=errors))
+    return results
 
 
 def _results_to_df(
@@ -525,7 +559,8 @@ def embed_and_checkpoint(
             method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
         checkpoint_target: (catalog, table_identifier) passed through to
             checkpoint_embedding_chunk.
-        batch_size: rows per embed_batch call and per checkpoint upsert.
+        batch_size: rows per checkpoint upsert. _embed_chunk splits this into
+            smaller client.max_request_batch_size-sized embed_batch calls.
         errors: if given, collects every failure's message (see _embed_chunk) so a
             caller can surface *why* calls failed, e.g. in a Failure message.
 

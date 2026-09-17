@@ -28,10 +28,14 @@ class _FakeEmbeddingClient:
     """
 
     def __init__(
-        self, model_version: str = "text-embedding-3-large", dim: int = 3
+        self,
+        model_version: str = "text-embedding-3-large",
+        dim: int = 3,
+        max_request_batch_size: int = 2048,
     ) -> None:
         self.model_version = model_version
         self.dim = dim
+        self.max_request_batch_size = max_request_batch_size
         self.batch_calls: list[list[str]] = []
         self.trace_metadata_calls: list[dict[str, object] | None] = []
 
@@ -559,6 +563,36 @@ def test_embed_and_checkpoint_batches_calls() -> None:
     ]
 
 
+def test_embed_and_checkpoint_splits_request_batches_by_provider_limit() -> None:
+    """A checkpoint chunk larger than the client's per-request limit is split
+    into multiple embed_batch calls, e.g. Bedrock Cohere's 96-text cap -- the
+    checkpoint batch_size can be much larger than any provider's real limit.
+    """
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient(max_request_batch_size=2)
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
+            "source_slug": ["zendesk", "zendesk", "zendesk"],
+            "conversation_ref": ["1", "2", "3"],
+            "turn_count": [1, 1, 1],
+            "embedding_input": ["summary", "summary", "summary"],
+            "resolved_text": ["hi", "hello", "hey"],
+        }
+    )
+
+    result = embed.embed_and_checkpoint(
+        df, client, (catalog, "some_db.feedback_embeddings"), batch_size=3
+    )
+
+    assert sorted(result["conversation_ref"].to_list()) == ["1", "2", "3"]
+    # one checkpoint chunk of 3 rows, but split into two request-sized calls
+    assert client.batch_calls == [["hi", "hello"], ["hey"]]
+    # one Iceberg commit for the whole checkpoint chunk, not one per request
+    assert len(table.upserts) == 1
+
+
 def test_embed_and_checkpoint_retries_individually_on_batch_failure() -> None:
     """A bad row fails the batch call; the rest are recovered by retrying solo."""
     table = _FakeTable()
@@ -747,6 +781,7 @@ def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
     class _AlwaysFailingClient:
         model_version = "test-model"
         dim = 3
+        max_request_batch_size = 2048
 
         def embed_batch(
             self,
