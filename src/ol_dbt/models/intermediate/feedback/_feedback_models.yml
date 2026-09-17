@@ -86,6 +86,20 @@ models:
 - name: int__feedback__learn_ai_tutor
   description: One row per user message sent to the Learn AI tutor chatbot. Bot replies
     are excluded.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/tracking_logs
   columns:
   - name: source_slug
     description: str, the feedback source this row came from. Always 'learn_ai_tutor'
@@ -160,6 +174,20 @@ models:
     PII: this model carries raw, unredacted feedback text under the intermediate
     schema's grants. Presidio masking happens in the feedback_redacted Dagster asset
     between here and tfact_feedback.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/tracking_logs
   columns:
   - name: source_slug
     description: str, which source the row came from.
