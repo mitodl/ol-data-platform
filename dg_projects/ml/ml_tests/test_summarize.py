@@ -617,9 +617,15 @@ def _summary_row(**overrides: object) -> dict[str, object]:
     return row
 
 
+class _FakeField:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class _FakeSchema:
     def __init__(self, column_names: list[str]) -> None:
         self.column_names = column_names
+        self.fields = [_FakeField(name) for name in column_names]
 
 
 class _FakeSchemaUpdate:

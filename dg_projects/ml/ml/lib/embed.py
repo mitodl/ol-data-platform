@@ -60,8 +60,10 @@ BEDROCK_EMBEDDING_MODEL_VERSION = os.environ.get(
 EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 
 # Bounds each API call to this many conversations rather than one call per
-# conversation
-EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "100"))
+# conversation. Also the checkpoint commit size: each chunk is one Iceberg upsert,
+# and more chunks means more commits, which is what actually dominates wall-clock
+# time at scale.
+EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "500"))
 
 logger = logging.getLogger(__name__)
 
@@ -493,8 +495,9 @@ def checkpoint_embedding_chunk(
         update.union_by_name(chunk_df.to_arrow().schema)
     # union_by_name appends new columns at the table's end regardless of chunk_df's
     # order, and upsert's pyarrow cast is positional -- so it must be reordered
-    # to match the table, not chunk_df.
-    ordered_chunk_df = chunk_df.select(table.schema().column_names)
+    # to match the table, not chunk_df. table.schema().fields (== .columns) gives
+    # the top-level field names only.
+    ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
     table.upsert(
         df=ordered_chunk_df.to_arrow(),
         join_cols=JOIN_COLS,

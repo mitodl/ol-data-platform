@@ -417,9 +417,17 @@ def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
         client.embed_batch(["a"])
 
 
+class _FakeField:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class _FakeSchema:
-    def __init__(self, column_names: list[str]) -> None:
-        self.column_names = column_names
+    def __init__(self, top_level_names: list[str], nested_extra: list[str]) -> None:
+        # Mirrors real pyiceberg: column_names flattens in nested field names
+        # (e.g. a List column's "element" child) that fields/columns does not.
+        self.column_names = top_level_names + nested_extra
+        self.fields = [_FakeField(name) for name in top_level_names]
 
 
 class _FakeSchemaUpdate:
@@ -445,12 +453,13 @@ class _FakeTable:
     def __init__(self) -> None:
         self.upserts: list[dict[str, object]] = []
         self._column_names: list[str] = []
+        self._nested_extra_column_names: list[str] = []
 
     def update_schema(self) -> _FakeSchemaUpdate:
         return _FakeSchemaUpdate(self)
 
     def schema(self) -> _FakeSchema:
-        return _FakeSchema(self._column_names)
+        return _FakeSchema(self._column_names, self._nested_extra_column_names)
 
     def upsert(self, **kwargs: object) -> None:
         self.upserts.append(kwargs)
@@ -654,6 +663,43 @@ def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
     assert catalog.create_calls == ["some_db.feedback_embeddings"]
     assert len(table.upserts) == 1
     assert table.upserts[0]["join_cols"] == embed.JOIN_COLS
+
+
+def test_checkpoint_embedding_chunk_reorders_using_top_level_fields_only() -> None:
+    """Pyiceberg's Schema.column_names includes nested fields (e.g. a List
+    column's "element" child, surfaced as "embedding_vector.element") -- using
+    it to reorder columns would try to select a name Polars doesn't have.
+    """
+    table = _FakeTable()
+    table._column_names = [
+        "feedback_conversation_pk",
+        "source_slug",
+        "conversation_ref",
+        "turn_count",
+        "embedding_input",
+        "embedding_vector",
+        "embedding_dim",
+        "embedding_model_version",
+    ]
+    # column_names would also surface this, but it isn't a real top-level field.
+    table._nested_extra_column_names = ["embedding_vector.element"]
+    catalog = _FakeCatalog(table)
+    chunk_df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1"],
+            "source_slug": ["zendesk"],
+            "conversation_ref": ["1"],
+            "turn_count": [1],
+            "embedding_input": ["summary"],
+            "embedding_vector": [[0.1, 0.2, 0.3]],
+            "embedding_dim": [3],
+            "embedding_model_version": ["text-embedding-3-large"],
+        }
+    )
+
+    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", chunk_df)
+
+    assert len(table.upserts) == 1
 
 
 def test_checkpoint_embedding_chunk_skips_empty_chunks_without_touching_catalog() -> (
