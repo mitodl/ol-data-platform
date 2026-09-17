@@ -10,30 +10,30 @@ strategies:
   qa: omit
   local: fixture
 loader: dlt
-# TRANSITIONAL — set this to `_file_modified_at` once the backfill has loaded.
-#
-# Explicit null means "no metadata column, do not deduplicate". No row in these
-# tables carries `_file_modified_at` yet, and naming it before the backfill
-# writes those rows reinstates the COLUMN_NOT_FOUND that
-# ol-data-platform#2443 was filed for. Measured in s3://ol-data-lake-raw-
-# production/edxorg/ol_warehouse_production_raw on 2026-09-17: auth_user holds
-# only the empty table dlt created on 2026-07-03; auth_userprofile,
-# courseware_studentmodule, student_courseenrollment and
-# student_courseaccessrole do not exist; certificates_generatedcertificate
-# (925 MB, 1,450 metadata versions, last written during the 2026-09-16 failed
-# runs) and grades_persistentcoursegrade (711 KB) hold rows written under the
-# old merge disposition, which carry a null there and lose the dedup to
-# freshly stamped rows (Trino orders NULLS LAST in both directions).
-#
 # `_file_modified_at` rather than `_dlt_load_id`: the load appends and the
 # backfill walks the landing zone in whatever order it likes, so the load id
 # records when a row was ingested, not which export it came from. Ordering
 # staging by the source file's mtime is what picks the newest version of a
-# record.
+# record, and it is the only thing deduplicating these tables now that the
+# load appends -- raw keeps every row of every export until the compaction
+# pass exists.
 #
-# Until this flips, nothing deduplicates at either layer and raw holds every
-# row of every export.
-raw_metadata_column:
+# This column does not exist in the raw tables until each one's first append
+# load writes it, so the 7 staging models here fail with COLUMN_NOT_FOUND
+# (ol-data-platform#2443) in between. Measured in
+# s3://ol-data-lake-raw-production/edxorg/ol_warehouse_production_raw on
+# 2026-09-17, that window costs 2 tables: certificates_generatedcertificate
+# (925 MB, 1,450 metadata versions, last written during the 2026-09-16 failed
+# runs) and grades_persistentcoursegrade (711 KB) hold rows and are modeled
+# today. auth_user holds only the empty table dlt created on 2026-07-03, and
+# auth_userprofile, courseware_studentmodule, student_courseenrollment and
+# student_courseaccessrole have no table at all, so their staging models are
+# already failing on the missing source.
+#
+# Rows written under the old merge disposition carry a null here and lose the
+# dedup to freshly stamped rows: Trino orders NULLS LAST in both directions,
+# and a key with only old rows still yields its single row.
+raw_metadata_column: _file_modified_at
 table_prefix: raw__edxorg__s3__tables__
 dlt:
   source_module: ol_dlt.sources.edxorg_s3
