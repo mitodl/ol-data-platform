@@ -38,11 +38,20 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
 # default limit (see the `data_loading` code location in ol_infrastructure's
 # dagster/__main__.py), not just fan-out, was the binding constraint. The
 # `dagster-k8s/config` tag below raises the memory *limit for this job's run
-# pod only*, matching the 32Gi already given to the `edxorg` and
-# `legacy_openedx` code locations for the exact same large-edX-table problem
-# (see __main__.py's "Give more memory for processing edxorg archives" /
-# "studentmodule loading to memory" comments) -- without inflating the
+# pod only* (see __main__.py's "Give more memory for processing edxorg
+# archives" / "studentmodule loading to memory" comments for the same problem
+# in the `edxorg` and `legacy_openedx` code locations) -- without inflating the
 # baseline for the other, much smaller ingest jobs sharing this code location.
+#
+# 48Gi, up from 32Gi, sized against the batched loads rather than guessed. Each
+# op loads at most `budget_bytes` (4 GiB) of source TSV at a time, and dlt's
+# Iceberg writer materializes a whole load as one Arrow table: measured 2.70 GB
+# peak for a 1.1 GB batch and 6.34 GB for 3.34 GB, about 0.9 GB + 1.6x the
+# batch. Four ops at a full budget is ~29 GB. The binding case is the batch
+# holding the 14.5 GB export, which is a batch of its own at ~24 GB, alongside
+# three ops at ~7.3 GB: ~46 GB. Worker nodes are m8i-flex.4xlarge (64 GiB), so
+# this is the largest limit that still schedules. Lowering max_concurrent to 2
+# would fit 32Gi instead, at half the throughput.
 edxorg_s3_ingest_job = dg.define_asset_job(
     name="edxorg_s3_ingest_job",
     selection=dg.AssetSelection.keys(*_EDXORG_S3_ASSET_KEYS),
@@ -68,7 +77,7 @@ edxorg_s3_ingest_job = dg.define_asset_job(
             "container_config": {
                 "resources": {
                     "requests": {"memory": "2Gi", "ephemeral-storage": "32Gi"},
-                    "limits": {"memory": "32Gi", "ephemeral-storage": "96Gi"},
+                    "limits": {"memory": "48Gi", "ephemeral-storage": "96Gi"},
                 }
             }
         }

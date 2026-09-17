@@ -10,7 +10,7 @@ import contextlib
 import io
 import json
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -214,17 +214,95 @@ class _FakeFileItem(dict[str, Any]):
         return io.BytesIO(self._content)
 
 
-def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
+def _read(
+    items: Iterable[_FakeFileItem], budget_bytes: int | None = None
+) -> list[pa.Table]:
     """Drive the reader's generator directly, past dlt's transformer wrapper."""
+    kwargs: dict[str, Any] = dict(edxorg_s3._CSV_READER_OPTIONS)  # noqa: SLF001
+    if budget_bytes is not None:
+        kwargs["budget_bytes"] = budget_bytes
     return list(
-        edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001
-            items, **edxorg_s3._CSV_READER_OPTIONS
-        )
+        edxorg_s3.read_edxorg_tsv._pipe.gen(items, **kwargs)  # noqa: SLF001
     )
 
 
 def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
     return [row for batch in batches for row in batch.to_pylist()]
+
+
+def test_reader_stops_once_the_byte_budget_is_reached() -> None:
+    """A batch covers at most budget_bytes of source TSV.
+
+    dlt's Iceberg writer materializes a whole load as one Arrow table, so an
+    unbounded batch is what makes an 11.1 TB table unloadable at any pod size.
+    """
+    files = [
+        _FakeFileItem(
+            f"s3://bucket/{i}.tsv", _CLEAN_TSV, datetime(2026, 2, i, tzinfo=UTC)
+        )
+        for i in range(1, 6)
+    ]
+
+    rows = _rows(_read(files, budget_bytes=len(_CLEAN_TSV) * 2))
+
+    # Two files' worth: the budget is reached at the end of the second file,
+    # and a file already started is always finished.
+    assert [r[file_metadata.SOURCE_FILE_COLUMN] for r in rows] == [
+        "s3://bucket/1.tsv",
+        "s3://bucket/1.tsv",
+        "s3://bucket/2.tsv",
+        "s3://bucket/2.tsv",
+    ]
+
+
+def test_reader_does_not_pull_the_file_it_stops_before() -> None:
+    """The unread file must not even be requested from the upstream resource.
+
+    dlt's filesystem resource applies its incremental cursor as it yields, so
+    a file pulled and then skipped would be recorded as processed and never
+    read again. Iterating a generator of items lets this assert what was
+    pulled, which a list cannot.
+    """
+    pulled: list[str] = []
+
+    def _items() -> Iterator[_FakeFileItem]:
+        for i in range(1, 4):
+            item = _FakeFileItem(f"s3://bucket/{i}.tsv", _CLEAN_TSV)
+            pulled.append(item["file_url"])
+            yield item
+
+    _read(_items(), budget_bytes=len(_CLEAN_TSV))
+
+    assert pulled == ["s3://bucket/1.tsv"]
+
+
+def test_reader_finishes_a_file_larger_than_the_whole_budget() -> None:
+    """A single oversized file is a batch of its own, not a truncated read.
+
+    The largest edxorg export is 14.5 GB against a 4 GiB budget; stopping
+    mid-file would leave the rest of it unread and the cursor past it.
+    """
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/big.tsv", _CLEAN_TSV)], budget_bytes=1)
+    )
+
+    assert [r["id"] for r in rows] == ["1", "2"]
+
+
+def test_reader_counts_a_file_recovered_by_the_unquoted_fallback() -> None:
+    """The fallback path must spend budget too, or a batch of legacy files is
+    unbounded."""
+    pulled: list[str] = []
+
+    def _items() -> Iterator[_FakeFileItem]:
+        for i in range(1, 4):
+            item = _FakeFileItem(f"s3://bucket/{i}.tsv", _LEGACY_STRAY_QUOTE_TSV)
+            pulled.append(item["file_url"])
+            yield item
+
+    _read(_items(), budget_bytes=len(_LEGACY_STRAY_QUOTE_TSV))
+
+    assert pulled == ["s3://bucket/1.tsv"]
 
 
 def test_reader_stamps_every_row_with_its_source_file() -> None:

@@ -90,6 +90,20 @@ _UNQUOTED_READER_OVERRIDES: dict[str, Any] = {"quotechar": "", "escapechar": ""}
 
 _DOWNLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 
+# How much source TSV one dlt load may cover. dlt's Iceberg writer materializes
+# a whole load as one Arrow table (`write_iceberg_table` receives
+# `arrow_dataset.to_table()`; only the Delta path streams), so the load step's
+# peak memory tracks this number: measured 2.70 GB for a 1.1 GB batch and
+# 6.34 GB for 3.34 GB, about 0.9 GB + 1.6x the batch. At 4 GiB, four
+# concurrent table ops need ~29 GB, and the one batch holding the 14.5 GB
+# export -- a single file always forms a batch of its own -- needs ~24 GB for
+# that op. See the job's memory limit in data_loading's ingestion sensor.
+#
+# The backlog is walked one budget at a time rather than in a single load:
+# 11.1 TB of courseware_studentmodule does not fit in any pod, and a kill
+# costs one batch instead of the whole run.
+_DEFAULT_BUDGET_BYTES = 4 * 1024**3
+
 
 class EdxorgTSVUnreadableError(Exception):
     """DuckDB could not read one edxorg TSV, named in the message."""
@@ -201,10 +215,20 @@ def _read_unquoted_tsv(
     return batches
 
 
+def _log_batch_end(read_bytes: int, budget_bytes: int) -> None:
+    logger.info(
+        "Read %s bytes of edxorg TSV, at or over the %s byte budget; "
+        "ending this batch.",
+        read_bytes,
+        budget_bytes,
+    )
+
+
 @dlt.transformer(standalone=True)
 def read_edxorg_tsv(
     items: Iterable[FileItemDict],
     chunk_size: int = 5000,
+    budget_bytes: int = _DEFAULT_BUDGET_BYTES,
     **duckdb_kwargs: Any,
 ) -> Iterator[Any]:
     """Read edxorg TSVs, recovering legacy files and naming any it cannot read.
@@ -248,6 +272,8 @@ def read_edxorg_tsv(
     """
     import duckdb  # noqa: PLC0415
 
+    read_bytes = 0
+
     for item in items:
         if not item.get("size_in_bytes"):
             logger.warning(
@@ -284,6 +310,10 @@ def read_edxorg_tsv(
                     raise EdxorgTSVUnreadableError(msg) from error
                 for batch in unquoted:
                     yield _stamp(batch)
+                read_bytes += item["size_in_bytes"]
+                if read_bytes >= budget_bytes:
+                    _log_batch_end(read_bytes, budget_bytes)
+                    return
                 continue
 
             yield _stamp(first_batch)
@@ -299,12 +329,25 @@ def read_edxorg_tsv(
                 )
                 raise EdxorgTSVUnreadableError(msg) from error
 
+        read_bytes += item["size_in_bytes"]
+        if read_bytes >= budget_bytes:
+            # Stop before pulling the next item, not after. The upstream
+            # filesystem resource applies its incremental cursor as it yields,
+            # so an item pulled here would be recorded as processed even
+            # though this batch never read it; breaking first leaves it for
+            # the next batch. Same reason the resource is configured with
+            # files_per_page=1: a page is yielded whole, so a bigger page
+            # would carry the cursor past files this batch never touched.
+            _log_batch_end(read_bytes, budget_bytes)
+            return
+
 
 @dlt.source(name="edxorg_s3")
 def edxorg_s3_source(
     tables: list[str] | None = None,
     bucket_url: str = _EDXORG_LANDING_BUCKET,
     table_format: config.TableFormat | None = None,
+    budget_bytes: int = _DEFAULT_BUDGET_BYTES,
 ) -> Generator[Any]:
     """Load edxorg CSV/TSV data from S3, one resource per table.
 
@@ -317,6 +360,10 @@ def edxorg_s3_source(
         bucket_url: S3 bucket URL containing the TSV files.
         table_format: ``native`` (parquet) or ``iceberg``; defaults to the active
             profile's table format.
+        budget_bytes: How much source TSV one load may cover before the batch
+            ends. The caller re-runs the source until a batch reads nothing,
+            which is how the backlog is walked without holding a whole table's
+            load in memory.
     """
     resolved_format = table_format or config.active_table_format()
 
@@ -353,7 +400,15 @@ def edxorg_s3_source(
             bucket_url=bucket_url,
             file_glob=file_glob,
             credentials=fs,
-            incremental=incremental("modification_date"),
+            # One file per page. The cursor advances over a page as a whole,
+            # so a larger page would mark files processed that the byte budget
+            # stopped this batch short of reading (see read_edxorg_tsv).
+            files_per_page=1,
+            # row_order="asc" makes the resource sort the listing by
+            # modification_date before yielding, which is what lets a batch
+            # stop early without skipping anything: every file left unread
+            # sorts after the cursor the batch saves.
+            incremental=incremental("modification_date", row_order="asc"),
         )
 
         # Pipe filesystem items through read_edxorg_tsv, then rename and
@@ -361,7 +416,7 @@ def edxorg_s3_source(
         # *returns* another DltResource would replace the outer resource and
         # discard its name/hints; applying hints on the pipe avoids that.
         yield (
-            (files | read_edxorg_tsv(**_CSV_READER_OPTIONS))
+            (files | read_edxorg_tsv(budget_bytes=budget_bytes, **_CSV_READER_OPTIONS))
             .with_name(resource_name)
             .apply_hints(
                 table_name=resource_name,

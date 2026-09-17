@@ -10,7 +10,12 @@ blocking the rest of the run behind it.
 from collections.abc import Iterable
 from typing import Any
 
-from dagster import AssetExecutionContext, AssetsDefinition, Definitions
+from dagster import (
+    AssetExecutionContext,
+    AssetsDefinition,
+    Definitions,
+    MaterializeResult,
+)
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     edxorg_s3,
@@ -138,6 +143,84 @@ posthog_events_assets = build_ingest_assets(
 # fixed CPU/memory budget. Tune the slot count in the Dagster instance UI.
 _EDXORG_S3_POOL = "edxorg_s3"
 
+# Each batch is one dlt load of at most `budget_bytes` of source TSV (see
+# ol_dlt.sources.edxorg_s3), so one Dagster run walks the backlog a batch at a
+# time instead of holding a whole table's load in memory. The cap keeps a run
+# from spinning forever on a source that never drains; the cursor is saved per
+# batch, so the next run picks up where this one stopped. 11.1 TB of
+# courseware_studentmodule at 4 GiB per batch is ~2,800 batches, so the
+# backlog spans many runs by design.
+_MAX_BATCHES_PER_RUN = 200
+
+
+def _normalized_row_count(pipeline: Any, table_name: str) -> int:
+    """Rows this pipeline's last load normalized into ``table_name``.
+
+    Zero means the batch found no files the cursor had not already covered,
+    which is how the loop learns the backlog is drained. Read from the trace
+    rather than the load info because dagster-dlt hands back materializations,
+    not the LoadInfo.
+    """
+    trace = pipeline.last_trace
+    if trace is None or trace.last_normalize_info is None:
+        return 0
+    return trace.last_normalize_info.row_counts.get(table_name, 0)
+
+
+def load_in_batches(
+    *,
+    context: AssetExecutionContext,
+    dlt: DagsterDltResource,
+    table_name: str,
+    pipeline: Any,
+    resource_name: str,
+) -> tuple[list[Any], int, int]:
+    """Run one dlt load per byte budget until the table's backlog is drained.
+
+    Returns the last batch's materializations, how many batches ran, and the
+    rows they loaded between them.
+
+    A batch that normalizes zero rows means the cursor already covers every
+    file in the landing zone, which is the only stop condition that does not
+    need a second listing of the bucket. Each batch commits its own cursor, so
+    a pod killed mid-run costs one batch rather than the run.
+    """
+    results: list[Any] = []
+    rows_loaded = 0
+    batches = 0
+
+    for batch in range(1, _MAX_BATCHES_PER_RUN + 1):
+        # A fresh source per batch: a DltSource's resources are generators,
+        # spent once the batch that consumed them ends.
+        results = list(
+            dlt.run(
+                context=context,
+                dlt_source=edxorg_s3.edxorg_s3_source(tables=[table_name]),
+                loader_file_format="parquet",
+            )
+        )
+        batches = batch
+        batch_rows = _normalized_row_count(pipeline, resource_name)
+        rows_loaded += batch_rows
+        context.log.info(
+            "Batch %s of %s loaded %s rows (%s total).",
+            batch,
+            table_name,
+            batch_rows,
+            rows_loaded,
+        )
+        if batch_rows == 0:
+            break
+    else:
+        context.log.warning(
+            "%s hit the %s batch cap with rows still loading; the next run "
+            "resumes from the saved cursor.",
+            table_name,
+            _MAX_BATCHES_PER_RUN,
+        )
+
+    return results, batches, rows_loaded
+
 
 def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     """Wrap one edxorg_s3 table as its own ``@dlt_assets`` op.
@@ -151,6 +234,7 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     """
     source = edxorg_s3.edxorg_s3_source(tables=[table_name])
     pipeline = edxorg_s3.edxorg_s3_pipeline_for(table_name)
+    resource_name = f"raw__edxorg__s3__tables__{table_name}"
 
     @dlt_assets(
         dlt_source=source,
@@ -163,11 +247,27 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     def _asset(
         context: AssetExecutionContext, dlt: DagsterDltResource
     ) -> Iterable[Any]:
-        yield from dlt.run(
+        results, batches, rows_loaded = load_in_batches(
             context=context,
-            dlt_source=source,
-            loader_file_format="parquet",
+            dlt=dlt,
+            table_name=table_name,
+            pipeline=pipeline,
+            resource_name=resource_name,
         )
+
+        # One materialization per asset, not one per batch: Dagster rejects a
+        # step that materializes the same asset twice. The last batch's
+        # metadata describes an empty catch-up load, so the counts that
+        # describe the whole run are added here.
+        for result in results:
+            yield MaterializeResult(
+                asset_key=result.asset_key,
+                metadata={
+                    **dict(result.metadata or {}),
+                    "batches": batches,
+                    "rows_loaded": rows_loaded,
+                },
+            )
 
     return _asset
 
