@@ -305,8 +305,8 @@ Every unit's `strategies.qa` now follows one rule:
 `ol-dbt inventory validate` now rejects `scoped` + `mirror` and `singleton` + `ingest`.
 
 Most `ingest` and every `mirror` unit is empty or stale in QA. That's the gap step 5 baselines
-(§2's second row), not a reason to mark the unit `omit`. Marking it `omit` would turn the 168
-`qa_branches` declarations into unbaselineable errors.
+(§2's second row), not a reason to mark the unit `omit`. Marking it `omit` would turn the `qa_branches`
+declarations on 165 models into unbaselineable errors.
 
 ### How it was measured
 
@@ -315,8 +315,9 @@ Most `ingest` and every `mirror` unit is empty or stale in QA. That's the gap st
   `tables[].raw_table`. Glue stores names lowercased, and salesforce's inventory names are not.
 - **Non-empty and snapshot date:** the current snapshot in each table's Iceberg
   `metadata_location` file, using `total-records` and `timestamp-ms`. Glue `UpdateTime` is
-  useless here. The 2026-09-08 QA JSONL→Iceberg conversion (step 8) rewrote it on 2,290 tables,
-  and it wrote snapshot dates for the tables that held data. So a 2026-09-08 to 09-14 snapshot on
+  useless here. 2,354 QA tables carry a 2026-09-08 `UpdateTime`, the date of the QA
+  JSONL→Iceberg conversion (step 8), and 190 more carry 09-11 or 09-14. The conversion also wrote
+  snapshot dates for the tables that held data. So a 2026-09-08 to 09-14 snapshot on
   a converted table dates the conversion, not the data. Converted empty shells have no snapshot
   at all.
 - **QA loaders:** `bin/airbyte-inventory.py dump --environment qa`. The workspace has 28
