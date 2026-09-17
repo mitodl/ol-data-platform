@@ -66,10 +66,7 @@ EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 # time at scale.
 EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "500"))
 
-# How many embed_batch calls (one per client.max_request_batch_size-sized
-# sub-batch) run at once. Titan has no batch endpoint at all (_embed_titan is a
-# sequential loop), so this is the only lever for its wall-clock time at scale --
-# same reasoning as SUMMARIZE_MAX_CONCURRENCY.
+# How many embed_batch sub-batch calls run at once.
 EMBEDDING_MAX_CONCURRENCY = int(os.environ.get("EMBEDDING_MAX_CONCURRENCY", "20"))
 
 logger = logging.getLogger(__name__)
@@ -464,14 +461,7 @@ def _embed_chunk(
     max_concurrency: int = EMBEDDING_MAX_CONCURRENCY,
 ) -> list[tuple[dict[str, Any], list[float]]]:
     """Embed one checkpoint chunk, split into client.max_request_batch_size-sized
-    API calls run concurrently -- keeps a large checkpoint chunk from being sent
-    as one oversized, guaranteed-to-fail request, and (for a client like Titan
-    with no real batch endpoint) is what actually parallelizes the work, since
-    each sub-batch's calls happen in its own thread.
-
-    errors is appended to from multiple threads here -- safe because list.append
-    is atomic under the GIL, same as any other plain list mutation shared across
-    threads in this codebase (e.g. summarize.py's per-row results).
+    API calls run concurrently.
     """
     request_batches = [
         chunk[start : start + client.max_request_batch_size]
