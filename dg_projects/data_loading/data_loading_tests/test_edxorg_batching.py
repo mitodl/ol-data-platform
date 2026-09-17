@@ -126,6 +126,35 @@ def test_one_empty_batch_is_a_complete_run() -> None:
     assert results, "the asset still needs a materialization to emit"
 
 
+def test_the_loop_reads_the_pipeline_dagster_dlt_actually_runs() -> None:
+    """The stop condition depends on these being one object.
+
+    `load_in_batches` reads `last_trace` off the pipeline captured in the
+    asset's closure, while `dlt.run()` is called without `dlt_pipeline=` and
+    resolves it from the asset's metadata. If a refactor ever made those two
+    different objects, the trace would be written to one and read from the
+    other, every batch would look like zero rows, and the walk would stop
+    after the first batch having loaded whatever that batch held.
+    """
+    from dagster_dlt.constants import META_KEY_PIPELINE  # noqa: PLC0415
+
+    asset_def = next(
+        a for a in assets.edxorg_s3_table_assets if "auth_user" in a.op.name
+    )
+    from_metadata = next(iter(asset_def.metadata_by_key.values()))[META_KEY_PIPELINE]
+
+    compute_fn = asset_def.op.compute_fn.decorated_fn
+    closure = dict(
+        zip(
+            compute_fn.__code__.co_freevars,
+            (cell.cell_contents for cell in compute_fn.__closure__ or ()),
+            strict=True,
+        )
+    )
+
+    assert closure["pipeline"] is from_metadata
+
+
 @pytest.mark.parametrize(
     ("trace", "expected"),
     [
