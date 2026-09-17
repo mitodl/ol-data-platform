@@ -1,6 +1,7 @@
 """Tests for ml.lib.embed."""
 
 import json
+import time
 from typing import Any, Self
 
 import boto3
@@ -563,6 +564,57 @@ def test_embed_and_checkpoint_batches_calls() -> None:
     ]
 
 
+def test_embed_and_checkpoint_runs_request_batches_concurrently() -> None:
+    """max_concurrency > 1 should let several embed_batch calls overlap, not
+    run strictly one after another -- the actual parallelism lever for a client
+    like Titan with no real batch endpoint.
+    """
+    call_delay = 0.2
+
+    class _SlowEmbeddingClient:
+        model_version = "test-model"
+        dim = 3
+        max_request_batch_size = 1
+
+        def embed_batch(
+            self,
+            texts: list[str],
+            *,
+            trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
+        ) -> list[list[float]]:
+            time.sleep(call_delay)
+            return [[float(len(text))] * self.dim for text in texts]
+
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    row_count = 8
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": [f"pk-{i}" for i in range(row_count)],
+            "source_slug": ["zendesk"] * row_count,
+            "conversation_ref": [str(i) for i in range(row_count)],
+            "turn_count": [1] * row_count,
+            "embedding_input": ["summary"] * row_count,
+            "resolved_text": [f"text {i}" for i in range(row_count)],
+        }
+    )
+
+    start = time.monotonic()
+    result = embed.embed_and_checkpoint(
+        df,
+        _SlowEmbeddingClient(),
+        (catalog, "some_db.feedback_embeddings"),
+        batch_size=row_count,
+        max_concurrency=row_count,
+    )
+    elapsed = time.monotonic() - start
+
+    assert result.height == row_count
+    # Serial would take row_count * call_delay (1.6s); running them all at once
+    # should land close to one call_delay, with generous headroom for CI jitter.
+    assert elapsed < row_count * call_delay / 2
+
+
 def test_embed_and_checkpoint_splits_request_batches_by_provider_limit() -> None:
     """A checkpoint chunk larger than the client's per-request limit is split
     into multiple embed_batch calls, e.g. Bedrock Cohere's 96-text cap -- the
@@ -587,8 +639,9 @@ def test_embed_and_checkpoint_splits_request_batches_by_provider_limit() -> None
     )
 
     assert sorted(result["conversation_ref"].to_list()) == ["1", "2", "3"]
-    # one checkpoint chunk of 3 rows, but split into two request-sized calls
-    assert client.batch_calls == [["hi", "hello"], ["hey"]]
+    # one checkpoint chunk of 3 rows, split into two request-sized calls -- run
+    # concurrently, so compare unordered
+    assert sorted(client.batch_calls, key=len) == [["hey"], ["hi", "hello"]]
     # one Iceberg commit for the whole checkpoint chunk, not one per request
     assert len(table.upserts) == 1
 

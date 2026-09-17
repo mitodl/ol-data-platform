@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -64,6 +65,12 @@ EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 # and more chunks means more commits, which is what actually dominates wall-clock
 # time at scale.
 EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "500"))
+
+# How many embed_batch calls (one per client.max_request_batch_size-sized
+# sub-batch) run at once. Titan has no batch endpoint at all (_embed_titan is a
+# sequential loop), so this is the only lever for its wall-clock time at scale --
+# same reasoning as SUMMARIZE_MAX_CONCURRENCY.
+EMBEDDING_MAX_CONCURRENCY = int(os.environ.get("EMBEDDING_MAX_CONCURRENCY", "20"))
 
 logger = logging.getLogger(__name__)
 
@@ -454,15 +461,30 @@ def _embed_chunk(
     chunk: list[dict[str, Any]],
     client: EmbeddingClient,
     errors: list[str] | None = None,
+    max_concurrency: int = EMBEDDING_MAX_CONCURRENCY,
 ) -> list[tuple[dict[str, Any], list[float]]]:
     """Embed one checkpoint chunk, split into client.max_request_batch_size-sized
-    API calls -- keeps a large checkpoint chunk from being sent as one oversized,
-    guaranteed-to-fail request.
+    API calls run concurrently -- keeps a large checkpoint chunk from being sent
+    as one oversized, guaranteed-to-fail request, and (for a client like Titan
+    with no real batch endpoint) is what actually parallelizes the work, since
+    each sub-batch's calls happen in its own thread.
+
+    errors is appended to from multiple threads here -- safe because list.append
+    is atomic under the GIL, same as any other plain list mutation shared across
+    threads in this codebase (e.g. summarize.py's per-row results).
     """
+    request_batches = [
+        chunk[start : start + client.max_request_batch_size]
+        for start in range(0, len(chunk), client.max_request_batch_size)
+    ]
     results: list[tuple[dict[str, Any], list[float]]] = []
-    for start in range(0, len(chunk), client.max_request_batch_size):
-        request_batch = chunk[start : start + client.max_request_batch_size]
-        results.extend(_embed_request_batch(request_batch, client, errors=errors))
+    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+        futures = [
+            executor.submit(_embed_request_batch, request_batch, client, errors=errors)
+            for request_batch in request_batches
+        ]
+        for future in futures:
+            results.extend(future.result())
     return results
 
 
@@ -540,12 +562,13 @@ def checkpoint_embedding_chunk(
     )
 
 
-def embed_and_checkpoint(
+def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     df: pl.DataFrame,
     client: EmbeddingClient,
     checkpoint_target: tuple[Catalog, str],
     batch_size: int = EMBEDDING_BATCH_SIZE,
     errors: list[str] | None = None,
+    max_concurrency: int = EMBEDDING_MAX_CONCURRENCY,
 ) -> pl.DataFrame:
     """Embed df in chunks, upserting each into feedback_embeddings as it completes.
 
@@ -563,6 +586,7 @@ def embed_and_checkpoint(
             smaller client.max_request_batch_size-sized embed_batch calls.
         errors: if given, collects every failure's message (see _embed_chunk) so a
             caller can surface *why* calls failed, e.g. in a Failure message.
+        max_concurrency: how many of those embed_batch calls run at once.
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
@@ -591,7 +615,9 @@ def embed_and_checkpoint(
     chunk_dfs: list[pl.DataFrame] = []
     for chunk_start in range(0, len(rows), batch_size):
         chunk = rows[chunk_start : chunk_start + batch_size]
-        results = _embed_chunk(chunk, client, errors=errors)
+        results = _embed_chunk(
+            chunk, client, errors=errors, max_concurrency=max_concurrency
+        )
         chunk_df = _results_to_df(results, client)
         chunk_dfs.append(chunk_df)
         checkpoint_embedding_chunk(catalog, table_identifier, chunk_df)
