@@ -11,6 +11,8 @@ from dagster import (
     asset,
 )
 from ml.lib.embed import (
+    EMBEDDING_BATCH_SIZE,
+    EMBEDDING_MAX_CONCURRENCY,
     JOIN_COLS,
     build_embedding_client,
     embed_and_checkpoint,
@@ -70,6 +72,25 @@ class FeedbackEmbeddingsConfig(Config):
         description=(
             "Override the embedding vector dimension for this run. Unset uses "
             "EMBEDDING_DIM (ml.lib.embed)."
+        ),
+    )
+    batch_size: int = Field(
+        default=EMBEDDING_BATCH_SIZE,
+        ge=1,
+        description=(
+            "How many conversations are embedded together in one API call and "
+            "checkpointed together. A larger value means fewer, cheaper checkpoint "
+            "commits. Unset uses EMBEDDING_BATCH_SIZE (ml.lib.embed)."
+        ),
+    )
+    max_concurrency: int = Field(
+        default=EMBEDDING_MAX_CONCURRENCY,
+        ge=1,
+        description=(
+            "How many embed_batch calls run at once -- the lever for wall-clock "
+            "time with a client like Bedrock Titan that has no real batch endpoint "
+            "(one sequential call per text). Unset uses EMBEDDING_MAX_CONCURRENCY "
+            "(ml.lib.embed)."
         ),
     )
 
@@ -170,7 +191,10 @@ def feedback_embeddings(
         unembedded_df,
         client,
         (catalog, table_identifier),
+        batch_size=config.batch_size,
         errors=errors,
+        max_concurrency=config.max_concurrency,
+        context=context,
     )
 
     # A null resolved_text or a failed API call is dropped from embeddings_df

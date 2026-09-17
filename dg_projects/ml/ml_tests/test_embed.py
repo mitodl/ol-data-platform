@@ -1,6 +1,8 @@
 """Tests for ml.lib.embed."""
 
 import json
+import logging
+import time
 from typing import Any, Self
 
 import boto3
@@ -28,10 +30,14 @@ class _FakeEmbeddingClient:
     """
 
     def __init__(
-        self, model_version: str = "text-embedding-3-large", dim: int = 3
+        self,
+        model_version: str = "text-embedding-3-large",
+        dim: int = 3,
+        max_request_batch_size: int = 2048,
     ) -> None:
         self.model_version = model_version
         self.dim = dim
+        self.max_request_batch_size = max_request_batch_size
         self.batch_calls: list[list[str]] = []
         self.trace_metadata_calls: list[dict[str, object] | None] = []
 
@@ -326,6 +332,61 @@ def test_build_embedding_client_honors_bedrock_model_version_override() -> None:
     assert client.model_version == "cohere.embed-english-v3"
 
 
+def test_bedrock_client_sub_batches_titan_by_single_text() -> None:
+    """Titan has no batch endpoint (_embed_titan loops one invoke_model call per
+    text), so its sub-batch size must be 1 -- otherwise _embed_chunk's one
+    future per sub-batch never actually parallelizes Titan's real API calls,
+    regardless of max_concurrency.
+    """
+    client = embed.BedrockEmbeddingClient(
+        boto3.client("bedrock-runtime", region_name="us-east-1"),
+        "amazon.titan-embed-text-v2:0",
+        1024,
+    )
+
+    assert client.max_request_batch_size == 1
+
+
+def test_bedrock_client_sub_batches_cohere_by_96() -> None:
+    client = embed.BedrockEmbeddingClient(
+        boto3.client("bedrock-runtime", region_name="us-east-1"),
+        "cohere.embed-english-v3",
+        1024,
+    )
+
+    assert client.max_request_batch_size == 96
+
+
+def test_default_embedding_model_version_matches_bedrock_outside_dev(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#2689: outside dev, embedding_llm defaults to bedrock_embeddings."""
+    monkeypatch.setattr(embed, "DAGSTER_ENV", "production")
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+
+    assert (
+        embed.default_embedding_model_version() == embed.BEDROCK_EMBEDDING_MODEL_VERSION
+    )
+
+
+def test_default_embedding_model_version_matches_openai_in_dev(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embed, "DAGSTER_ENV", "dev")
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+
+    assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
+
+
+def test_default_embedding_model_version_honors_explicit_provider_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embed, "DAGSTER_ENV", "production")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
+
+    assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
+
+
 class _FakeGeminiEmbedding:
     def __init__(self, values: list[float]) -> None:
         self.values = values
@@ -417,9 +478,17 @@ def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
         client.embed_batch(["a"])
 
 
+class _FakeField:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class _FakeSchema:
-    def __init__(self, column_names: list[str]) -> None:
-        self.column_names = column_names
+    def __init__(self, top_level_names: list[str], nested_extra: list[str]) -> None:
+        # Mirrors real pyiceberg: column_names flattens in nested field names
+        # (e.g. a List column's "element" child) that fields/columns does not.
+        self.column_names = top_level_names + nested_extra
+        self.fields = [_FakeField(name) for name in top_level_names]
 
 
 class _FakeSchemaUpdate:
@@ -445,12 +514,13 @@ class _FakeTable:
     def __init__(self) -> None:
         self.upserts: list[dict[str, object]] = []
         self._column_names: list[str] = []
+        self._nested_extra_column_names: list[str] = []
 
     def update_schema(self) -> _FakeSchemaUpdate:
         return _FakeSchemaUpdate(self)
 
     def schema(self) -> _FakeSchema:
-        return _FakeSchema(self._column_names)
+        return _FakeSchema(self._column_names, self._nested_extra_column_names)
 
     def upsert(self, **kwargs: object) -> None:
         self.upserts.append(kwargs)
@@ -548,6 +618,88 @@ def test_embed_and_checkpoint_batches_calls() -> None:
             "embedding_inputs": ["summary", "summary", "summary"],
         }
     ]
+
+
+def test_embed_and_checkpoint_runs_request_batches_concurrently() -> None:
+    """max_concurrency > 1 should let several embed_batch calls overlap, not
+    run strictly one after another -- the actual parallelism lever for a client
+    like Titan with no real batch endpoint.
+    """
+    call_delay = 0.2
+
+    class _SlowEmbeddingClient:
+        model_version = "test-model"
+        dim = 3
+        max_request_batch_size = 1
+
+        def embed_batch(
+            self,
+            texts: list[str],
+            *,
+            trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
+        ) -> list[list[float]]:
+            time.sleep(call_delay)
+            return [[float(len(text))] * self.dim for text in texts]
+
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    row_count = 8
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": [f"pk-{i}" for i in range(row_count)],
+            "source_slug": ["zendesk"] * row_count,
+            "conversation_ref": [str(i) for i in range(row_count)],
+            "turn_count": [1] * row_count,
+            "embedding_input": ["summary"] * row_count,
+            "resolved_text": [f"text {i}" for i in range(row_count)],
+        }
+    )
+
+    start = time.monotonic()
+    result = embed.embed_and_checkpoint(
+        df,
+        _SlowEmbeddingClient(),
+        (catalog, "some_db.feedback_embeddings"),
+        batch_size=row_count,
+        max_concurrency=row_count,
+    )
+    elapsed = time.monotonic() - start
+
+    assert result.height == row_count
+    # Serial would take row_count * call_delay (1.6s); running them all at once
+    # should land close to one call_delay, with generous headroom for CI jitter.
+    assert elapsed < row_count * call_delay / 2
+
+
+def test_embed_and_checkpoint_splits_request_batches_by_provider_limit() -> None:
+    """A checkpoint chunk larger than the client's per-request limit is split
+    into multiple embed_batch calls, e.g. Bedrock Cohere's 96-text cap -- the
+    checkpoint batch_size can be much larger than any provider's real limit.
+    """
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient(max_request_batch_size=2)
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
+            "source_slug": ["zendesk", "zendesk", "zendesk"],
+            "conversation_ref": ["1", "2", "3"],
+            "turn_count": [1, 1, 1],
+            "embedding_input": ["summary", "summary", "summary"],
+            "resolved_text": ["hi", "hello", "hey"],
+        }
+    )
+
+    result = embed.embed_and_checkpoint(
+        df, client, (catalog, "some_db.feedback_embeddings"), batch_size=3
+    )
+
+    assert sorted(result["conversation_ref"].to_list()) == ["1", "2", "3"]
+    # one checkpoint chunk of 3 rows, split into two request-sized calls -- run
+    # concurrently, so compare unordered
+    assert sorted(client.batch_calls, key=len) == [["hey"], ["hi", "hello"]]
+    # one Iceberg commit for the whole checkpoint chunk, not one per request
+    assert len(table.upserts) == 1
 
 
 def test_embed_and_checkpoint_retries_individually_on_batch_failure() -> None:
@@ -656,6 +808,43 @@ def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
     assert table.upserts[0]["join_cols"] == embed.JOIN_COLS
 
 
+def test_checkpoint_embedding_chunk_reorders_using_top_level_fields_only() -> None:
+    """Pyiceberg's Schema.column_names includes nested fields (e.g. a List
+    column's "element" child, surfaced as "embedding_vector.element") -- using
+    it to reorder columns would try to select a name Polars doesn't have.
+    """
+    table = _FakeTable()
+    table._column_names = [
+        "feedback_conversation_pk",
+        "source_slug",
+        "conversation_ref",
+        "turn_count",
+        "embedding_input",
+        "embedding_vector",
+        "embedding_dim",
+        "embedding_model_version",
+    ]
+    # column_names would also surface this, but it isn't a real top-level field.
+    table._nested_extra_column_names = ["embedding_vector.element"]
+    catalog = _FakeCatalog(table)
+    chunk_df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1"],
+            "source_slug": ["zendesk"],
+            "conversation_ref": ["1"],
+            "turn_count": [1],
+            "embedding_input": ["summary"],
+            "embedding_vector": [[0.1, 0.2, 0.3]],
+            "embedding_dim": [3],
+            "embedding_model_version": ["text-embedding-3-large"],
+        }
+    )
+
+    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", chunk_df)
+
+    assert len(table.upserts) == 1
+
+
 def test_checkpoint_embedding_chunk_skips_empty_chunks_without_touching_catalog() -> (
     None
 ):
@@ -690,6 +879,64 @@ def test_embed_and_checkpoint_upserts_each_chunk() -> None:
     assert len(table.upserts) == 3
 
 
+class _FakeLog:
+    def __init__(self) -> None:
+        self.info_calls: list[tuple[object, ...]] = []
+
+    def info(self, *args: object) -> None:
+        self.info_calls.append(args)
+
+
+class _FakeContext:
+    def __init__(self) -> None:
+        self.log = _FakeLog()
+
+
+def test_embed_and_checkpoint_logs_via_context_when_given() -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient()
+    df = pl.concat(
+        [_embedding_df(conversation_ref=str(i)) for i in range(5)],
+        how="vertical_relaxed",
+    )
+    context = _FakeContext()
+
+    embed.embed_and_checkpoint(
+        df,
+        client,
+        (catalog, "some_db.feedback_embeddings"),
+        batch_size=2,
+        context=context,
+    )
+
+    # 3 chunks of size 2, 2, 1 -- one context.log.info call per chunk
+    assert len(context.log.info_calls) == 3
+
+
+def test_embed_and_checkpoint_falls_back_to_module_logger_without_context(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient()
+    df = pl.concat(
+        [_embedding_df(conversation_ref=str(i)) for i in range(5)],
+        how="vertical_relaxed",
+    )
+
+    with caplog.at_level(logging.INFO, logger="ml.lib.embed"):
+        embed.embed_and_checkpoint(
+            df,
+            client,
+            (catalog, "some_db.feedback_embeddings"),
+            batch_size=2,
+        )
+
+    upserted_logs = [r for r in caplog.records if "Upserted chunk" in r.message]
+    assert len(upserted_logs) == 3
+
+
 def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
     """A credential-type failure shouldn't burn through every remaining chunk with
     the same error -- a whole chunk with zero successes should abort the run
@@ -701,6 +948,7 @@ def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
     class _AlwaysFailingClient:
         model_version = "test-model"
         dim = 3
+        max_request_batch_size = 2048
 
         def embed_batch(
             self,

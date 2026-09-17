@@ -3,16 +3,19 @@
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import openai
 import polars as pl
 from botocore.client import BaseClient
+from dagster import AssetExecutionContext
 from google import genai
 from google.genai import types as genai_types
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import attach_llm_usage, attach_span_metadata, traced
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from openai import OpenAI
 from pyiceberg.catalog import Catalog
 
@@ -60,8 +63,13 @@ BEDROCK_EMBEDDING_MODEL_VERSION = os.environ.get(
 EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 
 # Bounds each API call to this many conversations rather than one call per
-# conversation
-EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "100"))
+# conversation. Also the checkpoint commit size: each chunk is one Iceberg upsert,
+# and more chunks means more commits, which is what actually dominates wall-clock
+# time at scale.
+EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "500"))
+
+# How many embed_batch sub-batch calls run at once.
+EMBEDDING_MAX_CONCURRENCY = int(os.environ.get("EMBEDDING_MAX_CONCURRENCY", "20"))
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +77,11 @@ logger = logging.getLogger(__name__)
 class EmbeddingClient(Protocol):
     model_version: str
     dim: int
+    # The largest number of texts this provider accepts in one embed_batch call --
+    # independent of EMBEDDING_BATCH_SIZE/config.batch_size, which only controls
+    # how many rows are checkpointed together. _embed_chunk splits a checkpoint
+    # chunk into sub-batches of this size before calling embed_batch.
+    max_request_batch_size: int
 
     def embed_batch(
         self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
@@ -77,6 +90,9 @@ class EmbeddingClient(Protocol):
 
 class OpenAIEmbeddingClient:
     """Adapts an OpenAI-compatible client to the EmbeddingClient protocol."""
+
+    # OpenAI's embeddings API accepts up to 2048 inputs per request.
+    max_request_batch_size = 2048
 
     def __init__(self, client: OpenAI, model_version: str, dim: int) -> None:
         self._client = client
@@ -117,6 +133,9 @@ class OpenAIEmbeddingClient:
 
 class GeminiEmbeddingClient:
     """Adapts a google-genai client to the EmbeddingClient protocol."""
+
+    # Gemini's embed_content accepts up to 250 texts per request.
+    max_request_batch_size = 250
 
     def __init__(self, client: genai.Client, model_version: str, dim: int) -> None:
         self._client = client
@@ -170,10 +189,18 @@ class BedrockEmbeddingClient:
     contract to adapt to, so this dispatches on model_version's prefix.
     """
 
+    # Cohere's Bedrock invoke_model accepts up to 96 texts per request. Titan has
+    # no batch endpoint at all -- _embed_titan loops one invoke_model call per
+    # text regardless of sub-batch size, so its sub-batch size must be 1, or
+    # _embed_chunk's concurrency (one future per sub-batch) never actually
+    # parallelizes Titan's real API calls.
     def __init__(self, client: BaseClient, model_version: str, dim: int) -> None:
         self._client = client
         self.model_version = model_version
         self.dim = dim
+        self.max_request_batch_size = (
+            1 if model_version.startswith("amazon.titan-embed") else 96
+        )
 
     @traced(
         "feedback_embed_bedrock",
@@ -254,6 +281,20 @@ def build_embedding_client(
         "'openai_compatible', 'azure_openai', 'gemini', or 'bedrock_embeddings'."
     )
     raise TypeError(msg)
+
+
+def default_embedding_model_version() -> str:
+    """Return the model_version a default feedback_embeddings run writes, so a
+    reader can filter on what was actually written instead of assuming
+    EMBEDDING_MODEL_VERSION (#2689). Mirrors definitions.py's embedding_llm
+    resource default.
+    """
+    provider = os.environ.get(
+        "EMBEDDING_PROVIDER", "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings"
+    )
+    if provider == "bedrock_embeddings":
+        return BEDROCK_EMBEDDING_MODEL_VERSION
+    return EMBEDDING_MODEL_VERSION
 
 
 def resolve_embedding_text(
@@ -352,12 +393,12 @@ def filter_unembedded(
     return joined.filter(is_new_or_changed).select(source_df.columns)
 
 
-def _embed_chunk(
+def _embed_request_batch(
     chunk: list[dict[str, Any]],
     client: EmbeddingClient,
     errors: list[str] | None = None,
 ) -> list[tuple[dict[str, Any], list[float]]]:
-    """Embed one chunk via a single batched API call, falling back row-by-row.
+    """Embed one request-sized batch via a single API call, falling back row-by-row.
 
     A single bad row (e.g. a length/encoding issue the API rejects) fails the whole
     batch call as openai.BadRequestError -- retrying one at a time isolates it
@@ -430,6 +471,30 @@ def _embed_chunk(
     return list(zip(chunk, vectors, strict=True))
 
 
+def _embed_chunk(
+    chunk: list[dict[str, Any]],
+    client: EmbeddingClient,
+    errors: list[str] | None = None,
+    max_concurrency: int = EMBEDDING_MAX_CONCURRENCY,
+) -> list[tuple[dict[str, Any], list[float]]]:
+    """Embed one checkpoint chunk, split into client.max_request_batch_size-sized
+    API calls run concurrently.
+    """
+    request_batches = [
+        chunk[start : start + client.max_request_batch_size]
+        for start in range(0, len(chunk), client.max_request_batch_size)
+    ]
+    results: list[tuple[dict[str, Any], list[float]]] = []
+    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+        futures = [
+            executor.submit(_embed_request_batch, request_batch, client, errors=errors)
+            for request_batch in request_batches
+        ]
+        for future in futures:
+            results.extend(future.result())
+    return results
+
+
 def _results_to_df(
     results: list[tuple[dict[str, Any], list[float]]], client: EmbeddingClient
 ) -> pl.DataFrame:
@@ -493,8 +558,9 @@ def checkpoint_embedding_chunk(
         update.union_by_name(chunk_df.to_arrow().schema)
     # union_by_name appends new columns at the table's end regardless of chunk_df's
     # order, and upsert's pyarrow cast is positional -- so it must be reordered
-    # to match the table, not chunk_df.
-    ordered_chunk_df = chunk_df.select(table.schema().column_names)
+    # to match the table, not chunk_df. table.schema().fields (== .columns) gives
+    # the top-level field names only.
+    ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
     table.upsert(
         df=ordered_chunk_df.to_arrow(),
         join_cols=JOIN_COLS,
@@ -503,12 +569,14 @@ def checkpoint_embedding_chunk(
     )
 
 
-def embed_and_checkpoint(
+def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     df: pl.DataFrame,
     client: EmbeddingClient,
     checkpoint_target: tuple[Catalog, str],
     batch_size: int = EMBEDDING_BATCH_SIZE,
     errors: list[str] | None = None,
+    max_concurrency: int = EMBEDDING_MAX_CONCURRENCY,
+    context: AssetExecutionContext | None = None,
 ) -> pl.DataFrame:
     """Embed df in chunks, upserting each into feedback_embeddings as it completes.
 
@@ -522,9 +590,13 @@ def embed_and_checkpoint(
             method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
         checkpoint_target: (catalog, table_identifier) passed through to
             checkpoint_embedding_chunk.
-        batch_size: rows per embed_batch call and per checkpoint upsert.
+        batch_size: rows per checkpoint upsert. _embed_chunk splits this into
+            smaller client.max_request_batch_size-sized embed_batch calls.
         errors: if given, collects every failure's message (see _embed_chunk) so a
             caller can surface *why* calls failed, e.g. in a Failure message.
+        max_concurrency: how many of those embed_batch calls run at once.
+        context: if given, logs per-chunk progress via context.log.info instead
+            of the plain module logger.
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
@@ -546,17 +618,29 @@ def embed_and_checkpoint(
     handling -- the caller's own write of this (e.g. via the io_manager) upserts
     the same rows again, which is a harmless no-op since they're already there.
     """
+    log = context.log if context is not None else logger
     catalog, table_identifier = checkpoint_target
     rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
 
     consecutive_failed_chunks = 0
     chunk_dfs: list[pl.DataFrame] = []
-    for chunk_start in range(0, len(rows), batch_size):
+    chunk_starts = range(0, len(rows), batch_size)
+    total_chunks = len(chunk_starts)
+    for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
         chunk = rows[chunk_start : chunk_start + batch_size]
-        results = _embed_chunk(chunk, client, errors=errors)
+        results = _embed_chunk(
+            chunk, client, errors=errors, max_concurrency=max_concurrency
+        )
         chunk_df = _results_to_df(results, client)
         chunk_dfs.append(chunk_df)
         checkpoint_embedding_chunk(catalog, table_identifier, chunk_df)
+        log.info(
+            "Upserted chunk %d/%d (%d rows) into %s",
+            chunk_index,
+            total_chunks,
+            chunk_df.height,
+            table_identifier,
+        )
 
         if len(chunk) > 0 and len(results) == 0:
             consecutive_failed_chunks += 1
