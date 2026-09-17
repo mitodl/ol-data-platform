@@ -153,10 +153,28 @@ class TestCheckQaContracts:
             "qa_branches names mitxonline/app_postgres, which is not upstream of this model",
         ) in _findings(registry)
 
+    def test_explicit_null_is_not_an_absent_key(self) -> None:
+        # dbt keeps `qa_branches:` with nothing under it in config.meta as None,
+        # so on a model that unions nothing there is no missing-declaration
+        # finding to catch it.
+        registry = _dag(None)
+        registry.nodes["model.pkg.stg_xpro"].meta = {"qa_branches": None, "qa_buildable": None}
+        findings = _findings(registry)
+        assert ("stg_xpro", "qa_branches must be a list of `deployment/layer` strings") in findings
+        assert (
+            "stg_xpro",
+            "qa_buildable only takes `false`; a buildable model says so by declaring qa_branches",
+        ) in findings
+
     @pytest.mark.parametrize(
         ("meta", "message"),
         [
             ({"qa_branches": "mitxonline/app_postgres"}, "qa_branches must be a list of `deployment/layer` strings"),
+            ({"qa_branches": None}, "qa_branches must be a list of `deployment/layer` strings"),
+            (
+                {"qa_buildable": None},
+                "qa_buildable only takes `false`; a buildable model says so by declaring qa_branches",
+            ),
             (
                 {"qa_branches": []},
                 "qa_branches is empty; a model with no QA branches declares `qa_buildable: false`",
