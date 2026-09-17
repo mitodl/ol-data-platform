@@ -79,7 +79,10 @@ def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
     branches = meta.get("qa_branches")
     buildable = meta.get("qa_buildable")
 
-    if branches is not None:
+    # Key presence, not a non-null value: dbt keeps `qa_branches:` with nothing
+    # under it in config.meta as None, and reading that as an absent key lets a
+    # half-written declaration pass on a model that unions nothing.
+    if "qa_branches" in meta:
         if not isinstance(branches, list) or not all(isinstance(b, str) for b in branches):
             problems.append("qa_branches must be a list of `deployment/layer` strings")
             branches = None
@@ -94,7 +97,7 @@ def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
             if len(set(branches)) != len(branches):
                 problems.append("qa_branches lists a branch more than once")
 
-    if buildable is not None and buildable is not False:
+    if "qa_buildable" in meta and buildable is not False:
         problems.append("qa_buildable only takes `false`; a buildable model says so by declaring qa_branches")
 
     return Contract(branches=branches, buildable=buildable), problems

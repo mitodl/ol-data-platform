@@ -221,12 +221,13 @@ models:
   - name: final_priority
     description: str, current-state snapshot of the conversation's priority.
   - name: explicit_rating
-    description: str, the conversation-level explicit rating. Non-numeric for Zendesk
-      ('good', 'bad', 'offered'), so it does not average.
+    description: str, the conversation-level explicit rating - Zendesk 'good'/'bad'/'offered',
+      Learn AI tutor 'like'/'dislike'. Non-numeric, so it does not average.
   - name: sentiment_fk
     description: str, foreign key to dim_sentiment. Populated at MVP from the explicit
-      rating alone. Only 'good' and 'bad' are verdicts; an unoffered or unanswered
-      survey leaves this null, because it is an absence of signal, not a neutral one.
+      rating alone. Only a verdict ('good'/'bad' for Zendesk, 'like'/'dislike' for
+      Learn AI tutor) resolves this; an unoffered or unanswered survey leaves it null,
+      because it is an absence of signal, not a neutral one.
     tests:
     - relationships:
         arguments:

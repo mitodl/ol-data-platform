@@ -81,7 +81,21 @@ left join redacted
     -- rating, a status change or a late-syncing comment re-enters with all of its turns,
     -- so delete+insert replaces them together. Filtering to unseen turns instead would
     -- freeze the ticket-level columns and leave turn_index inconsistent.
-    where unioned.updated_at > (select max(feedback_updated_at) from {{ this }})
+    --
+    -- Per source, not a single global max: a global watermark would compare every
+    -- source's rows against whichever source is currently newest, so a newly-added
+    -- source's entire (older) history would never pass the filter. coalesce's fallback
+    -- covers a source with no rows in the table yet, so its first run backfills
+    -- everything instead of needing a manual --full-refresh.
+    where unioned.updated_at > coalesce(
+        (
+            select max(stale.feedback_updated_at)
+            from {{ this }} as stale
+            where stale.feedback_source_fk
+                = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }}
+        ),
+        '0001-01-01T00:00:00'
+    )
     -- Backfill: a row inserted before feedback_redacted existed carries the old
     -- feedback_text = null stub forever under the watermark above alone, because
     -- redaction landing does not bump the source ticket's updated_at. Reselect any
