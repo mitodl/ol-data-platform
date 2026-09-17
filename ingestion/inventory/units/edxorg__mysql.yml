@@ -10,51 +10,64 @@ strategies:
   qa: omit
   local: fixture
 loader: dlt
-# TRANSITIONAL — remove once this unit has run once with
-# `normalize.parquet_normalizer.add_dlt_load_id = true` (src/ol_dlt/.dlt/config.toml).
+# TRANSITIONAL — set this to `_file_modified_at` once the backfill has loaded.
 #
-# These tables were loaded before that flag existed, so they carry no
-# `_dlt_load_id` column and the 7 staging models that read them cannot order by
-# it: dropping this line before a reload reinstates the exact COLUMN_NOT_FOUND
-# that ol-data-platform#2443 was filed for. Explicit null means "no metadata
-# column, do not deduplicate", which is what the tables actually support today.
+# Explicit null means "no metadata column, do not deduplicate", which is what
+# these tables support today: nothing has ever loaded into them, and the rows a
+# backfill writes are the first to carry `_file_modified_at`. Naming the column
+# before those rows exist reinstates the COLUMN_NOT_FOUND that
+# ol-data-platform#2443 was filed for.
 #
-# Deleting the line restores the loader default (`_dlt_load_id`). Safe to do the
-# first time an edxorg_s3 load completes on the new config: the disposition is
-# `merge`, so rows that predate the flag keep a null load id, and Trino orders
-# NULLS LAST by default in both directions -- freshly stamped rows win the
-# dedup, and a key with only old rows still yields its single row.
+# `_file_modified_at` rather than `_dlt_load_id`: the load appends and the
+# backfill walks the landing zone in whatever order it likes, so the load id
+# records when a row was ingested, not which export it came from. Ordering
+# staging by the source file's mtime is what picks the newest version of a
+# record.
 raw_metadata_column:
 table_prefix: raw__edxorg__s3__tables__
 dlt:
   source_module: ol_dlt.sources.edxorg_s3
-  write_disposition: merge
+  write_disposition: append
 tables:
 - name: raw__edxorg__s3__tables__auth_user
   raw_table: raw__edxorg__s3__tables__auth_user
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__auth_userprofile
   raw_table: raw__edxorg__s3__tables__auth_userprofile
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__certificates_generatedcertificate
   raw_table: raw__edxorg__s3__tables__certificates_generatedcertificate
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__courseware_studentmodule
   raw_table: raw__edxorg__s3__tables__courseware_studentmodule
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__grades_persistentcoursegrade
   raw_table: raw__edxorg__s3__tables__grades_persistentcoursegrade
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__student_courseaccessrole
   raw_table: raw__edxorg__s3__tables__student_courseaccessrole
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__student_courseenrollment
   raw_table: raw__edxorg__s3__tables__student_courseenrollment
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
