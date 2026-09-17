@@ -430,8 +430,9 @@ def edxorg_s3_pipeline_for(table_name: str) -> dlt.Pipeline:
 
     NOTE: this pipeline_name must stay stable across deploys -- dlt keys the
     incremental ``modification_date`` cursor by pipeline_name + resource name,
-    so renaming it resets that table's cursor and triggers a full S3 reprocess
-    on the next run (safe -- merge + primary_key dedup makes reprocessing
-    idempotent -- but slower and more expensive for that one run).
+    so renaming it resets that table's cursor and reprocesses the whole landing
+    zone. Under the old merge disposition that was merely slow and expensive
+    for one run; under append it re-inserts every file, so the duplicates last
+    until staging dedup hides them and the compaction pass removes them.
     """
     return config.pipeline_for("edxorg", pipeline_name=f"edxorg_s3__{table_name}")

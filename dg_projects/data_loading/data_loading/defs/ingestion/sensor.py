@@ -51,15 +51,23 @@ edxorg_s3_ingest_job = dg.define_asset_job(
     # file before DuckDB parses it (see ol_dlt.sources.edxorg_s3._local_copy).
     # Four ops run concurrently and the largest export in the landing zone is
     # 14.5 GB, so the worst case is ~58 GB of downloads plus dlt's normalized
-    # parquet. Without a limit the kubelet evicts this pod on node DiskPressure
-    # -- and takes whatever else is on that node with it -- instead of failing
-    # the one job that overran. Worker nodes are m8i-flex.4xlarge with 500 GB
-    # root volumes.
+    # parquet (a 1.1 GB TSV normalizes to 244 MB). Worker nodes are
+    # m8i-flex.4xlarge with 500 GB root volumes.
+    #
+    # The limit buys a per-pod eviction at 96Gi instead of waiting for
+    # node-level DiskPressure. It does not change who gets evicted: run workers
+    # already carry PriorityClass dagster-run at value -100, and
+    # ephemeral-storage eviction ranks pods over their requests first, so this
+    # pod is the preferred victim either way. The request is what the scheduler
+    # packs against, and it is deliberately below the worst case -- reserving
+    # ~58Gi per run pod on a 4-node group that also runs the StarRocks
+    # frontends is how these same workers starved FE out of the core nodegroup
+    # for 5 days (ol-infrastructure #5183).
     tags={
         "dagster-k8s/config": {
             "container_config": {
                 "resources": {
-                    "requests": {"memory": "2Gi", "ephemeral-storage": "16Gi"},
+                    "requests": {"memory": "2Gi", "ephemeral-storage": "32Gi"},
                     "limits": {"memory": "32Gi", "ephemeral-storage": "96Gi"},
                 }
             }

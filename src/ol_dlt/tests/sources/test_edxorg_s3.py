@@ -273,7 +273,8 @@ def test_reader_stamps_rows_recovered_by_the_unquoted_fallback() -> None:
 def test_resources_append_rather_than_merge() -> None:
     """Merge on (row_hash, extracted_course_key) can never update anything.
 
-    row_hash covers every column, so a matched row is byte-identical; the
+    row_hash covers every original CSV column, so a matched row is one whose
+    content did not change between two exports of a course; the
     merge only bought one Iceberg commit per 1,000 rows and a whole load held
     in memory. Duplicates are removed after the load instead.
     """

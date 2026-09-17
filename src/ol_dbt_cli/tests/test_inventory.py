@@ -536,10 +536,14 @@ class TestRawMetadataColumn:
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
         assert mapping["raw__edxorg__s3__tables__auth_user"] == "_file_modified_at"
 
-    def test_real_inventory_keeps_an_explicit_null_over_the_loader_default(self) -> None:
-        # An explicit null has to beat the loader default: ordering a table by
-        # a column it does not carry is the exact regression this seam was
-        # filed for (ol-data-platform#2443).
+    def test_real_inventory_resolves_dagster_units_to_none(self) -> None:
+        # A dagster-loaded unit writes no metadata column, so its tables must
+        # not be deduplicated: ordering a table by a column it does not carry
+        # is the regression this seam was filed for (ol-data-platform#2443).
+        # This resolves through the loader default rather than an explicit
+        # null -- edxorg/mysql was the real inventory's last explicit null, so
+        # the key-presence-beats-truthiness path is covered only synthetically,
+        # by test_explicit_null_override_beats_an_airbyte_loader.
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
         assert mapping["raw__edxorg__s3__course_xml_blocks"] is None
 
