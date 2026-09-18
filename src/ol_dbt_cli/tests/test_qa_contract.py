@@ -138,6 +138,12 @@ class TestCheckQaContracts:
         registry = _dag({"qa_buildable": False, "qa_branches": ["mitxonline/app_postgres"]})
         assert ("dim_user", "declares both qa_buildable: false and qa_branches") in _findings(registry)
 
+    def test_empty_branches_beside_not_buildable_is_reported_once(self) -> None:
+        registry = _dag({"qa_buildable": False, "qa_branches": []})
+        assert [found for model, found in _findings(registry) if model == "dim_user"] == [
+            "qa_branches is empty; a model with no QA branches declares `qa_buildable: false`"
+        ]
+
     def test_branch_not_upstream(self) -> None:
         registry = _dag({"qa_branches": ["mitxonline/app_postgres", "mitlearn/app_postgres"]})
         assert (

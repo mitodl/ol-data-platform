@@ -88,6 +88,7 @@ def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
             branches = None
         elif not branches:
             problems.append("qa_branches is empty; a model with no QA branches declares `qa_buildable: false`")
+            branches = None
         else:
             problems.extend(
                 f"qa_branches entry {b!r} is not a `deployment/layer` unit key"
