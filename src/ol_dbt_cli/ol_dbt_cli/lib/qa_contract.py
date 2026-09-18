@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from ol_dbt_cli.lib.dimensional_layering import classify_layer
 from ol_dbt_cli.lib.inventory import tables_by_raw_name
+from ol_dbt_cli.lib.qa_observation import QA_GLUE_DATABASE, QA_STRATEGIES, qa_strategy
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -47,9 +48,6 @@ OBSERVATION_MAX_AGE_DAYS = 30
 
 UNCONTRACTED_LAYERS = frozenset({"staging"})
 """Staging models read exactly one source table, so they are never a union."""
-
-QA_STRATEGIES = frozenset({"ingest", "mirror"})
-"""The strategies under which QA holds a unit. Anything else is `omit`."""
 
 _BRANCH = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$")
 
@@ -133,7 +131,7 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
     """
     lineage = upstream_units(manifest, units)
     scope = {unit.key: unit.data.get("scope") for unit in units}
-    qa_strategy = {unit.key: (unit.data.get("strategies") or {}).get("qa") for unit in units}
+    strategies = {unit.key: qa_strategy(unit) for unit in units}
 
     for node in sorted(manifest.nodes.values(), key=lambda n: n.name):
         if not node.is_model:
@@ -157,7 +155,7 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
         for branch in sorted(set(contract.branches or [])):
             if not _BRANCH.match(branch):
                 continue
-            if branch not in qa_strategy:
+            if branch not in strategies:
                 report.add(
                     QA_CONTRACT_CHECK,
                     Severity.ERROR,
@@ -175,12 +173,12 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                     f"Lineage reaches: {', '.join(sorted(reads)) or 'no inventory unit'}. A declared "
                     "branch the model cannot read asserts coverage nothing checks.",
                 )
-            elif qa_strategy[branch] not in QA_STRATEGIES:
+            elif strategies[branch] not in QA_STRATEGIES:
                 report.add(
                     QA_CONTRACT_CHECK,
                     Severity.ERROR,
                     node.name,
-                    f"qa_branches names {branch}, whose strategies.qa is {qa_strategy[branch]}",
+                    f"qa_branches names {branch}, whose strategies.qa is {strategies[branch]}",
                     "The model expects the branch in QA and the inventory says QA never gets it. "
                     "Set the unit's strategies.qa to ingest (scoped) or mirror (singleton), or drop "
                     "the branch here so this model's QA form is partial by declaration. Not "
@@ -225,10 +223,6 @@ class Gap:
         return f"{self.branch} {self.table}: {self.condition}"
 
 
-def _qa_strategy(unit: Unit) -> str | None:
-    return (unit.data.get("strategies") or {}).get("qa")
-
-
 def _condition(state: TableState, mirror_max_age: timedelta | None, observed_at: datetime) -> tuple[str, str] | None:
     if not state.present:
         return "empty", "absent from QA raw"
@@ -243,14 +237,16 @@ def _condition(state: TableState, mirror_max_age: timedelta | None, observed_at:
     return None
 
 
-def qa_gaps(
-    manifest: ManifestRegistry, units: list[Unit], observation: Observation
-) -> tuple[list[Gap], dict[str, list[str]]]:
-    """Return the declared-branch tables QA lacks, and those the observation never saw.
+def qa_gaps(manifest: ManifestRegistry, units: list[Unit], observation: Observation) -> list[Gap]:
+    """Return the declared-branch tables QA lacks or the observation never saw.
 
     Only tables a declaring model actually reads count: an empty table in a unit
     no declaring model touches cannot make a QA build partial. Branches the
     inventory check already rejects (unknown, not upstream, `omit`) are left to it.
+
+    A table missing from the observation is a gap too, not a warning: it is what
+    a newly declared or newly ingested branch looks like before anyone has shown
+    QA holds it, which is exactly when QA is least likely to.
     """
     owners = tables_by_raw_name(units)
     by_key = {unit.key: unit for unit in units}
@@ -264,25 +260,27 @@ def qa_gaps(
         declared = {
             branch
             for branch in contract.branches or []
-            if branch in by_key and _qa_strategy(by_key[branch]) in QA_STRATEGIES
+            if branch in by_key and qa_strategy(by_key[branch]) in QA_STRATEGIES
         }
         for table in lineage[node.name]:
             if owners[table] in declared:
                 readers[(owners[table], table)].add(node.name)
 
     gaps: list[Gap] = []
-    unobserved: dict[str, list[str]] = defaultdict(list)
     for (branch, table), models in sorted(readers.items()):
         state = observation.tables.get(table)
         if state is None:
-            unobserved[branch].append(table)
-            continue
-        unit = by_key[branch]
-        max_age = timedelta(days=unit.data["mirror_max_age_days"]) if _qa_strategy(unit) == "mirror" else None
-        found = _condition(state, max_age, observation.observed_at)
+            found: tuple[str, str] | None = (
+                "unobserved",
+                "not in the QA observation; refresh it with `ol-dbt inventory observe`",
+            )
+        else:
+            unit = by_key[branch]
+            max_age = timedelta(days=unit.data["mirror_max_age_days"]) if qa_strategy(unit) == "mirror" else None
+            found = _condition(state, max_age, observation.observed_at)
         if found:
             gaps.append(Gap(branch, table, *found, models=tuple(sorted(models))))
-    return gaps, dict(unobserved)
+    return gaps
 
 
 def check_qa_gaps(  # noqa: PLR0913
@@ -305,17 +303,17 @@ def check_qa_gaps(  # noqa: PLR0913
             f"{observation.observed_at:%Y-%m-%d}. Refresh with `ol-dbt inventory observe` and commit it.",
         )
 
-    gaps, unobserved = qa_gaps(manifest, units, observation)
-
-    for branch, tables in sorted(unobserved.items()):
+    if observation.glue_database != QA_GLUE_DATABASE:
         report.add(
             QA_CONTRACT_CHECK,
-            Severity.WARNING,
-            branch,
-            f"{len(tables)} declared-branch table(s) are not in the QA observation",
-            f"{', '.join(tables)}. The observation predates these tables or the unit's "
-            "strategies.qa; refresh it with `ol-dbt inventory observe` so they are checked.",
+            Severity.ERROR,
+            "(qa observation)",
+            f"The QA observation was taken from {observation.glue_database}, not {QA_GLUE_DATABASE}",
+            "An observation of another environment hides every QA gap. Re-run "
+            "`ol-dbt inventory observe` against the QA database.",
         )
+
+    gaps = qa_gaps(manifest, units, observation)
 
     by_group: dict[tuple[str, str], list[Gap]] = defaultdict(list)
     for gap in gaps:
@@ -360,8 +358,9 @@ def render_qa_baseline(gaps: list[Gap]) -> str:
         "# QA branch-contract baseline (RFC 12711 step 5).",
         "#",
         "# Each line is a table of a declared QA branch that the committed QA",
-        "# observation (qa_observation.json) shows empty, or a mirror past its",
-        "# mirror_max_age_days. These are operational lapses, tolerated so QA builds",
+        "# observation (qa_observation.json) shows empty, a mirror past its",
+        "# mirror_max_age_days, or a table the observation does not cover yet",
+        "# (unobserved). These are operational lapses, tolerated so QA builds",
         "# keep running while they are repaired. A gap NOT listed here fails",
         "# `ol-dbt validate`. Contradictions between qa_branches and the inventory",
         "# are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",

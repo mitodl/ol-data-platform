@@ -1,8 +1,9 @@
 # QA branch-contract baseline (RFC 12711 step 5).
 #
 # Each line is a table of a declared QA branch that the committed QA
-# observation (qa_observation.json) shows empty, or a mirror past its
-# mirror_max_age_days. These are operational lapses, tolerated so QA builds
+# observation (qa_observation.json) shows empty, a mirror past its
+# mirror_max_age_days, or a table the observation does not cover yet
+# (unobserved). These are operational lapses, tolerated so QA builds
 # keep running while they are repaired. A gap NOT listed here fails
 # `ol-dbt validate`. Contradictions between qa_branches and the inventory
 # are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.

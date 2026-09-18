@@ -185,7 +185,13 @@ The second row needs to know what QA holds, and the CI job has no AWS credential
 as empty when it is absent, not Iceberg, has no current snapshot, or has zero rows. A `mirror`
 table is stale when its snapshot is older than `mirror_max_age_days` at observation time. Staleness
 is measured against the observation time, not the CI run time, so an old observation can't
-invent staleness. An observation older than 30 days is a WARNING.
+invent staleness. An observation older than 30 days is a WARNING. An observation of any database
+other than `ol_warehouse_qa_raw` is an ERROR, because it would hide every gap.
+
+A declared table the observation doesn't cover is an `unobserved` gap, not a warning. That is
+what a branch looks like when a PR newly declares it, or flips its unit from `omit` to `ingest`,
+which is when QA is least likely to hold it. The PR either refreshes the observation or baselines
+the gap, and both are visible in review.
 
 Only tables that a declaring model reads count, through manifest lineage. The baseline
 (`ingestion/inventory/qa_branch_baseline.txt`) is keyed per table, not per branch: a model that

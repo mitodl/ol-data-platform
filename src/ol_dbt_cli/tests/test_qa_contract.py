@@ -296,7 +296,7 @@ def _observation(**tables: TableState) -> Observation:
         "raw__xpro__app__postgres__auth_user": HAS_ROWS,
         "raw__emeritus__bigquery__api_enrollments": HAS_ROWS,
     }
-    return Observation(glue_database="qa_raw", observed_at=OBSERVED_AT, tables=base | tables)
+    return Observation(glue_database="ol_warehouse_qa_raw", observed_at=OBSERVED_AT, tables=base | tables)
 
 
 def _gap_report(
@@ -332,33 +332,48 @@ class TestQaGaps:
         ],
     )
     def test_empty_conditions(self, state: TableState, reason: str) -> None:
-        gaps, _ = qa_gaps(_dag(DECLARED), UNITS, _observation(raw__xpro__app__postgres__auth_user=state))
+        gaps = qa_gaps(_dag(DECLARED), UNITS, _observation(raw__xpro__app__postgres__auth_user=state))
         assert [(g.key, g.reason, g.models) for g in gaps] == [(XPRO_GAP, reason, ("dim_user",))]
 
     def test_stale_mirror(self) -> None:
         old = TableState(present=True, iceberg=True, rows=5, snapshot_at=OBSERVED_AT - timedelta(days=91))
-        gaps, _ = qa_gaps(_dag(DECLARED), UNITS, _observation(raw__emeritus__bigquery__api_enrollments=old))
+        gaps = qa_gaps(_dag(DECLARED), UNITS, _observation(raw__emeritus__bigquery__api_enrollments=old))
         assert [g.key for g in gaps] == ["emeritus/bigquery raw__emeritus__bigquery__api_enrollments: stale"]
 
     def test_old_ingested_table_is_not_stale(self) -> None:
         # mirror_max_age_days bounds a copy of production; an ingested branch has no such bound.
         old = TableState(present=True, iceberg=True, rows=5, snapshot_at=OBSERVED_AT - timedelta(days=400))
-        gaps, _ = qa_gaps(_dag(DECLARED), UNITS, _observation(raw__xpro__app__postgres__auth_user=old))
+        gaps = qa_gaps(_dag(DECLARED), UNITS, _observation(raw__xpro__app__postgres__auth_user=old))
         assert gaps == []
 
     def test_undeclared_branch_is_not_checked(self) -> None:
         registry = _dag({"qa_branches": ["mitxonline/app_postgres"]})
-        assert qa_gaps(registry, UNITS, _observation(**XPRO_ABSENT)) == ([], {})
+        assert qa_gaps(registry, UNITS, _observation(**XPRO_ABSENT)) == []
 
     def test_omitted_branch_is_left_to_the_inventory_half(self) -> None:
         units = [UNITS[0], _unit("xpro", "app_postgres", "scoped", "raw__xpro__app__postgres__auth_user", qa="omit")]
-        assert qa_gaps(_dag(DECLARED), units, _observation(**XPRO_ABSENT))[0] == []
+        assert qa_gaps(_dag(DECLARED), units, _observation(**XPRO_ABSENT)) == []
 
-    def test_unobserved_table_warns(self) -> None:
+    def test_unobserved_table_is_a_gap(self) -> None:
+        # A branch declared or ingested after the observation was taken must not pass on a warning.
         observation = _observation()
         del observation.tables["raw__xpro__app__postgres__auth_user"]
         assert _gap_report(observation) == [
-            (Severity.WARNING, "xpro/app_postgres", "1 declared-branch table(s) are not in the QA observation")
+            (Severity.ERROR, "xpro/app_postgres", "1 table(s) that declaring models read are unobserved in QA")
+        ]
+        baseline = {"xpro/app_postgres raw__xpro__app__postgres__auth_user: unobserved"}
+        assert [severity for severity, _, _ in _gap_report(observation, baseline)] == [Severity.INFO]
+
+    def test_observation_of_another_database_errors(self) -> None:
+        observation = Observation(
+            glue_database="ol_warehouse_production_raw", observed_at=OBSERVED_AT, tables=_observation().tables
+        )
+        assert _gap_report(observation) == [
+            (
+                Severity.ERROR,
+                "(qa observation)",
+                "The QA observation was taken from ol_warehouse_production_raw, not ol_warehouse_qa_raw",
+            )
         ]
 
     def test_new_gap_errors_per_branch(self) -> None:
@@ -382,7 +397,7 @@ class TestQaGaps:
         ]
 
     def test_baseline_round_trip(self, tmp_path: Path) -> None:
-        gaps, _ = qa_gaps(_dag(DECLARED), UNITS, _observation(**XPRO_ABSENT))
+        gaps = qa_gaps(_dag(DECLARED), UNITS, _observation(**XPRO_ABSENT))
         path = tmp_path / "qa_branch_baseline.txt"
         path.write_text(render_qa_baseline(gaps))
         assert load_baseline(path) == {XPRO_GAP}

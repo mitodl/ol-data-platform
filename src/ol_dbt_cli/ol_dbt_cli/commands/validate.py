@@ -654,7 +654,7 @@ def _update_qa_baseline(manifest: ManifestRegistry | None, inventory_dir: Path) 
             f"{OBSERVATION_FILENAME} under {inventory_dir}."
         )
         raise SystemExit(1)
-    gaps, _ = qa_gaps(manifest, units, observation)
+    gaps = qa_gaps(manifest, units, observation)
     path = inventory_dir / QA_BASELINE_FILENAME
     write_qa_baseline(path, gaps)
     console.print(f"[green]Wrote {len(gaps)} QA gap(s)[/] to {path}.")
@@ -1244,6 +1244,15 @@ def validate(
             if output_format == "text":
                 console.print(f"[yellow]Warning:[/] Could not load manifest ({exc}); using raw SQL parsing.")
 
+    inventory_dir = (
+        Path(inventory_dir_path).resolve() if inventory_dir_path else dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR
+    )
+    # Needs only the manifest, the units and the observation, so it exits before
+    # the per-model SQL parsing below.
+    if update_qa_baseline:
+        _update_qa_baseline(manifest, inventory_dir)
+        return
+
     # Build YAML registry
     yaml_registry = build_yaml_registry(models_dir)
 
@@ -1366,13 +1375,6 @@ def validate(
         console.print(
             f"[green]Wrote {len(violations)} dimensional-layering violation(s)[/] to {baseline_path} (via {source})."
         )
-        return
-
-    inventory_dir = (
-        Path(inventory_dir_path).resolve() if inventory_dir_path else dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR
-    )
-    if update_qa_baseline:
-        _update_qa_baseline(manifest, inventory_dir)
         return
 
     # Authoritative set of ref()-able names for dangling-ref detection: every

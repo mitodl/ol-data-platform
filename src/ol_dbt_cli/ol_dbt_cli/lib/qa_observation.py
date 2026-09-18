@@ -24,8 +24,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from ol_dbt_cli.lib.qa_contract import QA_STRATEGIES
-
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -33,6 +31,13 @@ if TYPE_CHECKING:
 
 OBSERVATION_FILENAME = "qa_observation.json"
 QA_GLUE_DATABASE = "ol_warehouse_qa_raw"
+QA_STRATEGIES = frozenset({"ingest", "mirror"})
+"""The strategies under which QA holds a unit. Anything else is `omit`."""
+
+
+def qa_strategy(unit: Unit) -> str | None:
+    return (unit.data.get("strategies") or {}).get("qa")
+
 
 _METADATA_FETCH_WORKERS = 16
 
@@ -69,12 +74,7 @@ class Observation:
 
 def observed_tables(units: list[Unit]) -> set[str]:
     """Raw tables of every unit a QA contract can legally declare."""
-    return {
-        str(table["raw_table"])
-        for unit in units
-        if (unit.data.get("strategies") or {}).get("qa") in QA_STRATEGIES
-        for table in unit.tables
-    }
+    return {str(table["raw_table"]) for unit in units if qa_strategy(unit) in QA_STRATEGIES for table in unit.tables}
 
 
 def load_observation(path: Path) -> Observation | None:
