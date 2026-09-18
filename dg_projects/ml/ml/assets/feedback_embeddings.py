@@ -129,14 +129,29 @@ def feedback_embeddings(
     is already made; a conversation feedback_summaries hasn't reached yet (upstream
     still processing) is simply absent here and picked up next run.
     """
-    summaries_df = get_dbt_model_as_dataframe(
+    summaries_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="feedback_summaries",
-    ).collect()
-    conversation_df = get_dbt_model_as_dataframe(
+    )
+    if config.sample_limit is not None:
+        summaries_lazy = summaries_lazy.limit(config.sample_limit)
+    summaries_df = summaries_lazy.collect()
+
+    conversation_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__conversation",
-    ).collect()
+    )
+    if config.sample_limit is not None:
+        # Restricted to the (already-limited) summaries_df's own pks, not
+        # independently limited -- resolve_embedding_text's join needs both
+        # sides to cover the same conversations, or a sample run resolves
+        # almost nothing.
+        conversation_lazy = conversation_lazy.filter(
+            pl.col("feedback_conversation_pk").is_in(
+                summaries_df["feedback_conversation_pk"]
+            )
+        )
+    conversation_df = conversation_lazy.collect()
     resolved_df = resolve_embedding_text(summaries_df, conversation_df)
 
     # Built before already_embedded_df, which is scoped to this model/dim so a
@@ -181,15 +196,8 @@ def feedback_embeddings(
                 .collect()
             )
 
-    # Caps the upstream read, matching feedback_summaries -- not unembedded_df,
-    # so total_upstream_count below stays the true total.
-    sample_df = (
-        resolved_df.head(config.sample_limit)
-        if config.sample_limit is not None
-        else resolved_df
-    )
     unembedded_df = filter_unembedded(
-        sample_df,
+        resolved_df,
         already_embedded_df,
         current_model_version=client.model_version,
         current_dim=client.dim,
