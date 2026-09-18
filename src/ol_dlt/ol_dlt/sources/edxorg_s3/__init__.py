@@ -26,7 +26,7 @@ from typing import Any
 import dlt
 import s3fs
 from dlt.sources import incremental
-from dlt.sources.filesystem import FileItemDict, filesystem
+from dlt.sources.filesystem import FileItemDict
 from dlt.sources.filesystem.helpers import fetch_arrow
 
 from ol_dlt import config
@@ -89,6 +89,20 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
 _UNQUOTED_READER_OVERRIDES: dict[str, Any] = {"quotechar": "", "escapechar": ""}
 
 _DOWNLOAD_CHUNK_BYTES = 8 * 1024 * 1024
+
+# How much source TSV one dlt load may cover. dlt's Iceberg writer materializes
+# a whole load as one Arrow table (`write_iceberg_table` receives
+# `arrow_dataset.to_table()`; only the Delta path streams), so the load step's
+# peak memory tracks this number: measured 2.70 GB for a 1.1 GB batch and
+# 6.34 GB for 3.34 GB, about 0.9 GB + 1.6x the batch. A full 4 GiB batch is
+# therefore ~7.8 GB, and the batch holding the 14.5 GB export -- a file larger
+# than the budget forms a batch of its own -- is ~24 GB. See the job's memory
+# limit and concurrency in data_loading's ingestion sensor.
+#
+# The backlog is walked one budget at a time rather than in a single load:
+# 11.1 TB of courseware_studentmodule does not fit in any pod, and a kill
+# costs one batch instead of the whole run.
+_DEFAULT_BUDGET_BYTES = 4 * 1024**3
 
 
 class EdxorgTSVUnreadableError(Exception):
@@ -300,11 +314,115 @@ def read_edxorg_tsv(
                 raise EdxorgTSVUnreadableError(msg) from error
 
 
+# dlt keys incremental state by "<parent resource>_<piped resource>", so this
+# name is part of every table's saved cursor. It stays "filesystem" -- what
+# dlt.sources.filesystem.filesystem was called -- because renaming it orphans
+# the cursor main has been saving since #2443's wiring shipped: every table
+# would re-list its landing zone from the beginning and, under append,
+# re-insert every row it already holds. Verified by running both wirings
+# against one pipeline: the old key is filesystem_raw__edxorg__s3__tables__X,
+# the new one edxorg_files_raw__..., and run 3 re-read everything.
+@dlt.resource(name="filesystem", primary_key="file_url", standalone=True)
+def edxorg_files(
+    bucket_url: str,
+    file_glob: str,
+    credentials: Any,
+    budget_bytes: int = _DEFAULT_BUDGET_BYTES,
+    modification_date: incremental[Any] = dlt.sources.incremental(  # noqa: B008
+        "modification_date"
+    ),
+) -> Iterator[list[FileItemDict]]:
+    """List one batch of unread TSVs, oldest first.
+
+    ``budget_bytes`` caps the files this batch yields past the cursor's
+    second. The cursor's own second is deliberately exempt and is NOT capped
+    (see the boundary branch below), so a batch's true ceiling is the unread
+    bytes in that one second plus ``budget_bytes`` plus, when the first unread
+    file is larger than the whole budget, that file.
+
+    This is where the budget has to live. A dlt transformer is invoked once
+    per page, so a running total kept in ``read_edxorg_tsv`` restarts at zero
+    for every file and never trips -- confirmed against the landing zone,
+    where a 20 MB budget read all 3,336 certificates_generatedcertificate
+    files. Worse, a transformer that did stop would stop only itself: the
+    resource above it keeps yielding, and the incremental cursor advances over
+    files nothing ever read. Not yielding a file is the only thing that keeps
+    the cursor off it.
+
+    Sorting by modification_date is what makes stopping early safe: everything
+    left unyielded sorts after the cursor this batch saves. The caller re-runs
+    the source until a batch comes back empty.
+
+    ``dlt.sources.filesystem.filesystem`` is not reused because its budget
+    would have to be enforced downstream of its own yields, which is the
+    failure above.
+    """
+    from dlt.common.storages.fsspec_filesystem import glob_files  # noqa: PLC0415
+
+    listed = sorted(
+        glob_files(credentials, bucket_url, file_glob),
+        key=lambda file_item: file_item["modification_date"],
+    )
+    cursor_value = modification_date.last_value
+    batch_bytes = 0
+    boundary_bytes = 0
+    # "Definitely unread", not merely "unread": a boundary file may be a
+    # re-listing of the file this batch resumes on, which dedups upstream of
+    # the reader, so it cannot be counted as progress.
+    yielded_definitely_unread = False
+
+    for file_item in listed:
+        modified_at = file_item["modification_date"]
+        size = file_item["size_in_bytes"]
+
+        if cursor_value is not None and modified_at < cursor_value:
+            continue  # read by an earlier batch
+
+        if cursor_value is not None and modified_at == cursor_value:
+            # The boundary second. dlt's cursor boundary is inclusive, so the
+            # file this batch resumes on is listed again and deduped against
+            # the file_url hashes kept from last time; charging it to the
+            # budget would let one already-read file (the largest export is
+            # 14.5 GB) exhaust the batch before anything new is yielded, and
+            # an empty batch reads as a drained backlog. S3 reports whole
+            # seconds, so a file sharing this second may instead be unread,
+            # which is why the whole group is yielded and left for dedup to
+            # sort out. Measured across courseware_studentmodule's 58,378
+            # files: the largest single second holds 14.48 GB, and only 8
+            # seconds hold more than 4 GiB, so the group is small in practice.
+            yield [FileItemDict(file_item, credentials)]
+            boundary_bytes += size
+            continue
+
+        # Check before yielding, so the files past the boundary second come
+        # to at most the budget rather than the budget plus whatever the file
+        # that crossed the line happens to weigh. The flag keeps a file larger
+        # than the entire budget from being skipped forever: it becomes a
+        # batch of its own.
+        if yielded_definitely_unread and batch_bytes + size > budget_bytes:
+            logger.info(
+                "Listed %s bytes of edxorg TSV for %s against a %s byte "
+                "budget (%s more on the cursor boundary); ending this batch.",
+                batch_bytes,
+                file_glob,
+                budget_bytes,
+                boundary_bytes,
+            )
+            return
+
+        # A page of one: the cursor advances over a page as a whole, so a
+        # larger page would carry it past files this batch stops before.
+        yield [FileItemDict(file_item, credentials)]
+        yielded_definitely_unread = True
+        batch_bytes += size
+
+
 @dlt.source(name="edxorg_s3")
 def edxorg_s3_source(
     tables: list[str] | None = None,
     bucket_url: str = _EDXORG_LANDING_BUCKET,
     table_format: config.TableFormat | None = None,
+    budget_bytes: int = _DEFAULT_BUDGET_BYTES,
 ) -> Generator[Any]:
     """Load edxorg CSV/TSV data from S3, one resource per table.
 
@@ -317,6 +435,10 @@ def edxorg_s3_source(
         bucket_url: S3 bucket URL containing the TSV files.
         table_format: ``native`` (parquet) or ``iceberg``; defaults to the active
             profile's table format.
+        budget_bytes: How much source TSV one load may cover before the batch
+            ends. The caller re-runs the source until a batch reads nothing,
+            which is how the backlog is walked without holding a whole table's
+            load in memory.
     """
     resolved_format = table_format or config.active_table_format()
 
@@ -346,14 +468,14 @@ def edxorg_s3_source(
         # False lets item.open() stream chunk-by-chunk.
         fs = s3fs.S3FileSystem()
 
-        # Pass incremental directly to filesystem() so dlt tracks the
-        # modification_date cursor per-resource; only files newer than the last
-        # successful run's cursor are processed.
-        files = filesystem(
+        # edxorg_files owns the modification_date cursor and the per-batch
+        # byte budget; only files the cursor has not covered are processed,
+        # and only until the budget is reached.
+        files = edxorg_files(
             bucket_url=bucket_url,
             file_glob=file_glob,
             credentials=fs,
-            incremental=incremental("modification_date"),
+            budget_bytes=budget_bytes,
         )
 
         # Pipe filesystem items through read_edxorg_tsv, then rename and

@@ -10,7 +10,7 @@ import contextlib
 import io
 import json
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -214,7 +214,7 @@ class _FakeFileItem(dict[str, Any]):
         return io.BytesIO(self._content)
 
 
-def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
+def _read(items: Iterable[_FakeFileItem]) -> list[pa.Table]:
     """Drive the reader's generator directly, past dlt's transformer wrapper."""
     return list(
         edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001

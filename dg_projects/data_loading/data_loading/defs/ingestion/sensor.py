@@ -26,8 +26,7 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
 # immediately (confirmed in production logs 2026-07-23: repeated "Run has not
 # completed but K8s job has no active pods" within ~2 minutes of each start,
 # exhausting the daemon's 3 resume attempts twice in a row).
-# 4 is a conservative starting point given unknown per-table memory profiles;
-# override per-launch via run config (execution.config.multiprocess.config.
+# Override per-launch via run config (execution.config.multiprocess.config.
 # max_concurrent) to tune without a redeploy.
 #
 # The 4-way cap alone did NOT fix the OOMKill loop: production runs kept
@@ -38,21 +37,40 @@ _EDXORG_UPSTREAM_ASSET_KEYS = [
 # default limit (see the `data_loading` code location in ol_infrastructure's
 # dagster/__main__.py), not just fan-out, was the binding constraint. The
 # `dagster-k8s/config` tag below raises the memory *limit for this job's run
-# pod only*, matching the 32Gi already given to the `edxorg` and
-# `legacy_openedx` code locations for the exact same large-edX-table problem
-# (see __main__.py's "Give more memory for processing edxorg archives" /
-# "studentmodule loading to memory" comments) -- without inflating the
+# pod only* (see __main__.py's "Give more memory for processing edxorg
+# archives" / "studentmodule loading to memory" comments for the same problem
+# in the `edxorg` and `legacy_openedx` code locations) -- without inflating the
 # baseline for the other, much smaller ingest jobs sharing this code location.
+#
+# 48Gi, up from 32Gi, and max_concurrent down from 4 to 2, sized against the
+# batched loads rather than guessed. Each op loads at most `budget_bytes`
+# (4 GiB) of source TSV at a time, and dlt's Iceberg writer materializes a
+# whole load as one Arrow table: measured 2.70 GB peak for a 1.1 GB batch and
+# 6.34 GB for 3.34 GB, about 0.9 GB + 1.6x the batch, so a full 4 GiB batch is
+# ~7.8 GB. The binding case is a batch carrying the 14.5 GB export: on its own
+# that is ~24 GB, and ~32 GB for the pair of ops. It can be larger, because the
+# files sharing a batch's cursor second are exempt from the budget (see
+# edxorg_files) -- 14.48 GB is the largest single second in
+# courseware_studentmodule, which puts that batch near 31 GB and the pair near
+# 39 GB, still inside 48Gi. At max_concurrent 4 the same case is ~54 GB, over
+# the limit, which is why this is 2 and not 4.
+#
+# The limit is not a scheduling input: the pod requests 2Gi, so the scheduler
+# places it as if it were small either way, and what 48Gi buys is a higher
+# OOM-kill ceiling on a node that still looks empty. That is the same node
+# pressure as ol-infrastructure #5183 (these workers starving the StarRocks
+# frontends), which is the other reason to run two ops rather than four.
 edxorg_s3_ingest_job = dg.define_asset_job(
     name="edxorg_s3_ingest_job",
     selection=dg.AssetSelection.keys(*_EDXORG_S3_ASSET_KEYS),
-    executor_def=dg.multiprocess_executor.configured({"max_concurrent": 4}),
+    executor_def=dg.multiprocess_executor.configured({"max_concurrent": 2}),
     # ephemeral-storage, because the reader downloads each TSV to a local temp
     # file before DuckDB parses it (see ol_dlt.sources.edxorg_s3._local_copy).
-    # Four ops run concurrently and the largest export in the landing zone is
-    # 14.5 GB, so the worst case is ~58 GB of downloads plus dlt's normalized
-    # parquet (a 1.1 GB TSV normalizes to 244 MB). Worker nodes are
-    # m8i-flex.4xlarge with 500 GB root volumes.
+    # Two ops run concurrently and the largest export in the landing zone is
+    # 14.5 GB, so the worst case is ~29 GB of downloads plus dlt's normalized
+    # parquet (a 1.1 GB TSV normalizes to 244 MB). The limit stays at 96Gi so
+    # raising max_concurrent back to 4 does not silently overrun it. Worker
+    # nodes are m8i-flex.4xlarge with 500 GB root volumes.
     #
     # The limit buys a per-pod eviction at 96Gi instead of waiting for
     # node-level DiskPressure. It does not change who gets evicted: run workers
@@ -68,7 +86,7 @@ edxorg_s3_ingest_job = dg.define_asset_job(
             "container_config": {
                 "resources": {
                     "requests": {"memory": "2Gi", "ephemeral-storage": "32Gi"},
-                    "limits": {"memory": "32Gi", "ephemeral-storage": "96Gi"},
+                    "limits": {"memory": "48Gi", "ephemeral-storage": "96Gi"},
                 }
             }
         }
