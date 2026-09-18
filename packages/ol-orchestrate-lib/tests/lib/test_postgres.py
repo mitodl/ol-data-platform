@@ -183,3 +183,23 @@ def test_optimize_for_webserver_disposes_the_engine_it_replaces(storage_class) -
 
     dispose.assert_called_once()
     assert storage._engine is not replaced_engine
+
+
+def test_each_storage_names_its_own_pool() -> None:
+    """db.client.connections.usage is labelled with the pool's logging_name,
+    and falls back to the connection URL, which all three storages share. With
+    no names, the three pools report as one series and none of them can be
+    sized from it. The name has to survive the webserver's engine rebuild too.
+    """
+    storages = [build_storage(storage_class) for storage_class in STORAGE_CLASSES]
+    names = {storage._engine.pool.logging_name for storage in storages}
+
+    for storage in storages:
+        storage.optimize_for_webserver(
+            statement_timeout=5000, pool_recycle=60, max_overflow=2
+        )
+    rebuilt_names = {storage._engine.pool.logging_name for storage in storages}
+
+    assert None not in names
+    assert len(names) == len(STORAGE_CLASSES)
+    assert rebuilt_names == names
