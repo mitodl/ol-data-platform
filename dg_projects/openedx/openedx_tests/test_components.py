@@ -42,6 +42,24 @@ def _asset_graph(component: OpenEdxDeploymentComponent) -> AssetGraph:
     )
 
 
+@pytest.mark.parametrize("deployment", ["mitx", "mitxonline", "xpro"])
+def test_the_deployment_repository_loads(deployment: str) -> None:
+    """Load every job, schedule and sensor the way the code server does.
+
+    Building the Definitions does not validate them. Name collisions between an
+    asset's op and a job only raise in `load_all_definitions`, which is what
+    the gRPC server calls at startup, so a collision passes every other test
+    here and crash-loops the code location.
+    """
+    component = OpenEdxDeploymentComponent(
+        deployment_name=deployment, vault=unauthenticated_vault(VAULT_ADDRESS)
+    )
+
+    component.build_definitions(
+        shared_resources=SHARED_RESOURCES
+    ).get_repository_def().load_all_definitions()
+
+
 def test_the_courseware_source_asset_has_no_automation_condition(
     component: OpenEdxDeploymentComponent,
 ) -> None:
