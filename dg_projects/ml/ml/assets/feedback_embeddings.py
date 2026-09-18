@@ -14,6 +14,7 @@ from ml.lib.embed import (
     EMBEDDING_BATCH_SIZE,
     EMBEDDING_MAX_CONCURRENCY,
     JOIN_COLS,
+    UPSERT_JOIN_COLS,
     build_embedding_client,
     embed_and_checkpoint,
     filter_unembedded,
@@ -44,9 +45,10 @@ class FeedbackEmbeddingsConfig(Config):
     sample_limit: int | None = Field(
         default=None,
         description=(
-            "Cap the number of conversations embedded, for local tests. Applied "
-            "after the incremental filter, so repeated runs keep finding new "
-            "candidates instead of re-hitting already-embedded rows."
+            "Cap the number of upstream rows read, for fast local testing -- "
+            "matches feedback_summaries' sample_limit semantics. Applied "
+            "before the incremental filter, so a repeated run may re-select "
+            "already-embedded rows if they're within this cap."
         ),
     )
     embedding_model_version: str | None = Field(
@@ -109,7 +111,7 @@ class FeedbackEmbeddingsConfig(Config):
     metadata={
         "schema": database_name,
         "write_mode": "upsert",
-        "upsert_options": {"join_cols": JOIN_COLS},
+        "upsert_options": {"join_cols": UPSERT_JOIN_COLS},
         "schema_update_mode": "update",
     },
 )
@@ -137,6 +139,16 @@ def feedback_embeddings(
     ).collect()
     resolved_df = resolve_embedding_text(summaries_df, conversation_df)
 
+    # Built before already_embedded_df, which is scoped to this model/dim so a
+    # conversation with more than one model's vector doesn't fan out the
+    # pk-only join in filter_unembedded below.
+    client = build_embedding_client(
+        embedding_llm,
+        config.embedding_model_version,
+        config.embedding_dim,
+        config.bedrock_model_version,
+    )
+
     already_embedded_df = pl.DataFrame(
         schema={
             **dict.fromkeys(JOIN_COLS, pl.String),
@@ -162,27 +174,26 @@ def feedback_embeddings(
                         "embedding_dim",
                     ]
                 )
+                .filter(
+                    (pl.col("embedding_model_version") == client.model_version)
+                    & (pl.col("embedding_dim") == client.dim)
+                )
                 .collect()
             )
 
-    # Built before filtering: filter_unembedded needs the model/dim actually in use
-    # to re-submit a conversation whose stored embedding_model_version or
-    # embedding_dim has since gone stale (a model change or dimension sweep), not
-    # just a turn_count or embedding_input change.
-    client = build_embedding_client(
-        embedding_llm,
-        config.embedding_model_version,
-        config.embedding_dim,
-        config.bedrock_model_version,
+    # Caps the upstream read, matching feedback_summaries -- not unembedded_df,
+    # so total_upstream_count below stays the true total.
+    sample_df = (
+        resolved_df.head(config.sample_limit)
+        if config.sample_limit is not None
+        else resolved_df
     )
     unembedded_df = filter_unembedded(
-        resolved_df,
+        sample_df,
         already_embedded_df,
         current_model_version=client.model_version,
         current_dim=client.dim,
     )
-    if config.sample_limit is not None:
-        unembedded_df = unembedded_df.head(config.sample_limit)
 
     errors: list[str] = []
     catalog = get_glue_catalog()

@@ -805,7 +805,7 @@ def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
 
     assert catalog.create_calls == ["some_db.feedback_embeddings"]
     assert len(table.upserts) == 1
-    assert table.upserts[0]["join_cols"] == embed.JOIN_COLS
+    assert table.upserts[0]["join_cols"] == embed.UPSERT_JOIN_COLS
 
 
 def test_checkpoint_embedding_chunk_reorders_using_top_level_fields_only() -> None:
