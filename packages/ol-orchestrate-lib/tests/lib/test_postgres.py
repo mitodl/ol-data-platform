@@ -192,14 +192,14 @@ def test_each_storage_names_its_own_pool() -> None:
     sized from it. The name has to survive the webserver's engine rebuild too.
     """
     storages = [build_storage(storage_class) for storage_class in STORAGE_CLASSES]
-    names = {storage._engine.pool.logging_name for storage in storages}
+    names = [storage._engine.pool.logging_name for storage in storages]
 
     for storage in storages:
         storage.optimize_for_webserver(
             statement_timeout=5000, pool_recycle=60, max_overflow=2
         )
-    rebuilt_names = {storage._engine.pool.logging_name for storage in storages}
+    rebuilt_names = [storage._engine.pool.logging_name for storage in storages]
 
     assert None not in names
-    assert len(names) == len(STORAGE_CLASSES)
+    assert len(set(names)) == len(STORAGE_CLASSES)
     assert rebuilt_names == names
