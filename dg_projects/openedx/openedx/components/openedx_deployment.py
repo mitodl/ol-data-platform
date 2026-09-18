@@ -218,7 +218,9 @@ class OpenEdxDeploymentComponent:
             List of schedule definitions
         """
         irx_export_job = define_asset_job(
-            name=f"{self.deployment_name}_irx_export",
+            # Not the bare `<deployment>_irx_export`: that is the multi-asset's
+            # op name, and a job sharing it fails the code location at load.
+            name=f"{self.deployment_name}_irx_export_job",
             selection=AssetSelection.assets(assets["irx_export_asset"]),
             tags={
                 # The ceiling legacy_openedx needed for loading studentmodule
