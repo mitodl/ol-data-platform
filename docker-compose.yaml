@@ -208,19 +208,19 @@ services:
     - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
     - ./src/ol_dbt:/opt/dbt
 
-  # Code location: learning_resources
-  dagster_learning_resources:
-    container_name: dagster_learning_resources
-    image: mitodl/dagster-learning_resources:dev
+  # Code location: delivery
+  dagster_delivery:
+    container_name: dagster_delivery
+    image: mitodl/dagster-delivery:dev
     build:
       context: .
-      dockerfile: dg_projects/learning_resources/Dockerfile
+      dockerfile: dg_projects/delivery/Dockerfile
     entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4004",
-      "--module-name", "learning_resources.definitions"]
+      "--module-name", "delivery.definitions"]
     ports:
     - "4004:4004"
     environment:
-      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-learning_resources:dev"
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-delivery:dev"
       VAULT_TOKEN_CACHE_DIR: /vault/token-cache
       VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENV: dev
@@ -235,7 +235,7 @@ services:
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
-    - ./dg_projects/learning_resources/learning_resources:/app/learning_resources
+    - ./dg_projects/delivery/delivery:/app/delivery
 
   # Code location: legacy_openedx
   dagster_legacy_openedx:
@@ -341,6 +341,33 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/ml/ml:/app/ml
+
+  # Code location: data_loading
+  dagster_data_loading:
+    container_name: dagster_data_loading
+    image: mitodl/dagster-data_loading:dev
+    build:
+      context: .
+      dockerfile: dg_projects/data_loading/Dockerfile
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4009",
+      "--module-name", "data_loading.definitions"]
+    ports:
+    - "4009:4009"
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-data_loading:dev"
+      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
+      VAULT_OIDC_NONINTERACTIVE: "1"
+      DAGSTER_ENVIRONMENT: dev
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
+    - ./dg_projects/data_loading/data_loading:/app/data_loading
 
   postgres:
     image: postgres

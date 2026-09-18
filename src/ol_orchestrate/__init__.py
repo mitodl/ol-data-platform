@@ -16,7 +16,7 @@ Code locations:
 - legacy_openedx: Legacy repository-based extracts
 - canvas: Canvas LMS course exports
 - orchestration_platform: Platform infrastructure & monitoring
-- learning_resources: Learning platform API extraction
+- delivery: Webhook delivery of learning resources to MIT Learn
 
 DO NOT import from this module. Use:
 - from ol_orchestrate.lib import ...  (shared library)

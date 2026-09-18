@@ -416,7 +416,7 @@ def test_sensor_fingerprint_matches_a_real_dagster_step_failure(
 
     The ``retried`` case covers an op whose RetryPolicy is exhausted, which
     Dagster serializes as ``RetryRequestedFromPolicy -> <user exception>``.
-    Several learning_resources assets carry a RetryPolicy, so that wrapper is
+    Several delivery assets carry a RetryPolicy, so that wrapper is
     on a live path.
     """
     from dagster import (  # noqa: PLC0415
