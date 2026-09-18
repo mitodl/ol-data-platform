@@ -170,6 +170,41 @@ unbaselineable finding is what forces step 3 to decide each branch, either by ma
 IRx's BigQuery, with no QA counterpart. Left `scoped`, it would have been declared a QA branch
 of 135 models.
 
+### Step 5 as built (2026-09-18)
+
+Both rows of the table above are now part of `qa_branch_contract`.
+
+The first row needs only text. A declared branch that no unit declares, or whose unit is
+`strategies.qa: omit`, is an ERROR on every model that declares it. After step 3 no declaration
+hits this. Flipping `mitlearn/app_postgres` to `omit` fails 44 models.
+
+The second row needs to know what QA holds, and the CI job has no AWS credentials. So
+`ol-dbt inventory observe` reads the QA Glue database and each table's current Iceberg snapshot
+(the same method as §7) for every table of an `ingest` or `mirror` unit, and writes
+`ingestion/inventory/qa_observation.json`. That file is committed and CI reads it. A table counts
+as empty when it is absent, not Iceberg, has no current snapshot, or has zero rows. A `mirror`
+table is stale when its snapshot is older than `mirror_max_age_days` at observation time. Staleness
+is measured against the observation time, not the CI run time, so an old observation can't
+invent staleness. An observation older than 30 days is a WARNING. An observation of any database
+other than `ol_warehouse_qa_raw` is an ERROR, because it would hide every gap.
+
+A declared table the observation doesn't cover is an `unobserved` gap, not a warning. That is
+what a branch looks like when a PR newly declares it, or flips its unit from `omit` to `ingest`,
+which is when QA is least likely to hold it. The PR either refreshes the observation or baselines
+the gap, and both are visible in review.
+
+Only tables that a declaring model reads count, through manifest lineage. The baseline
+(`ingestion/inventory/qa_branch_baseline.txt`) is keyed per table, not per branch: a model that
+starts reading an empty table of an already-baselined branch is a new finding. New findings are
+reported as one ERROR per branch. `ol-dbt validate --update-qa-baseline` rewrites the baseline.
+
+The first observation (2026-09-18) gives 48 baselined tables across 14 branches, all `empty`.
+No `stale` finding can fire yet, because step 4 declared only scoped units and no model declares
+a mirror branch. That changes once step 6 lands mirrors and models start declaring them.
+
+The observation is refreshed by hand for now. A refresh that shows a table has emptied fails the
+refresh PR, which is where the lapse should surface.
+
 ---
 
 ## 3. Specified: per-environment strategy map (task Local-1)

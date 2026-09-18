@@ -71,8 +71,11 @@ jobs:
     # Global gates. Dimensional layering (#2072 DoD) is baselined and fails only
     # on NEW marts/reporting → staging/intermediate references. The QA branch
     # contract (RFC 12711) fails when a model unioning several ingestion units
-    # declares no qa_branches/qa_buildable, or declares a branch it cannot read;
-    # an inventory edit that moves a raw table between units can cause the latter.
+    # declares no qa_branches/qa_buildable, declares a branch it cannot read, or
+    # declares one whose unit is strategies.qa: omit; an inventory edit can cause
+    # the last two. It also fails on a declared-branch table that the committed
+    # ingestion/inventory/qa_observation.json shows empty (or a stale mirror)
+    # unless ingestion/inventory/qa_branch_baseline.txt lists it.
     - name: Dimensional-layering and QA branch contract lint
       run: |
         uv run ol-dbt validate \
