@@ -12,6 +12,16 @@ models:
       - enrollment_id
       - platform
       - enrollment_type
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: enrollment_key
     description: >
@@ -127,6 +137,16 @@ models:
     watermark has no visibility into order-side changes (refunds, price updates,
     fulfillment).
     Grain: one row per enrollment_key.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: enrollment_key
     description: Foreign key to tfact_enrollment.enrollment_key
@@ -192,6 +212,16 @@ models:
       - order_id
       - line_id
       - platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: order_key
     description: >
@@ -311,6 +341,16 @@ models:
       combination_of_columns:
       - payment_id
       - platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: payment_key
     description: Surrogate key for payment
@@ -386,6 +426,16 @@ models:
       - certificate_id
       - platform
       - certificate_scope
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: certificate_key
     description: Surrogate key for certificate
@@ -485,6 +535,16 @@ models:
       combination_of_columns:
       - grade_id
       - platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: grade_key
     description: Surrogate key for grade record

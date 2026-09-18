@@ -13,6 +13,16 @@ models:
       - user_fk
       - courserun_readable_id
       - courseaccess_role
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_fk
     description: Foreign key to dim_user.user_pk.
@@ -54,6 +64,12 @@ models:
       combination_of_columns:
       - program_fk
       - course_fk
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: program_fk
     description: Foreign key to dim_program
@@ -78,6 +94,12 @@ models:
 
 - name: bridge_course_instructor
   description: Many-to-many relationship between courses and instructors
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
   columns:
   - name: course_fk
     description: Foreign key to dim_course
@@ -101,6 +123,11 @@ models:
 
 - name: bridge_course_topic
   description: Many-to-many relationship between courses and topics
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: course_fk
     description: Foreign key to dim_course
@@ -124,6 +151,10 @@ models:
 
 - name: bridge_course_department
   description: Many-to-many relationship between courses and departments
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
   columns:
   - name: course_fk
     description: Foreign key to dim_course
@@ -154,6 +185,16 @@ models:
       combination_of_columns:
       - user_fk
       - organization_fk
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_fk
     description: Foreign key to dim_user.user_pk.
@@ -187,6 +228,12 @@ models:
       - from_platform
       - from_user_id
       - to_platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: from_platform
     description: Platform identifier code for the source account (currently always

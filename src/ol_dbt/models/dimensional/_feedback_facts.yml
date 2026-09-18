@@ -5,6 +5,16 @@ models:
 - name: tfact_feedback
   description: One row per feedback turn. At MVP a turn is a single public Zendesk
     comment written by the ticket requester.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: feedback_pk
     description: str, surrogate key generated from source_slug and source_record_id.
@@ -151,6 +161,16 @@ models:
 - name: afact_feedback_conversation
   description: One row per conversation - a whole Zendesk ticket or thread, rather
     than a single turn.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: feedback_conversation_pk
     description: str, surrogate key generated from source_slug and conversation_ref.

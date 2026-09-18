@@ -5,6 +5,22 @@ models:
 - name: afact_video_engagement
   description: Aggregate fact table summarizing video engagement by video, learner,
     and a courserun.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -81,6 +97,15 @@ models:
 
 - name: dim_video
   description: video metadata across the Open edX platforms
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitx/mysql
+      - mitxonline/api
+      - mitxonline/mysql
+      - xpro/api
+      - xpro/mysql
   columns:
   - name: video_block_pk
     description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@video+block@{hash
@@ -124,6 +149,15 @@ models:
 
 - name: dim_problem
   description: problem metadata across the Open edX platforms
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/tracking_logs
   columns:
   - name: problem_block_pk
     description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@problem+block@{hash
@@ -167,6 +201,12 @@ models:
 
 - name: dim_discussion_topic
   description: discussion topics across the Open edX platforms
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitxonline/api
+      - xpro/api
   columns:
   - name: discussion_topic_pk
     description: string, primary key for this table
@@ -205,6 +245,12 @@ models:
   description: Slowly Changing Dimension model for course content, including courses,
     chapters, subsections, problems, videos, and other contents across the Open edX
     platforms.
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitxonline/api
+      - xpro/api
   columns:
   - name: content_block_pk
     description: string, primary key for this table
@@ -285,6 +331,16 @@ models:
   description: Eventually a dimensional model for users from different platforms.
     It will contain one record for a user that's potentially a part of different platforms
     where we are able to see they are the same person.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_pk
     description: string, primary key for this user dim table. The grain is still one
@@ -427,6 +483,19 @@ models:
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -500,6 +569,19 @@ models:
 
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -586,6 +668,19 @@ models:
     both tracking log and studentmodule sources have the same attempt — and all
     showanswer events regardless of count. Incremental; full-refresh required when
     backfilling or after schema changes.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: event_id
     description: string, surrogate key uniquely identifying this event row, derived
@@ -679,6 +774,16 @@ models:
 
     The seed column identifies which randomized variant of the problem the student
     received, enabling analysis of whether specific variants are harder than others.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_fk
     description: string, foreign key to dim_user
@@ -751,6 +856,19 @@ models:
         column_list: ["platform", "studentmodulehistoryextended_id"]
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
@@ -845,6 +963,22 @@ models:
 - name: afact_course_page_engagement
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -891,6 +1025,22 @@ models:
 - name: afact_problem_engagement
   description: Aggregate fact table summarizing problem engagement by learners within
     a course.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -937,6 +1087,22 @@ models:
 - name: afact_discussion_engagement
   description: Aggregate fact table summarizing learner engagement in discussion posts
     within a course.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
@@ -1000,6 +1166,18 @@ models:
 
 - name: tfact_chatbot_events
   description: Transactional fact table for learner chatbot events in a course
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: chatbot_source
     description: string, indicates the source of the chatbot event like 'open_edx'
@@ -1082,6 +1260,12 @@ models:
       combination_of_columns:
       - source_discount_id
       - platform_code
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: discount_pk
     description: string, surrogate primary key for this table, generated from source_discount_id
@@ -1227,6 +1411,20 @@ models:
         - user_fk
         - courserun_readable_id
         - activity_date_key
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: activity_key
     description: string, surrogate key over (platform, user_fk, courserun_readable_id,

@@ -4,6 +4,16 @@ version: 2
 models:
 - name: int__learn_ai__tutorbot
   description: Intermediate model for TutorBot chat history
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - mitx/api
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/tracking_logs
   columns:
   - name: tutorbotoutput_id
     description: int, primary key in ai_chatbots_tutorbotoutput
@@ -48,6 +58,16 @@ models:
 - name: int__learn_ai__chatbot
   description: Intermediate model for Learn AI RecommendationBot, SyllabusBot and
     VideoGPTBot
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - mitx/api
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/tracking_logs
   columns:
   - name: djangocheckpoint_id
     description: int, foreign key to chatbots_djangocheckpoint

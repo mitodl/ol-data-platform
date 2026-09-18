@@ -6,8 +6,9 @@ deployment: global_alumni
 layer: bigquery
 scope: singleton
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: airbyte
 table_prefix: raw__global_alumni__bigquery__
 airbyte:

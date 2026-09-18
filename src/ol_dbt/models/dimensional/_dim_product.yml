@@ -13,6 +13,12 @@ models:
       - platform
       - is_current
       where: "is_current = true"
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: product_pk
     description: >

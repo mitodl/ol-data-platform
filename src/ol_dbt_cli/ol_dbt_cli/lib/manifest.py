@@ -41,6 +41,10 @@ class ManifestModel:
     """unique_ids of parent nodes."""
     depends_on_macros: list[str] = field(default_factory=list)
     """unique_ids of macros this node references (``depends_on.macros``)."""
+    identifier: str = ""
+    """For a source, the physical table name it reads, which can differ from ``name``."""
+    meta: dict[str, Any] = field(default_factory=dict)
+    """``config.meta``: dbt merges project-level and YAML ``meta`` into it."""
 
     @property
     def column_names(self) -> set[str]:
@@ -227,6 +231,8 @@ def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
         columns=columns,
         depends_on=depends_on.get("nodes", []),
         depends_on_macros=depends_on.get("macros", []),
+        identifier=node_data.get("identifier") or "",
+        meta=(node_data.get("config") or {}).get("meta") or {},
     )
 
 

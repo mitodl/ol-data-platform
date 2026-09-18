@@ -7,8 +7,9 @@ deployment: edxorg
 scope: singleton
 layer: mysql
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: dlt
 # `_file_modified_at` rather than `_dlt_load_id`: the load appends and the
 # backfill walks the landing zone in whatever order it likes, so the load id

@@ -60,6 +60,11 @@ models:
 
 - name: marts__mitxpro_all_coupons
   description: B2B and regular coupons combined into one table
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: coupon_code
     description: string, coupon code for the coupon
