@@ -102,11 +102,17 @@ def test_the_automation_sensor_targets_the_courseware_source_asset(
         sensor for sensor in sensors if sensor.name.endswith("_automation_sensor")
     )
 
-    graph = _asset_graph(component)
-    targeted = automation_sensor.asset_selection.resolve(graph)
+    targeted = automation_sensor.asset_selection.resolve(_asset_graph(component))
+    # The component's own keys, not the whole graph: the graph also holds the
+    # dbt models the IRx drop depends on, which the lakehouse location owns.
+    own_keys = {
+        key
+        for asset in assets.values()
+        for key in (asset.keys if isinstance(asset, AssetsDefinition) else [asset.key])
+    }
 
     assert assets["courseware_asset"].key in targeted
-    assert targeted == graph.get_all_asset_keys(), "nothing dropped from the target"
+    assert targeted == own_keys, "nothing dropped from the target"
 
 
 def test_the_discovery_sensor_does_not_target_the_source_asset(

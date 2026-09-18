@@ -485,6 +485,10 @@ models:
     description: string, name of the discussion role e.g. Moderator
   - name: id
     description: int, the auto-incremented ID for this table
+  - name: org
+    description: string, name of the organization the course run belongs to, via organizations_organizationcourse.
+      Null when the course run has no organization link. A course run linked to more
+      than one organization has a row per organization, as in the legacy role_users.csv
 
 - name: irx__mitxonline__openedx__mysql__student_anonymoususerid
   description: Mapping of MITx Online OpenedX learners to their anonymous user IDs

@@ -252,8 +252,7 @@ def get_glue_catalog(region: str = AWS_REGION) -> GlueCatalog:
     """Return a configured pyiceberg GlueCatalog backed by boto3.
 
     This is the single factory used by both the maintenance library and
-    ``glue_helper.get_dbt_model_as_dataframe``.  When the latter is refactored,
-    it should delegate here.
+    ``glue_helper.load_dbt_model_table``.
     """
     return GlueCatalog(
         "default",
