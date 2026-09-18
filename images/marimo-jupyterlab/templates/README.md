@@ -143,10 +143,11 @@ response["output"]["message"]["content"][0]["text"]
 ```
 
 Use the `us.`-prefixed inference profile ID. Newer models reject the bare model
-ID. Models already enabled for the AWS account work straight away. A third-party
-model nobody has used here yet returns `AccessDeniedException` until the
-platform team enables it, which is a one-time step. Calls go through the environment's shared role, not your SSO identity, so
-AWS doesn't record which user made them. The personal-data guidance above
+ID. Models already enabled for the AWS account work straight away. A
+third-party model nobody has used here yet may answer for a few minutes, then
+returns `AccessDeniedException` until the platform team enables it, which is a
+one-time step. Calls go through the environment's shared role, not your SSO
+identity, so AWS doesn't record which user made them. The personal-data guidance above
 applies to what you put in a prompt too.
 
 ## Limits
