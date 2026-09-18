@@ -41,6 +41,13 @@ from ol_dbt_cli.lib.inventory import (
     render_dbt_metadata_columns,
     validate_inventory,
 )
+from ol_dbt_cli.lib.qa_observation import (
+    OBSERVATION_FILENAME,
+    QA_GLUE_DATABASE,
+    observe_glue,
+    observed_tables,
+    render_observation,
+)
 from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
 from ol_dbt_cli.lib.yaml_registry import collect_source_tables
 
@@ -651,3 +658,38 @@ def cursors(
 
     if result.broken:
         sys.exit(1)
+
+
+@inventory_app.command
+def observe(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/; the observation is written here."),
+    ] = DEFAULT_INVENTORY_DIR,
+    glue_database: Annotated[
+        str,
+        Parameter(help="Glue database holding QA's landed raw tables."),
+    ] = QA_GLUE_DATABASE,
+    region: str = "us-east-1",
+) -> None:
+    """Record what QA raw holds for every table of a unit QA ingests or mirrors.
+
+    Writes qa_observation.json, which `ol-dbt validate`'s qa_branch_contract
+    check reads to find declared QA branches that are empty or whose mirror is
+    stale. CI has no AWS credentials, so the observation is taken here and
+    committed. Needs AWS credentials that can read Glue and the lake's Iceberg
+    metadata.
+
+    Refresh it after QA ingestion or a mirror changes, then run
+    `ol-dbt validate --update-qa-baseline` if the refresh changed which gaps exist.
+    """
+    units = load_units(inventory_dir)
+    observation = observe_glue(observed_tables(units), database=glue_database, region=region)
+    path = inventory_dir / OBSERVATION_FILENAME
+    path.write_text(render_observation(observation))
+    holding = sum(1 for state in observation.tables.values() if state.rows)
+    console.print(
+        f"[green]Observed {len(observation.tables)} table(s)[/] in {glue_database}, "
+        f"{holding} holding rows. Wrote {path}."
+    )

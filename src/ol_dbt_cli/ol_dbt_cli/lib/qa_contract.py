@@ -12,15 +12,21 @@ Branches are inventory unit keys (``deployment/layer``), never source or
 platform names: ``(deployment, layer)`` is the unit that actually lapses. See
 docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.
 
-This module makes the declaration complete and consistent with lineage. Checking
-it against the inventory's QA strategies and against what QA actually holds is
-step 5, which extends the same check.
+The check has two halves with different severities (spec §2). A declaration
+that is missing, malformed, contradicts lineage, or names a unit the inventory
+omits from QA is fixed by editing text, so it is an ERROR nothing can baseline.
+A declared branch whose tables QA does not hold, or a mirror past its
+``mirror_max_age_days``, is an operational lapse upstream: an ERROR when new,
+INFO when listed in ``qa_branch_baseline.txt``. That half reads a committed
+observation of the QA lake (``lib.qa_observation``), since CI has no AWS access.
 """
 
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from ol_dbt_cli.lib.dimensional_layering import classify_layer
@@ -28,13 +34,22 @@ from ol_dbt_cli.lib.inventory import tables_by_raw_name
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ol_dbt_cli.lib.inventory import Unit
     from ol_dbt_cli.lib.manifest import ManifestRegistry
+    from ol_dbt_cli.lib.qa_observation import Observation, TableState
 
 QA_CONTRACT_CHECK = "qa_branch_contract"
+BASELINE_FILENAME = "qa_branch_baseline.txt"
+OBSERVATION_MAX_AGE_DAYS = 30
+"""Past this the observation, not QA, is what the gap findings describe."""
 
 UNCONTRACTED_LAYERS = frozenset({"staging"})
 """Staging models read exactly one source table, so they are never a union."""
+
+QA_STRATEGIES = frozenset({"ingest", "mirror"})
+"""The strategies under which QA holds a unit. Anything else is `omit`."""
 
 _BRANCH = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$")
 
@@ -45,8 +60,8 @@ class Contract:
     buildable: bool | None
 
 
-def upstream_units(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, set[str]]:
-    """Map each model name to every inventory unit its lineage reads from.
+def upstream_tables(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, set[str]]:
+    """Map each model name to every inventory-declared raw table its lineage reads.
 
     A source whose table no unit declares (a retired table, a dbt-built source
     like the feedback tables) contributes nothing: it is not an ingestion branch
@@ -61,9 +76,9 @@ def upstream_units(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, s
         node = manifest.nodes.get(unique_id)
         found: set[str] = set()
         if node is not None and node.resource_type == "source":
-            owner = owners.get(node.identifier or node.name)
-            if owner:
-                found.add(owner)
+            table = node.identifier or node.name
+            if table in owners:
+                found.add(table)
         elif node is not None:
             for parent in node.depends_on:
                 found |= walk(parent)
@@ -71,6 +86,12 @@ def upstream_units(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, s
         return found
 
     return {node.name: walk(uid) for uid, node in manifest.nodes.items() if node.is_model}
+
+
+def upstream_units(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, set[str]]:
+    """Map each model name to every inventory unit its lineage reads from."""
+    owners = tables_by_raw_name(units)
+    return {model: {owners[t] for t in tables} for model, tables in upstream_tables(manifest, units).items()}
 
 
 def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
@@ -105,13 +126,14 @@ def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
 
 
 def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: ValidationReport) -> None:
-    """Report models whose QA contract is missing, malformed, or contradicts lineage.
+    """Report models whose QA contract is missing, malformed, or contradicts lineage or the inventory.
 
     Every finding is an ERROR and none is baselineable: each is fixed by editing
-    the model's YAML, and none can be caused by an upstream outage.
+    the model's YAML or the inventory, and none can be caused by an upstream outage.
     """
     lineage = upstream_units(manifest, units)
     scope = {unit.key: unit.data.get("scope") for unit in units}
+    qa_strategy = {unit.key: (unit.data.get("strategies") or {}).get("qa") for unit in units}
 
     for node in sorted(manifest.nodes.values(), key=lambda n: n.name):
         if not node.is_model:
@@ -132,17 +154,38 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                 "exists, otherwise keep qa_buildable: false.",
             )
 
-        for branch in sorted(set(contract.branches or []) - reads):
+        for branch in sorted(set(contract.branches or [])):
             if not _BRANCH.match(branch):
                 continue
-            report.add(
-                QA_CONTRACT_CHECK,
-                Severity.ERROR,
-                node.name,
-                f"qa_branches names {branch}, which is not upstream of this model",
-                f"Lineage reaches: {', '.join(sorted(reads)) or 'no inventory unit'}. A declared "
-                "branch the model cannot read asserts coverage nothing checks.",
-            )
+            if branch not in qa_strategy:
+                report.add(
+                    QA_CONTRACT_CHECK,
+                    Severity.ERROR,
+                    node.name,
+                    f"qa_branches names {branch}, which is not an inventory unit",
+                    "Branches are `deployment/layer` keys of ingestion/inventory/units. A branch "
+                    "no unit declares can never be ingested or mirrored into QA.",
+                )
+            elif branch not in reads:
+                report.add(
+                    QA_CONTRACT_CHECK,
+                    Severity.ERROR,
+                    node.name,
+                    f"qa_branches names {branch}, which is not upstream of this model",
+                    f"Lineage reaches: {', '.join(sorted(reads)) or 'no inventory unit'}. A declared "
+                    "branch the model cannot read asserts coverage nothing checks.",
+                )
+            elif qa_strategy[branch] not in QA_STRATEGIES:
+                report.add(
+                    QA_CONTRACT_CHECK,
+                    Severity.ERROR,
+                    node.name,
+                    f"qa_branches names {branch}, whose strategies.qa is {qa_strategy[branch]}",
+                    "The model expects the branch in QA and the inventory says QA never gets it. "
+                    "Set the unit's strategies.qa to ingest (scoped) or mirror (singleton), or drop "
+                    "the branch here so this model's QA form is partial by declaration. Not "
+                    "baselineable: see docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
+                )
 
         is_union = len(reads) > 1 and classify_layer(node.original_file_path) not in UNCONTRACTED_LAYERS
         # Presence again: a malformed value is already reported above, and _read_contract
@@ -160,3 +203,174 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                 "`qa_buildable: false` if it has no QA form. See "
                 "docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
             )
+
+
+@dataclass(frozen=True)
+class Gap:
+    """One table of a declared branch that QA does not hold in usable form."""
+
+    branch: str
+    table: str
+    condition: str
+    reason: str
+    models: tuple[str, ...]
+
+    @property
+    def key(self) -> str:
+        """Baseline identity.
+
+        Per table, so a model newly reading an empty table of a baselined branch
+        is still a new finding.
+        """
+        return f"{self.branch} {self.table}: {self.condition}"
+
+
+def _qa_strategy(unit: Unit) -> str | None:
+    return (unit.data.get("strategies") or {}).get("qa")
+
+
+def _condition(state: TableState, mirror_max_age: timedelta | None, observed_at: datetime) -> tuple[str, str] | None:
+    if not state.present:
+        return "empty", "absent from QA raw"
+    if not state.iceberg:
+        return "empty", "not Iceberg (legacy JSON destination)"
+    if state.rows is None:
+        return "empty", "no current snapshot"
+    if state.rows == 0:
+        return "empty", "no rows"
+    if mirror_max_age is not None and state.snapshot_at and observed_at - state.snapshot_at > mirror_max_age:
+        return "stale", f"copied {state.snapshot_at:%Y-%m-%d}, past mirror_max_age_days"
+    return None
+
+
+def qa_gaps(
+    manifest: ManifestRegistry, units: list[Unit], observation: Observation
+) -> tuple[list[Gap], dict[str, list[str]]]:
+    """Return the declared-branch tables QA lacks, and those the observation never saw.
+
+    Only tables a declaring model actually reads count: an empty table in a unit
+    no declaring model touches cannot make a QA build partial. Branches the
+    inventory check already rejects (unknown, not upstream, `omit`) are left to it.
+    """
+    owners = tables_by_raw_name(units)
+    by_key = {unit.key: unit for unit in units}
+    lineage = upstream_tables(manifest, units)
+
+    readers: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for node in manifest.nodes.values():
+        if not node.is_model:
+            continue
+        contract, _ = _read_contract(node.meta)
+        declared = {
+            branch
+            for branch in contract.branches or []
+            if branch in by_key and _qa_strategy(by_key[branch]) in QA_STRATEGIES
+        }
+        for table in lineage[node.name]:
+            if owners[table] in declared:
+                readers[(owners[table], table)].add(node.name)
+
+    gaps: list[Gap] = []
+    unobserved: dict[str, list[str]] = defaultdict(list)
+    for (branch, table), models in sorted(readers.items()):
+        state = observation.tables.get(table)
+        if state is None:
+            unobserved[branch].append(table)
+            continue
+        unit = by_key[branch]
+        max_age = timedelta(days=unit.data["mirror_max_age_days"]) if _qa_strategy(unit) == "mirror" else None
+        found = _condition(state, max_age, observation.observed_at)
+        if found:
+            gaps.append(Gap(branch, table, *found, models=tuple(sorted(models))))
+    return gaps, dict(unobserved)
+
+
+def check_qa_gaps(  # noqa: PLR0913
+    manifest: ManifestRegistry,
+    units: list[Unit],
+    observation: Observation,
+    baseline: set[str],
+    now: datetime,
+    report: ValidationReport,
+) -> None:
+    """Ratchet the operational half: new gaps ERROR, baselined ones collapse to INFO."""
+    age = now - observation.observed_at
+    if age > timedelta(days=OBSERVATION_MAX_AGE_DAYS):
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(qa observation)",
+            f"The QA observation is {age.days} days old",
+            "Gap findings describe QA as of "
+            f"{observation.observed_at:%Y-%m-%d}. Refresh with `ol-dbt inventory observe` and commit it.",
+        )
+
+    gaps, unobserved = qa_gaps(manifest, units, observation)
+
+    for branch, tables in sorted(unobserved.items()):
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            branch,
+            f"{len(tables)} declared-branch table(s) are not in the QA observation",
+            f"{', '.join(tables)}. The observation predates these tables or the unit's "
+            "strategies.qa; refresh it with `ol-dbt inventory observe` so they are checked.",
+        )
+
+    by_group: dict[tuple[str, str], list[Gap]] = defaultdict(list)
+    for gap in gaps:
+        if gap.key not in baseline:
+            by_group[(gap.branch, gap.condition)].append(gap)
+    for (branch, condition), group in sorted(by_group.items()):
+        models = sorted({model for gap in group for model in gap.models})
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.ERROR,
+            branch,
+            f"{len(group)} table(s) that declaring models read are {condition} in QA",
+            f"{'; '.join(f'{gap.table} ({gap.reason})' for gap in group)}. Declared by "
+            f"{len(models)} model(s): {', '.join(models)}. Restore the branch in QA, drop it "
+            "from those models' qa_branches, or acknowledge the lapse with "
+            "`ol-dbt validate --update-qa-baseline`.",
+        )
+
+    current = {gap.key for gap in gaps}
+    known = current & baseline
+    if known:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.INFO,
+            "(qa baseline)",
+            f"{len(known)} known QA gap(s) tolerated by baseline",
+            f"See {BASELINE_FILENAME}. Each line is a declared-branch table QA does not hold yet.",
+        )
+    for resolved in sorted(baseline - current):
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.INFO,
+            "(qa baseline)",
+            f"Resolved baseline entry: {resolved}",
+            "QA holds this table now, or no declaring model reads it. Run "
+            "`ol-dbt validate --update-qa-baseline` to shrink the baseline.",
+        )
+
+
+def render_qa_baseline(gaps: list[Gap]) -> str:
+    header = [
+        "# QA branch-contract baseline (RFC 12711 step 5).",
+        "#",
+        "# Each line is a table of a declared QA branch that the committed QA",
+        "# observation (qa_observation.json) shows empty, or a mirror past its",
+        "# mirror_max_age_days. These are operational lapses, tolerated so QA builds",
+        "# keep running while they are repaired. A gap NOT listed here fails",
+        "# `ol-dbt validate`. Contradictions between qa_branches and the inventory",
+        "# are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
+        "#",
+        "# Regenerate with: ol-dbt validate --update-qa-baseline",
+        "",
+    ]
+    return "\n".join([*header, *sorted({gap.key for gap in gaps}), ""])
+
+
+def write_qa_baseline(path: Path, gaps: list[Gap]) -> None:
+    path.write_text(render_qa_baseline(gaps))
