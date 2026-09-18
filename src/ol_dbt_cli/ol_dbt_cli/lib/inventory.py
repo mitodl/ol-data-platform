@@ -212,6 +212,20 @@ def _check_strategies(unit: Unit, report: ValidationReport) -> None:
             "and no other loader has a local path (RFC 12711 §3).",
         )
 
+    # RFC 12711 Option 3: a scoped unit is ingested from the QA deployment, a
+    # singleton has no QA deployment and is mirrored from production or omitted.
+    qa = strategies.get("qa")
+    scope = unit.data.get("scope")
+    if (scope, qa) in {("scoped", MIRROR_STRATEGY), ("singleton", "ingest")}:
+        report.add(
+            CHECK,
+            Severity.ERROR,
+            unit.key,
+            f"strategies.qa is `{qa}` but the unit is {scope}",
+            "A scoped unit has a QA deployment to ingest from, and mirroring production rows into "
+            "QA breaks joins on environment-scoped identity. A singleton has no QA deployment.",
+        )
+
     mirrors = MIRROR_STRATEGY in strategies.values()
     declared = "mirror_max_age_days" in unit.data
     if mirrors and not declared:

@@ -7,8 +7,9 @@ deployment: edxorg
 scope: singleton
 layer: mysql
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: dlt
 # TRANSITIONAL — remove once this unit has run once with
 # `normalize.parquet_normalizer.add_dlt_load_id = true` (src/ol_dlt/.dlt/config.toml).

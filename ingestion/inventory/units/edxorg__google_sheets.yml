@@ -6,8 +6,9 @@ deployment: edxorg
 scope: singleton
 layer: google_sheets
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: airbyte
 table_prefix: raw__edxorg__program_entitlement
 airbyte:

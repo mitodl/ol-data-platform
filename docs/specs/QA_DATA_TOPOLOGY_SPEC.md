@@ -289,3 +289,103 @@ RFC 12711's other three open questions are not resolved here and do not gate any
 | 7 — narrow StarRocks grant | step 6 | Blocked |
 | 8 — B2B pilot | step 1 | Blocked on step 1 only |
 | 9 — engagement path | steps 5, 8 | Blocked |
+
+---
+
+## 7. Measured QA state and the strategies it set (step 3, 2026-09-17)
+
+Every unit's `strategies.qa` now follows one rule:
+
+- `ingest`: the unit is `scoped` and at least one model declares it in `meta.qa_branches`.
+  keycloak is `ingest` too, since a dlt loader already writes it in QA.
+- `mirror` with `mirror_max_age_days: 90`: the unit is a `singleton` with modeled tables. 90 days
+  fits the quarterly partner drops; edxorg is frozen.
+- `omit`: every other unit. No union model declares these, so they can't break a contract.
+
+`ol-dbt inventory validate` now rejects `scoped` + `mirror` and `singleton` + `ingest`.
+
+Most `ingest` and every `mirror` unit is empty or stale in QA. That's the gap step 5 baselines
+(§2's second row), not a reason to mark the unit `omit`. Marking it `omit` would turn the `qa_branches`
+declarations on 165 models into unbaselineable errors.
+
+### How it was measured
+
+- **Presence:** `aws glue get-tables` on `ol_warehouse_qa_raw` (2,766 tables) and
+  `ol_warehouse_production_raw` (2,087), joined case-insensitively to each unit's
+  `tables[].raw_table`. Glue stores names lowercased, and salesforce's inventory names are not.
+- **Non-empty and snapshot date:** the current snapshot in each table's Iceberg
+  `metadata_location` file, using `total-records` and `timestamp-ms`. Glue `UpdateTime` is
+  useless here. 2,354 QA tables carry a 2026-09-08 `UpdateTime`, the date of the QA
+  JSONL→Iceberg conversion (step 8), and 190 more carry 09-11 or 09-14. The conversion also wrote
+  snapshot dates for the tables that held data. So a 2026-09-08 to 09-14 snapshot on
+  a converted table dates the conversion, not the data. Converted empty shells have no snapshot
+  at all.
+- **QA loaders:** `bin/airbyte-inventory.py dump --environment qa`. The workspace has 28
+  connections, 9 marked active. The public jobs API returns no job history for any of them. Only
+  five target the Iceberg `S3 Data Lake` destination (xPro app DB, Bootcamps app DB, and the
+  edxorg/Open edX course XML and API connections). The rest write the legacy JSONL Glue
+  destination that neither StarRocks nor dlt can read. The QA Dagster sync schedules are stopped
+  (step 8). So the only QA writers are the two dlt units.
+
+### `ingest` (18)
+
+"Present" counts tables in QA Glue out of those declared. "Non-empty" counts tables with a snapshot holding rows.
+
+| Unit | Present | Non-empty | Modeled non-empty | QA loader | Gap |
+|---|---|---|---|---|---|
+| keycloak/app_postgres | 14/14 | 14 | — | dlt, writing 2026-09-17 | none |
+| mitxonline/app_postgres | 64/64 | 64 | 50/50 | dlt, run by hand 2026-09-08; schedule stopped | not scheduled; unit still says `loader: airbyte` |
+| micromasters/app_postgres | 39/39 | 39 | 28/28 | Airbyte, inactive, legacy destination | converted legacy data, no loader |
+| xpro/app_postgres | 178/178 | 159 | 54/55 | Airbyte, active, Iceberg destination, no jobs | newest snapshot 2025-02-25 |
+| ocw/app_postgres | 32/34 | 20 | 2/3 | Airbyte, inactive, legacy destination | converted legacy data, no loader |
+| ovs/app_postgres | 25/26 | 0 | 0/6 | Airbyte, inactive, legacy destination | empty |
+| mitx/mysql | 56/74 | 8 | 7/61 | Airbyte, inactive, legacy destination | nearly empty |
+| mitxonline/mysql | 55/68 | 0 | 0/56 | Airbyte, active, legacy destination, no jobs | empty |
+| xpro/mysql | 57/70 | 0 | 0/54 | Airbyte, inactive, legacy destination | empty |
+| mitx/tracking_logs | 1/1 | not Iceberg | 0/1 | Airbyte, inactive | legacy JSON, data 2024-08-28 |
+| mitxonline/tracking_logs | 1/1 | not Iceberg | 0/1 | Airbyte, inactive | legacy JSON, data 2024-08-28 |
+| xpro/tracking_logs | 1/1 | not Iceberg | 0/1 | Airbyte, inactive | legacy JSON, data 2024-08-27 |
+| mitx/api | 0/2 | 0 | 0/1 | none | never ingested |
+| mitxonline/api | 0/2 | 0 | 0/2 | none | never ingested |
+| xpro/api | 0/2 | 0 | 0/2 | none | never ingested |
+| mitlearn/app_postgres | 0/98 | 0 | 0/9 | none | never ingested |
+| learn_ai/app_postgres | 0/28 | 0 | 0/5 | none | never ingested |
+| openedx/s3 | 0/1 | 0 | 0/1 | none | also absent from production raw |
+
+### `mirror`, 90 days (11)
+
+The step 6 mirror asset doesn't exist yet, so none of these has a mirror. What QA holds for
+edxorg/s3 (2/6, non-empty) and irx/bigquery (4/4, legacy JSON) are pre-existing copies, not mirrors.
+
+| Unit | Production present | Production newest snapshot |
+|---|---|---|
+| edxorg/api | 0/1 | absent |
+| edxorg/course_structure | 4/5 | 2026-08-14 |
+| edxorg/google_sheets | 1/1 | 2026-09-17 |
+| edxorg/mysql | 3/7 | 2026-09-17 |
+| edxorg/s3 | 6/6 | 2026-09-17 |
+| edxorg/tracking_logs | 1/1 | 2026-09-14 |
+| emeritus/bigquery | 1/1 | 2026-09-17 |
+| global_alumni/bigquery | 1/1 | 2026-05-04 |
+| irx/bigquery | 4/4 | 2026-09-17 |
+| salesforce/api | 3/3 | 2026-06-16 |
+| zendesk/api | 26/26 | 2026-09-17 |
+
+A mirror copies production, so `mirror_max_age_days` measures time since the copy, not source
+freshness. global_alumni and salesforce are already months stale in production.
+
+### `omit` (14)
+
+bootcamps/hubspot, mailgun/api, mit_climate/api, mitpe/api, mitx/mongodb, mitxonline/mongodb,
+xpro/mongodb, mitxonline/hubspot, xpro/hubspot, mitxonline/openedx_notes, oll/google_sheets,
+open_discussions/app_postgres, podcast/rss, posthog/s3.
+
+QA holds converted forum data for the three mongodb units (3 non-empty tables each). Nothing
+reads it. Scope for mailgun, posthog, podcast, oll, mit_climate, mitpe and bootcamps/hubspot is
+still unaudited. It doesn't affect anything until a model declares one of them.
+
+### QA raw cleanup (§5)
+
+The 43 units own 538 of QA raw's 2,766 tables. The other 2,228 belong to no unit, so no
+`qa_branches` contract can depend on them. Whether a dbt source or anything outside dbt still
+reads them was not checked here. That check is what the cleanup decision still needs.

@@ -6,7 +6,7 @@ deployment: xpro
 layer: mysql
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__xpro__openedx__mysql__

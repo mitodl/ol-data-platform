@@ -7,8 +7,9 @@ deployment: edxorg
 scope: singleton
 layer: api
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: dlt
 table_prefix: raw__edxorg__discovery__api__
 dlt:

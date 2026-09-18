@@ -6,7 +6,7 @@ deployment: ocw
 layer: app_postgres
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__ocw__studio__postgres__
