@@ -114,11 +114,16 @@ ol-dbt local register --database ol_warehouse_production_intermediate
 ol-dbt local register --database ol_warehouse_production_dimensional
 ```
 
-**Read the `✗ Errors:` line — a non-zero count does not fail the command.**
-`register` catches per-table failures, prints the tally, and still exits 0. A table
-that fails to re-register keeps its previous view, so a run that *looks* successful
-can leave you on exactly the stale pointer you were trying to replace. Treat
-`✗ Errors: 0` as the success condition, not the exit status.
+**Read the `✗ Errors:` line — and do not stop there.** `register` exits 0 whatever
+failed. A per-table failure is counted (`✗ Errors: N`) and leaves that table on its
+previous view. A *database-level* failure is not counted at all: the Glue call raises,
+`register` prints `✗ Error accessing database` and skips the layer
+(`local_dev.py:824-828`), and the summary still reads `✗ Errors: 0`. A layer that
+comes back empty is skipped the same way (`⚠ No Iceberg tables found`, `:832-834`).
+So a run that *looks* successful can leave you on exactly the stale pointer you were
+trying to replace, or on a layer that was never touched. Success is all three lines —
+`✗ Errors: 0`, no `✗ Error accessing database`, no `⚠ No Iceberg tables found` —
+not the exit status. `ol-dbt-migration-validation` step 1 has this as a gate script.
 
 **One exception, and it is not really an exception.** When you are building two
 relations to compare against each other, both sides must come from the *same*
@@ -127,6 +132,10 @@ not code. That is compatible with the rule above because you build both sides in
 one invocation: register immediately before it. If you need to rebuild, re-register
 and rebuild **both** sides, never one. `ol-dbt-migration-validation` step 1 states
 this as the acceptance rule.
+
+The snapshot workflow below is the one shape where the two sides *cannot* share an
+invocation — the baseline is already frozen when you rebuild. There the rule becomes
+one registration for the whole sequence, with no refresh in the middle.
 
 ### 3. Iterate on models
 ```bash
@@ -171,11 +180,19 @@ reports join artifacts as mismatches.
 When you change a model's SQL rather than adding a `_new` copy, snapshot the
 pre-change build so the diff reflects only your change, not upstream data drift:
 ```bash
+ol-dbt local register --database ol_warehouse_production_<layer>  # once, for the whole sequence
+ol-dbt run --select my_model --full-refresh             # baseline build, on that registration
 ol-dbt local snapshot my_model --as my_model_baseline   # materialize a frozen copy
 # ...edit the SQL...
-ol-dbt run --select my_model --full-refresh
+ol-dbt run --select my_model --full-refresh             # do NOT re-register first
 ol-dbt diff --old my_model_baseline --old-raw --new my_model --primary-key my_model_pk
 ```
+**Do not re-register before the rebuild** — the one place the "re-register before
+every build" rule is deliberately suspended. The snapshot froze the baseline against
+one set of Glue pointers; moving them before the rebuild lets upstream drift show up
+in the diff as if your edit caused it. If the rebuild fails or the sequence drags,
+redo it from the register rather than refreshing in the middle.
+
 The snapshot is frozen, but the rebuild is not: without `--full-refresh` an
 incremental `my_model` may leave the edited rows untouched, and the diff then
 reports "no change" for a change that simply never ran.

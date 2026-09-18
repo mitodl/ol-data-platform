@@ -144,12 +144,21 @@ discovery commands below end up silently producing no output.
 #!/usr/bin/env bash
 set -euo pipefail
 for db in staging intermediate dimensional; do   # adjust to the layers YOUR selection reaches
-  uv run --frozen ol-dbt local register --database "ol_warehouse_production_$db" \
-    | tee "/tmp/reg_$db.log"
-  grep -q '✗ Errors: 0' "/tmp/reg_$db.log" || {
-    echo "STOP: $db registration had errors — do not build" >&2
+  log="/tmp/reg_$db.log"
+  uv run --frozen ol-dbt local register --database "ol_warehouse_production_$db" | tee "$log"
+  # Three independent failures; only the first reaches the error tally.
+  if ! grep -q '✗ Errors: 0' "$log"; then
+    echo "STOP: $db had per-table registration errors — do not build" >&2
     exit 1
-  }
+  fi
+  if grep -q '✗ Error accessing database' "$log"; then
+    echo "STOP: $db was never enumerated — the Glue call failed" >&2
+    exit 1
+  fi
+  if grep -q '⚠ No Iceberg tables found' "$log"; then
+    echo "STOP: $db enumerated zero tables" >&2
+    exit 1
+  fi
 done
 ```
 
@@ -159,13 +168,24 @@ that reports its own failure and does not gate. Run this as a script (hence the
 shebang and `set -euo pipefail`); pasting it into an interactive shell will close
 that shell on error.
 
-**Check for zero errors; `register` will not tell you.** It catches per-table
-failures, counts them, prints `✗ Errors: N` in the summary, and still **exits 0**
-(`commands/local_dev.py` — no `raise` or non-zero exit on that path). A table that
-fails to re-register keeps its *previous* view, so the very pointer you re-registered
-to refresh can still be the stale one, and an unattended run proceeds against it.
-That defeats the freshness requirement below without any visible failure, so gate
-the build on the count rather than on the exit status.
+**Check all three lines; `register` will not tell you.** It exits 0 whatever goes
+wrong — `commands/local_dev.py` has no `raise` and no non-zero exit on any of these
+paths — and only one of the three failures reaches the summary tally:
+
+| what failed | what you see | in `✗ Errors:`? |
+|---|---|---|
+| one table | `✗ Errors: N` | yes |
+| the whole Glue database | `✗ Error accessing database: …`, layer skipped | **no** — caught and `continue`d at `local_dev.py:824-828` |
+| the database came back empty | `⚠ No Iceberg tables found in <db>` | **no** — skipped the same way at `:832-834` |
+
+So `✗ Errors: 0` alone is not evidence of a refresh: a layer whose Glue call failed
+prints exactly that, and its views keep pointing at whatever metadata file was
+current the last time `register` succeeded. A table that fails individually keeps its
+*previous* view too, so the very pointer you re-registered to refresh can still be the
+stale one, and an unattended run proceeds against it. The empty case is the worst of
+the three — `_record_registry_scan` has already run by then (`:829-830`), so the
+staleness warning will not fire next time either. Gate on all three lines, not on the
+exit status and not on the count alone.
 
 Two requirements pull in different directions here, and both have to hold.
 
@@ -246,9 +266,18 @@ it has no `.yml`, so `ol-dbt validate` will flag it if you forget.
 
 `ol-dbt local snapshot <model> --as <model>_baseline` is the alternative when
 the old code is not in git (an uncommitted edit) — it freezes the current build
-as a plain table, immune to pointer rot. Then diff with `--old-raw`. Prefer the
-`_pre` model file when the old code is a commit away, which for a migration PR
-it always is.
+as a plain table, immune to pointer rot. Then diff with `--old-raw`.
+
+It carries a constraint this procedure otherwise forbids. The two sides cannot share
+an invocation — the baseline is frozen before the edit exists — so **one registration
+has to cover the whole sequence**: register, build the baseline, snapshot, edit, then
+rebuild *without* re-registering. Re-register before the rebuild and the frozen
+baseline is reading older Glue pointers than the new build, which is step 1's
+uncontrolled comparison in disguise — source drift attributed to your code. If you
+need fresher data, redo the sequence from the register; never refresh mid-sequence.
+
+Prefer the `_pre` model file when the old code is a commit away, which for a migration
+PR it always is: both sides build in one invocation and it needs no exception.
 
 ### 3. Build both sides in one invocation — and force-refresh anything incremental
 
@@ -660,8 +689,10 @@ else is a fan-out or a collapse that count parity was hiding.
 column tell you exactly which column moved:
 
 ```sql
-select count(*) from (select "<col>" from <pre> except all select "<col>" from <new>);
-select count(*) from (select "<col>" from <new> except all select "<col>" from <pre>);
+select count(*) from (select "<col>" from <pre> where <pred>
+                      except all select "<col>" from <new> where <pred>);
+select count(*) from (select "<col>" from <new> where <pred>
+                      except all select "<col>" from <pre> where <pred>);
 ```
 
 This is the highest-value step in the skill: it took an 8,891-row mystery down
@@ -688,8 +719,9 @@ a view is polluted; never quote it as a generation count or divide by it to
 ```sql
 select 'pre' as side, count(*) as n_rows,
        count("<col>") as non_null, round(100.0*count("<col>")/count(*),2) as pct
-from <pre>
-union all select 'new', count(*), count("<col>"), round(100.0*count("<col>")/count(*),2) from <new>;
+from <pre> where <pred>
+union all select 'new', count(*), count("<col>"), round(100.0*count("<col>")/count(*),2)
+from <new> where <pred>;
 ```
 
 Report the **delta** between the two sides, and say explicitly that the absolute
@@ -736,10 +768,31 @@ proven key that is the weak-key case above: `dim_course_run`'s key is unique onl
 among `is_current = true` rows, so the expired ones duplicate the join key and the
 per-column rates it prints are fan-out artifacts.
 
-You lose nothing by skipping it. Step 5(b)'s multiset diff needs no key at all, and
-step 6's mapping assertion is hand-written SQL — both take a `where` directly, so
-together they cover what 5(d) would have told you, on a key you can actually
-defend. Reach for `ol-dbt diff` when the key is proven across the whole relation.
+Skipping it costs you one specific thing. Step 5(b)'s multiset diff needs no key at
+all, and step 6's mapping assertion is hand-written SQL — both take a `where`
+directly, so between them you get *which* columns moved and whether the mapping under
+test is identical, on a key you can actually defend. What neither can see is a
+key↔value **re-association**: swap an untouched column's value between two keys and
+every per-column multiset, the row count, and step 6's `<changed_col>` mapping are all
+unchanged. Only a keyed row-level comparison catches that.
+
+So if the change under test could reorder or re-key rows, write the keyed comparison
+by hand — unlike `ol-dbt diff` it takes the predicate:
+
+```sql
+-- list the columns explicitly; `select *` drags in the build-time timestamps
+with p as (select distinct <key cols>, <cols under test> from <pre> where <pred>),
+     n as (select distinct <key cols>, <cols under test> from <new> where <pred>)
+select (select count(*) from (select * from p except select * from n)) as pre_not_new,
+       (select count(*) from (select * from n except select * from p)) as new_not_pre;
+```
+
+`select distinct` for the same reason step 6 uses it: it cancels source duplication,
+and a re-association still shows up because the `(key, value)` pair itself differs.
+It inherits step 6's limit too — it cannot cancel rows a polluted `__dbt_tmp` view is
+*missing*, so this is a detector, not the acceptance criterion. Accept on step 6's
+mapping; treat a nonzero count here as something to explain. Reach for `ol-dbt diff`
+itself when the key is proven across the whole relation.
 
 #### Negative-control the diff before you believe a MATCH
 
@@ -748,7 +801,8 @@ A clean `MATCH` proves nothing until you have seen the same command fail. Break 
 
 ```bash
 # replace the column under test with a literal in <model>_pre.sql, then
-uv run --frozen dbt run -t dev_local --full-refresh --select "<model>_pre"
+DBT_PROFILES_DIR=src/ol_dbt uv run --frozen dbt run --project-dir src/ol_dbt \
+  --select "<model>_pre" -t dev_local --full-refresh
 uv run --frozen ol-dbt diff --old <model>_pre --new <model> -k <a,b,c>
 ```
 
