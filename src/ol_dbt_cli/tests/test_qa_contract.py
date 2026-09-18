@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from ol_dbt_cli.commands.validate import _check_qa_branch_contract
+from ol_dbt_cli.commands.validate import _check_qa_branch_contract, _update_qa_baseline
 from ol_dbt_cli.lib.dimensional_layering import load_baseline
 from ol_dbt_cli.lib.inventory import Unit
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry, registry_from_manifest
@@ -368,13 +368,16 @@ class TestQaGaps:
         observation = Observation(
             glue_database="ol_warehouse_production_raw", observed_at=OBSERVED_AT, tables=_observation().tables
         )
-        assert _gap_report(observation) == [
+        expected = [
             (
                 Severity.ERROR,
                 "(qa observation)",
                 "The QA observation was taken from ol_warehouse_production_raw, not ol_warehouse_qa_raw",
             )
         ]
+        assert _gap_report(observation) == expected
+        # Stops there: production holding the table must not read as a resolved QA gap.
+        assert _gap_report(observation, {XPRO_GAP}) == expected
 
     def test_new_gap_errors_per_branch(self) -> None:
         assert _gap_report(_observation(**XPRO_ABSENT)) == [
@@ -429,6 +432,15 @@ class TestObservation:
     def test_no_current_snapshot(self) -> None:
         assert _current_snapshot({"current-snapshot-id": -1, "snapshots": []}) == (None, None)
 
+    def test_missing_total_records_fails_instead_of_reading_as_empty(self) -> None:
+        metadata = {
+            "location": "s3://lake/raw/t",
+            "current-snapshot-id": 1,
+            "snapshots": [{"snapshot-id": 1, "timestamp-ms": 0, "summary": {"operation": "append"}}],
+        }
+        with pytest.raises(ValueError, match="has no total-records statistic"):
+            _current_snapshot(metadata)
+
 
 class TestValidateGapWiring:
     def test_missing_observation_skips_only_the_gap_half(self, tmp_path: Path) -> None:
@@ -448,3 +460,15 @@ class TestValidateGapWiring:
         assert [i.message for i in report.issues if i.model == "(qa baseline)"] == [
             "1 known QA gap(s) tolerated by baseline"
         ]
+
+    def test_update_qa_baseline_rejects_a_non_qa_observation(self, tmp_path: Path) -> None:
+        inventory = _inventory(tmp_path, "ingest")
+        observation = Observation(
+            glue_database="ol_warehouse_production_raw", observed_at=OBSERVED_AT, tables=_observation().tables
+        )
+        (inventory / OBSERVATION_FILENAME).write_text(render_observation(observation))
+        baseline = inventory / "qa_branch_baseline.txt"
+        baseline.write_text(f"{XPRO_GAP}\n")
+        with pytest.raises(SystemExit):
+            _update_qa_baseline(_dag({"qa_branches": ["xpro/app_postgres"]}), inventory)
+        assert baseline.read_text() == f"{XPRO_GAP}\n"

@@ -50,7 +50,7 @@ from ol_dbt_cli.lib.qa_contract import (
     qa_gaps,
     write_qa_baseline,
 )
-from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, load_observation
+from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, QA_GLUE_DATABASE, load_observation
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
     consumed_columns_by_ref_via_scope,
@@ -652,6 +652,12 @@ def _update_qa_baseline(manifest: ManifestRegistry | None, inventory_dir: Path) 
         console.print(
             "[bold red]Error:[/] --update-qa-baseline needs manifest.json, inventory units and "
             f"{OBSERVATION_FILENAME} under {inventory_dir}."
+        )
+        raise SystemExit(1)
+    if observation.glue_database != QA_GLUE_DATABASE:
+        console.print(
+            f"[bold red]Error:[/] {OBSERVATION_FILENAME} was taken from {observation.glue_database}, "
+            f"not {QA_GLUE_DATABASE}. A baseline built from it would hide every QA gap."
         )
         raise SystemExit(1)
     gaps = qa_gaps(manifest, units, observation)

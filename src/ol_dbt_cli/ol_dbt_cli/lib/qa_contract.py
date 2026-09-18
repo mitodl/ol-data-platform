@@ -312,6 +312,9 @@ def check_qa_gaps(  # noqa: PLR0913
             "An observation of another environment hides every QA gap. Re-run "
             "`ol-dbt inventory observe` against the QA database.",
         )
+        # Comparing another environment's state to the QA baseline would only
+        # report QA gaps as resolved that nobody resolved.
+        return
 
     gaps = qa_gaps(manifest, units, observation)
 

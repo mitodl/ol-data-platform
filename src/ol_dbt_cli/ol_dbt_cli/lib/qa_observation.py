@@ -111,11 +111,20 @@ def _read_metadata(s3: Any, location: str) -> dict[str, Any]:
 
 
 def _current_snapshot(metadata: dict[str, Any]) -> tuple[int | None, datetime | None]:
+    """Return the current snapshot's row count and time, or ``(None, None)`` without one.
+
+    ``total-records`` is an optional summary statistic in the Iceberg spec.
+    Defaulting it to 0 would record a populated table as empty and let it be
+    baselined as a QA gap, so a snapshot without it fails the observation.
+    """
     current = metadata.get("current-snapshot-id")
     for snapshot in metadata.get("snapshots") or []:
         if snapshot["snapshot-id"] == current:
-            rows = int(snapshot.get("summary", {}).get("total-records", 0))
-            return rows, datetime.fromtimestamp(snapshot["timestamp-ms"] / 1000, tz=UTC)
+            summary = snapshot.get("summary") or {}
+            if "total-records" not in summary:
+                msg = f"snapshot {current} of {metadata.get('location')} has no total-records statistic"
+                raise ValueError(msg)
+            return int(summary["total-records"]), datetime.fromtimestamp(snapshot["timestamp-ms"] / 1000, tz=UTC)
     return None, None
 
 
