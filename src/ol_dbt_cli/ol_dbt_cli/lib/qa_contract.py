@@ -144,7 +144,9 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
             )
 
         is_union = len(reads) > 1 and classify_layer(node.original_file_path) not in UNCONTRACTED_LAYERS
-        if is_union and contract.branches is None and contract.buildable is None:
+        # Presence again: a malformed value is already reported above, and _read_contract
+        # nulls it out, so reading the parsed contract would report it as missing too.
+        if is_union and "qa_branches" not in node.meta and "qa_buildable" not in node.meta:
             scoped = sorted(key for key in reads if scope.get(key) == "scoped")
             suggestion = f"qa_branches: [{', '.join(scoped)}]" if scoped else "qa_buildable: false"
             report.add(

@@ -194,7 +194,11 @@ class TestCheckQaContracts:
         ],
     )
     def test_malformed(self, meta: dict[str, Any], message: str) -> None:
-        assert ("dim_user", message) in _findings(_dag(meta))
+        dim_user = [found for model, found in _findings(_dag(meta)) if model == "dim_user"]
+        assert message in dim_user
+        # A malformed declaration is still a declaration; reporting it as missing
+        # too would send the author looking for a key they already wrote.
+        assert not any("declares no QA contract" in found for found in dim_user)
 
 
 def test_manifest_reads_identifier_and_config_meta() -> None:
