@@ -21,7 +21,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /usr/local/bin/uvx
 # the one marimo's own `recommended` extra declares for pydantic-ai-slim.
 # No data-science packages here: each notebook declares its own via /// script.
 RUN pip install --no-cache-dir \
-    'marimo[sandbox]>=0.19.11' \
+    'marimo[sandbox]>=0.23.14' \
     'pydantic-ai-slim[bedrock]>=1.107.0,<3.0.0' \
     marimo-jupyter-extension
 
