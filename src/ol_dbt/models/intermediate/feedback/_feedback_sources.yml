@@ -122,10 +122,10 @@ sources:
     - name: summarized_at
       description: timestamp, when this row's summary was generated.
   - name: feedback_embeddings
-    description: One row per conversation (upsert key feedback_conversation_pk --
-      re-embedding overwrites in place, so only the latest model_version/dim/ embedding_input
-      survives), materialized by the feedback_embeddings Dagster asset. No column
-      tests here -- see feedback_cluster_run; not_null/unique coverage lives on int__feedback__embedding
+    description: One row per (feedback_conversation_pk, embedding_model_version, embedding_dim),
+      not conversation-unique -- see int__feedback__embedding for the one-row-per-conversation
+      view. Materialized by the feedback_embeddings Dagster asset. No column tests
+      here -- see feedback_cluster_run; not_null/unique coverage lives on int__feedback__embedding
       instead.
     columns:
     - name: feedback_conversation_pk

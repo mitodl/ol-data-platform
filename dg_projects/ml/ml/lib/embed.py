@@ -21,6 +21,10 @@ from pyiceberg.catalog import Catalog
 
 JOIN_COLS = ["feedback_conversation_pk"]
 
+# Storage upsert key: includes model/dim so a different model/dim override
+# adds a row instead of overwriting the existing vector.
+UPSERT_JOIN_COLS = [*JOIN_COLS, "embedding_model_version", "embedding_dim"]
+
 EMBEDDING_CHECKPOINT_SCHEMA = {
     **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
     "turn_count": pl.Int64,
@@ -563,7 +567,7 @@ def checkpoint_embedding_chunk(
     ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
     table.upsert(
         df=ordered_chunk_df.to_arrow(),
-        join_cols=JOIN_COLS,
+        join_cols=UPSERT_JOIN_COLS,
         when_matched_update_all=True,
         when_not_matched_insert_all=True,
     )
@@ -601,10 +605,11 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
             turn_count, embedding_vector, embedding_dim, embedding_model_version,
-            embedding_input, embedded_at - keyed by feedback_conversation_pk, for
-            afact_feedback_conversation to left-join. turn_count is carried through
-            so a later run's filter_unembedded can detect a conversation that
-            gained a turn.
+            embedding_input, embedded_at - keyed by UPSERT_JOIN_COLS, not
+            feedback_conversation_pk alone; see int__feedback__embedding for the
+            one-row-per-conversation view afact_feedback_conversation reads.
+            turn_count is carried through so a later run's filter_unembedded can
+            detect a conversation that gained a turn.
 
     Mirrors summarize.summarize_and_checkpoint.
 
