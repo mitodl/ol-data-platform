@@ -14,23 +14,24 @@ version: 2
 models:
 - name: mv_b2b_learner_enrollment
   description: >
-    One row per learner x course run under an organization's contracts -- grain
-    org x contract x course_run x learner. INDIVIDUALLY IDENTIFYING: backs
-    ol-analytics-api's b2b_learner_records tenant (the /enrollments collection,
-    and the /learners collection when filtered by contract_id or
+    One row per learner and course run under an organization's contracts. The
+    grain is org x contract x course_run x learner. INDIVIDUALLY IDENTIFYING:
+    this backs ol-analytics-api's b2b_learner_records tenant (the /enrollments
+    collection, and the /learners collection when filtered by contract_id or
     include_inactive), never the k-anonymized b2b_dashboard tenant. The
     organization is attributed through the contract that owns the course run,
-    never organization_administration_report's free-text organization_key
-    fallback. A course run belongs to at most one contract
-    (courses_courserun.b2b_contract_id is a single FK), so contract attribution
-    cannot fan out. Not filtered to the organization's current roster: a learner
-    removed from the organization keeps their enrollment in its contract runs;
-    snapshot_mitxonline_b2b_userorganization records membership history. Carries
-    no consent column yet: until the learner data-sharing consent field lands,
-    the API treats every row as outcomes_shared = false and nulls the grade and
-    certificate columns. Carries no activity columns: last_active_on and the
-    per-run counters wait on a user_fk-keyed activity fact. Manual-refresh
-    materialized view.
+    never through organization_administration_report's free-text
+    organization_key fallback. A course run belongs to at most one contract
+    (courses_courserun.b2b_contract_id is a single foreign key), so contract
+    attribution cannot fan out. The view is not filtered to the organization's
+    current roster, because a learner removed from the organization keeps their
+    enrollment in its contract runs; snapshot_mitxonline_b2b_userorganization
+    records membership history. There is no consent column yet. Until the
+    learner data-sharing consent field lands, the API treats every row as
+    outcomes_shared = false and nulls the grade and certificate columns. The
+    activity columns come from afact_learner_courserun_daily_activity,
+    pre-aggregated to (user, course run). This is a manual-refresh materialized
+    view.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -41,29 +42,33 @@ models:
         severity: warn
   columns:
   - name: organization_key
-    description: Org identifier, joined via dim_organization (platform='mitxonline'
-      only).
+    description: >
+      The organization identifier, joined in from dim_organization for
+      platform='mitxonline' only.
   - name: sso_organization_id
     description: >
-      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
-      identifier the ol-analytics-api filters organizations on.
+      The Keycloak organization UUID (dim_organization.sso_organization_id).
+      This is the identifier the ol-analytics-api filters organizations on.
   - name: organization_name
-    description: Display name of the organization.
+    description: The organization's display name.
   - name: contract_pk
-    description: Surrogate key of the B2B contract.
+    description: The surrogate key of the B2B contract.
   - name: contract_id
     description: >
-      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id) -- the
-      contract identifier the API exposes.
+      mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
+      the contract identifier the API exposes.
   - name: b2b_contract_name
-    description: Display name of the contract.
+    description: The contract's display name.
   - name: courserun_pk
-    description: Surrogate key of the course run.
+    description: The surrogate key of the course run.
   - name: courserun_readable_id
-    description: Course run identifier (e.g. course-v1:MITxT+14.310x+2T2026) -- the
-      API's courserun_id.
+    description: >
+      The course run identifier, for example course-v1:MITxT+14.310x+2T2026.
+      The API exposes it as courserun_id.
   - name: courserun_title
-    description: Display title of the course run. Mutable; key on courserun_readable_id.
+    description: >
+      The course run's display title. It is mutable, so key on
+      courserun_readable_id instead.
   - name: courserun_start_on
     description: >
       Course run start, ISO-8601 in UTC with no offset (e.g. 2026-02-09T15:00:00.000).
@@ -76,73 +81,114 @@ models:
       self-paced runs.
   - name: user_pk
     description: >
-      dim_user surrogate. Internal join key only -- it can still re-key, so the
-      API must not expose it. Join target for a future user_fk-keyed activity
-      fact.
+      The dim_user surrogate key. It is an internal join key only, because it
+      can still be re-keyed, so the API must not expose it. It is also the join
+      key for afact_learner_courserun_daily_activity.
   - name: user_global_id
     description: >
-      Keycloak user id (dim_user.user_global_id) -- the API's learner_id, stable
-      across email changes. Never null: the API contract requires it, so users
-      without one are filtered out.
+      The Keycloak user id (dim_user.user_global_id), which the API exposes as
+      learner_id. It is stable across email changes, and it is never null,
+      because the API contract requires it and users without one are filtered
+      out.
   - name: email
     description: >
-      dim_user.email -- a coalesce across the person's platform accounts, so it
-      may differ from the address the organization enrolled them under. Not a
-      join key.
+      dim_user.email, which is a coalesce across the person's platform
+      accounts, so it may differ from the address the organization enrolled
+      them under. It is not a join key.
   - name: full_name
-    description: dim_user.full_name. Often null.
+    description: dim_user.full_name. It is often null.
   - name: enrollment_created_on
-    description: When this run's enrollment was created, ISO-8601 -- the API's enrolled_on.
+    description: >
+      When this run's enrollment was created, in ISO-8601. The API exposes it
+      as enrolled_on.
   - name: enrollment_is_active
-    description: Whether the enrollment is active. Inactive rows are kept; the API
-      drops them unless include_inactive is set.
+    description: >
+      Whether the enrollment is active. Inactive rows are kept here, and the
+      API drops them unless include_inactive is set.
   - name: enrollment_mode
-    description: Enrollment mode (audit, verified, ...).
+    description: The enrollment mode, such as audit or verified.
   - name: enrollment_status
-    description: Deactivation reason where one was recorded.
+    description: The deactivation reason, where one was recorded.
   - name: is_passing
     description: >
-      tfact_grade.is_passing. Null where no grade exists. Emitted separately
-      from the certificate columns; the API derives completion_status from both.
+      tfact_grade.is_passing. It is null where no grade exists. It is emitted
+      separately from the certificate columns, because the API derives
+      completion_status from both.
   - name: grade_value
-    description: tfact_grade.grade_value, 0-1 -- the API's grade.
+    description: >
+      tfact_grade.grade_value, on a scale of 0 to 1. The API exposes it as
+      grade.
   - name: letter_grade
-    description: tfact_grade.letter_grade. Frequently null.
+    description: tfact_grade.letter_grade. It is frequently null.
   - name: certificate_issued_on
-    description: Course certificate issue time, ISO-8601. Null where no certificate
-      exists.
+    description: >
+      When the course certificate was issued, in ISO-8601. It is null where no
+      certificate exists.
   - name: certificate_is_revoked
     description: >
-      Whether the course certificate was revoked. Null where no certificate
-      exists. Revoked certificates are kept so the API can report a revoked run
-      as passed rather than certified.
+      Whether the course certificate was revoked. It is null where no
+      certificate exists. Revoked certificates are kept so the API can report a
+      revoked run as passed rather than certified.
+  - name: last_active_on
+    description: >
+      The date of the learner's most recent day of tracked activity in this
+      course run. Tracked activity is a video play, a problem check, a
+      navigation event, a discussion post or an Open edX chatbot submit. The
+      date is the day the event happened in the source system's local time,
+      not in UTC. It is null when the learner has no activity in the run.
+  - name: days_active
+    description: >
+      The number of distinct days on which the learner had tracked activity in
+      this course run. It is 0 when the learner had none.
+  - name: videos_played
+    description: >
+      The number of distinct video blocks the learner played on each day,
+      summed over the learner's active days. A block played on two days
+      therefore counts twice. The API exposes this column as videos_watched.
+  - name: problems_attempted
+    description: >
+      The number of distinct problem blocks the learner submitted a
+      problem_check for on each day, summed over the learner's active days. A
+      problem attempted on two days therefore counts twice. Viewing the answer
+      (showanswer) does not count.
+  - name: chatbot_interactions
+    description: >
+      The number of distinct (session, block) Open edX chatbot submits the
+      learner made on each day, summed over the learner's active days. A pair
+      submitted on two days therefore counts twice.
   - name: record_updated_on
     description: >
-      Latest of the enrollment, grade and certificate update timestamps,
-      ISO-8601 -- the cursor for the API's updated_since, which therefore
-      covers enrollment, grade and certificate changes ONLY, including
-      deactivation and revocation. Null only when every one of those
+      The latest of the enrollment, grade and certificate update timestamps, in
+      ISO-8601. It is the cursor for the API's updated_since, which therefore
+      covers only enrollment, grade and certificate changes, including
+      deactivation and revocation. It is null only when every one of those
       timestamps is missing. dim_user (email, name) and course-run metadata
-      carry no change timestamp, so edits to them do not move it; a partner
-      picks those up from a full reload of the bulk export.
+      carry no change timestamp, so edits to them do not move it, and a partner
+      picks those up from a full reload of the bulk export. Activity does not
+      move it either. A day's activity first appears at a refresh that runs
+      after that day has begun, and partners pass the previous refresh's as_of
+      as updated_since, so a cursor taken from last_active_on would already
+      sort below that bound and the change would never be sent.
 
 - name: mv_b2b_learner
   description: >
-    One row per learner associated with an organization -- grain org x learner,
-    the union of the organization's membership roster (bridge_user_organization)
-    and learners enrolled under its contracts. INDIVIDUALLY IDENTIFYING: backs
-    ol-analytics-api's b2b_learner_records /learners collection only.
-    Roster-only learners (assigned, never enrolled) appear here and in no
-    aggregate b2b_analytics view. courses_enrolled and the enrolled_on dates
-    count ACTIVE enrollments only, matching the API's default
-    include_inactive=false; completions count every enrollment. A contract_id
-    or include_inactive request is recomputed from mv_b2b_learner_enrollment.
+    One row per learner associated with an organization. The grain is org x
+    learner, and the rows are the union of the organization's membership roster
+    (bridge_user_organization) and the learners enrolled under its contracts.
+    INDIVIDUALLY IDENTIFYING: this backs ol-analytics-api's b2b_learner_records
+    /learners collection only. Roster-only learners, who were assigned a seat
+    but never enrolled, appear here and in no aggregate b2b_analytics view.
+    courses_enrolled and the enrolled_on dates count active enrollments only,
+    matching the API's default of include_inactive=false, while the completion
+    counts cover every enrollment. A request that filters on contract_id or
+    sets include_inactive is recomputed from mv_b2b_learner_enrollment instead.
     Roster rows with keep_until_seen are included: mitxonline sets that flag on
     memberships it creates itself (enrollment-code redemption, contract-run
     enrollment) so SSO reconciliation does not remove them before Keycloak
     reflects them. snapshot_mitxonline_b2b_userorganization records membership
-    history. Carries no consent or activity columns, for the same reasons as
-    mv_b2b_learner_enrollment. Manual-refresh materialized view.
+    history. There is no consent column, for the same reason as
+    mv_b2b_learner_enrollment. last_active_on and courses_in_progress count
+    active enrollments only. This is a manual-refresh materialized view.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -152,69 +198,98 @@ models:
         severity: warn
   columns:
   - name: organization_key
-    description: Org identifier, joined via dim_organization (platform='mitxonline'
-      only).
+    description: >
+      The organization identifier, joined in from dim_organization for
+      platform='mitxonline' only.
   - name: sso_organization_id
     description: >
-      Keycloak organization UUID (dim_organization.sso_organization_id) -- the
-      identifier the ol-analytics-api filters organizations on.
+      The Keycloak organization UUID (dim_organization.sso_organization_id).
+      This is the identifier the ol-analytics-api filters organizations on.
   - name: organization_name
-    description: Display name of the organization.
+    description: The organization's display name.
   - name: user_pk
-    description: dim_user surrogate. Internal join key only; the API must not expose
-      it.
+    description: >
+      The dim_user surrogate key. It is an internal join key only, and the API
+      must not expose it.
   - name: user_global_id
     description: >
-      Keycloak user id -- the API's learner_id. Never null: users without one
-      are filtered out.
+      The Keycloak user id, which the API exposes as learner_id. It is never
+      null, because users without one are filtered out.
   - name: email
-    description: dim_user.email. Not a join key; see mv_b2b_learner_enrollment.
+    description: >
+      dim_user.email. It is not a join key; see mv_b2b_learner_enrollment.
   - name: full_name
-    description: dim_user.full_name. Often null.
+    description: dim_user.full_name. It is often null.
   - name: membership_source
     description: >
-      roster (on the membership roster with no active enrollment under the
-      organization's contracts -- an unstarted seat, or one whose enrollments
-      were all deactivated), enrollment (enrolled under the organization's
-      contracts but absent from the roster -- removed from the organization, or
-      enrolled before mitxonline created memberships on enrollment), or both
-      (on the roster with an active enrollment).
+      How the learner is attached to the organization. roster means they are on
+      the membership roster with no active enrollment under the organization's
+      contracts, which is either an unstarted seat or one whose enrollments
+      were all deactivated. enrollment means they are enrolled under the
+      organization's contracts but absent from the roster, because they were
+      removed from the organization or enrolled before mitxonline created
+      memberships on enrollment. both means they are on the roster and have an
+      active enrollment.
   - name: is_organization_manager
-    description: Administers the organization in MITx Online (userorganization_is_manager).
-      False for enrollment-only learners.
+    description: >
+      Whether the learner administers the organization in MITx Online
+      (userorganization_is_manager). It is false for enrollment-only learners.
   - name: first_enrolled_on
-    description: Earliest active enrollment under the organization's contracts, ISO-8601.
-      Null when the learner has no active enrollment.
+    description: >
+      When the learner's earliest active enrollment under the organization's
+      contracts was created, in ISO-8601. It is null when the learner has no
+      active enrollment.
   - name: last_enrolled_on
-    description: Latest active enrollment under the organization's contracts, ISO-8601.
-      Null when the learner has no active enrollment.
+    description: >
+      When the learner's latest active enrollment under the organization's
+      contracts was created, in ISO-8601. It is null when the learner has no
+      active enrollment.
   - name: courses_enrolled
-    description: Distinct course runs with an active enrollment under the organization's
-      contracts.
+    description: >
+      The number of distinct course runs in which the learner has an active
+      enrollment under the organization's contracts.
   - name: courses_passed
-    description: Distinct course runs enrolled under the organization's contracts,
-      active or not, with a passing grade. Does not drop when a seat is reclaimed.
+    description: >
+      The number of distinct course runs the learner enrolled in under the
+      organization's contracts, active or not, with a passing grade. It does
+      not drop when a seat is reclaimed.
   - name: courses_certified
-    description: Distinct course runs enrolled under the organization's contracts,
-      active or not, with a non-revoked course certificate.
+    description: >
+      The number of distinct course runs the learner enrolled in under the
+      organization's contracts, active or not, with a non-revoked course
+      certificate.
   - name: program_certificates_earned
     description: >
-      Distinct non-revoked mitxonline program certificates for programs that
-      contain a course the learner enrolled in (active or not) under the
-      organization's contracts. Bounded that way so a certificate earned
-      outside the licence is not reported. The API's certificates_earned is
-      courses_certified + program_certificates_earned.
+      The number of distinct non-revoked mitxonline program certificates the
+      learner holds for programs that contain a course they enrolled in, active
+      or not, under the organization's contracts. That bound keeps a
+      certificate earned outside the licence from being reported. The API's
+      certificates_earned is courses_certified plus
+      program_certificates_earned.
+  - name: last_active_on
+    description: >
+      The latest last_active_on across the learner's active enrollments under
+      the organization's contracts. Like that column, it is a day in the source
+      system's local time. It is null when none of those enrollments has
+      activity.
+  - name: courses_in_progress
+    description: >
+      The number of distinct course runs where the learner has an active
+      enrollment under the organization's contracts, holds no unrevoked
+      certificate, is not passing, and has either a nonzero grade or some
+      tracked activity. This matches the API's completion_status of
+      in_progress on those enrollments.
   - name: record_updated_on
     description: >
-      Latest update timestamp across all of the learner's enrollments under the
-      organization's contracts (active or not), their grades and course
-      certificates, and the program certificates attributed above (revoked or
-      not), ISO-8601 -- the cursor for updated_since. Taken over the unfiltered
-      set so deactivation and revocation move it forward. Null for learners
-      with no enrollment under the organization's contracts. Roster adds,
-      removals and manager changes, and dim_user edits, carry no change
-      timestamp and do not move it; a partner picks those up from a full
-      reload of the bulk export.
+      The latest update timestamp across all of the learner's enrollments under
+      the organization's contracts, active or not, their grades and course
+      certificates, and the program certificates attributed above, revoked or
+      not, in ISO-8601. It is the cursor for updated_since. It is taken over
+      the unfiltered set so that deactivation and revocation move it forward.
+      It is null for learners with no enrollment under the organization's
+      contracts. Roster adds, removals and manager changes, and dim_user edits,
+      carry no change timestamp and do not move it; a partner picks those up
+      from a full reload of the bulk export.
 
 - name: mv_b2b_contract_courserun
   description: >

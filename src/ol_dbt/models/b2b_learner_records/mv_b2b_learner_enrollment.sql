@@ -14,6 +14,25 @@
 -- Not filtered to the organization's current roster: a learner removed from the
 -- organization keeps their enrollment in its contract runs. Roster history is kept in
 -- snapshot_mitxonline_b2b_userorganization.
+-- Activity is pre-aggregated to the (user, course run) join key so it cannot fan out.
+-- activity_date_key is YYYYMMDD, so its max is the latest day; it is read as a date
+-- through dim_date. The counters sum the fact's per-day distinct counts, so a video
+-- played on two days counts twice, as in b2b_analytics' total_videos_watched.
+-- Activity does not move record_updated_on; see the column's description.
+with activity as (
+    select
+        user_fk,
+        courserun_fk,
+        max(activity_date_key)                                                          as last_active_date_key,
+        count(distinct activity_date_key)                                               as days_active,
+        sum(videos_played)                                                              as videos_played,
+        sum(problems_attempted)                                                         as problems_attempted,
+        sum(chatbot_interactions)                                                       as chatbot_interactions
+    from {{ source('dimensional', 'afact_learner_courserun_daily_activity') }}
+    where platform = 'mitxonline'
+    group by user_fk, courserun_fk
+)
+
 select
     org.organization_key,
     org.sso_organization_id,
@@ -39,6 +58,11 @@ select
     g.letter_grade,
     cert.certificate_issued_on,
     cert.certificate_is_revoked,
+    cast(d.date as date)                                                                as last_active_on,
+    coalesce(a.days_active, 0)                                                          as days_active,
+    coalesce(a.videos_played, 0)                                                        as videos_played,
+    coalesce(a.problems_attempted, 0)                                                   as problems_attempted,
+    coalesce(a.chatbot_interactions, 0)                                                 as chatbot_interactions,
     -- Every mitxonline timestamp here is an ISO-8601 string from the same macro, so
     -- greatest() compares them correctly. StarRocks' greatest() returns null if any
     -- argument is null, so each is coalesced to '', which sorts below any real date.
@@ -63,6 +87,10 @@ left join {{ source('dimensional', 'tfact_grade') }} g
     on e.user_fk = g.user_fk and e.courserun_fk = g.courserun_fk
 left join {{ source('dimensional', 'tfact_certificate') }} cert
     on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
+left join activity a
+    on e.user_fk = a.user_fk and e.courserun_fk = a.courserun_fk
+left join {{ source('dimensional', 'dim_date') }} d
+    on a.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'
   and cr.is_current = true
   -- The API's learner_id is required. Filtered here rather than asserted by a dbt

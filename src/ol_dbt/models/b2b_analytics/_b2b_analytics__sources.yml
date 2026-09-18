@@ -9,8 +9,8 @@ sources:
 
     Which catalog is read comes from DBT_DATA_LAKE_ENV, NOT from the target
     name. The target names a CLUSTER and its auth; this names the lake the
-    cluster reads through its external catalog, and the two axes diverge --
-    a developer's StarRocks target port-forwards to the QA cluster but should
+    cluster reads through its external catalog, and the two axes diverge: a
+    developer's StarRocks target port-forwards to the QA cluster but should
     read production data. Inferring the lake from `'qa' in target.name` got
     that case wrong and made these models undevelopable locally (RFC 12711
     step 1). Set from a per-environment map that raises on an unknown
@@ -46,13 +46,21 @@ sources:
     description: "Grade fact. Grain: one row per (user, course_run)."
   - name: dim_user
     description: >
-      User dimension. Grain: one row per person across platforms. Read only by
-      the learner-grain views; user_global_id, not user_pk, is the stable
-      learner identifier.
+      User dimension. Grain: one row per person across platforms. Only the
+      learner-grain views read it, and user_global_id, not user_pk, is the
+      stable learner identifier.
   - name: bridge_user_organization
     description: >
       MITx Online organization membership roster. Grain: one row per (user,
       organization). Includes members with no enrollments.
+  - name: afact_learner_courserun_daily_activity
+    description: >
+      Per-learner course activity. Grain: one row per (platform, user, course
+      run, day) with any tracked activity. activity_date_key is a dim_date key
+      for the day the event happened in the source system's local time, not in
+      UTC. Only the learner-grain views read it.
+  - name: dim_date
+    description: "Date dimension. Grain: one row per day, keyed on date_key (YYYYMMDD)."
 - name: reporting
   description: >
     Reporting-layer Iceberg tables, accessed from StarRocks via the
@@ -67,4 +75,4 @@ sources:
       Per-learner x course_run x activity_date engagement report. Grain:
       (courserun_readable_id, organization_key, user_email, activity_date).
       organization_key is COALESCE'd from contract mapping and a free-text
-      fallback field -- filter WHERE organization_key IS NOT NULL for B2B use.
+      fallback field. Filter WHERE organization_key IS NOT NULL for B2B use.
