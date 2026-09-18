@@ -15,19 +15,22 @@ Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.edxorg_s3
 """
 
-import hashlib
 import logging
+import shutil
+import tempfile
 from collections.abc import Generator, Iterable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import dlt
-import pyarrow as pa
 import s3fs
 from dlt.sources import incremental
 from dlt.sources.filesystem import FileItemDict, filesystem
 from dlt.sources.filesystem.helpers import fetch_arrow
 
 from ol_dlt import config
+from ol_dlt.file_metadata import FILE_METADATA_COLUMNS, add_file_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -85,15 +88,41 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
 # data actually means.
 _UNQUOTED_READER_OVERRIDES: dict[str, Any] = {"quotechar": "", "escapechar": ""}
 
+_DOWNLOAD_CHUNK_BYTES = 8 * 1024 * 1024
+
 
 class EdxorgTSVUnreadableError(Exception):
     """DuckDB could not read one edxorg TSV, named in the message."""
 
 
+@contextmanager
+def _local_copy(item: FileItemDict) -> Iterator[Path]:
+    """Download ``item`` to a temporary file so DuckDB can read it by path.
+
+    Handing ``from_csv_auto`` a Python file object makes DuckDB call
+    ``obj.read()`` on the whole thing and keep the bytes in its in-memory
+    object store (``duckdb/filesystem.py``, ``ModifiedMemoryFileSystem.add_file``)
+    before parsing a single row. Reading a 1.1 GB courseware_studentmodule
+    export from the landing zone that way peaked at 3.9 GB RSS; from a local
+    copy, 0.63 GB, with the same 2,499,922 rows. The largest export is 14.5 GB,
+    well past the ingest pod's 32Gi limit at that ratio.
+
+    The copy goes through ``item.open()`` -- the source's s3fs filesystem, whose
+    IRSA credentials refresh -- rather than DuckDB's httpfs, whose
+    ``credential_chain`` secret snapshots the credentials once and would expire
+    partway through a long run.
+    """
+    with tempfile.TemporaryDirectory(prefix="edxorg_tsv_") as tmp_dir:
+        path = Path(tmp_dir, item["file_name"])
+        with item.open() as source, path.open("wb") as destination:
+            shutil.copyfileobj(source, destination, _DOWNLOAD_CHUNK_BYTES)
+        yield path
+
+
 def _read_tsv(
-    item: FileItemDict, chunk_size: int, duckdb_kwargs: dict[str, Any]
+    path: Path, chunk_size: int, duckdb_kwargs: dict[str, Any]
 ) -> Iterator[Any]:
-    """Stream ``item`` as Arrow batches instead of materializing the whole file.
+    """Stream ``path`` as Arrow batches instead of materializing the whole file.
 
     CSV dialect sniffing happens inside ``from_csv_auto`` itself, before this
     function's first ``yield`` -- confirmed by triggering a sniff failure
@@ -110,33 +139,32 @@ def _read_tsv(
 
     Streaming (rather than buffer-then-return) still matters: one edxorg
     export can be multiple GB, and the previous ``list(fetch_arrow(...))``
-    held an entire file's decoded rows in memory at once, which is what drove
-    the OOMKills on courseware_studentmodule and auth_user/auth_userprofile
-    once #2663 stopped those files' dialect failures from short-circuiting
-    the read.
+    held an entire file's decoded rows in memory at once.
     """
     import duckdb  # noqa: PLC0415
 
-    with item.open() as file_handle:
-        relation = duckdb.from_csv_auto(file_handle, **duckdb_kwargs)
-        yield from fetch_arrow(relation, chunk_size)
+    relation = duckdb.from_csv_auto(str(path), **duckdb_kwargs)
+    yield from fetch_arrow(relation, chunk_size)
 
 
-def _data_line_count(item: FileItemDict) -> int:
+def _data_line_count(path: Path) -> int:
     """Count the non-blank lines after the header, streaming line by line.
 
     Blank lines are excluded because DuckDB skips them: counting raw newlines
     would reject a file with a trailing or stray blank line even though every
     record in it was read.
     """
-    with item.open() as file_handle:
+    with path.open("rb") as file_handle:
         return sum(1 for line in file_handle if line.rstrip(b"\r\n")) - 1
 
 
 def _read_unquoted_tsv(
-    item: FileItemDict, chunk_size: int, duckdb_kwargs: dict[str, Any]
+    path: Path, file_url: str, chunk_size: int, duckdb_kwargs: dict[str, Any]
 ) -> list[Any] | None:
-    """Read ``item`` with quoting off, or return None if that loses any rows.
+    """Read ``path`` with quoting off, or return None if that loses any rows.
+
+    ``file_url`` is only for the log lines: the local copy's name is a content
+    hash that maps to nothing anyone can open.
 
     Only right for the legacy dumps, where every line is exactly one record, so
     that is checked rather than assumed. ``ignore_errors`` drops rows it cannot
@@ -154,18 +182,18 @@ def _read_unquoted_tsv(
         # read, so buffering the whole file is not the routine-case cost that
         # streaming _read_tsv avoids.
         batches = list(
-            _read_tsv(item, chunk_size, {**duckdb_kwargs, **_UNQUOTED_READER_OVERRIDES})
+            _read_tsv(path, chunk_size, {**duckdb_kwargs, **_UNQUOTED_READER_OVERRIDES})
         )
     except duckdb.Error:
-        logger.exception("Unquoted read of edxorg TSV %s failed too.", item["file_url"])
+        logger.exception("Unquoted read of edxorg TSV %s failed too.", file_url)
         return None
 
     rows = sum(batch.num_rows for batch in batches)
-    expected = _data_line_count(item)
+    expected = _data_line_count(path)
     if rows != expected:
         logger.error(
             "Unquoted read of edxorg TSV %s kept %s of %s lines; not loading it.",
-            item["file_url"],
+            file_url,
             rows,
             expected,
         )
@@ -182,22 +210,26 @@ def read_edxorg_tsv(
     """Read edxorg TSVs, recovering legacy files and naming any it cannot read.
 
     Same work as ``dlt.sources.filesystem.read_csv_duckdb`` with
-    ``use_pyarrow=True``, wrapped for three reasons.
+    ``use_pyarrow=True``, wrapped for four reasons.
 
-    First, diagnosability. ``duckdb.from_csv_auto`` is handed an open file
-    object, so the file it names in an error is DuckDB's internal handle --
-    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5``. Eleven Sentry issues
-    (DAGSTER-1C and friends) reported a sniffing failure against a content hash
-    that maps to nothing anyone can open. The S3 URL is right here; putting it in
-    the exception is the difference between a reproducible bug and a shrug.
+    First, memory: each file is read from a local copy rather than a file
+    object (see ``_local_copy``).
 
-    Second, empty files. ``from_csv_auto`` cannot infer a dialect from zero
+    Second, diagnosability. DuckDB names the file it was reading in an error,
+    which is a temporary path here (and was an opaque
+    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5`` handle back when it was
+    given a file object). Eleven Sentry issues (DAGSTER-1C and friends)
+    reported a sniffing failure against a name that maps to nothing anyone can
+    open. The S3 URL is right here; putting it in the exception is the
+    difference between a reproducible bug and a shrug.
+
+    Third, empty files. ``from_csv_auto`` cannot infer a dialect from zero
     bytes and fails with the same "not possible to automatically detect the CSV
     parsing dialect" message as a genuinely malformed file. An empty export is
     not an error -- there is simply nothing in it -- so it is skipped and logged
     rather than failing the whole table.
 
-    Third, legacy unquoted dumps. One user-entered value starting with `"` is
+    Fourth, legacy unquoted dumps. One user-entered value starting with `"` is
     enough to make the pinned dialect unreadable. The pinned read is still tried
     first, because it is correct for everything the archive writes today; only
     a file it rejects is re-read unquoted, and kept only if no row was lost.
@@ -223,115 +255,49 @@ def read_edxorg_tsv(
             )
             continue
 
-        reader = _read_tsv(item, chunk_size, duckdb_kwargs)
-        try:
-            first_batch = next(reader)
-        except StopIteration:
-            continue  # pinned dialect read the whole file; it just had no rows
-        except duckdb.Error as error:
-            logger.warning(
-                "Pinned dialect could not read edxorg TSV %s; retrying unquoted.",
-                item["file_url"],
+        def _stamp(batch: Any, item: FileItemDict = item) -> Any:  # noqa: ANN401
+            return add_file_metadata(
+                batch,
+                source_file=item["file_url"],
+                modified_at=item.get("modification_date"),
             )
-            unquoted = _read_unquoted_tsv(item, chunk_size, duckdb_kwargs)
-            if unquoted is None:
+
+        with _local_copy(item) as path:
+            reader = _read_tsv(path, chunk_size, duckdb_kwargs)
+            try:
+                first_batch = next(reader)
+            except StopIteration:
+                continue  # pinned dialect read the whole file; it just had no rows
+            except duckdb.Error as error:
+                logger.warning(
+                    "Pinned dialect could not read edxorg TSV %s; retrying unquoted.",
+                    item["file_url"],
+                )
+                unquoted = _read_unquoted_tsv(
+                    path, item["file_url"], chunk_size, duckdb_kwargs
+                )
+                if unquoted is None:
+                    msg = (
+                        f"DuckDB could not read the edxorg TSV {item['file_url']} "
+                        f"({item.get('size_in_bytes')} bytes): {error}"
+                    )
+                    raise EdxorgTSVUnreadableError(msg) from error
+                for batch in unquoted:
+                    yield _stamp(batch)
+                continue
+
+            yield _stamp(first_batch)
+            try:
+                for batch in reader:
+                    yield _stamp(batch)
+            except duckdb.Error as error:
                 msg = (
-                    f"DuckDB could not read the edxorg TSV {item['file_url']} "
-                    f"({item.get('size_in_bytes')} bytes): {error}"
+                    f"DuckDB failed partway through the edxorg TSV {item['file_url']} "
+                    f"({item.get('size_in_bytes')} bytes) after already yielding "
+                    "rows read under the pinned dialect, so it cannot be safely "
+                    f"retried unquoted: {error}"
                 )
                 raise EdxorgTSVUnreadableError(msg) from error
-            yield from unquoted
-            continue
-
-        yield first_batch
-        try:
-            yield from reader
-        except duckdb.Error as error:
-            msg = (
-                f"DuckDB failed partway through the edxorg TSV {item['file_url']} "
-                f"({item.get('size_in_bytes')} bytes) after already yielding rows "
-                "read under the pinned dialect, so it cannot be safely retried "
-                f"unquoted: {error}"
-            )
-            raise EdxorgTSVUnreadableError(msg) from error
-
-
-def _make_deduplicator():  # noqa: ANN202
-    """Return a stateful per-run deduplication function for use with add_map.
-
-    Tracks seen (row_hash, extracted_course_key) pairs and drops rows whose key
-    was already seen earlier in the same extraction run. Scoped per call, so each
-    ``edxorg_s3_source()`` invocation starts with an empty seen-set.
-
-    pyiceberg's upsert raises ValueError when the source DataFrame contains
-    duplicate join-key rows, even if those rows are identical. This happens when
-    multiple TSV files from overlapping archive runs are extracted in one dlt run
-    and combined into a single normalised parquet file.
-
-    ``seen`` holds one entry per row for the entire table's extraction, so for
-    high-row-count/high-file-count tables (e.g. auth_user, courseware_studentmodule,
-    dumped per-course across thousands of files) it dominates the op's peak RSS.
-    Storing a fixed-size digest instead of the raw (row_hash, extracted_course_key)
-    string tuple cuts per-entry overhead well below the tuple-of-two-strings form
-    (each of which carries its own PyObject header), at the cost of dedup becoming
-    probabilistic rather than exact: two distinct keys could in principle hash to
-    the same 128-bit digest and get treated as duplicates. blake2b at this digest
-    size makes that collision probability cryptographically negligible (a random
-    128-bit hash needs on the order of 2**64 distinct keys before a collision
-    becomes likely -- far beyond any realistic table here), so this is not treated
-    as a real risk in practice, but it is not literally identical semantics to the
-    original exact-comparison set.
-    """
-    seen: set[bytes] = set()
-
-    def _encode_key_part(part: str | None) -> bytes:
-        """Encode one primary-key component unambiguously as bytes.
-
-        Length-prefixing (rather than joining with a separator) means no
-        separator choice can collide with separator-like bytes inside the
-        data, and tagging ``None`` with its own marker (rather than folding
-        it into ``""``) keeps a NULL primary-key value distinct from an
-        empty-string one, matching the original tuple-based set's semantics.
-        """
-        if part is None:
-            return b"\x00"
-        encoded = part.encode()
-        return b"\x01" + len(encoded).to_bytes(4, "big") + encoded
-
-    def _dedup(item: object) -> object:
-        if not isinstance(item, (pa.Table, pa.RecordBatch)):
-            return item
-
-        tbl = item if isinstance(item, pa.Table) else pa.Table.from_batches([item])
-
-        # Require ALL primary key columns to be present. Partial-key
-        # deduplication (e.g. on row_hash alone) would silently drop valid rows
-        # because row_hash is not course-unique on its own.
-        if not all(k in tbl.schema.names for k in _EDXORG_PRIMARY_KEY):
-            return tbl
-
-        key_cols = [tbl.column(k).to_pylist() for k in _EDXORG_PRIMARY_KEY]
-
-        keep = []
-        for key in zip(*key_cols, strict=True):
-            digest = hashlib.blake2b(
-                b"".join(_encode_key_part(part) for part in key),
-                digest_size=16,
-            ).digest()
-            keep.append(digest not in seen)
-            seen.add(digest)
-
-        if all(keep):
-            return tbl
-        if not any(keep):
-            # Return an empty table (same schema) rather than None. The add_map
-            # docs say to use add_filter for dropping records; returning None
-            # from add_map is undefined and may propagate as data.
-            return tbl.slice(0, 0)
-
-        return tbl.filter(pa.array(keep, type=pa.bool_()))
-
-    return _dedup
 
 
 @dlt.source(name="edxorg_s3")
@@ -374,8 +340,10 @@ def edxorg_s3_source(
         # pipeline can run indefinitely.
         #
         # Do NOT pass extract_content=True: that reads the whole file into bytes
-        # in one blocking request (can exceed a token lifetime for big tables).
-        # Leaving it False lets read_csv_duckdb stream chunk-by-chunk.
+        # in one blocking request (can exceed a token lifetime for big tables),
+        # and _local_copy would then copy those bytes back out of memory --
+        # reinstating the whole-file-in-RAM read it exists to avoid. Leaving it
+        # False lets item.open() stream chunk-by-chunk.
         fs = s3fs.S3FileSystem()
 
         # Pass incremental directly to filesystem() so dlt tracks the
@@ -388,29 +356,54 @@ def edxorg_s3_source(
             incremental=incremental("modification_date"),
         )
 
-        # Pipe filesystem items through read_csv_duckdb, then rename and
+        # Pipe filesystem items through read_edxorg_tsv, then rename and
         # configure via with_name() + apply_hints(). A @dlt.resource wrapper that
         # *returns* another DltResource would replace the outer resource and
         # discard its name/hints; applying hints on the pipe avoids that.
         yield (
             (files | read_edxorg_tsv(**_CSV_READER_OPTIONS))
             .with_name(resource_name)
-            # Drop rows whose (row_hash, extracted_course_key) was already seen
-            # earlier in this run (see _make_deduplicator docstring).
-            .add_map(_make_deduplicator())
-            # Composite key: row_hash is computed from only the original CSV
-            # columns, so identical rows from different courses would collide on
-            # row_hash alone.
             .apply_hints(
                 table_name=resource_name,
-                write_disposition="merge",
+                # Append, not merge, and this trades storage for a load that
+                # can actually finish.
+                #
+                # What merge bought: row_hash is a sha256 over the original CSV
+                # columns (edxorg_archive.py), so a match on (row_hash,
+                # extracted_course_key) is a row whose content did not change
+                # between two exports of a course. Merge UPDATED those in place
+                # rather than inserting them, which is what kept re-exports
+                # from multiplying the table -- courses are exported over and
+                # over (543 of 1,647 courseware_studentmodule courses have 50+
+                # exports of near-identical size), so append inserts an entire
+                # export where merge inserted only its changed rows.
+                #
+                # What it cost: dlt drives pyiceberg's upsert at 1,000 rows per
+                # Iceberg commit and holds the whole load in memory to do it,
+                # which is a load that does not complete at this table's size.
+                # The update half of the merge was also always a no-op, since a
+                # matched row is identical; a record that DID change hashes
+                # differently and was inserted as a second row regardless, so
+                # merge never produced one row per business key either.
+                #
+                # The duplicates come out after the load instead:
+                # `deduplicate_raw_table` in staging once this unit's
+                # `raw_metadata_column` names _file_modified_at, and a
+                # compaction pass over the raw layer. Until both exist, raw
+                # holds every row of every export.
+                write_disposition="append",
+                # Kept as documentation of the grain (and read by the ingestion
+                # inventory); append does not deduplicate on it. Composite
+                # because row_hash covers only the original CSV columns, so
+                # identical rows from different courses collide on row_hash
+                # alone.
                 primary_key=_EDXORG_PRIMARY_KEY,
                 table_format=resolved_format,
-                # Nullable, overriding dlt's required default -- see
+                # All three nullable, overriding dlt's required default -- see
                 # config.DLT_LOAD_ID_COLUMN. This source has no build_source()
                 # to route through config.with_nullable_load_id, so it declares
-                # the column on the resource directly.
-                columns=config.DLT_LOAD_ID_COLUMN,
+                # them on the resource directly.
+                columns={**config.DLT_LOAD_ID_COLUMN, **FILE_METADATA_COLUMNS},
             )
         )
 
@@ -437,8 +430,9 @@ def edxorg_s3_pipeline_for(table_name: str) -> dlt.Pipeline:
 
     NOTE: this pipeline_name must stay stable across deploys -- dlt keys the
     incremental ``modification_date`` cursor by pipeline_name + resource name,
-    so renaming it resets that table's cursor and triggers a full S3 reprocess
-    on the next run (safe -- merge + primary_key dedup makes reprocessing
-    idempotent -- but slower and more expensive for that one run).
+    so renaming it resets that table's cursor and reprocesses the whole landing
+    zone. Under the old merge disposition that was merely slow and expensive
+    for one run; under append it re-inserts every file, so the duplicates last
+    until staging dedup hides them and the compaction pass removes them.
     """
     return config.pipeline_for("edxorg", pipeline_name=f"edxorg_s3__{table_name}")

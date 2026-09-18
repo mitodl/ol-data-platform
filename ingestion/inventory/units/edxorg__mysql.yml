@@ -10,51 +10,81 @@ strategies:
   qa: omit
   local: fixture
 loader: dlt
-# TRANSITIONAL — remove once this unit has run once with
-# `normalize.parquet_normalizer.add_dlt_load_id = true` (src/ol_dlt/.dlt/config.toml).
+# `_file_modified_at` rather than `_dlt_load_id`: the load appends and the
+# backfill walks the landing zone in whatever order it likes, so the load id
+# records when a row was ingested, not which export it came from. Ordering
+# staging by the source file's mtime is what picks the newest version of a
+# record, and it is the only thing deduplicating these tables now that the
+# load appends -- raw keeps every row of every export until the compaction
+# pass exists.
 #
-# These tables were loaded before that flag existed, so they carry no
-# `_dlt_load_id` column and the 7 staging models that read them cannot order by
-# it: dropping this line before a reload reinstates the exact COLUMN_NOT_FOUND
-# that ol-data-platform#2443 was filed for. Explicit null means "no metadata
-# column, do not deduplicate", which is what the tables actually support today.
+# This column does not exist in the raw tables until each one's first append
+# load writes it, so the staging models here order by a column that is not
+# there until then (ol-data-platform#2443). That costs nothing that currently
+# works: measured on 2026-09-17, stg__edxorg__s3__user,
+# stg__edxorg__s3__user_profile and stg__edxorg__s3__courserun_certificate
+# were last built 2026-06-24 and are materialized as tables, so they have not
+# run successfully in nearly three months, while their consumers
+# (int__combined__user_course_roles, then bridge_user_courserun_role /
+# organization_administration_report and the b2b_analytics MVs) keep building
+# off those stale tables -- int__combined__user_course_roles at 05:29 and
+# organization_administration_report at 13:10 that same day.
 #
-# Deleting the line restores the loader default (`_dlt_load_id`). Safe to do the
-# first time an edxorg_s3 load completes on the new config: the disposition is
-# `merge`, so rows that predate the flag keep a null load id, and Trino orders
-# NULLS LAST by default in both directions -- freshly stamped rows win the
-# dedup, and a key with only old rows still yields its single row.
-raw_metadata_column:
+# What exists in Glue, same date: auth_user (28 columns, no metadata column of
+# any kind, no rows), certificates_generatedcertificate (925 MB, carries
+# _dlt_load_id, last written during the 2026-09-16 failed runs) and
+# grades_persistentcoursegrade (711 KB). auth_userprofile,
+# courseware_studentmodule, student_courseenrollment and
+# student_courseaccessrole do not exist at all.
+#
+# Rows written under the old merge disposition carry a null here and lose the
+# dedup to freshly stamped rows: Trino orders NULLS LAST in both directions,
+# and a key with only old rows still yields its single row.
+raw_metadata_column: _file_modified_at
 table_prefix: raw__edxorg__s3__tables__
 dlt:
   source_module: ol_dlt.sources.edxorg_s3
-  write_disposition: merge
+  write_disposition: append
 tables:
 - name: raw__edxorg__s3__tables__auth_user
   raw_table: raw__edxorg__s3__tables__auth_user
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__auth_userprofile
   raw_table: raw__edxorg__s3__tables__auth_userprofile
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__certificates_generatedcertificate
   raw_table: raw__edxorg__s3__tables__certificates_generatedcertificate
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__courseware_studentmodule
   raw_table: raw__edxorg__s3__tables__courseware_studentmodule
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__grades_persistentcoursegrade
   raw_table: raw__edxorg__s3__tables__grades_persistentcoursegrade
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__student_courseaccessrole
   raw_table: raw__edxorg__s3__tables__student_courseaccessrole
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true
 - name: raw__edxorg__s3__tables__student_courseenrollment
   raw_table: raw__edxorg__s3__tables__student_courseenrollment
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true

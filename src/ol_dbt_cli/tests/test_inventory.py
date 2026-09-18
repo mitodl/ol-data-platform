@@ -528,13 +528,24 @@ class TestRawMetadataColumn:
         declared = {table["raw_table"] for unit in units for table in unit.tables}
         assert set(mapping) == declared
 
-    def test_real_inventory_keeps_edxorg_undeduplicatable_until_it_reloads(self) -> None:
-        # edxorg/mysql declares `raw_metadata_column: null` because its tables
-        # predate add_dlt_load_id. Ordering them by a column they do not carry is
-        # the exact regression this seam was filed for, so the explicit null has
-        # to beat the loader default until that unit reloads.
+    def test_real_inventory_orders_edxorg_tables_by_source_file_mtime(self) -> None:
+        # edxorg/mysql appends, and a backfill walks the landing zone in
+        # whatever order it likes, so `_dlt_load_id` records ingest order
+        # rather than which export a row came from. The source file's mtime is
+        # what picks the newest version of a record.
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
-        assert mapping["raw__edxorg__s3__tables__auth_user"] is None
+        assert mapping["raw__edxorg__s3__tables__auth_user"] == "_file_modified_at"
+
+    def test_real_inventory_resolves_dagster_units_to_none(self) -> None:
+        # A dagster-loaded unit writes no metadata column, so its tables must
+        # not be deduplicated: ordering a table by a column it does not carry
+        # is the regression this seam was filed for (ol-data-platform#2443).
+        # This resolves through the loader default rather than an explicit
+        # null -- edxorg/mysql was the real inventory's last explicit null, so
+        # the key-presence-beats-truthiness path is covered only synthetically,
+        # by test_explicit_null_override_beats_an_airbyte_loader.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__course_xml_blocks"] is None
 
     def test_real_inventory_gives_reloaded_dlt_units_the_load_id(self) -> None:
         # A dlt unit carrying no override takes the new default, which is what
@@ -564,4 +575,4 @@ class TestGeneratedMetadataMacro:
         # `'none'` would be a truthy string in Jinja and silently order by a
         # column named none; the bare literal is what makes the pass-through fire.
         rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
-        assert "'raw__edxorg__s3__tables__auth_user': none," in rendered
+        assert "'raw__edxorg__s3__course_xml_blocks': none," in rendered

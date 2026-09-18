@@ -1,20 +1,25 @@
 """Unit tests for the edxorg_s3 source.
 
 Materialization is not tested here: the source reads TSVs from the production S3
-landing zone and cannot run hermetically. Coverage focuses on the pure per-run
-deduplication logic and on the DuckDB CSV reader options, which are where the
-subtle correctness bugs lived.
+landing zone and cannot run hermetically. Coverage focuses on the reader -- the
+DuckDB CSV options, how each file is handed to DuckDB, and the provenance
+columns every row carries -- which is where the subtle correctness bugs lived.
 """
 
+import contextlib
 import io
 import json
+import tempfile
 from collections.abc import Iterator
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import duckdb
 import pyarrow as pa
 import pytest
 
+from ol_dlt import file_metadata
 from ol_dlt.sources import edxorg_s3
 
 
@@ -36,51 +41,6 @@ _MIXED_NEWLINE_TSV = (
 
 # The same table with consistent LF endings: must parse the same either way.
 _CLEAN_TSV = b"id\tuser_id\tbio\tgoals\n1\t10\tbio one\tlearn\n2\t20\tbio two\tgrow\n"
-
-
-def test_deduplicator_drops_repeat_keys_within_run() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    first = _table(
-        [
-            {"row_hash": "h1", "extracted_course_key": "c1", "v": "a"},
-            {"row_hash": "h1", "extracted_course_key": "c1", "v": "b"},  # dup key
-            {"row_hash": "h2", "extracted_course_key": "c1", "v": "c"},
-        ]
-    )
-    out = dedup(first)
-    assert out.num_rows == 2  # noqa: PLR2004
-    # The same key appearing in a later batch is also dropped (stateful).
-    second = _table([{"row_hash": "h1", "extracted_course_key": "c1", "v": "d"}])
-    assert dedup(second).num_rows == 0
-
-
-def test_deduplicator_keeps_same_hash_different_course() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    tbl = _table(
-        [
-            {"row_hash": "h1", "extracted_course_key": "c1"},
-            {"row_hash": "h1", "extracted_course_key": "c2"},
-        ]
-    )
-    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
-
-
-def test_deduplicator_keeps_null_distinct_from_empty_string() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    tbl = _table(
-        [
-            {"row_hash": None, "extracted_course_key": "c1"},
-            {"row_hash": "", "extracted_course_key": "c1"},
-        ]
-    )
-    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
-
-
-def test_deduplicator_passes_through_without_key_columns() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    tbl = _table([{"some_col": "x"}, {"some_col": "x"}])
-    # Missing primary-key columns: do not drop anything.
-    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
 
 
 def test_reader_options_parse_tsv_with_mixed_newlines() -> None:
@@ -233,12 +193,20 @@ def test_pipeline_for_shares_destination_with_singleton_pipeline() -> None:
 # ── read_edxorg_tsv ───────────────────────────────────────────────────────────
 
 
-class _FakeFileItem(dict[str, Any]):
-    """The three FileItemDict members the reader touches."""
+_MODIFIED_AT = datetime(2026, 3, 7, 10, 25, tzinfo=UTC)
 
-    def __init__(self, url: str, content: bytes) -> None:
+
+class _FakeFileItem(dict[str, Any]):
+    """The FileItemDict members the reader touches."""
+
+    def __init__(
+        self, url: str, content: bytes, modification_date: datetime = _MODIFIED_AT
+    ) -> None:
         super().__init__(
-            file_url=url, file_name=url.rsplit("/", 1)[-1], size_in_bytes=len(content)
+            file_url=url,
+            file_name=url.rsplit("/", 1)[-1],
+            size_in_bytes=len(content),
+            modification_date=modification_date,
         )
         self._content = content
 
@@ -259,8 +227,119 @@ def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
     return [row for batch in batches for row in batch.to_pylist()]
 
 
-def test_read_tsv_streams_instead_of_buffering_the_whole_file(
+def test_reader_stamps_every_row_with_its_source_file() -> None:
+    """Rows must carry the file they came from and when it was written.
+
+    Two exports of the same course produce byte-identical rows apart from
+    these columns, so without them the post-load dedupe cannot tell a
+    re-exported copy from a distinct row, and staging has nothing to order
+    versions of a record by.
+    """
+    earlier = datetime(2026, 2, 21, 7, 50, tzinfo=UTC)
+    rows = _rows(
+        _read(
+            [
+                _FakeFileItem("s3://bucket/old.tsv", _CLEAN_TSV, earlier),
+                _FakeFileItem("s3://bucket/new.tsv", _CLEAN_TSV),
+            ]
+        )
+    )
+
+    assert [r[file_metadata.SOURCE_FILE_COLUMN] for r in rows] == [
+        "s3://bucket/old.tsv",
+        "s3://bucket/old.tsv",
+        "s3://bucket/new.tsv",
+        "s3://bucket/new.tsv",
+    ]
+    assert [r[file_metadata.FILE_MODIFIED_AT_COLUMN] for r in rows] == [
+        earlier,
+        earlier,
+        _MODIFIED_AT,
+        _MODIFIED_AT,
+    ]
+
+
+def test_reader_stamps_rows_recovered_by_the_unquoted_fallback() -> None:
+    """The fallback path yields its own batches and must stamp them too."""
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert {r[file_metadata.SOURCE_FILE_COLUMN] for r in rows} == {
+        "s3://bucket/legacy.tsv"
+    }
+
+
+def test_resources_append_rather_than_merge() -> None:
+    """Merge on (row_hash, extracted_course_key) can never update anything.
+
+    row_hash covers every original CSV column, so a matched row is one whose
+    content did not change between two exports of a course; the
+    merge only bought one Iceberg commit per 1,000 rows and a whole load held
+    in memory. Duplicates are removed after the load instead.
+    """
+    source = edxorg_s3.edxorg_s3_source(tables=["auth_user"])
+    table = source.resources[
+        "raw__edxorg__s3__tables__auth_user"
+    ].compute_table_schema()
+
+    assert table["write_disposition"] == "append"
+    for column in (
+        file_metadata.SOURCE_FILE_COLUMN,
+        file_metadata.FILE_MODIFIED_AT_COLUMN,
+    ):
+        assert table["columns"][column]["nullable"] is True
+
+
+def test_reader_hands_duckdb_a_path_not_a_file_object(
     monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression guard for the OOMKills a file object caused.
+
+    Given a file object, DuckDB ``read()``s the whole thing into its in-memory
+    object store before parsing, which put a 14.5 GB courseware_studentmodule
+    export entirely in RAM.
+    """
+    sources: list[object] = []
+    real_from_csv_auto = duckdb.from_csv_auto
+
+    def spy(source: object, **kwargs: Any) -> duckdb.DuckDBPyRelation:
+        sources.append(source)
+        return real_from_csv_auto(source, **kwargs)
+
+    monkeypatch.setattr(duckdb, "from_csv_auto", spy)
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)]))
+
+    assert [r["id"] for r in rows] == ["1", "2"]
+    assert len(sources) == 1
+    assert isinstance(sources[0], str)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(_CLEAN_TSV, id="read"),
+        pytest.param(b'id\tname\tbio\n1\t"open\tb\n2\n', id="unreadable"),
+    ],
+)
+def test_reader_removes_its_local_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, content: bytes
+) -> None:
+    """Each download is deleted once its file is done, even when it fails.
+
+    Left behind, a table's worth of downloads would fill the node's disk.
+    """
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    with contextlib.suppress(edxorg_s3.EdxorgTSVUnreadableError):
+        _read([_FakeFileItem("s3://bucket/file.tsv", content)])
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_read_tsv_streams_instead_of_buffering_the_whole_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Regression guard for the OOMKills this streaming rewrite fixed.
 
@@ -282,8 +361,10 @@ def test_read_tsv_streams_instead_of_buffering_the_whole_file(
 
     monkeypatch.setattr(edxorg_s3, "fetch_arrow", fake_fetch_arrow)
 
+    path = tmp_path / "clean.tsv"
+    path.write_bytes(_CLEAN_TSV)
     reader = edxorg_s3._read_tsv(  # noqa: SLF001
-        _FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV),
+        path,
         5000,
         edxorg_s3._CSV_READER_OPTIONS,  # noqa: SLF001
     )
