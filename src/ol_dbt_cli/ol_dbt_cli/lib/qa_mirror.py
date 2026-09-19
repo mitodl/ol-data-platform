@@ -107,9 +107,10 @@ REDACTED = "redacted"
 def _expression(column: str, mode: str) -> str:
     quoted = quote(column)
     if mode == "hash":
-        # A blank would otherwise hash to one constant digest, and every blank
-        # username would become the same pseudo-user.
-        return f"sha2(nullif({quoted}, ''), 256) AS {quoted}"
+        # Blank stays blank and NULL stays NULL. Hashing a blank would give every
+        # blank username one shared digest, and turning it into NULL would break
+        # not_null tests on anything concatenated from it (emeritus full names).
+        return f"if({quoted} = '', '', sha2({quoted}, 256)) AS {quoted}"
     if mode == "redact":
         # NULL stays NULL, so a not_null test sees what it would see in production.
         return f"CASE WHEN {quoted} IS NULL THEN NULL ELSE '{REDACTED}' END AS {quoted}"

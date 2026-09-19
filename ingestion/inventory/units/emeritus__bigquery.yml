@@ -42,8 +42,8 @@ tables:
       function: copy
       industry: copy
       job_title: redact
-      last_name: redact
-      first_name: redact
+      last_name: hash
+      first_name: hash
       gdpr_agree: copy
       student_id: copy
       nationality: copy

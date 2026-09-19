@@ -46,7 +46,7 @@ class TestRenderMirror:
             "CREATE TABLE ol_data_lake_qa.ol_warehouse_qa_raw.`raw__edxorg__report`\nAS SELECT /*+ SET_VAR("
         )
         assert "`user id`,\n" in statement.sql
-        assert "sha2(nullif(`email`, ''), 256) AS `email`" in statement.sql
+        assert "if(`email` = '', '', sha2(`email`, 256)) AS `email`" in statement.sql
         # Typed by the dead branch, so QA keeps production's column type.
         assert "CASE WHEN FALSE THEN `birth_year` END AS `birth_year`" in statement.sql
         assert statement.sql.endswith("FROM ol_data_lake_production.ol_warehouse_production_raw.`raw__edxorg__report`")
@@ -83,7 +83,7 @@ class TestRenderMirror:
 
     def test_column_names_match_case_insensitively(self) -> None:
         statement = render_mirror(_table({"Email": "hash"}), {"email": "VARCHAR(65533)"})
-        assert "sha2(nullif(`Email`, ''), 256)" in statement.sql
+        assert "sha2(`Email`, 256)" in statement.sql
 
 
 class TestMirrorTables:

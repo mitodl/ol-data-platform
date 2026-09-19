@@ -465,10 +465,12 @@ Each mirrored table carries a `mirror:` block in its unit file:
 `columns` is the allowlist. A production column it does not name is not copied. The modes:
 
 - `copy` keeps the value.
-- `hash` writes `sha2(nullif(value, ''), 256)`. It keeps a key distinct and joinable within
-  mirrored data. It is pseudonymization, not anonymization: an unsalted digest of a known email
-  can be matched, and a digest of a first name is trivial to reverse. Blanks become NULL, or
-  every blank username would share one digest.
+- `hash` writes `sha2(value, 256)`, leaving blanks blank and NULLs NULL. It keeps a key
+  distinct and joinable within mirrored data. It is pseudonymization, not anonymization: an
+  unsalted digest of a known email can be matched, and a digest of a common name can be reversed
+  from a name list. A blank is kept rather than hashed, or every blank username would share one
+  digest, and rather than nulled, or emeritus full names built from blank parts would fail their
+  `not_null` test (475 production rows have a blank first or last name).
 - `redact` writes the literal `'redacted'` where the value is not NULL. It carries no
   information and keeps the column's NULLs where production has them, so a `not_null` test
   fails in QA exactly when it would in production.
@@ -514,9 +516,13 @@ raw metadata column. Unread columns are dropped, which is how `mitx_person_cours
 `city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
 masked:
 
-- `hash`: emails, usernames, tracking-log session ids, and the certificate key and uuids in
+- `hash`: emails, usernames, tracking-log session ids, the certificate key and uuids in
   `mitx_user_info_combo` (edX's public certificate pages, keyed by those, show the learner's
-  name).
+  name), and emeritus first and last names. `stg__emeritus__api__bigquery__user_enrollments`
+  deduplicates on `batch_id, email, first_name, last_name`, and every `'(blank)'` email hashes to
+  one digest, so redacted names would collapse all blank-email learners in a batch into one
+  row. A side effect: the model maps `'(blank)'` to a NULL `user_email`, and the digest of
+  `'(blank)'` does not match, so in QA those rows carry a digest instead of NULL.
 - `redact`: names, street address, city, zip code, job title and company, phone, alias,
   signature and zendesk user `details`, profile goals and mailing address, certificate name,
   zendesk organization and user notes, salesforce `nextstep` and line-item `description`.
