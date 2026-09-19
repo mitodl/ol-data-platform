@@ -71,6 +71,21 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: copy
+      active: copy
+      default: copy
+      brand_url: copy
+      subdomain: copy
+      created_at: copy
+      is_deleted: copy
+      updated_at: copy
+      has_help_center: copy
+      help_center_state: copy
 - name: categories
   raw_table: raw__thirdparty__zendesk_support__categories
   sync_mode: full_refresh_overwrite
@@ -95,6 +110,18 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: copy
+      default: copy
+      deleted: copy
+      is_public: copy
+      created_at: copy
+      updated_at: copy
+      description: copy
 - name: organizations
   raw_table: raw__thirdparty__zendesk_support__organizations
   sync_mode: full_refresh_overwrite
@@ -103,6 +130,21 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: copy
+      tags: copy
+      notes: nullify
+      group_id: copy
+      created_at: copy
+      deleted_at: copy
+      updated_at: copy
+      domain_names: copy
+      shared_tickets: copy
+      shared_comments: copy
 - name: satisfaction_ratings
   raw_table: raw__thirdparty__zendesk_support__satisfaction_ratings
   sync_mode: incremental_deduped_history
@@ -167,6 +209,23 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      via: nullify
+      body: nullify
+      type: copy
+      public: copy
+      uploads: nullify
+      audit_id: copy
+      author_id: copy
+      html_body: nullify
+      ticket_id: copy
+      timestamp: copy
+      created_at: copy
+      plain_body: nullify
+      attachments: nullify
 - name: ticket_events
   raw_table: raw__thirdparty__zendesk_support__ticket_events
   sync_mode: incremental_deduped_history
@@ -183,6 +242,16 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      title: copy
+      active: copy
+      created_at: copy
+      updated_at: copy
+      description: copy
 - name: ticket_forms
   raw_table: raw__thirdparty__zendesk_support__ticket_forms
   sync_mode: incremental_append
@@ -223,6 +292,44 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      via: nullify
+      tags: copy
+      type: copy
+      due_at: copy
+      status: copy
+      subject: nullify
+      brand_id: copy
+      group_id: copy
+      priority: copy
+      is_public: copy
+      recipient: hash
+      created_at: copy
+      problem_id: copy
+      updated_at: copy
+      assignee_id: copy
+      description: nullify
+      raw_subject: nullify
+      email_cc_ids: copy
+      follower_ids: copy
+      requester_id: copy
+      submitter_id: copy
+      custom_fields: nullify
+      has_incidents: copy
+      ticket_form_id: copy
+      organization_id: copy
+      collaborator_ids: copy
+      custom_status_id: copy
+      allow_attachments: copy
+      allow_channelback: copy
+      generated_timestamp: copy
+      satisfaction_rating: nullify
+      sharing_agreement_ids: copy
+      from_messaging_channel: copy
 - name: topics
   raw_table: raw__thirdparty__zendesk_support__topics
   sync_mode: full_refresh_overwrite
@@ -255,3 +362,41 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: nullify
+      role: copy
+      tags: copy
+      alias: nullify
+      email: hash
+      notes: nullify
+      phone: nullify
+      photo: nullify
+      active: copy
+      locale: copy
+      shared: copy
+      details: nullify
+      verified: copy
+      chat_only: copy
+      locale_id: copy
+      moderator: copy
+      role_type: copy
+      signature: nullify
+      suspended: copy
+      time_zone: copy
+      created_at: copy
+      updated_at: copy
+      user_fields: nullify
+      shared_agent: copy
+      last_login_at: copy
+      iana_time_zone: copy
+      organization_id: copy
+      default_group_id: copy
+      restricted_agent: copy
+      ticket_restriction: copy
+      permanently_deleted: copy
+      only_private_comments: copy
+      two_factor_auth_enabled: copy

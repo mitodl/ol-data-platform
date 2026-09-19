@@ -424,3 +424,134 @@ still unaudited. It doesn't affect anything until a model declares one of them.
 The 43 units own 538 of QA raw's 2,766 tables. The other 2,228 belong to no unit, so no
 `qa_branches` contract can depend on them. Whether a dbt source or anything outside dbt still
 reads them was not checked here. That check is what the cleanup decision still needs.
+
+---
+
+## 8. The singleton mirror (step 6, 2026-09-18)
+
+### It runs from production, not QA
+
+The RFC assumed the QA StarRocks cluster would read production through the catalog it already
+carries. That is no longer true. Since ol-infrastructure #5472 (2026-08-17) and #5670
+(2026-08-31), the QA StarRocks IRSA role carries
+`data-lake-cross-environment-glue-denial-policy-qa`. On 2026-09-18 the IAM policy simulator
+returned `explicitDeny` for `glue:GetTable` on `ol_warehouse_production_raw` tables from
+`data-qa-starrocks-lakehouse-trust-role`. The production role was allowed to read production
+and to create and drop tables in `ol_warehouse_qa_raw`.
+
+So the mirror runs on production StarRocks, from the production lakehouse code location. The
+assets are registered only when `DAGSTER_ENV == "production"`. Production pushes an allowlisted
+subset into QA, and QA never reads production. That changes step 7. The QA cluster has no
+mirror role to narrow a grant to, and its production catalog is already unusable at the IAM
+layer. What is left is to drop `ol_data_lake_production` from the QA cluster's
+`_DATA_LAKE_ENVS`, so the SQL grants stop advertising access IAM denies.
+
+### The declaration
+
+Each mirrored table carries a `mirror:` block in its unit file:
+
+```yaml
+- name: api_enrollments
+  raw_table: raw__emeritus__bigquery__api_enrollments
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      first_name: nullify
+      batch_id: copy
+    where: "..."        # optional
+```
+
+`columns` is the allowlist. A production column it does not name is not copied. `copy` keeps
+the value. `hash` writes `sha2(value, 256)` and is accepted only on string columns, so a
+cast in a staging model never meets a hex digest. It keeps a key distinct and joinable within
+mirrored data. It is pseudonymization, not anonymization: an unsalted digest of a known email
+can be matched. `nullify` keeps the column with every value NULL, typed through a dead `CASE`
+branch so QA gets production's type. Staging models select PII columns by name, so a dropped
+column fails the QA build and a nullified one does not.
+
+`where` is one predicate. `{source}` stands for the production relation, so a filter can be
+measured from the table's own newest row. A paused feed then still copies rows, which a filter
+on `now()` would not.
+
+`ol-dbt inventory validate` rejects a `mirror:` block on a unit whose `strategies.qa` is not
+`mirror`, a `where` containing `;`, and an allowlist without the table's resolved raw metadata
+column. The dedup macro reads that column through the inventory, so no analysis of the model's
+SQL sees the read.
+
+The asset checks every table's declaration in the unit against `DESCRIBE` of the production
+table before it drops any QA copy. An allowlisted column that production lacks, or `hash` on a
+non-string column, fails the run with the whole unit's QA copies still in place.
+
+### What was not built
+
+A static check that no model reads a column the mirror drops. The sqlglot scope resolution in
+`ol-dbt validate` expands `select *` to the whole schema it is given, so it cannot see a
+dropped column. Strict qualification against the mirrored schema fails on 29 of the 32 models
+that read a mirrored table even when given the full production schema, because it cannot see
+through the dedup macro's CTE or other macro calls. A dropped column instead fails the QA dbt
+build of that staging model with the column's name, which is loud and in the right place.
+
+### The allowlists
+
+27 tables across 9 units. Each allowlist is the columns the reading models name, found by
+text-matching the production column list against each model and the macros it calls, plus the
+raw metadata column. Unread columns are dropped, which is how `mitx_person_course`'s `ip`,
+`city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
+masked:
+
+- `hash`: emails, usernames, tracking-log session ids, zendesk ticket `recipient`, and the
+  certificate key and uuids in `mitx_user_info_combo` (edX's public certificate pages, keyed by
+  those, show the learner's name).
+- `nullify`: names, street address, city, zip code, phone, IP, year of birth, profile goals and
+  mailing address, certificate download URLs, zendesk ticket and comment bodies, subjects,
+  `via`, `custom_fields`, attachments and user notes, salesforce `nextstep` and line-item
+  `description`.
+
+Two tables are filtered:
+
+- `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
+  files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
+  mirror keeps the last day of syncs by `_airbyte_extracted_at` (epoch milliseconds). That is
+  one full report while syncs run a day apart, and two if a gap is shorter. The staging model
+  dedupes on user, course run and program either way.
+- `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs.
+
+Tracking-log `event` and `context` payloads are copied as they are, because the staging model
+parses them. Whatever PII an event payload carries is copied with it. The 30-day filter bounds
+how much lands, but the allowlist cannot mask inside a JSON column.
+
+Not declared, so not mirrored:
+
+- edxorg/mysql's `auth_user`, `certificates_generatedcertificate` and
+  `grades_persistentcoursegrade`. They resolve to `_file_modified_at`, which production does
+  not have yet (ol-data-platform#2443).
+- Tables absent from production raw: `raw__edxorg__discovery__api__programs`,
+  `raw__edxorg__s3__course_xml_blocks`, and edxorg/mysql's `auth_userprofile`,
+  `courseware_studentmodule`, `student_courseenrollment` and `student_courseaccessrole`.
+- Unmodeled tables (most of zendesk, salesforce `Account`), which nothing reads.
+
+The salesforce `Opportunity` and `OpportunityLineItem` tables declared `_airbyte_emitted_at`
+as their raw metadata column, as if they were still on Airbyte's v1 destination. Production
+Glue shows the v2 columns and no `_airbyte_emitted_at`. The override is removed. Neither staging
+model read it, since both order by `systemmodstamp`.
+
+### Refresh and staleness
+
+Each unit is one asset, `qa_mirror/<deployment>/<layer>`, materialized by hand. There is no
+schedule, no partitions and no `AutomationCondition` (§1). A refresh drops each QA table with
+`FORCE`, which deletes its data files, then runs the CTAS. StarRocks cannot rename an Iceberg
+table, so there is no swap. A CTAS that fails inside StarRocks drops the table it created
+(`StmtExecutor.handleCreateTableAsSelectStmt` on branch-4.1), and the next QA observation
+reports it as empty. The CTAS is never retried by the StarRocks
+resource: an FE lost mid-statement can leave the table behind, and a retry would fail on
+"already exists" and hide the real error. The next manual run's `DROP` clears it.
+
+The `DROP` goes through the Iceberg catalog, so it cannot remove a Glue entry that is not an
+Iceberg table, and the CTAS then fails on the name. One mirrored name had such an entry in QA:
+`raw__irx__edxorg__bigquery__email_opt_in`, a legacy JSON table last written 2024-08-26. It has
+to be deleted from QA Glue before the irx mirror first runs.
+
+§1 called for a copy-time stamp in table metadata. The CTAS writes a single snapshot, and
+`ol-dbt inventory observe` already reads that snapshot's time as the copy time. So no separate
+property is written.

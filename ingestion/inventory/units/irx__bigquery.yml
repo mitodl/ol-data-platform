@@ -35,18 +35,124 @@ tables:
   sync_mode: full_refresh_overwrite
   namespace: email_opt_in
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      user_id: copy
+      username: hash
+      course_id: copy
+      full_name: nullify
+      is_opted_in_for_email: copy
+      preference_set_datetime: copy
 - name: mitx_course
   raw_table: raw__irx__edxorg__bigquery__mitx_course
   sync_mode: full_refresh_overwrite
   namespace: aggregate_data
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      url: copy
+      semester: copy
+      course_id: copy
+      department: copy
+      self_paced: copy
+      course_wrap: copy
+      dept_number: copy
+      institution: copy
+      instructors: copy
+      course_title: copy
+      course_launch: copy
+      course_number: copy
+      registration_open: copy
 - name: mitx_person_course
   raw_table: raw__irx__edxorg__bigquery__mitx_person_course
   sync_mode: full_refresh_overwrite
   namespace: aggregate_data
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      loe: copy
+      yob: nullify
+      mode: copy
+      n_dt: copy
+      grade: copy
+      avg_dt: copy
+      gender: copy
+      max_dt: copy
+      nvideo: copy
+      sdv_dt: copy
+      sum_dt: copy
+      viewed: copy
+      nevents: copy
+      user_id: copy
+      explored: copy
+      username: hash
+      certified: copy
+      completed: copy
+      course_id: copy
+      is_active: copy
+      ndays_act: copy
+      nseq_goto: copy
+      last_event: copy
+      nprogcheck: copy
+      start_time: copy
+      cert_status: copy
+      first_event: copy
+      nplay_video: copy
+      nseek_video: copy
+      ntranscript: copy
+      npause_video: copy
+      nshow_answer: copy
+      passing_grade: copy
+      nproblem_check: copy
+      profile_country: copy
+      cert_created_date: copy
+      cert_modified_date: copy
+      verified_enroll_time: copy
+      nvideos_total_watched: copy
+      nvideos_unique_viewed: copy
+      verified_unenroll_time: copy
 - name: mitx_user_info_combo
   raw_table: raw__irx__edxorg__bigquery__mitx_user_info_combo
   sync_mode: full_refresh_overwrite
   namespace: aggregate_data
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      user_id: copy
+      username: hash
+      last_login: copy
+      date_joined: copy
+      profile_city: nullify
+      profile_meta: nullify
+      profile_name: nullify
+      profile_goals: nullify
+      certificate_id: copy
+      id_map_hash_id: copy
+      profile_gender: copy
+      certificate_key: hash
+      enrollment_mode: copy
+      profile_country: copy
+      certificate_mode: copy
+      certificate_name: nullify
+      certificate_grade: copy
+      certificate_status: copy
+      enrollment_created: copy
+      certificate_user_id: copy
+      enrollment_course_id: copy
+      enrollment_is_active: copy
+      certificate_course_id: copy
+      profile_year_of_birth: nullify
+      certificate_distinction: copy
+      certificate_verify_uuid: hash
+      profile_mailing_address: nullify
+      certificate_created_date: copy
+      certificate_download_url: nullify
+      certificate_download_uuid: hash
+      certificate_modified_date: copy
+      profile_level_of_education: copy

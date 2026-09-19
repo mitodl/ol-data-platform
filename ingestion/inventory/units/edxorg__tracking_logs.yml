@@ -28,3 +28,26 @@ tables:
   cursor_field:
   - _ab_source_file_last_modified
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      ip: nullify
+      host: copy
+      name: copy
+      page: copy
+      time: copy
+      agent: copy
+      event: copy
+      context: copy
+      referer: copy
+      session: hash
+      username: hash
+      event_type: copy
+      event_source: copy
+      accept_language: copy
+      _ab_source_file_last_modified: copy
+    # 2.2B rows and 245 GB whole. The last 30 days of syncs, measured back from
+    # the newest one so a paused feed still copies rows. Epoch milliseconds.
+    where: >-
+      _airbyte_extracted_at >=
+      (SELECT max(_airbyte_extracted_at) FROM {source}) - 2592000000

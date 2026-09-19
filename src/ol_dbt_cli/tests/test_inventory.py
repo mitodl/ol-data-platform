@@ -171,6 +171,45 @@ class TestSchemaShape:
         assert "mirror" in _messages(report)
 
 
+def _mirrored_unit(mirror: dict[str, Any]) -> dict[str, Any]:
+    unit = copy.deepcopy(DLT_UNIT)
+    unit.update(strategies={"qa": "mirror", "local": "fixture"}, mirror_max_age_days=90)
+    unit["tables"][0]["mirror"] = mirror
+    return unit
+
+
+class TestMirrorRules:
+    def test_a_well_formed_mirror_passes(self, inventory: Path) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "copy", "email": "hash"}}))
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_mirror_on_a_unit_qa_does_not_mirror_is_rejected(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["tables"][0]["mirror"] = {"columns": {"_airbyte_extracted_at": "copy"}}
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "strategies.qa is not `mirror`" in _messages(report)
+
+    def test_mirror_must_keep_the_raw_metadata_column(self, inventory: Path) -> None:
+        # The dedup macro reads it through the inventory, where no SQL analysis
+        # of the staging model can see the read.
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"email": "hash"}}))
+        report = _run(inventory)
+        assert "drops its raw metadata column '_dlt_load_id'" in _messages(report)
+
+    def test_unknown_mode_is_rejected_by_the_schema(self, inventory: Path) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "redact"}}))
+        report = _run(inventory)
+        assert "redact" in _messages(report)
+
+    def test_where_is_a_predicate_not_a_statement(self, inventory: Path) -> None:
+        mirror = {"columns": {"_dlt_load_id": "copy"}, "where": "true; DROP TABLE x"}
+        _write(inventory, "edxorg__s3", _mirrored_unit(mirror))
+        report = _run(inventory)
+        assert "mirror.where contains `;`" in _messages(report)
+
+
 class TestRules:
     def test_local_ingest_requires_a_dlt_unit(self, inventory: Path) -> None:
         _mutate(

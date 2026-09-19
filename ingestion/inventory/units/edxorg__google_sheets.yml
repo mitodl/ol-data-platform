@@ -29,3 +29,18 @@ tables:
   - - Email
   - - Program Title
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      partner key: copy
+      program type: copy
+      program title: copy
+      email: hash
+      user id: copy
+      username: hash
+      last name: nullify
+      first name: nullify
+      entitlements: copy
+      purchase date: copy
+      expiration date: copy
+      redeemed entitlements: copy

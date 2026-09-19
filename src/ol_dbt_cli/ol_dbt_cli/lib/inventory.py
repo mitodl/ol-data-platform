@@ -308,6 +308,45 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
         )
 
 
+def _check_mirror(unit: Unit, report: ValidationReport) -> None:
+    """Rules on the per-table `mirror:` block the QA mirror asset executes (QA_DATA_TOPOLOGY_SPEC.md §8)."""
+    mirrored_in_qa = (unit.data.get("strategies") or {}).get("qa") == MIRROR_STRATEGY
+    for table in unit.tables:
+        mirror = table.get("mirror")
+        if mirror is None:
+            continue
+        raw_table = table.get("raw_table", "")
+        if not mirrored_in_qa:
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table} declares `mirror:` but the unit's strategies.qa is not `mirror`",
+                "Nothing would execute it, and a scoped unit must never have production rows copied into QA.",
+            )
+        # The dedup macro resolves this column from the inventory rather than
+        # naming it in the model, so no SQL analysis sees the read. A mirror that
+        # drops it breaks every staging model deduplicating the table.
+        metadata_column = raw_metadata_column(unit, table)
+        if metadata_column is not None and metadata_column not in mirror["columns"]:
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table}'s mirror drops its raw metadata column {metadata_column!r}",
+                "deduplicate_raw_table orders by it. Add it as `copy`, or correct the table's "
+                "raw_metadata_column if the table does not carry it.",
+            )
+        if ";" in mirror.get("where", ""):
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table}'s mirror.where contains `;`",
+                "It is one predicate spliced into a CREATE TABLE AS SELECT, never a statement.",
+            )
+
+
 def _is_cursorless_incremental(table: dict[str, Any]) -> bool:
     return str(table.get("sync_mode", "")).startswith(INCREMENTAL_PREFIX) and not table.get("cursor_field")
 
@@ -442,6 +481,7 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
         _check_strategies(unit, report)
         _check_loader_block(unit, report)
         _check_tables(unit, report)
+        _check_mirror(unit, report)
         _check_connections(unit, report)
         well_formed.append(unit)
 

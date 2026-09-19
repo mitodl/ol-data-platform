@@ -204,6 +204,27 @@
           "renamed_from": {
             "type": "string",
             "description": "The full previous raw_table this table replaces, so the removal check does not fire (§7.2). Not the bare stream name."
+          },
+          "mirror": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["columns"],
+            "description": "How the QA mirror copies this table from production (QA_DATA_TOPOLOGY_SPEC.md §8). Only on a unit whose strategies.qa is `mirror`; a table without it is not mirrored.",
+            "properties": {
+              "columns": {
+                "type": "object",
+                "minProperties": 1,
+                "description": "The column allowlist. A production column not listed here is not copied. `copy` keeps the value, `hash` writes its sha256 hex digest so the column stays distinct and joinable within mirrored data (string columns only), and `nullify` keeps the column with every value NULL so the models that select it still compile.",
+                "additionalProperties": {
+                  "enum": ["copy", "hash", "nullify"]
+                }
+              },
+              "where": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A row filter, for tables too large to copy whole. `{source}` stands for the production relation, so a filter can be relative to the table's own newest row rather than to the clock."
+              }
+            }
           }
         }
       }
