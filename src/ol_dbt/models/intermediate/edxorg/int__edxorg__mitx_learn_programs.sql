@@ -43,7 +43,7 @@ with programs as (
         and lower(program_type) not like '%micromasters%'
         and (
             '|' || replace(program_organization, ', ', '|') || '|' like '%|MITx|%'
-            or '|' || replace(program_organization, ', ', '|') || '|' like '%|MITx_PRO|%'
+            or '|' || replace(program_organization, ', ', '|') || '|' like '%|MITx\_PRO|%' escape '\'
         )
         and not (
             lower(trim(program_title)) like '%[delete]%'

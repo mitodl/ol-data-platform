@@ -118,23 +118,32 @@ def published_program() -> dict[str, Any]:
     }
 
 
-def github_stub(open_issue_count: int) -> MagicMock:
-    """Build a PyGithub stand-in whose search finds ``open_issue_count`` issues."""
+def github_stub(*, found: int = 0, recent_titles: tuple[str, ...] = ()) -> MagicMock:
+    """Build a PyGithub stand-in.
+
+    ``found`` issues match the title search; ``recent_titles`` are issues updated
+    recently, which search may not have indexed yet.
+    """
     github = MagicMock()
-    existing = MagicMock(totalCount=open_issue_count)
-    existing.__getitem__.return_value = SimpleNamespace(
+    search = MagicMock(totalCount=found)
+    search.__getitem__.return_value = SimpleNamespace(
         html_url="https://github.com/o/r/issues/1"
     )
-    github.search_issues.return_value = existing
-    github.get_repo.return_value.create_issue.return_value = SimpleNamespace(
+    github.search_issues.return_value = search
+    repo = github.get_repo.return_value
+    repo.get_issues.return_value = [
+        SimpleNamespace(title=title, html_url="https://github.com/o/r/issues/3")
+        for title in recent_titles
+    ]
+    repo.create_issue.return_value = SimpleNamespace(
         html_url="https://github.com/o/r/issues/2"
     )
     return github
 
 
 def test_review_issue_opened_for_a_program_without_one() -> None:
-    """A still-published program with no open review issue gets one."""
-    github = github_stub(open_issue_count=0)
+    """A still-published program with no review issue gets one."""
+    github = github_stub()
     urls = open_unpublish_reviews(
         github, "o/r", [published_program()], checked_on="2026-09-19"
     )
@@ -143,13 +152,24 @@ def test_review_issue_opened_for_a_program_without_one() -> None:
     assert PROGRAM_ID in title
 
 
-def test_existing_review_issue_is_reused() -> None:
-    """A program that stays unlisted keeps one issue rather than one per run."""
-    github = github_stub(open_issue_count=1)
+def test_existing_review_issue_open_or_closed_is_reused() -> None:
+    """The title search spans closed issues: closing one records the decision."""
+    github = github_stub(found=1)
     urls = open_unpublish_reviews(
         github, "o/r", [published_program()], checked_on="2026-09-19"
     )
     assert urls == ["https://github.com/o/r/issues/1"]
+    assert "is:open" not in github.search_issues.call_args.args[0]
+    github.get_repo.return_value.create_issue.assert_not_called()
+
+
+def test_recent_issue_not_yet_searchable_is_reused() -> None:
+    """An issue a failed attempt just filed counts before search indexes it."""
+    github = github_stub(recent_titles=(f"Review ... {PROGRAM_ID}",))
+    urls = open_unpublish_reviews(
+        github, "o/r", [published_program()], checked_on="2026-09-19"
+    )
+    assert urls == ["https://github.com/o/r/issues/3"]
     github.get_repo.return_value.create_issue.assert_not_called()
 
 

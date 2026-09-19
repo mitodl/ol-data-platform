@@ -21,6 +21,9 @@ with source as (
         ) as course_topics
         , prerequisites_raw as course_prerequisites_text
         , {{ cast_timestamp_to_iso8601('modified') }} as course_updated_at
+        -- when the catalog extraction that wrote this row ran; courses in the latest
+        -- extraction are the ones the catalog currently lists
+        , retrieved_at as course_retrieved_at
 
     from most_recent_source
 )
