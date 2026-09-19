@@ -1215,6 +1215,9 @@ models:
     description: timestamp, the date and time the course was last modified.
     tests:
     - not_null
+  - name: course_retrieved_at
+    description: str, when the catalog extraction that wrote this row ran. Courses
+      with the latest value are the ones the catalog currently lists.
 
 - name: stg__edxorg__api__courserun
   description: MITx course runs on edX.org, sourced from the discovery API
@@ -1297,6 +1300,9 @@ models:
     - not_null
   - name: courserun_weeks_to_complete
     description: int, weeks the run takes to complete
+  - name: courserun_retrieved_at
+    description: str, when the catalog extraction that wrote this row ran. Runs with
+      the latest value are the ones the catalog currently lists.
 
 - name: stg__edxorg__s3__course_certificate_signatory
   description: edx course certificate signatory data

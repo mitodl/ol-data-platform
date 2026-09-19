@@ -5,9 +5,26 @@
   next to start, else the latest to have started. MIT Learn copies a course's
   duration and weekly hours from its best run, and programs take their instructors
   from it. Evaluated when the model is built.
+
+  The catalog tables only append, so only courses and runs from the latest catalog
+  extraction count: MIT Learn's load prunes whatever the catalog stops listing.
 #}
 
-with runs as (
+with current_courses as (
+    select course_readable_id
+    from {{ ref('stg__edxorg__api__course') }}
+    where
+        course_retrieved_at = (select max(course_retrieved_at) from {{ ref('stg__edxorg__api__course') }})
+        -- courses MIT Learn skips as deleted
+        and not (
+            lower(trim(course_title)) like '%[delete]%'
+            or lower(trim(course_title)) like '%(delete)%'
+            or lower(trim(course_title)) like '%delete %'
+            or lower(trim(course_title)) = 'delete'
+        )
+)
+
+, runs as (
     select
         course_readable_id
         , courserun_readable_id
@@ -23,13 +40,18 @@ with runs as (
         , courserun_weeks_to_complete
         , courserun_instructors
     from {{ ref('stg__edxorg__api__courserun') }}
-    -- runs MIT Learn skips as deleted
-    where not (
-        lower(trim(courserun_title)) like '%[delete]%'
-        or lower(trim(courserun_title)) like '%(delete)%'
-        or lower(trim(courserun_title)) like '%delete %'
-        or lower(trim(courserun_title)) = 'delete'
-    )
+    where
+        courserun_retrieved_at = (
+            select max(courserun_retrieved_at) from {{ ref('stg__edxorg__api__courserun') }}
+        )
+        and course_readable_id in (select course_readable_id from current_courses)
+        -- runs MIT Learn skips as deleted
+        and not (
+            lower(trim(courserun_title)) like '%[delete]%'
+            or lower(trim(courserun_title)) like '%(delete)%'
+            or lower(trim(courserun_title)) like '%delete %'
+            or lower(trim(courserun_title)) = 'delete'
+        )
 )
 
 , ranked_runs as (
@@ -59,6 +81,8 @@ with runs as (
     from (
         select
             *
+            , coalesce(courserun_min_weekly_hours, 0) as effort_min
+            , coalesce(nullif(courserun_max_weekly_hours, 0), courserun_min_weekly_hours, 0) as effort_max
             , row_number() over (
                 partition by course_readable_id
                 order by
@@ -80,23 +104,15 @@ select
     -- MIT Learn publishes a course when any of its runs is published
     , runs_by_course.is_published
     , best_runs.courserun_readable_id as best_run_readable_id
-    -- as MIT Learn's commitment parsing: a missing minimum counts as 0 and a missing
-    -- maximum as the minimum
+    -- as MIT Learn's commitment parsing: a missing minimum counts as 0, and a missing
+    -- or zero maximum as the minimum
     , case
-        when coalesce(best_runs.courserun_min_weekly_hours, 0) != 0
-            or coalesce(best_runs.courserun_max_weekly_hours, best_runs.courserun_min_weekly_hours, 0) != 0
-            then least(
-                coalesce(best_runs.courserun_min_weekly_hours, 0)
-                , coalesce(best_runs.courserun_max_weekly_hours, best_runs.courserun_min_weekly_hours, 0)
-            )
+        when best_runs.effort_min != 0 or best_runs.effort_max != 0
+            then least(best_runs.effort_min, best_runs.effort_max)
     end as best_run_min_weekly_hours
     , case
-        when coalesce(best_runs.courserun_min_weekly_hours, 0) != 0
-            or coalesce(best_runs.courserun_max_weekly_hours, best_runs.courserun_min_weekly_hours, 0) != 0
-            then greatest(
-                coalesce(best_runs.courserun_min_weekly_hours, 0)
-                , coalesce(best_runs.courserun_max_weekly_hours, best_runs.courserun_min_weekly_hours, 0)
-            )
+        when best_runs.effort_min != 0 or best_runs.effort_max != 0
+            then greatest(best_runs.effort_min, best_runs.effort_max)
     end as best_run_max_weekly_hours
     , nullif(best_runs.courserun_weeks_to_complete, 0) as best_run_max_weeks
     , best_runs.courserun_instructors as best_run_instructors_json

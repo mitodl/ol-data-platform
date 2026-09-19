@@ -1026,7 +1026,13 @@ sources:
       description: str, the program's level override
     - name: retrieved_at
       description: str, when the extraction that wrote this row ran
-
+    config:
+      # The edX programs delivery rebuilds from the latest extraction; if the edxorg
+      # asset stops landing new ones it would keep re-sending a stale program set.
+      freshness:
+        warn_after: {count: 2, period: day}
+        error_after: {count: 3, period: day}
+      loaded_at_field: "from_iso8601_timestamp(retrieved_at)"
   - name: raw__edxorg__s3__program_course
     description: this table includes all the program courses running on edX.org
     columns:

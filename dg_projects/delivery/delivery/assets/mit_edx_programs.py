@@ -15,10 +15,13 @@ Data flow:
             → integrations__learn__mit_edx_program{s,_instructors} (dbt)
                 → MIT Learn webhook (this asset)
 
-When no program is listed there is nothing to deliver, and MIT Learn would reject an
-empty batch. Its legacy ETL left existing programs published in that case, and so
-does this asset, but it opens a GitHub issue per program MIT Learn still publishes so
-a person decides whether to unpublish it.
+When the latest programs extraction lists no program MIT Learn ingests, there is
+nothing to deliver, and MIT Learn would reject an empty batch. Its legacy ETL left
+existing programs published in that case, and so does this asset, but it opens a
+GitHub issue per program MIT Learn still publishes so a person decides whether to
+unpublish it. If extractions stop arriving altogether, the models keep the last one
+and this asset re-sends it; the freshness check on raw__edxorg__s3__program flags
+that.
 
 Scheduling: daily at 06:45 UTC. Configured in definitions.py.
 """
@@ -26,7 +29,7 @@ Scheduling: daily at 06:45 UTC. Configured in definitions.py.
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import httpx2 as httpx
@@ -64,6 +67,8 @@ _REVIEW_TITLE_PREFIX = "Review whether MIT Learn should unpublish edX program"
 
 
 class MitEdxProgramsWebhookConfig(Config):
+    """Run config for mit_edx_programs_webhook."""
+
     review_repository: str = Field(
         default="mitodl/mit-learn",
         description=(
@@ -201,21 +206,34 @@ def open_unpublish_reviews(
     *,
     checked_on: str,
 ) -> list[str]:
-    """Make sure each program has an open review issue; return their URLs.
+    """Make sure each program has a review issue; return their URLs.
 
-    An open issue whose title names the program already counts, so a program that
-    stays unlisted for days gets one issue, not one per run.
+    Any issue whose title names the program counts, open or closed: an open one is
+    still under review, and closing one records the decision, so a program that
+    stays unlisted is raised once rather than every run. Issues updated in the last
+    two days are checked too, because search indexes new issues with a delay and a
+    retry soon after a partial failure would otherwise file duplicates.
     """
     repo = github.get_repo(repository)
+    recent_issues = list(
+        repo.get_issues(state="all", since=datetime.now(tz=UTC) - timedelta(days=2))
+    )
     urls = []
     for program in programs:
-        title, body = unpublish_review_issue(program, checked_on=checked_on)
-        existing = github.search_issues(
-            f'repo:{repository} is:issue is:open in:title "{program["readable_id"]}"'
+        readable_id = program["readable_id"]
+        recent = next(
+            (issue for issue in recent_issues if readable_id in issue.title), None
         )
-        if existing.totalCount:
-            urls.append(existing[0].html_url)
+        if recent is not None:
+            urls.append(recent.html_url)
             continue
+        found = github.search_issues(
+            f'repo:{repository} is:issue in:title "{readable_id}"'
+        )
+        if found.totalCount:
+            urls.append(found[0].html_url)
+            continue
+        title, body = unpublish_review_issue(program, checked_on=checked_on)
         urls.append(repo.create_issue(title=title, body=body).html_url)
     return urls
 

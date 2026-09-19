@@ -25,6 +25,9 @@ with source as (
         , if(seats = '[]', null, seats) as courserun_enrollment_modes
         , {{ json_query_string('image', "'$.url'") }} as courserun_image_url
         , weeks_to_complete as courserun_weeks_to_complete
+        -- when the catalog extraction that wrote this row ran; runs in the latest
+        -- extraction are the ones the catalog currently lists
+        , retrieved_at as courserun_retrieved_at
         , if(status = 'published' and is_enrollable, true, false) as courserun_is_published
         , case
             when pacing_type = 'self_paced' then true

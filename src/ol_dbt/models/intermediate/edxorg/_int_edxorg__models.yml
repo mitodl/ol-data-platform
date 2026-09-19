@@ -1147,35 +1147,58 @@ unit_tests:
     the
     next to start, else the latest to have started. Unpublished runs never count,
     and
-    a course with none is unpublished.
+    a course with none is unpublished. Only the latest catalog extraction counts,
+    and
+    courses titled as deleted are skipped. A zero maximum effort falls back to the
+    minimum, as MIT Learn's "max_effort or min_effort" does.
   model: int__edxorg__mitx_learn_course_best_runs
   given:
+  - input: ref('stg__edxorg__api__course')
+    rows:
+    - {course_readable_id: a, course_title: A, course_retrieved_at: t2}
+    - {course_readable_id: b, course_title: B, course_retrieved_at: t2}
+    - {course_readable_id: c, course_title: C, course_retrieved_at: t2}
+    - {course_readable_id: d, course_title: D, course_retrieved_at: t2}
+    - {course_readable_id: gone, course_title: Gone, course_retrieved_at: t1}
+    - {course_readable_id: deleted, course_title: "[delete] Old", course_retrieved_at: t2}
   - input: ref('stg__edxorg__api__courserun')
     rows:
     - {course_readable_id: a, courserun_readable_id: a-past, courserun_title: t, courserun_is_published: true,
       courserun_start_on: "2000-01-01T00:00:00Z", courserun_end_on: "2000-06-01T00:00:00Z",
-      courserun_min_weekly_hours: 1}
+      courserun_min_weekly_hours: 1, courserun_retrieved_at: t2}
     - {course_readable_id: a, courserun_readable_id: a-open, courserun_title: t, courserun_is_published: true,
       courserun_start_on: "2001-01-01T00:00:00Z", courserun_enrollment_end_on: "2099-01-01T00:00:00Z",
-      courserun_min_weekly_hours: 4, courserun_weeks_to_complete: 6}
+      courserun_min_weekly_hours: 4, courserun_max_weekly_hours: 0, courserun_weeks_to_complete: 6,
+      courserun_retrieved_at: t2}
     - {course_readable_id: a, courserun_readable_id: a-next, courserun_title: t, courserun_is_published: true,
-      courserun_start_on: "2098-01-01T00:00:00Z", courserun_min_weekly_hours: 9}
+      courserun_start_on: "2098-01-01T00:00:00Z", courserun_min_weekly_hours: 9, courserun_retrieved_at: t2}
+    - {course_readable_id: a, courserun_readable_id: a-stale, courserun_title: t,
+      courserun_is_published: true, courserun_start_on: "2002-01-01T00:00:00Z", courserun_enrollment_end_on: "2099-01-01T00:00:00Z",
+      courserun_retrieved_at: t1}
     - {course_readable_id: b, courserun_readable_id: b-past, courserun_title: t, courserun_is_published: true,
-      courserun_start_on: "2001-01-01T00:00:00Z", courserun_end_on: "2001-06-01T00:00:00Z"}
+      courserun_start_on: "2001-01-01T00:00:00Z", courserun_end_on: "2001-06-01T00:00:00Z",
+      courserun_retrieved_at: t2}
     - {course_readable_id: b, courserun_readable_id: b-later, courserun_title: t,
-      courserun_is_published: true, courserun_start_on: "2099-01-01T00:00:00Z"}
+      courserun_is_published: true, courserun_start_on: "2099-01-01T00:00:00Z", courserun_retrieved_at: t2}
     - {course_readable_id: b, courserun_readable_id: b-next, courserun_title: t, courserun_is_published: true,
-      courserun_start_on: "2098-01-01T00:00:00Z", courserun_min_weekly_hours: 3, courserun_max_weekly_hours: 5}
+      courserun_start_on: "2098-01-01T00:00:00Z", courserun_min_weekly_hours: 3, courserun_max_weekly_hours: 5,
+      courserun_retrieved_at: t2}
     - {course_readable_id: c, courserun_readable_id: c-old, courserun_title: t, courserun_is_published: true,
-      courserun_start_on: "2001-01-01T00:00:00Z", courserun_end_on: "2001-06-01T00:00:00Z"}
+      courserun_start_on: "2001-01-01T00:00:00Z", courserun_end_on: "2001-06-01T00:00:00Z",
+      courserun_retrieved_at: t2}
     - {course_readable_id: c, courserun_readable_id: c-newer, courserun_title: t,
-      courserun_is_published: true, courserun_start_on: "2002-01-01T00:00:00Z", courserun_end_on: "2002-06-01T00:00:00Z"}
+      courserun_is_published: true, courserun_start_on: "2002-01-01T00:00:00Z", courserun_end_on: "2002-06-01T00:00:00Z",
+      courserun_retrieved_at: t2}
     - {course_readable_id: c, courserun_readable_id: c-hidden, courserun_title: t,
-      courserun_is_published: false, courserun_start_on: "2003-01-01T00:00:00Z", courserun_end_on: "2003-06-01T00:00:00Z"}
+      courserun_is_published: false, courserun_start_on: "2003-01-01T00:00:00Z", courserun_end_on: "2003-06-01T00:00:00Z",
+      courserun_retrieved_at: t2}
     - {course_readable_id: d, courserun_readable_id: d-only, courserun_title: t, courserun_is_published: false,
-      courserun_start_on: "2003-01-01T00:00:00Z"}
+      courserun_start_on: "2003-01-01T00:00:00Z", courserun_retrieved_at: t2}
     - {course_readable_id: e, courserun_readable_id: e-gone, courserun_title: "Run\
-        \ [delete]", courserun_is_published: true, courserun_start_on: "2003-01-01T00:00:00Z"}
+        \ [delete]", courserun_is_published: true, courserun_start_on: "2003-01-01T00:00:00Z",
+      courserun_retrieved_at: t2}
+    - {course_readable_id: deleted, courserun_readable_id: deleted-run, courserun_title: t,
+      courserun_is_published: true, courserun_start_on: "2003-01-01T00:00:00Z", courserun_retrieved_at: t2}
   expect:
     rows:
     - {course_readable_id: a, is_published: true, best_run_readable_id: a-open, best_run_min_weekly_hours: 4,
