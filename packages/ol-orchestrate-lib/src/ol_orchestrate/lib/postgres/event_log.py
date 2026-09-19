@@ -21,6 +21,12 @@ from dagster_postgres.utils import (
 )
 from sqlalchemy import event, inspect
 
+# The OTel sqlalchemy instrumentation labels db.client.connections.usage with
+# the pool's logging_name, falling back to driver://host:port/db. All three
+# storages share one URL, so without a name their pools merge into one series
+# and pool_size can't be sized per storage from it.
+POOL_LOGGING_NAME = "dagster-event-log"
+
 
 class PooledPostgresEventLogStorage(PostgresEventLogStorage):
     """Postgres-backed event log storage with proper connection pooling.
@@ -98,6 +104,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             pool_timeout=self._pool_timeout,
             pool_pre_ping=True,
             pool_reset_on_return="rollback",
+            pool_logging_name=POOL_LOGGING_NAME,
         )
         self._event_watcher: SqlPollingEventWatcher | None = None
 
@@ -133,6 +140,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             "pool_timeout": self._pool_timeout,
             "pool_pre_ping": True,
             "pool_reset_on_return": "rollback",
+            "pool_logging_name": POOL_LOGGING_NAME,
         }
 
         existing_options = self._engine.url.query.get("options")
