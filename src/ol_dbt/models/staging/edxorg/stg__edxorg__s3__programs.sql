@@ -12,6 +12,12 @@ with source as (
         , status as program_status
         , authoring_organizations as program_organization
         , {{ cast_timestamp_to_iso8601('data_modified_timestamp') }} as program_updated_on
+        , marketing_url as program_marketing_url
+        , banner_image_url as program_banner_image_url
+        , level_type_override as program_level_type_override
+        -- when the extraction that wrote this row ran; programs in the latest
+        -- extraction are the ones the programs API currently lists
+        , retrieved_at as program_retrieved_at
     from most_recent_source
 )
 

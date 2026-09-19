@@ -17,7 +17,7 @@ with source as (
         , if(
             subjects = '[]'
             , null
-            , cast(json_parse(json_query(subjects, 'lax $.name' with array wrapper)) as array(varchar))  --noqa
+            , {{ json_array_field_values('subjects', 'name') }}
         ) as course_topics
         , prerequisites_raw as course_prerequisites_text
         , {{ cast_timestamp_to_iso8601('modified') }} as course_updated_at

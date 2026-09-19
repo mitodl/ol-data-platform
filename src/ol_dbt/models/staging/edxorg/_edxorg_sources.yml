@@ -1018,6 +1018,14 @@ sources:
         MITx , HarvardX
     - name: data_modified_timestamp
       description: str, timestamp when the data was last modified
+    - name: marketing_url
+      description: str, the program's edX marketing URL
+    - name: banner_image_url
+      description: str, URL of the program's medium banner image
+    - name: level_type_override
+      description: str, the program's level override
+    - name: retrieved_at
+      description: str, when the extraction that wrote this row ran
 
   - name: raw__edxorg__s3__program_course
     description: this table includes all the program courses running on edX.org
@@ -1033,6 +1041,15 @@ sources:
       description: str, short description of the course
     - name: course_type
       description: str, type of the course. e.g., audit, verified, professional
+    - name: course_position
+      description: int, 1-based position of the course in the program
+    - name: excluded_from_search
+      description: boolean, whether edX excludes the course from search
+    - name: course_runs
+      description: str, JSON array of the course's runs as the programs API reports
+        them
+    - name: retrieved_at
+      description: str, when the extraction that wrote this row ran
 
   - name: raw__edxorg__s3__mitx_course
     description: MITx courses on edX.org, sourced from the discovery API
