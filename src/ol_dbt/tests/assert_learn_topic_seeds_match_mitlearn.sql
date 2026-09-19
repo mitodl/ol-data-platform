@@ -4,8 +4,10 @@
 -- MIT Learn's topic taxonomy. Until the MIT Learn ETL cutover, MIT Learn's data_fixtures
 -- migrations are still what writes the taxonomy, so every row here is drift between the
 -- seeds and MIT Learn's replicated tables: `drift` says which side is missing the row.
--- Fix by updating the seed to match MIT Learn. After cutover the direction flips (MIT
--- Learn consumes the seed) and this test should be removed.
+-- Fix by updating the seed to match MIT Learn. A row only on the MIT Learn side can also
+-- be one MIT Learn deleted that its replicated table still holds; check MIT Learn before
+-- adding it to the seed. After cutover the direction flips (MIT Learn consumes the seed)
+-- and this test should be removed.
 with seed_topics as (
     select
         cast(topic_uuid as varchar) as topic_uuid
