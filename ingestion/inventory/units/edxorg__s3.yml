@@ -155,7 +155,7 @@ tables:
   mirror:
     columns:
       _airbyte_extracted_at: copy
-      name: nullify
+      name: redact
       grade: copy
       track: copy
       user id: copy

@@ -308,6 +308,9 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
         )
 
 
+_SET_OPERATOR = re.compile(r"\b(union|intersect|except|minus)\b", re.IGNORECASE)
+
+
 def _check_mirror(unit: Unit, report: ValidationReport) -> None:
     """Rules on the per-table `mirror:` block the QA mirror asset executes (QA_DATA_TOPOLOGY_SPEC.md §8)."""
     mirrored_in_qa = (unit.data.get("strategies") or {}).get("qa") == MIRROR_STRATEGY
@@ -337,13 +340,15 @@ def _check_mirror(unit: Unit, report: ValidationReport) -> None:
                 "deduplicate_raw_table orders by it. Add it as `copy`, or correct the table's "
                 "raw_metadata_column if the table does not carry it.",
             )
-        if ";" in mirror.get("where", ""):
+        where = mirror.get("where", "")
+        if ";" in where or _SET_OPERATOR.search(where):
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
-                f"{raw_table}'s mirror.where contains `;`",
-                "It is one predicate spliced into a CREATE TABLE AS SELECT, never a statement.",
+                f"{raw_table}'s mirror.where contains `;` or a set operator",
+                "It is one predicate spliced into a CREATE TABLE AS SELECT. A UNION there could "
+                "read production columns the allowlist leaves out.",
             )
 
 

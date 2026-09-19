@@ -42,7 +42,7 @@ tables:
       user_id: copy
       username: hash
       course_id: copy
-      full_name: nullify
+      full_name: redact
       is_opted_in_for_email: copy
       preference_set_datetime: copy
 - name: mitx_course
@@ -128,10 +128,10 @@ tables:
       username: hash
       last_login: copy
       date_joined: copy
-      profile_city: nullify
+      profile_city: redact
       profile_meta: nullify
-      profile_name: nullify
-      profile_goals: nullify
+      profile_name: redact
+      profile_goals: redact
       certificate_id: copy
       id_map_hash_id: copy
       profile_gender: copy
@@ -139,7 +139,7 @@ tables:
       enrollment_mode: copy
       profile_country: copy
       certificate_mode: copy
-      certificate_name: nullify
+      certificate_name: redact
       certificate_grade: copy
       certificate_status: copy
       enrollment_created: copy
@@ -150,7 +150,7 @@ tables:
       profile_year_of_birth: nullify
       certificate_distinction: copy
       certificate_verify_uuid: hash
-      profile_mailing_address: nullify
+      profile_mailing_address: redact
       certificate_created_date: copy
       certificate_download_url: nullify
       certificate_download_uuid: hash

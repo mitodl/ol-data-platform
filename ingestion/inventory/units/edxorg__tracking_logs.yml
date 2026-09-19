@@ -48,6 +48,9 @@ tables:
       _ab_source_file_last_modified: copy
     # 2.2B rows and 245 GB whole. The last 30 days of syncs, measured back from
     # the newest one so a paused feed still copies rows. Epoch milliseconds.
+    # edx.user.settings.changed carries old and new emails, names and addresses
+    # in `event`, which no column mode can mask, and no model reads it.
     where: >-
       _airbyte_extracted_at >=
       (SELECT max(_airbyte_extracted_at) FROM {source}) - 2592000000
+      AND event_type <> 'edx.user.settings.changed'

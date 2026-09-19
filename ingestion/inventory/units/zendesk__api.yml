@@ -137,7 +137,7 @@ tables:
       url: copy
       name: copy
       tags: copy
-      notes: nullify
+      notes: redact
       group_id: copy
       created_at: copy
       deleted_at: copy
@@ -209,23 +209,6 @@ tables:
   primary_key:
   - - id
   modeled: true
-  mirror:
-    columns:
-      _airbyte_extracted_at: copy
-      id: copy
-      via: nullify
-      body: nullify
-      type: copy
-      public: copy
-      uploads: nullify
-      audit_id: copy
-      author_id: copy
-      html_body: nullify
-      ticket_id: copy
-      timestamp: copy
-      created_at: copy
-      plain_body: nullify
-      attachments: nullify
 - name: ticket_events
   raw_table: raw__thirdparty__zendesk_support__ticket_events
   sync_mode: incremental_deduped_history
@@ -292,44 +275,6 @@ tables:
   primary_key:
   - - id
   modeled: true
-  mirror:
-    columns:
-      _airbyte_extracted_at: copy
-      id: copy
-      url: copy
-      via: nullify
-      tags: copy
-      type: copy
-      due_at: copy
-      status: copy
-      subject: nullify
-      brand_id: copy
-      group_id: copy
-      priority: copy
-      is_public: copy
-      recipient: hash
-      created_at: copy
-      problem_id: copy
-      updated_at: copy
-      assignee_id: copy
-      description: nullify
-      raw_subject: nullify
-      email_cc_ids: copy
-      follower_ids: copy
-      requester_id: copy
-      submitter_id: copy
-      custom_fields: nullify
-      has_incidents: copy
-      ticket_form_id: copy
-      organization_id: copy
-      collaborator_ids: copy
-      custom_status_id: copy
-      allow_attachments: copy
-      allow_channelback: copy
-      generated_timestamp: copy
-      satisfaction_rating: nullify
-      sharing_agreement_ids: copy
-      from_messaging_channel: copy
 - name: topics
   raw_table: raw__thirdparty__zendesk_support__topics
   sync_mode: full_refresh_overwrite
@@ -367,24 +312,24 @@ tables:
       _airbyte_extracted_at: copy
       id: copy
       url: copy
-      name: nullify
+      name: redact
       role: copy
       tags: copy
-      alias: nullify
+      alias: redact
       email: hash
-      notes: nullify
-      phone: nullify
+      notes: redact
+      phone: redact
       photo: nullify
       active: copy
       locale: copy
       shared: copy
-      details: nullify
+      details: redact
       verified: copy
       chat_only: copy
       locale_id: copy
       moderator: copy
       role_type: copy
-      signature: nullify
+      signature: redact
       suspended: copy
       time_zone: copy
       created_at: copy

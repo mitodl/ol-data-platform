@@ -199,15 +199,23 @@ class TestMirrorRules:
         assert "drops its raw metadata column '_dlt_load_id'" in _messages(report)
 
     def test_unknown_mode_is_rejected_by_the_schema(self, inventory: Path) -> None:
-        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "redact"}}))
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "scramble"}}))
         report = _run(inventory)
-        assert "redact" in _messages(report)
+        assert "scramble" in _messages(report)
 
-    def test_where_is_a_predicate_not_a_statement(self, inventory: Path) -> None:
-        mirror = {"columns": {"_dlt_load_id": "copy"}, "where": "true; DROP TABLE x"}
+    @pytest.mark.parametrize(
+        "where",
+        [
+            "true; DROP TABLE x",
+            "true) UNION ALL SELECT email FROM ol_data_lake_production.db.t WHERE (true",
+        ],
+    )
+    def test_where_is_a_predicate_not_a_statement(self, inventory: Path, where: str) -> None:
+        # A UNION would read production columns the allowlist leaves out.
+        mirror = {"columns": {"_dlt_load_id": "copy"}, "where": where}
         _write(inventory, "edxorg__s3", _mirrored_unit(mirror))
         report = _run(inventory)
-        assert "mirror.where contains `;`" in _messages(report)
+        assert "contains `;` or a set operator" in _messages(report)
 
 
 class TestRules:

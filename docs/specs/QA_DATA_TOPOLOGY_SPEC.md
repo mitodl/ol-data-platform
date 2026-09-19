@@ -457,31 +457,45 @@ Each mirrored table carries a `mirror:` block in its unit file:
     columns:
       _airbyte_extracted_at: copy
       email: hash
-      first_name: nullify
+      first_name: redact
       batch_id: copy
     where: "..."        # optional
 ```
 
-`columns` is the allowlist. A production column it does not name is not copied. `copy` keeps
-the value. `hash` writes `sha2(value, 256)` and is accepted only on string columns, so a
-cast in a staging model never meets a hex digest. It keeps a key distinct and joinable within
-mirrored data. It is pseudonymization, not anonymization: an unsalted digest of a known email
-can be matched. `nullify` keeps the column with every value NULL, typed through a dead `CASE`
-branch so QA gets production's type. Staging models select PII columns by name, so a dropped
-column fails the QA build and a nullified one does not.
+`columns` is the allowlist. A production column it does not name is not copied. The modes:
+
+- `copy` keeps the value.
+- `hash` writes `sha2(nullif(value, ''), 256)`. It keeps a key distinct and joinable within
+  mirrored data. It is pseudonymization, not anonymization: an unsalted digest of a known email
+  can be matched, and a digest of a first name is trivial to reverse. Blanks become NULL, or
+  every blank username would share one digest.
+- `redact` writes the literal `'redacted'` where the value is not NULL. It carries no
+  information and keeps the column's NULLs where production has them, so a `not_null` test
+  fails in QA exactly when it would in production.
+- `nullify` keeps the column with every value NULL, typed through a dead `CASE` branch so QA
+  gets production's type. For non-string and JSON-shaped columns, where a literal would break a
+  cast or a JSON parse.
+
+`hash` and `redact` take string columns only, so a cast in a staging model never meets a hex
+digest or the word `redacted`. Staging models select PII columns by name, so a dropped column
+fails the QA build. A nullified column builds, but fails any `not_null` test on it, which is
+why string PII uses `redact`.
 
 `where` is one predicate. `{source}` stands for the production relation, so a filter can be
 measured from the table's own newest row. A paused feed then still copies rows, which a filter
 on `now()` would not.
 
 `ol-dbt inventory validate` rejects a `mirror:` block on a unit whose `strategies.qa` is not
-`mirror`, a `where` containing `;`, and an allowlist without the table's resolved raw metadata
+`mirror`, a `where` containing `;` or a set operator (a `UNION` there could read production
+columns the allowlist leaves out), and an allowlist without the table's resolved raw metadata
 column. The dedup macro reads that column through the inventory, so no analysis of the model's
 SQL sees the read.
 
 The asset checks every table's declaration in the unit against `DESCRIBE` of the production
-table before it drops any QA copy. An allowlisted column that production lacks, or `hash` on a
-non-string column, fails the run with the whole unit's QA copies still in place.
+table before it drops any QA copy. An allowlisted column that production lacks, or `hash` or
+`redact` on a non-string column, fails the run with the whole unit's QA copies still in place.
+A `where` or CTAS that fails at run time is different: it fails after that table's `DROP`, so
+the unit is left partly refreshed and the failed table absent.
 
 ### What was not built
 
@@ -494,19 +508,20 @@ build of that staging model with the column's name, which is loud and in the rig
 
 ### The allowlists
 
-27 tables across 9 units. Each allowlist is the columns the reading models name, found by
+25 tables across 9 units. Each allowlist is the columns the reading models name, found by
 text-matching the production column list against each model and the macros it calls, plus the
 raw metadata column. Unread columns are dropped, which is how `mitx_person_course`'s `ip`,
 `city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
 masked:
 
-- `hash`: emails, usernames, tracking-log session ids, zendesk ticket `recipient`, and the
-  certificate key and uuids in `mitx_user_info_combo` (edX's public certificate pages, keyed by
-  those, show the learner's name).
-- `nullify`: names, street address, city, zip code, phone, IP, year of birth, profile goals and
-  mailing address, certificate download URLs, zendesk ticket and comment bodies, subjects,
-  `via`, `custom_fields`, attachments and user notes, salesforce `nextstep` and line-item
-  `description`.
+- `hash`: emails, usernames, tracking-log session ids, and the certificate key and uuids in
+  `mitx_user_info_combo` (edX's public certificate pages, keyed by those, show the learner's
+  name).
+- `redact`: names, street address, city, zip code, job title and company, phone, alias,
+  signature and zendesk user `details`, profile goals and mailing address, certificate name,
+  zendesk organization and user notes, salesforce `nextstep` and line-item `description`.
+- `nullify`: IP, year of birth, certificate download URLs, and the JSON-shaped `profile_meta`,
+  zendesk user `photo` and `user_fields`.
 
 Two tables are filtered:
 
@@ -515,11 +530,14 @@ Two tables are filtered:
   mirror keeps the last day of syncs by `_airbyte_extracted_at` (epoch milliseconds). That is
   one full report while syncs run a day apart, and two if a gap is shorter. The staging model
   dedupes on user, course run and program either way.
-- `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs.
+- `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
+  drops `edx.user.settings.changed` events.
 
 Tracking-log `event` and `context` payloads are copied as they are, because the staging model
-parses them. Whatever PII an event payload carries is copied with it. The 30-day filter bounds
-how much lands, but the allowlist cannot mask inside a JSON column.
+parses them. `edx.user.settings.changed` is excluded because edx-platform logs the old and new
+email, name and address in its payload, and no model reads it. Forum events carry post bodies
+and are kept, because `tfact_discussion_events` reads them. That text is copied into QA. The
+30-day filter bounds how much lands, but no column mode can mask inside a JSON payload.
 
 Not declared, so not mirrored:
 
@@ -530,6 +548,10 @@ Not declared, so not mirrored:
   `raw__edxorg__s3__course_xml_blocks`, and edxorg/mysql's `auth_userprofile`,
   `courseware_studentmodule`, `student_courseenrollment` and `student_courseaccessrole`.
 - Unmodeled tables (most of zendesk, salesforce `Account`), which nothing reads.
+- zendesk `tickets` and `ticket_comments`. Their `via` JSON holds the requester's email at
+  `$.source.from.address`, and the staging models parse `$.channel` from it into a column with
+  a `not_null` test. `copy` leaks the email, and `redact` or `nullify` fail the test. A mode that
+  keeps named JSON keys would fix both, and is left as a follow-up.
 
 The salesforce `Opportunity` and `OpportunityLineItem` tables declared `_airbyte_emitted_at`
 as their raw metadata column, as if they were still on Airbyte's v1 destination. Production
@@ -549,8 +571,9 @@ resource: an FE lost mid-statement can leave the table behind, and a retry would
 
 The `DROP` goes through the Iceberg catalog, so it cannot remove a Glue entry that is not an
 Iceberg table, and the CTAS then fails on the name. One mirrored name had such an entry in QA:
-`raw__irx__edxorg__bigquery__email_opt_in`, a legacy JSON table last written 2024-08-26. It has
-to be deleted from QA Glue before the irx mirror first runs.
+`raw__irx__edxorg__bigquery__email_opt_in`, a legacy JSON table last written 2024-08-26. Its Glue
+entry was deleted on 2026-09-19. The JSON files under
+`s3://ol-data-lake-raw-qa/raw/irx/edxorg/bigquery/email_opt_in/` were left in place.
 
 §1 called for a copy-time stamp in table metadata. The CTAS writes a single snapshot, and
 `ol-dbt inventory observe` already reads that snapshot's time as the copy time. So no separate

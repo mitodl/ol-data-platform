@@ -38,8 +38,8 @@ tables:
       email: hash
       user id: copy
       username: hash
-      last name: nullify
-      first name: nullify
+      last name: redact
+      first name: redact
       entitlements: copy
       purchase date: copy
       expiration date: copy

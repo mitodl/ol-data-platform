@@ -100,10 +100,19 @@ def mirror_tables(units: list[Unit]) -> dict[str, list[MirrorTable]]:
     return grouped
 
 
+STRING_ONLY_MODES = frozenset({"hash", "redact"})
+REDACTED = "redacted"
+
+
 def _expression(column: str, mode: str) -> str:
     quoted = quote(column)
     if mode == "hash":
-        return f"sha2({quoted}, 256) AS {quoted}"
+        # A blank would otherwise hash to one constant digest, and every blank
+        # username would become the same pseudo-user.
+        return f"sha2(nullif({quoted}, ''), 256) AS {quoted}"
+    if mode == "redact":
+        # NULL stays NULL, so a not_null test sees what it would see in production.
+        return f"CASE WHEN {quoted} IS NULL THEN NULL ELSE '{REDACTED}' END AS {quoted}"
     if mode == "nullify":
         # A bare NULL would be typed NULL_TYPE and change the column's type in
         # QA. The dead branch carries the production column's type instead.
@@ -117,25 +126,27 @@ def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> Mirro
     *production_types* maps column name to StarRocks type, as ``DESCRIBE``
     reports it. The declaration is checked against it first: an allowlisted
     column production does not have means the declaration is stale, and
-    ``hash`` on a non-string column would change the column's type under the
-    staging models that cast it.
+    ``hash`` or ``redact`` on a non-string column would change the column's
+    type under the staging models that cast it.
     """
     types = {name.lower(): kind.lower() for name, kind in production_types.items()}
     missing = sorted(column for column in table.columns if column.lower() not in types)
     if missing:
         msg = f"{table.raw_table}: mirror.columns names {missing}, which production does not have"
         raise MirrorDeclarationError(msg)
-    unhashable = sorted(
+    not_strings = sorted(
         column
         for column, mode in table.columns.items()
-        if mode == "hash" and not types[column.lower()].startswith(_STRING_TYPE_PREFIXES)
+        if mode in STRING_ONLY_MODES and not types[column.lower()].startswith(_STRING_TYPE_PREFIXES)
     )
-    if unhashable:
-        msg = f"{table.raw_table}: `hash` needs a string column, and {unhashable} are not"
+    if not_strings:
+        msg = f"{table.raw_table}: `hash` and `redact` need string columns, and {not_strings} are not"
         raise MirrorDeclarationError(msg)
 
     select_list = ",\n    ".join(_expression(column, mode) for column, mode in table.columns.items())
-    where = f"\nWHERE {table.where.replace(SOURCE_PLACEHOLDER, table.source)}" if table.where else ""
+    # Parenthesized so an OR in the predicate keeps its meaning if anything is
+    # ever combined with it. `inventory validate` rejects set operators in it.
+    where = f"\nWHERE ({table.where.replace(SOURCE_PLACEHOLDER, table.source)})" if table.where else ""
     hint = f"/*+ SET_VAR(query_timeout = {STATEMENT_TIMEOUT_SECONDS}, insert_timeout = {STATEMENT_TIMEOUT_SECONDS}) */"
     sql = f"CREATE TABLE {table.target}\nAS SELECT {hint}\n    {select_list}\nFROM {table.source}{where}"
     kept = {column.lower() for column in table.columns}

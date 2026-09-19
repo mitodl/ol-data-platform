@@ -39,18 +39,18 @@ tables:
       deferred: copy
       function: copy
       industry: copy
-      job_title: copy
-      last_name: nullify
-      first_name: nullify
+      job_title: redact
+      last_name: redact
+      first_name: redact
       gdpr_agree: copy
       student_id: copy
-      company_name: copy
+      company_name: redact
       work_exp_slab: copy
       batch_end_date: copy
       wrike_run_code: copy
       batch_start_date: copy
-      residential_city: nullify
+      residential_city: redact
       gdpr_consent_date: copy
       residential_state: copy
-      residential_address: nullify
-      residential_zip_code: nullify
+      residential_address: redact
+      residential_zip_code: redact
