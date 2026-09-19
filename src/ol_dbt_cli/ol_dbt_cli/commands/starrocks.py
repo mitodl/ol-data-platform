@@ -94,7 +94,7 @@ _ENVS: dict[str, dict[str, Any]] = {
     # why `local` is coming rather than this being the end state.
     "dev": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
+        "eks_context": "data-qa",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
@@ -104,7 +104,7 @@ _ENVS: dict[str, dict[str, Any]] = {
     },
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
+        "eks_context": "data-qa",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
@@ -114,7 +114,7 @@ _ENVS: dict[str, dict[str, Any]] = {
     },
     "production": {
         "host": "lakehouse.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-production",
+        "eks_context": "data-production",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-production.odl.mit.edu",
@@ -124,7 +124,7 @@ _ENVS: dict[str, dict[str, Any]] = {
     },
     "ci": {
         "host": "lakehouse.ci.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-ci",
+        "eks_context": "data-ci",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
