@@ -10,7 +10,7 @@ Obtains credentials for StarRocks via one of three flows:
 Output modes:
   --output token  Print the raw access token / password
   --output env    Emit shell export statements (eval-able)
-  --output exec   Exec a command with credentials in the environment
+  --output exec   Run a command with credentials in the environment
   --output mysql  Open an interactive mysql session
 
 Tokens from the browser flow are cached in ~/.cache/starrocks-auth/<env>.json
@@ -629,7 +629,11 @@ def _output_exec(
         env["STARROCKS_PASSWORD"] = password
     else:
         env["STARROCKS_TOKEN"] = token
-    os.execvpe(cmd[0], cmd, env)  # noqa: S606
+    # A child process rather than exec: exec replaces this interpreter, so the
+    # atexit hook that stops --port-forward's kubectl never runs and the tunnel
+    # outlives the command, holding port 9030 against the next run.
+    result = subprocess.run(cmd, env=env, check=False)  # noqa: S603
+    sys.exit(result.returncode)
 
 
 def _mysql_supports_openid_connect() -> bool:
@@ -780,7 +784,7 @@ def main() -> None:
         "cmd",
         nargs=argparse.REMAINDER,
         metavar="CMD",
-        help="Command to exec (with --output exec); separate with --",
+        help="Command to run (with --output exec); separate with --",
     )
     args = parser.parse_args()
 
