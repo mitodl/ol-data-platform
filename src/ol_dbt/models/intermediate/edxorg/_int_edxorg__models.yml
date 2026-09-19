@@ -981,3 +981,249 @@ models:
   - name: credit_hours
     description: str, the number of credit hours that learners who pass the course
       earn.
+
+- name: int__edxorg__mitx_learn_program_course_runs
+  description: >
+    One row per course run of each program course in the latest edX programs API
+    extraction, as the programs API reports it. MIT Learn derives a program's dates,
+    price, pace and availability from these runs.
+  columns:
+  - name: program_uuid
+    description: str, the program
+    tests:
+    - not_null
+  - name: course_key
+    description: str, the course, {org}+{course}
+    tests:
+    - not_null
+  - name: run_key
+    description: str, the run's key
+  - name: run_start_on
+    description: str, ISO 8601 run start as the API gives it
+  - name: run_end_on
+    description: str, ISO 8601 run end
+  - name: run_enrollment_start_on
+    description: str, ISO 8601 enrollment start
+  - name: run_enrollment_end_on
+    description: str, ISO 8601 enrollment end
+  - name: run_status
+    description: str, edX run status, e.g. published
+  - name: run_pacing_type
+    description: str, self_paced or instructor_paced
+  - name: run_availability
+    description: str, edX availability label, e.g. Current, Archived
+  - name: run_is_published
+    description: boolean, published and open for enrollment, which is what MIT Learn
+      counts as a published run
+    tests:
+    - not_null
+  - name: run_min_paid_price
+    description: decimal, the run's cheapest seat not priced 0.00, null if none
+  - name: run_first_seat_currency
+    description: str, currency of the run's first seat
+
+- name: int__edxorg__mitx_learn_course_best_runs
+  description: >
+    One row per MITx edX.org catalog course as MIT Learn's mit_edx course ETL loads
+    it, with its best run: of the published runs, the earliest-starting one open for
+    enrollment now, else the next to start, else the latest to have started.
+    Evaluated when built.
+  columns:
+  - name: course_readable_id
+    description: str, the course key
+    tests:
+    - not_null
+    - unique
+  - name: is_published
+    description: boolean, true when any of the course's runs is published
+    tests:
+    - not_null
+  - name: best_run_readable_id
+    description: str, the best run's key, null for an unpublished course
+  - name: best_run_min_weekly_hours
+    description: int, lower weekly hours of the best run, null if none
+  - name: best_run_max_weekly_hours
+    description: int, upper weekly hours of the best run, null if none
+  - name: best_run_max_weeks
+    description: int, the best run's weeks to complete, null if none
+  - name: best_run_instructors_json
+    description: str, JSON array of the best run's staff (first_name, last_name)
+
+- name: int__edxorg__mitx_learn_programs
+  description: >
+    The edX.org programs MIT Learn lists, with the program-level fields and run
+    aggregates MIT Learn's legacy mit_edx programs ETL derived from the programs API.
+    Evaluated when built.
+  columns:
+  - name: readable_id
+    description: str, the program's edX uuid
+    tests:
+    - not_null
+    - unique
+  - name: title
+    description: str, program title
+  - name: description
+    description: str, the program's subtitle
+  - name: url
+    description: str, marketing URL
+  - name: image_url
+    description: str, medium banner image URL
+  - name: last_modified
+    description: str, ISO 8601 last modification
+  - name: level
+    description: str, MIT Learn level code, null if the override isn't one
+  - name: start_date
+    description: str, earliest start of a published searchable run
+  - name: end_date
+    description: str, latest end of such a run
+  - name: enrollment_start
+    description: str, earliest enrollment start of such a run
+  - name: enrollment_end
+    description: str, latest enrollment end of such a run
+  - name: price
+    description: decimal, summed course prices
+  - name: currency
+    description: str, the first course's price currency
+  - name: pace
+    description: array of str, pacing types across the courses
+  - name: availability
+    description: str, dated, anytime or null
+  - name: course_readable_ids
+    description: array of str, course keys in API order
+
+- name: int__edxorg__mitx_learn_program_rollups
+  description: >
+    What each listed edX.org program takes from the courses MIT Learn publishes:
+    topics through the MIT Learn topic crosswalk, summed weeks and averaged weekly
+    hours from each course's best run.
+  columns:
+  - name: readable_id
+    description: str, the program's edX uuid
+    tests:
+    - not_null
+    - unique
+  - name: topics
+    description: array of str, MIT Learn topic names
+  - name: duration
+    description: str, e.g. 22 weeks, empty if none
+  - name: min_weeks
+    description: int, the summed weeks
+  - name: max_weeks
+    description: int, the summed weeks
+  - name: time_commitment
+    description: str, e.g. 4-5 hours/week, empty if none
+  - name: min_weekly_hours
+    description: int, lower averaged weekly hours
+  - name: max_weekly_hours
+    description: int, higher averaged weekly hours
+
+- name: int__edxorg__mitx_learn_program_instructors
+  description: >
+    Distinct instructors of each listed edX.org program: staff of the best runs of
+    the
+    program's published courses, positioned by last name.
+  columns:
+  - name: program_uuid
+    description: str, the program
+    tests:
+    - not_null
+  - name: first_name
+    description: str, first name
+  - name: last_name
+    description: str, last name
+  - name: full_name
+    description: str, first and last name
+    tests:
+    - not_null
+  - name: instructor_position
+    description: int, 1-based position in the program
+    tests:
+    - not_null
+
+unit_tests:
+- name: test_int__edxorg__mitx_learn_course_best_runs_picks_like_mit_learn
+  description: >
+    MIT Learn's best-run rule: a published run open for enrollment now wins, else
+    the
+    next to start, else the latest to have started. Unpublished runs never count,
+    and
+    a course with none is unpublished.
+  model: int__edxorg__mitx_learn_course_best_runs
+  given:
+  - input: ref('stg__edxorg__api__courserun')
+    rows:
+    - {course_readable_id: a, courserun_readable_id: a-past, courserun_title: t, courserun_is_published: true,
+      courserun_start_on: "2000-01-01T00:00:00Z", courserun_end_on: "2000-06-01T00:00:00Z",
+      courserun_min_weekly_hours: 1}
+    - {course_readable_id: a, courserun_readable_id: a-open, courserun_title: t, courserun_is_published: true,
+      courserun_start_on: "2001-01-01T00:00:00Z", courserun_enrollment_end_on: "2099-01-01T00:00:00Z",
+      courserun_min_weekly_hours: 4, courserun_weeks_to_complete: 6}
+    - {course_readable_id: a, courserun_readable_id: a-next, courserun_title: t, courserun_is_published: true,
+      courserun_start_on: "2098-01-01T00:00:00Z", courserun_min_weekly_hours: 9}
+    - {course_readable_id: b, courserun_readable_id: b-past, courserun_title: t, courserun_is_published: true,
+      courserun_start_on: "2001-01-01T00:00:00Z", courserun_end_on: "2001-06-01T00:00:00Z"}
+    - {course_readable_id: b, courserun_readable_id: b-later, courserun_title: t,
+      courserun_is_published: true, courserun_start_on: "2099-01-01T00:00:00Z"}
+    - {course_readable_id: b, courserun_readable_id: b-next, courserun_title: t, courserun_is_published: true,
+      courserun_start_on: "2098-01-01T00:00:00Z", courserun_min_weekly_hours: 3, courserun_max_weekly_hours: 5}
+    - {course_readable_id: c, courserun_readable_id: c-old, courserun_title: t, courserun_is_published: true,
+      courserun_start_on: "2001-01-01T00:00:00Z", courserun_end_on: "2001-06-01T00:00:00Z"}
+    - {course_readable_id: c, courserun_readable_id: c-newer, courserun_title: t,
+      courserun_is_published: true, courserun_start_on: "2002-01-01T00:00:00Z", courserun_end_on: "2002-06-01T00:00:00Z"}
+    - {course_readable_id: c, courserun_readable_id: c-hidden, courserun_title: t,
+      courserun_is_published: false, courserun_start_on: "2003-01-01T00:00:00Z", courserun_end_on: "2003-06-01T00:00:00Z"}
+    - {course_readable_id: d, courserun_readable_id: d-only, courserun_title: t, courserun_is_published: false,
+      courserun_start_on: "2003-01-01T00:00:00Z"}
+    - {course_readable_id: e, courserun_readable_id: e-gone, courserun_title: "Run\
+        \ [delete]", courserun_is_published: true, courserun_start_on: "2003-01-01T00:00:00Z"}
+  expect:
+    rows:
+    - {course_readable_id: a, is_published: true, best_run_readable_id: a-open, best_run_min_weekly_hours: 4,
+      best_run_max_weekly_hours: 4, best_run_max_weeks: 6}
+    - {course_readable_id: b, is_published: true, best_run_readable_id: b-next, best_run_min_weekly_hours: 3,
+      best_run_max_weekly_hours: 5, best_run_max_weeks: null}
+    - {course_readable_id: c, is_published: true, best_run_readable_id: c-newer, best_run_min_weekly_hours: null,
+      best_run_max_weekly_hours: null, best_run_max_weeks: null}
+    - {course_readable_id: d, is_published: false, best_run_readable_id: null, best_run_min_weekly_hours: null,
+      best_run_max_weekly_hours: null, best_run_max_weeks: null}
+
+- name: test_int__edxorg__mitx_learn_programs_lists_and_aggregates
+  description: >
+    Only active, non-MicroMasters MITx/MITx_PRO programs from the latest extraction
+    are listed. Dates and price come from published runs of searchable courses; pace
+    and availability from every course's published runs.
+  model: int__edxorg__mitx_learn_programs
+  given:
+  - input: ref('stg__edxorg__s3__programs')
+    rows:
+    - {program_uuid: p, program_title: P, program_type: XSeries, program_status: active,
+      program_organization: "MITx", program_retrieved_at: "t2", program_level_type_override: "Graduate"}
+    - {program_uuid: old, program_title: Old, program_type: XSeries, program_status: active,
+      program_organization: "MITx", program_retrieved_at: "t1"}
+    - {program_uuid: mm, program_title: MM, program_type: MicroMasters, program_status: active,
+      program_organization: "MITx", program_retrieved_at: "t2"}
+    - {program_uuid: other, program_title: Other, program_type: XSeries, program_status: active,
+      program_organization: "SmithsonianX", program_retrieved_at: "t2"}
+  - input: ref('stg__edxorg__s3__program_courses')
+    rows:
+    - {program_uuid: p, course_key: c1, course_position: 1, course_is_excluded_from_search: false,
+      program_course_retrieved_at: "t2"}
+    - {program_uuid: p, course_key: c2, course_position: 2, course_is_excluded_from_search: true,
+      program_course_retrieved_at: "t2"}
+    - {program_uuid: p, course_key: dropped, course_position: 3, course_is_excluded_from_search: false,
+      program_course_retrieved_at: "t1"}
+  - input: ref('int__edxorg__mitx_learn_program_course_runs')
+    rows:
+    - {program_uuid: p, course_key: c1, run_key: r1, run_start_on: "2098-01-01T00:00:00Z",
+      run_end_on: "2098-06-01T00:00:00Z", run_pacing_type: instructor_paced, run_availability: Upcoming,
+      run_is_published: true, run_min_paid_price: 100, run_first_seat_currency: USD}
+    - {program_uuid: p, course_key: c1, run_key: r0, run_start_on: "2097-01-01T00:00:00Z",
+      run_end_on: "2097-06-01T00:00:00Z", run_pacing_type: instructor_paced, run_availability: Upcoming,
+      run_is_published: false, run_min_paid_price: 5, run_first_seat_currency: USD}
+    - {program_uuid: p, course_key: c2, run_key: r2, run_start_on: "2001-01-01T00:00:00Z",
+      run_end_on: "2099-06-01T00:00:00Z", run_pacing_type: self_paced, run_availability: Current,
+      run_is_published: true, run_min_paid_price: 50, run_first_seat_currency: USD}
+  expect:
+    rows:
+    - {readable_id: p, level: graduate, start_date: "2098-01-01T00:00:00Z", end_date: "2098-06-01T00:00:00Z",
+      price: 100, currency: USD, availability: dated}

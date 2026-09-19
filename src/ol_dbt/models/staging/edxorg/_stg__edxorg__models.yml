@@ -1132,6 +1132,15 @@ models:
       , HarvardX
   - name: program_updated_on
     description: str, timestamp when the data was last modified
+  - name: program_marketing_url
+    description: str, the program's edX marketing URL
+  - name: program_banner_image_url
+    description: str, URL of the program's medium banner image
+  - name: program_level_type_override
+    description: str, the program's level override, e.g. Intermediate
+  - name: program_retrieved_at
+    description: str, when the extraction that wrote this row ran. Programs with the
+      latest value are the ones the programs API currently lists.
 
 - name: stg__edxorg__s3__program_courses
   description: this table includes all the program courses running on edX.org
@@ -1152,6 +1161,18 @@ models:
     description: str, short description of the course
   - name: course_type
     description: str, type of the course. e.g., audit, verified, professional
+  - name: course_key
+    description: str, the course key as the programs API gives it, {org}+{course}
+  - name: course_position
+    description: int, 1-based position of the course in the program
+  - name: course_is_excluded_from_search
+    description: boolean, whether edX excludes the course from search
+  - name: course_runs_json
+    description: str, JSON array of the course's runs as the programs API reports
+      them
+  - name: program_course_retrieved_at
+    description: str, when the extraction that wrote this row ran. Rows with the latest
+      value are the programs' current courses.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1274,6 +1295,8 @@ models:
     description: timestamp, the date and time the course was last modified.
     tests:
     - not_null
+  - name: courserun_weeks_to_complete
+    description: int, weeks the run takes to complete
 
 - name: stg__edxorg__s3__course_certificate_signatory
   description: edx course certificate signatory data

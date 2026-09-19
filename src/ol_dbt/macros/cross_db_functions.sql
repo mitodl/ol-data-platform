@@ -784,3 +784,37 @@
         , '&#039;', ''''), '&#39;', ''''), '&apos;', ''''), '&quot;', '"'), '&lt;', '<')
         , '&gt;', '>'), '&amp;', '&')
 {%- endmacro %}
+
+
+{#
+    json_array_field_values: the values of `field` in each object of a JSON array
+    string, as an array of varchar. '[{"name": "a"}, {"name": "b"}]' -> ['a', 'b'].
+#}
+{% macro json_array_field_values(json_col, field) -%}
+    {{ adapter.dispatch('json_array_field_values', 'open_learning')(json_col, field) }}
+{%- endmacro %}
+
+{% macro default__json_array_field_values(json_col, field) -%}
+    cast(json_parse(json_query({{ json_col }}, 'lax $.{{ field }}' with array wrapper)) as array(varchar))  --noqa
+{%- endmacro %}
+
+{% macro duckdb__json_array_field_values(json_col, field) -%}
+    cast(json_extract_string({{ json_col }}, '$[*].{{ field }}') as varchar[])
+{%- endmacro %}
+
+
+{#
+    json_array_string: the JSON array at `json_path` inside a JSON value, as a varchar
+    JSON string, so it can be passed to unnest_json_array.
+#}
+{% macro json_array_string(json_col, json_path) -%}
+    {{ adapter.dispatch('json_array_string', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_array_string(json_col, json_path) -%}
+    json_format(json_extract({{ json_col }}, {{ json_path }}))
+{%- endmacro %}
+
+{% macro duckdb__json_array_string(json_col, json_path) -%}
+    cast(json_extract({{ json_col }}, {{ json_path }}) as varchar)
+{%- endmacro %}

@@ -60,6 +60,27 @@ class MITLearnApiClient(BaseApiClient):
         """Send webhook notification for an OVS include_in_learn video."""
         return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
 
+    def get_published_programs(self, platform: str) -> list[dict[str, Any]]:
+        """Return every program MIT Learn currently publishes for ``platform``.
+
+        Reads MIT Learn's public programs API, which lists published programs only,
+        following its pagination to the end.
+
+        Args:
+            platform: MIT Learn platform code, e.g. ``edx``.
+        """
+        programs: list[dict[str, Any]] = []
+        url: str | None = f"{self.base_url}/api/v1/programs/"
+        params: dict[str, Any] | None = {"platform": platform, "limit": 100}
+        while url:
+            response = self.http_client.get(url, params=params)
+            response.raise_for_status()
+            page = response.json()
+            programs.extend(page["results"])
+            # "next" is a complete URL that already carries the query parameters
+            url, params = page["next"], None
+        return programs
+
     def notify_learning_resources(
         self,
         resources: list[dict[str, Any]],

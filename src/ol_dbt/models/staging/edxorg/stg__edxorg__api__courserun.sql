@@ -24,6 +24,7 @@ with source as (
         , if(staff = '[]', null, staff) as courserun_instructors
         , if(seats = '[]', null, seats) as courserun_enrollment_modes
         , {{ json_query_string('image', "'$.url'") }} as courserun_image_url
+        , weeks_to_complete as courserun_weeks_to_complete
         , if(status = 'published' and is_enrollable, true, false) as courserun_is_published
         , case
             when pacing_type = 'self_paced' then true
