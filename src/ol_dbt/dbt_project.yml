@@ -56,6 +56,8 @@ vars:
     # Entitlements expiring before this date are not migrated to MITx Online
     edxorg_migration_entitlement_expiration_cutoff: "2026-01-01"
     ocw_production_url: "https://ocw.mit.edu/"
+    # MIT PE feed paths are root-relative (/courses/...), so no trailing slash
+    mitpe_url: "https://professional.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
     # Base URLs for Wagtail-uploaded media files (prepended to wagtailimages_image.file paths).
