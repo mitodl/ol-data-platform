@@ -117,7 +117,12 @@ def _expression(column: str, mode: str) -> str:
         # A bare NULL would be typed NULL_TYPE and change the column's type in
         # QA. The dead branch carries the production column's type instead.
         return f"CASE WHEN FALSE THEN {quoted} END AS {quoted}"
-    return quoted
+    if mode == "copy":
+        return quoted
+    # The asset reads the inventory without the JSON Schema, so a typo'd mode
+    # must fail here rather than copy a PII column in the clear.
+    msg = f"{column}: unknown mirror mode {mode!r}"
+    raise MirrorDeclarationError(msg)
 
 
 def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> MirrorStatement:

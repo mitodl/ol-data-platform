@@ -70,6 +70,12 @@ class TestRenderMirror:
         with pytest.raises(MirrorDeclarationError, match="need string columns"):
             render_mirror(_table({"birth_year": mode}), PRODUCTION_TYPES)
 
+    def test_an_unknown_mode_fails_closed(self) -> None:
+        # The asset reads the inventory without the JSON Schema, so this is the
+        # only thing between a typo'd mode and a PII column copied in the clear.
+        with pytest.raises(MirrorDeclarationError, match="unknown mirror mode 'hsah'"):
+            render_mirror(_table({"email": "hsah"}), PRODUCTION_TYPES)
+
     def test_redact_keeps_nulls_null(self) -> None:
         # So a not_null test on the column fails in QA exactly when it would in production.
         statement = render_mirror(_table({"last_name": "redact"}), PRODUCTION_TYPES)

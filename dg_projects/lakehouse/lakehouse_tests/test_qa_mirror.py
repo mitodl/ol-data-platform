@@ -5,10 +5,11 @@ here is the Dagster side: the statements run in an order that leaves no stale
 copy behind, and nothing but a person can trigger a refresh.
 """
 
+from pathlib import Path
 from typing import Any
 
 import pytest
-from dagster import build_asset_context
+from dagster import Failure, build_asset_context
 from lakehouse.assets.qa_mirror import _mirror_asset, build_qa_mirror_assets
 from ol_dbt_cli.lib.qa_mirror import MirrorDeclarationError, MirrorTable
 
@@ -102,3 +103,13 @@ def test_the_real_inventory_builds_one_manual_asset_per_mirrored_unit() -> None:
             condition is None
             for condition in asset.automation_conditions_by_key.values()
         )
+
+
+def test_a_missing_inventory_is_a_failing_asset_not_an_empty_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("lakehouse.assets.qa_mirror.INVENTORY_DIR", tmp_path)
+    (asset,) = build_qa_mirror_assets()
+    assert asset.key.to_user_string() == "qa_mirror/inventory_missing"
+    with pytest.raises(Failure, match="No inventory units found"):
+        asset()

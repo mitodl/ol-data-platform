@@ -24,6 +24,7 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     AssetsDefinition,
+    Failure,
     MaterializeResult,
     MetadataValue,
     asset,
@@ -112,9 +113,27 @@ def _mirror_asset(unit: str, tables: list[MirrorTable]) -> AssetsDefinition:
     return _mirror
 
 
+@asset(
+    key=AssetKey(["qa_mirror", "inventory_missing"]),
+    group_name="qa_mirror",
+    description="Stands in for the mirror assets when the inventory is missing.",
+)
+def qa_mirror_inventory_missing() -> None:
+    msg = f"No inventory units found under {INVENTORY_DIR}, so no QA mirror is defined."
+    raise Failure(description=msg)
+
+
 def build_qa_mirror_assets() -> list[AssetsDefinition]:
-    """One asset per unit the inventory mirrors that declares at least one table."""
+    """One asset per unit the inventory mirrors that declares at least one table.
+
+    A missing inventory yields one asset that fails naming the path, rather than
+    no assets at all, which would look like a healthy code location with every
+    mirror gone. It is not raised here: failing at import would take the whole
+    code location down (see lakehouse/lib/inventory.py).
+    """
+    units = load_units(INVENTORY_DIR)
+    if not units:
+        return [qa_mirror_inventory_missing]
     return [
-        _mirror_asset(unit, tables)
-        for unit, tables in mirror_tables(load_units(INVENTORY_DIR)).items()
+        _mirror_asset(unit, tables) for unit, tables in mirror_tables(units).items()
     ]
