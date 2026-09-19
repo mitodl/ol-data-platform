@@ -53,6 +53,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
+from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
@@ -429,6 +430,11 @@ airbyte_drift_schedules = (
     ]
 )
 
+# Production only: the mirror reads production and writes QA, and QA's StarRocks
+# role is denied production Glue. Registered in no other environment, so there
+# is nothing a QA or dev code location could run against production by mistake.
+qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
+
 # The PostHog staging model is the only staging model fed by a dlt source rather
 # than an Airbyte connection. `sync_and_stage_*` jobs are generated per Airbyte
 # group, and the automation sensor target subtracts the whole `staging` group,
@@ -536,6 +542,7 @@ defs = Definitions(
             iceberg_raw_layer_maintenance,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
+            *qa_mirror_assets,
         ]
     ),
     asset_checks=dbt_layer_freshness_checks,

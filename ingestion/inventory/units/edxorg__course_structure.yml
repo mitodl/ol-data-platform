@@ -18,18 +18,56 @@ tables:
   raw_table: raw__edxorg__s3__course_structure__course_certificate_signatory
   sync_mode: full_refresh_overwrite
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      name: copy
+      title: copy
+      course_id: copy
+      organization: copy
+      certificate_id: copy
+      signature_image_path: copy
+      _ab_source_file_last_modified: copy
 - name: raw__edxorg__s3__course_structure__course_metadata
   raw_table: raw__edxorg__s3__course_structure__course_metadata
   sync_mode: full_refresh_overwrite
   modeled: true
+  mirror:
+    columns:
+      title: copy
+      semester: copy
+      course_id: copy
+      course_end: copy
+      self_paced: copy
+      institution: copy
+      course_start: copy
+      course_number: copy
+      enrollment_end: copy
+      instructor_info: copy
+      enrollment_start: copy
 - name: raw__edxorg__s3__course_structure__course_policy
   raw_table: raw__edxorg__s3__course_structure__course_policy
   sync_mode: full_refresh_overwrite
   modeled: true
+  mirror:
+    columns:
+      tabs: copy
+      course_id: copy
+      self_paced: copy
+      advanced_modules: copy
+      discussions_settings: copy
+      display_coursenumber: copy
 - name: raw__edxorg__s3__course_structure__course_video
   raw_table: raw__edxorg__s3__course_structure__course_video
   sync_mode: full_refresh_overwrite
   modeled: true
+  mirror:
+    columns:
+      duration: copy
+      course_id: copy
+      edx_video_id: copy
+      video_block_id: copy
 - name: raw__edxorg__s3__course_xml_blocks
   raw_table: raw__edxorg__s3__course_xml_blocks
   sync_mode: full_refresh_overwrite
