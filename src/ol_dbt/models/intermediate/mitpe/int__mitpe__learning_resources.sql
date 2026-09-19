@@ -12,20 +12,21 @@ with source as (
 , normalized as (
     select
         course_uuid as readable_id
-        -- The feed labels most items; unlabelled ones are courses only if they grant
-        -- a Certificate of Completion.
+        -- The feed labels most items, and anything labelled other than Program is a
+        -- course. Unlabelled items are courses only if they grant a Certificate of
+        -- Completion.
         , case
             when course_resource_type is not null and course_resource_type != ''
-                then lower(course_resource_type)
+                then case when lower(course_resource_type) = 'program' then 'program' else 'course' end
             when '|' || course_certificates_raw || '|' like '%|Certificate of Completion|%'
                 then 'course'
             else 'program'
         end as resource_type
         , {{ html_unescape(regexp_replace_all('course_title', "'^\\s+|\\s+$'", "''")) }} as title
-        , concat('{{ var("mitpe_url") }}', course_url) as url
+        , {{ url_join("'" ~ var("mitpe_url") ~ "'", 'course_url') }} as url
         , case
             when course_image_src is not null and course_image_src != ''
-                then concat('{{ var("mitpe_url") }}', course_image_src)
+                then {{ url_join("'" ~ var("mitpe_url") ~ "'", 'course_image_src') }}
         end as image_url
         , course_image_alt as image_alt
         , course_description as description
@@ -48,27 +49,28 @@ with source as (
             else ''
         end as location
         , coalesce(course_duration, '') as duration
-        , {{ regexp_extract_group_or_null("lower(trim(course_duration))", "'^(\\d+)'", 1) }}
+        , {{ regexp_extract_or_null("lower(trim(course_duration))", "'^(\\d+)'", 1) }}
             as duration_min_raw
         -- A second number only counts after a separator, so "12 weeks" is not read as
         -- the range 1-2.
-        , {{ regexp_extract_group_or_null(
+        , {{ regexp_extract_or_null(
             "lower(trim(course_duration))", "'^\\d+(?:\\s*(?:to|-)+\\s*|\\s+)(\\d+)'", 1
         ) }} as duration_max_raw
         -- The first English unit anywhere in the string, else the first Spanish, French
-        -- or Italian one. Only whether it is a day or month unit matters below.
+        -- or Italian one. Only whether it is a day or month unit matters below. As in
+        -- MIT Learn's pattern, only the last alternative of each needs a separator
+        -- after it, so "mes" doesn't match inside "semesters".
         , {{ regexp_extract_or_null(
             "lower(course_duration)",
             "'half-days|half-day|hours|hour|days|day|weeks|week|months|month(\\s|/|$)'"
         ) }} as duration_english_unit
         , {{ regexp_extract_or_null(
             "lower(course_duration)",
-            "'horas|hora|días|jours|día|jour|semanas|semaines|settimanes|semana|semaine|settimane|meses|mois|mesi|mes'"
+            "'horas|hora|días|jours|día|jour|semanas|semaines|settimanes|semana|semaine|settimane|meses|mois|mesi|mes(\\s|/|$)'"
         ) }} as duration_other_unit
-        , case
-            when course_price_raw is not null and course_price_raw != ''
-                then cast({{ regexp_replace_all('course_price_raw', "'[^0-9.]'", "''") }} as decimal(12, 2))
-        end as price
+        -- A price without a usable number (e.g. "Contact us") is no price rather than
+        -- a failed build.
+        , try_cast({{ regexp_replace_all('course_price_raw', "'[^0-9.]'", "''") }} as decimal(12, 2)) as price
         -- lead instructors first, then the rest
         , {{ array_filter_nonempty(
             "split(" ~ html_unescape(
@@ -86,7 +88,7 @@ with source as (
             when duration_english_unit like '%month%' then 'month'
             when duration_english_unit is not null then 'week'
             when duration_other_unit in ('días', 'jours', 'día', 'jour') then 'day'
-            when duration_other_unit in ('meses', 'mois', 'mesi', 'mes') then 'month'
+            when trim(duration_other_unit) in ('meses', 'mois', 'mesi', 'mes') then 'month'
             when duration_other_unit is not null then 'week'
         end as duration_unit
     from normalized

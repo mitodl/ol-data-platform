@@ -755,70 +755,28 @@
 
 
 {#
-    regexp_extract_group_or_null: capture group `group_index` of the first match, or
-    NULL when there is no match (DuckDB returns '' instead; see regexp_extract_or_null).
+    local_date_to_timestamptz: midnight of a YYYY-MM-DD date string in `time_zone`, as a
+    zone-aware timestamp. Compare it with current_timestamp and render it with
+    format_timestamp_as_iso8601 on either engine.
 #}
-{% macro regexp_extract_group_or_null(subject, pattern, group_index) -%}
-    {{ adapter.dispatch('regexp_extract_group_or_null', 'open_learning')(subject, pattern, group_index) }}
+{% macro local_date_to_timestamptz(date_expr, time_zone) -%}
+    {{ adapter.dispatch('local_date_to_timestamptz', 'open_learning')(date_expr, time_zone) }}
 {%- endmacro %}
 
-{% macro default__regexp_extract_group_or_null(subject, pattern, group_index) -%}
-    regexp_extract({{ subject }}, {{ pattern }}, {{ group_index }})
+{% macro default__local_date_to_timestamptz(date_expr, time_zone) -%}
+    with_timezone(cast(cast({{ date_expr }} as date) as timestamp), '{{ time_zone }}')
 {%- endmacro %}
 
-{% macro duckdb__regexp_extract_group_or_null(subject, pattern, group_index) -%}
-    nullif(regexp_extract({{ subject }}, {{ pattern }}, {{ group_index }}), '')
-{%- endmacro %}
-
-
-{#
-    utc_now / local_date_to_utc / to_iso8601_utc: compare and render instants in UTC
-    the same way on both engines. Trino carries the zone on the value; DuckDB's
-    timezone() returns a naive timestamp, so both sides of a comparison are kept
-    naive-UTC there.
-#}
-{% macro utc_now() -%}
-    {{ adapter.dispatch('utc_now', 'open_learning')() }}
-{%- endmacro %}
-
-{% macro default__utc_now() -%}
-    current_timestamp
-{%- endmacro %}
-
-{% macro duckdb__utc_now() -%}
-    timezone('UTC', current_timestamp)
-{%- endmacro %}
-
-{# Midnight of a YYYY-MM-DD date string in `time_zone`, as a UTC instant. #}
-{% macro local_date_to_utc(date_expr, time_zone) -%}
-    {{ adapter.dispatch('local_date_to_utc', 'open_learning')(date_expr, time_zone) }}
-{%- endmacro %}
-
-{% macro default__local_date_to_utc(date_expr, time_zone) -%}
-    at_timezone(with_timezone(cast(cast({{ date_expr }} as date) as timestamp), '{{ time_zone }}'), 'UTC')
-{%- endmacro %}
-
-{% macro duckdb__local_date_to_utc(date_expr, time_zone) -%}
-    timezone('UTC', timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp)))
-{%- endmacro %}
-
-{% macro to_iso8601_utc(timestamp_expr) -%}
-    {{ adapter.dispatch('to_iso8601_utc', 'open_learning')(timestamp_expr) }}
-{%- endmacro %}
-
-{% macro default__to_iso8601_utc(timestamp_expr) -%}
-    to_iso8601({{ timestamp_expr }})
-{%- endmacro %}
-
-{% macro duckdb__to_iso8601_utc(timestamp_expr) -%}
-    strftime({{ timestamp_expr }}, '%Y-%m-%dT%H:%M:%S.%gZ')
+{% macro duckdb__local_date_to_timestamptz(date_expr, time_zone) -%}
+    timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp))
 {%- endmacro %}
 
 
 {#
     html_unescape: decode the HTML entities upstream feeds put in plain-text fields.
-    Covers the named entities plus the apostrophe forms; &amp; goes last so an
-    escaped entity (&amp;lt;) decodes once, as Python's html.unescape does.
+    Covers the entities the MIT PE feed has been seen to use, not every entity Python's
+    html.unescape knows; tests/assert_mitpe_text_has_no_html_entities.sql warns on any
+    other. &amp; goes last so an escaped entity (&amp;lt;) decodes once.
 #}
 {% macro html_unescape(string_expr) -%}
     replace(replace(replace(replace(replace(replace(replace(

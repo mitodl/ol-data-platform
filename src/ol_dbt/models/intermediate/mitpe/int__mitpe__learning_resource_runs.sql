@@ -40,9 +40,9 @@ with source as (
         readable_id
         , run_position
         , run_id
-        , {{ local_date_to_utc('start_date', 'America/New_York') }} as start_on
-        , {{ local_date_to_utc('end_date', 'America/New_York') }} as end_on
-        , {{ local_date_to_utc('enrollment_end_date', 'America/New_York') }} as enrollment_end_on
+        , {{ local_date_to_timestamptz('start_date', 'America/New_York') }} as start_on
+        , {{ local_date_to_timestamptz('end_date', 'America/New_York') }} as end_on
+        , {{ local_date_to_timestamptz('enrollment_end_date', 'America/New_York') }} as enrollment_end_on
     from runs
 )
 
@@ -59,7 +59,7 @@ select
         run_id != ''
         and (
             (end_on is null and enrollment_end_on is null)
-            or {{ utc_now() }} <= coalesce(enrollment_end_on, end_on)
+            or current_timestamp <= coalesce(enrollment_end_on, end_on)
         )
     ) as is_published
 from dated_runs
