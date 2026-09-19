@@ -1,30 +1,39 @@
 {#
   integrations__learn__mitpe_courses
-  Exposes MIT Professional Education courses for MIT Learn's ETL (Trino-pull or webhook).
+  MIT Professional Education courses for MIT Learn webhook delivery: every course
+  with at least one published run (integrations__learn__mitpe_runs). A course with
+  none is left out, which MIT Learn treats as unpublished.
   Contract: docs/learn_marts_contract.md
-
-  MIT PE has no source-system last_modified timestamp, so current_timestamp is used
-  as a conservative fallback (documented in schema YAML below).
 #}
 
-with courses as (
-    select * from {{ ref('stg__mitpe__api__courses') }}
+with resources as (
+    select * from {{ ref('int__mitpe__learning_resources') }}
+)
+
+, published_resources as (
+    select distinct readable_id
+    from {{ ref('int__mitpe__learning_resource_runs') }}
+    where is_published
 )
 
 select
-    course_readable_id                                      as readable_id
-    , course_title                                          as title
-    , {{ cast_timestamp_to_iso8601('current_timestamp') }}  as last_modified
-    , 'mitpe'                                               as etl_source
-    , course_description                                    as description
-    , concat('https://professional.mit.edu', course_url)   as url
-    , case
-        when course_image_src is not null and course_image_src != ''
-            then concat('https://professional.mit.edu', course_image_src)
-    end                                                     as image_url
-    , course_image_alt                                      as image_alt
-    , replace(course_topics_raw, '|', ', ')                 as topics
-    , true                                                  as published
-    , 'mitpe'                                               as platform
-    , 'course'                                              as resource_type
-from courses
+    resources.readable_id
+    , resources.title
+    , resources.url
+    , resources.image_url
+    , resources.image_alt
+    , resources.description
+    , resources.topics
+    , resources.delivery
+    , resources.location
+    , resources.duration
+    , resources.min_weeks
+    , resources.max_weeks
+    , resources.price
+    , resources.instructors
+    , 'mitpe' as etl_source
+    , 'mitpe' as platform
+    , 'course' as resource_type
+from resources
+inner join published_resources on resources.readable_id = published_resources.readable_id
+where resources.resource_type = 'course'
