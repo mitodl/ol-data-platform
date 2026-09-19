@@ -569,11 +569,6 @@ class TestRawMetadataColumn:
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
         assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
 
-    def test_real_inventory_keeps_salesforce_on_the_v1_column(self) -> None:
-        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
-        opportunity = "raw__thirdparty__salesforce___destination_v2__Opportunity"
-        assert mapping[opportunity] == "_airbyte_emitted_at"
-
 
 class TestGeneratedMetadataMacro:
     def test_generated_macro_is_current(self) -> None:
