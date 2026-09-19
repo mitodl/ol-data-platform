@@ -555,3 +555,18 @@ to be deleted from QA Glue before the irx mirror first runs.
 §1 called for a copy-time stamp in table metadata. The CTAS writes a single snapshot, and
 `ol-dbt inventory observe` already reads that snapshot's time as the copy time. So no separate
 property is written.
+
+### Checked on QA StarRocks (2026-09-19)
+
+The rendered SQL was run QA-to-QA, from `raw__edxorg__s3__mitx_course` into a scratch table,
+through the `admin` Vault role the production resource uses:
+
+- `DESCRIBE` on an Iceberg table returns `Field` and `Type`, which the asset reads.
+- The CTAS with the `SET_VAR(query_timeout, insert_timeout)` hint and a `{source}` subquery in
+  its `WHERE` created the table and copied all 448 rows as one `append` snapshot.
+- A nullified `BIGINT` column stayed `BIGINT` with no non-NULL values, and a hashed column was
+  64-character hex in every row.
+- `DROP TABLE ... FORCE` removed the Glue entry and the data files. It left a zero-byte
+  `data/load_spill/` marker, and because `ol-data-lake-raw-qa` is versioned the dropped files
+  remain as noncurrent versions until the bucket's 90-day `expire-noncurrent-versions` rule
+  removes them. So each refresh keeps the previous copy billed for up to 90 days.
