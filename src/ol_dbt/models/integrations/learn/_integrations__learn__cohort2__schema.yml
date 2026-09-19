@@ -54,46 +54,138 @@ models:
 
 - name: integrations__learn__mitpe_courses
   description: >
-    MIT Professional Education courses exposed for MIT Learn's ETL.
-    One row per course. Sourced from stg__mitpe__api__courses via the mitpe
-    dlt pipeline.
-    NOTE: MIT PE has no last_modified timestamp in source data; last_modified
-    is set to current_timestamp as a conservative fallback.
+    MIT Professional Education courses for MIT Learn webhook delivery, one row per
+    course with at least one published run (integrations__learn__mitpe_runs). A
+    course with none is left out, which MIT Learn treats as unpublished. Built from
+    int__mitpe__learning_resources.
   columns:
   - name: readable_id
-    description: >
-      MIT PE course URL path (used as stable identifier; MIT PE has no UUID).
-      Used for upsert matching.
+    description: str, the feed item's uuid, which MIT Learn's legacy ETL used as readable_id.
     tests: [not_null, unique]
   - name: title
-    description: Course title.
+    description: str, title with surrounding whitespace trimmed and HTML entities
+      decoded.
     tests: [not_null]
-  - name: last_modified
-    description: >
-      current_timestamp — MIT PE feeds API does not expose a modification
-      timestamp.
+  - name: url
+    description: str, absolute URL of the page on professional.mit.edu.
+  - name: image_url
+    description: str, absolute URL of the cover image, null if none.
+  - name: image_alt
+    description: str, alt text for the cover image.
+  - name: description
+    description: str, description as the feed gives it (HTML). The delivery asset
+      sanitizes it, as MIT Learn's clean_data did.
+  - name: topics
+    description: array of str, the feed's topic names, null if none. MIT Learn keeps
+      only names that are exactly one of its topics.
+  - name: delivery
+    description: str, MIT Learn delivery code (online, hybrid, in_person, offline).
     tests: [not_null]
+  - name: location
+    description: str, location for in-person and blended formats, else empty.
+  - name: duration
+    description: str, the feed's duration text, empty if none.
+  - name: min_weeks
+    description: int, lower bound of the duration in weeks, null if unparseable.
+  - name: max_weeks
+    description: int, upper bound of the duration in weeks, null if unparseable.
+  - name: price
+    description: decimal, price in USD, null if none. Applies to every run.
+  - name: instructors
+    description: array of str, instructor full names, lead instructors first. Applies
+      to every run.
   - name: etl_source
     description: Always 'mitpe'.
     tests: [not_null]
-  - name: description
-    description: Course description.
-  - name: url
-    description: Absolute URL for the course (base URL prepended to the relative path).
-  - name: image_url
-    description: Absolute URL for the course's cover image, or NULL if absent.
-  - name: image_alt
-    description: Alt text for the course's cover image, or NULL if absent.
-  - name: topics
-    description: Comma-separated topic labels (normalized from pipe-separated raw
-      field).
-  - name: published
-    description: >
-      Always true; the MIT PE feeds API only returns published courses.
   - name: platform
-    description: Always 'mitpe', matches etl_source.
+    description: Always 'mitpe'.
+    tests: [not_null]
   - name: resource_type
     description: Always 'course'.
+    tests: [not_null]
+
+- name: integrations__learn__mitpe_programs
+  description: >
+    MIT Professional Education programs for MIT Learn webhook delivery, one row per
+    program with at least one published run, with the delivered courses it contains.
+    Built from int__mitpe__learning_resources and int__mitpe__program_courses.
+  columns:
+  - name: readable_id
+    description: str, the feed item's uuid.
+    tests: [not_null, unique]
+  - name: title
+    description: str, title with surrounding whitespace trimmed and HTML entities
+      decoded.
+    tests: [not_null]
+  - name: url
+    description: str, absolute URL of the page on professional.mit.edu.
+  - name: image_url
+    description: str, absolute URL of the cover image, null if none.
+  - name: image_alt
+    description: str, alt text for the cover image.
+  - name: description
+    description: str, description as the feed gives it (HTML). The delivery asset
+      sanitizes it, as MIT Learn's clean_data did.
+  - name: topics
+    description: array of str, the feed's topic names, null if none. MIT Learn keeps
+      only names that are exactly one of its topics.
+  - name: delivery
+    description: str, MIT Learn delivery code (online, hybrid, in_person, offline).
+    tests: [not_null]
+  - name: location
+    description: str, location for in-person and blended formats, else empty.
+  - name: duration
+    description: str, the feed's duration text, empty if none.
+  - name: min_weeks
+    description: int, lower bound of the duration in weeks, null if unparseable.
+  - name: max_weeks
+    description: int, upper bound of the duration in weeks, null if unparseable.
+  - name: price
+    description: decimal, price in USD, null if none. Applies to every run.
+  - name: instructors
+    description: array of str, instructor full names, lead instructors first. Applies
+      to every run.
+  - name: course_readable_ids
+    description: array of str, readable_ids of the program's courses that are in integrations__learn__mitpe_courses,
+      in the order the feed lists them; null if none.
+  - name: etl_source
+    description: Always 'mitpe'.
+    tests: [not_null]
+  - name: platform
+    description: Always 'mitpe'.
+    tests: [not_null]
+  - name: resource_type
+    description: Always 'program'.
+    tests: [not_null]
+
+- name: integrations__learn__mitpe_runs
+  description: >
+    Published runs of MIT Professional Education courses and programs, for MIT Learn
+    webhook delivery. Publication is evaluated when the model is built. Dates are
+    ISO
+    8601 UTC instants of midnight US Eastern.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - readable_id
+        - run_position
+  columns:
+  - name: readable_id
+    description: str, the course or program the run belongs to.
+    tests: [not_null]
+  - name: run_id
+    description: str, the feed's run id.
+    tests: [not_null]
+  - name: run_position
+    description: int, 1-based position of the run in the feed.
+    tests: [not_null]
+  - name: start_date
+    description: str, ISO 8601 start instant, null if none.
+  - name: end_date
+    description: str, ISO 8601 end instant, null if none.
+  - name: enrollment_end
+    description: str, ISO 8601 enrollment end instant, null if none.
 
 - name: integrations__learn__oll_courses
   description: >

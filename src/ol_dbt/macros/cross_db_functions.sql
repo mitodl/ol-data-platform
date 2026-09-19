@@ -686,3 +686,143 @@
 {% macro duckdb__null_varchar_array() -%}cast(null as varchar[]){%- endmacro %}
 
 {% macro starrocks__null_varchar_array() -%}cast(null as array<varchar>){%- endmacro %}
+
+
+{% macro array_length(array_expr) -%}
+    {{ adapter.dispatch('array_length', 'open_learning')(array_expr) }}
+{%- endmacro %}
+
+{% macro default__array_length(array_expr) -%}
+    cardinality({{ array_expr }})
+{%- endmacro %}
+
+{% macro duckdb__array_length(array_expr) -%}
+    {# DuckDB's cardinality() only accepts maps #}
+    len({{ array_expr }})
+{%- endmacro %}
+
+
+{#
+    array_filter_nonempty: drop NULL and empty-string elements from a varchar array,
+    keeping the order of the rest.
+#}
+{% macro array_filter_nonempty(array_expr) -%}
+    {{ adapter.dispatch('array_filter_nonempty', 'open_learning')(array_expr) }}
+{%- endmacro %}
+
+{% macro default__array_filter_nonempty(array_expr) -%}
+    filter({{ array_expr }}, x -> x is not null and x != '')
+{%- endmacro %}
+
+{% macro duckdb__array_filter_nonempty(array_expr) -%}
+    list_filter({{ array_expr }}, x -> x is not null and x != '')
+{%- endmacro %}
+
+
+{#
+    unnest_sequence: one row per integer 1..length_expr, for walking several arrays
+    in step with element_at_array(). length_expr must be >= 1: Trino's
+    sequence(1, 0) counts down rather than returning an empty array.
+#}
+{% macro unnest_sequence(length_expr, alias, col_name) -%}
+    {{ adapter.dispatch('unnest_sequence', 'open_learning')(length_expr, alias, col_name) }}
+{%- endmacro %}
+
+{% macro default__unnest_sequence(length_expr, alias, col_name) -%}
+    unnest(sequence(1, {{ length_expr }})) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+{% macro duckdb__unnest_sequence(length_expr, alias, col_name) -%}
+    unnest(generate_series(1, {{ length_expr }})) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+
+{#
+    regexp_replace_all: replace every match. DuckDB's regexp_replace replaces only the
+    first match unless given the 'g' option; Trino's always replaces all.
+#}
+{% macro regexp_replace_all(subject, pattern, replacement) -%}
+    {{ adapter.dispatch('regexp_replace_all', 'open_learning')(subject, pattern, replacement) }}
+{%- endmacro %}
+
+{% macro default__regexp_replace_all(subject, pattern, replacement) -%}
+    regexp_replace({{ subject }}, {{ pattern }}, {{ replacement }})
+{%- endmacro %}
+
+{% macro duckdb__regexp_replace_all(subject, pattern, replacement) -%}
+    regexp_replace({{ subject }}, {{ pattern }}, {{ replacement }}, 'g')
+{%- endmacro %}
+
+
+{#
+    regexp_extract_group_or_null: capture group `group_index` of the first match, or
+    NULL when there is no match (DuckDB returns '' instead; see regexp_extract_or_null).
+#}
+{% macro regexp_extract_group_or_null(subject, pattern, group_index) -%}
+    {{ adapter.dispatch('regexp_extract_group_or_null', 'open_learning')(subject, pattern, group_index) }}
+{%- endmacro %}
+
+{% macro default__regexp_extract_group_or_null(subject, pattern, group_index) -%}
+    regexp_extract({{ subject }}, {{ pattern }}, {{ group_index }})
+{%- endmacro %}
+
+{% macro duckdb__regexp_extract_group_or_null(subject, pattern, group_index) -%}
+    nullif(regexp_extract({{ subject }}, {{ pattern }}, {{ group_index }}), '')
+{%- endmacro %}
+
+
+{#
+    utc_now / local_date_to_utc / to_iso8601_utc: compare and render instants in UTC
+    the same way on both engines. Trino carries the zone on the value; DuckDB's
+    timezone() returns a naive timestamp, so both sides of a comparison are kept
+    naive-UTC there.
+#}
+{% macro utc_now() -%}
+    {{ adapter.dispatch('utc_now', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__utc_now() -%}
+    current_timestamp
+{%- endmacro %}
+
+{% macro duckdb__utc_now() -%}
+    timezone('UTC', current_timestamp)
+{%- endmacro %}
+
+{# Midnight of a YYYY-MM-DD date string in `time_zone`, as a UTC instant. #}
+{% macro local_date_to_utc(date_expr, time_zone) -%}
+    {{ adapter.dispatch('local_date_to_utc', 'open_learning')(date_expr, time_zone) }}
+{%- endmacro %}
+
+{% macro default__local_date_to_utc(date_expr, time_zone) -%}
+    at_timezone(with_timezone(cast(cast({{ date_expr }} as date) as timestamp), '{{ time_zone }}'), 'UTC')
+{%- endmacro %}
+
+{% macro duckdb__local_date_to_utc(date_expr, time_zone) -%}
+    timezone('UTC', timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp)))
+{%- endmacro %}
+
+{% macro to_iso8601_utc(timestamp_expr) -%}
+    {{ adapter.dispatch('to_iso8601_utc', 'open_learning')(timestamp_expr) }}
+{%- endmacro %}
+
+{% macro default__to_iso8601_utc(timestamp_expr) -%}
+    to_iso8601({{ timestamp_expr }})
+{%- endmacro %}
+
+{% macro duckdb__to_iso8601_utc(timestamp_expr) -%}
+    strftime({{ timestamp_expr }}, '%Y-%m-%dT%H:%M:%S.%gZ')
+{%- endmacro %}
+
+
+{#
+    html_unescape: decode the HTML entities upstream feeds put in plain-text fields.
+    Covers the named entities plus the apostrophe forms; &amp; goes last so an
+    escaped entity (&amp;lt;) decodes once, as Python's html.unescape does.
+#}
+{% macro html_unescape(string_expr) -%}
+    replace(replace(replace(replace(replace(replace(replace(
+        {{ string_expr }}
+        , '&#039;', ''''), '&#39;', ''''), '&apos;', ''''), '&quot;', '"'), '&lt;', '<')
+        , '&gt;', '>'), '&amp;', '&')
+{%- endmacro %}
