@@ -115,3 +115,77 @@ seeds:
   - name: polarity_score_bucket
     description: string, optional coarser grouping for trend rollups. Left empty until
       the sentiment task introduces a finer label set for it to collapse.
+
+- name: learn_topics
+  description: >
+    The MIT Learn topic taxonomy. The data platform owns this definition so topic
+    mapping for learning resource delivery (and any other consumer) happens here
+    rather than inside MIT Learn. Until the MIT Learn ETL cutover, MIT Learn's own
+    data_fixtures migrations still write the taxonomy, so
+    tests/assert_learn_topic_seeds_match_mitlearn.sql fails on any drift between this
+    seed and MIT Learn's replicated tables. When it fails, update the seed to match.
+    Generated from MIT Learn's production tables as replicated to the warehouse, not
+    from topics.yaml or a fresh migrate: data_fixtures migrations 0022/0023 create
+    topics with random UUIDs and later full-file upserts drop mappings that
+    production kept, so neither reproduces production.
+  config:
+    column_types:
+      topic_uuid: varchar
+      topic_name: varchar
+      parent_topic_uuid: varchar
+  columns:
+  - name: topic_uuid
+    description: string, stable identifier for the topic (MIT Learn topic_uuid)
+    tests:
+    - not_null
+    - unique
+  - name: topic_name
+    description: string, the topic name. MIT Learn matches topics by exact name.
+    tests:
+    - not_null
+    - unique
+  - name: parent_topic_uuid
+    description: string, topic_uuid of the parent topic, empty for top-level topics
+    tests:
+    - relationships:
+        arguments:
+          to: ref('learn_topics')
+          field: topic_uuid
+
+- name: learn_topic_offeror_mappings
+  description: >
+    Per-offeror crosswalk from an offeror's own topic names to learn_topics. One
+    offeror topic name can map to several topics. Kept in sync with MIT Learn's
+    LearningResourceTopicMapping by tests/assert_learn_topic_seeds_match_mitlearn.sql
+    until the MIT Learn ETL cutover. Production holds most mappings twice under
+    different ids; the seed keeps the distinct set, which is all topic resolution
+    reads.
+  config:
+    column_types:
+      offeror_code: varchar
+      offeror_topic_name: varchar
+      topic_uuid: varchar
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - offeror_code
+        - offeror_topic_name
+        - topic_uuid
+  columns:
+  - name: offeror_code
+    description: string, MIT Learn offeror code, e.g. mitx, ocw, mitpe
+    tests:
+    - not_null
+  - name: offeror_topic_name
+    description: string, the offeror's own topic name, e.g. an edX subject
+    tests:
+    - not_null
+  - name: topic_uuid
+    description: string, the learn_topics topic the offeror topic maps to
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('learn_topics')
+          field: topic_uuid
