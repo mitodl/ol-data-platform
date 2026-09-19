@@ -162,6 +162,8 @@ unit_tests:
     - {course_uuid: i, course_title: i, course_resource_type: Course, course_price_raw: "$3,600"}
     - {course_uuid: j, course_title: j, course_resource_type: Short Course, course_duration: "2\
         \ semesters", course_price_raw: "Contact us"}
+    - {course_uuid: k, course_title: k, course_resource_type: Course, course_duration: "3\
+        \ mes/curso"}
   expect:
     rows:
     - {readable_id: a, resource_type: course, title: "A & B", delivery: in_person,
@@ -185,6 +187,8 @@ unit_tests:
       duration: "", min_weeks: null, max_weeks: null, price: 3600}
     - {readable_id: j, resource_type: course, title: j, delivery: online, location: "",
       duration: "2 semesters", min_weeks: null, max_weeks: null, price: null}
+    - {readable_id: k, resource_type: course, title: k, delivery: online, location: "",
+      duration: "3 mes/curso", min_weeks: 12, max_weeks: 12, price: null}
 
 - name: test_int__mitpe__learning_resources_urls_join_like_urljoin
   description: >

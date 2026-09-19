@@ -88,7 +88,9 @@ with source as (
             when duration_english_unit like '%month%' then 'month'
             when duration_english_unit is not null then 'week'
             when duration_other_unit in ('días', 'jours', 'día', 'jour') then 'day'
-            when trim(duration_other_unit) in ('meses', 'mois', 'mesi', 'mes') then 'month'
+            -- "mes" can match with its trailing separator ("mes/"); MIT Learn raised
+            -- KeyError on that, and it is a month
+            when trim(replace(duration_other_unit, '/', '')) in ('meses', 'mois', 'mesi', 'mes') then 'month'
             when duration_other_unit is not null then 'week'
         end as duration_unit
     from normalized
