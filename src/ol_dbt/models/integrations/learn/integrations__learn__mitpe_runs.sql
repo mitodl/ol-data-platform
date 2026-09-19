@@ -10,8 +10,8 @@ select
     readable_id
     , run_id
     , run_position
-    , {{ to_iso8601_utc('start_on') }} as start_date
-    , {{ to_iso8601_utc('end_on') }} as end_date
-    , {{ to_iso8601_utc('enrollment_end_on') }} as enrollment_end
+    , {{ format_timestamp_as_iso8601('start_on') }} as start_date
+    , {{ format_timestamp_as_iso8601('end_on') }} as end_date
+    , {{ format_timestamp_as_iso8601('enrollment_end_on') }} as enrollment_end
 from {{ ref('int__mitpe__learning_resource_runs') }}
 where is_published

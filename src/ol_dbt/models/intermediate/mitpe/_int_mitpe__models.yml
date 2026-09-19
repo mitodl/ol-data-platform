@@ -24,12 +24,14 @@ models:
           values: ['course', 'program']
   - name: title
     description: str, title with surrounding whitespace trimmed and HTML entities
-      decoded. Unique among courses, since programs reference courses by title.
+      decoded. Programs reference courses by title, so a duplicate course title links
+      every course with that title; the warning flags it.
     tests:
     - not_null
     - unique:
         config:
           where: "resource_type = 'course'"
+          severity: warn
   - name: url
     description: str, absolute URL of the item's page
   - name: image_url
@@ -91,11 +93,12 @@ models:
   - name: run_id
     description: str, the feed's run id, possibly empty
   - name: start_on
-    description: timestamp, midnight US Eastern of the start date, in UTC
+    description: timestamp with time zone, midnight US Eastern of the start date
   - name: end_on
-    description: timestamp, midnight US Eastern of the end date, in UTC
+    description: timestamp with time zone, midnight US Eastern of the end date
   - name: enrollment_end_on
-    description: timestamp, midnight US Eastern of the enrollment end date, in UTC
+    description: timestamp with time zone, midnight US Eastern of the enrollment end
+      date
   - name: is_published
     description: boolean, true when the run has an id and its enrollment end (or,
       without one, its end) has not passed as of the model build. A run with neither
@@ -115,7 +118,7 @@ models:
       arguments:
         combination_of_columns:
         - program_readable_id
-        - course_position
+        - course_readable_id
   columns:
   - name: program_readable_id
     description: str, the program
@@ -157,6 +160,8 @@ unit_tests:
     - {course_uuid: h, course_title: h, course_resource_type: Course, course_duration: "10\
         \ to 14 semanas"}
     - {course_uuid: i, course_title: i, course_resource_type: Course, course_price_raw: "$3,600"}
+    - {course_uuid: j, course_title: j, course_resource_type: Short Course, course_duration: "2\
+        \ semesters", course_price_raw: "Contact us"}
   expect:
     rows:
     - {readable_id: a, resource_type: course, title: "A & B", delivery: in_person,
@@ -178,6 +183,27 @@ unit_tests:
       duration: "10 to 14 semanas", min_weeks: 10, max_weeks: 14, price: null}
     - {readable_id: i, resource_type: course, title: i, delivery: online, location: "",
       duration: "", min_weeks: null, max_weeks: null, price: 3600}
+    - {readable_id: j, resource_type: course, title: j, delivery: online, location: "",
+      duration: "2 semesters", min_weeks: null, max_weeks: null, price: null}
+
+- name: test_int__mitpe__learning_resources_urls_join_like_urljoin
+  description: >
+    Page and image URLs resolve against the MIT PE site the way MIT Learn's urljoin
+    did: absolute URLs are kept, root-relative and relative paths are appended, and
+    a
+    missing page path gives the site root.
+  model: int__mitpe__learning_resources
+  given:
+  - input: ref('stg__mitpe__api__courses')
+    rows:
+    - {course_uuid: a, course_title: a, course_url: "/courses/a", course_image_src: "https://cdn.example.com/a.png"}
+    - {course_uuid: b, course_title: b, course_url: "courses/b", course_image_src: "img/b.png"}
+    - {course_uuid: c, course_title: c, course_url: null, course_image_src: ""}
+  expect:
+    rows:
+    - {readable_id: a, url: "https://professional.mit.edu/courses/a", image_url: "https://cdn.example.com/a.png"}
+    - {readable_id: b, url: "https://professional.mit.edu/courses/b", image_url: "https://professional.mit.edu/img/b.png"}
+    - {readable_id: c, url: "https://professional.mit.edu", image_url: null}
 
 - name: test_int__mitpe__learning_resource_runs_zip_and_publish
   description: >
