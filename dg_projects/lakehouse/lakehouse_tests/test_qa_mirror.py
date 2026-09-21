@@ -12,6 +12,7 @@ import pytest
 from dagster import Failure, build_asset_context
 from lakehouse.assets.qa_mirror import _mirror_asset, build_qa_mirror_assets
 from ol_dbt_cli.lib.qa_mirror import MirrorDeclarationError, MirrorTable
+from pymysql.err import OperationalError
 
 TABLE = MirrorTable(
     unit="emeritus/bigquery",
@@ -88,6 +89,27 @@ def test_a_stale_declaration_fails_before_any_qa_copy_in_the_unit_is_dropped() -
     with pytest.raises(MirrorDeclarationError):
         _materialise(starrocks, [TABLE, stale])
     assert [s.split()[0] for s in starrocks.statements] == ["DESCRIBE", "DESCRIBE"]
+
+
+def test_a_failed_ctas_fails_the_run_rather_than_counting_what_it_left() -> None:
+    # The CTAS is the one statement the resource will not retry, so a failure
+    # here ends the run. Were it swallowed, the row count below it would read
+    # the empty table StarRocks leaves behind and report a successful refresh
+    # of nothing, which the qa_branch_contract staleness check cannot catch.
+    class FailingCtas(FakeStarRocks):
+        def execute(self, sql: str, *, idempotent: bool = True) -> None:
+            super().execute(sql, idempotent=idempotent)
+            if not idempotent:
+                raise OperationalError(2013, "Lost connection to MySQL server")
+
+    starrocks = FailingCtas(PRODUCTION)
+    with pytest.raises(OperationalError):
+        _materialise(starrocks)
+    assert [s.split()[0] for s in starrocks.statements] == [
+        "DESCRIBE",
+        "DROP",
+        "CREATE",
+    ]
 
 
 def test_the_real_inventory_builds_one_manual_asset_per_mirrored_unit() -> None:
