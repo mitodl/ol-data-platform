@@ -495,11 +495,19 @@ SQL sees the read.
 
 The asset checks every table's declaration in the unit against `DESCRIBE` of the production
 table, then `EXPLAIN`s each rendered query, before it drops any QA copy. An allowlisted column
-that production lacks, `hash` or `redact` on a non-string column, and a `where` StarRocks
-cannot plan (a type error in the epoch-millisecond arithmetic, say) all fail the run with the
-whole unit's QA copies still in place. A CTAS that fails while it runs is what is left: it
-fails after that table's `DROP`, so the unit is left partly refreshed and the failed table
-absent. `EXPLAIN` plans the query, so it catches analysis errors and nothing about the data.
+that production lacks, and `hash` or `redact` on a non-string column, fail in the declaration
+check. The `EXPLAIN` covers what that check does not look at at all: `mirror.where`. A column
+the predicate names, or that its `{source}` subquery names, is resolved against production
+here rather than reaching StarRocks for the first time in the CTAS.
+
+What `EXPLAIN` settles is name and signature resolution, not types. Measured on QA StarRocks
+2026-09-21 (below): an unresolvable column, an unknown function, a wrong argument count and a
+wrong argument type all raise `1064 Getting analyzing error` at plan time, while
+`varchar >= varchar - 86400000`, `date_add` on a varchar and a non-boolean predicate all plan
+without complaint, because StarRocks coerces them. So a `where` wrong in that second way still
+fails from the CTAS, after that table's `DROP`, leaving the unit partly refreshed and the
+failed table absent -- as does any CTAS that fails while it runs. `EXPLAIN` plans the query and
+reads no data.
 
 Every mirror asset names the `qa_mirror` concurrency pool, so two refreshes of one unit can be
 stopped from racing each other's `DROP` and CTAS. Naming the pool only makes that limit
@@ -625,3 +633,21 @@ through the `admin` Vault role the production resource uses:
   `data/load_spill/` marker, and because `ol-data-lake-raw-qa` is versioned the dropped files
   remain as noncurrent versions until the bucket's 90-day `expire-noncurrent-versions` rule
   removes them. So each refresh keeps the previous copy billed for up to 90 days.
+
+### Checked on QA StarRocks (2026-09-21)
+
+`EXPLAIN` of the same rendered SELECT, QA-to-QA against `raw__edxorg__s3__mitx_course`, through
+the `readonly` Vault role, since planning reads no data:
+
+- `EXPLAIN SELECT /*+ SET_VAR(query_timeout = 14400, insert_timeout = 14400) */ ...` over an
+  Iceberg table is accepted with the hint in place and returns a plan. So is the same query
+  with a `{source}` subquery in its `WHERE`, which is how both declared filters are shaped.
+- Raised at plan time, as `1064 Getting analyzing error`: an unresolvable column in the select
+  list, in the predicate, and inside the `{source}` subquery; an unknown function; a wrong
+  argument count (`sha2(x)`); a wrong argument type (`array_length` on a varchar).
+- Planned without complaint, so *not* caught: `varchar >= varchar - 86400000`, `date_add` on a
+  varchar, and a bare non-boolean predicate. StarRocks coerces all three.
+- A literal `%` in the predicate (`LIKE '%sandbox%'`) plans normally once the statement is sent
+  with no parameter tuple. Sent with an empty one, pymysql's `query % args` raises
+  `ProgrammingError: not enough arguments for format string` before StarRocks sees it, which is
+  why `StarRocksResource.fetch` defaults `params` to None rather than `()`.

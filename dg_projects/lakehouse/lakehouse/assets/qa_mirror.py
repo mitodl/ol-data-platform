@@ -53,12 +53,17 @@ def _render(
             table.name,
             ", ".join(statement.dropped),
         )
-    # render_mirror checks the declaration against DESCRIBE, which catches a
-    # column production no longer has but not an expression StarRocks refuses
-    # to plan -- the epoch-millisecond arithmetic in a `where`, say. EXPLAIN
-    # raises that while every QA copy in the unit is still intact. Reached
-    # first from _copy, the same error would land after this table's DROP,
-    # leaving the unit half refreshed.
+    # render_mirror compares `mirror.columns` with DESCRIBE. It never looks at
+    # `mirror.where`, so a column production has renamed or dropped that the
+    # predicate alone names -- including inside its `{source}` subquery --
+    # reached StarRocks for the first time in the CTAS, after this table's
+    # DROP, leaving the unit half refreshed. EXPLAIN resolves it here instead,
+    # while every QA copy in the unit is still intact.
+    #
+    # It resolves names and function signatures, not types: StarRocks coerces
+    # varchar arithmetic and `date_add` on a varchar rather than rejecting
+    # them, so a `where` wrong in that way still fails from the CTAS. Measured
+    # on QA 2026-09-21, recorded in QA_DATA_TOPOLOGY_SPEC.md §8.
     context.log.info("%s: planning the copy", table.name)
     starrocks.fetch(f"EXPLAIN {statement.select}")
     return statement
