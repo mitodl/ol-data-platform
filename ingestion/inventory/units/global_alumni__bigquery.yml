@@ -27,3 +27,30 @@ tables:
   sync_mode: full_refresh_append
   namespace: mit_xpro_api
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      batch: copy
+      gender: copy
+      status: copy
+      country: copy
+      batch_id: copy
+      deferred: copy
+      function: copy
+      industry: copy
+      job_title: redact
+      last_name: redact
+      first_name: redact
+      gdpr_agree: copy
+      student_id: copy
+      company_name: redact
+      work_exp_slab: copy
+      batch_end_date: copy
+      wrike_run_code: copy
+      batch_start_date: copy
+      residential_city: redact
+      gdpr_consent_date: copy
+      residential_state: copy
+      residential_address: redact
+      residential_zip_code: redact

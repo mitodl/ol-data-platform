@@ -118,12 +118,12 @@ FROM python:3.14-slim-bookworm
 # Copy the application from the builder. Note this copies the project's
 # *contents* onto /app, so lakehouse/assets/foo.py sits two levels below /app
 # rather than the four it sits below the repo root in the source tree -- see
-# _find_inventory_dir in assets/airbyte_drift.py, which is why that resolves the
+# find_inventory_dir in lib/inventory.py, which is why that resolves the
 # inventory by searching upward instead of indexing a fixed parent.
 COPY --from=builder /app/dg_projects/lakehouse /app
 COPY --from=builder /app/src/ol_dbt /app/ol_dbt
 # Keeps ingestion/inventory a sibling of the package, so the upward search from
-# /app/lakehouse/assets/ finds it at /app/ingestion/inventory.
+# /app/lakehouse/lib/ finds it at /app/ingestion/inventory.
 COPY --from=builder /app/ingestion/inventory /app/ingestion/inventory
 
 # Copy the dbt project from the builder

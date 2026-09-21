@@ -17,42 +17,14 @@ neither dbt nor duckdb precisely so a Dagster code location can read the
 inventory (spec §5). This module only fetches and adapts.
 """
 
-from pathlib import Path
 from typing import Any
 
 from dagster import AssetExecutionContext, Failure, MetadataValue, Output, asset
 from ol_dbt_cli.lib.inventory import check_drift, load_units
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
+from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
-
-# Anchored on this file rather than the process's cwd, which a run launcher is
-# free to change -- but found by searching upward instead of by counting
-# parents, because the two layouts this runs in sit at different depths. In the
-# source tree the file is four levels below the repo root
-# (dg_projects/lakehouse/lakehouse/assets/); in the image it is two, because
-# dg_projects/lakehouse/Dockerfile copies the project's *contents* onto /app. No
-# fixed index is right for both, and the one that matched the source tree raised
-# IndexError at import inside the image, taking the entire code location down
-# before dagster could load its definitions.
-#
-# Returning a path rather than raising when nothing is found keeps a missing
-# inventory a findable runtime failure -- airbyte_inventory_drift already fails
-# with "No inventory units found under ..." -- rather than an unimportable
-# module that no error message can reach.
-_INVENTORY_FALLBACK = Path("/app/ingestion/inventory")
-
-
-def _find_inventory_dir() -> Path:
-    """Locate ``ingestion/inventory`` from either the source tree or the image."""
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "ingestion" / "inventory"
-        if candidate.is_dir():
-            return candidate
-    return _INVENTORY_FALLBACK
-
-
-INVENTORY_DIR = _find_inventory_dir()
 
 
 def _fetch_workspace(workspace: AirbyteOSSWorkspace) -> dict[str, list[dict[str, Any]]]:

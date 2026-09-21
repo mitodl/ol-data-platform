@@ -34,25 +34,62 @@ tables:
   modeled: false
 - name: Opportunity
   raw_table: raw__thirdparty__salesforce___destination_v2__Opportunity
-  # Still on the Airbyte v1 destination's column pair (_airbyte_ab_id /
-  # _airbyte_emitted_at), not the current _airbyte_extracted_at. Declared
-  # here so the dedup macro resolves it instead of the loader default.
-  raw_metadata_column: _airbyte_emitted_at
   sync_mode: incremental_deduped_history
   cursor_field:
   - SystemModstamp
   primary_key:
   - - Id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      name: copy
+      type: copy
+      iswon: copy
+      amount: copy
+      isclosed: copy
+      nextstep: redact
+      closedate: copy
+      isdeleted: copy
+      stagename: copy
+      leadsource: copy
+      createddate: copy
+      probability: copy
+      systemmodstamp: copy
+      business_type__c: copy
+      agreement_type__c: copy
+      price_per_seat__c: copy
+      mit_is_sales_lead__c: copy
+      data_quality_score__c: copy
+      of_seats_purchased__c: copy
+      hasopportunitylineitem: copy
+      data_quality_description__c: copy
+      enrollment_codes_redeemed__c: copy
+      revenue_share_or_commission_amount__c: copy
+      revenue_share_or_commission_contract__c: copy
 - name: OpportunityLineItem
   raw_table: raw__thirdparty__salesforce___destination_v2__OpportunityLineItem
-  # Still on the Airbyte v1 destination's column pair (_airbyte_ab_id /
-  # _airbyte_emitted_at), not the current _airbyte_extracted_at. Declared
-  # here so the dedup macro resolves it instead of the loader default.
-  raw_metadata_column: _airbyte_emitted_at
   sync_mode: incremental_deduped_history
   cursor_field:
   - SystemModstamp
   primary_key:
   - - Id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      name: copy
+      discount: copy
+      quantity: copy
+      isdeleted: copy
+      listprice: copy
+      unitprice: copy
+      totalprice: copy
+      createddate: copy
+      description: redact
+      productcode: copy
+      servicedate: copy
+      opportunityid: copy
+      systemmodstamp: copy

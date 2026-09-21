@@ -71,6 +71,21 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: copy
+      active: copy
+      default: copy
+      brand_url: copy
+      subdomain: copy
+      created_at: copy
+      is_deleted: copy
+      updated_at: copy
+      has_help_center: copy
+      help_center_state: copy
 - name: categories
   raw_table: raw__thirdparty__zendesk_support__categories
   sync_mode: full_refresh_overwrite
@@ -95,6 +110,18 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: copy
+      default: copy
+      deleted: copy
+      is_public: copy
+      created_at: copy
+      updated_at: copy
+      description: copy
 - name: organizations
   raw_table: raw__thirdparty__zendesk_support__organizations
   sync_mode: full_refresh_overwrite
@@ -103,6 +130,21 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: copy
+      tags: copy
+      notes: redact
+      group_id: copy
+      created_at: copy
+      deleted_at: copy
+      updated_at: copy
+      domain_names: copy
+      shared_tickets: copy
+      shared_comments: copy
 - name: satisfaction_ratings
   raw_table: raw__thirdparty__zendesk_support__satisfaction_ratings
   sync_mode: incremental_deduped_history
@@ -183,6 +225,16 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      title: copy
+      active: copy
+      created_at: copy
+      updated_at: copy
+      description: copy
 - name: ticket_forms
   raw_table: raw__thirdparty__zendesk_support__ticket_forms
   sync_mode: incremental_append
@@ -255,3 +307,41 @@ tables:
   primary_key:
   - - id
   modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      name: redact
+      role: copy
+      tags: copy
+      alias: redact
+      email: hash
+      notes: redact
+      phone: redact
+      photo: nullify
+      active: copy
+      locale: copy
+      shared: copy
+      details: redact
+      verified: copy
+      chat_only: copy
+      locale_id: copy
+      moderator: copy
+      role_type: copy
+      signature: redact
+      suspended: copy
+      time_zone: copy
+      created_at: copy
+      updated_at: copy
+      user_fields: nullify
+      shared_agent: copy
+      last_login_at: copy
+      iana_time_zone: copy
+      organization_id: copy
+      default_group_id: copy
+      restricted_agent: copy
+      ticket_restriction: copy
+      permanently_deleted: copy
+      only_private_comments: copy
+      two_factor_auth_enabled: copy
