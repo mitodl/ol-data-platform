@@ -122,6 +122,29 @@ def test_a_query_starrocks_cannot_plan_fails_before_any_qa_copy_is_dropped() -> 
     assert [s.split()[0] for s in starrocks.statements] == ["DESCRIBE", "EXPLAIN"]
 
 
+def test_the_last_table_in_a_unit_is_planned_before_the_first_one_is_dropped() -> None:
+    # The table whose plan fails is the second, so a loop that rendered and
+    # copied one table at a time would already have dropped and rebuilt the
+    # first. Only planning the whole unit up front leaves it untouched.
+    class FailsOnTheSecondExplain(FakeStarRocks):
+        def fetch(self, sql: str) -> list[dict[str, Any]]:
+            rows = super().fetch(sql)
+            explains = [s for s in self.statements if s.startswith("EXPLAIN")]
+            if sql.startswith("EXPLAIN") and len(explains) > 1:
+                raise OperationalError(1064, "Getting analyzing error")
+            return rows
+
+    starrocks = FailsOnTheSecondExplain(PRODUCTION)
+    with pytest.raises(OperationalError):
+        _materialise(starrocks, [TABLE, TABLE])
+    assert [s.split()[0] for s in starrocks.statements] == [
+        "DESCRIBE",
+        "EXPLAIN",
+        "DESCRIBE",
+        "EXPLAIN",
+    ]
+
+
 def test_a_failed_ctas_fails_the_run_rather_than_counting_what_it_left() -> None:
     # The CTAS is the one statement the resource will not retry, so a failure
     # here ends the run. Were it swallowed, the row count below it would read

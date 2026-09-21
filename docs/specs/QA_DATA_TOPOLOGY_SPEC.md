@@ -506,6 +506,11 @@ stopped from racing each other's `DROP` and CTAS. Naming the pool only makes tha
 settable: it takes effect once `qa_mirror` has a slot limit of 1 on the Dagster instance
 (Deployment -> Concurrency). The pool is new here, so that limit still has to be added.
 
+One pool for all the units rather than one per unit. A limit of 1 then serialises `edxorg/s3`
+against `zendesk/api` as well, which for a refresh nobody schedules and that scans hundreds of
+gigabytes is no loss. Per-unit pools would keep distinct units parallel, at the cost of one
+instance entry each and a new unit silently arriving with no limit at all.
+
 ### What was not built
 
 A static check that no model reads a column the mirror drops. The sqlglot scope resolution in

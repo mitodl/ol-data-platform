@@ -98,11 +98,20 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         """
         self._run(sql, retry_statement=idempotent)
 
-    def fetch(self, sql: str, params: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    def fetch(
+        self, sql: str, params: tuple[str, ...] | None = None
+    ) -> list[dict[str, Any]]:
         """Run *sql* and return its rows, with `execute`'s credential retry.
 
         *params* are passed through to the driver's own placeholder
         substitution (`%s`) rather than interpolated into *sql*.
+
+        The default is None rather than an empty tuple because pymysql applies
+        `query % args` for any args that is not None -- including `()`, which
+        binds nothing but still makes a literal `%` in *sql* (a `LIKE '%x%'`,
+        a `date_format` pattern) raise "not enough arguments for format
+        string". Statements with no placeholders have to skip the binding
+        rather than pass an empty one. `execute` already passes None.
 
         Retrying a SELECT is unconditionally safe. A retry only happens when
         the previous attempt failed to connect or died mid-statement.
