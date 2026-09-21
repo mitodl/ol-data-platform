@@ -14,6 +14,7 @@ from ml.lib.embed import (
     EMBEDDING_BATCH_SIZE,
     EMBEDDING_MAX_CONCURRENCY,
     JOIN_COLS,
+    UPSERT_JOIN_COLS,
     build_embedding_client,
     embed_and_checkpoint,
     filter_unembedded,
@@ -44,9 +45,10 @@ class FeedbackEmbeddingsConfig(Config):
     sample_limit: int | None = Field(
         default=None,
         description=(
-            "Cap the number of conversations embedded, for local tests. Applied "
-            "after the incremental filter, so repeated runs keep finding new "
-            "candidates instead of re-hitting already-embedded rows."
+            "Cap the number of upstream rows read, for fast local testing -- "
+            "matches feedback_summaries' sample_limit semantics. Applied "
+            "before the incremental filter, so a repeated run may re-select "
+            "already-embedded rows if they're within this cap."
         ),
     )
     embedding_model_version: str | None = Field(
@@ -96,7 +98,7 @@ class FeedbackEmbeddingsConfig(Config):
 
 
 @asset(
-    code_version="feedback_embeddings_v1",
+    code_version="feedback_embeddings_v2",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_embeddings"]),
     deps=[
@@ -109,7 +111,7 @@ class FeedbackEmbeddingsConfig(Config):
     metadata={
         "schema": database_name,
         "write_mode": "upsert",
-        "upsert_options": {"join_cols": JOIN_COLS},
+        "upsert_options": {"join_cols": UPSERT_JOIN_COLS},
         "schema_update_mode": "update",
     },
 )
@@ -127,15 +129,40 @@ def feedback_embeddings(
     is already made; a conversation feedback_summaries hasn't reached yet (upstream
     still processing) is simply absent here and picked up next run.
     """
-    summaries_df = get_dbt_model_as_dataframe(
+    summaries_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="feedback_summaries",
-    ).collect()
-    conversation_df = get_dbt_model_as_dataframe(
+    )
+    if config.sample_limit is not None:
+        summaries_lazy = summaries_lazy.limit(config.sample_limit)
+    summaries_df = summaries_lazy.collect()
+
+    conversation_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__conversation",
-    ).collect()
+    )
+    if config.sample_limit is not None:
+        # Restricted to the (already-limited) summaries_df's own pks, not
+        # independently limited -- resolve_embedding_text's join needs both
+        # sides to cover the same conversations, or a sample run resolves
+        # almost nothing.
+        conversation_lazy = conversation_lazy.filter(
+            pl.col("feedback_conversation_pk").is_in(
+                summaries_df["feedback_conversation_pk"]
+            )
+        )
+    conversation_df = conversation_lazy.collect()
     resolved_df = resolve_embedding_text(summaries_df, conversation_df)
+
+    # Built before already_embedded_df, which is scoped to this model/dim so a
+    # conversation with more than one model's vector doesn't fan out the
+    # pk-only join in filter_unembedded below.
+    client = build_embedding_client(
+        embedding_llm,
+        config.embedding_model_version,
+        config.embedding_dim,
+        config.bedrock_model_version,
+    )
 
     already_embedded_df = pl.DataFrame(
         schema={
@@ -162,27 +189,19 @@ def feedback_embeddings(
                         "embedding_dim",
                     ]
                 )
+                .filter(
+                    (pl.col("embedding_model_version") == client.model_version)
+                    & (pl.col("embedding_dim") == client.dim)
+                )
                 .collect()
             )
 
-    # Built before filtering: filter_unembedded needs the model/dim actually in use
-    # to re-submit a conversation whose stored embedding_model_version or
-    # embedding_dim has since gone stale (a model change or dimension sweep), not
-    # just a turn_count or embedding_input change.
-    client = build_embedding_client(
-        embedding_llm,
-        config.embedding_model_version,
-        config.embedding_dim,
-        config.bedrock_model_version,
-    )
     unembedded_df = filter_unembedded(
         resolved_df,
         already_embedded_df,
         current_model_version=client.model_version,
         current_dim=client.dim,
     )
-    if config.sample_limit is not None:
-        unembedded_df = unembedded_df.head(config.sample_limit)
 
     errors: list[str] = []
     catalog = get_glue_catalog()
