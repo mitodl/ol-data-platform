@@ -496,28 +496,24 @@ SQL sees the read.
 The asset checks every table's declaration in the unit against `DESCRIBE` of the production
 table, then `EXPLAIN`s each rendered query, before it drops any QA copy. An allowlisted column
 that production lacks, and `hash` or `redact` on a non-string column, fail in the declaration
-check. The `EXPLAIN` covers what that check does not look at at all: `mirror.where`. A column
-the predicate names, or that its `{source}` subquery names, is resolved against production
-here rather than reaching StarRocks for the first time in the CTAS.
+check. That check also rejects a `mirror.where` that is a statement rather than a predicate,
+but it never resolves the predicate's own columns. The `EXPLAIN` is what covers those: a column
+the `where` names, or that its `{source}` subquery names, is resolved against production here
+rather than reaching StarRocks for the first time in the CTAS.
 
-What `EXPLAIN` settles is name and signature resolution, not types. Measured on QA StarRocks
-2026-09-21 (below): an unresolvable column, an unknown function, a wrong argument count and a
-wrong argument type all raise `1064 Getting analyzing error` at plan time, while
-`varchar >= varchar - 86400000`, `date_add` on a varchar and a non-boolean predicate all plan
-without complaint, because StarRocks coerces them. So a `where` wrong in that second way still
-fails from the CTAS, after that table's `DROP`, leaving the unit partly refreshed and the
-failed table absent -- as does any CTAS that fails while it runs. `EXPLAIN` plans the query and
-reads no data.
+What `EXPLAIN` settles is whether every name and every function signature resolves. An
+expression StarRocks has an implicit cast for is planned rather than rejected, so it is not a
+type check. Measured on QA StarRocks 2026-09-21 (below): an unresolvable column, an unknown
+function, a wrong argument count and an argument type no signature accepts (`array_length` on a
+varchar) all raise `1064 Getting analyzing error` at plan time, while
+`varchar >= varchar - 86400000`, `date_add` on a varchar and a bare non-boolean predicate all
+plan without complaint. So a `where` wrong in that second way still fails from the CTAS, after
+that table's `DROP`, leaving the unit partly refreshed and the failed table absent -- as does
+any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
-Every mirror asset names the `qa_mirror` concurrency pool, so two refreshes of one unit can be
-stopped from racing each other's `DROP` and CTAS. Naming the pool only makes that limit
-settable: it takes effect once `qa_mirror` has a slot limit of 1 on the Dagster instance
-(Deployment -> Concurrency). The pool is new here, so that limit still has to be added.
-
-One pool for all the units rather than one per unit. A limit of 1 then serialises `edxorg/s3`
-against `zendesk/api` as well, which for a refresh nobody schedules and that scans hundreds of
-gigabytes is no loss. Per-unit pools would keep distinct units parallel, at the cost of one
-instance entry each and a new unit silently arriving with no limit at all.
+The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
+other 23 what it adds over the declaration check is that the masking expressions themselves
+plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
 

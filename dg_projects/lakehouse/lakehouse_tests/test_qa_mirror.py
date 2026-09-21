@@ -105,10 +105,10 @@ def test_a_stale_declaration_fails_before_any_qa_copy_in_the_unit_is_dropped() -
 
 
 def test_a_query_starrocks_cannot_plan_fails_before_any_qa_copy_is_dropped() -> None:
-    # A `where` that only fails at analysis time -- a type error in the
-    # epoch-millisecond arithmetic, a function the production table's types do
-    # not support -- gets past render_mirror, which compares names and types
-    # but does not plan the query.
+    # A `where` naming a column production has renamed, or calling a function
+    # no signature matches, gets past render_mirror: that compares
+    # `mirror.columns` with DESCRIBE and never resolves the predicate's own
+    # columns. Only planning the query catches it.
     class FailingExplain(FakeStarRocks):
         def fetch(self, sql: str) -> list[dict[str, Any]]:
             rows = super().fetch(sql)
