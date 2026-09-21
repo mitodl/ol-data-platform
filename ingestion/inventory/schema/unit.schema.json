@@ -53,7 +53,7 @@
     },
     "raw_metadata_column": {
       "type": ["string", "null"],
-      "description": "Column a staging model orders by to pick the newest copy of a record key. Omit to take the loader default: `airbyte` -> `_airbyte_extracted_at`, `dlt` and `dagster` -> null. Null is a real answer meaning \"no metadata column, so do not deduplicate\" — measured, not assumed: the Iceberg schemas dlt writes here carry no metadata columns at all, neither `_airbyte_*` nor `_dlt_*`. Declare explicitly only where a table departs from its loader's convention, such as the two Salesforce tables still on Airbyte v1's `_airbyte_emitted_at`. Set here it covers every table in the unit; a table's own value wins."
+      "description": "Column a staging model orders by to pick the newest copy of a record key. Omit to take the loader default: `airbyte` -> `_airbyte_extracted_at`, `dlt` and `dagster` -> null. Null is a real answer meaning \"no metadata column, so do not deduplicate\" — measured, not assumed: the Iceberg schemas dlt writes here carry no metadata columns at all, neither `_airbyte_*` nor `_dlt_*`. Declare explicitly only where a table departs from its loader's convention, such as the Airbyte-loaded edxorg/mysql tables, which order by `_file_modified_at`. Set here it covers every table in the unit; a table's own value wins."
     },
     "dagster_visible": {
       "type": "boolean",

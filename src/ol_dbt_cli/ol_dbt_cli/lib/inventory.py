@@ -49,11 +49,11 @@ DAGSTER_LOADER = "dagster"
 # of a record key. Resolved per raw table, because one dbt source mixes tables
 # from units with different loaders and edxorg alone nests three of them.
 #
-# Airbyte's current destination writes `_airbyte_extracted_at`. Two Salesforce
-# tables still carry the v1 pair (`_airbyte_ab_id` / `_airbyte_emitted_at`) and
-# declare the override rather than being special-cased here — which is why this
-# resolves through a declaration at all instead of switching two ways on the
-# loader (INGESTION_INVENTORY_SPEC.md §1.2).
+# Airbyte's current destination writes `_airbyte_extracted_at`, and every
+# Airbyte table in the inventory now takes that default. The declaration seam
+# stays because the departures are not loader-shaped: edxorg/mysql is an
+# Airbyte unit ordering by `_file_modified_at`, and a dbt source mixes tables
+# from units with different loaders (INGESTION_INVENTORY_SPEC.md §1.2).
 AIRBYTE_METADATA_COLUMN = "_airbyte_extracted_at"
 
 # dlt stamps each row with the load package id once

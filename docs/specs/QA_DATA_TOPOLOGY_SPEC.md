@@ -561,8 +561,10 @@ Not declared, so not mirrored:
 
 The salesforce `Opportunity` and `OpportunityLineItem` tables declared `_airbyte_emitted_at`
 as their raw metadata column, as if they were still on Airbyte's v1 destination. Production
-Glue shows the v2 columns and no `_airbyte_emitted_at`. The override is removed. Neither staging
-model read it, since both order by `systemmodstamp`.
+Glue shows the v2 quartet (`_airbyte_raw_id`, `_airbyte_extracted_at`, `_airbyte_meta`,
+`_airbyte_generation_id`) and neither `_airbyte_ab_id` nor `_airbyte_emitted_at`. The override is
+removed, and `_salesforce__sources.yml` no longer documents the two v1 columns. Neither staging
+model read them, since both order by `systemmodstamp`.
 
 ### Refresh and staleness
 
