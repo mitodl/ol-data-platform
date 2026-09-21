@@ -91,6 +91,18 @@ def _mirror_asset(unit: str, tables: list[MirrorTable]) -> AssetsDefinition:
             "Materialize by hand; see RFC 12711 step 6."
         ),
         kinds={"starrocks", "iceberg"},
+        # Per unit, because the refresh is DROP-then-CTAS with no swap: two
+        # runs of the SAME unit interleave into a dropped table under a live
+        # CTAS, or a row count taken over the other run's copy. Different units
+        # touch disjoint tables, so they still run in parallel -- a shared pool
+        # would queue emeritus behind the 760 GB program_learner_report.
+        #
+        # As elsewhere in this repo (openedx_course_export), naming the pool
+        # only makes the limit *settable*. Until `qa_mirror_<deployment>_<layer>`
+        # has a slot limit of 1 on the instance (Deployment -> Concurrency),
+        # these runs are still unbounded: the instance config sets no
+        # concurrency.pools.default_limit, so an unlimited pool is the default.
+        pool=f"qa_mirror_{deployment}_{layer}",
     )
     def _mirror(
         context: AssetExecutionContext, starrocks: StarRocksResource

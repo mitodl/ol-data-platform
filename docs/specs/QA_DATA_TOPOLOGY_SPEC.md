@@ -577,6 +577,18 @@ reports it as empty. The CTAS is never retried by the StarRocks
 resource: an FE lost mid-statement can leave the table behind, and a retry would fail on
 "already exists" and hide the real error. The next manual run's `DROP` clears it.
 
+Because that sequence drops before it creates, two runs of one unit must not overlap: the second
+`DROP` can take the table out from under the first CTAS, and the row count either run reports can
+be taken over the other's copy. Each asset therefore declares the pool
+`qa_mirror_<deployment>_<layer>`. Per unit rather than one shared pool, since units touch disjoint
+tables and a shared one would queue a small unit behind the 760 GB `program_learner_report` copy.
+
+Naming the pool only makes the limit settable. The instance config sets no
+`concurrency.pools.default_limit` (ol-infrastructure `dagster_instance.yaml`), so until each of
+the nine pools is given a slot limit of 1 under Deployment -> Concurrency, concurrent runs of one
+unit are still unbounded. Setting those limits is a deploy-time step, not something this repo can
+assert.
+
 The `DROP` goes through the Iceberg catalog, so it cannot remove a Glue entry that is not an
 Iceberg table, and the CTAS then fails on the name. One mirrored name had such an entry in QA:
 `raw__irx__edxorg__bigquery__email_opt_in`, a legacy JSON table last written 2024-08-26. Its Glue

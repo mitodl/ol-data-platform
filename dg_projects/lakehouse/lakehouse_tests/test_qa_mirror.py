@@ -112,6 +112,19 @@ def test_a_failed_ctas_fails_the_run_rather_than_counting_what_it_left() -> None
     ]
 
 
+def test_each_unit_gets_its_own_concurrency_pool() -> None:
+    # The refresh drops the table before it recreates it, so two runs of one
+    # unit must not overlap. Per unit rather than one shared pool: different
+    # units touch disjoint tables, and queueing them together would put a small
+    # unit behind edxorg's 760 GB program_learner_report copy.
+    pools = {
+        next(iter(asset.keys)).to_user_string(): asset.op.pool
+        for asset in build_qa_mirror_assets()
+    }
+    assert pools["qa_mirror/emeritus/bigquery"] == "qa_mirror_emeritus_bigquery"
+    assert len(set(pools.values())) == len(pools)
+
+
 def test_the_real_inventory_builds_one_manual_asset_per_mirrored_unit() -> None:
     assets = build_qa_mirror_assets()
     keys = {key.to_user_string() for asset in assets for key in asset.keys}
