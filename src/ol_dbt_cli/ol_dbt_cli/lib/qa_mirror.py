@@ -67,6 +67,8 @@ class MirrorTable:
 
 @dataclass(frozen=True)
 class MirrorStatement:
+    select: str
+    """The CTAS's query on its own, so the asset can EXPLAIN it before it drops anything."""
     sql: str
     dropped: list[str]
     """Production columns the allowlist leaves out, reported so a new upstream column is noticed."""
@@ -166,6 +168,10 @@ def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> Mirro
     # ever combined with it. Set operators are rejected above.
     where = f"\nWHERE ({table.where.replace(SOURCE_PLACEHOLDER, table.source)})" if table.where else ""
     hint = f"/*+ SET_VAR(query_timeout = {STATEMENT_TIMEOUT_SECONDS}, insert_timeout = {STATEMENT_TIMEOUT_SECONDS}) */"
-    sql = f"CREATE TABLE {table.target}\nAS SELECT {hint}\n    {select_list}\nFROM {table.source}{where}"
+    select = f"SELECT {hint}\n    {select_list}\nFROM {table.source}{where}"
     kept = {column.lower() for column in table.columns}
-    return MirrorStatement(sql=sql, dropped=sorted(set(types) - kept))
+    return MirrorStatement(
+        select=select,
+        sql=f"CREATE TABLE {table.target}\nAS {select}",
+        dropped=sorted(set(types) - kept),
+    )

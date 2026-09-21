@@ -494,10 +494,17 @@ column. The dedup macro reads that column through the inventory, so no analysis 
 SQL sees the read.
 
 The asset checks every table's declaration in the unit against `DESCRIBE` of the production
-table before it drops any QA copy. An allowlisted column that production lacks, or `hash` or
-`redact` on a non-string column, fails the run with the whole unit's QA copies still in place.
-A `where` or CTAS that fails at run time is different: it fails after that table's `DROP`, so
-the unit is left partly refreshed and the failed table absent.
+table, then `EXPLAIN`s each rendered query, before it drops any QA copy. An allowlisted column
+that production lacks, `hash` or `redact` on a non-string column, and a `where` StarRocks
+cannot plan (a type error in the epoch-millisecond arithmetic, say) all fail the run with the
+whole unit's QA copies still in place. A CTAS that fails while it runs is what is left: it
+fails after that table's `DROP`, so the unit is left partly refreshed and the failed table
+absent. `EXPLAIN` plans the query, so it catches analysis errors and nothing about the data.
+
+Every mirror asset names the `qa_mirror` concurrency pool, so two refreshes of one unit can be
+stopped from racing each other's `DROP` and CTAS. Naming the pool only makes that limit
+settable: it takes effect once `qa_mirror` has a slot limit of 1 on the Dagster instance
+(Deployment -> Concurrency). The pool is new here, so that limit still has to be added.
 
 ### What was not built
 

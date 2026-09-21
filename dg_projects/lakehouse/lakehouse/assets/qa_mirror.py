@@ -53,6 +53,14 @@ def _render(
             table.name,
             ", ".join(statement.dropped),
         )
+    # render_mirror checks the declaration against DESCRIBE, which catches a
+    # column production no longer has but not an expression StarRocks refuses
+    # to plan -- the epoch-millisecond arithmetic in a `where`, say. EXPLAIN
+    # raises that while every QA copy in the unit is still intact. Reached
+    # first from _copy, the same error would land after this table's DROP,
+    # leaving the unit half refreshed.
+    context.log.info("%s: planning the copy", table.name)
+    starrocks.fetch(f"EXPLAIN {statement.select}")
     return statement
 
 
