@@ -17,7 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ol_dbt_cli.lib.inventory import MIRROR_STRATEGY
+from ol_dbt_cli.lib.inventory import (
+    MIRROR_STRATEGY,
+    MIRROR_WHERE_VIOLATION,
+    mirror_where_is_a_statement,
+)
 from ol_dbt_cli.lib.qa_observation import QA_GLUE_DATABASE, qa_strategy
 
 if TYPE_CHECKING:
@@ -133,8 +137,16 @@ def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> Mirro
     reports it. The declaration is checked against it first: an allowlisted
     column production does not have means the declaration is stale, and
     ``hash`` or ``redact`` on a non-string column would change the column's
-    type under the staging models that cast it.
+    type under the staging models that cast it. ``mirror.where`` is checked
+    for being a predicate rather than a statement, because a ``UNION`` there
+    would read production columns the allowlist leaves out.
     """
+    # `inventory validate` rejects this too, but the asset renders straight from
+    # the inventory without it, so the boundary has to close here as well.
+    if mirror_where_is_a_statement(table.where):
+        msg = f"{table.raw_table}: mirror.where {MIRROR_WHERE_VIOLATION}"
+        raise MirrorDeclarationError(msg)
+
     types = {name.lower(): kind.lower() for name, kind in production_types.items()}
     missing = sorted(column for column in table.columns if column.lower() not in types)
     if missing:
@@ -151,7 +163,7 @@ def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> Mirro
 
     select_list = ",\n    ".join(_expression(column, mode) for column, mode in table.columns.items())
     # Parenthesized so an OR in the predicate keeps its meaning if anything is
-    # ever combined with it. `inventory validate` rejects set operators in it.
+    # ever combined with it. Set operators are rejected above.
     where = f"\nWHERE ({table.where.replace(SOURCE_PLACEHOLDER, table.source)})" if table.where else ""
     hint = f"/*+ SET_VAR(query_timeout = {STATEMENT_TIMEOUT_SECONDS}, insert_timeout = {STATEMENT_TIMEOUT_SECONDS}) */"
     sql = f"CREATE TABLE {table.target}\nAS SELECT {hint}\n    {select_list}\nFROM {table.source}{where}"

@@ -310,6 +310,23 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
 
 _SET_OPERATOR = re.compile(r"\b(union|intersect|except|minus)\b", re.IGNORECASE)
 
+MIRROR_WHERE_VIOLATION = "contains `;` or a set operator"
+"""Shared between `inventory validate` and the renderer so both report the same reason."""
+
+
+def mirror_where_is_a_statement(where: str | None) -> bool:
+    """Report whether `mirror.where` is more than the predicate it is spliced in as.
+
+    Lives here rather than in `lib.qa_mirror` so `render_mirror` can call it
+    too: the mirror asset loads the inventory directly and never runs
+    `validate_inventory`, so a check that existed only on the CLI path would
+    let a `UNION` reach the CTAS and append production columns the allowlist
+    leaves out.
+    """
+    if not where:
+        return False
+    return ";" in where or bool(_SET_OPERATOR.search(where))
+
 
 def _check_mirror(unit: Unit, report: ValidationReport) -> None:
     """Rules on the per-table `mirror:` block the QA mirror asset executes (QA_DATA_TOPOLOGY_SPEC.md §8)."""
@@ -340,13 +357,12 @@ def _check_mirror(unit: Unit, report: ValidationReport) -> None:
                 "deduplicate_raw_table orders by it. Add it as `copy`, or correct the table's "
                 "raw_metadata_column if the table does not carry it.",
             )
-        where = mirror.get("where", "")
-        if ";" in where or _SET_OPERATOR.search(where):
+        if mirror_where_is_a_statement(mirror.get("where", "")):
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
-                f"{raw_table}'s mirror.where contains `;` or a set operator",
+                f"{raw_table}'s mirror.where {MIRROR_WHERE_VIOLATION}",
                 "It is one predicate spliced into a CREATE TABLE AS SELECT. A UNION there could "
                 "read production columns the allowlist leaves out.",
             )

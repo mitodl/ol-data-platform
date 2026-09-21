@@ -76,6 +76,20 @@ class TestRenderMirror:
         with pytest.raises(MirrorDeclarationError, match="unknown mirror mode 'hsah'"):
             render_mirror(_table({"email": "hsah"}), PRODUCTION_TYPES)
 
+    @pytest.mark.parametrize(
+        "where",
+        [
+            "true; DROP TABLE x",
+            "true) UNION ALL SELECT email FROM ol_data_lake_production.db.t WHERE (true",
+        ],
+    )
+    def test_where_must_be_a_predicate_here_too(self, where: str) -> None:
+        # The asset renders from the inventory without running `inventory
+        # validate`, so the same payload that check rejects has to be rejected
+        # here: the UNION appends `email`, which the allowlist leaves out.
+        with pytest.raises(MirrorDeclarationError, match="contains `;` or a set operator"):
+            render_mirror(_table({"_airbyte_extracted_at": "copy"}, where), PRODUCTION_TYPES)
+
     def test_redact_keeps_nulls_null(self) -> None:
         # So a not_null test on the column fails in QA exactly when it would in production.
         statement = render_mirror(_table({"last_name": "redact"}), PRODUCTION_TYPES)
