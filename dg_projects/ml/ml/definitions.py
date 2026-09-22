@@ -88,16 +88,20 @@ feedback_sentiment_eval_job = define_asset_job(
     selection=[feedback_sentiment_eval],
 )
 
-# Scoped to just these assets, independent of the ml code location's shared
-# default_automation_condition_sensor. Stopped by default so a fresh deploy
-# doesn't auto-run against an unverified LLM credential; enable in the UI
-# once the Bedrock/API path is confirmed working. feedback_clusters runs on
-# feedback_clusters_schedule/feedback_clusters_growth_sensor instead (ml/schedules,
-# ml/sensors), not chained here -- a full re-cluster is too expensive to run on
-# every embedding refresh.
-feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
-    name="feedback_summaries_automation_sensor",
-    target=AssetSelection.assets(feedback_summaries, feedback_embeddings),
+# One sensor to stop when a manual/bake-off run shouldn't cascade -- covers
+# feedback_summaries/feedback_embeddings plus feedback_cluster_identity/
+# feedback_cluster_assignment, which auto-cascade from feedback_clusters via
+# upstream_or_code_changes(). feedback_clusters itself runs on
+# feedback_clusters_schedule/feedback_clusters_growth_sensor, not here.
+# Stopped by default.
+feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
+    name="feedback_pipeline_automation_sensor",
+    target=AssetSelection.assets(
+        feedback_summaries,
+        feedback_embeddings,
+        feedback_cluster_identity,
+        feedback_cluster_assignment,
+    ),
     default_status=DefaultSensorStatus.STOPPED,
 )
 
@@ -190,5 +194,5 @@ defs = Definitions(
         feedback_sentiment_eval_job,
     ],
     schedules=[feedback_clusters_schedule],
-    sensors=[feedback_summaries_automation_sensor, feedback_clusters_growth_sensor],
+    sensors=[feedback_pipeline_automation_sensor, feedback_clusters_growth_sensor],
 )
