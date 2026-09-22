@@ -5,7 +5,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
 from delivery.assets.mit_edx_programs import (
+    ProgramWithoutCoursesError,
     build_resources,
     open_unpublish_reviews,
     unpublish_review_issue,
@@ -94,18 +96,34 @@ def test_missing_values_become_empty_lists() -> None:
                 topics=None,
                 level=None,
                 pace=None,
-                course_readable_ids=None,
                 image_url=None,
             )
         ],
         [],
     )
     assert resource["topics"] == []
-    assert resource["courses"] == []
     assert resource["pace"] == []
     assert resource["image"] is None
     assert resource["runs"][0]["level"] == []
     assert resource["runs"][0]["instructors"] == []
+
+
+@pytest.mark.parametrize("course_readable_ids", [None, []])
+def test_program_without_courses_fails_the_batch(
+    course_readable_ids: list[str] | None,
+) -> None:
+    """MIT Learn would unlink every course, so nothing in the batch is sent."""
+    with pytest.raises(ProgramWithoutCoursesError, match="empty-program"):
+        build_resources(
+            [
+                program_row(),
+                program_row(
+                    readable_id="empty-program",
+                    course_readable_ids=course_readable_ids,
+                ),
+            ],
+            [],
+        )
 
 
 def published_program() -> dict[str, Any]:
