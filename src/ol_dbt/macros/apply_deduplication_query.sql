@@ -37,7 +37,7 @@
 {% endmacro %}
 
 
-{% macro deduplicate_raw_table(raw_table=none, order_by=none, partition_columns='id', then_by=none, source_cte='source', snapshot_by=none) %}
+{% macro deduplicate_raw_table(raw_table=none, order_by=none, partition_columns='id', first_by=none, then_by=none, source_cte='source', snapshot_by=none) %}
     {#
         Collapse duplicate raw rows to the most recent copy per record key, emitting a
         `most_recent_<source_cte>` CTE (`most_recent_source` by default) for the model
@@ -50,6 +50,10 @@
 
         `then_by` appends a business-column tie-breaker after the resolved ordering,
         so a model can keep one without naming the loader's columns itself.
+        `first_by` prepends one instead, for a model whose primary ordering is a
+        business column (updated_on) with the loader column only breaking ties.
+        When the resolved column is none, `first_by` does not force a dedup: the
+        pass-through below still applies.
 
         `source_cte` names the CTE to read, for a model that deduplicates more than
         one raw table.
@@ -78,6 +82,12 @@
             ~ "from the inventory) or an explicit order_by (a business column)."
         ) }}
     {%- endif -%}
+    {%- if order_by is not none and first_by is not none -%}
+        {{ exceptions.raise_compiler_error(
+            "deduplicate_raw_table: first_by prepends to the inventory-resolved ordering; "
+            ~ "with an explicit order_by, put the column in order_by instead."
+        ) }}
+    {%- endif -%}
 
     {%- set resolved = order_by if order_by is not none else raw_extracted_at(raw_table) -%}
 
@@ -86,7 +96,8 @@
         select * from {{ source_cte }}
     )
     {%- else %}
-    {%- set ordering = ([resolved] if resolved is string else resolved) + ([then_by] if then_by is not none else []) %}
+    {%- set resolved_columns = [resolved] if resolved is string else resolved %}
+    {%- set ordering = ([first_by] if first_by is not none else []) + resolved_columns + ([then_by] if then_by is not none else []) %}
     {%- set dedup_input = source_cte ~ '_snapshot' if snapshot_by is not none else source_cte %}
     {%- if snapshot_by is not none %}
     , {{ source_cte }}_snapshot_ranked as (
@@ -94,7 +105,7 @@
             *
             , dense_rank() over (
                 partition by {{ snapshot_by }}
-                order by {{ ordering[0] }} desc nulls last
+                order by {{ resolved_columns[0] }} desc nulls last
             ) as snapshot_rank
         from {{ source_cte }}
     )
