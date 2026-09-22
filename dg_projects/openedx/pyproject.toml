@@ -12,6 +12,7 @@ dependencies = [
     "httpx2 >= 2.2.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
+    "pymongo>=4.15",
     "universal-pathlib ~= 0.3.1",
 ]
 
