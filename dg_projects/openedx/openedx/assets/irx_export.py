@@ -52,6 +52,9 @@ IRX_EXPORT_SANDBOX_ROOT = "s3://ol-devops-sandbox/pipeline-storage/irx-export"
 
 LEGACY_DATETIME = "%Y-%m-%d %H:%M:%S"
 
+MANIFEST_NAME = "_MANIFEST.json"
+MANIFEST_FILE_FIELDS = ("row_count", "size_bytes", "sha256")
+
 FORUM_CONTENTS_MODEL = "forum_contents"
 # Which fields the retired cs_comments_service stored on each kind of post, read
 # off the last mongodump legacy_openedx shipped.
@@ -313,7 +316,8 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
     """
     course_ids_key = AssetKey([deployment, IRX_EXPORT_GROUP, "course_ids"])
     forum_key = AssetKey([deployment, IRX_EXPORT_GROUP, FORUM_CONTENTS_MODEL])
-    specs = [
+    manifest_key = AssetKey([deployment, IRX_EXPORT_GROUP, "manifest"])
+    file_specs = [
         AssetSpec(
             key=course_ids_key,
             description="course_ids.csv: the course runs the Open edX API lists.",
@@ -340,6 +344,19 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
             code_version="irx_export_v1",
         ),
     ]
+    specs = [
+        *file_specs,
+        AssetSpec(
+            key=manifest_key,
+            deps=[spec.key for spec in file_specs],
+            description=(
+                f"{MANIFEST_NAME}: every file in the drop with its row count, size "
+                "and sha256. Written last, so its presence means the drop is "
+                "complete."
+            ),
+            code_version="irx_export_v1",
+        ),
+    ]
 
     @multi_asset(
         name=f"{deployment}_irx_export",
@@ -352,6 +369,11 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         root = UPath(IRX_EXPORT_ROOTS.get(DAGSTER_ENV, IRX_EXPORT_SANDBOX_ROOT))
         drop_date = context.partition_time_window.start.strftime("%Y%m%d")
         drop = root / deployment / drop_date
+        # A re-run rewrites the files in place. Take the old manifest down first,
+        # so a re-run that fails partway leaves no manifest vouching for a mix of
+        # old and new files.
+        (drop / MANIFEST_NAME).unlink(missing_ok=True)
+        delivered: dict[str, MaterializeResult] = {}
 
         # The live API list, not the course-run partition set: the sensor that
         # maintains those partitions only ever adds, so they accumulate runs
@@ -368,13 +390,14 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                     "file in the drop would be empty."
                 )
             )
-        yield _export(
+        delivered["course_ids.csv"] = _export(
             course_ids_key,
             write_legacy_csv,
             pl.LazyFrame({"course_id": course_ids}, schema={"course_id": pl.String}),
             drop / "course_ids.csv",
             {},
         )
+        yield delivered["course_ids.csv"]
 
         for export in IRX_EXPORT_FILES:
             frame, metadata = _scan_pinned(irx_model_name(deployment, export.model))
@@ -383,26 +406,32 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                 .filter(pl.col("course_id").is_in(course_ids))
                 .drop_nulls(list(export.required))
             )
-            yield _export(
+            file_name = f"{export.name}.csv"
+            delivered[file_name] = _export(
                 AssetKey([deployment, IRX_EXPORT_GROUP, export.name]),
                 write_legacy_csv,
                 frame.select(
                     legacy_csv_columns(frame.collect_schema(), export.columns)
                 ),
-                drop / f"{export.name}.csv",
+                drop / file_name,
                 metadata,
             )
+            yield delivered[file_name]
 
         # Not cut to the course list: legacy dumped the whole forum database,
         # posts in runs the LMS no longer lists included.
         frame, metadata = _scan_pinned(irx_model_name(deployment, FORUM_CONTENTS_MODEL))
-        yield _export(
+        delivered["forum/contents.bson"] = _export(
             forum_key,
             write_forum_bson,
             frame,
             drop / "forum" / "contents.bson",
             metadata,
         )
+        yield delivered["forum/contents.bson"]
+
+        manifest = build_manifest(deployment, drop_date, context.run.run_id, delivered)
+        yield _write_manifest(manifest_key, manifest, drop / MANIFEST_NAME)
 
     return irx_export
 
@@ -426,6 +455,51 @@ def _scan_pinned(table_name: str) -> tuple[pl.LazyFrame, dict[str, str]]:
         "source_table": f"{IRX_GLUE_DATABASE}.{table_name}",
         "source_snapshot_id": str(snapshot.snapshot_id),
     }
+
+
+def build_manifest(
+    deployment: str,
+    drop_date: str,
+    run_id: str,
+    delivered: Mapping[str, MaterializeResult],
+) -> dict[str, Any]:
+    """Describe a finished drop from what its files' materializations recorded.
+
+    Built from the metadata each file's write already computed, not by reading
+    the files back.
+    """
+    return {
+        "deployment": deployment,
+        "drop_date": drop_date,
+        "run_id": run_id,
+        "files": [
+            {
+                "name": name,
+                **{
+                    field_name: (result.metadata or {})[field_name]
+                    for field_name in MANIFEST_FILE_FIELDS
+                },
+            }
+            for name, result in delivered.items()
+        ],
+    }
+
+
+def _write_manifest(
+    key: AssetKey, manifest: Mapping[str, Any], destination: UPath
+) -> MaterializeResult:
+    data = json.dumps(manifest, indent=2).encode()
+    destination.write_bytes(data)
+    sha256 = hashlib.sha256(data).hexdigest()
+    return MaterializeResult(
+        asset_key=key,
+        data_version=DataVersion(sha256),
+        metadata={
+            "file_count": len(manifest["files"]),
+            "path": MetadataValue.path(str(destination)),
+            "sha256": sha256,
+        },
+    )
 
 
 def _export(

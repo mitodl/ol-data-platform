@@ -3,13 +3,18 @@
 import csv
 import hashlib
 import io
+import json
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
 import polars as pl
-from dagster import AssetKey
+import pytest
+from dagster import AssetKey, materialize
+from openedx.assets import irx_export
 from openedx.assets.irx_export import (
     IRX_EXPORT_FILES,
+    MANIFEST_NAME,
     build_irx_export_asset,
     legacy_csv_columns,
     write_legacy_csv,
@@ -90,9 +95,105 @@ def test_every_file_depends_on_its_irx_model() -> None:
     assert deps.pop("forum_contents") == {
         AssetKey(["external", "irx__mitxonline__openedx__mysql__forum_contents"])
     }
+    assert deps.pop("manifest") == {
+        AssetKey(["mitxonline", "irx_export", name])
+        for name in (
+            "course_ids",
+            *(export.name for export in IRX_EXPORT_FILES),
+            "forum_contents",
+        )
+    }
     assert deps == {
         export.name: {
             AssetKey(["external", f"irx__mitxonline__openedx__mysql__{export.model}"])
         }
         for export in IRX_EXPORT_FILES
     }
+
+
+DROP_DATE = "2026-09-20"
+COURSE_ID = "course-v1:MITx+1.00x+3T2026"
+
+
+class _Snapshot(SimpleNamespace):
+    snapshot_id = 42
+
+
+class _Table:
+    def __init__(self, name: str):
+        self.name = name
+
+    def current_snapshot(self) -> _Snapshot:
+        return _Snapshot()
+
+
+def _irx_frame(table: _Table) -> pl.LazyFrame:
+    if table.name.endswith("forum_contents"):
+        return pl.LazyFrame(schema={"_type": pl.String, "id": pl.Int64})
+    export = next(f for f in IRX_EXPORT_FILES if table.name.endswith(f.model))
+    model_names = {new: old for old, new in export.renames.items()}
+    row = {model_names.get(c, c): "x" for c in export.columns} | {
+        "course_id": COURSE_ID
+    }
+    return pl.LazyFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
+
+
+@pytest.fixture
+def drop_root(tmp_path, monkeypatch) -> UPath:
+    monkeypatch.setattr(irx_export, "IRX_EXPORT_SANDBOX_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        irx_export, "load_dbt_model_table", lambda _db, name: _Table(name)
+    )
+    drop = UPath(tmp_path) / "mitx" / DROP_DATE.replace("-", "")
+    # S3 has no directories to create; a local path does.
+    (drop / "forum").mkdir(parents=True)
+    return drop
+
+
+def _run_export(monkeypatch, fail_on: str | None = None):
+    def scan(table: _Table, _snapshot_id: int) -> pl.LazyFrame:
+        if fail_on and table.name.endswith(fail_on):
+            raise RuntimeError
+        return _irx_frame(table)
+
+    monkeypatch.setattr(irx_export, "scan_dbt_model_table", scan)
+    openedx = SimpleNamespace(
+        client=SimpleNamespace(get_edx_course_ids=lambda: [[{"id": COURSE_ID}]])
+    )
+    return materialize(
+        [build_irx_export_asset("mitx")],
+        partition_key=DROP_DATE,
+        resources={"openedx": openedx},
+        raise_on_error=False,
+    )
+
+
+def test_manifest_lists_every_delivered_file(drop_root, monkeypatch) -> None:
+    result = _run_export(monkeypatch)
+
+    assert result.success
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    assert manifest["deployment"] == "mitx"
+    assert manifest["drop_date"] == "20260920"
+    expected = [
+        "course_ids.csv",
+        *(f"{f.name}.csv" for f in IRX_EXPORT_FILES),
+        "forum/contents.bson",
+    ]
+    assert [entry["name"] for entry in manifest["files"]] == expected
+    for entry in manifest["files"]:
+        data = (drop_root / entry["name"]).read_bytes()
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest()
+        assert entry["size_bytes"] == len(data)
+    # The course list filters out the unlisted run.
+    assert {entry["row_count"] for entry in manifest["files"][:-1]} == {1}
+
+
+def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> None:
+    assert _run_export(monkeypatch).success
+    assert (drop_root / MANIFEST_NAME).exists()
+
+    result = _run_export(monkeypatch, fail_on="courseware_studentmodule")
+
+    assert not result.success
+    assert not (drop_root / MANIFEST_NAME).exists()
