@@ -42,6 +42,7 @@ tables:
   raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:
+      _airbyte_extracted_at: copy
       title: copy
       semester: copy
       course_id: copy
@@ -60,6 +61,7 @@ tables:
   raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:
+      _airbyte_extracted_at: copy
       tabs: copy
       course_id: copy
       self_paced: copy
@@ -73,6 +75,7 @@ tables:
   raw_metadata_column: _airbyte_extracted_at
   mirror:
     columns:
+      _airbyte_extracted_at: copy
       duration: copy
       course_id: copy
       edx_video_id: copy
