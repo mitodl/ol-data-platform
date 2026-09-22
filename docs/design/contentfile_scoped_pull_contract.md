@@ -98,8 +98,12 @@ is just `str(course_id)` — Learn's `canvas_course_folder()` derives it from th
 but its own docstring says that value *is* the Canvas course id, it's just reached via the archive
 path today. So the formula the new sender builds is `f"{course_id}-{course_code}"`, using the
 `course_id` and `metadata["course_code"]` it already has; it does not need `course_folder` as a
-separate lookup. The new Canvas sending asset must build `readable_id` this way before sending, so
-it matches `LearningResource.readable_id` on receipt.
+separate lookup. That value is the Canvas `LearningResource.readable_id`, not the run id: Learn
+creates the run with `run_id=f"{readable_id}+canvas"` (`learning_resources/etl/canvas.py:179`).
+**Decision: the sender appends the suffix** and sends `f"{course_id}-{course_code}+canvas"`, so the
+rule above (`readable_id` == `ContentFile.run.run_id`) holds for every source and the receiver
+needs no per-source branch to translate it. Sending the resource-level id would make the §4 prune
+match no Canvas files at all.
 
 ## 3. Receiver behaviour
 
@@ -118,13 +122,22 @@ An entry naming an unknown/unsupported `source` is logged and skipped, not 500'd
 source cannot reject an otherwise-valid batch. (Same resilience rule the `learning_resources`
 handler uses.)
 
-**Per-run lock.** Two scoped pulls for the same `readable_id` can be in flight at once — a course
+**Per-run lock.** Two scoped pulls for the same `(source, readable_id)` can be in flight at once — a course
 exported twice in quick succession, or a retried POST. Without coordination, an
 earlier-started/later-finishing pull can prune based on a result set that predates a
 later-started/earlier-finishing pull's upserts, unpublishing files the other pull just added, with
-nothing to correct it until the next export. **Decision: serialize scoped pulls per `readable_id`**
-(a lock keyed on the scope key) rather than a staleness check against a payload timestamp — a
-second pull for a run already in flight waits rather than racing it.
+nothing to correct it until the next export. **Decision: serialize scoped pulls per
+`(source, readable_id)`** (a lock keyed on the same pair the §4 prune filters on, since `run_id`
+alone is not unique across sources) rather than a staleness check against a payload timestamp.
+
+The lock is acquired **non-blocking**. A task that finds it held does not wait inside the worker:
+it re-queues itself with a countdown (`self.retry(countdown=...)`) under a max-retries cap, and on
+exhausting the cap logs and gives up, leaving that run to §7's daily reconciliation sweep. A
+blocking acquire would hold a Celery worker slot for the length of the other pull, and an N-course
+sweep landing on busy keys would starve the queue, the same shape as the §5 outage. Discarding the
+second pull as redundant was considered and rejected: it is only redundant if the second publish
+landed before the first pull read the view, and a re-export that lands mid-pull would otherwise be
+lost until the daily sweep.
 
 These tasks subclass `BaseWarehouseETLTask` from
 [mit-learn#3807](https://github.com/mitodl/mit-learn/pull/3807)
@@ -161,6 +174,18 @@ So the prune predicate must be scoped to the same key as the fetch:
 Both fields are needed: `run_id` alone is not unique across sources (Open edX run keys and Canvas
 course/run pairs can collide), so the warehouse view must expose `etl_source` alongside the scope
 key for the receiver to filter on (see §9).
+
+**"Unpublish" keeps each source's current semantics.** They are not uniform today:
+- Sources in `RESOURCE_FILE_ETL_SOURCES` (`learning_resources/etl/constants.py:121`: `mit_edx`,
+  `ocw`, `mitxonline`, `xpro`) soft-delete (`published=False`), and
+  `cleanup_deleted_content_files` reaps them after `CONTENT_FILE_RETENTION_DAYS`.
+- Canvas hard-deletes (`learning_resources/etl/canvas.py:262-267`) and is excluded from that
+  cleanup (`learning_resources/tasks.py:1018`), so a Canvas soft-delete would never be reaped.
+
+The scoped prune branches on source to match: soft-delete for `RESOURCE_FILE_ETL_SOURCES`,
+`bulk_resources_unpublished_actions` + hard delete for Canvas. Moving Canvas onto soft-delete
+would mean adding it to `RESOURCE_FILE_ETL_SOURCES`, which also gates search indexing
+(`learning_resources_search/tasks.py:669,1098`), so that is out of scope for this migration.
 
 This is the podcast full-sync hazard (`MIN_PODCASTS` / `MIN_EPISODES` in
 `assets/podcasts.py`) at a different granularity, and it deserves the same guard.
