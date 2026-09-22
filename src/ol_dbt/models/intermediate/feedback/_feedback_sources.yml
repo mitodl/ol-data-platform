@@ -35,12 +35,13 @@ sources:
           column_list: ["source_slug", "source_record_ref"]
   - name: feedback_cluster_run
     description: One row per clustering run (params, cluster/noise counts, silhouette,
-      run_status='completed'|'failed' -- an audit value, not a promotion gate), materialized
-      by the feedback_clusters Dagster asset. Consumed by feedback_cluster_identity,
-      which matches each completed run's clusters onto stable cluster_keys. No column
-      tests here -- this table may not exist yet in a clean schema, and a source-level
-      test (unlike a test on a guarded intermediate model) queries the raw relation
-      directly and fails outright rather than tolerating its absence.
+      run_status='completed'|'failed', is_promoted -- whether feedback_cluster_identity
+      may select it), materialized by the feedback_clusters Dagster asset. Consumed
+      by feedback_cluster_identity, which matches each completed, promoted run's clusters
+      onto stable cluster_keys. No column tests here -- this table may not exist yet
+      in a clean schema, and a source-level test (unlike a test on a guarded intermediate
+      model) queries the raw relation directly and fails outright rather than tolerating
+      its absence.
     columns:
     - name: cluster_run_id
       description: str, uuid identifying this clustering run.
