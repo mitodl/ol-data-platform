@@ -1,5 +1,6 @@
 """ELT assets for the data lakehouse."""
 
+import json
 import os
 import re
 from datetime import timedelta
@@ -25,8 +26,10 @@ from dagster_airbyte import (
 )
 from dagster_dbt import (
     DbtCliResource,
+    build_dbt_asset_selection,
 )
 from dagster_dbt.asset_utils import get_asset_key_for_model
+from ol_dbt_cli.lib.inventory import load_units
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
@@ -47,6 +50,7 @@ from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
     dbt_docs_artifacts_job,
+    dbt_project,
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
@@ -57,6 +61,11 @@ from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
+from lakehouse.lib.inventory import INVENTORY_DIR
+from lakehouse.lib.non_airbyte_staging import (
+    non_airbyte_raw_tables,
+    staging_models_reading,
+)
 from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
@@ -435,26 +444,70 @@ airbyte_drift_schedules = (
 # is nothing a QA or dev code location could run against production by mistake.
 qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
 
-# The PostHog staging model is the only staging model fed by a dlt source rather
-# than an Airbyte connection. `sync_and_stage_*` jobs are generated per Airbyte
-# group, and the automation sensor target subtracts the whole `staging` group,
-# so nothing else in this file reaches it: without this schedule the model has
-# no execution path at all and the raw table accumulates unmodelled.
+# The PostHog staging model is fed by a dlt source rather than an Airbyte
+# connection, so no `sync_and_stage_*` job covers it (see non_airbyte_staging).
+# It gets its own hourly schedule because the source lands an hour at a time;
+# the rest of that class is built daily below.
 #
 # data_loading lands the closed hour at :20 (see its posthog_events_ingest
 # schedule for the measured export lag); :35 leaves the load room to finish.
+POSTHOG_STAGING_MODEL = "stg__posthog__learn__s3__search_update_events"
 posthog_staging_schedule = ScheduleDefinition(
     name="posthog_staging_hourly",
     job=define_asset_job(
         name="posthog_staging_job",
         selection=AssetSelection.keys(
-            get_asset_key_for_model(
-                [full_dbt_project], "stg__posthog__learn__s3__search_update_events"
-            )
+            get_asset_key_for_model([full_dbt_project], POSTHOG_STAGING_MODEL)
         ).downstream(depth=1, include_self=True),
     ),
     cron_schedule="35 * * * *",
     execution_timezone="UTC",
+)
+
+# Every other staging model whose raw table the inventory assigns to a loader
+# other than Airbyte. For the dlt-fed ones, dbt_automation_sensor picks up the
+# downstream models once these materialize, because dlt materializes the raw
+# keys and so moves their data version. Nothing materializes the raw keys of the
+# `loader: dagster` units (the edxorg code location writes edxorg/processed_data),
+# so a rebuild of those staging models does not by itself re-trigger anything
+# downstream.
+#
+# Registered only when the selection is non-empty: an empty model list would
+# hand dbt an empty selector, which selects the whole project. The image copies
+# the inventory in, and airbyte_inventory_drift already fails naming the path
+# when it is missing.
+non_airbyte_staging_models = sorted(
+    staging_models_reading(
+        json.loads(dbt_project.manifest_path.read_text()),
+        non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
+    )
+    - {POSTHOG_STAGING_MODEL}
+)
+non_airbyte_staging_schedules = (
+    [
+        (
+            "non_airbyte_staging_daily",
+            ScheduleDefinition(
+                name="non_airbyte_staging_daily",
+                job=define_asset_job(
+                    name="non_airbyte_staging_job",
+                    selection=build_dbt_asset_selection(
+                        [full_dbt_project],
+                        dbt_select=" ".join(non_airbyte_staging_models),
+                    ),
+                ),
+                # After the cron-driven dlt ingests in data_loading (03:00 to
+                # 04:30 UTC). The edxorg table loads and the course structure
+                # assets are sensor-driven, so their staging can trail raw by up
+                # to a day.
+                cron_schedule="0 6 * * *",
+                execution_timezone="UTC",
+                default_status=DefaultScheduleStatus.RUNNING,
+            ),
+        )
+    ]
+    if non_airbyte_staging_models
+    else []
 )
 
 # Instructor onboarding schedule
@@ -563,7 +616,8 @@ defs = Definitions(
                 if DBT_AUTOMATION_ENABLED
                 else DefaultSensorStatus.STOPPED
             ),
-            # exclude staging as they are already handled by "sync_and_stage_" job
+            # exclude staging as they are already handled by the "sync_and_stage_"
+            # jobs, or by the non-Airbyte staging schedules for dlt/Dagster sources
             #
             # Note what that exclusion costs in production, where staging models
             # DO carry a condition: get_default_automation_condition_sensor_target
@@ -608,6 +662,7 @@ defs = Definitions(
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
             *airbyte_drift_schedules,
             ("posthog_staging_hourly", posthog_staging_schedule),
+            *non_airbyte_staging_schedules,
         ]
     ),
 )

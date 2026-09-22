@@ -125,6 +125,12 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # the source reads the production landing zone and no QA PostHog raw table
     # exists to build from.
     "posthog_staging_hourly": frozenset({"production"}),
+    # The same gap for every other staging model whose raw table has a
+    # non-Airbyte loader (see lakehouse.lib.non_airbyte_staging). Production
+    # only: most of these units are `qa: omit` or `qa: mirror` in the inventory,
+    # so QA has no raw table of its own to build from, and building staging in
+    # QA is RFC 12711 step 8's call.
+    "non_airbyte_staging_daily": frozenset({"production"}),
     "b2b_analytics_starrocks_nightly": frozenset({"production"}),
     # Not a data-platform schedule at all: it pushes a commit to the access
     # forge GitHub repository. There is one of those, not one per environment,
