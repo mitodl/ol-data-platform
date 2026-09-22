@@ -303,6 +303,11 @@ models:
       no courses for the program, which the delivery refuses to send, since MIT Learn
       would drop every course link the program has.
     tests: [not_null]
+  - name: retrieved_at
+    description: str, ISO 8601 time the edX programs extraction these rows come from
+      ran. The delivery refuses to send an extraction older than three days, since
+      the models keep the last one when extractions stop arriving.
+    tests: [not_null]
   - name: etl_source
     description: Always 'mit_edx'.
     tests: [not_null]

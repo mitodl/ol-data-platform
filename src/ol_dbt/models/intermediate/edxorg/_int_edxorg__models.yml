@@ -1090,6 +1090,8 @@ models:
     description: str, dated, anytime or null
   - name: course_readable_ids
     description: array of str, course keys in API order, from the programs' extraction
+  - name: retrieved_at
+    description: str, ISO 8601 time the programs extraction these rows come from ran
 
 - name: int__edxorg__mitx_learn_program_rollups
   description: >

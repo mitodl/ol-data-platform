@@ -1,5 +1,6 @@
 """Tests for the MIT edX programs payload and the no-program review issues."""
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -8,7 +9,9 @@ from unittest.mock import MagicMock
 import pytest
 from delivery.assets.mit_edx_programs import (
     ProgramWithoutCoursesError,
+    StaleExtractionError,
     build_resources,
+    check_extraction_age,
     open_unpublish_reviews,
     unpublish_review_issue,
 )
@@ -45,6 +48,7 @@ def program_row(**overrides: Any) -> dict[str, Any]:
         "etl_source": "mit_edx",
         "platform": "edx",
         "resource_type": "program",
+        "retrieved_at": "2026-09-21T05:00:15.869203+00:00",
         **overrides,
     }
 
@@ -123,6 +127,19 @@ def test_program_without_courses_fails_the_batch(
                 ),
             ],
             [],
+        )
+
+
+def test_recent_extraction_is_delivered() -> None:
+    """Up to three days old is fine; the extraction runs daily."""
+    check_extraction_age([program_row()], now=datetime(2026, 9, 24, 5, 0, tzinfo=UTC))
+
+
+def test_stale_extraction_is_refused() -> None:
+    """Past three days the models are still serving the last extraction."""
+    with pytest.raises(StaleExtractionError, match="2026-09-21T05:00:15"):
+        check_extraction_age(
+            [program_row()], now=datetime(2026, 9, 24, 5, 1, tzinfo=UTC)
         )
 
 

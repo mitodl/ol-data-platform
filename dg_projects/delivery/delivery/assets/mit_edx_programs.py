@@ -19,9 +19,8 @@ When the latest programs extraction lists no program MIT Learn ingests, there is
 nothing to deliver, and MIT Learn would reject an empty batch. Its legacy ETL left
 existing programs published in that case, and so does this asset, but it opens a
 GitHub issue per program MIT Learn still publishes so a person decides whether to
-unpublish it. If extractions stop arriving altogether, the models keep the last one
-and this asset re-sends it; the freshness check on raw__edxorg__s3__program flags
-that.
+unpublish it. If extractions stop arriving altogether, the models keep the last one,
+so this asset fails rather than deliver an extraction more than three days old.
 
 A listed program with no courses fails the run before anything is sent. MIT Learn
 replaces a program's course links with the ones delivered, so an empty list would
@@ -69,6 +68,9 @@ _PROGRAMS_TABLE = "integrations__learn__mit_edx_programs"
 _INSTRUCTORS_TABLE = "integrations__learn__mit_edx_program_instructors"
 
 _PLATFORM = "edx"
+# Matches the error_after freshness on raw__edxorg__s3__program. The extraction runs
+# daily, so this allows two missed days before refusing to re-send the last one.
+_MAX_EXTRACTION_AGE = timedelta(days=3)
 _REVIEW_TITLE_PREFIX = "Review whether MIT Learn should unpublish edX program"
 
 
@@ -169,6 +171,27 @@ def _program_to_resource(
 
 class ProgramWithoutCoursesError(ValueError):
     """A listed program has no courses, so delivering it would unlink them all."""
+
+
+class StaleExtractionError(ValueError):
+    """The programs extraction is too old to deliver."""
+
+
+def check_extraction_age(
+    programs: Iterable[Mapping[str, Any]], *, now: datetime
+) -> None:
+    """Refuse programs from an extraction older than ``_MAX_EXTRACTION_AGE``.
+
+    :raises StaleExtractionError: if the extraction is older than that.
+    """
+    retrieved_at = max(datetime.fromisoformat(row["retrieved_at"]) for row in programs)
+    if now - retrieved_at > _MAX_EXTRACTION_AGE:
+        msg = (
+            f"The latest edX programs extraction ran at {retrieved_at.isoformat()}, "
+            f"more than {_MAX_EXTRACTION_AGE.days} days ago; not re-sending it. Check "
+            "the edxorg_program_metadata asset and the raw__edxorg__s3__program sync."
+        )
+        raise StaleExtractionError(msg)
 
 
 def build_resources(
@@ -320,6 +343,7 @@ def mit_edx_programs_webhook(
         )
         return {"delivered_count": 0, "webhook_status": "skipped"}
 
+    check_extraction_age(programs_df.iter_rows(named=True), now=datetime.now(tz=UTC))
     context.log.info(
         "Delivering %d MIT edX programs to MIT Learn webhook", len(resources)
     )

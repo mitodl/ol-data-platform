@@ -196,6 +196,7 @@ select
     , coalesce(program_availability.availability, case when program_course_ids.program_uuid is null then 'anytime' end)
         as availability
     , program_course_ids.course_readable_ids
+    , listed_programs.program_retrieved_at as retrieved_at
 from listed_programs
 left join program_dates on listed_programs.program_uuid = program_dates.program_uuid
 left join program_prices on listed_programs.program_uuid = program_prices.program_uuid
