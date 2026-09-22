@@ -4,7 +4,11 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__profiles_profile') }}
 )
 
-{{ deduplicate_raw_table(order_by='updated_at desc, _airbyte_extracted_at' , partition_columns = 'user_id') }}
+{{ deduplicate_raw_table(
+    raw_table='raw__mitlearn__app__postgres__profiles_profile'
+    , first_by='updated_at'
+    , partition_columns='user_id'
+) }}
 
 , cleaned as (
     select
