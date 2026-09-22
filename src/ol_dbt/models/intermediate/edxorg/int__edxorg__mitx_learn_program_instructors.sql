@@ -6,11 +6,7 @@
 #}
 
 with program_courses as (
-    select *
-    from {{ ref('stg__edxorg__s3__program_courses') }}
-    where program_course_retrieved_at = (
-        select max(program_course_retrieved_at) from {{ ref('stg__edxorg__s3__program_courses') }}
-    )
+    {{ edxorg_current_program_courses() }}
 )
 
 , staff as (
