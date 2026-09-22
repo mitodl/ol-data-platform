@@ -15,6 +15,7 @@ from openedx.assets import irx_export
 from openedx.assets.irx_export import (
     IRX_EXPORT_FILES,
     MANIFEST_NAME,
+    _DigestingWriter,
     build_irx_export_asset,
     legacy_csv_columns,
     write_legacy_csv,
@@ -74,6 +75,21 @@ def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
     assert sha256 == hashlib.sha256(written).hexdigest()
     assert size == len(written)
     assert row_count == len(ROWS)
+
+
+def test_row_count_ignores_crlf_inside_quoted_fields_at_any_chunk_boundary() -> None:
+    frame = pl.LazyFrame(
+        {"id": [1, 2, 3], "s": ['crlf\r\n"inside" quotes', "\r", 'x""\r\n']}
+    )
+    csv_bytes = io.BytesIO()
+    frame.sink_csv(csv_bytes, line_terminator="\r\n")
+    data = csv_bytes.getvalue()
+
+    for split in range(len(data) + 1):
+        writer = _DigestingWriter(io.BytesIO())
+        writer.write(data[:split])
+        writer.write(data[split:])
+        assert writer.records - 1 == 3, split
 
 
 def test_role_users_projects_name_to_the_role_header() -> None:

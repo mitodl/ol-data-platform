@@ -182,14 +182,21 @@ def legacy_csv_columns(schema: pl.Schema, columns: Sequence[str]) -> list[pl.Exp
 
 
 class _DigestingWriter(io.RawIOBase):
-    """Hash and count bytes and rows on their way to the object store."""
+    """Hash and count bytes and CSV records on their way to the object store.
 
-    def __init__(self, sink: Any, line_terminator: bytes):
+    A record ends at a CRLF outside quotes. polars quotes any field holding a
+    CR, LF or quote, and doubles the quotes inside it, so splitting on quotes
+    alternates between unquoted and quoted text. Both that state and a CR that
+    ends one chunk carry over to the next write.
+    """
+
+    def __init__(self, sink: Any):
         self._sink = sink
-        self._line_terminator = line_terminator
+        self._in_quotes = False
+        self._pending_cr = False
         self.digest = hashlib.sha256()
         self.size = 0
-        self.lines = 0
+        self.records = 0
 
     def writable(self) -> bool:
         return True
@@ -197,7 +204,17 @@ class _DigestingWriter(io.RawIOBase):
     def write(self, data: Any) -> int:
         self.digest.update(data)
         self.size += len(data)
-        self.lines += data.count(self._line_terminator)
+        for index, segment in enumerate(bytes(data).split(b'"')):
+            if index:
+                self._in_quotes = not self._in_quotes
+                self._pending_cr = False
+            if self._in_quotes:
+                continue
+            if self._pending_cr and segment[:1] == b"\n":
+                self.records += 1
+            self.records += segment.count(b"\r\n")
+            if segment:
+                self._pending_cr = segment.endswith(b"\r")
         return self._sink.write(data)
 
 
@@ -209,11 +226,10 @@ def write_legacy_csv(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int,
     count is counted off the bytes as they're written (minus the header line)
     rather than from a second full scan of the frame.
     """
-    line_terminator = "\r\n"
     with destination.open("wb") as sink:
-        writer = _DigestingWriter(sink, line_terminator.encode())
-        frame.sink_csv(writer, line_terminator=line_terminator)
-    return writer.digest.hexdigest(), writer.size, writer.lines - 1
+        writer = _DigestingWriter(sink)
+        frame.sink_csv(writer, line_terminator="\r\n")
+    return writer.digest.hexdigest(), writer.size, writer.records - 1
 
 
 def mint_objectid(content_type: str, content_id: int) -> ObjectId:
