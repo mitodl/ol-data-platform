@@ -40,6 +40,7 @@ select
     , rollups.min_weekly_hours
     , rollups.max_weekly_hours
     , programs.course_readable_ids
+    , programs.retrieved_at
     , 'mit_edx' as etl_source
     , 'edx' as platform
     , 'program' as resource_type

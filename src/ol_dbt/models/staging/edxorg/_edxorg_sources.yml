@@ -1029,6 +1029,8 @@ sources:
     config:
       # The edX programs delivery rebuilds from the latest extraction; if the edxorg
       # asset stops landing new ones it would keep re-sending a stale program set.
+      # Nothing runs `dbt source freshness` yet, so the delivery asset also refuses
+      # an extraction older than three days.
       freshness:
         warn_after: {count: 2, period: day}
         error_after: {count: 3, period: day}
