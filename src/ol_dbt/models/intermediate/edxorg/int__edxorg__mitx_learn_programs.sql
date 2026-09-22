@@ -23,13 +23,8 @@ with programs as (
     where program_retrieved_at = (select max(program_retrieved_at) from {{ ref('stg__edxorg__s3__programs') }})
 )
 
--- The courses from the same extraction as the programs, rather than their own latest:
--- if one stream's sync lands without the other's, a program is left with no courses
--- (which the delivery refuses to send) instead of being paired with another day's.
 , program_courses as (
-    select *
-    from {{ ref('stg__edxorg__s3__program_courses') }}
-    where program_course_retrieved_at = (select max(program_retrieved_at) from programs)
+    {{ edxorg_current_program_courses() }}
 )
 
 , runs as (
