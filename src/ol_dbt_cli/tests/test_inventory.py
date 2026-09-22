@@ -198,6 +198,14 @@ class TestMirrorRules:
         report = _run(inventory)
         assert "drops its raw metadata column '_dlt_load_id'" in _messages(report)
 
+    def test_mirror_must_keep_every_column_of_a_list_declaration(self, inventory: Path) -> None:
+        unit = _mirrored_unit({"columns": {"_airbyte_extracted_at": "copy"}})
+        unit["raw_metadata_column"] = ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+        _write(inventory, "edxorg__s3", unit)
+        report = _run(inventory)
+        assert "drops its raw metadata column '_ab_source_file_last_modified'" in _messages(report)
+        assert "'_airbyte_extracted_at'" not in _messages(report)
+
     def test_unknown_mode_is_rejected_by_the_schema(self, inventory: Path) -> None:
         _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "scramble"}}))
         report = _run(inventory)

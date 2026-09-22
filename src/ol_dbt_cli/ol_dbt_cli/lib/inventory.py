@@ -348,15 +348,17 @@ def _check_mirror(unit: Unit, report: ValidationReport) -> None:
         # naming it in the model, so no SQL analysis sees the read. A mirror that
         # drops it breaks every staging model deduplicating the table.
         metadata_column = raw_metadata_column(unit, table)
-        if metadata_column is not None and metadata_column not in mirror["columns"]:
-            report.add(
-                CHECK,
-                Severity.ERROR,
-                unit.key,
-                f"{raw_table}'s mirror drops its raw metadata column {metadata_column!r}",
-                "deduplicate_raw_table orders by it. Add it as `copy`, or correct the table's "
-                "raw_metadata_column if the table does not carry it.",
-            )
+        metadata_columns = [metadata_column] if isinstance(metadata_column, str) else metadata_column or []
+        for column in metadata_columns:
+            if column not in mirror["columns"]:
+                report.add(
+                    CHECK,
+                    Severity.ERROR,
+                    unit.key,
+                    f"{raw_table}'s mirror drops its raw metadata column {column!r}",
+                    "deduplicate_raw_table orders by it. Add it as `copy`, or correct the table's "
+                    "raw_metadata_column if the table does not carry it.",
+                )
         if mirror_where_is_a_statement(mirror.get("where", "")):
             report.add(
                 CHECK,
