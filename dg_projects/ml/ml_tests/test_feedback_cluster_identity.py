@@ -127,7 +127,7 @@ def _runs_and_identity_frames(
 
 def test_select_run_to_process_skips_unpromoted_same_model_sweep() -> None:
     # Same model/dim/arm as production (e.g. a min_cluster_size sweep) but not
-    # promoted -- embedding provenance alone can't tell these apart (#2727).
+    # promoted -- embedding provenance alone can't tell these apart (#2543).
     runs_lf = _lazyframe(
         {
             "cluster_run_id": ["sweep-run", "production-run"],

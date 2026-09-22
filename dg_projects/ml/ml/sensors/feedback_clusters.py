@@ -51,11 +51,20 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
 
     last_completed_total_conversations = None
     if table_exists(catalog, f"{cluster_database_name}.feedback_cluster_run"):
+        runs_lazy = get_dbt_model_as_dataframe(
+            database_name=cluster_database_name, table_name="feedback_cluster_run"
+        )
+        # is_promoted may not exist yet on a table pre-dating it -- an unpromoted
+        # run (a bake-off/hyperparameter sweep) must never become this baseline,
+        # so treat a missing column as "nothing eligible" rather than skip the
+        # check.
+        is_promoted_filter = (
+            pl.col("is_promoted")
+            if "is_promoted" in runs_lazy.collect_schema().names()
+            else pl.lit(False)  # noqa: FBT003
+        )
         last_run_df = (
-            get_dbt_model_as_dataframe(
-                database_name=cluster_database_name, table_name="feedback_cluster_run"
-            )
-            .filter(pl.col("run_status") == "completed")
+            runs_lazy.filter((pl.col("run_status") == "completed") & is_promoted_filter)
             .sort("run_at", descending=True)
             .select("total_conversations")
             .limit(1)
@@ -67,7 +76,9 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     if should_trigger_early_recluster(
         embedding_count, last_completed_total_conversations
     ):
-        return RunRequest()
+        return RunRequest(
+            run_config={"ops": {"feedback_clusters": {"config": {"is_promoted": True}}}}
+        )
     return SkipReason(
         "Corpus growth since the last completed run is below the trigger threshold"
     )

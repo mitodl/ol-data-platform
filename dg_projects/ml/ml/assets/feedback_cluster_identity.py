@@ -79,14 +79,20 @@ def _select_run_to_process(
         return config.cluster_run_id
     if not table_exists(catalog, f"{database_name}.feedback_cluster_run"):
         return None
+    runs_lazy = get_dbt_model_as_dataframe(
+        database_name=database_name, table_name="feedback_cluster_run"
+    )
+    # is_promoted may not exist yet on a table pre-dating it -- treat that as
+    # "nothing eligible" rather than error or silently skip the check.
+    is_promoted_filter = (
+        pl.col("is_promoted")
+        if "is_promoted" in runs_lazy.collect_schema().names()
+        else pl.lit(False)  # noqa: FBT003
+    )
     runs_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_cluster_run"
-        )
-        .filter(
+        runs_lazy.filter(
             (pl.col("run_status") == "completed")
-            # Only a run explicitly marked for production.
-            & (pl.col("is_promoted"))
+            & is_promoted_filter
             & (pl.col("embedding_model_version") == default_embedding_model_version())
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
             & (pl.col("embedding_input_filter") == PRODUCTION_EMBEDDING_INPUT)

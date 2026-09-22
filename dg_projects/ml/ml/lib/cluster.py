@@ -41,8 +41,10 @@ CLUSTER_RUN_SCHEMA = {
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
 # embedding_dim/embedding_input_filter, which a same-model evaluation run (e.g. a
-# min_cluster_size/UMAP sweep) can share with a real production run.
-DEFAULT_IS_PROMOTED = True
+# min_cluster_size/UMAP sweep) can share with a real production run. Fails closed:
+# a manual/ad hoc launch that omits this is an evaluation run by default; only the
+# weekly schedule and growth sensor explicitly opt into True.
+DEFAULT_IS_PROMOTED = False
 
 # Column order matches how cluster_embeddings actually writes it: JOIN_COLS then
 # DEBUG_COLS then the added columns, not cluster_run_id first.

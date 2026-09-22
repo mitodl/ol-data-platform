@@ -93,9 +93,10 @@ class FeedbackClustersConfig(Config):
         default=DEFAULT_IS_PROMOTED,
         description=(
             "Whether feedback_cluster_identity may auto-select this run into "
-            "live cluster_membership. Set to false for a bake-off (#2543) or "
-            "hyperparameter-sweep run -- embedding model/dim/arm alone can't "
-            "tell those apart from a real production run."
+            "live cluster_membership. Defaults false -- set true only for the "
+            "production launcher (feedback_clusters_weekly_schedule/"
+            "feedback_clusters_growth_sensor); a manual run (e.g. a bake-off, "
+            "#2543, or hyperparameter sweep) should leave this unset."
         ),
     )
 
@@ -112,7 +113,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v1",
+            code_version="feedback_clusters_v2",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -122,7 +123,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v1",
+            code_version="feedback_clusters_v2",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
