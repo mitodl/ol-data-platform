@@ -799,6 +799,8 @@ models:
   - name: dedp_public_policy_program_cert_ind
     description: str, indictor showing if the user has recieved any DEDP Public Policy
       program credentials
+  - name: any_dedp_program_enroll_ind
+    description: str, indictor showing if the user has enrolled in any DEDP program
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
