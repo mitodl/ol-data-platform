@@ -14,7 +14,7 @@ import json
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import bson
 import polars as pl
@@ -379,7 +379,17 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         # A re-run rewrites the files in place. Take the old manifest down first,
         # so a re-run that fails partway leaves no manifest vouching for a mix of
         # old and new files.
-        (drop / MANIFEST_NAME).unlink(missing_ok=True)
+        manifest_path = drop / MANIFEST_NAME
+        manifest_path.unlink(missing_ok=True)
+        # s3fs deletes through DeleteObjects and drops per-key errors, so a
+        # denied delete returns as if it had worked.
+        if manifest_path.exists():
+            raise Failure(
+                description=(
+                    f"Could not delete {manifest_path}; it would vouch for a drop "
+                    "this run is about to rewrite."
+                )
+            )
         delivered: dict[str, MaterializeResult] = {}
 
         # The live API list, not the course-run partition set: the sensor that
@@ -438,7 +448,7 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         yield delivered["forum/contents.bson"]
 
         manifest = build_manifest(deployment, drop_date, context.run.run_id, delivered)
-        yield _write_manifest(manifest_key, manifest, drop / MANIFEST_NAME)
+        yield _write_manifest(manifest_key, manifest, manifest_path)
 
     return irx_export
 
@@ -483,7 +493,7 @@ def build_manifest(
             {
                 "name": name,
                 **{
-                    field_name: result.metadata[field_name]
+                    field_name: cast("Mapping[str, Any]", result.metadata)[field_name]
                     for field_name in MANIFEST_FILE_FIELDS
                 },
             }

@@ -200,3 +200,17 @@ def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> Non
 
     assert not result.success
     assert not (drop_root / MANIFEST_NAME).exists()
+
+
+def test_rerun_fails_when_the_old_manifest_cannot_be_deleted(
+    drop_root, monkeypatch
+) -> None:
+    assert _run_export(monkeypatch).success
+    written = (drop_root / "users_query.csv").stat().st_mtime_ns
+    # s3fs reports a denied delete as a success.
+    monkeypatch.setattr(type(drop_root), "unlink", lambda *_args, **_kwargs: None)
+
+    result = _run_export(monkeypatch)
+
+    assert not result.success
+    assert (drop_root / "users_query.csv").stat().st_mtime_ns == written
