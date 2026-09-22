@@ -51,6 +51,10 @@ class TestRenderMirror:
         assert "CASE WHEN FALSE THEN `birth_year` END AS `birth_year`" in statement.sql
         assert statement.sql.endswith("FROM ol_data_lake_production.ol_warehouse_production_raw.`raw__edxorg__report`")
         assert statement.dropped == ["last_name"]
+        # The query on its own is what the asset EXPLAINs before it drops the
+        # QA copy, so it has to be the CTAS's own query, not a rebuild of it.
+        assert statement.sql.endswith(statement.select)
+        assert statement.select.startswith("SELECT /*+ SET_VAR(")
 
     def test_where_is_relative_to_the_production_table(self) -> None:
         where = "_airbyte_extracted_at >= (SELECT max(_airbyte_extracted_at) FROM {source}) - 86400000"

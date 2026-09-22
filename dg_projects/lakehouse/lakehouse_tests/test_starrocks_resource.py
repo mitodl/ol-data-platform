@@ -105,3 +105,29 @@ def test_a_failed_connection_is_still_retried_for_a_non_idempotent_statement(
     with pytest.raises(OperationalError):
         resource.execute("CREATE TABLE t AS SELECT 1", idempotent=False)
     assert statements == ["CREATE TABLE t AS SELECT 1"]
+
+
+def test_a_fetch_with_no_params_binds_nothing(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    # pymysql's Cursor.execute runs `query % args` for any args that is not
+    # None, so an empty tuple binds nothing and still makes a literal `%` in
+    # the SQL raise "not enough arguments for format string". The QA mirror
+    # sends a `where` an operator wrote through fetch, and a LIKE pattern or a
+    # date_format mask there is exactly that.
+    sent: list[tuple[str, Any]] = []
+
+    class RecordingCursor(FakeCursor):
+        def execute(self, sql: str, _params: Any) -> None:
+            sent.append((sql, _params))
+
+    class RecordingConnection(FakeConnection):
+        def cursor(self) -> RecordingCursor:
+            return RecordingCursor(self)
+
+    monkeypatch.setattr(
+        starrocks_module, "connect", lambda **_: RecordingConnection([])
+    )
+    sql = "EXPLAIN SELECT a FROM t WHERE b LIKE '%sandbox%'"
+    assert resource.fetch(sql) == []
+    assert sent == [(sql, None)]

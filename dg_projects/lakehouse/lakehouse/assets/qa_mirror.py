@@ -53,6 +53,21 @@ def _render(
             table.name,
             ", ".join(statement.dropped),
         )
+    # render_mirror compares `mirror.columns` with DESCRIBE, and rejects a
+    # `mirror.where` that is a statement rather than a predicate, but it never
+    # resolves the predicate's own columns. So a column production has renamed
+    # that the `where` alone names -- including inside its `{source}` subquery
+    # -- reached StarRocks for the first time in the CTAS, after this table's
+    # DROP, leaving the unit half refreshed. EXPLAIN resolves it here instead,
+    # while every QA copy in the unit is still intact.
+    #
+    # What it resolves is names and function signatures. An expression
+    # StarRocks has an implicit cast for is planned, not rejected: varchar
+    # arithmetic and `date_add` on a varchar both plan, so a `where` wrong in
+    # that way still fails from the CTAS. Measured on QA 2026-09-21, recorded
+    # in QA_DATA_TOPOLOGY_SPEC.md §8.
+    context.log.info("%s: planning the copy", table.name)
+    starrocks.fetch(f"EXPLAIN {statement.select}")
     return statement
 
 

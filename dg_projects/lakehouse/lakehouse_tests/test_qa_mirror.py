@@ -10,7 +10,10 @@ from typing import Any
 
 import pytest
 from dagster import Failure, build_asset_context
-from lakehouse.assets.qa_mirror import _mirror_asset, build_qa_mirror_assets
+from lakehouse.assets.qa_mirror import (
+    _mirror_asset,
+    build_qa_mirror_assets,
+)
 from ol_dbt_cli.lib.qa_mirror import MirrorDeclarationError, MirrorTable
 from pymysql.err import OperationalError
 
@@ -35,6 +38,8 @@ class FakeStarRocks:
         self.statements.append(sql)
         if sql.startswith("DESCRIBE"):
             return self.described
+        if sql.startswith("EXPLAIN"):
+            return [{"Explain String": "OlapScanNode"}]
         return [{"row_count": 42}]
 
     def execute(self, sql: str, *, idempotent: bool = True) -> None:
@@ -57,12 +62,16 @@ def _materialise(
     return asset(build_asset_context(), starrocks)
 
 
-def test_describes_drops_then_copies() -> None:
+def test_describes_explains_drops_then_copies() -> None:
     starrocks = FakeStarRocks(PRODUCTION)
     result = _materialise(starrocks)
 
-    describe, drop, ctas, count = starrocks.statements
+    describe, explain, drop, ctas, count = starrocks.statements
     assert describe.startswith("DESCRIBE ol_data_lake_production.")
+    assert explain.startswith("EXPLAIN SELECT")
+    # The plan is of the copy's own query, so a `where` StarRocks cannot plan
+    # fails here rather than after the DROP below.
+    assert explain.removeprefix("EXPLAIN ") in ctas
     assert drop == f"DROP TABLE IF EXISTS {TARGET} FORCE"
     assert ctas.startswith(f"CREATE TABLE {TARGET}\nAS SELECT")
     assert count.endswith(f"FROM {TARGET}")
@@ -88,7 +97,52 @@ def test_a_stale_declaration_fails_before_any_qa_copy_in_the_unit_is_dropped() -
     starrocks = FakeStarRocks(PRODUCTION)
     with pytest.raises(MirrorDeclarationError):
         _materialise(starrocks, [TABLE, stale])
-    assert [s.split()[0] for s in starrocks.statements] == ["DESCRIBE", "DESCRIBE"]
+    assert [s.split()[0] for s in starrocks.statements] == [
+        "DESCRIBE",
+        "EXPLAIN",
+        "DESCRIBE",
+    ]
+
+
+def test_a_query_starrocks_cannot_plan_fails_before_any_qa_copy_is_dropped() -> None:
+    # A `where` naming a column production has renamed, or calling a function
+    # no signature matches, gets past render_mirror: that compares
+    # `mirror.columns` with DESCRIBE and never resolves the predicate's own
+    # columns. Only planning the query catches it.
+    class FailingExplain(FakeStarRocks):
+        def fetch(self, sql: str) -> list[dict[str, Any]]:
+            rows = super().fetch(sql)
+            if sql.startswith("EXPLAIN"):
+                raise OperationalError(1064, "Getting analyzing error")
+            return rows
+
+    starrocks = FailingExplain(PRODUCTION)
+    with pytest.raises(OperationalError):
+        _materialise(starrocks, [TABLE, TABLE])
+    assert [s.split()[0] for s in starrocks.statements] == ["DESCRIBE", "EXPLAIN"]
+
+
+def test_the_last_table_in_a_unit_is_planned_before_the_first_one_is_dropped() -> None:
+    # The table whose plan fails is the second, so a loop that rendered and
+    # copied one table at a time would already have dropped and rebuilt the
+    # first. Only planning the whole unit up front leaves it untouched.
+    class FailsOnTheSecondExplain(FakeStarRocks):
+        def fetch(self, sql: str) -> list[dict[str, Any]]:
+            rows = super().fetch(sql)
+            explains = [s for s in self.statements if s.startswith("EXPLAIN")]
+            if sql.startswith("EXPLAIN") and len(explains) > 1:
+                raise OperationalError(1064, "Getting analyzing error")
+            return rows
+
+    starrocks = FailsOnTheSecondExplain(PRODUCTION)
+    with pytest.raises(OperationalError):
+        _materialise(starrocks, [TABLE, TABLE])
+    assert [s.split()[0] for s in starrocks.statements] == [
+        "DESCRIBE",
+        "EXPLAIN",
+        "DESCRIBE",
+        "EXPLAIN",
+    ]
 
 
 def test_a_failed_ctas_fails_the_run_rather_than_counting_what_it_left() -> None:
@@ -107,6 +161,7 @@ def test_a_failed_ctas_fails_the_run_rather_than_counting_what_it_left() -> None
         _materialise(starrocks)
     assert [s.split()[0] for s in starrocks.statements] == [
         "DESCRIBE",
+        "EXPLAIN",
         "DROP",
         "CREATE",
     ]

@@ -494,10 +494,26 @@ column. The dedup macro reads that column through the inventory, so no analysis 
 SQL sees the read.
 
 The asset checks every table's declaration in the unit against `DESCRIBE` of the production
-table before it drops any QA copy. An allowlisted column that production lacks, or `hash` or
-`redact` on a non-string column, fails the run with the whole unit's QA copies still in place.
-A `where` or CTAS that fails at run time is different: it fails after that table's `DROP`, so
-the unit is left partly refreshed and the failed table absent.
+table, then `EXPLAIN`s each rendered query, before it drops any QA copy. An allowlisted column
+that production lacks, and `hash` or `redact` on a non-string column, fail in the declaration
+check. That check also rejects a `mirror.where` that is a statement rather than a predicate,
+but it never resolves the predicate's own columns. The `EXPLAIN` is what covers those: a column
+the `where` names, or that its `{source}` subquery names, is resolved against production here
+rather than reaching StarRocks for the first time in the CTAS.
+
+What `EXPLAIN` settles is whether every name and every function signature resolves. An
+expression StarRocks has an implicit cast for is planned rather than rejected, so it is not a
+type check. Measured on QA StarRocks 2026-09-21 (below): an unresolvable column, an unknown
+function, a wrong argument count and an argument type no signature accepts (`array_length` on a
+varchar) all raise `1064 Getting analyzing error` at plan time, while
+`varchar >= varchar - 86400000`, `date_add` on a varchar and a bare non-boolean predicate all
+plan without complaint. So a `where` wrong in that second way still fails from the CTAS, after
+that table's `DROP`, leaving the unit partly refreshed and the failed table absent -- as does
+any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
+
+The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
+other 23 what it adds over the declaration check is that the masking expressions themselves
+plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
 
@@ -613,3 +629,21 @@ through the `admin` Vault role the production resource uses:
   `data/load_spill/` marker, and because `ol-data-lake-raw-qa` is versioned the dropped files
   remain as noncurrent versions until the bucket's 90-day `expire-noncurrent-versions` rule
   removes them. So each refresh keeps the previous copy billed for up to 90 days.
+
+### Checked on QA StarRocks (2026-09-21)
+
+`EXPLAIN` of the same rendered SELECT, QA-to-QA against `raw__edxorg__s3__mitx_course`, through
+the `readonly` Vault role, since planning reads no data:
+
+- `EXPLAIN SELECT /*+ SET_VAR(query_timeout = 14400, insert_timeout = 14400) */ ...` over an
+  Iceberg table is accepted with the hint in place and returns a plan. So is the same query
+  with a `{source}` subquery in its `WHERE`, which is how both declared filters are shaped.
+- Raised at plan time, as `1064 Getting analyzing error`: an unresolvable column in the select
+  list, in the predicate, and inside the `{source}` subquery; an unknown function; a wrong
+  argument count (`sha2(x)`); a wrong argument type (`array_length` on a varchar).
+- Planned without complaint, so *not* caught: `varchar >= varchar - 86400000`, `date_add` on a
+  varchar, and a bare non-boolean predicate. StarRocks coerces all three.
+- A literal `%` in the predicate (`LIKE '%sandbox%'`) plans normally once the statement is sent
+  with no parameter tuple. Sent with an empty one, pymysql's `query % args` raises
+  `ProgrammingError: not enough arguments for format string` before StarRocks sees it, which is
+  why `StarRocksResource.fetch` defaults `params` to None rather than `()`.
