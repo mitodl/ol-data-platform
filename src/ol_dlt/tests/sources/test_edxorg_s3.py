@@ -301,26 +301,17 @@ def test_reader_hands_duckdb_a_path_not_a_file_object(
     export entirely in RAM.
     """
     sources: list[object] = []
-    real_connect = duckdb.connect
+    real_from_csv_auto = duckdb.DuckDBPyConnection.from_csv_auto
 
-    class _SpyConnection:
-        """Records what the reader hands to ``from_csv_auto``."""
+    def spy(
+        connection: duckdb.DuckDBPyConnection,
+        source: Any,  # noqa: ANN401
+        **kwargs: Any,
+    ) -> duckdb.DuckDBPyRelation:
+        sources.append(source)
+        return real_from_csv_auto(connection, source, **kwargs)
 
-        def __init__(self) -> None:
-            self._connection = real_connect()
-
-        def from_csv_auto(
-            self,
-            source: Any,  # noqa: ANN401
-            **kwargs: Any,
-        ) -> duckdb.DuckDBPyRelation:
-            sources.append(source)
-            return self._connection.from_csv_auto(source, **kwargs)
-
-        def close(self) -> None:
-            self._connection.close()
-
-    monkeypatch.setattr(duckdb, "connect", lambda: _SpyConnection())
+    monkeypatch.setattr(duckdb.DuckDBPyConnection, "from_csv_auto", spy)
 
     rows = _rows(_read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)]))
 
