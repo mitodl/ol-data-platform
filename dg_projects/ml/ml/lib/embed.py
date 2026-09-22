@@ -252,6 +252,10 @@ class BedrockEmbeddingClient:
         }
         if is_v4:
             request_body["embedding_types"] = ["float"]
+            # v4's Matryoshka truncation param -- unlike v3, which has no
+            # dimension override at all. Unverified against a live response;
+            # confirm the returned vector length actually matches self.dim.
+            request_body["output_dimension"] = self.dim
         response = self._client.invoke_model(
             modelId=self.model_version, body=json.dumps(request_body)
         )
@@ -414,16 +418,22 @@ def _is_isolatable_error(error: Exception) -> bool:
     """Whether error is about one bad row's content, not the whole request.
 
     openai.BadRequestError is always this (OpenAI has no other 4xx that reaches
-    here). Bedrock's ValidationException is Cohere/Titan's equivalent -- e.g. a
-    text over the model's per-input length cap (Cohere embed-english-v3: 2048
-    chars) -- but boto3 raises the same ClientError for every failure mode
-    (throttling, auth, etc.), so the error code inside it has to be checked
-    rather than the exception type alone.
+    here). Bedrock's ValidationException is overloaded, though -- it also covers
+    a bad model id, an unsupported dimension, or a malformed request schema, none
+    of which a per-row retry can fix (that just turns one systemic failure into
+    up to len(chunk) failed calls). Cohere's per-input length cap (e.g.
+    embed-english-v3: 2048 chars) is the one ValidationException shape that is
+    actually isolatable, and it's identifiable: Bedrock reports it as
+    "#/texts/<index>: expected maxLength..." -- a JSON-pointer at a specific
+    array element, unlike a request-level problem, which never names one.
     """
     if isinstance(error, openai.BadRequestError):
         return True
     if isinstance(error, ClientError):
-        return error.response.get("Error", {}).get("Code") == "ValidationException"
+        if error.response.get("Error", {}).get("Code") != "ValidationException":
+            return False
+        message = error.response.get("Error", {}).get("Message", "")
+        return "#/texts/" in message
     return False
 
 

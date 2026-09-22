@@ -55,15 +55,38 @@ class _FakeEmbeddingClient:
             raise openai.RateLimitError(msg, response=_fake_response(429), body=None)
         if "toolong" in texts:
             # Bedrock's isolatable-per-row equivalent of openai.BadRequestError
-            # -- e.g. Cohere embed-english-v3's 2048-char-per-text cap.
+            # -- e.g. Cohere embed-english-v3's 2048-char-per-text cap. The
+            # "#/texts/<index>" pointer is what distinguishes this from a
+            # request-level ValidationException below.
             raise ClientError(
-                {"Error": {"Code": "ValidationException", "Message": "too long"}},
+                {
+                    "Error": {
+                        "Code": "ValidationException",
+                        "Message": (
+                            "Malformed input request: #/texts/1: expected "
+                            "maxLength: 2048, actual: 2103, please reformat "
+                            "your input and try again."
+                        ),
+                    }
+                },
                 "InvokeModel",
             )
         if "throttled" in texts:
             # A ClientError that is NOT content-related -- must stay systemic.
             raise ClientError(
                 {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
+                "InvokeModel",
+            )
+        if "badmodel" in texts:
+            # Same ValidationException code as "toolong", but request-level (no
+            # per-item pointer) -- must also stay systemic, not retried per row.
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "ValidationException",
+                        "Message": "The provided model identifier is invalid.",
+                    }
+                },
                 "InvokeModel",
             )
         return [[float(len(text))] * self.dim for text in texts]
@@ -498,6 +521,7 @@ def test_bedrock_embedding_client_cohere_v4_unnests_float_embeddings() -> None:
 
     assert result == [[0.1, 0.2], [0.3, 0.4]]
     assert fake_client.calls[0]["embedding_types"] == ["float"]
+    assert fake_client.calls[0]["output_dimension"] == 2
 
 
 def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
@@ -869,6 +893,35 @@ def test_embed_and_checkpoint_drops_chunk_on_non_validation_client_error() -> No
 
     assert result.height == 0
     assert client.batch_calls == [["hello", "throttled", "world"]]
+    assert len(errors) == 1
+
+
+def test_embed_and_checkpoint_drops_chunk_on_request_level_validation_error() -> None:
+    """A ValidationException with no "#/texts/<index>" pointer (e.g. an invalid
+    model id) is request-level, not row-content -- must stay systemic rather
+    than retry once per row in the chunk.
+    """
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient()
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
+            "source_slug": ["zendesk", "zendesk", "zendesk"],
+            "conversation_ref": ["1", "2", "3"],
+            "turn_count": [1, 1, 1],
+            "embedding_input": ["summary", "summary", "summary"],
+            "resolved_text": ["hello", "badmodel", "world"],
+        }
+    )
+    errors: list[str] = []
+
+    result = embed.embed_and_checkpoint(
+        df, client, (catalog, "some_db.feedback_embeddings"), errors=errors
+    )
+
+    assert result.height == 0
+    assert client.batch_calls == [["hello", "badmodel", "world"]]
     assert len(errors) == 1
 
 
