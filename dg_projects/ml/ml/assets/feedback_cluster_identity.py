@@ -85,8 +85,8 @@ def _select_run_to_process(
         )
         .filter(
             (pl.col("run_status") == "completed")
-            # Scoped to production's config so a bake-off run (#2543) is never
-            # auto-selected into live cluster_membership.
+            # Only a run explicitly marked for production.
+            & (pl.col("is_promoted"))
             & (pl.col("embedding_model_version") == default_embedding_model_version())
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
             & (pl.col("embedding_input_filter") == PRODUCTION_EMBEDDING_INPUT)

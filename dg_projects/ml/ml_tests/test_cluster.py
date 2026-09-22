@@ -122,6 +122,7 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["algorithm"] == "umap+hdbscan"
     assert run_metadata["embedding_model_version"] == "text-embedding-3-small"
     assert run_metadata["embedding_dim"] == 5
+    assert run_metadata["is_promoted"] is True
     assert run_metadata["embedding_input_filter"] == "summary"
     assert run_metadata["random_state"] == 42
     # Two well-separated blobs must not collapse into a single cluster.

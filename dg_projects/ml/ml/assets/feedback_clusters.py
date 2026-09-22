@@ -14,6 +14,7 @@ from dagster import (
 from ml.lib.cluster import (
     CLUSTER_CANDIDATE_SCHEMA,
     CLUSTER_RUN_SCHEMA,
+    DEFAULT_IS_PROMOTED,
     HDBSCAN_MIN_CLUSTER_SIZE,
     RANDOM_STATE,
     UMAP_N_COMPONENTS,
@@ -88,6 +89,15 @@ class FeedbackClustersConfig(Config):
             "EMBEDDING_DIM (ml.lib.embed)."
         ),
     )
+    is_promoted: bool = Field(
+        default=DEFAULT_IS_PROMOTED,
+        description=(
+            "Whether feedback_cluster_identity may auto-select this run into "
+            "live cluster_membership. Set to false for a bake-off (#2543) or "
+            "hyperparameter-sweep run -- embedding model/dim/arm alone can't "
+            "tell those apart from a real production run."
+        ),
+    )
 
 
 @multi_asset(
@@ -124,8 +134,9 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     Reduce (UMAP) and cluster (HDBSCAN) feedback conversation embeddings.
 
     One row lands in feedback_cluster_run describing the run as a whole (params,
-    cluster/noise counts, silhouette, run_status='completed'|'failed' -- an audit
-    value, not a promotion gate); one row per clustered conversation lands in
+    cluster/noise counts, silhouette, run_status='completed'|'failed', is_promoted
+    -- whether feedback_cluster_identity may select it); one row per clustered
+    conversation lands in
     feedback_cluster_candidate. Both are append-only:
     every run gets its own cluster_run_id. Scheduled/triggered (see
     feedback_clusters_schedule/feedback_clusters_growth_sensor in definitions.py),
@@ -202,6 +213,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             config.min_cluster_size,
             RANDOM_STATE,
             embeddings_df.height,
+            is_promoted=config.is_promoted,
         )
         failed_metadata["run_at"] = datetime.now(tz=UTC)
         yield Output(
@@ -224,6 +236,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         umap_params=umap_params,
         min_cluster_size=config.min_cluster_size,
         cluster_run_id=cluster_run_id,
+        is_promoted=config.is_promoted,
     )
     run_metadata["run_at"] = datetime.now(tz=UTC)
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
@@ -254,5 +267,6 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             "noise_count": MetadataValue.int(run_metadata["noise_count"]),
             "embedding_model_version": MetadataValue.text(embedding_model_version),
             "embedding_dim": MetadataValue.int(embedding_dim),
+            "is_promoted": MetadataValue.bool(config.is_promoted),
         },
     )

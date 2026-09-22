@@ -125,22 +125,24 @@ def _runs_and_identity_frames(
     return _fake_get_dbt_model_as_dataframe
 
 
-def test_select_run_to_process_skips_non_production_run() -> None:
-    # bake-off is newer than production, but must lose regardless of run_at.
+def test_select_run_to_process_skips_unpromoted_same_model_sweep() -> None:
+    # Same model/dim/arm as production (e.g. a min_cluster_size sweep) but not
+    # promoted -- embedding provenance alone can't tell these apart (#2727).
     runs_lf = _lazyframe(
         {
-            "cluster_run_id": ["bake-off-run", "production-run"],
+            "cluster_run_id": ["sweep-run", "production-run"],
             "run_status": ["completed", "completed"],
             "run_at": [
                 datetime(2026, 1, 2, tzinfo=UTC),
                 datetime(2026, 1, 1, tzinfo=UTC),
             ],
             "embedding_model_version": [
-                "gemini-embedding-001",
+                "text-embedding-3-large",
                 "text-embedding-3-large",
             ],
             "embedding_dim": [1024, 1024],
             "embedding_input_filter": ["summary", "summary"],
+            "is_promoted": [False, True],
         }
     )
     with (
@@ -157,33 +159,6 @@ def test_select_run_to_process_skips_non_production_run() -> None:
     ):
         result = _select_run_to_process(MagicMock(), FeedbackClusterIdentityConfig())
     assert result == "production-run"
-
-
-def test_select_run_to_process_none_when_only_bake_off_runs() -> None:
-    runs_lf = _lazyframe(
-        {
-            "cluster_run_id": ["bake-off-run"],
-            "run_status": ["completed"],
-            "run_at": [datetime(2026, 1, 1, tzinfo=UTC)],
-            "embedding_model_version": ["gemini-embedding-001"],
-            "embedding_dim": [1024],
-            "embedding_input_filter": ["summary"],
-        }
-    )
-    with (
-        patch("ml.assets.feedback_cluster_identity.table_exists", return_value=True),
-        patch(
-            "ml.assets.feedback_cluster_identity.get_dbt_model_as_dataframe",
-            side_effect=_runs_and_identity_frames(runs_lf),
-        ),
-        patch(
-            "ml.assets.feedback_cluster_identity.default_embedding_model_version",
-            return_value="text-embedding-3-large",
-        ),
-        patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
-    ):
-        result = _select_run_to_process(MagicMock(), FeedbackClusterIdentityConfig())
-    assert result is None
 
 
 def test_select_run_to_process_explicit_override_bypasses_filter() -> None:

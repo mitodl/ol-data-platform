@@ -35,8 +35,14 @@ CLUSTER_RUN_SCHEMA = {
     "total_conversations": pl.Int64,
     "silhouette_score": pl.Float64,
     "run_status": pl.String,
+    "is_promoted": pl.Boolean,
     "run_at": pl.Datetime(time_zone="UTC"),
 }
+
+# Explicit intent, set at launch time -- not inferred from embedding_model_version/
+# embedding_dim/embedding_input_filter, which a same-model evaluation run (e.g. a
+# min_cluster_size/UMAP sweep) can share with a real production run.
+DEFAULT_IS_PROMOTED = True
 
 # Column order matches how cluster_embeddings actually writes it: JOIN_COLS then
 # DEBUG_COLS then the added columns, not cluster_run_id first.
@@ -107,6 +113,8 @@ def failed_run_metadata(  # noqa: PLR0913 -- same shape as cluster_embeddings's 
     min_cluster_size: int,
     random_state: int,
     total_conversations: int,
+    *,
+    is_promoted: bool = DEFAULT_IS_PROMOTED,
 ) -> dict[str, Any]:
     """Build a feedback_cluster_run row for an attempt that didn't complete.
 
@@ -132,6 +140,7 @@ def failed_run_metadata(  # noqa: PLR0913 -- same shape as cluster_embeddings's 
         "total_conversations": total_conversations,
         "silhouette_score": None,
         "run_status": "failed",
+        "is_promoted": is_promoted,
     }
 
 
@@ -249,6 +258,8 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     min_cluster_size: int = HDBSCAN_MIN_CLUSTER_SIZE,
     random_state: int = RANDOM_STATE,
     cluster_run_id: str | None = None,
+    *,
+    is_promoted: bool = DEFAULT_IS_PROMOTED,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
     """Cluster every row's embedding_vector; produce this run's candidates + summary.
 
@@ -266,6 +277,9 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         umap_params: (umap_n_components, umap_n_neighbors).
         cluster_run_id: caller-supplied, retry-stable ID (e.g. Dagster's run ID);
             defaults to a fresh UUID for callers that don't need retry-stability.
+        is_promoted: whether feedback_cluster_identity may auto-select this run.
+            False for a bake-off/hyperparameter-sweep run (#2543) -- embedding
+            model/dim/arm alone can't distinguish those from a production run.
 
     Returns:
         (candidates_df, run_metadata): candidates_df has cluster_run_id plus
@@ -318,5 +332,6 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         "total_conversations": embeddings_df.height,
         "silhouette_score": silhouette,
         "run_status": "completed",
+        "is_promoted": is_promoted,
     }
     return candidates_df, run_metadata
