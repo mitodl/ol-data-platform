@@ -154,11 +154,36 @@ def _read_tsv(
     Streaming (rather than buffer-then-return) still matters: one edxorg
     export can be multiple GB, and the previous ``list(fetch_arrow(...))``
     held an entire file's decoded rows in memory at once.
+
+    Each read gets its own cursor rather than issuing statements directly on
+    ``duckdb``'s module-level default connection, which every read in the
+    process shares. dlt invokes this transformer once per page and
+    round-robins the resulting generators, so while one file is suspended
+    mid-stream its ``fetch_arrow_reader`` holds a transaction open on the
+    connection it was created on; a sniff failure on the NEXT file aborts
+    that transaction, and the unquoted retry in ``_read_unquoted_tsv`` then
+    dies with "TransactionContext Error: Current transaction is aborted
+    (please ROLLBACK)" before it opens the file. That is what kept #2663's
+    fallback from ever recovering a legacy file in production (DAGSTER-30),
+    and is reproduced by priming a reader on one file and then sniff-failing
+    another without this isolation.
+
+    A cursor and not ``duckdb.connect()``: a fresh connection is a whole new
+    database instance, with its own task scheduler (measured: ~11 threads
+    each, 90 OS threads across 7 suspended reads against 13 for cursors) and
+    its own ``memory_limit`` of 80% of detected RAM, so N files in flight
+    would mean N independent memory budgets in a pod that has been OOMKilled
+    on this table before. Cursors share the one instance and isolate only
+    what needs isolating, which is the transaction.
     """
     import duckdb  # noqa: PLC0415
 
-    relation = duckdb.from_csv_auto(str(path), **duckdb_kwargs)
-    yield from fetch_arrow(relation, chunk_size)
+    connection = duckdb.default_connection().cursor()
+    try:
+        relation = connection.from_csv_auto(str(path), **duckdb_kwargs)
+        yield from fetch_arrow(relation, chunk_size)
+    finally:
+        connection.close()
 
 
 def _data_line_count(path: Path) -> int:

@@ -301,13 +301,17 @@ def test_reader_hands_duckdb_a_path_not_a_file_object(
     export entirely in RAM.
     """
     sources: list[object] = []
-    real_from_csv_auto = duckdb.from_csv_auto
+    real_from_csv_auto = duckdb.DuckDBPyConnection.from_csv_auto
 
-    def spy(source: object, **kwargs: Any) -> duckdb.DuckDBPyRelation:
+    def spy(
+        connection: duckdb.DuckDBPyConnection,
+        source: Any,  # noqa: ANN401
+        **kwargs: Any,
+    ) -> duckdb.DuckDBPyRelation:
         sources.append(source)
-        return real_from_csv_auto(source, **kwargs)
+        return real_from_csv_auto(connection, source, **kwargs)
 
-    monkeypatch.setattr(duckdb, "from_csv_auto", spy)
+    monkeypatch.setattr(duckdb.DuckDBPyConnection, "from_csv_auto", spy)
 
     rows = _rows(_read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)]))
 
@@ -450,6 +454,38 @@ def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
 
     assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
     assert rows[39]["bio"] == '"I love MIT'
+
+
+def test_reader_recovers_a_legacy_file_while_another_read_is_in_flight(
+    tmp_path: Path,
+) -> None:
+    """The fallback must survive a read that is suspended mid-stream.
+
+    dlt invokes this transformer once per page and interleaves the generators,
+    so a file suspended at a yield still holds its ``fetch_arrow_reader`` open.
+    On duckdb's module-level default connection that open reader holds a
+    transaction, the next file's sniff failure aborts it, and the unquoted
+    retry dies with "Current transaction is aborted (please ROLLBACK)" without
+    reading anything -- which is why DAGSTER-30 kept failing on a file the
+    fallback reads fine on its own. Each read owns its connection now.
+    """
+    in_flight_file = tmp_path / "in_flight.tsv"
+    in_flight_file.write_bytes(
+        b"id\tbio\tmeta\n"
+        + b"".join(f"{i}\tbio {i}\t{{}}\n".encode() for i in range(12000))
+    )
+    in_flight = edxorg_s3._read_tsv(  # noqa: SLF001
+        in_flight_file,
+        5000,
+        edxorg_s3._CSV_READER_OPTIONS,  # noqa: SLF001
+    )
+    next(in_flight)  # suspended mid-file, its reader still open
+
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
 
 
 @pytest.mark.parametrize(
