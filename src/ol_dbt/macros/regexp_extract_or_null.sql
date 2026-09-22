@@ -1,6 +1,7 @@
 {% macro regexp_extract_or_null(subject, pattern, group=none) %}
   {#
-    First substring of `subject` matching `pattern`, or NULL when there is no match.
+    First substring of `subject` matching `pattern` (or its capture group `group`), or NULL
+    when there is no match.
 
     The NULL is the point. Trino's regexp_extract already returns NULL on no match, but
     DuckDB's returns an empty string, so callers that branch on `... is not null` (see
