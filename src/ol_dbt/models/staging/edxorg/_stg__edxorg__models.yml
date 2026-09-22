@@ -1141,6 +1141,7 @@ models:
   - name: program_retrieved_at
     description: str, when the extraction that wrote this row ran. Programs with the
       latest value are the ones the programs API currently lists.
+    tests: [not_null]
 
 - name: stg__edxorg__s3__program_courses
   description: this table includes all the program courses running on edX.org
@@ -1172,7 +1173,8 @@ models:
       them
   - name: program_course_retrieved_at
     description: str, when the extraction that wrote this row ran. Rows with the latest
-      value are the programs' current courses.
+      value are the programs' current courses. Null on rows written before the extraction
+      recorded it, which a program-course pair edX has since dropped keeps.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1218,6 +1220,7 @@ models:
   - name: course_retrieved_at
     description: str, when the catalog extraction that wrote this row ran. Courses
       with the latest value are the ones the catalog currently lists.
+    tests: [not_null]
 
 - name: stg__edxorg__api__courserun
   description: MITx course runs on edX.org, sourced from the discovery API
@@ -1303,6 +1306,7 @@ models:
   - name: courserun_retrieved_at
     description: str, when the catalog extraction that wrote this row ran. Runs with
       the latest value are the ones the catalog currently lists.
+    tests: [not_null]
 
 - name: stg__edxorg__s3__course_certificate_signatory
   description: edx course certificate signatory data

@@ -299,7 +299,10 @@ models:
     description: int, the higher averaged weekly hours, null if none.
   - name: course_readable_ids
     description: array of str, the program's course keys in the programs API's order.
-      MIT Learn links the ones it publishes.
+      MIT Learn links the ones it publishes. Null when the programs' extraction has
+      no courses for the program, which the delivery refuses to send, since MIT Learn
+      would drop every course link the program has.
+    tests: [not_null]
   - name: etl_source
     description: Always 'mit_edx'.
     tests: [not_null]
