@@ -1057,6 +1057,32 @@ def test_the_first_tick_only_initializes_the_cursor() -> None:
         assert context.cursor == "-1"
 
 
+def test_the_first_tick_with_history_posts_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh cursor over existing failures skips them rather than posting them.
+
+    This is the case the move into ``delivery`` actually hits: production has
+    months of check evaluations and the new location starts with no cursor.
+    """
+    from dagster import DagsterInstance, build_sensor_context  # noqa: PLC0415
+    from ol_orchestrate.sensors import failure_notification  # noqa: PLC0415
+
+    def no_slack(**_: Any) -> Any:
+        pytest.fail("the first tick must not build a Slack client")
+
+    monkeypatch.setattr(failure_notification, "WebClient", no_slack)
+    monkeypatch.setattr(
+        failure_notification, "latest_check_evaluation_cursor", lambda _: "9001"
+    )
+
+    with DagsterInstance.ephemeral() as instance:
+        context = build_sensor_context(instance=instance)
+        asset_check_failure_sensor(context)
+
+        assert context.cursor == "9001"
+
+
 def _check_failure(
     run_id: str,
     asset: str,
