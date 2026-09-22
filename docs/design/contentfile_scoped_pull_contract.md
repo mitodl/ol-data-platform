@@ -111,7 +111,11 @@ For each entry, enqueue a **scoped** pull rather than doing work in the request:
 
 ```python
 SyncOpenEdXContentFilesTask.apply_async(
-    kwargs={"source": source, "readable_id": readable_id, "expected_count": content_file_count},
+    kwargs={
+        "source": source,
+        "readable_id": readable_id,
+        "expected_count": content_file_count,
+    },
 )
 ```
 
