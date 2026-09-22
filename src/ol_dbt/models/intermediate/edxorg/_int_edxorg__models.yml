@@ -1089,7 +1089,7 @@ models:
   - name: availability
     description: str, dated, anytime or null
   - name: course_readable_ids
-    description: array of str, course keys in API order
+    description: array of str, course keys in API order, from the programs' extraction
 
 - name: int__edxorg__mitx_learn_program_rollups
   description: >
@@ -1213,8 +1213,9 @@ unit_tests:
 - name: test_int__edxorg__mitx_learn_programs_lists_and_aggregates
   description: >
     Only active, non-MicroMasters MITx/MITx_PRO programs from the latest extraction
-    are listed. Dates and price come from published runs of searchable courses; pace
-    and availability from every course's published runs.
+    are listed, with the courses from that same extraction. Dates and price come from
+    published runs of searchable courses; pace and availability from every course's
+    published runs.
   model: int__edxorg__mitx_learn_programs
   given:
   - input: ref('stg__edxorg__s3__programs')
@@ -1235,6 +1236,8 @@ unit_tests:
       program_course_retrieved_at: "t2"}
     - {program_uuid: p, course_key: dropped, course_position: 3, course_is_excluded_from_search: false,
       program_course_retrieved_at: "t1"}
+    - {program_uuid: p, course_key: ahead, course_position: 4, course_is_excluded_from_search: false,
+      program_course_retrieved_at: "t3"}
   - input: ref('int__edxorg__mitx_learn_program_course_runs')
     rows:
     - {program_uuid: p, course_key: c1, run_key: r1, run_start_on: "2098-01-01T00:00:00Z",
@@ -1246,6 +1249,9 @@ unit_tests:
     - {program_uuid: p, course_key: c2, run_key: r2, run_start_on: "2001-01-01T00:00:00Z",
       run_end_on: "2099-06-01T00:00:00Z", run_pacing_type: self_paced, run_availability: Current,
       run_is_published: true, run_min_paid_price: 50, run_first_seat_currency: USD}
+    - {program_uuid: p, course_key: ahead, run_key: r3, run_start_on: "2098-01-01T00:00:00Z",
+      run_end_on: "2098-06-01T00:00:00Z", run_pacing_type: instructor_paced, run_availability: Upcoming,
+      run_is_published: true, run_min_paid_price: 7, run_first_seat_currency: USD}
   expect:
     rows:
     - {readable_id: p, level: graduate, start_date: "2098-01-01T00:00:00Z", end_date: "2098-06-01T00:00:00Z",
