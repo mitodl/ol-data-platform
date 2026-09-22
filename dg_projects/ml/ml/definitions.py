@@ -89,10 +89,10 @@ feedback_sentiment_eval_job = define_asset_job(
 )
 
 # Covers the feedback pipeline's auto-cascading assets (feedback_clusters itself
-# runs on its own schedule/sensor, not here). Name kept as-is since renaming
-# would reset any deployed running/stopped state. Stopped by default.
-feedback_summaries_automation_sensor = AutomationConditionSensorDefinition(
-    name="feedback_summaries_automation_sensor",
+# runs on its own schedule/sensor). Re-enable in the UI after deploy if it was
+# previously on. Stopped by default.
+feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
+    name="feedback_pipeline_automation_sensor",
     target=AssetSelection.assets(
         feedback_summaries,
         feedback_embeddings,
@@ -191,5 +191,5 @@ defs = Definitions(
         feedback_sentiment_eval_job,
     ],
     schedules=[feedback_clusters_schedule],
-    sensors=[feedback_summaries_automation_sensor, feedback_clusters_growth_sensor],
+    sensors=[feedback_pipeline_automation_sensor, feedback_clusters_growth_sensor],
 )
