@@ -7,14 +7,29 @@ to state a set, and that stating it is what decides whether Dagster ever sees
 the instigator at all.
 """
 
+import importlib
+import os
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
+from dagster import DefaultSensorStatus
 from delivery.lib.scheduled_automation import (
     INSTIGATOR_ENVIRONMENTS,
     instigators_for_environment,
 )
 from ol_orchestrate.lib.constants import VALID_DAGSTER_ENVS
+
+# Packages whose module-level code reads DAGSTER_ENVIRONMENT, so a build under
+# a different environment has to re-import them.
+_ENVIRONMENT_SENSITIVE_ROOTS = frozenset({"delivery", "ol_orchestrate"})
+
+FAILURE_NOTIFICATION_SENSOR_NAMES = frozenset(
+    {"run_failure_notification_sensor", "asset_check_failure_sensor"}
+)
 
 
 @dataclass(frozen=True)
@@ -106,22 +121,59 @@ def test_every_registered_instigator_is_declared():
     assert registered <= set(INSTIGATOR_ENVIRONMENTS)
 
 
-def test_failure_notification_sensors_register_in_production_only():
-    """The alerting sensors watch every code location from wherever they load.
+@contextmanager
+def _repository_for(environment: str) -> Iterator[Any]:
+    """Build the code location as the gRPC server would under ``environment``.
+
+    ``DAGSTER_ENV`` is resolved once, at import of
+    ``ol_orchestrate.lib.constants``, and ``instigators_for_environment``
+    defaults to it, so the gate in ``delivery.definitions`` can only be
+    exercised by re-importing the tree with the variable set. Same pattern as
+    data_loading_tests/test_definitions.py.
+    """
+    saved_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if name.split(".")[0] in _ENVIRONMENT_SENSITIVE_ROOTS
+    }
+    saved_environment = os.environ.get("DAGSTER_ENVIRONMENT")
+
+    def _purge() -> None:
+        for name in list(sys.modules):
+            if name.split(".")[0] in _ENVIRONMENT_SENSITIVE_ROOTS:
+                del sys.modules[name]
+
+    os.environ["DAGSTER_ENVIRONMENT"] = environment
+    _purge()
+    try:
+        module = importlib.import_module("delivery.definitions")
+        yield module.defs.get_repository_def()
+    finally:
+        _purge()
+        sys.modules.update(saved_modules)
+        if saved_environment is None:
+            os.environ.pop("DAGSTER_ENVIRONMENT", None)
+        else:
+            os.environ["DAGSTER_ENVIRONMENT"] = saved_environment
+
+
+@pytest.mark.parametrize("environment", VALID_DAGSTER_ENVS)
+def test_failure_notification_sensors_register_in_production_only(environment):
+    """Read off the built repository, not the gate, so dropping them fails here.
 
     Losing them in production silences failure alerting for the whole
     deployment, and they declare default_status=RUNNING, so a registration
     anywhere else would start them there too.
     """
-    from ol_orchestrate.sensors.failure_notification import (  # noqa: PLC0415
-        FAILURE_NOTIFICATION_SENSORS,
-    )
+    with _repository_for(environment) as repo:
+        sensors = {sensor.name: sensor for sensor in repo.sensor_defs}
 
-    for environment in VALID_DAGSTER_ENVS:
-        kept = instigators_for_environment(
-            FAILURE_NOTIFICATION_SENSORS, environment=environment
-        )
-        expected = (
-            list(FAILURE_NOTIFICATION_SENSORS) if environment == "production" else []
-        )
-        assert kept == expected, environment
+        registered = set(sensors) & FAILURE_NOTIFICATION_SENSOR_NAMES
+        if environment == "production":
+            assert registered == FAILURE_NOTIFICATION_SENSOR_NAMES
+            assert all(
+                sensors[name].default_status == DefaultSensorStatus.RUNNING
+                for name in registered
+            )
+        else:
+            assert registered == set()
