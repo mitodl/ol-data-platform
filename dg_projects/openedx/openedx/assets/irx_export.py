@@ -364,6 +364,13 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         group_name=IRX_EXPORT_GROUP,
         partitions_def=IRX_EXPORT_PARTITIONS,
         required_resource_keys={"openedx"},
+        # Two overlapping runs of one drop (a manual re-materialize during the
+        # nightly run) would each write files over the other's, and the first to
+        # finish would write a manifest vouching for hashes the other replaced.
+        # As with openedx_course_export, naming the pool only makes the limit
+        # settable: `irx_export_<deployment>` needs a slot limit of 1 on the
+        # instance (Deployment -> Concurrency) before the runs are serialized.
+        pool=f"irx_export_{deployment}",
     )
     def irx_export(context: AssetExecutionContext) -> Iterator[MaterializeResult]:
         root = UPath(IRX_EXPORT_ROOTS.get(DAGSTER_ENV, IRX_EXPORT_SANDBOX_ROOT))
@@ -476,7 +483,7 @@ def build_manifest(
             {
                 "name": name,
                 **{
-                    field_name: (result.metadata or {})[field_name]
+                    field_name: result.metadata[field_name]
                     for field_name in MANIFEST_FILE_FIELDS
                 },
             }

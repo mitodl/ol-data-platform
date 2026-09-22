@@ -140,6 +140,9 @@ def _irx_frame(table: _Table) -> pl.LazyFrame:
 
 @pytest.fixture
 def drop_root(tmp_path, monkeypatch) -> UPath:
+    # Both roots, so a DAGSTER_ENVIRONMENT exported in the shell can't send the
+    # test's files to a real bucket.
+    monkeypatch.setattr(irx_export, "IRX_EXPORT_ROOTS", {})
     monkeypatch.setattr(irx_export, "IRX_EXPORT_SANDBOX_ROOT", str(tmp_path))
     monkeypatch.setattr(
         irx_export, "load_dbt_model_table", lambda _db, name: _Table(name)
