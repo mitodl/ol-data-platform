@@ -10,14 +10,12 @@ with micromasters_exam_grades as (
     select * from {{ ref('int__micromasters__users') }}
 )
 
--- semester + passing_grade for MITxOnline proctored exam runs are now sourced from
--- dim_course_run (added in #2319) instead of being re-derived here. The pure MicroMasters
--- branch below (micromasters_exam_grades) still reads these fields directly from
--- int__micromasters__dedp_proctored_exam_grades because those exam runs are not represented
--- in dim_course_run until MicroMasters grades are added to tfact_grade (tracked in epic #2072).
--- Guard against dim_course_run SCD2 expiration gap: multiple is_current=true rows
--- for the same courserun_readable_id can fan out mitxonline_exam_grades rows.
--- Pick the latest, matching the established pattern in dim_product.
+-- MITxOnline semester + passing_grade are sourced from dim_course_run (#2319).
+-- The MicroMasters branch below still reads them from int__micromasters__dedp_proctored_exam_grades
+-- because those exam runs are absent from dim_course_run until MicroMasters grades reach tfact_grade (#2072).
+--
+-- dim_course_run can temporarily hold multiple is_current rows per course run during an SCD2
+-- expiration gap, which would fan this join out. Take the newest, as dim_product does.
 , mitxonline_courserun_metadata as (
     select courserun_readable_id, semester, passing_grade
     from (

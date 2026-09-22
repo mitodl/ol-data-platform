@@ -45,23 +45,15 @@ with micromasters_courseruns as (
     where _row_num = 1
 )
 
--- Not every proctored exam gets its own MicroMasters exam-run course object. Some are a
--- unit embedded inside an ordinary course run, and those have no micromasters_examruns
--- match at all. int__mitxonline__proctored_exam_grades identifies them by a course
--- structure block titled 'proctored exam' (see its exam_unit_grades CTE); we reproduce
--- that predicate here so the semester fallback below applies to exactly those runs and no
--- others.
+-- Some MITxOnline proctored exams are embedded units inside ordinary course runs
+-- rather than separate MicroMasters exam runs, and cannot be linked to micromasters_examruns.
+-- This CTE reproduces the 'proctored exam' block predicate from
+-- int__mitxonline__proctored_exam_grades to gate the semester fallback.
 --
--- int__mitxonline__course_structure keeps every retrieval, so the title has to be read
--- from the current snapshot only. The upstream reaches this model through
--- int__mitxonline__courserun_subsection_grades, which takes the newest snapshot PER BLOCK
--- (partition by courserun_readable_id, coursestructure_block_id ... where row_num = 1) and
--- matches the title on that. We mirror that dedup exactly rather than filtering on
--- coursestructure_is_latest: is_latest keeps only blocks present in the newest whole-course
--- retrieval, which silently drops a run whose exam block has since been removed from the
--- structure but whose graded attempts still exist. Measured on production 2026-09-15,
--- is_latest would have dropped one such run that has proctored exam grades and a semester,
--- nulling a value the pre-migration mart populated; per-block dedup drops none.
+-- Dedup to the newest snapshot per block, mirroring int__mitxonline__courserun_subsection_grades.
+-- Do not switch to coursestructure_is_latest: that flag drops runs whose exam block was later
+-- removed from the course structure but whose graded attempts remain, nulling a semester the
+-- mart previously populated.
 , mitxonline_course_structure_current_blocks as (
     select
         courserun_readable_id
@@ -92,12 +84,8 @@ with micromasters_courseruns as (
         , cr.courserun_is_live
         , cr.courserun_created_on
         , cs.course_readable_id
-        -- Course runs with an embedded proctored-exam unit have no micromasters_examruns
-        -- match, so fall back to the course run's own tag — the same derivation
-        -- int__mitxonline__proctored_exam_grades used before this field moved here.
-        -- The fallback is deliberately gated on xu: applying it unconditionally would
-        -- populate semester for every MITxOnline course run, including the thousands that
-        -- have no proctored exam and for which a term label is meaningless.
+        -- Gated on xu: ungated, this would label every MITxOnline course run with a term,
+        -- including the thousands that have no proctored exam.
         , coalesce(
             er.examrun_semester
             , case when xu.courserun_readable_id is not null then cr.courserun_tag end
