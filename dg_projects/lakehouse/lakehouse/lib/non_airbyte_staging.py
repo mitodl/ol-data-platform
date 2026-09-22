@@ -11,7 +11,9 @@ up, and nothing reported it.
 
 The inventory is the source of truth for which loader owns a raw table, so the
 selection is derived from it rather than listed. A unit that flips to
-``loader: dlt`` is picked up here in the same change, with no schedule to edit.
+``loader: dlt`` is picked up here in the same change, as long as dbt declares a
+source for its raw table. A table with no source (keycloak and podcast today)
+selects nothing, and nothing reports that.
 """
 
 from collections.abc import Iterable, Mapping

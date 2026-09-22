@@ -465,8 +465,12 @@ posthog_staging_schedule = ScheduleDefinition(
 )
 
 # Every other staging model whose raw table the inventory assigns to a loader
-# other than Airbyte. Downstream of these, dbt_automation_sensor takes over once
-# they materialize.
+# other than Airbyte. For the dlt-fed ones, dbt_automation_sensor picks up the
+# downstream models once these materialize, because dlt materializes the raw
+# keys and so moves their data version. Nothing materializes the raw keys of the
+# `loader: dagster` units (the edxorg code location writes edxorg/processed_data),
+# so a rebuild of those staging models does not by itself re-trigger anything
+# downstream.
 #
 # Registered only when the selection is non-empty: an empty model list would
 # hand dbt an empty selector, which selects the whole project. The image copies
@@ -492,8 +496,10 @@ non_airbyte_staging_schedules = (
                         dbt_select=" ".join(non_airbyte_staging_models),
                     ),
                 ),
-                # After the daily dlt ingests in data_loading, which start
-                # between 03:00 and 04:30 UTC.
+                # After the cron-driven dlt ingests in data_loading (03:00 to
+                # 04:30 UTC). The edxorg table loads and the course structure
+                # assets are sensor-driven, so their staging can trail raw by up
+                # to a day.
                 cron_schedule="0 6 * * *",
                 execution_timezone="UTC",
                 default_status=DefaultScheduleStatus.RUNNING,
