@@ -63,8 +63,20 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
             if "is_promoted" in runs_lazy.collect_schema().names()
             else pl.lit(False)  # noqa: FBT003
         )
+        # Same model/dim/arm as embedding_count above -- a promoted run from a
+        # since-retired production config is not a valid baseline for the
+        # current one (e.g. after switching embedding models).
         last_run_df = (
-            runs_lazy.filter((pl.col("run_status") == "completed") & is_promoted_filter)
+            runs_lazy.filter(
+                (pl.col("run_status") == "completed")
+                & is_promoted_filter
+                & (
+                    pl.col("embedding_model_version")
+                    == default_embedding_model_version()
+                )
+                & (pl.col("embedding_dim") == EMBEDDING_DIM)
+                & (pl.col("embedding_input_filter") == "summary")
+            )
             .sort("run_at", descending=True)
             .select("total_conversations")
             .limit(1)

@@ -98,6 +98,7 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
         feedback_embeddings,
         feedback_cluster_identity,
         feedback_cluster_assignment,
+        feedback_category_proposals,
     ),
     default_status=DefaultSensorStatus.STOPPED,
 )
