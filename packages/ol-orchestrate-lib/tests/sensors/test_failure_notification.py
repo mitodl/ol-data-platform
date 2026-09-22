@@ -1,4 +1,4 @@
-"""Unit tests for the platform run failure notification sensor."""
+"""Unit tests for the deployment-wide failure notification sensors."""
 
 from __future__ import annotations
 
@@ -8,23 +8,27 @@ from typing import Any
 import pytest
 import sentry_sdk
 from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
-from data_platform.definitions import (
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.sentry import PARTITION_NAME_TAG
+from ol_orchestrate.sensors.failure_notification import (
+    FAILURE_NOTIFICATION_SENSORS,
     MAX_CHECK_EVALUATIONS_PER_TICK,
     MAX_METADATA_ENTRIES_PER_FAILURE,
     MAX_SENTRY_ERROR_LENGTH,
     MAX_SLACK_TEXT_LENGTH,
     RETRY_NUMBER_TAG,
     asset_check_failure_message,
+    asset_check_failure_sensor,
     capture_run_failure_to_sentry,
     collect_new_check_failures,
     dagster_url,
-    defs,
     error_message,
     format_check_metadata,
     get_exception,
     is_an_interrupted_worker,
     is_reported_by_the_run_failure_sensor,
     is_retry_of_a_reported_failure,
+    latest_check_evaluation_cursor,
     record_announcement,
     repeats_to_announce,
     sentry_fingerprint,
@@ -32,8 +36,6 @@ from data_platform.definitions import (
     step_failure_of,
     truncate_text,
 )
-from ol_orchestrate.lib.constants import DAGSTER_ENV
-from ol_orchestrate.lib.sentry import PARTITION_NAME_TAG
 from sentry_sdk.transport import Transport
 
 ERROR = AssetCheckSeverity.ERROR
@@ -882,7 +884,7 @@ def test_truncate_text_bounds_slack_payloads(length: int, expected: int) -> None
 
 def test_sensors_are_defined_without_vault_or_sentry() -> None:
     """Regression: the sensor used to vanish if Vault was unreachable at import."""
-    assert sorted(sensor.name for sensor in defs.sensors) == [
+    assert sorted(sensor.name for sensor in FAILURE_NOTIFICATION_SENSORS) == [
         "asset_check_failure_sensor",
         "run_failure_notification_sensor",
     ]
@@ -1022,6 +1024,37 @@ def test_collect_reports_no_cursor_when_there_is_nothing_new() -> None:
 
     assert failures == []
     assert next_cursor is None
+
+
+def test_a_fresh_cursor_starts_after_the_newest_evaluation() -> None:
+    """Regression: an empty cursor used to replay the whole event history.
+
+    ``after_cursor=None`` reads from the start of the event log, and instigator
+    state is keyed on the code location, so moving the sensor started it with no
+    cursor and every historical check failure went to Slack again.
+    """
+    captured: dict[str, Any] = {}
+    newest = _record(9001, _evaluation(asset="a", passed=False, severity=ERROR))
+
+    cursor = latest_check_evaluation_cursor(_instance_returning([newest], captured))
+
+    assert cursor == "9001"
+    assert captured == {"limit": 1, "ascending": False}
+
+
+def test_a_fresh_cursor_with_no_evaluations_still_reports_the_first_one() -> None:
+    assert latest_check_evaluation_cursor(_instance_returning([], {})) == "-1"
+
+
+def test_the_first_tick_only_initializes_the_cursor() -> None:
+    """Nothing is read past the initialization, so nothing reaches Slack."""
+    from dagster import DagsterInstance, build_sensor_context  # noqa: PLC0415
+
+    with DagsterInstance.ephemeral() as instance:
+        context = build_sensor_context(instance=instance)
+        asset_check_failure_sensor(context)
+
+        assert context.cursor == "-1"
 
 
 def _check_failure(

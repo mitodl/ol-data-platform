@@ -81,6 +81,14 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Drops the local partition definition after a delete has been delivered.
     # RUNNING in production.
     "ovs_videos_delete_partition_cleanup_sensor": frozenset({"production"}),
+    # Deployment-wide failure alerting, from ol_orchestrate.sensors.
+    # failure_notification, registered here and nowhere else (issue #2260).
+    # Both were RUNNING in production and STOPPED in QA under data_platform on
+    # 2026-09-22, read off each daemon's ticks; CI runs no Dagster. Production
+    # only keeps that: a QA registration would start them, since they now
+    # declare default_status=RUNNING.
+    "run_failure_notification_sensor": frozenset({"production"}),
+    "asset_check_failure_sensor": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {

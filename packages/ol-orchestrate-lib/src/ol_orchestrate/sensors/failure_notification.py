@@ -1,12 +1,16 @@
-"""Platform-level failure notification.
+"""Deployment-wide failure notification.
 
-This code location owns cross-code-location monitoring. It runs a single run
-failure sensor that watches every code location in the deployment and reports
-each failure to both Sentry and Slack.
+Two sensors: a run failure sensor that watches every code location and reports
+each failure to both Sentry and Slack, and an asset check sensor that announces
+the check failures no failed run reports.
 
-The two live in one sensor on purpose: Sentry is captured first so the Slack
-message can carry the resulting event ID, which is what turns a notification
-into something you can actually go and look up.
+Sentry and Slack live in one sensor on purpose: Sentry is captured first so the
+Slack message can carry the resulting event ID, which is what turns a
+notification into something you can actually go and look up.
+
+Register these from exactly ONE code location (``delivery``, per issue #2260).
+``monitor_all_code_locations=True`` watches the whole deployment from wherever
+it is registered, so a second registration reports every failure twice.
 """
 
 import re
@@ -22,7 +26,6 @@ from dagster import (
     DagsterEventType,
     DagsterRun,
     DefaultSensorStatus,
-    Definitions,
     EventRecordsFilter,
     FloatMetadataValue,
     IntMetadataValue,
@@ -36,17 +39,15 @@ from dagster import (
     run_failure_sensor,
     sensor,
 )
+from slack_sdk import WebClient
+
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.sentry import (
     INTERRUPTION_ERRORS,
     PARTITION_NAME_TAG,
     failure_fingerprint,
-    init_sentry,
 )
 from ol_orchestrate.lib.utils import authenticate_vault
-from slack_sdk import WebClient
-
-init_sentry("data_platform")
 
 # Dagster's own run tag. Hardcoded rather than imported: the constant lives in
 # dagster._core.storage.tags, which is private, but the tag string itself is
@@ -599,7 +600,12 @@ def get_slack_token() -> str:
 @run_failure_sensor(
     name="run_failure_notification_sensor",
     monitor_all_code_locations=True,
-    default_status=DefaultSensorStatus.STOPPED,
+    # RUNNING in production when this moved out of data_platform, by UI toggle.
+    # Instigator state is keyed on (location_name, repository_name, name), so
+    # the new location starts with none, and a STOPPED default would silence
+    # alerting at cutover. Where it may run is decided by registration, not
+    # here -- see delivery.lib.scheduled_automation.
+    default_status=DefaultSensorStatus.RUNNING,
     description=(
         "Reports run failures across all code locations to Sentry and Slack. "
         "Reports the first failed attempt and suppresses its automatic retries, "
@@ -885,10 +891,35 @@ def collect_new_check_failures(
     return failures, str(records[-1].storage_id)
 
 
+def latest_check_evaluation_cursor(instance: Any) -> str:
+    """Where a sensor with no cursor yet should start: after everything so far.
+
+    A missing cursor means ``after_cursor=None``, which reads from the start of
+    the event log. That drained the whole history of check evaluations into
+    Slack, one batch per tick, whenever the sensor's state started empty --
+    which is what happens every time it moves to a new code location, because
+    instigator state is keyed on the location name. The run failure sensor
+    does not have this problem: Dagster initializes a run status sensor's
+    cursor to the latest event on its first tick (``run_status_sensor_definition``
+    in dagster 1.13) and this does the same.
+
+    Returns "-1" when there are no evaluations at all, so the first one ever
+    recorded is still reported.
+    """
+    records = instance.get_event_records(
+        EventRecordsFilter(event_type=DagsterEventType.ASSET_CHECK_EVALUATION),
+        limit=1,
+        ascending=False,
+    )
+    return str(records[0].storage_id) if records else "-1"
+
+
 @sensor(
     name="asset_check_failure_sensor",
     minimum_interval_seconds=300,
-    default_status=DefaultSensorStatus.STOPPED,
+    # RUNNING in production when this moved out of data_platform; see the run
+    # failure sensor above.
+    default_status=DefaultSensorStatus.RUNNING,
     description=(
         "Announces ERROR-severity failures of checks that have no failed run "
         "behind them -- the freshness checks and any native Dagster asset check "
@@ -898,7 +929,11 @@ def collect_new_check_failures(
 )
 def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:
     """Post newly-failed ERROR-severity asset checks to Slack."""
-    cursor = int(context.cursor) if context.cursor else None
+    if not context.cursor:
+        context.update_cursor(latest_check_evaluation_cursor(context.instance))
+        return
+
+    cursor = int(context.cursor)
 
     failures, next_cursor = collect_new_check_failures(context.instance, cursor)
     if next_cursor is None:
@@ -920,6 +955,7 @@ def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:
     )
 
 
-defs = Definitions(
-    sensors=[run_failure_notification_sensor, asset_check_failure_sensor],
+FAILURE_NOTIFICATION_SENSORS = (
+    run_failure_notification_sensor,
+    asset_check_failure_sensor,
 )

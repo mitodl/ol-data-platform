@@ -158,7 +158,7 @@ python bin/uv-operations.py lock --upgrade
   - `resources/`: Reusable connections (databases, APIs, Vault)
   - `io_managers/`: S3FileObjectIOManager, FileObjectIOManager for asset persistence
   - `lib/`: Utilities, constants, helpers
-- `dg_projects/`: 10 Dagster code locations (b2b_organization, canvas, data_loading, data_platform, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add an 11th.**
+- `dg_projects/`: 9 Dagster code locations (b2b_organization, canvas, data_loading, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add a new one.**
   - Each has: `<project>/assets/`, `<project>/resources/`, `<project>/definitions.py`, `pyproject.toml`, `Dockerfile`
 - `dg_deployments/local/`: Local Docker deployment configuration
 - `src/ol_dbt/`: Complete dbt project

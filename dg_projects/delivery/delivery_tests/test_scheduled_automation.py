@@ -104,3 +104,24 @@ def test_every_registered_instigator_is_declared():
         s.name for s in definitions.defs.sensors or []
     }
     assert registered <= set(INSTIGATOR_ENVIRONMENTS)
+
+
+def test_failure_notification_sensors_register_in_production_only():
+    """The alerting sensors watch every code location from wherever they load.
+
+    Losing them in production silences failure alerting for the whole
+    deployment, and they declare default_status=RUNNING, so a registration
+    anywhere else would start them there too.
+    """
+    from ol_orchestrate.sensors.failure_notification import (  # noqa: PLC0415
+        FAILURE_NOTIFICATION_SENSORS,
+    )
+
+    for environment in VALID_DAGSTER_ENVS:
+        kept = instigators_for_environment(
+            FAILURE_NOTIFICATION_SENSORS, environment=environment
+        )
+        expected = (
+            list(FAILURE_NOTIFICATION_SENSORS) if environment == "production" else []
+        )
+        assert kept == expected, environment
