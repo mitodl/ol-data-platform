@@ -23,6 +23,12 @@ unpublish it. If extractions stop arriving altogether, the models keep the last 
 and this asset re-sends it; the freshness check on raw__edxorg__s3__program flags
 that.
 
+A listed program with no courses fails the run before anything is sent. MIT Learn
+replaces a program's course links with the ones delivered, so an empty list would
+unlink every course, and no courses usually means the program-course extraction
+didn't land rather than that edX emptied the program. MIT Learn's legacy ETL failed
+the run on such a program too.
+
 Scheduling: daily at 06:45 UTC. Configured in definitions.py.
 """
 
@@ -156,15 +162,34 @@ def _program_to_resource(
         # reference is enough; ones it doesn't publish are skipped.
         "courses": [
             {"readable_id": course_id, "platform": _PLATFORM}
-            for course_id in row["course_readable_ids"] or []
+            for course_id in row["course_readable_ids"]
         ],
     }
+
+
+class ProgramWithoutCoursesError(ValueError):
+    """A listed program has no courses, so delivering it would unlink them all."""
 
 
 def build_resources(
     programs: Iterable[Mapping[str, Any]], instructors: Iterable[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Build the webhook batch, one resource per program."""
+    """Build the webhook batch, one resource per program.
+
+    :raises ProgramWithoutCoursesError: if any program has no courses.
+    """
+    programs = list(programs)
+    without_courses = sorted(
+        row["readable_id"] for row in programs if not row["course_readable_ids"]
+    )
+    if without_courses:
+        msg = (
+            f"{len(without_courses)} edX program(s) have no courses, and MIT Learn "
+            "would unlink every course from them; not delivering. Check that the "
+            "program-course extraction landed with the programs one: "
+            f"{', '.join(without_courses)}"
+        )
+        raise ProgramWithoutCoursesError(msg)
     instructors_by_program: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for instructor in instructors:
         instructors_by_program[instructor["readable_id"]].append(instructor)
