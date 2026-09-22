@@ -10,6 +10,7 @@ from typing import Any, Protocol
 import openai
 import polars as pl
 from botocore.client import BaseClient
+from botocore.exceptions import ClientError
 from dagster import AssetExecutionContext
 from google import genai
 from google.genai import types as genai_types
@@ -240,10 +241,22 @@ class BedrockEmbeddingClient:
         return embeddings
 
     def _embed_cohere(self, texts: list[str]) -> list[list[float]]:
-        body = json.dumps({"texts": texts, "input_type": "search_document"})
-        response = self._client.invoke_model(modelId=self.model_version, body=body)
+        # v4 speaks Cohere's newer v2-style embed contract: embedding_types is
+        # required in the request, and the response nests vectors under
+        # embeddings.float instead of returning a flat embeddings list -- v3's
+        # (legacy v1-style) shape, which this dispatches on.
+        is_v4 = self.model_version.startswith("cohere.embed-v4")
+        request_body: dict[str, Any] = {
+            "texts": texts,
+            "input_type": "search_document",
+        }
+        if is_v4:
+            request_body["embedding_types"] = ["float"]
+        response = self._client.invoke_model(
+            modelId=self.model_version, body=json.dumps(request_body)
+        )
         payload = json.loads(response["body"].read())
-        return payload["embeddings"]
+        return payload["embeddings"]["float"] if is_v4 else payload["embeddings"]
 
 
 def build_embedding_client(
@@ -397,6 +410,23 @@ def filter_unembedded(
     return joined.filter(is_new_or_changed).select(source_df.columns)
 
 
+def _is_isolatable_error(error: Exception) -> bool:
+    """Whether error is about one bad row's content, not the whole request.
+
+    openai.BadRequestError is always this (OpenAI has no other 4xx that reaches
+    here). Bedrock's ValidationException is Cohere/Titan's equivalent -- e.g. a
+    text over the model's per-input length cap (Cohere embed-english-v3: 2048
+    chars) -- but boto3 raises the same ClientError for every failure mode
+    (throttling, auth, etc.), so the error code inside it has to be checked
+    rather than the exception type alone.
+    """
+    if isinstance(error, openai.BadRequestError):
+        return True
+    if isinstance(error, ClientError):
+        return error.response.get("Error", {}).get("Code") == "ValidationException"
+    return False
+
+
 def _embed_request_batch(
     chunk: list[dict[str, Any]],
     client: EmbeddingClient,
@@ -405,13 +435,14 @@ def _embed_request_batch(
     """Embed one request-sized batch via a single API call, falling back row-by-row.
 
     A single bad row (e.g. a length/encoding issue the API rejects) fails the whole
-    batch call as openai.BadRequestError -- retrying one at a time isolates it
-    rather than dropping every otherwise-fine row in the chunk along with it.
+    batch call as an isolatable error (see _is_isolatable_error) -- retrying one at
+    a time isolates it rather than dropping every otherwise-fine row in the chunk
+    along with it.
 
     Any other exception (rate limit, auth, connection, 5xx) is systemic: retrying
     row-by-row would just multiply the same failure by len(chunk) rather than fix
     anything -- e.g. 100 extra calls at an endpoint that already asked us to back
-    off (the OpenAI SDK's own retry/backoff is exhausted by the time an error
+    off (the provider SDK's own retry/backoff is exhausted by the time an error
     surfaces here at all). So it's recorded as a single whole-chunk failure instead,
     letting the caller's consecutive-failed-chunks counter decide whether to abort.
 
@@ -430,7 +461,17 @@ def _embed_request_batch(
                 "embedding_inputs": [row["embedding_input"] for row in chunk],
             },
         )
-    except openai.BadRequestError:
+    except Exception as e:
+        if not _is_isolatable_error(e):
+            logger.warning(
+                "Batch embed failed for %d conversations with a systemic error; "
+                "not retrying individually",
+                len(chunk),
+                exc_info=True,
+            )
+            if errors is not None:
+                errors.append(f"chunk of {len(chunk)}: {type(e).__name__}: {e}")
+            return []
         logger.warning(
             "Batch embed failed for %d conversations; retrying individually",
             len(chunk),
@@ -462,16 +503,6 @@ def _embed_request_batch(
                 continue
             results.append((row, vector))
         return results
-    except Exception as e:
-        logger.warning(
-            "Batch embed failed for %d conversations with a systemic error; "
-            "not retrying individually",
-            len(chunk),
-            exc_info=True,
-        )
-        if errors is not None:
-            errors.append(f"chunk of {len(chunk)}: {type(e).__name__}: {e}")
-        return []
     return list(zip(chunk, vectors, strict=True))
 
 
