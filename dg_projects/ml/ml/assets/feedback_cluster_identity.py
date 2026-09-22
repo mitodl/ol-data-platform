@@ -26,6 +26,7 @@ from ml.lib.cluster_identity import (
     compute_continuity,
     match_clusters,
 )
+from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -59,6 +60,9 @@ IDENTITY_RUN_SCHEMA = {
     "processed_at": pl.Datetime(time_zone="UTC"),
 }
 
+# Mirrors FeedbackClustersConfig.embedding_input_filter's default.
+PRODUCTION_EMBEDDING_INPUT = "summary"
+
 
 def _select_run_to_process(
     catalog, config: FeedbackClusterIdentityConfig
@@ -79,7 +83,14 @@ def _select_run_to_process(
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_run"
         )
-        .filter(pl.col("run_status") == "completed")
+        .filter(
+            (pl.col("run_status") == "completed")
+            # Scoped to production's config so a bake-off run (#2543) is never
+            # auto-selected into live cluster_membership.
+            & (pl.col("embedding_model_version") == default_embedding_model_version())
+            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            & (pl.col("embedding_input_filter") == PRODUCTION_EMBEDDING_INPUT)
+        )
         .select(["cluster_run_id", "run_at"])
         .collect()
     )
