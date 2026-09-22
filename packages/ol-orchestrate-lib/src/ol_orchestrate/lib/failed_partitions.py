@@ -30,10 +30,11 @@ Wire them into a code location alongside the assets they watch::
     )
 
 An asset check rather than a bespoke sensor, for three reasons: the Dagster UI
-renders it against the asset it concerns, ``asset_check_failure_sensor`` in the
-data_platform code location already announces ERROR-severity check failures to
-Slack, and a check is evaluated on a schedule independent of materialization --
-which is what makes it a standing signal rather than another event.
+renders it against the asset it concerns, ``asset_check_failure_sensor``
+(ol_orchestrate.sensors.failure_notification) already announces ERROR-severity
+check failures to Slack, and a check is evaluated on a schedule independent of
+materialization -- which is what makes it a standing signal rather than another
+event.
 
 The Slack half of that is a notification, not a report: the existing formatter
 carries the asset, the check and a run link, so the failed keys live in the
@@ -62,10 +63,11 @@ from dagster import (
 # renders them against the asset. The count is always exact; this only caps the
 # sample.
 #
-# Note that the Slack notification does NOT carry them: data_platform's
-# asset_check_failure_message renders the asset name, the check name and a link
-# to the run, and nothing from the evaluation's metadata. Slack tells you which
-# check went red; the keys are one click away, not in the message.
+# Note that the Slack notification does NOT carry them:
+# asset_check_failure_message renders only the first few scalar metadata
+# entries (the count, the truncation flag, the recovery text), and ``sample`` is
+# JSON. Slack tells you which check went red and how many partitions; the keys
+# are one click away, not in the message.
 MAX_REPORTED_PARTITION_KEYS = 20
 
 FAILED_PARTITION_CHECK_NAME = "no_partitions_left_failed"

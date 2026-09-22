@@ -7,10 +7,6 @@ load_from:
     port: 4000
     location_name: 'canvas'
 - grpc_server:
-    host: dagster_data_platform
-    port: 4001
-    location_name: 'data_platform'
-- grpc_server:
     host: dagster_edxorg
     port: 4002
     location_name: 'edxorg'

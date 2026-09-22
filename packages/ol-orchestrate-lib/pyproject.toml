@@ -27,6 +27,10 @@ dependencies = [
     "pygsheets ~= 2.0.6",
     "pyiceberg[polars]>=0.11.1",
     "sentry-sdk ~=2.66",
+    # slack-sdk directly rather than dagster-slack: its run failure sensor gives
+    # no way to skip a tick, which the failure notification sensor's retry
+    # suppression needs.
+    "slack-sdk ~=3.36",
     "trino>=0.329",
     "s3fs (>=2026.0.0,<2027.0.0)",
     "universal-pathlib ~= 0.3.1",
