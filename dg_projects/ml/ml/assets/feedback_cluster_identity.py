@@ -71,9 +71,9 @@ def _select_run_to_process(
 
     "Already processed" is tracked in feedback_cluster_identity_run rather than by
     the presence of feedback_cluster_lineage rows for the run -- a completed run
-    whose clusters are all noise (or whose only clusters are 'new', with none
-    retired) produces zero lineage rows, so lineage-row existence alone can never
-    mark it processed and it would be reselected on every tick.
+    that is all noise while no cluster is active (so nothing is 'new' or 'retired')
+    produces zero lineage rows, so lineage-row existence alone can never mark it
+    processed and it would be reselected on every tick.
     """
     if config.cluster_run_id is not None:
         return config.cluster_run_id
