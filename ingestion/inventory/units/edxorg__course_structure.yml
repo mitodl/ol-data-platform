@@ -68,7 +68,3 @@ tables:
       course_id: copy
       edx_video_id: copy
       video_block_id: copy
-- name: raw__edxorg__s3__course_xml_blocks
-  raw_table: raw__edxorg__s3__course_xml_blocks
-  sync_mode: full_refresh_overwrite
-  modeled: true

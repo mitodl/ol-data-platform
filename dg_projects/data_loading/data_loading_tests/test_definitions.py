@@ -89,6 +89,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__edxorg__s3__tables__auth_user",
         "ol_warehouse_raw_data/raw__edxorg__discovery__api__programs",
         "ol_warehouse_raw_data/raw__posthog__learn__s3__events",
+        "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
     ):
         assert expected in asset_keys
 
@@ -101,6 +103,7 @@ def test_schedules_and_sensors_load() -> None:
         "mit_edx_programs_ingest_daily_schedule",
         "podcast_rss_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
+        "course_xml_blocks_ingest_daily_schedule",
     }
     assert "edxorg_upstream_changes_sensor" in {s.name for s in _REPO.sensor_defs}
 

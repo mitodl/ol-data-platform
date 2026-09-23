@@ -8,10 +8,19 @@ scope: scoped
 strategies:
   qa: ingest
   local: fixture
-loader: dagster
+loader: dlt
+# The openedx code location lands one JSON Lines file per course version, and
+# the load appends every file, so staging picks each block's newest copy by
+# the file it came from. Same reasoning as edxorg/mysql.
+raw_metadata_column: _file_modified_at
 table_prefix: raw__openedx__s3__
+dlt:
+  source_module: ol_dlt.sources.course_xml_blocks
+  write_disposition: append
 tables:
 - name: raw__openedx__s3__course_xml_blocks
   raw_table: raw__openedx__s3__course_xml_blocks
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
   modeled: true

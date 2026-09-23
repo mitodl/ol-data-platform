@@ -7,7 +7,8 @@ of wildly different sizes can load concurrently instead of one giant table
 blocking the rest of the run behind it.
 """
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from functools import partial
 from typing import Any
 
 from dagster import (
@@ -18,6 +19,7 @@ from dagster import (
 )
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
+    course_xml_blocks,
     edxorg_s3,
     keycloak,
     mit_climate,
@@ -171,14 +173,15 @@ def load_in_batches(
     *,
     context: AssetExecutionContext,
     dlt: DagsterDltResource,
-    table_name: str,
+    build_source: Callable[[], Any],
     pipeline: Any,
     resource_name: str,
 ) -> tuple[list[Any], int, int]:
     """Run one dlt load per byte budget until the table's backlog is drained.
 
-    Returns the last batch's materializations, how many batches ran, and the
-    rows they loaded between them.
+    ``build_source`` returns a budgeted source for the one table. Returns the
+    last batch's materializations, how many batches ran, and the rows they
+    loaded between them.
 
     A batch that normalizes zero rows means the cursor already covers every
     file in the landing zone, which is the only stop condition that does not
@@ -195,7 +198,7 @@ def load_in_batches(
         results = list(
             dlt.run(
                 context=context,
-                dlt_source=edxorg_s3.edxorg_s3_source(tables=[table_name]),
+                dlt_source=build_source(),
                 loader_file_format="parquet",
             )
         )
@@ -205,7 +208,7 @@ def load_in_batches(
         context.log.info(
             "Batch %s of %s loaded %s rows (%s total).",
             batch,
-            table_name,
+            resource_name,
             batch_rows,
             rows_loaded,
         )
@@ -215,34 +218,36 @@ def load_in_batches(
         context.log.warning(
             "%s hit the %s batch cap with rows still loading; the next run "
             "resumes from the saved cursor.",
-            table_name,
+            resource_name,
             _MAX_BATCHES_PER_RUN,
         )
 
     return results, batches, rows_loaded
 
 
-def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
-    """Wrap one edxorg_s3 table as its own ``@dlt_assets`` op.
+def build_batched_assets(
+    *,
+    name: str,
+    build_source: Callable[[], Any],
+    pipeline: Any,
+    translator: RawDataDltTranslator,
+    pool: str | None = None,
+) -> AssetsDefinition:
+    """Wrap a one-table budgeted source as an ``@dlt_assets`` op that drains it.
 
-    One op per table (rather than one op looping over every table) lets
-    Dagster's step executor run tables concurrently instead of a single huge
-    table head-of-line-blocking every smaller table behind it in one
-    sequential Python loop. Each table gets its own dlt pipeline_name (see
-    ``edxorg_s3_pipeline_for``) so concurrent table loads never share a local
-    working directory.
+    ``build_source`` is called once for the asset definition and once per
+    batch (see ``load_in_batches``). Its single resource names the table.
     """
-    source = edxorg_s3.edxorg_s3_source(tables=[table_name])
-    pipeline = edxorg_s3.edxorg_s3_pipeline_for(table_name)
-    resource_name = f"raw__edxorg__s3__tables__{table_name}"
+    source = build_source()
+    (resource_name,) = source.resources
 
     @dlt_assets(
         dlt_source=source,
         dlt_pipeline=pipeline,
-        name=f"edxorg_s3_{table_name}",
+        name=name,
         # group_name is set per-asset by the translator (scoped by source system).
-        dagster_dlt_translator=EdxorgDltTranslator(),
-        pool=_EDXORG_S3_POOL,
+        dagster_dlt_translator=translator,
+        pool=pool,
     )
     def _asset(
         context: AssetExecutionContext, dlt: DagsterDltResource
@@ -250,7 +255,7 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
         results, batches, rows_loaded = load_in_batches(
             context=context,
             dlt=dlt,
-            table_name=table_name,
+            build_source=build_source,
             pipeline=pipeline,
             resource_name=resource_name,
         )
@@ -272,8 +277,43 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     return _asset
 
 
+def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
+    """Wrap one edxorg_s3 table as its own ``@dlt_assets`` op.
+
+    One op per table (rather than one op looping over every table) lets
+    Dagster's step executor run tables concurrently instead of a single huge
+    table head-of-line-blocking every smaller table behind it in one
+    sequential Python loop. Each table gets its own dlt pipeline_name (see
+    ``edxorg_s3_pipeline_for``) so concurrent table loads never share a local
+    working directory.
+    """
+    return build_batched_assets(
+        name=f"edxorg_s3_{table_name}",
+        build_source=lambda: edxorg_s3.edxorg_s3_source(tables=[table_name]),
+        pipeline=edxorg_s3.edxorg_s3_pipeline_for(table_name),
+        translator=EdxorgDltTranslator(),
+        pool=_EDXORG_S3_POOL,
+    )
+
+
 edxorg_s3_table_assets = [
     _build_edxorg_s3_table_asset(table_name) for table_name in EDXORG_DB_TABLES
+]
+
+# The course archive assets in the edxorg and openedx code locations land one
+# JSON Lines file of parsed XML blocks per course version; nothing else loads
+# them into raw. One op per table, like edxorg_s3, so the two drain
+# independently.
+course_xml_blocks_assets = [
+    build_batched_assets(
+        name=f"course_xml_blocks_{table.pipeline_prefix}",
+        build_source=partial(
+            course_xml_blocks.course_xml_blocks_source, raw_table=raw_table
+        ),
+        pipeline=course_xml_blocks.course_xml_blocks_pipeline_for(raw_table),
+        translator=RawDataDltTranslator(),
+    )
+    for raw_table, table in course_xml_blocks.TABLES.items()
 ]
 
 
@@ -290,6 +330,7 @@ defs = Definitions(
             youtube_assets,
             posthog_events_assets,
             *edxorg_s3_table_assets,
+            *course_xml_blocks_assets,
         ]
     ),
 )

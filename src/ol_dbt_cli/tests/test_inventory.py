@@ -608,7 +608,7 @@ class TestRawMetadataColumn:
         # the key-presence-beats-truthiness path is covered only synthetically,
         # by test_explicit_null_override_beats_an_airbyte_loader.
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
-        assert mapping["raw__edxorg__s3__course_xml_blocks"] is None
+        assert mapping["raw__edxorg__s3__course_structure__course_policy"] is None
 
     def test_real_inventory_gives_reloaded_dlt_units_the_load_id(self) -> None:
         # A dlt unit carrying no override takes the new default, which is what
@@ -633,4 +633,4 @@ class TestGeneratedMetadataMacro:
         # `'none'` would be a truthy string in Jinja and silently order by a
         # column named none; the bare literal is what makes the pass-through fire.
         rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
-        assert "'raw__edxorg__s3__course_xml_blocks': none," in rendered
+        assert "'raw__edxorg__s3__course_structure__course_policy': none," in rendered
