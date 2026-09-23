@@ -20,6 +20,7 @@ select
     ) }} as feedback_conversation_pk
     , feedback_source.source_slug
     , feedback.conversation_id as conversation_ref
+    , min(feedback.feedback_occurred_at) as conversation_opened_at
     , count(*) as turn_count
     , sum(feedback.feedback_text_chars) as conversation_text_chars
     -- nullif because array_join drops null elements: with the redaction stub in place

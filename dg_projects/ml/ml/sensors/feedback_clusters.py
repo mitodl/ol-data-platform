@@ -7,7 +7,11 @@ from dagster import (
     sensor,
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
-from ml.lib.cluster import should_trigger_early_recluster
+from ml.lib.cluster import (
+    DEFAULT_OPENED_SINCE,
+    filter_opened_since,
+    should_trigger_early_recluster,
+)
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
@@ -35,14 +39,21 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     # arm/model/dim would inflate this past what a completed run's
     # total_conversations actually measures, and could trigger on growth in rows
     # the next run won't even see.
+    embeddings_lf = get_dbt_model_as_dataframe(
+        database_name=cluster_database_name, table_name="feedback_embeddings"
+    ).filter(
+        (pl.col("embedding_input") == "summary")
+        & (pl.col("embedding_model_version") == default_embedding_model_version())
+        & (pl.col("embedding_dim") == EMBEDDING_DIM)
+    )
     embedding_count = (
-        get_dbt_model_as_dataframe(
-            database_name=cluster_database_name, table_name="feedback_embeddings"
-        )
-        .filter(
-            (pl.col("embedding_input") == "summary")
-            & (pl.col("embedding_model_version") == default_embedding_model_version())
-            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+        filter_opened_since(
+            embeddings_lf,
+            get_dbt_model_as_dataframe(
+                database_name=cluster_database_name,
+                table_name="int__feedback__conversation",
+            ),
+            DEFAULT_OPENED_SINCE,
         )
         .select(pl.len())
         .collect()
@@ -63,6 +74,18 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
             if "is_promoted" in runs_lazy.collect_schema().names()
             else pl.lit(False)  # noqa: FBT003
         )
+        # A run over a different date range is not a valid baseline either; a
+        # table pre-dating opened_since only holds full-history runs.
+        run_opened_since = (
+            pl.col("opened_since")
+            if "opened_since" in runs_lazy.collect_schema().names()
+            else pl.lit(None, dtype=pl.String)
+        )
+        same_opened_since = (
+            run_opened_since.is_null()
+            if DEFAULT_OPENED_SINCE is None
+            else run_opened_since == DEFAULT_OPENED_SINCE
+        )
         # Same model/dim/arm as embedding_count above -- a promoted run from a
         # since-retired production config is not a valid baseline for the
         # current one (e.g. after switching embedding models).
@@ -76,6 +99,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
                 )
                 & (pl.col("embedding_dim") == EMBEDDING_DIM)
                 & (pl.col("embedding_input_filter") == "summary")
+                & same_opened_since
             )
             .sort("run_at", descending=True)
             .select("total_conversations")

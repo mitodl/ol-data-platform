@@ -128,6 +128,15 @@ with conversation as (
     select * from {{ ref('int__feedback__embedding') }}
 )
 
+-- Both ways feedback_cluster_assignment writes a row stamp the latest run's id, so
+-- the most recently assigned row names the run that is current.
+, current_cluster_run as (
+    select cluster_run_id
+    from cluster_assignment
+    order by assigned_at desc
+    limit 1
+)
+
 select
     conversation.feedback_conversation_pk
     , conversation.conversation_ref as conversation_id
@@ -172,6 +181,11 @@ select
     , cluster_assignment.cluster_similarity
     , cluster_assignment.cluster_assignment_method
     , cluster_assignment.cluster_run_id
+    -- Filter on this to report only conversations the current clustering run covers.
+    , exists (
+        select 1 from current_cluster_run
+        where current_cluster_run.cluster_run_id = cluster_assignment.cluster_run_id
+    ) as is_in_cluster_scope
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as conversation_ingested_at
 from conversation
 inner join turn_aggregates

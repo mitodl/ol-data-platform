@@ -10,8 +10,10 @@ from dagster import (
     MetadataValue,
     asset,
 )
+from ml.lib.cluster import DEFAULT_OPENED_SINCE
 from ml.lib.summarize import (
     JOIN_COLS,
+    SUMMARIZE_ALL_CONVERSATIONS,
     SUMMARIZE_CHECKPOINT_BATCH_SIZE,
     SUMMARIZE_MAX_CONCURRENCY,
     SUMMARY_PROMPT,
@@ -46,6 +48,25 @@ class FeedbackSummariesConfig(Config):
     sample_limit: int | None = Field(
         default=None,
         description="Cap the number of upstream rows read, for fast local testing.",
+    )
+    opened_since: str | None = Field(
+        default=DEFAULT_OPENED_SINCE,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description=(
+            "Only summarize conversations opened on or after this date (YYYY-MM-DD). "
+            "Rows already in feedback_summaries from earlier runs are kept. Defaults "
+            "to feedback_clusters' opened_since, so both cover the same range. Set "
+            "to null to read the full history."
+        ),
+    )
+    summarize_all_conversations: bool = Field(
+        default=SUMMARIZE_ALL_CONVERSATIONS,
+        description=(
+            "When true, every conversation that has text is summarized. When false, "
+            "conversations with only one turn or fewer than 500 characters are "
+            "skipped. The default comes from the SUMMARIZE_ALL_CONVERSATIONS env var, "
+            "which is false if not set."
+        ),
     )
     model_version: str | None = Field(
         default=None,
@@ -117,6 +138,12 @@ def feedback_summaries(
         database_name=database_name,
         table_name="int__feedback__conversation",
     )
+    if config.opened_since is not None:
+        # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
+        # compares correctly as text
+        source_lazy = source_lazy.filter(
+            pl.col("conversation_opened_at") >= config.opened_since
+        )
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
     source_df = source_lazy.collect()
@@ -156,6 +183,7 @@ def feedback_summaries(
         already_summarized_df,
         current_model_version=client.model_version,
         current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT),
+        summarize_all=config.summarize_all_conversations,
     )
 
     errors: list[str] = []
@@ -169,6 +197,7 @@ def feedback_summaries(
         errors=errors,
         max_concurrency=config.max_concurrency,
         context=context,
+        summarize_all=config.summarize_all_conversations,
     )
 
     llm_call_count = summaries_df.filter(

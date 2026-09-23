@@ -37,6 +37,7 @@ CLUSTER_RUN_SCHEMA = {
     "run_status": pl.String,
     "is_promoted": pl.Boolean,
     "run_at": pl.Datetime(time_zone="UTC"),
+    "opened_since": pl.String,
 }
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
@@ -45,6 +46,34 @@ CLUSTER_RUN_SCHEMA = {
 # a manual/ad hoc launch that omits this is an evaluation run by default; only the
 # weekly schedule and growth sensor explicitly opt into True.
 DEFAULT_IS_PROMOTED = False
+
+# The default for FeedbackClustersConfig.opened_since, and what the weekly schedule
+# and growth sensor use, since they don't pass it. Set the env var to an empty
+# string to cluster the full history.
+DEFAULT_OPENED_SINCE = (
+    os.environ.get("FEEDBACK_CLUSTERS_OPENED_SINCE", "2026-01-01") or None
+)
+
+
+def filter_opened_since(
+    embeddings_lf: pl.LazyFrame,
+    conversations_lf: pl.LazyFrame,
+    opened_since: str | None,
+) -> pl.LazyFrame:
+    """Keep embeddings whose conversation opened on or after opened_since.
+
+    opened_since is a YYYY-MM-DD date, or None to keep every row. Older rows stay
+    in feedback_embeddings; this only hides them from clustering and placement.
+    """
+    if opened_since is None:
+        return embeddings_lf
+    # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
+    # compares correctly as text
+    opened_pks = conversations_lf.filter(
+        pl.col("conversation_opened_at") >= opened_since
+    ).select("feedback_conversation_pk")
+    return embeddings_lf.join(opened_pks, on="feedback_conversation_pk", how="semi")
+
 
 # Column order matches how cluster_embeddings actually writes it: JOIN_COLS then
 # DEBUG_COLS then the added columns, not cluster_run_id first.

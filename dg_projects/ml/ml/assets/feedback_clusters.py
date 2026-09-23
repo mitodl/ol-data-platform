@@ -15,12 +15,14 @@ from ml.lib.cluster import (
     CLUSTER_CANDIDATE_SCHEMA,
     CLUSTER_RUN_SCHEMA,
     DEFAULT_IS_PROMOTED,
+    DEFAULT_OPENED_SINCE,
     HDBSCAN_MIN_CLUSTER_SIZE,
     RANDOM_STATE,
     UMAP_N_COMPONENTS,
     UMAP_N_NEIGHBORS,
     cluster_embeddings,
     failed_run_metadata,
+    filter_opened_since,
 )
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -87,6 +89,16 @@ class FeedbackClustersConfig(Config):
         description=(
             "Override the embedding vector dimension to cluster. Unset uses "
             "EMBEDDING_DIM (ml.lib.embed)."
+        ),
+    )
+    opened_since: str | None = Field(
+        default=DEFAULT_OPENED_SINCE,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description=(
+            "Only cluster conversations opened on or after this date (YYYY-MM-DD). "
+            "Recorded on feedback_cluster_run so feedback_cluster_assignment places "
+            "the same range. Defaults to FEEDBACK_CLUSTERS_OPENED_SINCE, or "
+            "2026-01-01 when that is unset. Set to null to cluster the full history."
         ),
     )
     is_promoted: bool = Field(
@@ -171,6 +183,13 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         embeddings_lazy = embeddings_lazy.filter(
             pl.col("embedding_input") == config.embedding_input_filter
         )
+    embeddings_lazy = filter_opened_since(
+        embeddings_lazy,
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="int__feedback__conversation"
+        ),
+        config.opened_since,
+    )
     embeddings_df = embeddings_lazy.select(
         [
             "feedback_conversation_pk",
@@ -217,6 +236,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             is_promoted=config.is_promoted,
         )
         failed_metadata["run_at"] = datetime.now(tz=UTC)
+        failed_metadata["opened_since"] = config.opened_since
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
             output_name="feedback_cluster_run",
@@ -240,6 +260,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         is_promoted=config.is_promoted,
     )
     run_metadata["run_at"] = datetime.now(tz=UTC)
+    run_metadata["opened_since"] = config.opened_since
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
 
     context.log.info(
@@ -269,5 +290,6 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             "embedding_model_version": MetadataValue.text(embedding_model_version),
             "embedding_dim": MetadataValue.int(embedding_dim),
             "is_promoted": MetadataValue.bool(config.is_promoted),
+            "opened_since": MetadataValue.text(config.opened_since or ""),
         },
     )

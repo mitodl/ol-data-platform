@@ -278,6 +278,10 @@ models:
     description: str, the source-native thread id.
     tests:
     - not_null
+  - name: conversation_opened_at
+    description: str, ISO8601 time of the conversation's first turn. The summary and
+      clustering assets use it to process only conversations opened on or after their
+      opened_since date.
   - name: turn_count
     description: int, number of kept turns. At least 1 - a conversation with no kept
       turns does not appear here.
