@@ -106,14 +106,18 @@ def mit_edx_programs_source(
 ) -> Generator[Any]:
     """Load active MIT-authored programs from the edX.org Programs API.
 
-    Credentials are resolved at execution time from environment variables if not
-    passed explicitly, so the module imports cleanly without secrets present.
+    Credentials are resolved at execution time, so the module imports cleanly
+    without secrets present. Under the qa and production profiles the OAuth
+    client always comes from Vault and the first three arguments are ignored.
 
     Args:
-        client_id: JWT client ID (else EDX_API_CLIENT_ID).
-        client_secret: JWT client secret (else EDX_API_CLIENT_SECRET).
+        client_id: JWT client ID (else EDX_API_CLIENT_ID). Local profiles only.
+        client_secret: JWT client secret (else EDX_API_CLIENT_SECRET). Local
+            profiles only.
         access_token_url: Token endpoint URL (else EDX_API_ACCESS_TOKEN_URL).
-        programs_api_url: Programs API base URL (else EDX_PROGRAMS_API_URL).
+            Local profiles only.
+        programs_api_url: Programs API base URL (else EDX_PROGRAMS_API_URL,
+            else ``EDX_PROGRAMS_API_URL``).
     """
 
     @dlt.resource(
