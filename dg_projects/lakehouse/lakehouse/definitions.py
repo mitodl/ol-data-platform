@@ -476,12 +476,19 @@ posthog_staging_schedule = ScheduleDefinition(
 # hand dbt an empty selector, which selects the whole project. The image copies
 # the inventory in, and airbyte_inventory_drift already fails naming the path
 # when it is missing.
+#
+# Left out until its raw table exists: raw__edxorg__discovery__api__programs has
+# never been created, because edX.org lists no active non-MicroMasters MIT
+# program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
+# table from an empty load. Building it would fail the whole job every day.
+AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
 non_airbyte_staging_models = sorted(
     staging_models_reading(
         json.loads(dbt_project.manifest_path.read_text()),
         non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
     )
     - {POSTHOG_STAGING_MODEL}
+    - AWAITING_RAW_TABLE
 )
 non_airbyte_staging_schedules = (
     [

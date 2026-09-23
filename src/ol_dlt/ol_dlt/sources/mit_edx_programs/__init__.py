@@ -8,9 +8,11 @@ MIT-authored programs that are active and not MicroMasters are included
 Data flow:
     edX Programs API (JWT)  -> raw__edxorg__discovery__api__programs
 
-Secrets (resolved lazily at run time from the environment):
-    EDX_API_CLIENT_ID, EDX_API_CLIENT_SECRET,
-    EDX_API_ACCESS_TOKEN_URL, EDX_PROGRAMS_API_URL
+Secrets are resolved lazily at run time. The qa and production profiles read
+the edX.org OAuth client from Vault (``EDX_OAUTH_VAULT_PATH``), the same one the
+edxorg code location uses against this API. Any other profile reads
+EDX_API_CLIENT_ID, EDX_API_CLIENT_SECRET and EDX_API_ACCESS_TOKEN_URL from the
+environment. EDX_PROGRAMS_API_URL overrides ``EDX_PROGRAMS_API_URL`` in both.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.mit_edx_programs
@@ -23,9 +25,16 @@ from typing import Any
 import dlt
 from dlt.sources.helpers import requests
 
-from ol_dlt import config
+from ol_dlt import config, vault
 
 logger = logging.getLogger(__name__)
+
+# The Dagster deployment carries no EDX_API_* environment, so until this was
+# read from Vault every deployed run failed on missing credentials and
+# raw__edxorg__discovery__api__programs was never created.
+EDX_OAUTH_VAULT_MOUNT = "secret-data"
+EDX_OAUTH_VAULT_PATH = "pipelines/edx/edxorg/edx-oauth-client"
+EDX_PROGRAMS_API_URL = "https://discovery.edx.org/api/v1/programs/"
 
 # MIT owner keys used by MIT Learn to identify MIT-authored edX content.
 # Kept in sync with learning_resources/etl/openedx.py MIT_OWNER_KEYS.
@@ -51,6 +60,40 @@ def _is_mit_program(program: dict[str, Any]) -> bool:
         any(org.get("key") in _MIT_OWNER_KEYS for org in orgs)
         and "micromasters" not in (program.get("type") or "").lower()
         and program.get("status") == "active"
+    )
+
+
+def _resolve_credentials(
+    client_id: str | None,
+    client_secret: str | None,
+    access_token_url: str | None,
+    programs_api_url: str | None,
+) -> dict[str, str]:
+    """Return the OAuth client and endpoints for the active profile.
+
+    Deployed profiles take the client from Vault, as ``ol_dlt.database`` does for
+    its database credentials. Explicit arguments and the environment apply only
+    to the other profiles.
+    """
+    programs_api_url = (
+        config.resolve_secret(programs_api_url, "EDX_PROGRAMS_API_URL")
+        or EDX_PROGRAMS_API_URL
+    )
+    if config.active_profile() in config.ICEBERG_PROFILES:
+        oauth_client = vault.read_kv_secret(EDX_OAUTH_VAULT_MOUNT, EDX_OAUTH_VAULT_PATH)
+        return {
+            "client_id": oauth_client["id"],
+            "client_secret": oauth_client["secret"],
+            "access_token_url": oauth_client["token_url"],
+            "programs_api_url": programs_api_url,
+        }
+    return config.require_secrets(
+        client_id=config.resolve_secret(client_id, "EDX_API_CLIENT_ID"),
+        client_secret=config.resolve_secret(client_secret, "EDX_API_CLIENT_SECRET"),
+        access_token_url=config.resolve_secret(
+            access_token_url, "EDX_API_ACCESS_TOKEN_URL"
+        ),
+        programs_api_url=programs_api_url,
     )
 
 
@@ -84,15 +127,8 @@ def mit_edx_programs_source(
     )
     def programs() -> Generator[dict[str, Any]]:
         """Fetch and yield MIT-authored programs from the edX Programs API."""
-        creds = config.require_secrets(
-            client_id=config.resolve_secret(client_id, "EDX_API_CLIENT_ID"),
-            client_secret=config.resolve_secret(client_secret, "EDX_API_CLIENT_SECRET"),
-            access_token_url=config.resolve_secret(
-                access_token_url, "EDX_API_ACCESS_TOKEN_URL"
-            ),
-            programs_api_url=config.resolve_secret(
-                programs_api_url, "EDX_PROGRAMS_API_URL"
-            ),
+        creds = _resolve_credentials(
+            client_id, client_secret, access_token_url, programs_api_url
         )
 
         # edX uses JWT token type, not Bearer — fetch a token with the client

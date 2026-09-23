@@ -87,6 +87,28 @@ def _authenticated_client() -> hvac.Client:
     return client
 
 
+def read_kv_secret(mount: str, path: str) -> dict[str, Any]:
+    """Return the data held at a KV-v1 secret.
+
+    Not cached: a KV secret carries no lease, and a source reads it once per
+    run.
+
+    Args:
+        mount: KV-v1 mount point, e.g. ``secret-data``.
+        path: Secret path within the mount.
+    """
+    client = _authenticated_client()
+    try:
+        return client.secrets.kv.v1.read_secret(path=path, mount_point=mount)["data"]
+    except hvac.exceptions.Forbidden as exc:
+        msg = (
+            f"Vault denied {mount}/{path!r} — the token's policy does not grant it. "
+            "Add it to the dagster policy in ol-infrastructure "
+            "(dagster_server_policy.hcl)."
+        )
+        raise RuntimeError(msg) from exc
+
+
 def read_database_credentials(mount: str, role: str = "readonly") -> tuple[str, str]:
     """Return ``(username, password)`` from Vault's database secrets engine.
 

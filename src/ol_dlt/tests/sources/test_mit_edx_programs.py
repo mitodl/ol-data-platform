@@ -83,6 +83,55 @@ def test_only_mit_programs_yielded(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [r["uuid"] for r in records] == ["mit-1"]
 
 
+@pytest.mark.parametrize("profile", ["qa", "production"])
+def test_deployed_profiles_read_the_oauth_client_from_vault(
+    monkeypatch: pytest.MonkeyPatch, profile: str
+) -> None:
+    """The deployment has no EDX_API_* env, so Vault is the only credential source."""
+    for var in (
+        "EDX_API_CLIENT_ID",
+        "EDX_API_CLIENT_SECRET",
+        "EDX_API_ACCESS_TOKEN_URL",
+        "EDX_PROGRAMS_API_URL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("DLT_PROFILE", profile)
+    reads: list[tuple[str, str]] = []
+
+    def _read_kv_secret(mount: str, path: str) -> dict[str, str]:
+        reads.append((mount, path))
+        return {
+            "id": "vault-cid",
+            "secret": "vault-secret",  # pragma: allowlist secret
+            "token_url": "https://api.edx.org/oauth2/v1/access_token",
+            "url": "https://api.edx.org",
+        }
+
+    monkeypatch.setattr(mit_edx_programs.vault, "read_kv_secret", _read_kv_secret)
+    posted: dict[str, Any] = {}
+    fetched: list[str] = []
+
+    def _post(url: str, **kwargs: Any) -> FakeResponse:
+        posted.update(url=url, data=kwargs["data"])
+        return FakeResponse(json_data={"access_token": "tok"})
+
+    def _get(url: str, **_kwargs: Any) -> FakeResponse:
+        fetched.append(url)
+        return FakeResponse(json_data=_PROGRAMS)
+
+    monkeypatch.setattr(mit_edx_programs.requests, "post", _post)
+    monkeypatch.setattr(mit_edx_programs.requests, "get", _get)
+
+    source = mit_edx_programs.mit_edx_programs_source()
+    records = list(source.resources["raw__edxorg__discovery__api__programs"])
+
+    assert [r["uuid"] for r in records] == ["mit-1"]
+    assert reads == [("secret-data", "pipelines/edx/edxorg/edx-oauth-client")]
+    assert posted["url"] == "https://api.edx.org/oauth2/v1/access_token"
+    assert posted["data"]["client_id"] == "vault-cid"
+    assert fetched == [mit_edx_programs.EDX_PROGRAMS_API_URL]
+
+
 @pytest.mark.integration
 def test_mit_edx_programs_materialization(
     test_profile: Path, monkeypatch: pytest.MonkeyPatch
