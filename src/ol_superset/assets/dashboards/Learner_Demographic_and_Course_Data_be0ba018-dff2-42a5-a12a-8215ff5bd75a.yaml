@@ -1,11 +1,215 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Learner Demographic and Course Data
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: be0ba018-dff2-42a5-a12a-8215ff5bd75a
+metadata:
+  chart_configuration:
+    '261':
+      crossFilters:
+        chartsInScope: []
+        scope: global
+      id: 261
+  chart_customization_config: []
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 261
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-cKjlGY1Lq
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: platforms
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-RV4K3jCG00isIH5GM8vi8
+    name: DEDP_Program_Cert_Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: any_dedp_program_cert_ind
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-qPMfIWPCHb2lhenCJVuMT
+    name: DEDP_Course_Cert_Count
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: dedp_course_cert_count
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-cKjlGY1Lq
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-Flg9Ij2JfzTpGQYx-Nl68
+    name: User Email
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: user_email
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-igp0eBtvxw0dj0oBoRZd7
+    name: User Full Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: user_full_name
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-neydWriKnWkdQrS0Dh_w7
+    name: DEDP Program Enrolled Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: any_dedp_program_enroll_ind
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   CHART-explore-261-1:
     children: []
@@ -118,212 +322,8 @@ position:
     - ROOT_ID
     - GRID_ID
     type: TABS
-metadata:
-  chart_configuration:
-    '261':
-      id: 261
-      crossFilters:
-        scope: global
-        chartsInScope: []
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: true
-  expanded_slices: {}
-  global_chart_configuration:
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    chartsInScope:
-    - 261
-  label_colors: {}
-  map_label_colors: {}
-  native_filter_configuration:
-  - cascadeParentIds: []
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-cKjlGY1Lq
-    name: Platform
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    sortMetric: null
-    targets:
-    - column:
-        name: platforms
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    type: NATIVE_FILTER
-    chartsInScope:
-    - 261
-    tabsInScope:
-    - TAB-dhOB0wMgmenerPbUQNy7K
-  - cascadeParentIds: []
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-RV4K3jCG00isIH5GM8vi8
-    name: DEDP_Program_Cert_Indicator
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    sortMetric: null
-    targets:
-    - column:
-        name: any_dedp_program_cert_ind
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    type: NATIVE_FILTER
-    chartsInScope:
-    - 261
-    tabsInScope:
-    - TAB-dhOB0wMgmenerPbUQNy7K
-  - cascadeParentIds: []
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-qPMfIWPCHb2lhenCJVuMT
-    name: DEDP_Course_Cert_Count
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    sortMetric: null
-    targets:
-    - column:
-        name: dedp_course_cert_count
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    type: NATIVE_FILTER
-    chartsInScope:
-    - 261
-    tabsInScope:
-    - TAB-dhOB0wMgmenerPbUQNy7K
-  - cascadeParentIds:
-    - NATIVE_FILTER-cKjlGY1Lq
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-Flg9Ij2JfzTpGQYx-Nl68
-    name: User Email
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    sortMetric: null
-    targets:
-    - column:
-        name: user_email
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    type: NATIVE_FILTER
-    chartsInScope:
-    - 261
-    tabsInScope:
-    - TAB-dhOB0wMgmenerPbUQNy7K
-  - cascadeParentIds: []
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-igp0eBtvxw0dj0oBoRZd7
-    name: User Full Name
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    sortMetric: null
-    targets:
-    - column:
-        name: user_full_name
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    type: NATIVE_FILTER
-    chartsInScope:
-    - 261
-    tabsInScope:
-    - TAB-dhOB0wMgmenerPbUQNy7K
-  - id: NATIVE_FILTER-neydWriKnWkdQrS0Dh_w7
-    type: NATIVE_FILTER
-    name: DEDP Program Enrolled Indicator
-    filterType: filter_select
-    description: ''
-    targets:
-    - column:
-        name: any_dedp_program_enroll_ind
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    sortMetric: null
-    chartsInScope:
-    - 261
-    tabsInScope:
-    - TAB-dhOB0wMgmenerPbUQNy7K
-  refresh_frequency: 0
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
-  chart_customization_config: []
-  default_filters: '{}'
+published: true
+slug: null
 theme_uuid: null
+uuid: be0ba018-dff2-42a5-a12a-8215ff5bd75a
 version: 1.0.0
