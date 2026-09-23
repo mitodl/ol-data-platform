@@ -30,6 +30,7 @@ from ml.lib.cluster_identity import (
     compute_continuity,
     match_clusters,
 )
+from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -226,6 +227,25 @@ def _other_config_active_keys(
     )
 
 
+def _scope_changed(catalog, run_row: dict[str, Any]) -> bool:
+    prior_run_id = latest_identity_processed_run(catalog, database_name)
+    if prior_run_id is None:
+        return False
+    prior_run_row = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster_run"
+        )
+        .filter(pl.col("cluster_run_id") == prior_run_id)
+        .collect()
+        .to_dicts()[0]
+    )
+    # A run table written before a scope column existed has no such key
+    return any(
+        prior_run_row.get(column) != run_row.get(column)
+        for column in ("opened_since", "platforms")
+    )
+
+
 def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
     """cluster_key -> its current feedback_cluster row, for carrying
     first_seen_run_id forward on a continued/merged key.
@@ -364,6 +384,9 @@ def feedback_cluster_identity(
         run_row.get("opened_since"),
         platforms_from_run_value(run_row.get("platforms")),
     )
+    if _scope_changed(catalog, run_row):
+        # Empty sets match nothing: every old key retires and the floor is skipped
+        active_cluster_members = dict.fromkeys(active_cluster_members, frozenset())
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
     matches, lineage_rows = match_clusters(
