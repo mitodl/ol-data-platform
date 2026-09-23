@@ -1,5 +1,5 @@
+import json
 import os
-import re
 import threading
 import time
 
@@ -15,27 +15,31 @@ from dagster_dbt.errors import DagsterDbtCliRuntimeError
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DbtAutomationTranslator,
-    resolve_dbt_target,
+)
+from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
+from lakehouse.lib.starrocks_dbt import (
+    MAX_BUILD_ATTEMPTS,
+    documented_columns,
+    drifted_relations,
+    live_column_query,
+    live_columns,
+    looks_retriable,
+    retry_delay,
 )
 from lakehouse.resources.starrocks import StarRocksResource
 
 # tag:starrocks models (see dbt_project.yml) are additionally gated
 # `+enabled: "{{ target.type == 'starrocks' }}"`, so they only exist in a
-# manifest parsed against one of these targets -- full_dbt_project's manifest
-# is always parsed against a Trino target and never sees them. Matches the
-# dbt_target choices in src/ol_dbt_cli/ol_dbt_cli/commands/starrocks.py's
-# _ENVS map. Migrating an existing model onto StarRocks means tagging it here
-# (dbt_project.yml or model-level config) and giving it a matching +enabled
-# condition -- this asset set and full_dbt_project's exclude="tag:starrocks"
-# then pick it up automatically, no Python change needed.
-STARROCKS_DBT_TARGET_MAP = {
-    "dev": "starrocks_qa_vault",
-    # ci connects directly to its own FE service (no port-forward), same
-    # connection shape as production -- matches _ENVS["ci"]["dbt_target"].
-    "ci": "starrocks_production",
-    "qa": "starrocks_qa_vault",
-    "production": "starrocks_production",
-}
+# manifest parsed against a StarRocks target -- full_dbt_project's manifest is
+# always parsed against a Trino target and never sees them. Migrating an
+# existing model onto StarRocks means tagging it here (dbt_project.yml or
+# model-level config) and giving it a matching +enabled condition -- this asset
+# set and full_dbt_project's exclude="tag:starrocks" then pick it up
+# automatically, no Python change needed.
+#
+# The per-environment target map lives in lakehouse.lib.dbt_environment
+# alongside the Trino one, so the two cannot drift apart the way they did
+# before RFC 12711 step 1.
 
 # `prepare_if_dev()` below only ever parses (never opens a DB connection), but
 # profiles.yml's env_var() calls for the starrocks targets have no defaults and
@@ -51,11 +55,7 @@ os.environ.setdefault("DBT_STARROCKS_PASSWORD", "dev")
 # manifest at the default "target/" (both dbt projects share the same project_dir).
 starrocks_dbt_project = DbtProject(
     project_dir=DBT_REPO_DIR,
-    target=resolve_dbt_target(
-        STARROCKS_DBT_TARGET_MAP,
-        override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
-        default="starrocks_production",
-    ),
+    target=STARROCKS_DBT_TARGET,
     target_path="target/starrocks",
 )
 starrocks_dbt_project.prepare_if_dev()
@@ -76,27 +76,44 @@ starrocks_dbt_cli = DbtCliResource(project_dir=starrocks_dbt_project)
 # os.environ at that point; nothing after that call can still race).
 _ENV_LOCK = threading.Lock()
 
-_MAX_BUILD_ATTEMPTS = 3
-_RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
-# Same MySQL-wire-protocol error signatures StarRocksResource.execute() retries
-# on: a freshly-generated Vault user may not yet be visible on the FE node dbt
-# connects to. dbt build has no adapter-level retry of its own, so without this
-# a replication-lag race fails the whole build instead of a single statement.
-#
-# dbt-starrocks connects via mysql-connector-python, whose Error.__str__
-# formats as "<errno> (<sqlstate>): <msg>" when the server returns a real
-# error code (verified by reading dbt/adapters/starrocks/connections.py and
-# mysql/connector/errors.py); dbt-core's exception handling preserves str(e)
-# unmodified through to the node's logged error message, so the code does
-# reach here -- but as plain text in a multi-line message, not a structured
-# field, so match on a word boundary rather than a bare substring to avoid
-# an unrelated number (a row count, a line number, part of a timestamp)
-# coincidentally tripping a retry.
-_RETRIABLE_ERROR_PATTERN = re.compile(r"\b(1044|1045|2006|2013)\b")
+# Retry knobs, the retriable-error classifier, and the column-drift comparison
+# live in lakehouse.lib so they can be unit-tested without a parsed dbt manifest
+# on disk (importing this module evaluates the @dbt_assets decorator below,
+# which needs one).
 
 
-def _looks_retriable(exc: Exception) -> bool:
-    return bool(_RETRIABLE_ERROR_PATTERN.search(str(exc)))
+def _stale_materialized_views(
+    context: AssetExecutionContext, starrocks: StarRocksResource
+) -> list[str]:
+    """MVs whose columns in StarRocks disagree with the dbt manifest.
+
+    dbt cannot find these itself. dbt-core only replaces an existing
+    materialized view under --full-refresh, and asks the adapter for
+    configuration changes otherwise -- but dbt-starrocks'
+    `starrocks__get_materialized_view_configuration_changes` returns nothing,
+    so a plain build logs "no configuration changes were identified" and leaves
+    the old SELECT in place. Green build, green refresh, change never landed.
+
+    That made shipping a column a two-step release with a hand-run
+    `dbt run --full-refresh --select b2b_analytics` in the middle, and nothing
+    but memory enforcing the order -- while ol-analytics-api's `build_select`
+    projects each model's own field list, so deploying the consumer first turns
+    the miss into an unknown-column error at request time.
+    """
+    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    documented = documented_columns(manifest)
+    if not documented:
+        # Nothing to compare against, and `live_column_query` would build an
+        # empty `IN ()` -- a syntax error. Logged rather than passed over in
+        # silence: it means the schema YAML lost its `columns:`, which also
+        # disables the rebuild these models depend on.
+        context.log.warning(
+            "No StarRocks materialized view documents any columns -- skipping "
+            "the column-drift check. An edited MV SELECT will not be rebuilt."
+        )
+        return []
+    query, params = live_column_query(documented)
+    return drifted_relations(documented, live_columns(starrocks.fetch(query, params)))
 
 
 @dbt_assets(
@@ -121,16 +138,33 @@ def starrocks_dbt_assets(
     engine and must be generated fresh for this run. Shares the same
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
+
+    Escalates to --full-refresh when a materialized view's columns in StarRocks
+    have fallen out of step with the manifest, since a plain build would not
+    notice -- see `_stale_materialized_views`.
     """
+    build_args = ["build"]
+    stale = _stale_materialized_views(context, starrocks)
+    if stale:
+        # --full-refresh drops and recreates every selected MV, not just the
+        # stale ones, which is why it is conditional: each recreated view is
+        # briefly absent, and ol-analytics-api queries these live.
+        context.log.info(
+            "Materialized views whose columns differ from the dbt manifest -- "
+            "building with --full-refresh so the new SELECT actually lands: %s",
+            ", ".join(stale),
+        )
+        build_args.append("--full-refresh")
+
     last_exc: DagsterDbtCliRuntimeError | None = None
-    for attempt in range(_MAX_BUILD_ATTEMPTS):
+    for attempt in range(MAX_BUILD_ATTEMPTS):
         if attempt:
-            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            delay = retry_delay(attempt)
             context.log.warning(
                 "dbt build failed (attempt %d/%d) -- retrying in %ds with fresh "
                 "Vault credentials: %s",
                 attempt,
-                _MAX_BUILD_ATTEMPTS,
+                MAX_BUILD_ATTEMPTS,
                 delay,
                 last_exc,
             )
@@ -141,7 +175,7 @@ def starrocks_dbt_assets(
             os.environ["DBT_STARROCKS_USERNAME"] = username
             os.environ["DBT_STARROCKS_PASSWORD"] = password
             os.environ["DBT_STARROCKS_HOST"] = starrocks.host
-            invocation = starrocks_dbt.cli(["build"], context=context)
+            invocation = starrocks_dbt.cli(build_args, context=context)
 
         # The subprocess above is already spawned (and has already inherited
         # the env set under the lock) by the time .cli() returns -- streaming
@@ -151,7 +185,7 @@ def starrocks_dbt_assets(
         try:
             events = list(invocation.stream())
         except DagsterDbtCliRuntimeError as exc:
-            if attempt == _MAX_BUILD_ATTEMPTS - 1 or not _looks_retriable(exc):
+            if attempt == MAX_BUILD_ATTEMPTS - 1 or not looks_retriable(exc):
                 raise
             last_exc = exc
             continue

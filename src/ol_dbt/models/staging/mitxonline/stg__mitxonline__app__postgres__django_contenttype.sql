@@ -4,6 +4,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__django_content_type', partition_columns='id') }}
+
 , renamed as (
 
     select
@@ -13,7 +15,7 @@ with source as (
             , app_label
             , model
         ) as contenttype_full_name
-    from source
+    from most_recent_source
 
 )
 

@@ -12,6 +12,12 @@ models:
       combination_of_columns:
       - source_id
       - platform_code
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: program_pk
     description: Surrogate key primary key

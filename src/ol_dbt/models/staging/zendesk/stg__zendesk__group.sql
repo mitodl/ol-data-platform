@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__thirdparty__zendesk_support__groups') }}
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'id') }}
+{{ deduplicate_raw_table(raw_table='raw__thirdparty__zendesk_support__groups', partition_columns = 'id') }}
 , cleaned as (
     select
         id as group_id

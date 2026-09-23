@@ -1,0 +1,95 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: salesforce
+layer: api
+scope: singleton
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: airbyte
+table_prefix: raw__thirdparty__salesforce___destination_v2__
+airbyte:
+  source_kind: source-salesforce
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: OL Salesforce → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - Account
+    - Opportunity
+    - OpportunityLineItem
+tables:
+- name: Account
+  raw_table: raw__thirdparty__salesforce___destination_v2__Account
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - SystemModstamp
+  primary_key:
+  - - Id
+  modeled: false
+- name: Opportunity
+  raw_table: raw__thirdparty__salesforce___destination_v2__Opportunity
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - SystemModstamp
+  primary_key:
+  - - Id
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      name: copy
+      type: copy
+      iswon: copy
+      amount: copy
+      isclosed: copy
+      nextstep: redact
+      closedate: copy
+      isdeleted: copy
+      stagename: copy
+      leadsource: copy
+      createddate: copy
+      probability: copy
+      systemmodstamp: copy
+      business_type__c: copy
+      agreement_type__c: copy
+      price_per_seat__c: copy
+      mit_is_sales_lead__c: copy
+      data_quality_score__c: copy
+      of_seats_purchased__c: copy
+      hasopportunitylineitem: copy
+      data_quality_description__c: copy
+      enrollment_codes_redeemed__c: copy
+      revenue_share_or_commission_amount__c: copy
+      revenue_share_or_commission_contract__c: copy
+- name: OpportunityLineItem
+  raw_table: raw__thirdparty__salesforce___destination_v2__OpportunityLineItem
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - SystemModstamp
+  primary_key:
+  - - Id
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      name: copy
+      discount: copy
+      quantity: copy
+      isdeleted: copy
+      listprice: copy
+      unitprice: copy
+      totalprice: copy
+      createddate: copy
+      description: redact
+      productcode: copy
+      servicedate: copy
+      opportunityid: copy
+      systemmodstamp: copy

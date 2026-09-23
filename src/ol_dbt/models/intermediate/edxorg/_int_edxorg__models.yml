@@ -4,6 +4,10 @@ version: 2
 models:
 - name: int__edxorg__mitx_courseruns
   description: Intermediate model for MITx course runs on edx.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: courserun_readable_id
     description: str, The canonical ID of the course run in the format as {org}/{course}/{run}
@@ -87,6 +91,11 @@ models:
     (courserun_readable_id, user_username). Since user_username is unique per user_id
     in that model (sourced from int__edxorg__mitx_users), this resolves to the enrollment
     model's (user_id, courserun_readable_id) unique key and cannot fan out.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on edx.org
@@ -155,6 +164,10 @@ models:
 
 - name: int__edxorg__mitx_courserun_enrollments
   description: Intermediate model for course run enrollments on edx.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on edx.org
@@ -276,6 +289,10 @@ models:
 
 - name: int__edxorg__mitx_courserun_grades
   description: Intermediate model for course run grades from edx.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on edx.org
@@ -380,6 +397,10 @@ models:
 - name: int__edxorg__mitx_program_certificates
   description: learners who completed MicroMasters and XSeries programs on edX.org.
     program_certificate_awarded_on might be null for some programs such as SCM
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: program_certificate_hashed_id
     description: str, unique hash value used to identify the program certificate
@@ -431,6 +452,10 @@ models:
 
 - name: int__edxorg__mitx_program_enrollments
   description: learners who enrolled in MicroMasters and XSeries programs on edX.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: program_type
     description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
@@ -893,6 +918,10 @@ models:
 
 - name: int__edxorg__mitx_program_courses
   description: MITx program and its courses on edX.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: program_uuid
     description: str, UUID of the program on edX.org.

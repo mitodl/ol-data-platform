@@ -2,13 +2,15 @@
 # - Model the different asset objects according to their type
 
 import hashlib
-import io
 import json
-import tarfile
+import logging
 import time
+from collections.abc import Sequence
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Any, NamedTuple
 from urllib.parse import urlparse
 
 import httpx2 as httpx
@@ -19,14 +21,25 @@ from dagster import (
     AssetKey,
     AssetOut,
     DataVersion,
+    DataVersionsByPartition,
+    MetadataValue,
+    OpExecutionContext,
     Output,
+    PartitionsDefinition,
+    SourceAsset,
     asset,
     multi_asset,
+    observable_source_asset,
 )
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.failures import permanent_failure
+from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
+    CourseExportOutcome,
+    classify_course_export_state,
+    course_export_task_id,
     process_course_xml,
     process_course_xml_blocks,
     process_video_xml,
@@ -38,34 +51,211 @@ HTTP_SUCCESS = 200
 HTTP_NOT_FOUND = 404
 COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT = timedelta(minutes=60)
 
+COURSEWARE_ASSET_KEY = AssetKey(["openedx", "courseware"])
 
-@asset(
-    description=("An instance of courseware running in an Open edX environment."),
-    group_name="openedx",
-    key=AssetKey(["openedx", "courseware"]),
-    required_resource_keys={"openedx"},
-)
-def openedx_live_courseware(context: AssetExecutionContext):
-    courserun_id = context.partition_key
-    # Retrieve the last published timestamp from
-    # /learning_sequences/v1/course_outline/{course_key_str}, using the last published
-    # information as the data version
-    course_outline = context.resources.openedx.client.get_course_outline(courserun_id)
-    return Output(
-        course_outline,
-        data_version=DataVersion(course_outline["published_version"]),
-        metadata={
-            "course_key": courserun_id,
-            "course_title": course_outline["title"],
-            "courseware_published_version": course_outline["published_version"],
-            "courseware_published_at": course_outline["published_at"],
-        },
+# 16 workers measured at ~53 outline fetches/sec against mitxonline with no
+# throttling. ceiling: raise only with fresh numbers from the authenticated
+# endpoint, which is slower than the anonymous one used to measure.
+OUTLINE_FETCH_WORKERS = 16
+
+
+class OutlineFetchError(Exception):
+    """An outline fetch failed in a way that counts against the sweep's tally.
+
+    A course that has vanished from the LMS (404) is deliberately not one of
+    these: there is nothing left to export, so it is not a symptom of trouble.
+    """
+
+
+def published_version_of(
+    future: "Future[dict[str, str]]", course_run_id: str, log: logging.Logger
+) -> str | None:
+    """Resolve one outline fetch into a published version.
+
+    Returns None when the course no longer exists in the LMS, and raises
+    OutlineFetchError when the fetch failed for any other reason.
+    """
+    try:
+        return future.result()["published_version"]
+    except httpx.HTTPStatusError as error:
+        if error.response.status_code == HTTP_NOT_FOUND:
+            log.info("Course outline not found for key %s", course_run_id)
+            return None
+        log.exception("Failed to fetch the course outline for %s", course_run_id)
+        raise OutlineFetchError from error
+    except Exception as error:
+        log.exception("Failed to fetch the course outline for %s", course_run_id)
+        raise OutlineFetchError from error
+
+
+class CoursewareSweep(NamedTuple):
+    """What one pass over a deployment's course outlines produced.
+
+    ``unswept`` is the tail the pass never reached -- empty unless a deadline
+    cut it short. Its callers use it to decide where the next pass starts, so
+    that a budget that always expires in the same place cannot starve the
+    courses that sit past it.
+    """
+
+    versions: dict[str, str]
+    failures: int
+    unswept: list[str]
+
+
+def sweep_course_versions(
+    client: Any,
+    course_run_ids: Sequence[str],
+    log: logging.Logger,
+    deadline: datetime | None = None,
+) -> CoursewareSweep:
+    """Fetch the published version of every course run, concurrently.
+
+    ``deadline`` bounds the wall clock the fetch phase may spend. Without one
+    the sweep runs to completion, which is what a run wants; a sensor passes one
+    because an unbounded sweep that outlives its tick emits *nothing* and saves
+    no progress -- the failure that left courses un-exported from May to August.
+
+    Stopping early is safe in a way that stopping late is not: a course left out
+    of ``versions`` emits no observation, so its last known version stands and
+    the next pass picks it up. Reporting a version we did not actually read, or
+    reporting nothing at all because the tick was killed, are the two outcomes
+    worth avoiding.
+    """
+    versions: dict[str, str] = {}
+    failures = 0
+    unswept: list[str] = []
+    timed_out = False
+    executor = ThreadPoolExecutor(max_workers=OUTLINE_FETCH_WORKERS)
+    try:
+        futures = {
+            executor.submit(client.get_course_outline, course_run_id): course_run_id
+            for course_run_id in course_run_ids
+        }
+        timeout = (
+            None
+            if deadline is None
+            else max(0.0, (deadline - datetime.now(tz=UTC)).total_seconds())
+        )
+        try:
+            for future in as_completed(futures, timeout=timeout):
+                course_run_id = futures[future]
+                try:
+                    published_version = published_version_of(future, course_run_id, log)
+                except OutlineFetchError:
+                    failures += 1
+                    continue
+                # A partition left out of the mapping emits no observation at
+                # all, so its last known version stands. That is what we want
+                # for a course that has vanished from the LMS: there is nothing
+                # to export, and inventing a version would look like a change.
+                if published_version is not None:
+                    versions[course_run_id] = published_version
+        except TimeoutError:
+            timed_out = True
+        unswept = [
+            course_run_id
+            for future, course_run_id in futures.items()
+            if not future.done()
+        ]
+    finally:
+        # wait=False so a blocked worker cannot hold the caller past the
+        # deadline it just set; cancel_futures so the ones still queued do not
+        # go on issuing requests against an LMS that is already struggling.
+        executor.shutdown(wait=False, cancel_futures=True)
+    if timed_out:
+        log.warning(
+            "Course outline sweep ran out of time with %s of %s course runs "
+            "unswept; the next pass resumes from them.",
+            len(unswept),
+            len(course_run_ids),
+        )
+    return CoursewareSweep(versions=versions, failures=failures, unswept=unswept)
+
+
+def build_courseware_source_asset(
+    deployment: str, partitions_def: PartitionsDefinition
+) -> SourceAsset:
+    """Build the observable source asset for one deployment's live courseware.
+
+    Courseware lives in the LMS, not in our warehouse, so it is a source asset
+    rather than something we materialize. Observing it is what gives the rest
+    of the graph a reason to run: every downstream carries
+    ``upstream_or_code_changes()``, whose ``data_version_changed()`` term only
+    fires against an *observable source* asset - an AssetObservation reported
+    against a materializable asset does not drive it at all, and a
+    never-materialized materializable upstream trips ``any_deps_missing()`` and
+    blocks the downstream outright.
+
+    Built per deployment by a factory, with the key and partitions passed
+    straight to the decorator, because the ``late_bind_partition_to_asset`` /
+    ``add_prefix_to_asset_keys`` helpers are written against AssetsDefinition
+    and have no SourceAsset equivalent.
+
+    Deliberately carries no ``automation_condition``. An AutomationCondition is
+    evaluated per *partition*, so an hourly cron on a 3,500-partition asset asks
+    for 3,500 observation runs an hour -- and because the observe function
+    sweeps the whole deployment regardless of which partition its run was
+    requested for, each of those runs re-fetched every course. That is O(N^2)
+    against the LMS and it saturated the run queue to the point where no export
+    ran at all. ``courseware_observation_sensor`` does the sweep once per tick
+    and reports the versions directly, with no run in between.
+
+    The asset stays *observable* even though nothing auto-observes it: the
+    data-version comparison that suppresses a re-export when a course has not
+    changed is only reached for observable assets, and a materializable
+    upstream with no materialization would trip ``any_deps_missing()`` and block
+    every downstream outright.
+    """
+
+    @observable_source_asset(
+        key=AssetKey([deployment, *COURSEWARE_ASSET_KEY.path]),
+        partitions_def=partitions_def,
+        description="An instance of courseware running in an Open edX environment.",
+        group_name="openedx",
+        required_resource_keys={"openedx"},
     )
+    def courseware(context: OpExecutionContext) -> DataVersionsByPartition:
+        """Report the published version of every registered course run.
+
+        Kept so the asset is observable and so a whole deployment can still be
+        swept on demand from the UI. Routine observation comes from
+        ``courseware_observation_sensor`` instead -- see the factory docstring.
+        """
+        partition_keys = partitions_def.get_partition_keys(
+            dynamic_partitions_store=context.instance
+        )
+        sweep = sweep_course_versions(
+            context.resources.openedx.client, partition_keys, context.log
+        )
+        context.log.info(
+            "Observed %s of %s %s course runs, %s failed",
+            len(sweep.versions),
+            len(partition_keys),
+            deployment,
+            sweep.failures,
+        )
+        # A sweep where every lookup failed is a bad token or a 500-ing LMS, not
+        # a deployment with nothing to say. Reporting it as a clean observation
+        # would leave every downstream quiet, hourly, forever.
+        if partition_keys and sweep.failures == len(partition_keys):
+            msg = (
+                f"Course outline sweep failed for all {sweep.failures} "
+                f"{deployment} courses"
+            )
+            raise RuntimeError(msg)
+        return DataVersionsByPartition(
+            {
+                course_run_id: DataVersion(version)
+                for course_run_id, version in sweep.versions.items()
+            }
+        )
+
+    return courseware
 
 
 @multi_asset(
     group_name="openedx",
-    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
+    deps=[COURSEWARE_ASSET_KEY],
     outs={
         "course_blocks": AssetOut(
             automation_condition=upstream_or_code_changes(),
@@ -87,7 +277,7 @@ def openedx_live_courseware(context: AssetExecutionContext):
     },
     required_resource_keys={"openedx"},
 )
-def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
+def course_structure(context: AssetExecutionContext):
     course_id = context.partition_key
     course_status = context.resources.openedx.client.check_course_status(course_id)
     context.log.info("Course status for %s: %s", course_id, course_status)
@@ -156,17 +346,33 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
         "An importable artifact representing the contents of an Open edX course."
     ),
     group_name="openedx",
-    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
+    deps=[COURSEWARE_ASSET_KEY],
     io_manager_key="s3file_io_manager",
     key=AssetKey(["openedx", "raw_data", "course_xml"]),
     required_resource_keys={"openedx", "s3"},
     output_required=False,
+    # Exports are slow (they poll Studio for minutes) and arrive in bursts: a
+    # republished term, or a fresh deployment where every course is new, asks
+    # for all of them at once, which without a limit of its own fills the
+    # global run slots and queues every unrelated pipeline behind it.
+    #
+    # Naming the pool here only makes that limit *settable*; it does not impose
+    # one. Until a slot limit is configured for `openedx_course_export` on the
+    # instance (Deployment -> Concurrency), these runs are still unbounded.
+    pool="openedx_course_export",
 )
-def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
+def course_xml(context: AssetExecutionContext):
     course_key = context.partition_key
     course_status = context.resources.openedx.client.check_course_status(course_key)
     # if the course is found, trigger the XML export
     if course_status == HTTP_SUCCESS:
+        # Read before the export is triggered so the version recorded below is
+        # the one this archive reflects, not one published while it ran. The
+        # upstream observation is what got us here, so this lookup is known to
+        # have just succeeded for this course.
+        published_version = context.resources.openedx.client.get_course_outline(
+            course_key
+        )["published_version"]
         exported_courses = context.resources.openedx.client.export_courses(
             course_ids=[course_key],
         )
@@ -175,14 +381,38 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         )
         successful_exports: set[str] = set()
         failed_exports: set[str] = set()
-        tasks = exported_courses["upload_task_ids"]
+        # Keyed by course id, so a failure or a timeout can say what Studio
+        # last reported instead of just that something went wrong.
+        last_seen_status: dict[str, str] = {}
+        # Only ever one course is requested, so the poll set is built from that
+        # course rather than from whatever the response happens to contain.
+        # Reading upload_task_ids directly meant a course Studio declined to
+        # queue produced an empty mapping: the loop ran zero times, nothing was
+        # recorded as failed, and execution fell through to a bare KeyError on
+        # upload_urls further down.
+        tasks = {course_key: course_export_task_id(course_key, exported_courses)}
         start_time = datetime.now(tz=UTC)
         while len(successful_exports.union(failed_exports)) < len(tasks):
             if (
                 datetime.now(tz=UTC) - start_time
                 > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
             ):
-                err_msg = f"Course export timed out for {course_key}"
+                # Which course timed out and what Studio last said are logged
+                # rather than interpolated into the message: Sentry titles the
+                # event from the message, so a course key in there gives every
+                # timeout a different title. The course key is already on the
+                # event as the dagster_partition tag.
+                context.log.error(
+                    "Course export timed out for %s after %s. Last status "
+                    "reported by Studio: %s",
+                    course_key,
+                    COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT,
+                    last_seen_status or "none",
+                )
+                err_msg = (
+                    "Course export timed out waiting for Studio after "
+                    f"{COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT}."
+                )
                 raise TimeoutError(err_msg)
             time.sleep(timedelta(seconds=20).seconds)
             for course_id, task_id in tasks.items():
@@ -194,9 +424,13 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
                 )
                 state = task_status.get("state")
                 details = task_status.get("details")
-                if state == "Succeeded":
+                last_seen_status[course_id] = (
+                    f"{state}{f' ({details})' if details else ''}"
+                )
+                outcome = classify_course_export_state(state)
+                if outcome is CourseExportOutcome.SUCCEEDED:
                     successful_exports.add(course_id)
-                elif state in {"Failed", "Canceled", "Retrying"}:
+                elif outcome is CourseExportOutcome.FAILED:
                     failed_exports.add(course_id)
                 elif details:
                     context.log.info(
@@ -206,8 +440,30 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
                         details,
                     )
         if failed_exports:
-            errmsg = f"Unable to export the course XML for {course_key}"
-            raise Exception(errmsg)  # noqa: TRY002
+            reported = {
+                course: last_seen_status.get(course)
+                for course in sorted(failed_exports)
+            }
+            # Studio reporting Failed is a terminal answer about this version of
+            # the course, not a hiccup -- re-asking returns the same thing until
+            # the course itself changes. Raised as a bare Exception it was never
+            # classified at all, so run_retries and the automation condition both
+            # kept re-running it: 2,587 events on DAGSTER-6.
+            # The course key stays out of the message and in the metadata
+            # below, so every occurrence of this defect carries the same Sentry
+            # title instead of one title per course.
+            errmsg = (
+                "Studio could not export the course XML, and reported a "
+                "terminal failure state. Rerunning will not change that; the "
+                "course itself has to be fixed or republished."
+            )
+            raise permanent_failure(
+                errmsg,
+                metadata={
+                    "course_key": str(course_key),
+                    "studio_status": MetadataValue.json(reported),
+                },
+            )
         s3_location = exported_courses["upload_urls"][course_key]
         context.log.debug("Attempting to download the course XML from %s", s3_location)
         s3_path = urlparse(s3_location)
@@ -222,7 +478,11 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         yield Output(
             (course_file, target_path),
             data_version=DataVersion(data_version),
-            metadata={"course_id": course_key, "object_key": target_path},
+            metadata={
+                "course_id": course_key,
+                "object_key": target_path,
+                "courseware_published_version": published_version,
+            },
         )
     # if the course is not found, refer to the last successful materialization
     elif course_status in {None, HTTP_NOT_FOUND}:
@@ -365,18 +625,12 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
             },
         )
 
-        # Materialize non-XML static assets to S3. Files are bundled into a single
-        # tar archive per course. The data_version is a content hash of the static
-        # files themselves, so it only changes when the assets actually change.
-        static_assets_file = Path(
-            NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
-        )
+        # Materialize non-XML static assets to S3. process_course_xml_blocks has
+        # already streamed them into a single tar archive per course; the
+        # data_version is a content hash of the static files themselves, so it
+        # only changes when the assets actually change.
+        static_assets_file = static_bundle.archive_path
         temp_files.append(static_assets_file)
-        with tarfile.open(static_assets_file, "w:gz") as assets_tar:
-            for relative_path, asset_bytes in static_bundle.files:
-                info = tarfile.TarInfo(name=relative_path)
-                info.size = len(asset_bytes)
-                assets_tar.addfile(info, io.BytesIO(asset_bytes))
         course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{source_system}/{context.partition_key}/{static_bundle.data_version}.tar.gz"  # noqa: E501
         yield Output(
             (static_assets_file, course_static_assets_object_key),
@@ -491,9 +745,14 @@ def openedx_course_content_webhook(
         )
 
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"Learn API webhook notification failed for course_id={course_id} "
-            f"with status code {error.response.status_code} and error: {error!s}"
+        context.log.exception(
+            "Learn API webhook notification failed for course_id=%s with status "
+            "code %s",
+            course_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise Exception(error_message) from error  # noqa: TRY002
+        raise http_failure(
+            error,
+            "Learn API webhook notification failed",
+            metadata={"course_id": course_id, "source": source},
+        ) from error

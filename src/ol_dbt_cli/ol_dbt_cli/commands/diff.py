@@ -16,6 +16,11 @@ Design notes (the non-obvious bits):
   ``--exclude-columns``.
 * The comparison itself is run via ``dbt show --inline`` invoking audit_helper
   macros with ``--output json``; results are parsed tolerantly from stdout.
+* ``--old``/``--new`` normally resolve through ``ref()``, which requires a real
+  dbt model in the manifest. ``--old-raw``/``--new-raw`` bypass that, building a
+  literal ``api.Relation.create(...)`` instead — for relations dbt doesn't know
+  about: an already-materialized table sitting in a different schema/database
+  than the current --target.
 
 Driveable both by hand and by CI (Phase 2 auto-diff vs a base ref). See
 docs/specs/DBT_WAREHOUSE_CI_QA_SPEC.md §3.
@@ -65,6 +70,55 @@ class InvalidIdentifierError(ValueError):
     """Raised when a user-supplied name is not a safe dbt identifier."""
 
 
+def _split_columns(values: tuple[str, ...]) -> list[str]:
+    """Flatten repeated and comma-separated column arguments into one list.
+
+    Cyclopts consumes exactly one token per flag occurrence, so the repeatable
+    form (``-k a -k b``) is the only one it understands natively; ``-k a b`` puts
+    ``b`` in the next positional parameter instead. Accepting commas as well means
+    ``-k a,b`` and ``-k a -k b`` are equivalent, which is what most people try
+    first for a composite key.
+
+    Order is preserved and duplicates are dropped -- a repeated key column would
+    otherwise be emitted twice into the surrogate-key expression, and would
+    needlessly push a single-column key onto the composite path. Matching is
+    case-INSENSITIVE, because unquoted warehouse identifiers are and the rest of
+    this path already treats them that way (see ``_validate_identifiers`` and the
+    ``pk_lower`` filter in :func:`diff`); the first spelling seen is the one kept,
+    since that is what the user wrote and what the emitted SQL should say.
+
+    Empty segments (a trailing comma, ``-k ""``, ``-k ","``) are dropped here
+    rather than reaching :func:`_validate_identifiers` as a confusing
+    empty-identifier error. Dropping them means an all-empty value flattens to
+    ``[]``, which is indistinguishable from the option never being passed -- so
+    the caller must reject that case explicitly rather than silently treating it
+    as "no key given". See :func:`_require_non_empty`.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for part in value.split(","):
+            cleaned = part.strip()
+            if cleaned and cleaned.lower() not in seen:
+                seen.add(cleaned.lower())
+                out.append(cleaned)
+    return out
+
+
+def _require_non_empty(kind: str, flag: str, given: tuple[str, ...], flattened: list[str]) -> None:
+    """Reject a column-list option that was supplied but held no usable names.
+
+    ``-k ""`` and ``-k ","`` flatten to nothing. Treating that as "not supplied"
+    would silently skip the per-column comparison the user explicitly asked for
+    (or silently exclude nothing), where before comma-splitting existed the empty
+    string simply failed identifier validation. Silent degradation is worse than a
+    loud error for a tool whose output is meant to be trusted, so this fails.
+    """
+    if given and not flattened:
+        msg = f"{flag} was given but contains no column names (values: {', '.join(repr(g) for g in given)})."
+        raise InvalidIdentifierError(msg)
+
+
 def _validate_identifiers(kind: str, names: list[str]) -> None:
     """Reject any *names* that are not plain dbt identifiers.
 
@@ -99,6 +153,11 @@ class ColumnMismatch:
     column: str
     mismatch_rate: float
     mismatched_rows: int
+    # Kept out of mismatch_rate: audit_helper charges rows present on only one
+    # side against every column, which reports the same missing rows once per
+    # column and gives the primary key an impossible nonzero rate.
+    missing_in_old: int = 0
+    missing_in_new: int = 0
 
 
 @dataclass
@@ -113,7 +172,20 @@ class DiffResult:
     column_mismatches: list[ColumnMismatch]
     sample_mismatches: list[dict[str, Any]]
     verdict: Verdict
+    # Text-output-only labels annotating each side's source (e.g. "name (raw)")
+    # when --old/new-raw make `old`/`new` ambiguous — identical to `old`/`new`
+    # for a plain ref()-vs-ref() diff. Kept separate from `old`/`new` so JSON
+    # output stays a stable, bare identifier. Uses parens, not brackets —
+    # rich.console.print() parses `[...]` as markup and silently swallows
+    # anything that isn't a recognized style tag.
+    old_label: str
+    new_label: str
     notes: list[str] = field(default_factory=list)
+    # Rows with no exact full-row match on the other side, from compare_relations
+    # -- NOT a count of one-sided rows: a row whose values differ is counted once
+    # per side. Reported on its own line since it is not in the per-column rates
+    # and sample_mismatches is truncated by --limit.
+    unmatched_rows: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +216,39 @@ def _resolve_columns(
     if yaml_model is not None and yaml_model.column_names:
         return {c.lower() for c in yaml_model.column_names}
     return set()
+
+
+def _resolve_raw_columns(
+    name: str,
+    dbt_dir: Path,
+    target: str,
+    *,
+    database: str | None = None,
+    schema: str | None = None,
+) -> tuple[set[str], str | None]:
+    """Resolve a raw (non-``ref()``) relation's columns by sampling one row.
+
+    Raw relations (an already-materialized table in another schema) have no
+    manifest/YAML metadata to resolve columns from statically, so this samples
+    a live row and reads its keys instead.
+
+    Returns ``(columns, error)``. *error* carries the dbt failure message when
+    the sampling query itself fails (e.g. the relation doesn't exist) — the
+    caller must surface it rather than let an empty column set masquerade as
+    "unparsed / not in manifest", which is misleading for a raw relation.
+    """
+    expr = _relation_jinja(name, raw=True, database=database, schema=schema)
+    # Rendered into a Jinja template compiled by dbt (not executed as a raw query
+    # here), so the S608 heuristic is a false positive — same as _compare_column_sql.
+    # No literal LIMIT here: `dbt show` already wraps the compiled query in its own
+    # limiting logic via --limit below; a second, literal `limit 1` in the SQL text
+    # collides with that wrapper and breaks the DuckDB parser.
+    inline_sql = f"select * from {{{{ {expr} }}}}"  # noqa: S608
+    try:
+        rows = _run_dbt_show(inline_sql, dbt_dir, target, limit=1)
+    except RuntimeError as exc:
+        return set(), str(exc)
+    return ({c.lower() for c in rows[0]} if rows else set()), None
 
 
 def reconcile_columns(
@@ -276,6 +381,72 @@ def _jinja_list(values: list[str]) -> str:
     return f"[{inner}]"
 
 
+# Base alias for the synthetic single-column join key that stands in for a
+# composite primary key in the per-column comparison (see `_compare_column_sql`).
+# Deliberately tool-namespaced, but see `_surrogate_alias` -- "unlikely to
+# collide" is not the same as "cannot", and the collision failed silently.
+_SURROGATE_PK = "ol_dbt_diff_surrogate_key"
+
+
+def _surrogate_alias(taken: list[str]) -> str:
+    """Pick a surrogate-key alias that cannot collide with a real column name.
+
+    If the compared column is itself called ``ol_dbt_diff_surrogate_key``, the
+    emitted select would carry that identifier twice -- once for the generated
+    key, once for the real column -- and audit_helper would then use the same
+    name as both ``primary_key`` and ``column_to_compare``. DuckDB does not
+    reject that: it binds to the *first* match, so the comparison compares the
+    generated key against itself and reports a perfect match no matter how much
+    the real values differ. A silent false negative is the worst outcome for a
+    tool whose job is detecting differences, so the alias is derived rather than
+    assumed safe.
+
+    Matching is case-insensitive because warehouse identifiers are. The ``_x``
+    suffix keeps the result a plain identifier, so it still satisfies
+    :data:`_IDENTIFIER_RE`.
+    """
+    taken_lower = {t.lower() for t in taken}
+    alias = _SURROGATE_PK
+    while alias.lower() in taken_lower:
+        alias += "_x"
+    return alias
+
+
+def _pk_string(values: list[str]) -> str:
+    """Render primary key columns as a single quoted, comma-joined SQL fragment.
+
+    audit_helper takes ``primary_key`` as an opaque string it interpolates
+    straight into SQL, never as a list -- a Jinja list literal reaches the
+    database as the text ``['k1', 'k2']`` and fails to parse. For
+    ``compare_relations``/``compare_queries`` the only use is the ``order by``
+    of the ``summarize=false`` branch, where a comma-joined column list is
+    exactly right.
+    """
+    return f"'{', '.join(values)}'"
+
+
+def _relation_jinja(
+    name: str,
+    *,
+    raw: bool = False,
+    database: str | None = None,
+    schema: str | None = None,
+) -> str:
+    """Render a relation reference for inline Jinja SQL.
+
+    Normally a plain ``ref('name')`` — requires *name* to be a real dbt model in
+    the manifest. When ``raw=True``, builds a literal ``api.Relation.create(...)``
+    instead, addressed by *database*/*schema* (defaulting to the current
+    ``--target``'s own database/schema) — for relations dbt doesn't know about,
+    e.g. an already-materialized table elsewhere.
+    """
+    if not raw:
+        return f"ref('{name}')"
+    db = f"'{database}'" if database else "target.database"
+    sch = f"'{schema}'" if schema else "target.schema"
+    return f"api.Relation.create(database={db}, schema={sch}, identifier='{name}')"
+
+
 def _compare_relations_sql(
     old: str,
     new: str,
@@ -283,6 +454,12 @@ def _compare_relations_sql(
     exclude_columns: list[str],
     *,
     summarize: bool,
+    old_raw: bool = False,
+    new_raw: bool = False,
+    old_schema: str | None = None,
+    new_schema: str | None = None,
+    old_database: str | None = None,
+    new_database: str | None = None,
 ) -> str:
     """Build inline SQL calling ``audit_helper.compare_relations``.
 
@@ -290,28 +467,88 @@ def _compare_relations_sql(
     ``percent_of_total`` grouping; with ``summarize=False`` it returns the actual
     differing rows (used to sample mismatches).
     """
-    pk_arg = ""
-    if primary_key:
-        pk_repr = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
-        pk_arg = f", primary_key={pk_repr}"
+    pk_arg = f", primary_key={_pk_string(primary_key)}" if primary_key else ""
     exclude_arg = f", exclude_columns={_jinja_list(exclude_columns)}" if exclude_columns else ""
+    a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
+    b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
+    # `}}` in an f-string is an escape for a single literal `}` (same as `{{` for
+    # `{`) — closing the Jinja `{{ ... }}` block from an f-string needs `}}}}`.
     return (
         "{{ audit_helper.compare_relations("
-        f"a_relation=ref('{old}'), b_relation=ref('{new}')"
-        f"{exclude_arg}{pk_arg}, summarize={'true' if summarize else 'false'}) }}"
+        f"a_relation={a_expr}, b_relation={b_expr}"
+        f"{exclude_arg}{pk_arg}, summarize={'true' if summarize else 'false'}) }}}}"
     )
 
 
-def _compare_column_sql(old: str, new: str, primary_key: list[str], column: str) -> str:
-    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column."""
-    pk = f"'{primary_key[0]}'" if len(primary_key) == 1 else _jinja_list(primary_key)
-    # Model names are dbt identifiers rendered into a Jinja template compiled by
-    # dbt (not executed as a raw query here), so the S608 heuristic is a false positive.
+def _compare_column_sql(
+    old: str,
+    new: str,
+    primary_key: list[str],
+    column: str,
+    *,
+    old_raw: bool = False,
+    new_raw: bool = False,
+    old_schema: str | None = None,
+    new_schema: str | None = None,
+    old_database: str | None = None,
+    new_database: str | None = None,
+) -> str:
+    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column.
+
+    ``compare_column_values`` supports only a *scalar* primary key: it emits
+    ``a_query.{{ primary_key }} = b_query.{{ primary_key }}`` (plus a coalesce
+    and several null checks), so the key has to be one column name that exists
+    in both queries. A composite key therefore cannot be passed through --
+    neither as a Jinja list (which reaches the database as the literal text
+    ``['k1', 'k2']``) nor comma-joined (``a.k1, k2 = b.k1, k2``).
+
+    For a composite key we instead synthesize a single hashed join column with the
+    project's ``diff_composite_key`` macro inside a_query/b_query and hand
+    audit_helper *that* column name. One side effect is better than the scalar
+    path: the macro encodes nulls rather than dropping them, so rows whose key
+    components are null still pair up, where a plain equi-join drops them.
+
+    ``dbt_utils.generate_surrogate_key`` is deliberately NOT used here: it joins
+    components with a literal ``-`` before hashing, without encoding component
+    boundaries, so ``('a-b', 'c')`` and ``('a', 'b-c')`` hash identically
+    (verified on dbt_utils 1.3.3). That would pair two distinct keys as one row
+    and reintroduce the very mispairing a composite key exists to prevent.
+    ``diff_composite_key`` length-prefixes each component instead.
+    """
+    a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
+    b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
+    # Only the primary key(s) + the one column being compared are needed here --
+    # `compare_column_values` does a full outer join on a_query/b_query, and
+    # selecting every column (as this used to) forces that join to carry the
+    # whole row width for a single-column comparison, which is needless I/O on
+    # wide tables.
+    if len(primary_key) > 1:
+        # Guard against every identifier that could appear alongside the alias --
+        # `column` is the only other one emitted today, but including the key
+        # columns keeps this correct if they are ever selected again.
+        alias = _surrogate_alias([*primary_key, column])
+        pk = f"'{alias}'"
+        key_expr = f"{{{{ diff_composite_key({_jinja_list(primary_key)}) }}}}"
+        select_cols = f"{key_expr} as {alias}, {column}"
+    else:
+        pk = f"'{primary_key[0]}'"
+        select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
+    # a_query/b_query are built with {% set %}/{% endset %} so `a_expr`/`b_expr`
+    # (a ref()/api.Relation.create() call) are rendered by Jinja BEFORE
+    # compare_column_values ever sees the string. Embedding `{{ ... }}` directly
+    # inside a quoted string argument (the previous approach) is inert: Jinja
+    # treats string literals atomically and never re-parses braces inside them,
+    # so the literal text `{{ ref(...) }}` reached the database unrendered --
+    # a real, pre-existing bug (every diff with a primary key hit this).
     return (
-        "{{ audit_helper.compare_column_values("  # noqa: S608
-        f"a_query=\"select * from {{{{ ref('{old}') }}}}\", "
-        f"b_query=\"select * from {{{{ ref('{new}') }}}}\", "
-        f"primary_key={pk}, column_to_compare='{column}') }}"
+        "{% set a_query %}"  # noqa: S608
+        f"select {select_cols} from {{{{ {a_expr} }}}}"
+        "{% endset %}"
+        "{% set b_query %}"
+        f"select {select_cols} from {{{{ {b_expr} }}}}"
+        "{% endset %}"
+        "{{ audit_helper.compare_column_values("
+        f"a_query=a_query, b_query=b_query, primary_key={pk}, column_to_compare='{column}') }}}}"
     )
 
 
@@ -362,14 +599,65 @@ def _result_to_dict(result: DiffResult) -> dict[str, Any]:
             "compared": result.column_reconciliation.compared,
         },
         "row_counts": result.row_counts,
+        "unmatched_rows": result.unmatched_rows,
         "column_mismatches": [
-            {"column": c.column, "mismatch_rate": c.mismatch_rate, "mismatched_rows": c.mismatched_rows}
+            {
+                "column": c.column,
+                "mismatch_rate": c.mismatch_rate,
+                "mismatched_rows": c.mismatched_rows,
+                "missing_in_old": c.missing_in_old,
+                "missing_in_new": c.missing_in_new,
+            }
             for c in result.column_mismatches
         ],
         "sample_mismatches": result.sample_mismatches,
         "verdict": result.verdict.value,
         "notes": result.notes,
+        "old_label": result.old_label,
+        "new_label": result.new_label,
     }
+
+
+def _format_sample_mismatches(
+    rows: list[dict[str, Any]], primary_key: list[str], old_label: str, new_label: str
+) -> list[str]:
+    """Turn raw ``compare_relations(summarize=false)`` rows into readable per-key diffs.
+
+    audit_helper tags each mismatching row with the full row content from
+    whichever side(s) it appears on (``in_a``/``in_b``) -- printed as raw JSON,
+    the 1-3 fields that actually differ are buried under the ~40 that don't.
+    This groups by primary key and reports only the differing fields, or
+    "only in <side>" when a row exists on just one side.
+    """
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = tuple(row.get(k) for k in primary_key)
+        groups.setdefault(key, []).append(row)
+
+    pk_desc = ", ".join(primary_key)
+    lines: list[str] = []
+    for key, group_rows in groups.items():
+        key_str = f"{pk_desc}={key[0]}" if len(key) == 1 else f"({pk_desc})={key}"
+        a_row = next((r for r in group_rows if r.get("in_a") and not r.get("in_b")), None)
+        b_row = next((r for r in group_rows if r.get("in_b") and not r.get("in_a")), None)
+        # A non-unique primary key can put more than 2 rows in one group -- flag
+        # it rather than silently comparing only the first pair and dropping the
+        # rest, which would understate how many rows actually differ.
+        extra = f" (+{len(group_rows) - 2} more rows in this key group, not shown)" if len(group_rows) > 2 else ""
+        if a_row and not b_row:
+            lines.append(f"{key_str}: only in {old_label}{extra}")
+        elif b_row and not a_row:
+            lines.append(f"{key_str}: only in {new_label}{extra}")
+        elif a_row and b_row:
+            diffs = [
+                f"{field}: {a_row.get(field)!r} → {b_row.get(field)!r}"
+                for field in a_row
+                if field not in ("in_a", "in_b") and a_row.get(field) != b_row.get(field)
+            ]
+            lines.append(
+                f"{key_str}: " + ("; ".join(diffs) if diffs else "(no field differences in this sample)") + extra
+            )
+    return lines
 
 
 def _print_json(result: DiffResult) -> None:
@@ -384,40 +672,55 @@ def _print_text(result: DiffResult) -> None:
     }[result.verdict]
     console.print(
         f"\n[{color}]{result.verdict.value.upper()}[/]  "
-        f"[bold]{result.old}[/] → [bold]{result.new}[/]  ([dim]{result.target}[/])"
+        f"[bold]{result.old_label}[/] → [bold]{result.new_label}[/]  ([dim]{result.target}[/])"
     )
 
     recon = result.column_reconciliation
     if recon.diverged:
         if recon.only_in_old:
-            console.print(f"   [yellow]Only in {result.old}:[/] {', '.join(recon.only_in_old)}")
+            console.print(f"   [yellow]Only in {result.old_label}:[/] {', '.join(recon.only_in_old)}")
         if recon.only_in_new:
-            console.print(f"   [yellow]Only in {result.new}:[/] {', '.join(recon.only_in_new)}")
+            console.print(f"   [yellow]Only in {result.new_label}:[/] {', '.join(recon.only_in_new)}")
     console.print(f"   [bold]Compared columns:[/] {len(recon.compared)}")
 
     rc = result.row_counts
     delta = rc.get("delta", 0)
     delta_str = f"[green]{delta}[/]" if delta == 0 else f"[red]{delta:+d}[/]"
     console.print(
-        f"   [bold]Row counts:[/] {result.old}={rc.get('old', 0)}  {result.new}={rc.get('new', 0)}  Δ={delta_str}"
+        f"   [bold]Row counts:[/] {result.old_label}={rc.get('old', 0)}  "
+        f"{result.new_label}={rc.get('new', 0)}  Δ={delta_str}"
     )
+    if result.unmatched_rows:
+        console.print(f"   [bold]Rows without an exact match on the other side:[/] [red]{result.unmatched_rows}[/]")
 
     if result.column_mismatches:
-        console.print("   [bold]Column mismatches:[/]")
+        console.print("   [bold]Column value mismatches[/] (rows present on both sides):")
         for c in result.column_mismatches:
             console.print(f"     • {c.column}: {c.mismatch_rate:.2%} ({c.mismatched_rows} rows)")
 
     if result.sample_mismatches:
-        console.print(f"   [bold]Sample mismatched rows[/] (first {len(result.sample_mismatches)}):")
-        for row in result.sample_mismatches:
-            console.print(f"     {json.dumps(row, default=str)}")
+        if result.primary_key:
+            formatted = _format_sample_mismatches(
+                result.sample_mismatches, result.primary_key, result.old_label, result.new_label
+            )
+            console.print(f"   [bold]Sample mismatches[/] (first {len(formatted)} keys):")
+            for line in formatted:
+                console.print(f"     • {line}")
+        else:
+            # No --primary-key means rows can't be reliably paired across sides,
+            # so fall back to the raw full-row dump rather than risk grouping
+            # unrelated rows together.
+            console.print(f"   [bold]Sample mismatched rows[/] (first {len(result.sample_mismatches)}):")
+            for row in result.sample_mismatches:
+                console.print(f"     {json.dumps(row, default=str)}")
 
     for note in result.notes:
         console.print(f"   [dim]{note}[/]")
 
     console.print(
         f"\n[bold]Summary:[/] {result.verdict.value} — "
-        f"row Δ {delta}, {len(result.column_mismatches)} column mismatch(es)."
+        f"row Δ {delta}, {result.unmatched_rows} unmatched row-side(s), "
+        f"{len(result.column_mismatches)} column value mismatch(es)."
     )
 
 
@@ -432,9 +735,13 @@ def diff(
         Parameter(name=["--old"], help="Baseline model name (the 'before' relation)."),
     ],
     new: Annotated[
-        str,
-        Parameter(name=["--new"], help="Candidate model name (the 'after' relation)."),
-    ],
+        str | None,
+        Parameter(
+            name=["--new"],
+            help="Candidate model name (the 'after' relation). Defaults to --old's value if omitted — "
+            "the common case is comparing the same table name via --old-raw against its ref()-resolved build.",
+        ),
+    ] = None,
     dbt_dir_path: Annotated[
         str | None,
         Parameter(
@@ -459,8 +766,10 @@ def diff(
             name=["--primary-key", "-k"],
             help=(
                 "Column(s) uniquely identifying a row, used as the comparison join key. "
-                "Repeatable. Required for per-column mismatch rates. Use this for models with "
-                "known surrogate-key non-determinism (e.g. dim_user.user_pk email-keyed collapse)."
+                "For a composite key pass a comma-separated list (-k a,b,c) or repeat the flag "
+                "(-k a -k b -k c); note that '-k a b c' does NOT work, since only the first "
+                "token is consumed. Required for per-column mismatch rates. Use this for models "
+                "with known surrogate-key non-determinism (e.g. dim_user.user_pk email-keyed collapse)."
             ),
         ),
     ] = (),
@@ -468,7 +777,8 @@ def diff(
         tuple[str, ...],
         Parameter(
             name=["--exclude-columns"],
-            help="Column(s) to exclude from the comparison (e.g. non-deterministic load timestamps). Repeatable.",
+            help="Column(s) to exclude from the comparison (e.g. non-deterministic load timestamps). "
+            "Comma-separated (--exclude-columns a,b) or repeatable, same as --primary-key.",
         ),
     ] = (),
     output_format: Annotated[
@@ -483,11 +793,54 @@ def diff(
         bool,
         Parameter(
             name=["--auto-build"],
-            help="Run 'dbt build' on both models (on --target) before comparing, so both relations exist.",
+            help="Run 'dbt build' on both models (on --target) before comparing, so both relations exist. "
+            "Skipped for any side marked --old-raw/--new-raw, since raw relations aren't dbt models.",
         ),
     ] = False,
+    old_raw: Annotated[
+        bool,
+        Parameter(
+            name=["--old-raw"],
+            help="Treat --old as a literal existing relation, not a dbt model — bypasses ref()/manifest "
+            "lookup. Use for an already-materialized table dbt doesn't know about (e.g. a snapshot made "
+            "with `ol-dbt local snapshot`). Defaults to the current --target's own database/schema; "
+            "override with --old-database/--old-schema.",
+        ),
+    ] = False,
+    new_raw: Annotated[
+        bool,
+        Parameter(name=["--new-raw"], help="Same as --old-raw, but for --new."),
+    ] = False,
+    old_schema: Annotated[
+        str | None,
+        Parameter(
+            name=["--old-schema"],
+            help="Schema override for --old. Requires --old-raw (default: the current --target's schema).",
+        ),
+    ] = None,
+    new_schema: Annotated[
+        str | None,
+        Parameter(
+            name=["--new-schema"],
+            help="Schema override for --new. Requires --new-raw (default: the current --target's schema).",
+        ),
+    ] = None,
+    old_database: Annotated[
+        str | None,
+        Parameter(
+            name=["--old-database"],
+            help="Database/catalog override for --old. Requires --old-raw (default: the current --target's database).",
+        ),
+    ] = None,
+    new_database: Annotated[
+        str | None,
+        Parameter(
+            name=["--new-database"],
+            help="Database/catalog override for --new. Requires --new-raw (default: the current --target's database).",
+        ),
+    ] = None,
 ) -> None:
-    """Diff two dbt model relations (same-engine row/column comparison).
+    r"""Diff two dbt model relations (same-engine row/column comparison).
 
     Reconciles column sets first (so a schema mismatch is reported clearly rather
     than as a raw SQL error), then runs a dbt_audit_helper comparison on the
@@ -498,25 +851,78 @@ def diff(
         Compare an old mart against its migrated replacement on local DuckDB:
             ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 
+        Use the model's real grain when no single column is unique. A composite key is
+        comma-separated, or the flag repeated -- these two are equivalent, and getting it
+        right matters: a single non-unique key pairs rows many-to-many and reports
+        mismatches that are an artifact of the join rather than a real difference.
+            ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on
+            ol-dbt diff --old m_old --new m_new -k user_email -k exam_created_on
+
         Exclude a non-deterministic column and emit JSON for CI:
             ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at --format json
 
         Build both sides first, then compare:
             ol-dbt diff --old m_old --new m_new --auto-build
 
+        Compare two already-materialized copies of the same model across schemas
+        (e.g. your personal dev schema vs. real production) on one Trino target:
+            ol-dbt diff --target dev_production \\
+                --old enrollment_detail_report --old-raw --old-schema ol_warehouse_production_reporting \\
+                --new enrollment_detail_report --new-raw --new-schema ol_warehouse_production_<username>_reporting \\
+                --primary-key courserunenrollment_id
+
+        Compare a frozen baseline (`ol-dbt local snapshot`) against a rebuild after a
+        code change, to isolate the change from any upstream data drift:
+            ol-dbt local snapshot enrollment_detail_report --as enrollment_detail_report_baseline
+            # ... edit the model, then rebuild it ...
+            ol-dbt diff --old enrollment_detail_report_baseline --old-raw \\
+                --new enrollment_detail_report --primary-key user_pk
+
     """
-    primary_key_list = list(primary_key)
-    exclude_list = list(exclude_columns)
+    new = new or old
+    primary_key_list = _split_columns(primary_key)
+    exclude_list = _split_columns(exclude_columns)
     notes: list[str] = []
+
+    if (old_schema or old_database) and not old_raw:
+        err_console.print("[red]Error:[/] --old-schema/--old-database require --old-raw.")
+        sys.exit(1)
+    if (new_schema or new_database) and not new_raw:
+        err_console.print("[red]Error:[/] --new-schema/--new-database require --new-raw.")
+        sys.exit(1)
 
     # Validate every value interpolated into inline Jinja SQL before use.
     try:
+        _require_non_empty("primary key", "--primary-key", primary_key, primary_key_list)
+        _require_non_empty("excluded column", "--exclude-columns", exclude_columns, exclude_list)
         _validate_identifiers("model name", [old, new])
         _validate_identifiers("primary key", primary_key_list)
         _validate_identifiers("excluded column", exclude_list)
+        _validate_identifiers(
+            "schema/database override",
+            [v for v in (old_schema, new_schema, old_database, new_database) if v],
+        )
     except InvalidIdentifierError as exc:
         err_console.print(f"[red]Error:[/] {exc}")
         sys.exit(1)
+
+    if old_raw:
+        notes.append(
+            f"--old-raw: '{old}' resolved as a literal relation "
+            f"(database={old_database or 'target.database'}, schema={old_schema or 'target.schema'})."
+        )
+    if new_raw:
+        notes.append(
+            f"--new-raw: '{new}' resolved as a literal relation "
+            f"(database={new_database or 'target.database'}, schema={new_schema or 'target.schema'})."
+        )
+
+    # Text-output labels disambiguating which side is which when --old/new-raw
+    # make the bare `old`/`new` names identical or otherwise ambiguous (e.g.
+    # both "enrollment_detail_report"). Unannotated for a plain ref()-vs-ref()
+    # diff, where `old`/`new` are already unambiguous.
+    old_label = f"{old} (raw)" if old_raw else old
+    new_label = f"{new} (raw)" if new_raw else new
 
     # Resolve dbt project directory (shared preamble with impact/validate).
     if dbt_dir_path:
@@ -530,6 +936,14 @@ def diff(
     if not (dbt_dir / "dbt_project.yml").exists():
         err_console.print(f"[red]Error:[/] dbt project not found at {dbt_dir}")
         err_console.print("  Use --dbt-dir to specify the path.")
+        sys.exit(1)
+
+    # Fail fast with an actionable message rather than letting dbt's raw
+    # "N package(s) specified... only M installed" Compilation Error (surfaced
+    # through 500 chars of dbt log noise) reach the user.
+    if not (dbt_dir / "dbt_packages" / "audit_helper").exists():
+        err_console.print(f"[red]Error:[/] the 'audit_helper' dbt package is not installed in {dbt_dir}.")
+        err_console.print(f"  Run: cd {dbt_dir} && dbt deps")
         sys.exit(1)
 
     models_dir = dbt_dir / "models"
@@ -553,14 +967,48 @@ def diff(
             continue
 
     # --- Column reconciliation (before any comparison) ---
-    old_cols = _resolve_columns(old, sql_models_by_name, manifest, yaml_registry)
-    new_cols = _resolve_columns(new, sql_models_by_name, manifest, yaml_registry)
+    old_raw_error: str | None = None
+    new_raw_error: str | None = None
+    if old_raw:
+        old_cols, old_raw_error = _resolve_raw_columns(old, dbt_dir, target, database=old_database, schema=old_schema)
+    else:
+        old_cols = _resolve_columns(old, sql_models_by_name, manifest, yaml_registry)
+    if new_raw:
+        new_cols, new_raw_error = _resolve_raw_columns(new, dbt_dir, target, database=new_database, schema=new_schema)
+    else:
+        new_cols = _resolve_columns(new, sql_models_by_name, manifest, yaml_registry)
+
     unresolved_note = "Column set for '{}' could not be resolved (unparsed / not in manifest); reconciliation skipped."
     if not old_cols:
-        notes.append(unresolved_note.format(old))
+        notes.append(
+            f"Column set for '{old}' could not be resolved: {old_raw_error}"
+            if old_raw_error
+            else unresolved_note.format(old)
+        )
     if not new_cols:
-        notes.append(unresolved_note.format(new))
+        notes.append(
+            f"Column set for '{new}' could not be resolved: {new_raw_error}"
+            if new_raw_error
+            else unresolved_note.format(new)
+        )
     recon = reconcile_columns(old_cols, new_cols, set(exclude_list))
+
+    # A mistyped --primary-key is a valid identifier, so identifier validation
+    # cannot catch it; without this it reaches the warehouse and comes back as a
+    # raw "column not found" SQL error with no hint that the key is at fault.
+    # Composite keys multiply the typo surface, so name the offenders here. Only
+    # meaningful when the column set actually resolved -- an unresolved set is
+    # "unknown", not "empty", and must not be read as "the key does not exist".
+    if primary_key_list and old_cols and new_cols:
+        known = {c.lower() for c in old_cols} & {c.lower() for c in new_cols}
+        unknown = [k for k in primary_key_list if k.lower() not in known]
+        if unknown:
+            err_console.print(
+                f"[red]Error:[/] --primary-key column(s) not present in both relations: "
+                f"{', '.join(repr(u) for u in unknown)}."
+            )
+            err_console.print(f"[dim]Columns common to both: {', '.join(sorted(known))}[/]")
+            sys.exit(1)
 
     # When a column set can't be resolved statically, the schema-divergence gate
     # cannot run — an empty reconciliation is "unverified", NOT "verified equal".
@@ -580,22 +1028,28 @@ def diff(
             "(or point --dbt-dir at a compiled project) for full schema validation."
         )
 
-    # Optionally build both relations first.
+    # Optionally build both relations first. Raw relations aren't dbt models —
+    # they're assumed to already exist (an already-materialized table) — so
+    # they're excluded from --select rather than passed to dbt build.
     if auto_build:
-        # Single space-joined --select value, consistent with ol-dbt run/impact.
-        build_cmd = ["dbt", "build", "--target", target, "--select", f"{old} {new}"]
-        if output_format == "text":
-            console.print(f"[dim]Running: {' '.join(build_cmd)} ...[/]")
-        try:
-            subprocess.run(build_cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603, S607
-        except subprocess.CalledProcessError as exc:
-            # dbt often logs useful detail to stdout, not stderr — prefer either.
-            detail = (exc.stderr or exc.stdout or str(exc)).strip()
-            err_console.print(f"[red]Error:[/] dbt build failed: {detail[-500:]}")
-            sys.exit(1)
-        except FileNotFoundError:
-            err_console.print("[red]Error:[/] 'dbt' command not found; install dbt and ensure it is on PATH.")
-            sys.exit(1)
+        build_targets = [name for name, raw in ((old, old_raw), (new, new_raw)) if not raw]
+        if not build_targets:
+            notes.append("--auto-build skipped: both --old and --new are raw relations (nothing to build).")
+        else:
+            # Single space-joined --select value, consistent with ol-dbt run/impact.
+            build_cmd = ["dbt", "build", "--target", target, "--select", " ".join(build_targets)]
+            if output_format == "text":
+                console.print(f"[dim]Running: {' '.join(build_cmd)} ...[/]")
+            try:
+                subprocess.run(build_cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603, S607
+            except subprocess.CalledProcessError as exc:
+                # dbt often logs useful detail to stdout, not stderr — prefer either.
+                detail = (exc.stderr or exc.stdout or str(exc)).strip()
+                err_console.print(f"[red]Error:[/] dbt build failed: {detail[-500:]}")
+                sys.exit(1)
+            except FileNotFoundError:
+                err_console.print("[red]Error:[/] 'dbt' command not found; install dbt and ensure it is on PATH.")
+                sys.exit(1)
 
     # --- Comparison ---
     row_counts: dict[str, int] = {"old": 0, "new": 0, "delta": 0}
@@ -619,6 +1073,8 @@ def diff(
                 column_mismatches=column_mismatches,
                 sample_mismatches=sample_mismatches,
                 verdict=Verdict.SCHEMA_DIVERGENCE,
+                old_label=old_label,
+                new_label=new_label,
                 notes=notes,
             ),
             output_format,
@@ -626,7 +1082,19 @@ def diff(
 
     try:
         summary_rows = _run_dbt_show(
-            _compare_relations_sql(old, new, primary_key_list, exclude_list, summarize=True),
+            _compare_relations_sql(
+                old,
+                new,
+                primary_key_list,
+                exclude_list,
+                summarize=True,
+                old_raw=old_raw,
+                new_raw=new_raw,
+                old_schema=old_schema,
+                new_schema=new_schema,
+                old_database=old_database,
+                new_database=new_database,
+            ),
             dbt_dir,
             target,
             limit=1000,
@@ -635,7 +1103,19 @@ def diff(
 
         if mismatched_rows:
             sample_mismatches = _run_dbt_show(
-                _compare_relations_sql(old, new, primary_key_list, exclude_list, summarize=False),
+                _compare_relations_sql(
+                    old,
+                    new,
+                    primary_key_list,
+                    exclude_list,
+                    summarize=False,
+                    old_raw=old_raw,
+                    new_raw=new_raw,
+                    old_schema=old_schema,
+                    new_schema=new_schema,
+                    old_database=old_database,
+                    new_database=new_database,
+                ),
                 dbt_dir,
                 target,
                 limit=limit,
@@ -643,12 +1123,27 @@ def diff(
 
         # Per-column mismatch rates require a primary key.
         if primary_key_list and recon.compared:
-            cols = recon.compared
+            # The join key can never hold differing values.
+            pk_lower = {k.lower() for k in primary_key_list}
+            cols = [c for c in recon.compared if c.lower() not in pk_lower]
             if len(cols) > _MAX_PER_COLUMN_COMPARISONS:
                 notes.append(f"Per-column comparison capped at {_MAX_PER_COLUMN_COMPARISONS} of {len(cols)} columns.")
                 cols = cols[:_MAX_PER_COLUMN_COMPARISONS]
             for col in cols:
-                mismatch = _compare_single_column(old, new, primary_key_list, col, dbt_dir, target)
+                mismatch = _compare_single_column(
+                    old,
+                    new,
+                    primary_key_list,
+                    col,
+                    dbt_dir,
+                    target,
+                    old_raw=old_raw,
+                    new_raw=new_raw,
+                    old_schema=old_schema,
+                    new_schema=new_schema,
+                    old_database=old_database,
+                    new_database=new_database,
+                )
                 if mismatch is not None and mismatch.mismatched_rows > 0:
                     column_mismatches.append(mismatch)
         elif not primary_key_list:
@@ -675,7 +1170,10 @@ def diff(
             column_mismatches=column_mismatches,
             sample_mismatches=sample_mismatches,
             verdict=verdict,
+            old_label=old_label,
+            new_label=new_label,
             notes=notes,
+            unmatched_rows=mismatched_rows,
         ),
         output_format,
     )
@@ -698,27 +1196,61 @@ def _compare_single_column(
     column: str,
     dbt_dir: Path,
     target: str,
+    *,
+    old_raw: bool = False,
+    new_raw: bool = False,
+    old_schema: str | None = None,
+    new_schema: str | None = None,
+    old_database: str | None = None,
+    new_database: str | None = None,
 ) -> ColumnMismatch | None:
     """Run a per-column value comparison, returning its mismatch rate.
 
-    audit_helper.compare_column_values returns rows tagged by ``match_status``;
-    the mismatch rate is the share of rows not in a "✅" perfect-match bucket.
+    audit_helper.compare_column_values tags rows by ``match_status``: "✅"
+    perfect match, "❌" values differ, and two "🤷" buckets for rows missing from
+    one side. Only "❌" counts toward the mismatch rate (see
+    :class:`ColumnMismatch`); the denominator stays the full joined row count.
     """
     rows = _run_dbt_show(
-        _compare_column_sql(old, new, primary_key, column),
+        _compare_column_sql(
+            old,
+            new,
+            primary_key,
+            column,
+            old_raw=old_raw,
+            new_raw=new_raw,
+            old_schema=old_schema,
+            new_schema=new_schema,
+            old_database=old_database,
+            new_database=new_database,
+        ),
         dbt_dir,
         target,
         limit=1000,
     )
     total = 0
     mismatched = 0
+    missing_in_old = 0
+    missing_in_new = 0
     for row in rows:
         count = _int(row.get("count_records") or row.get("count"))
         total += count
-        # audit_helper tags the perfect-match bucket with a leading "✅"; every
-        # other bucket (value mismatch, missing from a/b) counts as a mismatch.
-        if not str(row.get("match_status", "")).startswith("✅"):
+        status = str(row.get("match_status", ""))
+        if status.startswith("✅"):
+            continue
+        # audit_helper names the sides a/b; a is --old, b is --new.
+        if "missing from a" in status:
+            missing_in_old += count
+        elif "missing from b" in status:
+            missing_in_new += count
+        else:
             mismatched += count
     if total == 0:
         return None
-    return ColumnMismatch(column=column, mismatch_rate=mismatched / total, mismatched_rows=mismatched)
+    return ColumnMismatch(
+        column=column,
+        mismatch_rate=mismatched / total,
+        mismatched_rows=mismatched,
+        missing_in_old=missing_in_old,
+        missing_in_new=missing_in_new,
+    )

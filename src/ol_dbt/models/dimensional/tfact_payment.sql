@@ -115,6 +115,16 @@ with mitxonline_payments as (
     from {{ this }}
     group by platform
 )
+
+-- Snapshot of the target's current (payment_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        payment_key
+        , user_fk as stored_user_fk
+    from {{ this }}
+)
 {% endif %}
 
 , final as (
@@ -139,10 +149,17 @@ with mitxonline_payments as (
     {% if is_incremental() %}
     -- left join preserves payments from platforms not yet in the target table
     left join incremental_watermarks w on w.watermark_platform = pwf.platform
+    left join stale_user_fk_lookup as sufk
+        on sufk.payment_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(pwf.payment_id as varchar)",
+            "pwf.platform"
+        ]) }}
     where (
         w.max_created_on is null  -- platform not yet in target, include all
         or pwf.transaction_created_on > w.max_created_on
         or pwf.transaction_created_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from pwf.user_fk
     )
     {% endif %}
 )

@@ -19,7 +19,13 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
+from ol_orchestrate.lib.utils import (
+    authenticate_vault,
+    s3_uploads_bucket,
+    unauthenticated_vault,
+)
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 from canvas.assets.canvas import (
@@ -29,6 +35,8 @@ from canvas.assets.canvas import (
 )
 from canvas.sensors.canvas import canvas_google_sheet_course_id_sensor
 
+init_sentry("canvas")
+
 # Initialize vault with resilient loading
 try:
     vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
@@ -36,13 +44,11 @@ try:
 except Exception as e:  # noqa: BLE001 (resilient loading)
     import warnings
 
-    from ol_orchestrate.resources.secrets.vault import Vault
-
     warnings.warn(
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 # Get Google Sheets credentials
@@ -121,7 +127,7 @@ defs = Definitions(
         ),
         "google_sheet_config": GoogleSheetConfig(service_account_json=gs_secrets),
     },
-    assets=[export_course_content, course_content_metadata],
+    assets=with_failure_hooks([export_course_content, course_content_metadata]),
     schedules=[canvas_course_export_schedule],
     sensors=[canvas_google_sheet_course_id_sensor],
 )

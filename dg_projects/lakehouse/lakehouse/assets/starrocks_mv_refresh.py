@@ -1,17 +1,13 @@
+import json
+
 from dagster import AssetExecutionContext, AssetKey, asset
 
-from lakehouse.assets.lakehouse.dbt_starrocks import starrocks_dbt_assets
+from lakehouse.assets.lakehouse.dbt_starrocks import (
+    starrocks_dbt_assets,
+    starrocks_dbt_project,
+)
+from lakehouse.lib.starrocks_dbt import materialized_view_relations
 from lakehouse.resources.starrocks import StarRocksResource
-
-# Must match the model names in ol_dbt/models/b2b_analytics/.
-MV_NAMES = [
-    "mv_b2b_contract_utilization",
-    "mv_b2b_enrollment_completion_funnel",
-    "mv_b2b_monthly_engagement_trend",
-    "mv_b2b_program_funnel",
-    "mv_b2b_content_engagement_depth",
-    "mv_b2b_mit_admin_contract_health",
-]
 
 
 @asset(
@@ -30,8 +26,16 @@ def refresh_starrocks_analytics_mvs(
     The MVs are created with refresh_method='manual' (see ol_dbt/models/b2b_analytics)
     since external-catalog MVs can't auto-refresh on base-table changes -- this asset
     is what actually triggers the refresh, gated on the upstream dbt model.
+
+    Which MVs exist, and what schema they live in, both come from the same dbt
+    manifest that built them. Statements are schema-qualified rather than relying
+    on the connection's default database: the resource connects to
+    `b2b_analytics`, and an unqualified REFRESH silently means "wherever this
+    session happens to point", which is how a dbt-side schema change turned into
+    `Can not find materialized view` at runtime.
     """
-    for mv in MV_NAMES:
-        context.log.info("Refreshing %s", mv)
-        starrocks.execute(f"REFRESH MATERIALIZED VIEW {mv} WITH SYNC MODE")
-        context.log.info("Refreshed %s", mv)
+    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    for relation in materialized_view_relations(manifest):
+        context.log.info("Refreshing %s", relation)
+        starrocks.execute(f"REFRESH MATERIALIZED VIEW {relation} WITH SYNC MODE")
+        context.log.info("Refreshed %s", relation)

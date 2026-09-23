@@ -103,6 +103,98 @@ ol-dbt run test
 
 The `.dbt-state/` directory is gitignored and local to your machine.
 
+### Verifying a Change with `ol-dbt diff` and `ol-dbt local snapshot`
+
+When you change a model's SQL, `ol-dbt diff` compares two relations row-by-row and
+column-by-column so you can confirm exactly what changed — instead of eyeballing
+`select *` output.
+
+To isolate your code change from any upstream data drift, snapshot the model's
+current build as a frozen baseline *before* making your change, then diff that
+baseline against the rebuild:
+
+```bash
+# 1. Freeze the current (pre-change) build as a baseline table
+ol-dbt local snapshot my_model --as my_model_baseline
+
+# 2. Make your code change, then rebuild
+ol-dbt run --select my_model --target dev_local
+
+# 3. Diff the frozen baseline against the rebuild
+ol-dbt diff --target dev_local \
+    --old my_model_baseline --old-raw \
+    --new my_model \
+    --primary-key my_model_pk
+```
+
+Because both sides are built from the same underlying data (the baseline is frozen,
+the rebuild only reflects your code change), any reported mismatch can only come
+from your change — never from production data changing in the background.
+
+```bash
+# Per-column mismatch rates require --primary-key
+ol-dbt diff --old m_old --new m_new --primary-key id
+
+# Composite key: comma-separated, or repeat the flag. These are equivalent.
+ol-dbt diff --old m_old --new m_new -k user_email,exam_created_on
+ol-dbt diff --old m_old --new m_new -k user_email -k exam_created_on
+
+# Exclude a known non-deterministic column (e.g. a load timestamp)
+ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at
+
+# --exclude-columns takes the same two forms
+ol-dbt diff --old m_old --new m_new -k id --exclude-columns _loaded_at,_synced_at
+
+# Build both sides first, then compare
+ol-dbt diff --old m_old --new m_new --auto-build
+
+# Compare two already-materialized copies of the same model across schemas
+# (e.g. your personal dev schema vs. production) on one Trino target
+ol-dbt diff --target dev_production \
+    --old my_model --old-raw --old-schema ol_warehouse_production_reporting \
+    --new my_model --new-raw --new-schema ol_warehouse_production_<username>_reporting \
+    --primary-key id
+
+# Emit JSON (e.g. for CI); exits non-zero on any divergence
+ol-dbt diff --old m_old --new m_new -k id --format json
+```
+
+#### Choosing the primary key
+
+`--primary-key` pairs rows across the two sides, so it has to be the model's
+**actual grain**. A non-unique key joins many-to-many and the mismatch counts
+become an artifact of the join rather than a real difference: on one 20,908-row
+mart, keying on a single column of a three-column grain reported 65,000+
+mismatches and 7,826 rows "missing", where the correct composite key found one
+genuinely differing column, 8,891 rows, and nothing missing.
+
+Composite keys take either form, interchangeably:
+
+```
+-k a,b,c          # comma-separated
+-k a -k b -k c    # repeated flag
+```
+
+`-k a b c` does **not** work — only `a` is read as a key, the rest are consumed
+as positional arguments, and the resulting error mentions `--dbt-dir` rather
+than primary keys.
+
+To find the grain, look for a `dbt_expectations.expect_compound_columns_to_be_unique`
+test on the model; its column list is the key you want. (Grep the dotted
+spelling — the underscored form only appears in compiled test names.) Failing
+that, a single column is safe alone only with **both** a passing `unique` and a
+passing `not_null` test: `unique` ignores NULLs, and the single-column path joins
+on `a.k = b.k`, which never matches NULL to NULL, so those rows land in the
+"missing from" buckets on both sides instead of pairing up.
+
+Duplicate spellings collapse (`-k id,ID` is just `id`), and the tool fails fast
+rather than degrading quietly on an empty key (`-k ""`, `-k ","`) or a key column
+absent from either relation (reported by name, with the common column list).
+
+`--old-raw`/`--new-raw` treat that side as a literal existing table rather than a
+dbt model — required for a snapshot table (`ol-dbt local snapshot` output) or any
+other already-materialized relation dbt doesn't know about via `ref()`.
+
 ### Running dbt Directly
 
 You can still invoke dbt commands directly from `src/ol_dbt/`:

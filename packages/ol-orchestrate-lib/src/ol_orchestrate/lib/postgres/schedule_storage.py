@@ -17,6 +17,12 @@ from dagster_postgres.utils import (
 )
 from sqlalchemy import event, inspect
 
+# The OTel sqlalchemy instrumentation labels db.client.connections.usage with
+# the pool's logging_name, falling back to driver://host:port/db. All three
+# storages share one URL, so without a name their pools merge into one series
+# and pool_size can't be sized per storage from it.
+POOL_LOGGING_NAME = "dagster-schedule-storage"
+
 
 class PooledPostgresScheduleStorage(PostgresScheduleStorage):
     """Postgres-backed schedule storage with proper connection pooling.
@@ -90,6 +96,7 @@ class PooledPostgresScheduleStorage(PostgresScheduleStorage):
             pool_timeout=self._pool_timeout,
             pool_pre_ping=True,
             pool_reset_on_return="rollback",
+            pool_logging_name=POOL_LOGGING_NAME,
         )
 
         if self.should_autocreate_tables:
@@ -126,11 +133,19 @@ class PooledPostgresScheduleStorage(PostgresScheduleStorage):
             "pool_timeout": self._pool_timeout,
             "pool_pre_ping": True,
             "pool_reset_on_return": "rollback",
+            "pool_logging_name": POOL_LOGGING_NAME,
         }
 
         existing_options = self._engine.url.query.get("options")
         if existing_options:
             kwargs["connect_args"] = {"options": existing_options}
+
+        # QueuePool keeps its checked-in connections open until the engine is
+        # disposed, and rebuilding below drops the only reference to the old
+        # one. Without this the replaced pool's connections stay open for the
+        # life of the process, pinning PgBouncer server connections that nothing
+        # can ever check out again.
+        self._engine.dispose()
 
         self._engine = create_engine(self.postgres_url, **kwargs)
         event.listen(
@@ -167,8 +182,11 @@ class PooledPostgresScheduleStorage(PostgresScheduleStorage):
             "pool_timeout": Field(
                 IntSource,
                 is_required=False,
-                default_value=3600,
-                description="Recycle connections after N seconds",
+                default_value=30,
+                description=(
+                    "Seconds to wait for a connection from a saturated pool "
+                    "before raising"
+                ),
             ),
         }
 

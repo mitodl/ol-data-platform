@@ -5,15 +5,23 @@ from dagster import OpExecutionContext
 from google.oauth2 import service_account
 
 
-def fetch_canvas_course_ids_from_google_sheet(context: OpExecutionContext):
-    """
-    Fetch all canvas course IDs from a Google Sheet
+def fetch_canvas_course_ids_from_google_sheet(
+    context: OpExecutionContext,
+) -> set[str] | None:
+    """Fetch all canvas course IDs from a Google Sheet.
+
+    Returns ``None`` when the sheet could not be read, and a set -- possibly
+    empty -- when it could. The caller diffs this against the existing dynamic
+    partitions and deletes the difference, so "we could not read the sheet" and
+    "the sheet lists no courses" cannot both be ``set()``: the first would delete
+    every Canvas partition, taking any in-flight run for one down with it
+    (DAGSTER-2B).
     """
     sheet_config = context.resources.google_sheet_config
 
     if sheet_config.service_account_json is None:
         context.log.error("No google service account credentials found in vault")
-        return set()
+        return None
 
     creds_dict = (
         sheet_config.service_account_json
@@ -46,7 +54,7 @@ def fetch_canvas_course_ids_from_google_sheet(context: OpExecutionContext):
     )
     if worksheet is None:
         context.log.error("No worksheet found with gid %s", sheet_config.worksheet_id)
-        return set()
+        return None
 
     # Get all values from the first column and filter to only numeric values
     column_values = worksheet.get_col(1, include_tailing_empty=False)

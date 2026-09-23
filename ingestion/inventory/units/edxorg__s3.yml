@@ -1,0 +1,188 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: s3
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: airbyte
+table_prefix: raw__edxorg__
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: edx.org Production Course Structure→ S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__course_blocks
+  - environment: production
+    name: S3 edX.org course and program → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__mitx_course
+    - raw__edxorg__s3__mitx_course_run
+    - raw__edxorg__s3__program
+    - raw__edxorg__s3__program_course
+  - environment: production
+    name: S3 edX.org Program Credentials → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__program_learner_report
+tables:
+- name: raw__edxorg__s3__course_blocks
+  raw_table: raw__edxorg__s3__course_blocks
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      block_id: copy
+      course_id: copy
+      block_type: copy
+      block_index: copy
+      block_title: copy
+      block_parent: copy
+      course_title: copy
+      retrieved_at: copy
+      block_details: copy
+      block_content_hash: copy
+      course_content_hash: copy
+- name: raw__edxorg__s3__mitx_course
+  raw_table: raw__edxorg__s3__mitx_course
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      image: copy
+      owner: copy
+      title: copy
+      modified: copy
+      subjects: copy
+      course_key: copy
+      level_type: copy
+      course_type: copy
+      retrieved_at: copy
+      marketing_url: copy
+      full_description: copy
+      prerequisites_raw: copy
+      short_description: copy
+- name: raw__edxorg__s3__mitx_course_run
+  raw_table: raw__edxorg__s3__mitx_course_run
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      image: copy
+      seats: copy
+      staff: copy
+      title: copy
+      end_on: copy
+      status: copy
+      run_key: copy
+      modified: copy
+      start_on: copy
+      languages: copy
+      course_key: copy
+      level_type: copy
+      max_effort: copy
+      min_effort: copy
+      pacing_type: copy
+      announcement: copy
+      availability: copy
+      retrieved_at: copy
+      is_enrollable: copy
+      marketing_url: copy
+      enrollment_end: copy
+      enrollment_type: copy
+      estimated_hours: copy
+      enrollment_start: copy
+      full_description: copy
+      short_description: copy
+      weeks_to_complete: copy
+- name: raw__edxorg__s3__program
+  raw_table: raw__edxorg__s3__program
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      type: copy
+      uuid: copy
+      title: copy
+      status: copy
+      subtitle: copy
+      retrieved_at: copy
+      authoring_organizations: copy
+      data_modified_timestamp: copy
+- name: raw__edxorg__s3__program_course
+  raw_table: raw__edxorg__s3__program_course
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      course_key: copy
+      course_type: copy
+      course_title: copy
+      program_uuid: copy
+      course_short_description: copy
+- name: raw__edxorg__program_learner_report
+  raw_table: raw__edxorg__program_learner_report
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      name: redact
+      grade: copy
+      track: copy
+      user id: copy
+      username: hash
+      completed: copy
+      user roles: copy
+      course title: copy
+      letter grade: copy
+      program type: copy
+      program uuid: copy
+      program title: copy
+      course run key: copy
+      date completed: copy
+      completed program: copy
+      currently enrolled: copy
+      last activity date: copy
+      date first enrolled: copy
+      purchased as bundle: copy
+      date last unenrolled: copy
+      authoring institution: copy
+      course run start date: copy
+      _ab_source_file_last_modified: copy
+      date first upgraded to verified: copy
+      date program certificate awarded: copy
+    # Airbyte re-reads the same report files every day (their mtimes stop at
+    # 2025-03-13) and appends ~15M rows per sync, 14.4B in all. The last day of
+    # syncs is one full report. _airbyte_extracted_at is epoch milliseconds.
+    where: >-
+      _airbyte_extracted_at >=
+      (SELECT max(_airbyte_extracted_at) FROM {source}) - 86400000

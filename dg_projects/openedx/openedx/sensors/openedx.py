@@ -1,34 +1,50 @@
-import json
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-import httpx2 as httpx
 from dagster import (
     AssetKey,
-    RunRequest,
+    AssetObservation,
     SensorEvaluationContext,
     SensorResult,
 )
+
+# Not exported from the top-level dagster namespace. Importing the constant
+# rather than hard-coding "dagster/data_version" keeps a version bump that moves
+# it a loud import error instead of observations that silently carry no version.
+from dagster._core.definitions.data_version import (
+    DATA_VERSION_TAG,
+)
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
-from pydantic import BaseModel
 
-from openedx.lib.magic_numbers import HTTP_NOT_FOUND
+from openedx.assets.openedx import COURSEWARE_ASSET_KEY, sweep_course_versions
 from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
 
-
-class CourseCursor(BaseModel):
-    published_version: str
-    published_at: datetime | None = None
-    course_start: datetime | None = None
-    course_end: datetime | None = None
+# The gRPC tick timeout is 300s. 180s leaves the sweep room to finish while
+# keeping enough margin for the partition and cursor work around it -- timing
+# only the fetch phase is what let a slow event-log query eat the margin and
+# reproduce the killed-tick-with-no-output failure the first time around.
+COURSEWARE_SWEEP_BUDGET = timedelta(seconds=180)
 
 
 def course_run_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
 ):
+    """Register a dynamic partition for every course run the LMS reports.
+
+    Partition discovery only. Exports are left entirely to the asset graph: the
+    openedx/courseware observable source asset picks up the new partition on its
+    next observation, and ``upstream_or_code_changes()`` on course_xml treats a
+    partition with no materialization as needing one.
+
+    Requesting runs here as well used to double-export every new course, and it
+    bypassed the throttling that kept a bulk course creation from flooding the
+    run queue. Leaving every export to the automation condition is what keeps
+    the export path single and observable.
+    """
     # Enumerate the course-run IDs from edX via the API
     course_id_generator = openedx.client.get_edx_course_ids()
     course_run_ids = []
@@ -46,98 +62,138 @@ def course_run_sensor(
         )
     )
     new_course_run_ids = set(course_run_ids) - existing_keys
+    context.log.info(
+        "Registering %s new %s course run partitions.",
+        len(new_course_run_ids),
+        openedx.deployment,
+    )
     return SensorResult(
         dynamic_partitions_requests=[
             OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].build_add_request(
-                partition_keys=list(new_course_run_ids)
+                # Sorted because the difference above is a set: a stable order
+                # keeps tick logs and any downstream diff readable.
+                partition_keys=sorted(new_course_run_ids)
             )
-        ],
-        run_requests=[
-            RunRequest(
-                asset_selection=[
-                    AssetKey((openedx.deployment, "openedx", "courseware")),
-                    AssetKey((openedx.deployment, "openedx", "raw_data", "course_xml")),
-                    AssetKey((openedx.deployment, "openedx", "course_content_webhook")),
-                ],
-                partition_key=course_run_id,
-            )
-            for course_run_id in new_course_run_ids
         ],
     )
 
 
-def course_version_sensor(
-    context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
+def cursor_offset(cursor: str | None) -> int:
+    """Read the sweep offset out of a sensor cursor.
+
+    Anything unparseable restarts from the top rather than failing the tick: the
+    cursor is a fairness hint, and losing it costs one pass over the head of the
+    list, while raising here would stop observation for the whole deployment.
+    """
+    try:
+        return max(0, int(cursor)) if cursor else 0
+    except ValueError:
+        return 0
+
+
+def resume_order(course_run_ids: Sequence[str], offset: int) -> list[str]:
+    """Order a sweep so it starts where the last one stopped.
+
+    A sweep that runs out of budget always abandons its tail. Starting the next
+    one at the same place would sweep the head of the list forever and never
+    look at the courses behind it, so the list is rotated by the offset the
+    previous tick left behind.
+    """
+    ordered = sorted(course_run_ids)
+    if not ordered:
+        return ordered
+    start = offset % len(ordered)
+    return ordered[start:] + ordered[:start]
+
+
+def next_offset(offset: int, attempted: int, total: int) -> int:
+    """Where the next sweep should start.
+
+    Steps over everything this pass actually finished, rather than resuming at
+    the first course it missed. Resuming at the miss reads as fairer and is
+    not: a course that blocks on every tick pins the cursor to its own index,
+    so each tick re-sweeps the same prefix and the tail behind it is never
+    reached at all. Stepping past costs that one course a full wraparound
+    before it is retried, and in exchange every other course stays reachable.
+
+    Advances by at least one so that a pass where nothing finished -- every
+    worker blocked -- still moves rather than pinning in the same place.
+    """
+    if total <= 0:
+        return 0
+    return (offset + max(1, attempted)) % total
+
+
+def courseware_observation_sensor(
+    context: SensorEvaluationContext,
+    openedx: OpenEdxApiClientFactory,
 ):
-    course_run_ids = OPENEDX_COURSE_RUN_PARTITIONS[
-        openedx.deployment
-    ].get_partition_keys(dynamic_partitions_store=context.instance)
-    # There is a dictionary consisting of course_run_ids as the keys, and the values are
-    # instances of the CourseCursor pydantic class. This sensor calls the
-    # openedx.client.get_course_outline method for a given course_run_id to detect the
-    # current published_version and other metadata to populate an instance of the
-    # CourseCursor object. For any course runs that have course_end datetime that is
-    # more than 3 months in the past, don't bother fetching their versions. For any
-    # course_run_ids that don't have keys in the context cursor, create an entry in the
-    # cursor dictionary with the results of the call to the get_course_outline method.
-    # Returning a SensorResult with a list of RunRequest objects for each course_run_id
-    # instead of AssetMaterialization objects should trigger pipeline runs for the
-    # updated course runs instead of recording asset events.
+    """Report the published version of every course run as an observation.
 
-    cursor: dict[str, str] = json.loads(context.cursor or "{}")
-    run_requests = []
-    for course_run_id in course_run_ids:
-        course_cursor = CourseCursor(
-            **json.loads(
-                cursor.get(
-                    course_run_id,
-                    CourseCursor(
-                        published_version="",
-                        course_end=datetime(9999, 12, 31, tzinfo=UTC),
-                    ).model_dump_json(),
-                )
-            )
+    This is the whole trigger for the export graph. Every downstream carries
+    ``upstream_or_code_changes()``, whose ``data_version_changed()`` term fires
+    against the versions reported here; a course whose version is unchanged
+    reports the same value and asks for nothing, which is what keeps a steady
+    state quiet.
+
+    It is a sensor rather than the source asset's own automation condition
+    because an AutomationCondition is evaluated per partition. Hanging an hourly
+    cron on a 3,500-partition asset asked for 3,500 observation runs an hour,
+    each of which swept the entire deployment anyway -- millions of LMS calls an
+    hour, a permanently saturated run queue, and no exports. One tick, one
+    sweep, no runs.
+    """
+    # Anchored at entry rather than at the sweep. The tick timeout covers the
+    # partition lookup below as well, so starting the clock after it would let a
+    # slow partitions-store query eat the margin and then hand the sweep a full
+    # budget anyway -- which is the killed-tick-with-no-output failure this
+    # budget exists to prevent.
+    deadline = datetime.now(tz=UTC) + COURSEWARE_SWEEP_BUDGET
+    deployment = openedx.deployment
+    course_run_ids = OPENEDX_COURSE_RUN_PARTITIONS[deployment].get_partition_keys(
+        dynamic_partitions_store=context.instance
+    )
+    if not course_run_ids:
+        context.log.info("No %s course run partitions to observe.", deployment)
+        return SensorResult()
+
+    offset = cursor_offset(context.cursor)
+    ordered = resume_order(course_run_ids, offset)
+    sweep = sweep_course_versions(
+        openedx.client,
+        ordered,
+        context.log,
+        deadline=deadline,
+    )
+    context.log.info(
+        "Observed %s of %s %s course runs, %s failed, %s left for the next tick.",
+        len(sweep.versions),
+        len(ordered),
+        deployment,
+        sweep.failures,
+        len(sweep.unswept),
+    )
+
+    # A pass where every lookup failed is a bad token or a 500-ing LMS, not a
+    # deployment with nothing to say. Failing the tick surfaces it instead of
+    # leaving every downstream quiet, hourly, forever.
+    attempted = len(sweep.versions) + sweep.failures
+    if attempted and sweep.failures == attempted:
+        msg = (
+            f"Course outline sweep failed for all {sweep.failures} attempted "
+            f"{deployment} courses"
         )
-        if (
-            course_cursor
-            and course_cursor.course_end
-            and course_cursor.course_end <= datetime.now(tz=UTC) - timedelta(days=90)
-        ):
-            continue
-        try:
-            response = openedx.client.get_course_outline(course_run_id)
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code != HTTP_NOT_FOUND:
-                raise
-            context.log.exception("Course outline not found for key %s", course_run_id)
-            continue
-        if response["published_version"] != course_cursor.published_version:
-            course_update = CourseCursor(
-                published_version=response["published_version"],
-                published_at=datetime.fromisoformat(response["published_at"]),
-                course_start=datetime.fromisoformat(response["course_start"])
-                if response["course_start"]
-                else None,
-                course_end=datetime.fromisoformat(response["course_end"])
-                if response["course_end"]
-                else None,
-            )
-            run_requests.append(
-                RunRequest(
-                    asset_selection=[
-                        AssetKey((openedx.deployment, "openedx", "courseware")),
-                        AssetKey(
-                            (openedx.deployment, "openedx", "raw_data", "course_xml")
-                        ),
-                        AssetKey(
-                            (openedx.deployment, "openedx", "course_content_webhook")
-                        ),
-                    ],
-                    partition_key=course_run_id,
-                    tags={"published_version": response["published_version"]},
-                )
-            )
-            cursor[course_run_id] = course_update.model_dump_json()
+        raise RuntimeError(msg)
 
-    context.update_cursor(json.dumps(cursor))
-    return SensorResult(run_requests=run_requests)
+    courseware_key = AssetKey([deployment, *COURSEWARE_ASSET_KEY.path])
+    return SensorResult(
+        asset_events=[
+            AssetObservation(
+                asset_key=courseware_key,
+                partition=course_run_id,
+                tags={DATA_VERSION_TAG: version},
+            )
+            for course_run_id, version in sweep.versions.items()
+        ],
+        cursor=str(next_offset(offset, attempted, len(ordered))),
+    )

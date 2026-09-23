@@ -1,0 +1,62 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: emeritus
+layer: bigquery
+scope: singleton
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: airbyte
+table_prefix: raw__emeritus__bigquery__
+airbyte:
+  source_kind: source-bigquery
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: Emeritus BigQuery → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - api_enrollments
+tables:
+- name: api_enrollments
+  raw_table: raw__emeritus__bigquery__api_enrollments
+  sync_mode: full_refresh_append
+  namespace: mit_xpro_api
+  cursor_field:
+  - opportunity_last_modified_date
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      batch: copy
+      gender: copy
+      status: copy
+      country: copy
+      batch_id: copy
+      deferred: copy
+      function: copy
+      industry: copy
+      job_title: redact
+      last_name: hash
+      first_name: hash
+      gdpr_agree: copy
+      student_id: copy
+      nationality: copy
+      company_name: redact
+      work_exp_slab: copy
+      batch_end_date: copy
+      wrike_run_code: copy
+      enrollment_type: copy
+      batch_start_date: copy
+      residential_city: redact
+      gdpr_consent_date: copy
+      residential_state: copy
+      residential_address: redact
+      residential_zip_code: redact
+      opportunity_created_date: copy
+      opportunity_last_modified_date: copy

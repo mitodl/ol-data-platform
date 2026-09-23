@@ -1,0 +1,390 @@
+---
+version: 2
+
+models:
+- name: int__feedback__zendesk
+  description: One row per public, requester-authored Zendesk comment, conformed to
+    the common feedback event contract. Agent replies, internal notes and Zendesk
+    sample tickets are dropped.
+  columns:
+  - name: source_slug
+    description: str, the feedback source this row came from. Always 'zendesk' here.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the Zendesk comment_id - the turn's stable business key, and
+      what feedback_pk is minted from.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_ref
+    description: str, the Zendesk ticket_id. Groups a conversation's turns together.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, ordinal of this turn within its conversation, ordered by comment
+      creation time with comment_id as the tie-break.
+    tests:
+    - not_null
+  - name: is_conversation_opening
+    description: boolean, whether this is the first kept turn of the conversation.
+      Recovers the previous first-comment-only view as a filter rather than a grain.
+    tests:
+    - not_null
+  - name: occurred_at
+    description: str, ISO8601 timestamp of the comment itself. The grain's timestamp.
+    tests:
+    - not_null
+  - name: created_at
+    description: str, ISO8601 source lifecycle timestamp of the comment.
+  - name: updated_at
+    description: str, ISO8601 timestamp the parent ticket was last updated.
+  - name: text
+    description: str, the raw comment body. Masking happens downstream, in the feedback_redacted
+      Dagster asset.
+  - name: title
+    description: str, the ticket subject. Constant across a ticket's turns.
+  - name: channel_slug
+    description: str, how the feedback arrived, mapped onto the conformed channel
+      value set. Null where a Zendesk channel has no mapping, which then fails the
+      fact's relationships test.
+  - name: subject_user_ref
+    description: str, the comment author's email. Zendesk exposes no openedx user
+      id, so this is the last-resort identity path.
+  - name: source_url
+    description: str, the ticket API url. Per-comment deep links are not exposed by
+      the connector.
+  - name: subject_type
+    description: str, discriminator for what the feedback is about. Always 'unspecified'
+      until the Appzi URL decode is implemented.
+  - name: subject_ref
+    description: str, source-native id of the thing the feedback is about. Null at
+      MVP.
+  - name: subject_url
+    description: str, canonical deep link to the subject. Null at MVP.
+  - name: courserun_readable_id
+    description: str, null for Zendesk, which is not course-scoped.
+  - name: platform
+    description: str, null for Zendesk. Re-evaluate once brand_name is assessed against
+      dim_platform.
+  - name: explicit_rating
+    description: str, the ticket satisfaction rating score - 'good', 'bad' or 'offered'.
+      A ticket-level signal, so it repeats across a ticket's turns.
+  - name: ticket_tags
+    description: array, the parent ticket's tags, carried for bridge_feedback_tag
+      to explode. Not part of the event contract.
+  - name: source_metadata
+    description: str, JSON of the attributes that have not earned a conformed column
+      - ticket status, priority, due date, brand, group and organization. Excludes
+      the satisfaction rating comment and custom fields, which carry unredacted free
+      text.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["conversation_ref", "turn_index"]
+
+- name: int__feedback__learn_ai_tutor
+  description: One row per user message sent to the Learn AI tutor chatbot. Bot replies
+    are excluded.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/tracking_logs
+  columns:
+  - name: source_slug
+    description: str, the feedback source this row came from. Always 'learn_ai_tutor'
+      here.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the djangocheckpoint_id - the turn's stable business key.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_ref
+    description: str, the chatsession_thread_id. Groups a conversation's turns together.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, ordinal of this human turn within its conversation, ordered
+      by checkpoint_step with djangocheckpoint_id as the tie-break.
+    tests:
+    - not_null
+  - name: is_conversation_opening
+    description: boolean, whether this is the first kept turn of the conversation.
+    tests:
+    - not_null
+  - name: occurred_at
+    description: str, ISO8601 timestamp the checkpoint was created, falling back to
+      the chat session's created_at where the checkpoint's own timestamp is null.
+    tests:
+    - not_null
+  - name: text
+    description: str, the human_message
+  - name: title
+    description: str, the chat session title.
+  - name: channel_slug
+    description: str, always 'chat'.
+  - name: subject_user_ref
+    description: str, the chatter's global openedx user id.
+  - name: source_url
+    description: str, null. Not exposed by the connector.
+  - name: subject_type
+    description: str, what the chat concerns. 'courseware_block' for TutorBot and
+      VideoGPTBot, 'course' for SyllabusBot and CanvasSyllabusBot, 'resource' for
+      ResourceRecommendationBot. Null for any other chatsession_agent value.
+  - name: subject_ref
+    description: str, the chatsession_object_id - a course id, video transcript asset
+      id, or edX module id depending on chatsession_agent.
+  - name: subject_url
+    description: str, null. Not resolved at this stage.
+  - name: courserun_readable_id
+    description: str, the course run the chat concerns.
+  - name: platform
+    description: str, the platform readable id the course run belongs to, e.g. 'mitxonline'.
+  - name: explicit_rating
+    description: str, the chat response's rating, where given.
+  - name: created_at
+    description: str, same as occurred_at - the checkpoint's creation timestamp, falling
+      back to the chat session's created_at.
+  - name: updated_at
+    description: str, the chat session's updated_at.
+  - name: source_metadata
+    description: str, JSON of fields specific to Learn AI tutor, not shared with other
+      sources - chatsession_agent, checkpoint_source, checkpoint_type.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["conversation_ref", "turn_index"]
+
+- name: int__feedback__unioned
+  description: >
+    One row per feedback turn, from every source: Zendesk, Learn AI tutor.
+
+    PII: this model carries raw, unredacted feedback text under the intermediate
+    schema's grants. Presidio masking happens in the feedback_redacted Dagster asset
+    between here and tfact_feedback.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/tracking_logs
+  columns:
+  - name: source_slug
+    description: str, which source the row came from.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the source-native turn id. Unique within a source.
+    tests:
+    - not_null
+  - name: conversation_ref
+    description: str, the source-native thread id. Non-conversational sources set
+      this to source_record_ref so they degenerate to a one-turn conversation.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, ordinal of the turn within its conversation.
+  - name: is_conversation_opening
+    description: boolean, whether this is the conversation's first kept turn.
+  - name: occurred_at
+    description: str, ISO8601 source event time. The contract's required timestamp.
+    tests:
+    - not_null
+  - name: created_at
+    description: str, ISO8601 source lifecycle creation timestamp.
+  - name: updated_at
+    description: str, ISO8601 source lifecycle update timestamp.
+  - name: text
+    description: str, raw free text. Redacted downstream, not here.
+  - name: title
+    description: str, raw title or subject. Redacted downstream, not here.
+  - name: channel_slug
+    description: str, conformed channel the feedback arrived through.
+  - name: subject_user_ref
+    description: str, the author's identity reference - a global or openedx user id
+      where the source has one, an email as a last resort.
+  - name: source_url
+    description: str, deep link back to the record in its source system.
+  - name: subject_type
+    description: str, discriminator for the polymorphic subject reference.
+  - name: subject_ref
+    description: str, source-native id of the subject.
+  - name: subject_url
+    description: str, canonical deep link to the subject.
+  - name: courserun_readable_id
+    description: str, course run the feedback concerns, for course-scoped sources.
+  - name: platform
+    description: str, platform the feedback concerns, for course-scoped sources.
+  - name: explicit_rating
+    description: str, the source's own explicit rating signal, where it has one.
+  - name: source_tags
+    description: array, source-scoped tags carried through for bridge_feedback_tag.
+  - name: source_metadata
+    description: str, JSON of everything the conformance rule has not promoted to
+      a column.
+  - name: feedback_text_chars
+    description: int, length of the text measured before masking, so the metric survives
+      redaction.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source_slug", "source_record_ref"]
+
+- name: int__feedback__conversation
+  description: One row per conversation, its kept turns assembled in turn_index order.
+    This is the text the summarization and embedding assets send to the LLM.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key hashed from (source_slug, conversation_ref), computed
+      here as the single source of truth and passed unchanged to afact_feedback_conversation.
+    tests:
+    - not_null
+    - unique
+  - name: source_slug
+    description: str, which source the conversation came from.
+    tests:
+    - not_null
+  - name: conversation_ref
+    description: str, the source-native thread id.
+    tests:
+    - not_null
+  - name: turn_count
+    description: int, number of kept turns. At least 1 - a conversation with no kept
+      turns does not appear here.
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_between:
+        arguments:
+          min_value: 1
+  - name: conversation_text_chars
+    description: int, summed pre-redaction length of the kept turns.
+  - name: conversation_text
+    description: str, the conversation's redacted turns concatenated in order with
+      a turn delimiter. Null until the feedback_redacted asset populates the fact.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source_slug", "conversation_ref"]
+
+- name: int__feedback__summary
+  description: feedback_summaries' output, one row per conversation -- empty until
+    that asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_summary
+    description: str, the LLM-generated summary. Null for a single-turn/short conversation
+      (skipped by design, §A.1) or if the table doesn't exist yet.
+  - name: summary_model_version
+    description: str, which model produced conversation_summary. Null under the same
+      conditions as conversation_summary.
+  - name: prompt_version
+    description: str, the Opik Prompt Library version of feedback-summary active when
+      this row was summarized (or "local" if Opik wasn't configured). Null under the
+      same conditions as conversation_summary.
+  - name: summarized_at
+    description: ISO8601 varchar, when conversation_summary was generated. Null under
+      the same conditions as conversation_summary.
+
+- name: int__feedback__embedding
+  description: feedback_embeddings' output, one row per conversation -- empty until
+    that asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: embedding_vector
+    description: array(double), the conversation's embedding.
+  - name: embedding_dim
+    description: int, embedding_vector's length.
+  - name: embedding_model_version
+    description: str, which model produced embedding_vector.
+  - name: embedding_input
+    description: str, 'summary' or 'concatenated_turns' -- which text was actually
+      embedded.
+  - name: embedded_at
+    description: ISO8601 varchar, when embedding_vector was generated.
+
+- name: int__feedback__cluster_membership
+  description: feedback_cluster_membership's output, one row per conversation -- the
+    live cluster assignment. Empty until feedback_cluster_assignment has materialized
+    in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: cluster_key
+    description: str, null if not near any active cluster (noise or unplaced).
+  - name: cluster_similarity
+    description: double, cosine similarity to the cluster's centroid.
+  - name: cluster_assignment_method
+    description: str, recluster or incremental.
+  - name: cluster_run_id
+    description: str, which clustering run produced this assignment.
+  - name: assigned_at
+    description: ISO8601 varchar, when this row's placement was computed.
+
+- name: int__feedback__category_proposal
+  description: Every LLM-proposed category, one row per cluster_key that has ever
+    been labeled -- empty until feedback_category_proposals has materialized in this
+    schema.
+  columns:
+  - name: cluster_key
+    description: str, the stable cluster this proposal labels.
+    tests:
+    - not_null
+    - unique
+  - name: cluster_run_id
+    description: str, which clustering run this cluster_key was resolved from when
+      the proposal was generated.
+  - name: category_slug
+    description: str, deterministically slugified from category_label.
+    tests:
+    - not_null
+  - name: category_label
+    description: str, the LLM-proposed display label.
+    tests:
+    - not_null
+  - name: category_description
+    description: str, the LLM-proposed one-line description of the category.
+  - name: proposed_at
+    description: timestamp, when this proposal was generated.
+    tests:
+    - not_null

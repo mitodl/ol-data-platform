@@ -1,0 +1,766 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: open_discussions
+layer: app_postgres
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__open_discussions__app__postgres__
+airbyte:
+  source_kind: source-postgres
+  replication_method: xmin
+  connections:
+  - environment: production
+    name: Open Discussions App Postgres Production → S3 Data Lake
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - auth_user
+    - auth_user_groups
+    - auth_user_user_permissions
+    - authentication_blockedemailregex
+    - authentication_blockediprange
+    - authentication_emailvalidation
+    - authtoken_token
+    - channels_article
+    - channels_channel
+    - channels_channelgrouprole
+    - channels_channelinvitation
+    - channels_channelmembershipconfig
+    - channels_channelmembershipconfig_channels
+    - channels_channelsubscription
+    - channels_comment
+    - channels_fields_fieldchannel
+    - channels_fields_fieldchannelgrouprole
+    - channels_fields_fieldlist
+    - channels_fields_subfield
+    - channels_linkmeta
+    - channels_post
+    - channels_spamcheckresult
+    - channels_subscription
+    - course_catalog_contentfile
+    - course_catalog_course
+    - course_catalog_course_offered_by
+    - course_catalog_course_topics
+    - course_catalog_courseinstructor
+    - course_catalog_courseprice
+    - course_catalog_coursetopic
+    - course_catalog_favoriteitem
+    - course_catalog_learningresourceofferor
+    - course_catalog_learningresourcerun
+    - course_catalog_learningresourcerun_instructors
+    - course_catalog_learningresourcerun_offered_by
+    - course_catalog_learningresourcerun_prices
+    - course_catalog_learningresourcerun_topics
+    - course_catalog_playlist
+    - course_catalog_playlist_offered_by
+    - course_catalog_playlist_topics
+    - course_catalog_playlistvideo
+    - course_catalog_podcast
+    - course_catalog_podcast_offered_by
+    - course_catalog_podcast_topics
+    - course_catalog_podcastepisode
+    - course_catalog_podcastepisode_offered_by
+    - course_catalog_podcastepisode_topics
+    - course_catalog_program
+    - course_catalog_program_offered_by
+    - course_catalog_program_topics
+    - course_catalog_programitem
+    - course_catalog_stafflist
+    - course_catalog_stafflist_offered_by
+    - course_catalog_stafflist_topics
+    - course_catalog_stafflistitem
+    - course_catalog_userlist
+    - course_catalog_userlist_offered_by
+    - course_catalog_userlist_topics
+    - course_catalog_userlistitem
+    - course_catalog_video
+    - course_catalog_video_offered_by
+    - course_catalog_video_topics
+    - course_catalog_videochannel
+    - course_catalog_videochannel_offered_by
+    - course_catalog_videochannel_topics
+    - discussions_channel
+    - django_admin_log
+    - django_content_type
+    - django_migrations
+    - django_session
+    - django_site
+    - external_asset_cache
+    - guardian_groupobjectpermission
+    - guardian_userobjectpermission
+    - interactions_contenttypeinteraction
+    - keycloak_user_export_userexporttokeycloak
+    - moira_lists_moiralist
+    - moira_lists_moiralist_users
+    - notifications_commentevent
+    - notifications_emailnotification
+    - notifications_notificationsettings
+    - notifications_postevent
+    - profiles_profile
+    - profiles_userwebsite
+    - sites_authenticatedsite
+    - social_auth_association
+    - social_auth_partial
+    - social_auth_usersocialauth
+    - widgets_widgetinstance
+    - widgets_widgetlist
+tables:
+- name: auth_group
+  raw_table: raw__open_discussions__app__postgres__auth_group
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__open_discussions__app__postgres__auth_group_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__open_discussions__app__postgres__auth_permission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user
+  raw_table: raw__open_discussions__app__postgres__auth_user
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user_groups
+  raw_table: raw__open_discussions__app__postgres__auth_user_groups
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user_user_permissions
+  raw_table: raw__open_discussions__app__postgres__auth_user_user_permissions
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: authentication_blockedemailregex
+  raw_table: raw__open_discussions__app__postgres__authentication_blockedemailregex
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: authentication_blockediprange
+  raw_table: raw__open_discussions__app__postgres__authentication_blockediprange
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: authentication_emailvalidation
+  raw_table: raw__open_discussions__app__postgres__authentication_emailvalidation
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: authtoken_token
+  raw_table: raw__open_discussions__app__postgres__authtoken_token
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - key
+  modeled: false
+- name: channels_article
+  raw_table: raw__open_discussions__app__postgres__channels_article
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channel
+  raw_table: raw__open_discussions__app__postgres__channels_channel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channelgrouprole
+  raw_table: raw__open_discussions__app__postgres__channels_channelgrouprole
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channelinvitation
+  raw_table: raw__open_discussions__app__postgres__channels_channelinvitation
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channelmembershipconfig
+  raw_table: raw__open_discussions__app__postgres__channels_channelmembershipconfig
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channelmembershipconfig_channels
+  raw_table: raw__open_discussions__app__postgres__channels_channelmembershipconfig_channels
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_channelsubscription
+  raw_table: raw__open_discussions__app__postgres__channels_channelsubscription
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_comment
+  raw_table: raw__open_discussions__app__postgres__channels_comment
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_fieldchannel
+  raw_table: raw__open_discussions__app__postgres__channels_fields_fieldchannel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_fieldchannelgrouprole
+  raw_table: raw__open_discussions__app__postgres__channels_fields_fieldchannelgrouprole
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_fieldlist
+  raw_table: raw__open_discussions__app__postgres__channels_fields_fieldlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_fields_subfield
+  raw_table: raw__open_discussions__app__postgres__channels_fields_subfield
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_linkmeta
+  raw_table: raw__open_discussions__app__postgres__channels_linkmeta
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_post
+  raw_table: raw__open_discussions__app__postgres__channels_post
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_spamcheckresult
+  raw_table: raw__open_discussions__app__postgres__channels_spamcheckresult
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: channels_subscription
+  raw_table: raw__open_discussions__app__postgres__channels_subscription
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_contentfile
+  raw_table: raw__open_discussions__app__postgres__course_catalog_contentfile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_course
+  raw_table: raw__open_discussions__app__postgres__course_catalog_course
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_course_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_course_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_course_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_course_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_courseinstructor
+  raw_table: raw__open_discussions__app__postgres__course_catalog_courseinstructor
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_courseprice
+  raw_table: raw__open_discussions__app__postgres__course_catalog_courseprice
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_coursetopic
+  raw_table: raw__open_discussions__app__postgres__course_catalog_coursetopic
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_favoriteitem
+  raw_table: raw__open_discussions__app__postgres__course_catalog_favoriteitem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_learningresourceofferor
+  raw_table: raw__open_discussions__app__postgres__course_catalog_learningresourceofferor
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_learningresourcerun
+  raw_table: raw__open_discussions__app__postgres__course_catalog_learningresourcerun
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_learningresourcerun_instructors
+  raw_table: raw__open_discussions__app__postgres__course_catalog_learningresourcerun_instructors
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_learningresourcerun_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_learningresourcerun_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_learningresourcerun_prices
+  raw_table: raw__open_discussions__app__postgres__course_catalog_learningresourcerun_prices
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_learningresourcerun_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_learningresourcerun_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_playlist
+  raw_table: raw__open_discussions__app__postgres__course_catalog_playlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_playlist_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_playlist_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_playlist_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_playlist_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_playlistvideo
+  raw_table: raw__open_discussions__app__postgres__course_catalog_playlistvideo
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_podcast
+  raw_table: raw__open_discussions__app__postgres__course_catalog_podcast
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_podcast_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_podcast_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_podcast_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_podcast_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_podcastepisode
+  raw_table: raw__open_discussions__app__postgres__course_catalog_podcastepisode
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_podcastepisode_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_podcastepisode_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_podcastepisode_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_podcastepisode_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_program
+  raw_table: raw__open_discussions__app__postgres__course_catalog_program
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_program_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_program_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_program_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_program_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_programitem
+  raw_table: raw__open_discussions__app__postgres__course_catalog_programitem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_stafflist
+  raw_table: raw__open_discussions__app__postgres__course_catalog_stafflist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_stafflist_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_stafflist_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_stafflist_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_stafflist_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_stafflistitem
+  raw_table: raw__open_discussions__app__postgres__course_catalog_stafflistitem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_userlist
+  raw_table: raw__open_discussions__app__postgres__course_catalog_userlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_userlist_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_userlist_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_userlist_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_userlist_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_userlistitem
+  raw_table: raw__open_discussions__app__postgres__course_catalog_userlistitem
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_video
+  raw_table: raw__open_discussions__app__postgres__course_catalog_video
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_video_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_video_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_video_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_video_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_videochannel
+  raw_table: raw__open_discussions__app__postgres__course_catalog_videochannel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_videochannel_offered_by
+  raw_table: raw__open_discussions__app__postgres__course_catalog_videochannel_offered_by
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: course_catalog_videochannel_topics
+  raw_table: raw__open_discussions__app__postgres__course_catalog_videochannel_topics
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: discussions_channel
+  raw_table: raw__open_discussions__app__postgres__discussions_channel
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_admin_log
+  raw_table: raw__open_discussions__app__postgres__django_admin_log
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__open_discussions__app__postgres__django_content_type
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_migrations
+  raw_table: raw__open_discussions__app__postgres__django_migrations
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: django_session
+  raw_table: raw__open_discussions__app__postgres__django_session
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - session_key
+  modeled: false
+- name: django_site
+  raw_table: raw__open_discussions__app__postgres__django_site
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: external_asset_cache
+  raw_table: raw__open_discussions__app__postgres__external_asset_cache
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - cache_key
+  modeled: false
+- name: guardian_groupobjectpermission
+  raw_table: raw__open_discussions__app__postgres__guardian_groupobjectpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: guardian_userobjectpermission
+  raw_table: raw__open_discussions__app__postgres__guardian_userobjectpermission
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: interactions_contenttypeinteraction
+  raw_table: raw__open_discussions__app__postgres__interactions_contenttypeinteraction
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: keycloak_user_export_userexporttokeycloak
+  raw_table: raw__open_discussions__app__postgres__keycloak_user_export_userexporttokeycloak
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: moira_lists_moiralist
+  raw_table: raw__open_discussions__app__postgres__moira_lists_moiralist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - name
+  modeled: false
+- name: moira_lists_moiralist_users
+  raw_table: raw__open_discussions__app__postgres__moira_lists_moiralist_users
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: notifications_commentevent
+  raw_table: raw__open_discussions__app__postgres__notifications_commentevent
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: notifications_emailnotification
+  raw_table: raw__open_discussions__app__postgres__notifications_emailnotification
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: notifications_notificationsettings
+  raw_table: raw__open_discussions__app__postgres__notifications_notificationsettings
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: notifications_postevent
+  raw_table: raw__open_discussions__app__postgres__notifications_postevent
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: profiles_profile
+  raw_table: raw__open_discussions__app__postgres__profiles_profile
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: profiles_userwebsite
+  raw_table: raw__open_discussions__app__postgres__profiles_userwebsite
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: sites_authenticatedsite
+  raw_table: raw__open_discussions__app__postgres__sites_authenticatedsite
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_association
+  raw_table: raw__open_discussions__app__postgres__social_auth_association
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_partial
+  raw_table: raw__open_discussions__app__postgres__social_auth_partial
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: social_auth_usersocialauth
+  raw_table: raw__open_discussions__app__postgres__social_auth_usersocialauth
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: widgets_widgetinstance
+  raw_table: raw__open_discussions__app__postgres__widgets_widgetinstance
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: widgets_widgetlist
+  raw_table: raw__open_discussions__app__postgres__widgets_widgetlist
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false

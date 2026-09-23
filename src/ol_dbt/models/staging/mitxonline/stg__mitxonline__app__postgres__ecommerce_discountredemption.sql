@@ -4,6 +4,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__ecommerce_discountredemption', partition_columns='id') }}
+
 , renamed as (
 
     select
@@ -13,7 +15,7 @@ with source as (
         , redeemed_discount_id as discount_id
         ,{{ cast_timestamp_to_iso8601('redemption_date') }} as discountredemption_timestamp
 
-    from source
+    from most_recent_source
 
 )
 

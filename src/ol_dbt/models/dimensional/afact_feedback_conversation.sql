@@ -1,0 +1,200 @@
+{{ config(
+    materialized='table'
+) }}
+
+-- The analysis fact: one row per conversation. A complaint usually emerges over several
+-- turns, so the conversation is the unit that gets summarized, embedded, scored and
+-- clustered. Fully rebuildable without touching tfact_feedback.
+with conversation as (
+    select * from {{ ref('int__feedback__conversation') }}
+)
+
+, feedback as (
+    select * from {{ ref('tfact_feedback') }}
+)
+
+, ticket as (
+    select * from {{ ref('int__zendesk__ticket') }}
+)
+
+, ticket_comment as (
+    select * from {{ ref('int__zendesk__ticket_comment') }}
+)
+
+, turn_aggregates as (
+    select
+        conversation_id
+        , feedback_source_fk
+        , min(occurred_date_fk) as opened_date_fk
+        , max(occurred_date_fk) as last_turn_date_fk
+        -- the opening turn's author, not min() over the group: an arbitrary pick
+        -- disagrees wherever one turn resolves an identity and another does not
+        , max(case when is_conversation_opening then user_fk end) as opened_by_user_fk
+        , max(nullif(explicit_rating, '')) as explicit_rating
+    from feedback
+    group by conversation_id, feedback_source_fk
+)
+
+-- Counted over the ticket's full comment history: the requester filter leaves a single
+-- author by construction, so aggregating the kept turns would always return 1.
+, participants as (
+    select
+        'zendesk' as source_slug
+        , cast(ticket_id as varchar) as conversation_ref
+        , count(distinct comment_author_user_id) as participant_count
+    from ticket_comment
+    group by ticket_id
+)
+
+, conversation_tag as (
+    select distinct
+        feedback.feedback_source_fk
+        , feedback.conversation_id
+        , feedback_tag.tag_slug
+    from feedback
+    inner join {{ ref('bridge_feedback_tag') }} as bridge
+        on feedback.feedback_pk = bridge.feedback_pk
+    inner join {{ ref('dim_feedback_tag') }} as feedback_tag
+        on bridge.feedback_tag_pk = feedback_tag.feedback_tag_pk
+)
+
+, tag_frequency as (
+    select
+        tag_slug
+        , count(*) as conversation_count
+    from conversation_tag
+    group by tag_slug
+)
+
+-- Tags are a ticket attribute, so every tag on a conversation has the same
+-- within-conversation count. Corpus frequency is the only ordering that discriminates a
+-- dominant tag; tag_slug breaks the remaining ties so the pick is deterministic.
+, ranked_tag as (
+    select
+        conversation_tag.feedback_source_fk
+        , conversation_tag.conversation_id
+        , conversation_tag.tag_slug
+        , row_number() over (
+            partition by conversation_tag.feedback_source_fk, conversation_tag.conversation_id
+            order by tag_frequency.conversation_count desc, conversation_tag.tag_slug
+        ) as tag_rank
+    from conversation_tag
+    inner join tag_frequency on conversation_tag.tag_slug = tag_frequency.tag_slug
+)
+
+, dominant_tag as (
+    select
+        feedback_source_fk
+        , conversation_id
+        , tag_slug
+    from ranked_tag
+    where tag_rank = 1
+)
+
+, feedback_category as (
+    select
+        feedback_category_pk
+        , category_slug
+    from {{ ref('dim_feedback_category') }}
+)
+
+, cluster_assignment as (
+    select * from {{ ref('int__feedback__cluster_membership') }}
+)
+
+-- Joined through the proposal, not dim_feedback_category.cluster_key: two
+-- clusters can propose labels that slugify to the same category_slug, and
+-- dim_feedback_category keeps only one row per slug, which would silently drop
+-- every other cluster_key's mapping. int__feedback__category_proposal keeps one
+-- row per cluster_key uncollapsed, so joining through it here (by category_slug)
+-- preserves every cluster's resolution even when several share one category.
+-- Not filtered to an approval status -- an LLM-proposed category is assigned as
+-- soon as its cluster_key resolves one, and a human correction (approve/merge/
+-- deprecate) is applied afterward rather than gating this join.
+, cluster_category as (
+    select
+        dim_feedback_category.feedback_category_pk
+        , category_proposal.cluster_key
+    from {{ ref('int__feedback__category_proposal') }} as category_proposal
+    inner join {{ ref('dim_feedback_category') }}
+        on category_proposal.category_slug = dim_feedback_category.category_slug
+)
+
+, summary as (
+    select * from {{ ref('int__feedback__summary') }}
+)
+
+, embedding as (
+    select * from {{ ref('int__feedback__embedding') }}
+)
+
+select
+    conversation.feedback_conversation_pk
+    , conversation.conversation_ref as conversation_id
+    , turn_aggregates.feedback_source_fk
+    , turn_aggregates.opened_by_user_fk
+    , turn_aggregates.opened_date_fk
+    , turn_aggregates.last_turn_date_fk
+    , conversation.turn_count
+    , participants.participant_count
+    , conversation.conversation_text_chars
+    , ticket.ticket_status as final_status
+    , ticket.ticket_priority as final_priority
+    , turn_aggregates.explicit_rating
+    -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad' and tutor 'like'/'dislike'
+    -- are verdicts; Zendesk's 'unoffered' (no survey sent) and 'offered' (sent,
+    -- unanswered) are kinds of absence rather than neutral ratings, so both stay
+    -- null for the model tier to fill.
+    , case turn_aggregates.explicit_rating
+        when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
+        when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
+        when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+        when 'dislike' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+    end as sentiment_fk
+    , case
+        when turn_aggregates.explicit_rating in ('good', 'bad', 'like', 'dislike')
+            then 'explicit_rating'
+    end as sentiment_source
+    , summary.conversation_summary
+    , summary.summary_model_version
+    , summary.prompt_version
+    , summary.summarized_at
+    , embedding.embedding_vector
+    , embedding.embedding_dim
+    , embedding.embedding_model_version
+    , embedding.embedding_input
+    , embedding.embedded_at
+    -- A cluster-derived category wins over the tag-seed guess when both exist; a
+    -- conversation with neither stays null, the queryable unassigned state.
+    , coalesce(cluster_category.feedback_category_pk, feedback_category.feedback_category_pk)
+        as category_fk
+    , cluster_assignment.cluster_key
+    , cluster_assignment.cluster_similarity
+    , cluster_assignment.cluster_assignment_method
+    , cluster_assignment.cluster_run_id
+    , {{ cast_timestamp_to_iso8601('current_timestamp') }} as conversation_ingested_at
+from conversation
+inner join turn_aggregates
+    on conversation.conversation_ref = turn_aggregates.conversation_id
+    and {{ dbt_utils.generate_surrogate_key(['conversation.source_slug']) }} = turn_aggregates.feedback_source_fk
+-- final_status/final_priority are Zendesk-only concepts, so this enrichment only
+-- ever matches Zendesk rows; every other source keeps both columns null.
+left join ticket
+    on conversation.conversation_ref = cast(ticket.ticket_id as varchar)
+    and conversation.source_slug = 'zendesk'
+left join participants
+    on conversation.conversation_ref = participants.conversation_ref
+    and conversation.source_slug = participants.source_slug
+left join dominant_tag
+    on conversation.conversation_ref = dominant_tag.conversation_id
+    and turn_aggregates.feedback_source_fk = dominant_tag.feedback_source_fk
+left join feedback_category
+    on dominant_tag.tag_slug = feedback_category.category_slug
+left join cluster_assignment
+    on conversation.feedback_conversation_pk = cluster_assignment.feedback_conversation_pk
+left join cluster_category
+    on cluster_assignment.cluster_key = cluster_category.cluster_key
+left join summary
+    on conversation.feedback_conversation_pk = summary.feedback_conversation_pk
+left join embedding
+    on conversation.feedback_conversation_pk = embedding.feedback_conversation_pk

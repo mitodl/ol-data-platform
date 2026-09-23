@@ -4,29 +4,40 @@ from typing import Literal
 
 from dagster import (
     AssetsDefinition,
+    AssetSelection,
     AutomationConditionSensorDefinition,
     ConfigurableResource,
+    DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
     SensorDefinition,
+    SourceAsset,
+    build_schedule_from_partitioned_job,
+    define_asset_job,
+)
+from dagster._core.definitions.partitions.partitioned_schedule import (
+    UnresolvedPartitionedAssetScheduleDefinition,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
+from openedx.assets.content_files import extract_course_document_text
+from openedx.assets.irx_export import build_irx_export_asset
 from openedx.assets.openedx import (
+    build_courseware_source_asset,
     course_structure,
     course_xml,
     extract_courserun_details,
     openedx_course_content_webhook,
-    openedx_live_courseware,
 )
+from openedx.assets.transcripts import extract_course_transcript_text
 from openedx.lib.assets_helper import (
     add_prefix_to_asset_keys,
     late_bind_partition_to_asset,
 )
 from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
-from openedx.sensors.openedx import course_run_sensor, course_version_sensor
+from openedx.sensors.openedx import course_run_sensor, courseware_observation_sensor
 
 
 class OpenEdxDeploymentComponent:
@@ -35,6 +46,7 @@ class OpenEdxDeploymentComponent:
     This component creates a complete set of Dagster definitions for a single OpenEdX
     deployment, including:
     - Assets for course data extraction (courseware, structure, XML, metadata)
+    - The nightly IRx drop and its schedule
     - Sensors for detecting new courses and course version changes
     - Resources for API client configuration
 
@@ -53,16 +65,18 @@ class OpenEdxDeploymentComponent:
         self.deployment_name = deployment_name
         self.vault = vault
 
-    def build_assets(self) -> dict[str, AssetsDefinition]:
+    def build_assets(self) -> dict[str, AssetsDefinition | SourceAsset]:
         """Build asset definitions for the deployment.
 
         Returns:
             Dictionary of asset definitions with deployment-specific prefixes and
             partitions.
         """
-        # Create the main courseware asset with deployment-specific partitioning
-        course_version_asset = late_bind_partition_to_asset(
-            add_prefix_to_asset_keys(openedx_live_courseware, self.deployment_name),
+        # The courseware source asset takes its key and partitions directly
+        # rather than through the prefix/late-bind helpers, which only know how
+        # to rewrite an AssetsDefinition.
+        courseware_asset = build_courseware_source_asset(
+            self.deployment_name,
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
@@ -88,36 +102,54 @@ class OpenEdxDeploymentComponent:
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
+        document_text_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(
+                extract_course_document_text, self.deployment_name
+            ),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
+        transcript_text_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(
+                extract_course_transcript_text, self.deployment_name
+            ),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
         return {
-            "course_version_asset": course_version_asset,
+            "courseware_asset": courseware_asset,
             "course_structure_asset": course_structure_asset,
             "course_xml_asset": course_xml_asset,
             "courserun_detail_asset": courserun_detail_asset,
             "course_content_webhook_asset": course_content_webhook_asset,
+            "document_text_asset": document_text_asset,
+            "transcript_text_asset": transcript_text_asset,
+            "irx_export_asset": build_irx_export_asset(self.deployment_name),
         }
 
     def build_sensors(
-        self, assets: dict[str, AssetsDefinition]
+        self, assets: dict[str, AssetsDefinition | SourceAsset]
     ) -> list[SensorDefinition]:
         """Build sensor definitions for the deployment.
 
         Args:
-            assets: List of assets to monitor (used for course_version_sensor)
+            assets: The deployment's assets, used to target the sensors.
 
         Returns:
             List of sensor definitions
         """
         # Access individual assets by their keys
-        course_version_asset = assets["course_version_asset"]
         course_xml_asset = assets["course_xml_asset"]
         course_content_webhook_asset = assets["course_content_webhook_asset"]
 
-        # Create asset-bound courseware sensor
+        # Discovery only -- this sensor registers partitions and requests no
+        # runs, so the selection exists purely to give the definition a target.
+        # The courseware source asset is deliberately not in it: a sensor
+        # cannot target something it can never materialize.
         courseware_sensor = SensorDefinition(
             name=f"{self.deployment_name}_courseware_sensor",
             description="Query a running Open edX system for a list of course runs.",
             asset_selection=[
-                course_version_asset,
                 course_xml_asset,
                 course_content_webhook_asset,
             ],
@@ -127,31 +159,97 @@ class OpenEdxDeploymentComponent:
             evaluation_fn=course_run_sensor,
         )
 
-        # Create asset-bound course version sensor
-        asset_bound_course_version_sensor = SensorDefinition(
-            name=f"{self.deployment_name}_course_version_sensor",
+        # Sweeps the LMS once an hour and reports each course run's published
+        # version as an observation on the courseware source asset. This is what
+        # gives the export graph a reason to run.
+        #
+        # It lives here rather than on the source asset as an automation
+        # condition because conditions are evaluated per partition: an hourly
+        # cron on a 3,500-partition asset requested 3,500 observation runs an
+        # hour, each of which swept the whole deployment anyway. One tick, one
+        # sweep, no runs.
+        observation_sensor = SensorDefinition(
+            name=f"{self.deployment_name}_courseware_observation_sensor",
+            description=("Report the published version of every Open edX course run."),
+            # Observations are emitted directly, so the selection exists only to
+            # give the definition a target -- as with course_run_sensor, the
+            # courseware source asset itself cannot be one.
             asset_selection=[
-                course_version_asset,
                 course_xml_asset,
                 course_content_webhook_asset,
             ],
             job=None,
             default_status=DefaultSensorStatus.STOPPED,
             minimum_interval_seconds=60 * 60,
-            evaluation_fn=course_version_sensor,
+            evaluation_fn=courseware_observation_sensor,
         )
 
-        # Create automation condition sensor
+        # Turns the versions the observation sensor reports into export runs, via
+        # each downstream's upstream_or_code_changes().
+        #
+        # Evaluated every 5 minutes, not hourly. Each link in
+        # courseware -> course_xml -> extract_courserun_details -> webhook can
+        # only advance on a tick, so an hourly interval put roughly an hour
+        # between every pair of steps -- a republish would take most of a day to
+        # reach the webhook. How often the LMS is actually swept is set by the
+        # observation sensor, not by this: a tick that finds nothing to do costs
+        # a graph evaluation and no API calls.
         automation_sensor = AutomationConditionSensorDefinition(
             f"{self.deployment_name}_openedx_automation_sensor",
-            minimum_interval_seconds=300 if DAGSTER_ENV == "dev" else 60 * 60,
+            minimum_interval_seconds=300,
             target=list(assets.values()),
         )
 
         return [
             courseware_sensor,
-            asset_bound_course_version_sensor,
+            observation_sensor,
             automation_sensor,
+        ]
+
+    def build_schedules(
+        self, assets: dict[str, AssetsDefinition | SourceAsset]
+    ) -> list[UnresolvedPartitionedAssetScheduleDefinition]:
+        """Build the nightly IRx drop's schedule for the deployment.
+
+        Args:
+            assets: The deployment's assets, used to target the schedule.
+
+        Returns:
+            List of schedule definitions
+        """
+        irx_export_job = define_asset_job(
+            # Not the bare `<deployment>_irx_export`: that is the multi-asset's
+            # op name, and a job sharing it fails the code location at load.
+            name=f"{self.deployment_name}_irx_export_job",
+            selection=AssetSelection.assets(assets["irx_export_asset"]),
+            tags={
+                # The ceiling legacy_openedx needed for loading studentmodule
+                # whole. The export streams it, so the real peak should be far
+                # lower; it has not been measured yet.
+                "dagster-k8s/config": {
+                    "container_config": {
+                        "resources": {
+                            "requests": {"memory": "2Gi"},
+                            "limits": {"memory": "32Gi"},
+                        }
+                    }
+                }
+            },
+        )
+        # Running by default in production rather than switched on by hand, so
+        # no instigator state is left behind if the drop moves to another code
+        # location. The files are only as fresh as the last edxapp sync and irx
+        # build, whatever the hour.
+        return [
+            build_schedule_from_partitioned_job(
+                irx_export_job,
+                hour_of_day=6,
+                default_status=(
+                    DefaultScheduleStatus.RUNNING
+                    if DAGSTER_ENV == "production"
+                    else DefaultScheduleStatus.STOPPED
+                ),
+            )
         ]
 
     def build_resource(
@@ -181,7 +279,7 @@ class OpenEdxDeploymentComponent:
             shared_resources: Optional dict of shared resources to include.
 
         Returns:
-            Definitions object containing assets, sensors, and resources.
+            Definitions object containing assets, schedules, sensors, and resources.
         """
         assets = self.build_assets()
         sensors = self.build_sensors(assets)
@@ -194,6 +292,7 @@ class OpenEdxDeploymentComponent:
 
         return Definitions(
             assets=list(assets.values()),
+            schedules=self.build_schedules(assets),
             sensors=sensors,
             resources=all_resources,
         )

@@ -130,6 +130,16 @@ with mitxonline_grades as (
     from {{ this }}
     group by platform
 )
+
+-- Snapshot of the target's current (grade_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        grade_key
+        , user_fk as stored_user_fk
+    from {{ this }}
+)
 {% endif %}
 
 , final as (
@@ -152,12 +162,16 @@ with mitxonline_grades as (
     -- Left join preserves grades from platforms not yet in the target table
     left join incremental_watermarks w
         on w.watermark_platform = gwf.platform
+    left join stale_user_fk_lookup as sufk
+        on sufk.grade_key = {{ dbt_utils.generate_surrogate_key(["gwf.grade_id", "gwf.platform"]) }}
     where (
         w.max_activity_on is null  -- platform not yet in target, include all
         -- Use >= to capture updated_on changes within the same second as the watermark
         or coalesce(gwf.grade_updated_on, gwf.grade_created_on) >= w.max_activity_on
         -- edxorg has no timestamps; always re-ingest (delete+insert is idempotent)
         or gwf.grade_created_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from gwf.user_fk
     )
     {% endif %}
 )

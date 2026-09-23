@@ -1,0 +1,158 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: irx
+layer: bigquery
+scope: singleton
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: airbyte
+table_prefix: raw__irx__edxorg__bigquery__
+airbyte:
+  source_kind: source-bigquery
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: IRx BigQuery - Email Opt In → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - email_opt_in
+  - environment: production
+    name: IRx BigQuery → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - mitx_course
+    - mitx_person_course
+    - mitx_user_info_combo
+tables:
+- name: email_opt_in
+  raw_table: raw__irx__edxorg__bigquery__email_opt_in
+  sync_mode: full_refresh_overwrite
+  namespace: email_opt_in
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      user_id: copy
+      username: hash
+      course_id: copy
+      full_name: redact
+      is_opted_in_for_email: copy
+      preference_set_datetime: copy
+- name: mitx_course
+  raw_table: raw__irx__edxorg__bigquery__mitx_course
+  sync_mode: full_refresh_overwrite
+  namespace: aggregate_data
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      url: copy
+      semester: copy
+      course_id: copy
+      department: copy
+      self_paced: copy
+      course_wrap: copy
+      dept_number: copy
+      institution: copy
+      instructors: copy
+      course_title: copy
+      course_launch: copy
+      course_number: copy
+      registration_open: copy
+- name: mitx_person_course
+  raw_table: raw__irx__edxorg__bigquery__mitx_person_course
+  sync_mode: full_refresh_overwrite
+  namespace: aggregate_data
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      loe: copy
+      yob: nullify
+      mode: copy
+      n_dt: copy
+      grade: copy
+      avg_dt: copy
+      gender: copy
+      max_dt: copy
+      nvideo: copy
+      sdv_dt: copy
+      sum_dt: copy
+      viewed: copy
+      nevents: copy
+      user_id: copy
+      explored: copy
+      username: hash
+      certified: copy
+      completed: copy
+      course_id: copy
+      is_active: copy
+      ndays_act: copy
+      nseq_goto: copy
+      last_event: copy
+      nprogcheck: copy
+      start_time: copy
+      cert_status: copy
+      first_event: copy
+      nplay_video: copy
+      nseek_video: copy
+      ntranscript: copy
+      npause_video: copy
+      nshow_answer: copy
+      passing_grade: copy
+      nproblem_check: copy
+      profile_country: copy
+      cert_created_date: copy
+      cert_modified_date: copy
+      verified_enroll_time: copy
+      nvideos_total_watched: copy
+      nvideos_unique_viewed: copy
+      verified_unenroll_time: copy
+- name: mitx_user_info_combo
+  raw_table: raw__irx__edxorg__bigquery__mitx_user_info_combo
+  sync_mode: full_refresh_overwrite
+  namespace: aggregate_data
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      user_id: copy
+      username: hash
+      last_login: copy
+      date_joined: copy
+      profile_city: redact
+      profile_meta: nullify
+      profile_name: redact
+      profile_goals: redact
+      certificate_id: copy
+      id_map_hash_id: copy
+      profile_gender: copy
+      certificate_key: hash
+      enrollment_mode: copy
+      profile_country: copy
+      certificate_mode: copy
+      certificate_name: redact
+      certificate_grade: copy
+      certificate_status: copy
+      enrollment_created: copy
+      certificate_user_id: copy
+      enrollment_course_id: copy
+      enrollment_is_active: copy
+      certificate_course_id: copy
+      profile_year_of_birth: nullify
+      certificate_distinction: copy
+      certificate_verify_uuid: hash
+      profile_mailing_address: redact
+      certificate_created_date: copy
+      certificate_download_url: nullify
+      certificate_download_uuid: hash
+      certificate_modified_date: copy
+      profile_level_of_education: copy

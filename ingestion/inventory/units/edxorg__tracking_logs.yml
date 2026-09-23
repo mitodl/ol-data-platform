@@ -1,0 +1,59 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: tracking_logs
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: airbyte
+table_prefix: raw__edxorg__s3__tracking_logs
+airbyte:
+  source_kind: source-s3
+  replication_method: n/a
+  connections:
+  - environment: production
+    name: edx.org Tracking Logs → S3 Data Lake
+    status: active
+    sync_interval_hours: 24
+    streams:
+    - raw__edxorg__s3__tracking_logs
+tables:
+- name: raw__edxorg__s3__tracking_logs
+  raw_table: raw__edxorg__s3__tracking_logs
+  sync_mode: incremental_append
+  cursor_field:
+  - _ab_source_file_last_modified
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      ip: nullify
+      host: copy
+      name: copy
+      page: copy
+      time: copy
+      agent: copy
+      event: copy
+      context: copy
+      referer: copy
+      session: hash
+      username: hash
+      event_type: copy
+      event_source: copy
+      accept_language: copy
+      _ab_source_file_last_modified: copy
+    # 2.2B rows and 245 GB whole. The last 30 days of syncs, measured back from
+    # the newest one so a paused feed still copies rows. Epoch milliseconds.
+    # edx.user.settings.changed carries old and new emails, names and addresses
+    # in `event`, which no column mode can mask, and no model reads it. `name`
+    # supersedes `event_type` when present, so both are checked, and a NULL in
+    # either keeps the row.
+    where: >-
+      _airbyte_extracted_at >=
+      (SELECT max(_airbyte_extracted_at) FROM {source}) - 2592000000
+      AND 'edx.user.settings.changed' NOT IN
+      (coalesce(name, ''), coalesce(event_type, ''))

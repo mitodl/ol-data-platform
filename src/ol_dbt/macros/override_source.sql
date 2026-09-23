@@ -1,31 +1,58 @@
+{#
+    source() override for DuckDB targets: route to the `glue__`-prefixed views registered by
+    `ol-dbt local register`. Trino uses the built-in.
+
+    This used to dispatch on the SOURCE NAME through a hand-maintained map, defaulting
+    unknown names to the raw database. Two of the three source names actually in use were
+    missing from that map: `dimensional` (9 sources) and `reporting` (2), so all 11 resolved
+    to `glue__ol_warehouse_production_raw__<table>` -- a view that does not exist, because
+    those tables live in the dimensional and reporting Glue databases. A default that points
+    somewhere plausible is worse than no default; it turns a missing entry into a confusing
+    Catalog Error instead of a clear one.
+
+    The source already declares where it lives. dbt resolves its schema either to a
+    fully-qualified Glue database (`ol_warehouse_production_dimensional`, as the dimensional
+    and reporting sources declare) or to `<target.schema>_<layer>` (`main_raw`), so both
+    conventions are derivable and neither needs a list kept in sync.
+#}
 {% macro source(source_name, table_name) %}
-  {#
-    Override the default source() macro for DuckDB targets to route to Iceberg views
-
-    For DuckDB: References glue__ prefixed views registered by register-glue-sources.py
-    For Trino: Uses the built-in source() macro behavior
-  #}
   {% if target.type == 'duckdb' %}
-    {# Map source schemas to Glue database names #}
-    {% set source_to_database_map = {
-      'ol_warehouse_raw_data': 'ol_warehouse_production_raw',
-      'ol_warehouse_staging': 'ol_warehouse_production_staging',
-      'ol_warehouse_intermediate': 'ol_warehouse_production_intermediate',
-      'ol_warehouse_dimensional': 'ol_warehouse_production_dimensional',
-      'ol_warehouse_marts': 'ol_warehouse_production_mart',
-      'ol_warehouse_reporting': 'ol_warehouse_production_reporting'
-    } %}
+    {#- Registers the source.* dependency edge in the manifest so lineage and
+        state:modified+ selection still see it on DuckDB targets. The returned relation is
+        deliberately discarded; the Glue view below is what the SQL reads. There is a CI
+        guard for this specific edge (.github/workflows/dbt_pr_ci.yaml). -#}
+    {% set builtin_relation = builtins.source(source_name, table_name) %}
 
-    {% set glue_database = source_to_database_map.get(source_name, 'ol_warehouse_production_raw') %}
+    {#- Two contexts hand back a relation there is nothing to derive from, and in both the
+        value is never rendered as a table name:
+          - parsing, where the schema is still target.schema; only the dependency
+            registration above matters.
+          - a unit test, where dbt substitutes a fixture CTE for this input and the
+            relation arrives with schema None. -#}
+    {% if not execute or builtin_relation is none or builtin_relation.schema is none %}
+      {{ return(builtin_relation) }}
+    {% endif %}
 
-    {# Register the source dependency edge in the manifest (discarding the relation) so
-       lineage/state-based selection sees this model's source.* deps on DuckDB targets too #}
-    {% do builtins.source(source_name, table_name) %}
+    {% set prefix = target.schema ~ '_' %}
+    {% if builtin_relation.schema.startswith('ol_warehouse_') %}
+      {% set glue_database = builtin_relation.schema %}
+    {% elif builtin_relation.schema.startswith(prefix) %}
+      {% set glue_database = 'ol_warehouse_production_'
+                             ~ builtin_relation.schema[prefix | length:] %}
+    {% else %}
+      {% do exceptions.raise_compiler_error(
+        "No Glue database can be derived for source('" ~ source_name ~ "', '" ~ table_name
+        ~ "'): its schema is '" ~ builtin_relation.schema ~ "', which is neither a "
+        ~ "fully-qualified ol_warehouse_* database nor '" ~ prefix ~ "<layer>'."
+      ) %}
+    {% endif %}
 
-    {# Return the fully qualified view name #}
-    glue__{{ glue_database }}__{{ table_name }}
+    {{ return(api.Relation.create(
+      database=target.database,
+      schema=target.schema,
+      identifier='glue__' ~ glue_database ~ '__' ~ table_name
+    )) }}
   {% else %}
-    {# For Trino, use the built-in builtins.source() macro #}
     {{ return(builtins.source(source_name, table_name)) }}
   {% endif %}
 {% endmacro %}

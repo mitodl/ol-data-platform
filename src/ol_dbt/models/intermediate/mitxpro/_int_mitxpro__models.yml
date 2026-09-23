@@ -4,6 +4,11 @@ version: 2
 models:
 - name: int__mitxpro__ecommerce_allorders
   description: B2B and regular orders combined into one table
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: order_id
     description: int, foreign key for ecommerce_order
@@ -1058,6 +1063,11 @@ models:
         compare_model: ref('stg__mitxpro__app__postgres__ecommerce_product')
 - name: int__mitxpro__courserunenrollments
   description: Intermediate model of enrollments in xPro
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: courserunenrollment_id
     description: id for enrollment
@@ -1078,6 +1088,10 @@ models:
     - not_null
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
     tests:
     - not_null
   - name: courserunenrollment_enrollment_status
@@ -1267,6 +1281,9 @@ models:
     description: timestamp, date and time when the program page was first published
   - name: cms_programpage_last_published_on
     description: timestamp, date and time when the program page was last published
+  - name: cms_programpage_image_url
+    description: str, fully-qualified URL for the program's search/feature image,
+      resolved from the program page's search image in the Wagtail CMS
 
 - name: int__mitxpro__program_runs
   description: Intermediate model of program runs in MITxPro
@@ -1368,6 +1385,9 @@ models:
     description: timestamp, date and time when the course page was first published
   - name: cms_coursepage_last_published_on
     description: timestamp, date and time when the course page was last published
+  - name: cms_coursepage_image_url
+    description: str, fully-qualified URL for the course's search/feature image, resolved
+      from the course page's search image in the Wagtail CMS
 
 - name: int__mitxpro__course_runs
   description: Intermediate model of course runs in MIT xPro.
@@ -1431,6 +1451,11 @@ models:
 
 - name: int__mitxpro__users
   description: Intermediate model of users in MIT xPro.
+  config:
+    meta:
+      qa_branches:
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_id
     description: int, unique id assigned to the user
@@ -1715,6 +1740,13 @@ models:
 - name: int__mitxpro__user_courseactivities
   description: xPro open edX user activities aggregated statistics per course from
     tracking logs
+  config:
+    meta:
+      qa_branches:
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
@@ -1934,6 +1966,10 @@ models:
     description: int, primary key in courses_program
     tests:
     - not_null
+  - name: course_order
+    description: int, sequential number (1-indexed) indicating the display order of
+      the course within the program, derived from the position of the course page
+      in cms_coursesinprogrampage_coursepage_wagtail_page_ids
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -2229,6 +2265,11 @@ models:
 
 - name: int__mitxpro__courserun_videos
   description: course videos on MIT xPro open edx
+  config:
+    meta:
+      qa_branches:
+      - ovs/app_postgres
+      - xpro/mysql
   columns:
   - name: courserun_readable_id
     description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}

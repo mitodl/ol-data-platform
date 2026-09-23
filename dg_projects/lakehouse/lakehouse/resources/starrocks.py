@@ -8,6 +8,7 @@ connection -- no passwords are held in Dagster config.
 import logging
 import ssl
 import time
+from typing import Any
 
 from dagster import ConfigurableResource, ResourceDependency
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -34,8 +35,11 @@ def _make_ssl_context() -> ssl.SSLContext:
 # MySQL-wire-protocol error codes that warrant a fresh Vault credential + retry.
 # 1044 ER_DBACCESS_DENIED_ERROR / 1045 ER_ACCESS_DENIED_ERROR - the dynamic user
 #   Vault just created hasn't propagated across StarRocks FE nodes yet.
+# 2003 CR_CONN_HOST_ERROR - the connect() below failed outright, which is what
+#   an FE rolling restart looks like from here. Every attempt opens its own
+#   connection, so this is reachable on all of them, not just the first.
 # 2006 CR_SERVER_GONE_ERROR / 2013 CR_SERVER_LOST - dropped connection.
-_RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2006, 2013})
+_RETRIABLE_ERRORS: frozenset[int] = frozenset({1044, 1045, 2003, 2006, 2013})
 _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1  # seconds; doubles each attempt
 
@@ -47,11 +51,12 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
     vault_mount_point: str = PydanticField(
         description=(
             "Vault database secrets engine mount point for StarRocks, "
-            "e.g. 'database-starrocks-production'."
+            "e.g. 'database-starrocks'. Not environment-specific -- each "
+            "environment runs its own separate Vault deployment."
         )
     )
     vault_role: str = PydanticField(
-        default="dagster",
+        default="admin",
         description="Vault database role to generate credentials for.",
     )
     host: str = PydanticField(description="StarRocks FE host name.")
@@ -76,7 +81,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         )["data"]
         return creds["username"], creds["password"]
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, *, idempotent: bool = True) -> None:
         """Run *sql*, retrying with fresh Vault credentials on a transient error.
 
         A fresh set of dynamic credentials is generated on every attempt (not just
@@ -84,7 +89,42 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         just-created user not yet being visible on the FE node we connect to --
         generating a new one and retrying gives replication another round to catch
         up rather than reusing credentials known to be affected.
+
+        Pass ``idempotent=False`` for a statement that cannot be re-run after
+        dying partway, such as CREATE TABLE AS SELECT: an FE lost mid-statement
+        can leave the table created, so a retry fails on "already exists" and
+        hides the original error. Such a statement is still retried when the
+        connection itself fails, since then it never started.
         """
+        self._run(sql, retry_statement=idempotent)
+
+    def fetch(
+        self, sql: str, params: tuple[str, ...] | None = None
+    ) -> list[dict[str, Any]]:
+        """Run *sql* and return its rows, with `execute`'s credential retry.
+
+        *params* are passed through to the driver's own placeholder
+        substitution (`%s`) rather than interpolated into *sql*.
+
+        The default is None rather than an empty tuple because pymysql applies
+        `query % args` for any args that is not None -- including `()`, which
+        binds nothing but still makes a literal `%` in *sql* (a `LIKE '%x%'`,
+        a `date_format` pattern) raise "not enough arguments for format
+        string". Statements with no placeholders have to skip the binding
+        rather than pass an empty one. `execute` already passes None.
+
+        Retrying a SELECT is unconditionally safe. A retry only happens when
+        the previous attempt failed to connect or died mid-statement.
+        """
+        return self._run(sql, params) or []
+
+    def _run(
+        self,
+        sql: str,
+        params: tuple[str, ...] | None = None,
+        *,
+        retry_statement: bool = True,
+    ) -> list[dict[str, Any]] | None:
         last_exc: OperationalError | None = None
         for attempt in range(_MAX_ATTEMPTS):
             if attempt:
@@ -118,15 +158,16 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
 
             try:
                 with conn.cursor() as cursor:
-                    cursor.execute(sql)
+                    cursor.execute(sql, params)
+                    rows = cursor.fetchall()
                 conn.commit()
             except OperationalError as exc:
-                if exc.args[0] not in _RETRIABLE_ERRORS:
+                if not retry_statement or exc.args[0] not in _RETRIABLE_ERRORS:
                     raise
                 last_exc = exc
                 continue
             else:
-                return
+                return list(rows)
             finally:
                 conn.close()
 

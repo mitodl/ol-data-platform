@@ -38,6 +38,11 @@ from ol_dbt_cli.lib.sql_parser import (
     parse_model_file,
     parse_model_sql_at_content,
 )
+from ol_dbt_cli.lib.surrogate_keys import (
+    SurrogateKeyChange,
+    changed_surrogate_keys,
+    detect_key_regen,
+)
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
 console = Console()
@@ -46,6 +51,7 @@ err_console = Console(stderr=True)
 
 class AlertLevel(StrEnum):
     BREAKING = "BREAKING"
+    KEY_REGEN = "KEY_REGEN"
     WARNING = "WARNING"
     INFO = "INFO"
 
@@ -433,6 +439,66 @@ def _analyse_deleted_model(
     )
 
 
+def _analyse_key_regen(
+    changed_keys: dict[str, list[SurrogateKeyChange]],
+    manifest: ManifestRegistry,
+    sql_models_by_name: dict[str, ParsedModel],
+) -> list[ImpactAlert]:
+    """Alerts for surrogate-key hash-input changes that orphan downstream FKs.
+
+    A full-refresh dimension re-derives every ``generate_surrogate_key`` value
+    on its next build. Its incremental descendants stored the previous value as
+    an FK and will not revisit those rows, so the join silently stops matching
+    — no column changed, so neither the column diff above nor
+    ``on_schema_change`` sees anything. Reported separately from BREAKING
+    because the fix is not an edit to the downstream model: it is a
+    ``--full-refresh`` of the listed tables on the first run after this merges.
+    """
+    alerts: list[ImpactAlert] = []
+    reads: dict[tuple[str, str], set[str] | None] = {}
+
+    def column_reads(child: str, parent: str) -> set[str] | None:
+        if (child, parent) not in reads:
+            parsed = sql_models_by_name.get(child)
+            reads[(child, parent)] = None if parsed is None else get_columns_read_from_ref(parsed, parent)
+        return reads[(child, parent)]
+
+    for finding in detect_key_regen(changed_keys, manifest, column_reads):
+        before = " + ".join(", ".join(call) for call in finding.base_inputs)
+        after = " + ".join(", ".join(call) for call in finding.current_inputs)
+        alerts.append(
+            ImpactAlert(
+                level=AlertLevel.KEY_REGEN,
+                changed_model=finding.ancestor,
+                column_changes=[
+                    ColumnChange(
+                        column=finding.changed_key_column,
+                        change_type="key_inputs_changed",
+                        related=f"{before} → {after}",
+                    )
+                ],
+                downstream=[
+                    DownstreamImpact(
+                        model_name=model.model_name,
+                        unique_id=model.unique_id,
+                        affected_columns=[model.fk_column],
+                        depth=model.depth,
+                    )
+                    for model in finding.affected_models
+                ],
+                message=(
+                    f"'{finding.ancestor}.{finding.changed_key_column}' is hashed from a different "
+                    "column list than at the base ref — every existing value changes on the next build. "
+                    f"{len(finding.affected_model_names)} incremental model(s) store it as an FK and need "
+                    "`dbt build --full-refresh --select "
+                    f"{' '.join(finding.affected_model_names)}` on the first run after this merges."
+                ),
+                manifest_available=True,
+            )
+        )
+    return alerts
+
+
 def _analyse_macro_change(
     macro_rel_path: str,
     affected_models: set[str],
@@ -473,11 +539,13 @@ def _analyse_macro_change(
 
 _LEVEL_COLOR = {
     AlertLevel.BREAKING: "bold red",
+    AlertLevel.KEY_REGEN: "bold magenta",
     AlertLevel.WARNING: "yellow",
     AlertLevel.INFO: "green",
 }
 _LEVEL_ICON = {
     AlertLevel.BREAKING: "🔴",
+    AlertLevel.KEY_REGEN: "🔑",
     AlertLevel.WARNING: "⚠️ ",
     AlertLevel.INFO: "ℹ️ ",
 }
@@ -502,8 +570,14 @@ def _print_text_alerts(alerts: list[ImpactAlert]) -> None:
                     "added": "➕",
                     "renamed_from": "🔄",
                     "renamed_to": "→ ",
+                    "key_inputs_changed": "🔑",
                 }.get(change.change_type, "•")
-                suffix = f" → {change.related}" if change.related and change.change_type == "renamed_from" else ""
+                if change.change_type == "key_inputs_changed":
+                    suffix = f" hashed from: {change.related}"
+                elif change.related and change.change_type == "renamed_from":
+                    suffix = f" → {change.related}"
+                else:
+                    suffix = ""
                 console.print(f"     {prefix} {change.column}{suffix}")
 
         if alert.downstream:
@@ -622,6 +696,8 @@ def impact(
 
     Alert levels:
       🔴 BREAKING  — a removed/renamed column is used by a downstream model
+      🔑 KEY_REGEN — a full-refresh model re-hashes a surrogate key from different
+                     inputs, orphaning the FK copies incremental descendants hold
       ⚠️  WARNING   — column changed but downstream impact cannot be fully determined
       ℹ️  INFO      — only additive changes (new columns), no downstream breakage
 
@@ -848,8 +924,37 @@ def impact(
 
     alerts.extend(macro_alerts)
 
+    # Surrogate-key drift is a separate pass, not a branch of _analyse_model:
+    # re-hashing a key from a different column list changes no column, so the
+    # column diff above returns None for exactly the change that causes it.
+    changed_keys: dict[str, list[SurrogateKeyChange]] = {}
+    for name in target_names:
+        sql_file = sql_file_map.get(name)
+        if sql_file is None:
+            continue
+        base_content = get_file_at_ref(sql_file, merge_base, repo_root=repo_root)
+        if base_content is None:
+            continue  # New model — nothing downstream holds a key it never minted.
+        key_changes = changed_surrogate_keys(base_content, sql_file.read_text())
+        if key_changes:
+            changed_keys[name] = key_changes
+
+    if changed_keys and manifest is not None:
+        alerts.extend(_analyse_key_regen(changed_keys, manifest, sql_models_by_name))
+    elif changed_keys:
+        err_console.print(
+            f"[yellow]Warning:[/] {len(changed_keys)} model(s) changed their surrogate-key hash "
+            "inputs, but no manifest is available to find the incremental models storing those "
+            "keys. Run `dbt parse` (or --auto-compile) so the re-key is analysed."
+        )
+
     # Sort: BREAKING first, then WARNING, then INFO
-    order = {AlertLevel.BREAKING: 0, AlertLevel.WARNING: 1, AlertLevel.INFO: 2}
+    order = {
+        AlertLevel.BREAKING: 0,
+        AlertLevel.KEY_REGEN: 1,
+        AlertLevel.WARNING: 2,
+        AlertLevel.INFO: 3,
+    }
     alerts.sort(key=lambda a: order[a.level])
 
     if output_format == "json":
@@ -857,9 +962,11 @@ def impact(
     else:
         _print_text_alerts(alerts)
         breaking = sum(1 for a in alerts if a.level == AlertLevel.BREAKING)
+        key_regen = sum(1 for a in alerts if a.level == AlertLevel.KEY_REGEN)
         warnings = sum(1 for a in alerts if a.level == AlertLevel.WARNING)
         console.print(
-            f"\n[bold]Summary:[/] {breaking} breaking, {warnings} warning(s) across {len(alerts)} changed model(s)."
+            f"\n[bold]Summary:[/] {breaking} breaking, {key_regen} key regeneration(s), "
+            f"{warnings} warning(s) across {len(alerts)} changed model(s)."
         )
         if models_without_compiled:
             unique_missing = sorted(set(models_without_compiled))

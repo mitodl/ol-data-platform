@@ -1,8 +1,8 @@
 # mypy: disable-error-code="call-overload,union-attr,misc"
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Self
-from urllib.parse import parse_qs
+from typing import Any, Self
+from urllib.parse import parse_qs, urlparse
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from httpx2 import HTTPStatusError
@@ -10,6 +10,28 @@ from pydantic import Field, PrivateAttr
 
 from ol_orchestrate.resources.oauth import OAuthApiClient
 from ol_orchestrate.resources.secrets.vault import Vault
+
+
+def next_page_params(next_page: Any) -> dict[str, list[str]]:
+    """Extract the query parameters from a paginated API's ``next`` URL.
+
+    Typed ``Any`` because it is handed a value straight out of a JSON body, and
+    ``fetch_with_auth`` is declared as returning a union that keeps mypy from
+    narrowing it. ``urlparse`` accepts anything str-like and a non-string here
+    would be a server contract change, not something to branch on.
+
+    ``next`` is an absolute URL, and ``parse_qs`` applied to one of those parses
+    the whole thing as a single ``key=value`` pair: everything up to the first
+    ``=`` becomes the key. So ``https://host/courses/?page=2`` yielded
+    ``{"https://host/courses/?page": ["2"]}``, and that key was then sent as a
+    query parameter *name*.
+
+    Each page compounded it, since the server echoed the mangled parameters back
+    into the next ``next``, until the request URL was the base URL nested inside
+    itself twenty-five times over and the API answered 429 (DAGSTER-E). Parsing
+    only the query component is the fix.
+    """
+    return parse_qs(urlparse(next_page).query)
 
 
 class OpenEdxApiClient(OAuthApiClient):
@@ -37,7 +59,9 @@ class OpenEdxApiClient(OAuthApiClient):
         yield course_data
         while next_page:
             response_data = self.fetch_with_auth(
-                request_url, page_size=page_size, extra_params=parse_qs(next_page)
+                request_url,
+                page_size=page_size,
+                extra_params=next_page_params(next_page),
             )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
@@ -134,7 +158,7 @@ class OpenEdxApiClient(OAuthApiClient):
         yield count, results
         while next_page:
             response_data = self.fetch_with_auth(
-                request_url, extra_params=parse_qs(next_page)
+                request_url, extra_params=next_page_params(next_page)
             )
             next_page = response_data["next"]
             yield response_data["results"]
@@ -154,7 +178,7 @@ class OpenEdxApiClient(OAuthApiClient):
         yield count, results
         while next_page:
             response_data = self.fetch_with_auth(
-                course_catalog_url, extra_params=parse_qs(next_page)
+                course_catalog_url, extra_params=next_page_params(next_page)
             )
             next_page = response_data["next"]
             yield response_data["results"]

@@ -197,10 +197,15 @@ def promote(
     print("Step 5: Promoting assets to production...")
     print()
 
+    # Tracks whether any push step failed, so a failure can't be masked by
+    # --force (which only skips interactive confirmations) or by falling
+    # through to the "Promotion Complete!" banner at the end.
+    promotion_failed = False
+
     # Push charts with dependencies
     print("Step 5a: Pushing datasets...")
     if counts["datasets"] > 0:
-        run_sup_command(
+        result = run_sup_command(
             [
                 "dataset",
                 "push",
@@ -211,7 +216,11 @@ def promote(
             ],
             check=False,
         )
-        print("  ✅ Datasets promoted")
+        if result.returncode == 0:
+            print("  ✅ Datasets promoted")
+        else:
+            print("  ❌ Dataset promotion failed")
+            promotion_failed = True
 
         # Superset's import API does not update physical table connections
         # (table_name, schema) for existing datasets — patch them directly.
@@ -239,6 +248,7 @@ def promote(
             print("  ✅ Charts promoted successfully")
         else:
             print("  ⚠️  Some charts may have failed - check logs above")
+            promotion_failed = True
     else:
         print("  No charts to promote")
 
@@ -261,6 +271,7 @@ def promote(
             print("  ✅ Dashboards promoted successfully")
         else:
             print("  ❌ Dashboard promotion failed")
+            promotion_failed = True
             if not force and not confirm_action("Continue anyway?"):
                 print("Promotion aborted")
                 run_sup_command(["instance", "use", "superset-qa"])
@@ -297,7 +308,7 @@ def promote(
 
     print()
     print("=" * 50)
-    print("Promotion Complete!")
+    print("Promotion Complete!" if not promotion_failed else "Promotion Finished")
     print("=" * 50)
     print()
     print("Next steps:")
@@ -314,5 +325,10 @@ def promote(
     run_sup_command(["instance", "use", "superset-qa"])
 
     print()
+    if promotion_failed:
+        print("❌ Promotion completed with errors — see failures above.")
+        print()
+        sys.exit(1)
+
     print("✅ Promotion complete! All assets deployed to production.")
     print()

@@ -8,15 +8,32 @@
     {% set course_id_regex = 'course-v(\d{1}):([\w\.\-\_]+)\+([\w\.\-\_]+)\+([\w\.\-\_]+)' %}
 {% endif %}
 
+    {#- Routed through json_query_string and regexp_extract_or_null so this compiles and
+        behaves the same on Trino and DuckDB. Two engine gaps are in play:
+
+        1. Trino's `json_query(context, 'lax $.x' omit quotes)` is a parse error on DuckDB
+           (`syntax error at or near "omit"`). json_query_string exists for exactly this
+           substitution and its Trino branch emits that same expression unchanged, so the
+           Trino-side SQL here is untouched. It is also what the calling tracking-log
+           models already use for $.user_id / $.org_id / $.path.
+        2. DuckDB's regexp_extract returns '' rather than NULL on no match. A missing JSON
+           key is still safe (NULL in, NULL out), but a key that is *present and does not
+           match* the course-id pattern yields '', which `is not null` accepts -- so that
+           arm would win and emit the non-course-id string verbatim. `nullif(..., '')`
+           restores Trino's fall-through. -#}
+    {%- set course_id_pattern = "'" ~ course_id_regex ~ "'" -%}
+    {%- set context_course_id = json_query_string('context', "'$.course_id'") -%}
+    {%- set context_path = json_query_string('context', "'$.path'") -%}
+
       case
-          when regexp_extract(json_query(context, 'lax $.course_id' omit quotes), '{{ course_id_regex }}') is not null
-             then json_query(context, 'lax $.course_id' omit quotes)
-          when regexp_extract(json_query(context, 'lax $.path' omit quotes), '{{ course_id_regex }}') is not null
-              then regexp_extract(json_query(context, 'lax $.path' omit quotes), '{{ course_id_regex }}')
-          when regexp_extract(event_type, '{{ course_id_regex }}') is not null
-              then regexp_extract(event_type, '{{ course_id_regex }}')
-          when regexp_extract(page, '{{ course_id_regex }}') is not null
-              then regexp_extract(page, '{{ course_id_regex }}')
+          when {{ regexp_extract_or_null(context_course_id, course_id_pattern) }} is not null
+             then {{ context_course_id }}
+          when {{ regexp_extract_or_null(context_path, course_id_pattern) }} is not null
+              then {{ regexp_extract_or_null(context_path, course_id_pattern) }}
+          when {{ regexp_extract_or_null('event_type', course_id_pattern) }} is not null
+              then {{ regexp_extract_or_null('event_type', course_id_pattern) }}
+          when {{ regexp_extract_or_null('page', course_id_pattern) }} is not null
+              then {{ regexp_extract_or_null('page', course_id_pattern) }}
       end
 {% endmacro %}
 

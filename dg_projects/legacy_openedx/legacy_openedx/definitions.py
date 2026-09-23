@@ -15,17 +15,19 @@ from dagster import Definitions, RunRequest, ScheduleEvaluationContext, schedule
 from dagster_aws.s3 import S3Resource
 from dagster_aws.s3.resources import s3_resource
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.sentry import capture_exception_to_sentry, init_sentry
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.resources.secrets.vault import Vault
 
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
 from legacy_openedx.resources.mysql_db import VaultMySQLClientFactory
 
 log = logging.getLogger(__name__)
+
+init_sentry("legacy_openedx")
 
 # Initialize vault with resilient loading
 try:
@@ -38,7 +40,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 # Initialize GCS connection with resilient loading
@@ -214,7 +216,7 @@ def _job_default_config(
         return {}
     try:
         return open_edx_export_irx_job_config(deployment, DAGSTER_ENV)
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.warning(
             "Failed to build default job config for '%s' at code-location load "
             "time; launchpad will not be pre-populated. "
@@ -231,6 +233,7 @@ residential_edx_job = edx_course_pipeline.to_job(
         "sqldb": _mysql_resource("mitx", DAGSTER_ENV),
         **_base_production_resources,
     },
+    hooks={capture_exception_to_sentry},
     config=_job_default_config("mitx"),
 )
 
@@ -240,6 +243,7 @@ xpro_edx_job = edx_course_pipeline.to_job(
         "sqldb": _mysql_resource("xpro", DAGSTER_ENV),
         **_base_production_resources,
     },
+    hooks={capture_exception_to_sentry},
     config=_job_default_config("xpro"),
 )
 
@@ -249,6 +253,7 @@ mitxonline_edx_job = edx_course_pipeline.to_job(
         "sqldb": _mysql_resource("mitxonline", DAGSTER_ENV),
         **_base_production_resources,
     },
+    hooks={capture_exception_to_sentry},
     config=_job_default_config("mitxonline"),
 )
 

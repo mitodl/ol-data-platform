@@ -1,0 +1,636 @@
+"""Tests for the ingestion inventory checks.
+
+Every rule in INGESTION_INVENTORY_SPEC §3.3 gets a case that fails it, because a
+validator nobody has watched reject anything is a validator that passes
+everything.
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+from ol_dbt_cli.lib.inventory import (
+    Unit,
+    load_units,
+    raw_metadata_column,
+    raw_metadata_columns,
+    render_dbt_metadata_columns,
+    validate_inventory,
+)
+from ol_dbt_cli.lib.validation import ValidationReport
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+REAL_INVENTORY = REPO_ROOT / "ingestion" / "inventory"
+
+# A valid Airbyte-backed unit with two connections, the shape §3.5 established
+# from the live workspace: a bulk connection plus one huge table split out onto
+# its own cadence.
+APP_UNIT: dict[str, Any] = {
+    "schema_version": 1,
+    "deployment": "mitxonline",
+    "layer": "mysql",
+    "scope": "scoped",
+    "strategies": {"qa": "ingest", "local": "fixture"},
+    "loader": "airbyte",
+    "table_prefix": "raw__mitxonline__openedx__mysql__",
+    "airbyte": {
+        "source_kind": "source-mysql",
+        "replication_method": "cursor",
+        "connections": [
+            {
+                "environment": "production",
+                "name": "MITx Online Open edX DB → S3 Data Lake",
+                "status": "active",
+                "sync_interval_hours": 12,
+                "streams": ["auth_user"],
+            },
+            {
+                "environment": "production",
+                "name": "MITx Online Production Open edX Student Module History → S3 Data Lake",
+                "status": "active",
+                "sync_interval_hours": 24,
+                "streams": ["coursewarehistoryextended_studentmodulehistoryextended"],
+            },
+        ],
+    },
+    "tables": [
+        {
+            "name": "auth_user",
+            "raw_table": "raw__mitxonline__openedx__mysql__auth_user",
+            "sync_mode": "incremental_append",
+            "cursor_field": ["id"],
+            "primary_key": [["id"]],
+            "modeled": True,
+        },
+        {
+            "name": "coursewarehistoryextended_studentmodulehistoryextended",
+            "raw_table": ("raw__mitxonline__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended"),
+            "sync_mode": "incremental_append",
+            "cursor_field": ["id"],
+            "modeled": False,
+        },
+    ],
+}
+
+# A dlt-backed singleton, so the loader-conditional rules have both sides.
+DLT_UNIT: dict[str, Any] = {
+    "schema_version": 1,
+    "deployment": "edxorg",
+    "layer": "s3",
+    "scope": "singleton",
+    "strategies": {"qa": "omit", "local": "fixture"},
+    "loader": "dlt",
+    "table_prefix": "raw__edxorg__s3__",
+    "dlt": {
+        "source_module": "ol_dlt.sources.edxorg_s3",
+        "write_disposition": "merge",
+    },
+    "tables": [
+        {
+            "name": "tables__auth_user",
+            "raw_table": "raw__edxorg__s3__tables__auth_user",
+            "sync_mode": "full_refresh_overwrite",
+            "modeled": True,
+        }
+    ],
+}
+
+
+@pytest.fixture
+def inventory(tmp_path: Path) -> Path:
+    """Build a two-unit inventory carrying the real schema and vocabulary."""
+    root = tmp_path / "inventory"
+    (root / "units").mkdir(parents=True)
+    (root / "schema").mkdir()
+    (root / "schema" / "unit.schema.json").write_text((REAL_INVENTORY / "schema" / "unit.schema.json").read_text())
+    (root / "vocabulary.yml").write_text((REAL_INVENTORY / "vocabulary.yml").read_text())
+    _write(root, "mitxonline__mysql", APP_UNIT)
+    _write(root, "edxorg__s3", DLT_UNIT)
+    return root
+
+
+def _write(root: Path, name: str, unit: dict[str, Any]) -> None:
+    (root / "units" / f"{name}.yml").write_text(yaml.safe_dump(unit, sort_keys=False))
+
+
+def _run(root: Path) -> ValidationReport:
+    report = ValidationReport()
+    validate_inventory(root, report)
+    return report
+
+
+def _mutate(root: Path, name: str, base: dict[str, Any], **changes: Any) -> None:
+    unit = copy.deepcopy(base)
+    unit.update(changes)
+    _write(root, name, unit)
+
+
+def _messages(report: ValidationReport) -> str:
+    return " | ".join(issue.message for issue in report.errors)
+
+
+class TestValidInventory:
+    def test_two_unit_fixture_passes(self, inventory: Path) -> None:
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_the_real_vocabulary_and_schema_parse(self) -> None:
+        # Guards against a broken JSON Schema or vocabulary landing unnoticed:
+        # every fixture above depends on both, so a syntax error here fails
+        # everything else confusingly.
+        json.loads((REAL_INVENTORY / "schema" / "unit.schema.json").read_text())
+        vocabulary = yaml.safe_load((REAL_INVENTORY / "vocabulary.yml").read_text())
+        assert vocabulary["deployments"]
+        assert "openedx_notes" in vocabulary["layers"]
+
+
+class TestSchemaShape:
+    def test_unknown_key_is_rejected(self, inventory: Path) -> None:
+        _mutate(inventory, "mitxonline__mysql", APP_UNIT, sync_interval_hours=6)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
+    def test_local_mirror_is_rejected_by_the_schema(self, inventory: Path) -> None:
+        # RFC 12711 §3 rule 1 — the enum omits the value rather than a rule
+        # rejecting it, so it cannot be re-litigated per entry.
+        _mutate(
+            inventory,
+            "mitxonline__mysql",
+            APP_UNIT,
+            strategies={"qa": "ingest", "local": "mirror"},
+        )
+        report = _run(inventory)
+        assert report.errors
+        assert "mirror" in _messages(report)
+
+
+def _mirrored_unit(mirror: dict[str, Any]) -> dict[str, Any]:
+    unit = copy.deepcopy(DLT_UNIT)
+    unit.update(strategies={"qa": "mirror", "local": "fixture"}, mirror_max_age_days=90)
+    unit["tables"][0]["mirror"] = mirror
+    return unit
+
+
+class TestMirrorRules:
+    def test_a_well_formed_mirror_passes(self, inventory: Path) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "copy", "email": "hash"}}))
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_mirror_on_a_unit_qa_does_not_mirror_is_rejected(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["tables"][0]["mirror"] = {"columns": {"_airbyte_extracted_at": "copy"}}
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "strategies.qa is not `mirror`" in _messages(report)
+
+    def test_mirror_must_keep_the_raw_metadata_column(self, inventory: Path) -> None:
+        # The dedup macro reads it through the inventory, where no SQL analysis
+        # of the staging model can see the read.
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"email": "hash"}}))
+        report = _run(inventory)
+        assert "drops its raw metadata column '_dlt_load_id'" in _messages(report)
+
+    def test_unknown_mode_is_rejected_by_the_schema(self, inventory: Path) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "scramble"}}))
+        report = _run(inventory)
+        assert "scramble" in _messages(report)
+
+    @pytest.mark.parametrize(
+        "where",
+        [
+            "true; DROP TABLE x",
+            "true) UNION ALL SELECT email FROM ol_data_lake_production.db.t WHERE (true",
+        ],
+    )
+    def test_where_is_a_predicate_not_a_statement(self, inventory: Path, where: str) -> None:
+        # A UNION would read production columns the allowlist leaves out.
+        mirror = {"columns": {"_dlt_load_id": "copy"}, "where": where}
+        _write(inventory, "edxorg__s3", _mirrored_unit(mirror))
+        report = _run(inventory)
+        assert "contains `;` or a set operator" in _messages(report)
+
+
+class TestRules:
+    def test_local_ingest_requires_a_dlt_unit(self, inventory: Path) -> None:
+        _mutate(
+            inventory,
+            "mitxonline__mysql",
+            APP_UNIT,
+            strategies={"qa": "ingest", "local": "ingest"},
+        )
+        report = _run(inventory)
+        assert "not dlt-backed" in _messages(report)
+
+    def test_local_ingest_is_rejected_on_a_dagster_unit_too(self, inventory: Path) -> None:
+        # dlt is the only supported local ingest target. Adding `dagster`
+        # (rule 7) did not add a second one, so reading the rule as "bans
+        # Airbyte" would let a unit declare a local path nothing implements.
+        unit = copy.deepcopy(DLT_UNIT)
+        unit.pop("dlt")
+        unit.update(
+            deployment="openedx",
+            layer="s3",
+            loader="dagster",
+            table_prefix="raw__openedx__s3__",
+            strategies={"qa": "omit", "local": "ingest"},
+        )
+        unit["tables"] = [
+            {
+                "name": "raw__openedx__s3__course_xml_blocks",
+                "raw_table": "raw__openedx__s3__course_xml_blocks",
+                "sync_mode": "full_refresh_overwrite",
+            }
+        ]
+        _write(inventory, "openedx__s3", unit)
+        report = _run(inventory)
+        assert "not dlt-backed" in _messages(report)
+
+    def test_mirror_requires_max_age(self, inventory: Path) -> None:
+        _mutate(
+            inventory,
+            "mitxonline__mysql",
+            APP_UNIT,
+            strategies={"qa": "mirror", "local": "fixture"},
+        )
+        report = _run(inventory)
+        assert "mirror_max_age_days is not set" in _messages(report)
+
+    def test_scoped_unit_cannot_mirror(self, inventory: Path) -> None:
+        _mutate(
+            inventory,
+            "mitxonline__mysql",
+            APP_UNIT,
+            strategies={"qa": "mirror", "local": "fixture"},
+            mirror_max_age_days=30,
+        )
+        report = _run(inventory)
+        assert "strategies.qa is `mirror` but the unit is scoped" in _messages(report)
+
+    def test_singleton_cannot_ingest_in_qa(self, inventory: Path) -> None:
+        _mutate(inventory, "edxorg__s3", DLT_UNIT, strategies={"qa": "ingest", "local": "fixture"})
+        report = _run(inventory)
+        assert "strategies.qa is `ingest` but the unit is singleton" in _messages(report)
+
+    def test_max_age_without_mirror_is_rejected(self, inventory: Path) -> None:
+        _mutate(inventory, "mitxonline__mysql", APP_UNIT, mirror_max_age_days=30)
+        report = _run(inventory)
+        assert "no strategy is `mirror`" in _messages(report)
+
+    def test_unknown_layer_is_rejected(self, inventory: Path) -> None:
+        _mutate(inventory, "mitxonline__mysql", APP_UNIT, layer="notes")
+        report = _run(inventory)
+        assert "not in vocabulary" in _messages(report)
+
+    def test_unknown_deployment_is_rejected(self, inventory: Path) -> None:
+        _mutate(inventory, "mitxonline__mysql", APP_UNIT, deployment="thirdparty")
+        report = _run(inventory)
+        assert "not in vocabulary" in _messages(report)
+
+    def test_raw_table_must_start_with_the_prefix(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["tables"][0]["raw_table"] = "raw__somewhere__else__auth_user"
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "does not start with the unit's table_prefix" in _messages(report)
+
+    def test_incremental_without_cursor_is_rejected(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        del unit["tables"][0]["cursor_field"]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "declares no cursor_field" in _messages(report)
+
+    def test_xmin_explains_a_missing_cursor_once_per_unit(self, inventory: Path) -> None:
+        # `replication_method: xmin` already says these ride the source-defined
+        # cursor (§3.4), so the per-table error would be the same fact repeated —
+        # 514 times over the real inventory, which is what made it unlandable.
+        # Writing a cursor_field to silence it would invent config Airbyte does
+        # not hold, breaking step 5's empty-preview import.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["replication_method"] = "xmin"
+        for table in unit["tables"]:
+            table.pop("cursor_field", None)
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+
+        assert "declares no cursor_field" not in _messages(report)
+        riders = [issue for issue in report.warnings if "ride xmin" in issue.message]
+        assert len(riders) == 1
+        assert "2 incremental stream(s)" in riders[0].message
+
+    def test_a_single_table_unit_may_use_the_full_table_name_as_its_prefix(self, inventory: Path) -> None:
+        # A deployment's tracking logs are one table, not a `__`-terminated
+        # family: the only such prefix is the whole Open edX namespace, which
+        # swallows that deployment's mysql, api and mongodb units.
+        unit = copy.deepcopy(DLT_UNIT)
+        unit.update(deployment="mitx", layer="tracking_logs", table_prefix="raw__mitx__openedx__tracking_logs")
+        unit["tables"] = [
+            {
+                "name": "tracking_logs",
+                "raw_table": "raw__mitx__openedx__tracking_logs",
+                "sync_mode": "full_refresh_overwrite",
+                "modeled": True,
+            }
+        ]
+        _write(inventory, "mitx__tracking_logs", unit)
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_connection_name_must_survive_the_dagster_selector(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][0]["name"] = "MITx Online Open edX DB → Somewhere"
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "does not end with" in _messages(report)
+
+    def test_dagster_visible_false_permits_a_dropped_connection(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][0]["name"] = "MITx Online Open edX DB → Somewhere"
+        unit["dagster_visible"] = False
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_loader_block_must_match_loader(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["dlt"] = {
+            "source_module": "ol_dlt.sources.edxorg_s3",
+            "write_disposition": "merge",
+        }
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "`dlt:` is present but loader is 'airbyte'" in _messages(report)
+
+    def test_table_carried_by_no_connection_is_rejected(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["streams"] = ["something_else"]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "no connection carries that stream" in _messages(report)
+
+    def test_duplicate_stream_name_within_a_unit_is_rejected(self, inventory: Path) -> None:
+        # Two same-named streams in different source namespaces cannot be
+        # expressed — raw_table is prefix + name, so Airbyte would write both
+        # into one destination table — and the renderer resolves a connection's
+        # stream to its namespace by name.
+        unit = copy.deepcopy(APP_UNIT)
+        second = copy.deepcopy(unit["tables"][0])
+        second["raw_table"] = "raw__mitxonline__openedx__mysql__auth_user_other"
+        second["namespace"] = "edxapp_csmh"
+        unit["tables"].append(second)
+        unit["airbyte"]["connections"][0]["streams"] = ["auth_user", "auth_user"]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "is declared by 2 tables in this unit" in _messages(report)
+
+    def test_table_carried_by_two_connections_is_rejected(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["streams"] = ["auth_user"]
+        unit["tables"] = [unit["tables"][0]]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "is carried 2 times by production connections" in _messages(report)
+
+    def test_the_same_stream_in_two_environments_is_not_a_collision(self, inventory: Path) -> None:
+        # The rule above guards two connections writing one raw table. Each
+        # environment runs its own Airbyte against its own lake, so a unit
+        # ingested in both legitimately carries the same stream twice — and
+        # counting per unit rather than per environment would make every such
+        # unit an error the moment a QA snapshot is merged in.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = None
+        unit["airbyte"]["connections"][1]["status"] = "inactive"
+        unit["airbyte"]["connections"][1]["streams"] = ["auth_user"]
+        unit["tables"] = [unit["tables"][0]]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert not report.errors, _messages(report)
+
+    def test_a_qa_connection_may_omit_its_cadence(self, inventory: Path) -> None:
+        # group_name_to_interval in definitions.py is production-guarded, so
+        # there is no cadence to state for any other environment. Null is the
+        # honest value and the schema has to accept it.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = None
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert not report.errors, _messages(report)
+
+    def test_a_production_connection_may_not_omit_its_cadence(self, inventory: Path) -> None:
+        # The dangerous direction: render_dagster_intervals skips a non-integer,
+        # so the group falls through to definitions.py's 24-hour default and a
+        # 6-hour sync silently becomes daily. Nothing else would report it.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][0]["environment"] = "production"
+        unit["airbyte"]["connections"][0]["sync_interval_hours"] = None
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
+    def test_a_qa_connection_may_not_state_a_cadence(self, inventory: Path) -> None:
+        # The inverse case, and why this is an if/then rather than merely a
+        # nullable field: a number here reads as a schedule nothing will run.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["airbyte"]["connections"][1]["environment"] = "qa"
+        unit["airbyte"]["connections"][1]["sync_interval_hours"] = 12
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors
+        assert "sync_interval_hours" in _messages(report)
+
+    def test_a_connection_must_declare_its_environment(self, inventory: Path) -> None:
+        # Omission is the dangerous direction, not the safe one: an untagged QA
+        # connection reads as production, which is the exact fall-through RFC
+        # 12711 exists to end.
+        unit = copy.deepcopy(APP_UNIT)
+        del unit["airbyte"]["connections"][0]["environment"]
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "'environment' is a required property" in _messages(report)
+
+
+class TestCrossUnit:
+    def test_nested_prefixes_are_allowed(self, inventory: Path) -> None:
+        # This nesting is real: edxorg's `raw__edxorg__s3__` namespace holds
+        # Airbyte's catalog files and, underneath it, dlt's
+        # `raw__edxorg__s3__tables__` database dumps. Forbidding it made the
+        # deployment unexpressible, and it was only ever a proxy for the
+        # duplicate-table rule below, which catches the actual harm.
+        nested = copy.deepcopy(DLT_UNIT)
+        nested["layer"] = "api"
+        nested["table_prefix"] = "raw__edxorg__s3__tables__"
+        nested["tables"] = [
+            {
+                "name": "auth_user",
+                "raw_table": "raw__edxorg__s3__tables__auth_user_two",
+                "sync_mode": "full_refresh_overwrite",
+            }
+        ]
+        _write(inventory, "edxorg__api", nested)
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_duplicate_raw_table_across_units_is_rejected(self, inventory: Path) -> None:
+        duplicate = copy.deepcopy(DLT_UNIT)
+        duplicate["deployment"] = "oll"
+        duplicate["table_prefix"] = "raw__oll__google_sheets__"
+        duplicate["layer"] = "google_sheets"
+        duplicate["tables"] = [
+            {
+                # Same raw table as the edxorg unit, reached from a different unit.
+                "name": "tables__auth_user",
+                "raw_table": "raw__edxorg__s3__tables__auth_user",
+                "sync_mode": "full_refresh_overwrite",
+            }
+        ]
+        _write(inventory, "oll__google_sheets", duplicate)
+        report = _run(inventory)
+        assert "is also declared by" in _messages(report)
+
+    def test_a_scalar_tables_field_is_a_schema_error_not_a_crash(self, inventory: Path) -> None:
+        # Malformed units are still read while reporting, so the accessors have
+        # to tolerate the wrong type rather than assume the schema passed.
+        _mutate(inventory, "mitxonline__mysql", APP_UNIT, tables=3)
+        report = _run(inventory)
+        assert report.errors
+        assert "tables" in _messages(report)
+
+    def test_malformed_units_do_not_masquerade_as_duplicate_keys(self, inventory: Path) -> None:
+        # Two units missing `deployment` both key as `?/?`. Reporting that as a
+        # duplicate key blames the wrong thing — the shape errors are the finding.
+        for name in ("broken_one", "broken_two"):
+            broken = copy.deepcopy(DLT_UNIT)
+            del broken["deployment"]
+            _write(inventory, name, broken)
+        report = _run(inventory)
+        assert "already defined by" not in _messages(report)
+        assert "'deployment' is a required property" in _messages(report)
+
+    def test_duplicate_unit_key_is_rejected(self, inventory: Path) -> None:
+        clone = copy.deepcopy(DLT_UNIT)
+        clone["table_prefix"] = "raw__edxorg__discovery__"
+        clone["tables"] = [
+            {
+                "name": "programs",
+                "raw_table": "raw__edxorg__discovery__programs",
+                "sync_mode": "full_refresh_overwrite",
+            }
+        ]
+        _write(inventory, "edxorg__s3_again", clone)
+        report = _run(inventory)
+        assert "already defined by" in _messages(report)
+
+
+class TestRawMetadataColumn:
+    """The loader-agnostic dedup seam (ol-data-platform#2443).
+
+    The bug being fixed was silent: staging models ordered by
+    `_airbyte_extracted_at` against dlt-produced tables that never had it, so
+    these assert the None case as hard as the Airbyte one.
+    """
+
+    def test_airbyte_unit_resolves_to_the_airbyte_column(self) -> None:
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=copy.deepcopy(APP_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+
+    def test_dlt_unit_resolves_to_the_dlt_load_id(self) -> None:
+        # ol_dlt enables normalize.parquet_normalizer.add_dlt_load_id for every
+        # pipeline, so a dlt unit stamps a monotonic load id to order by.
+        unit = Unit(path=Path("edxorg__s3.yml"), data=copy.deepcopy(DLT_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0]) == "_dlt_load_id"
+
+    def test_dagster_unit_resolves_to_none(self) -> None:
+        data = copy.deepcopy(DLT_UNIT)
+        data["loader"] = "dagster"
+        del data["dlt"]
+        unit = Unit(path=Path("openedx__s3.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_table_override_wins_over_the_loader_default(self) -> None:
+        # The two Salesforce tables still on Airbyte v1's column pair.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = "_airbyte_emitted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_emitted_at"
+
+    def test_unit_override_applies_to_every_table(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["raw_metadata_column"] = "_airbyte_emitted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert all(raw_metadata_column(unit, table) == "_airbyte_emitted_at" for table in unit.tables)
+
+    def test_table_override_wins_over_the_unit_override(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["raw_metadata_column"] = "_airbyte_emitted_at"
+        data["tables"][0]["raw_metadata_column"] = "_airbyte_extracted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+
+    def test_explicit_null_override_beats_an_airbyte_loader(self) -> None:
+        # `raw_metadata_column:` with no value is a declaration, not an omission,
+        # so it must not fall through to the loader default.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = None
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_map_covers_every_declared_table(self, inventory: Path) -> None:
+        units = load_units(inventory)
+        mapping = raw_metadata_columns(units)
+        declared = {table["raw_table"] for unit in units for table in unit.tables}
+        assert set(mapping) == declared
+
+    def test_real_inventory_orders_edxorg_tables_by_source_file_mtime(self) -> None:
+        # edxorg/mysql appends, and a backfill walks the landing zone in
+        # whatever order it likes, so `_dlt_load_id` records ingest order
+        # rather than which export a row came from. The source file's mtime is
+        # what picks the newest version of a record.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__tables__auth_user"] == "_file_modified_at"
+
+    def test_real_inventory_resolves_dagster_units_to_none(self) -> None:
+        # A dagster-loaded unit writes no metadata column, so its tables must
+        # not be deduplicated: ordering a table by a column it does not carry
+        # is the regression this seam was filed for (ol-data-platform#2443).
+        # This resolves through the loader default rather than an explicit
+        # null -- edxorg/mysql was the real inventory's last explicit null, so
+        # the key-presence-beats-truthiness path is covered only synthetically,
+        # by test_explicit_null_override_beats_an_airbyte_loader.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__course_xml_blocks"] is None
+
+    def test_real_inventory_gives_reloaded_dlt_units_the_load_id(self) -> None:
+        # A dlt unit carrying no override takes the new default, which is what
+        # makes the edxorg entry above removable rather than permanent.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
+
+
+class TestGeneratedMetadataMacro:
+    def test_generated_macro_is_current(self) -> None:
+        """The committed macro must match the inventory it is generated from.
+
+        Without this the failure is silent in the worst way: an inventory edit
+        lands, the macro keeps the old answer, and dbt goes on deduplicating a
+        cutover source on a column it no longer has.
+        """
+        expected = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        macro = REPO_ROOT / "src" / "ol_dbt" / "macros" / "_raw_metadata_columns.sql"
+        assert macro.read_text() == expected, "Run `ol-dbt inventory metadata-columns --write`."
+
+    def test_rendered_macro_emits_none_unquoted(self) -> None:
+        # `'none'` would be a truthy string in Jinja and silently order by a
+        # column named none; the bare literal is what makes the pass-through fire.
+        rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        assert "'raw__edxorg__s3__course_xml_blocks': none," in rendered

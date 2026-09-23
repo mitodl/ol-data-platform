@@ -10,17 +10,27 @@ blocking the rest of the run behind it.
 from collections.abc import Iterable
 from typing import Any
 
-from dagster import AssetExecutionContext, AssetsDefinition, Definitions
+from dagster import (
+    AssetExecutionContext,
+    AssetsDefinition,
+    Definitions,
+    MaterializeResult,
+)
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     edxorg_s3,
+    keycloak,
     mit_climate,
     mit_edx_programs,
     mitpe,
+    mitxonline_app,
     oll,
     podcast_rss,
+    posthog_events,
+    youtube,
 )
-from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
+from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
+from ol_orchestrate.lib.failures import with_failure_hooks
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
@@ -73,6 +83,54 @@ podcast_rss_assets = build_ingest_assets(
     source=podcast_rss.build_source(),
     pipeline=podcast_rss.podcast_rss_pipeline,
 )
+keycloak_assets = build_ingest_assets(
+    name="keycloak_ingest",
+    source=keycloak.build_source(),
+    pipeline=keycloak.keycloak_pipeline,
+)
+# Environments where dlt owns the MITx Online app-database load.
+#
+# Production is deliberately absent, and it is not a preference. The Airbyte
+# connection "MITx Online Production App DB → S3 Data Lake" still loads that
+# unit there, and the lakehouse code location builds one asset per stream keyed
+# ol_warehouse_raw_data/raw__mitxonline__app__postgres__<table> -- byte-for-byte
+# the keys these dlt assets produce (definitions.py:182, and dagster_airbyte
+# keys on stream_prefix + stream_name). Registering both is a duplicate asset
+# key across two code locations, and two loaders writing one Iceberg table.
+#
+# QA has nothing to collide with: per the 2026-08-28 Airbyte snapshot its
+# connection is named "MITx Online QA Application DB → OL S3 Glue Data Lake -
+# QA", which the lakehouse selector (endswith "s3 data lake") drops, and it
+# still points at the legacy Glue destination that was never migrated to
+# Iceberg. That is why QA raw for this unit is frozen at 2025-01-19 despite the
+# connection being enabled, and it is what RFC 12711 step 8 exists to fix.
+#
+# Add "production" here in the SAME change that disables the Airbyte connection
+# and flips the inventory unit to `loader: dlt`. Never before.
+MITXONLINE_APP_DLT_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+
+mitxonline_app_assets = (
+    build_ingest_assets(
+        name="mitxonline_app_ingest",
+        source=mitxonline_app.build_source(),
+        pipeline=mitxonline_app.mitxonline_app_pipeline,
+    )
+    if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    else None
+)
+youtube_assets = build_ingest_assets(
+    name="youtube_ingest",
+    source=youtube.build_source(),
+    pipeline=youtube.youtube_pipeline,
+)
+# Resumes from the dlt cursor every run. A backfill is a deliberate
+# `posthog_events_source(start_date=...)` invocation (see the source's
+# __main__), not something a scheduled run can fall into.
+posthog_events_assets = build_ingest_assets(
+    name="posthog_events_ingest",
+    source=posthog_events.build_source(),
+    pipeline=posthog_events.posthog_events_pipeline,
+)
 
 
 # --- edxorg_s3: custom upstream deps + one op per table ---------------------
@@ -84,6 +142,84 @@ podcast_rss_assets = build_ingest_assets(
 # process-local, never shared across them), but still sharing that one pod's
 # fixed CPU/memory budget. Tune the slot count in the Dagster instance UI.
 _EDXORG_S3_POOL = "edxorg_s3"
+
+# Each batch is one dlt load of at most `budget_bytes` of source TSV (see
+# ol_dlt.sources.edxorg_s3), so one Dagster run walks the backlog a batch at a
+# time instead of holding a whole table's load in memory. The cap keeps a run
+# from spinning forever on a source that never drains; the cursor is saved per
+# batch, so the next run picks up where this one stopped. 11.1 TB of
+# courseware_studentmodule at 4 GiB per batch is ~2,800 batches, so the
+# backlog spans many runs by design.
+_MAX_BATCHES_PER_RUN = 200
+
+
+def _normalized_row_count(pipeline: Any, table_name: str) -> int:
+    """Rows this pipeline's last load normalized into ``table_name``.
+
+    Zero means the batch found no files the cursor had not already covered,
+    which is how the loop learns the backlog is drained. Read from the trace
+    rather than the load info because dagster-dlt hands back materializations,
+    not the LoadInfo.
+    """
+    trace = pipeline.last_trace
+    if trace is None or trace.last_normalize_info is None:
+        return 0
+    return trace.last_normalize_info.row_counts.get(table_name, 0)
+
+
+def load_in_batches(
+    *,
+    context: AssetExecutionContext,
+    dlt: DagsterDltResource,
+    table_name: str,
+    pipeline: Any,
+    resource_name: str,
+) -> tuple[list[Any], int, int]:
+    """Run one dlt load per byte budget until the table's backlog is drained.
+
+    Returns the last batch's materializations, how many batches ran, and the
+    rows they loaded between them.
+
+    A batch that normalizes zero rows means the cursor already covers every
+    file in the landing zone, which is the only stop condition that does not
+    need a second listing of the bucket. Each batch commits its own cursor, so
+    a pod killed mid-run costs one batch rather than the run.
+    """
+    results: list[Any] = []
+    rows_loaded = 0
+    batches = 0
+
+    for batch in range(1, _MAX_BATCHES_PER_RUN + 1):
+        # A fresh source per batch: a DltSource's resources are generators,
+        # spent once the batch that consumed them ends.
+        results = list(
+            dlt.run(
+                context=context,
+                dlt_source=edxorg_s3.edxorg_s3_source(tables=[table_name]),
+                loader_file_format="parquet",
+            )
+        )
+        batches = batch
+        batch_rows = _normalized_row_count(pipeline, resource_name)
+        rows_loaded += batch_rows
+        context.log.info(
+            "Batch %s of %s loaded %s rows (%s total).",
+            batch,
+            table_name,
+            batch_rows,
+            rows_loaded,
+        )
+        if batch_rows == 0:
+            break
+    else:
+        context.log.warning(
+            "%s hit the %s batch cap with rows still loading; the next run "
+            "resumes from the saved cursor.",
+            table_name,
+            _MAX_BATCHES_PER_RUN,
+        )
+
+    return results, batches, rows_loaded
 
 
 def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
@@ -98,6 +234,7 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     """
     source = edxorg_s3.edxorg_s3_source(tables=[table_name])
     pipeline = edxorg_s3.edxorg_s3_pipeline_for(table_name)
+    resource_name = f"raw__edxorg__s3__tables__{table_name}"
 
     @dlt_assets(
         dlt_source=source,
@@ -110,11 +247,27 @@ def _build_edxorg_s3_table_asset(table_name: str) -> AssetsDefinition:
     def _asset(
         context: AssetExecutionContext, dlt: DagsterDltResource
     ) -> Iterable[Any]:
-        yield from dlt.run(
+        results, batches, rows_loaded = load_in_batches(
             context=context,
-            dlt_source=source,
-            loader_file_format="parquet",
+            dlt=dlt,
+            table_name=table_name,
+            pipeline=pipeline,
+            resource_name=resource_name,
         )
+
+        # One materialization per asset, not one per batch: Dagster rejects a
+        # step that materializes the same asset twice. The last batch's
+        # metadata describes an empty catch-up load, so the counts that
+        # describe the whole run are added here.
+        for result in results:
+            yield MaterializeResult(
+                asset_key=result.asset_key,
+                metadata={
+                    **dict(result.metadata or {}),
+                    "batches": batches,
+                    "rows_loaded": rows_loaded,
+                },
+            )
 
     return _asset
 
@@ -125,12 +278,18 @@ edxorg_s3_table_assets = [
 
 
 defs = Definitions(
-    assets=[
-        oll_assets,
-        mitpe_assets,
-        mit_climate_assets,
-        mit_edx_programs_assets,
-        podcast_rss_assets,
-        *edxorg_s3_table_assets,
-    ],
+    assets=with_failure_hooks(
+        [
+            oll_assets,
+            mitpe_assets,
+            mit_climate_assets,
+            mit_edx_programs_assets,
+            podcast_rss_assets,
+            keycloak_assets,
+            *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            youtube_assets,
+            posthog_events_assets,
+            *edxorg_s3_table_assets,
+        ]
+    ),
 )

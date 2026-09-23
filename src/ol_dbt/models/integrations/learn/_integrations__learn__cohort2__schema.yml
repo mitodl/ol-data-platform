@@ -27,16 +27,30 @@ models:
   - name: etl_source
     description: Always 'mit_climate'.
     tests: [not_null]
+  - name: description
+    description: Article summary.
   - name: url
     description: Absolute URL for the article (base URL prepended to the relative
       path).
   - name: image_url
     description: Absolute URL for the article cover image, or NULL if absent.
+  - name: image_alt
+    description: Alt text for the article cover image, or NULL if absent.
   - name: topics
     description: Comma-separated topic labels (normalized from pipe-separated raw
       field).
+  - name: footnotes
+    description: Article footnotes/citations, as raw text from the CMS.
+  - name: byline
+    description: Article author byline.
   - name: feed_type
     description: Source feed — 'explainer' or 'ask_mit_climate'.
+  - name: published
+    description: >
+      Always true; the MIT Climate API only returns published articles.
+  - name: platform
+    description: >
+      Always 'climate' (differs from etl_source, which is 'mit_climate').
 
 - name: integrations__learn__mitpe_courses
   description: >
@@ -62,6 +76,22 @@ models:
   - name: etl_source
     description: Always 'mitpe'.
     tests: [not_null]
+  - name: description
+    description: Course description.
+  - name: url
+    description: Absolute URL for the course (base URL prepended to the relative path).
+  - name: image_url
+    description: Absolute URL for the course's cover image, or NULL if absent.
+  - name: image_alt
+    description: Alt text for the course's cover image, or NULL if absent.
+  - name: topics
+    description: Comma-separated topic labels (normalized from pipe-separated raw
+      field).
+  - name: published
+    description: >
+      Always true; the MIT PE feeds API only returns published courses.
+  - name: platform
+    description: Always 'mitpe', matches etl_source.
   - name: resource_type
     description: Always 'course'.
 
@@ -87,6 +117,23 @@ models:
   - name: etl_source
     description: Always 'oll'.
     tests: [not_null]
+  - name: description
+    description: Course description from the OLL spreadsheet.
+  - name: url
+    description: Course URL from the OLL spreadsheet.
+  - name: image_url
+    description: Course image URL from the OLL spreadsheet.
+  - name: topics
+    description: Comma-separated topic labels (normalized from pipe-separated raw
+      field).
+  - name: published
+    description: >
+      Always true; only the most recent offering per course (by year, then
+      semester) is exposed.
+  - name: platform
+    description: Always 'oll', matches etl_source.
+  - name: resource_type
+    description: Always 'course'.
   - name: runs
     description: >
       Single run record in pipe-delimited format: run_id|||true
@@ -119,6 +166,12 @@ models:
   - name: etl_source
     description: Always 'mit_edx'.
     tests: [not_null]
+  - name: description
+    description: Program description from the edX.org Discovery API.
+  - name: url
+    description: Program marketing URL on edx.org.
+  - name: image_url
+    description: Program image URL from the edX.org Discovery API.
   - name: topics_json
     description: >
       JSON array string of subject objects: [{"name": "Engineering"}, ...].
@@ -135,5 +188,8 @@ models:
       being yielded -- this compares each row's _dlt_load_id against the
       table-wide max to distinguish still-active from merge-left-behind rows).
     tests: [not_null]
+  - name: platform
+    description: >
+      Always 'edxorg' (differs from etl_source, which is 'mit_edx').
   - name: resource_type
     description: Always 'program'.

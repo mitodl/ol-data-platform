@@ -17,9 +17,10 @@ from ol_dbt_cli.commands.validate import (
     _print_json_report,
     _print_text_report,
     _resolve_model_targets,
+    _resolve_star_with_qualify,
     _resolve_star_with_registry,
 )
-from ol_dbt_cli.lib.sql_parser import ParsedModel
+from ol_dbt_cli.lib.sql_parser import ParsedModel, parse_model_file
 from ol_dbt_cli.lib.yaml_registry import (
     YamlColumn,
     YamlModel,
@@ -90,8 +91,8 @@ class TestYamlSqlSync:
         report = ValidationReport()
         _check_yaml_sql_sync("stg_users", yaml_registry, parsed, report)
 
-        warnings = [i for i in report.issues if i.severity == Severity.WARNING]
-        assert any("user_name" in i.message for i in warnings)
+        errors = [i for i in report.issues if i.severity == Severity.ERROR]
+        assert any("user_name" in i.message for i in errors)
 
     def test_no_issues_when_in_sync(self) -> None:
         registry = _simple_registry("user_id", "user_email")
@@ -419,6 +420,43 @@ class TestResolveStarWithRegistry:
         assert result is None
 
 
+class TestResolveStarWithQualify:
+    """Full-schema qualify() fallback for stars the single-source heuristics miss."""
+
+    def test_resolves_union_chain_via_parsed_upstreams(self, tmp_path: Path) -> None:
+        # A star from a CTE that UNIONs two `select * from ref` CTEs — the exact
+        # shape (int__combined__course_xml_blocks) the registry lookup cannot expand.
+        model = tmp_path / "combined_model.sql"
+        model.write_text(
+            textwrap.dedent(
+                """
+                with
+                    a as (select * from {{ ref('up_a') }}),
+                    b as (select * from {{ ref('up_b') }}),
+                    combined as (select * from a union all select * from b)
+                select * from combined
+                """
+            )
+        )
+        parsed = parse_model_file(model)
+        assert parsed.has_star  # single-source heuristics leave it unresolved
+        assert _resolve_star_with_registry(parsed, YamlRegistry(), None, {}) is None
+
+        sql_models = {
+            "up_a": ParsedModel(name="up_a", output_columns={"id", "name"}),
+            "up_b": ParsedModel(name="up_b", output_columns={"id", "name"}),
+        }
+        result = _resolve_star_with_qualify(parsed, YamlRegistry(), None, sql_models)
+        assert result == {"id", "name"}
+
+    def test_returns_none_when_no_upstream_columns_known(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("with c as (select * from {{ ref('up') }}) select * from c")
+        parsed = parse_model_file(model)
+        assert parsed.has_star
+        assert _resolve_star_with_qualify(parsed, YamlRegistry(), None, {}) is None
+
+
 class TestBrokenRefColumns:
     """Tests for _check_broken_ref_columns — existing breakage detection."""
 
@@ -528,6 +566,34 @@ class TestBrokenRefColumns:
         )
         assert not report_obj.errors
 
+    def test_duplicate_refs_report_broken_column_once(self, tmp_path: Path) -> None:
+        """A model that ref()s the same upstream twice (self-join) reports a broken column once."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = "select a.user_id, a.deleted_col from ref_stg_users a join ref_stg_users b on a.user_id = b.parent_id"
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users", "stg_users"],  # duplicate — mirrors strip_jinja's per-call list
+            placeholder_map={"ref_stg_users": "stg_users"},
+            sql=sql,
+        )
+        upstream = ParsedModel(name="stg_users", output_columns={"user_id", "parent_id"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": upstream},
+            report=report_obj,
+        )
+        broken = [e for e in report_obj.errors if e.check == "broken_ref_columns"]
+        assert len(broken) == 1
+        assert "deleted_col" in broken[0].message
+
     def test_skips_when_upstream_unknown(self, tmp_path: Path) -> None:
         """Silently skips when the upstream model has no resolvable output columns."""
         from ol_dbt_cli.commands.validate import _check_broken_ref_columns
@@ -553,13 +619,81 @@ class TestBrokenRefColumns:
         )
         assert not report_obj.issues  # no warning or error — skip silently
 
+    def test_detects_broken_column_through_join_via_scope_fallback(self, tmp_path: Path) -> None:
+        """A broken column read through a JOIN (heuristic skips) is caught by the scope fallback."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel, get_columns_read_from_ref
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = (
+            "select u.user_id, u.deleted_col, e.grade "
+            "from ref_stg_users u join ref_stg_enroll e on u.user_id = e.user_id"
+        )
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users", "stg_enroll"],
+            placeholder_map={"ref_stg_users": "stg_users", "ref_stg_enroll": "stg_enroll"},
+            sql=sql,
+        )
+        # The heuristic bails on the JOIN — without the fallback this would go unchecked.
+        assert get_columns_read_from_ref(downstream, "stg_users") is None
+        users = ParsedModel(name="stg_users", output_columns={"user_id"})
+        enroll = ParsedModel(name="stg_enroll", output_columns={"user_id", "grade"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": users, "stg_enroll": enroll},
+            report=report_obj,
+        )
+        errors = report_obj.errors
+        assert len(errors) == 1
+        assert errors[0].check == "broken_ref_columns"
+        assert "deleted_col" in errors[0].message
+        assert "ref('stg_users')" in errors[0].message
+
+    def test_join_of_valid_columns_produces_no_false_positive(self, tmp_path: Path) -> None:
+        """The scope fallback must not flag valid JOIN columns as broken."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = (
+            "select u.user_id, u.email, e.grade "
+            "from ref_stg_users u join ref_stg_enroll e on u.user_id = e.user_id "
+            "where u.status = 'active'"
+        )
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users", "stg_enroll"],
+            placeholder_map={"ref_stg_users": "stg_users", "ref_stg_enroll": "stg_enroll"},
+            sql=sql,
+        )
+        users = ParsedModel(name="stg_users", output_columns={"user_id", "email", "status"})
+        enroll = ParsedModel(name="stg_enroll", output_columns={"user_id", "grade"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": users, "stg_enroll": enroll},
+            report=report_obj,
+        )
+        assert not report_obj.errors
+
     def test_skips_when_consumed_columns_unknown(self, tmp_path: Path) -> None:
         """Silently skips when the downstream SQL cannot determine which columns are read."""
         from ol_dbt_cli.commands.validate import _check_broken_ref_columns
         from ol_dbt_cli.lib.sql_parser import ParsedModel
         from ol_dbt_cli.lib.yaml_registry import YamlRegistry
 
-        # No SQL file path → get_columns_read_from_ref returns None
+        # No SQL file path → get_columns_read_from_ref returns None, and no source_path
+        # means the scope fallback also can't read the SQL → still skips.
         downstream = ParsedModel(
             name="downstream",
             refs=["stg_users"],

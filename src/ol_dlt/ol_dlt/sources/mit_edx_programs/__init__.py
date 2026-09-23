@@ -138,4 +138,4 @@ mit_edx_programs_pipeline = config.pipeline_for("mit_edx_programs")
 
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the source (uniform entrypoint for the Dagster wrapper)."""
-    return mit_edx_programs_source()
+    return config.with_nullable_load_id(mit_edx_programs_source())

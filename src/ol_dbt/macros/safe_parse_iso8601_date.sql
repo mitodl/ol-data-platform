@@ -34,3 +34,18 @@
         ELSE NULL
     END
 {% endmacro %}
+
+{% macro starrocks__safe_parse_iso8601_date(varchar_field) %}
+    {# StarRocks: str_to_date returns NULL on parse failure, avoiding hard errors #}
+    CASE
+        WHEN {{ varchar_field }} IS NULL THEN NULL
+        WHEN {{ varchar_field }} = '' THEN NULL
+        -- Handle format: YYYY-MM-DDTHH:MM:SS.sss or YYYY-MM-DDTHH:MM:SS
+        WHEN LENGTH({{ varchar_field }}) >= 19 THEN
+            str_to_date(SUBSTRING({{ varchar_field }}, 1, 10), '%Y-%m-%d')
+        -- Handle format: YYYY-MM-DD
+        WHEN LENGTH({{ varchar_field }}) = 10 THEN
+            str_to_date({{ varchar_field }}, '%Y-%m-%d')
+        ELSE NULL
+    END
+{% endmacro %}

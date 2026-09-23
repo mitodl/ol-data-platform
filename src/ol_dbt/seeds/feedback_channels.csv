@@ -1,0 +1,9 @@
+channel_slug,channel_name,is_solicited
+email,Email,false
+web_form,Web Form,false
+in_product_widget,In-Product Widget,true
+chat,Chat,false
+forum_post,Forum Post,false
+assessment,Assessment,true
+api,API,false
+mobile,Mobile,false

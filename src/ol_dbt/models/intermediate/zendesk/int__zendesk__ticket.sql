@@ -85,6 +85,10 @@ select
     , ticket.ticket_source_channel
     , ticket.ticket_source_email
     , ticket.ticket_source_rel
+    -- from ticket, not user: the requester-vs-agent comment comparison in
+    -- int__feedback__zendesk needs the id, and a requester missing from
+    -- stg__zendesk__user must still carry it or the ticket drops out
+    , ticket.ticket_requester_user_id
     , requester.user_name as ticket_requester
     , assignee.user_name as ticket_assignee
     , submitter.user_name as ticket_submitter

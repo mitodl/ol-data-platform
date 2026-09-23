@@ -5,6 +5,15 @@ models:
   description: MITx and xPro Program Summary report. A count of all users, enrollments
     (audit and verified), certificates and program credentials aggregated for each
     program.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: program_name
     description: str, name of the program. If program is split over multiple tracks,
@@ -62,6 +71,22 @@ models:
     A count of posts replied, posts created, average percent grade, percent problems
     attempted, number of problems, problems attempted, video duration, estimated time
     played, and number of page views.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, name of the platform
@@ -124,7 +149,29 @@ models:
   description: Enrollment detail report for MITxOnline, xPro and edX.org courses.
     A detailed view of enrollments, course runs, course certificates, orders, and
     user information for each enrollment.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
+  - name: enrollment_key
+    description: string, surrogate key from tfact_enrollment identifying a specific
+      enrollment. Unlike courserunenrollment_id (each platform's own local ID, which
+      can collide across platforms), this column is intended to be unique per row
+      -- warn-only for now due to a known, separate issue where tfact_certificate's
+      user_fk can go stale relative to dim_user after a dim_user full-refresh (see
+      certificate_id 406875 investigation).
+    tests:
+    - not_null
+    - unique:
+        config:
+          severity: warn
   - name: platform
     description: string, application where the data is from
     tests:
@@ -265,6 +312,22 @@ models:
   description: Learners video engagement - play, pause, seek, or stop video actions
     from MITx Online, xPro, edX.org, Residential MITx with calculated counts for total
     video events, distinct videos watched, and max video index.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: str, user email on the corresponding platform
@@ -300,6 +363,22 @@ models:
 - name: cheating_detection_report
   description: Problem and grade information that is associated with a particular
     course run, platform, and learner that is used for cheating detection analysis.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
@@ -376,6 +455,22 @@ models:
 
 - name: student_risk_probability_report
   description: A report that contains student risk probability scores and course grade
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, name of the platform
@@ -404,6 +499,16 @@ models:
   description: AI chatbot interactions from Learn AI application including TutorBot,
     ResourceRecommendationBot, SyllabusBot and VideoGPTBot. No personal information
     is included in this report.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - mitx/api
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/tracking_logs
   columns:
   - name: ai_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
@@ -433,6 +538,20 @@ models:
 - name: organization_administration_report
   description: A report showing certificates/completions for later roll-up at the
     organizational level.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: courserun_readable_id
     description: string, unique string to identify a course run
@@ -469,6 +588,23 @@ models:
 
 - name: instructor_module_report
   description: A report showing chatbot data for later roll-up at the instructor level.
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -511,6 +647,15 @@ models:
 
 - name: mitxonline_video_engagements_w_video_counts
   description: A report that contains mitxonline video engagement data.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -538,6 +683,15 @@ models:
 
 - name: Enrollment_Activity_Counts_Dataset
   description: A report that contains enrollment activity metrics
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -587,6 +741,16 @@ models:
 
 - name: learner_demographics_and_cert_info
   description: A report that contains learner demographics and cerificate information
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_hashed_id
     description: str, user primary key
@@ -635,6 +799,8 @@ models:
   - name: dedp_public_policy_program_cert_ind
     description: str, indictor showing if the user has recieved any DEDP Public Policy
       program credentials
+  - name: any_dedp_program_enroll_ind
+    description: str, indicator showing if the user has enrolled in any DEDP program
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -643,6 +809,16 @@ models:
 - name: combined_enrollments_with_gender_and_date
   description: A report that contains learner enrollment details with demographic
     information
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: platform
     description: str, name of the platform
@@ -776,6 +952,22 @@ models:
 - name: engagement_problem_completion_summary
   description: A report that contains learner engagement details with problem completion
     information
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -807,6 +999,22 @@ models:
 
 - name: engagement_problem_completion_raw
   description: A report that contains learner engagement info with problem data
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: str, name of the platform
@@ -847,6 +1055,22 @@ models:
   description: Page engagement report showing user activity at the unit, subsection,
     and section level across course runs. Joins page engagement facts with course
     content hierarchy and user information.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, email address of the user. May be null when user_fk is null.
@@ -902,6 +1126,16 @@ models:
   description: Program enrollment report enriched with user demographic data and course
     completion details. Extends marts__combined_program_enrollment_detail with user
     profile information, capstone completion indicator, and program completion duration.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: platform_name
     description: string, name of the platform (e.g. edX.org, MITx Online, xPRO)
@@ -950,6 +1184,10 @@ models:
     description: timestamp, specifying when an enrollment was initially created
   - name: programenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment changed
+  - name: programenrollment_enrollment_mode
+    description: str, program enrollment mode, e.g. 'audit' or 'verified'. Only MITx
+      Online tracks a program-level enrollment mode, so this is null for edX.org,
+      MicroMasters and xPRO enrollments.
   - name: programcertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: programcertificate_is_revoked
@@ -1022,6 +1260,22 @@ models:
   description: Problem engagement detail report showing user performance at the problem
     level across course runs. Includes attempt counts, grade information, and course
     content hierarchy.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform
@@ -1085,6 +1339,13 @@ models:
     and course identification fields. Shows user engagement metrics including course
     events, problem submissions, video plays, and discussion participation aggregated
     by date, user, and course run.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: courseactivity_date
     description: date, the date when the course activity occurred
@@ -1141,6 +1402,22 @@ models:
   description: Combined video engagement report across all platforms with video counts
     per chapter. Shows user video watching activity including total videos available
     in each chapter and how many the user has watched.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: user_email
     description: string, user email address. May be null for some xPRO Emeritus learners.
@@ -1186,6 +1463,19 @@ models:
 - name: course_staff_report
   description: Report of course staff members (instructors, staff, etc.) across all
     platforms and their last course activity date
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, platform code identifying the source platform (e.g. mitxonline,
@@ -1227,6 +1517,19 @@ models:
 
 - name: data_detail_nav
   description: Report of navigatation events
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform (e.g. MITx Online, xPro, edX.org, Residential
@@ -1259,6 +1562,22 @@ models:
 - name: data_detail_problems
   description: Report of problem events enriched with problem metadata and course
     title
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
@@ -1303,6 +1622,22 @@ models:
 
 - name: data_detail_video
   description: Report of video events enriched with video metadata and course title
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform
     description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
@@ -1335,6 +1670,12 @@ models:
 
 - name: dedp_financial_assistance
   description: Report of users and their financial assistance status for DEDP programs
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_email
     description: string, email address of the user
@@ -1369,3 +1710,212 @@ models:
   - name: user_latest_row_desc
     description: integer, row number indicating the latest row for each user based
       on application and course run dates
+
+- name: edxorg_mitlearn_user_mapping
+  description: Mapping of edX.org user IDs to MIT Learn user IDs for the same person,
+    joined through their shared MITx Online account.
+  tests:
+  - dbt_utils.expression_is_true:
+      expression: edxorg_user_id is not null or mitlearn_application_user_id is not
+        null
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: mitxonline_openedx_user_id
+    description: string, Open edX user ID of the MITx Online account. May be null.
+    tests:
+    - unique:
+        config:
+          severity: warn
+  - name: edxorg_user_id
+    description: int, user id for edX.org. Null if the user has no edX.org account
+      or the link to it could not be confirmed.
+    tests:
+    - unique:
+        config:
+          severity: warn
+  - name: mitlearn_application_user_id
+    description: int, unique identifier for the user on MIT Learn. Null if the user
+      has no MIT Learn account.
+    tests:
+    - unique:
+        config:
+          severity: warn
+
+- name: orders_with_product_report
+  description: Combined orders mart table with product name added
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: combined_orders_hash_id
+    description: int, primary key for this table. At the grain of order id, line id,
+      and platform.
+  - name: platform
+    description: string, describes platform associated with the order (edX.org, mitxonline,
+      mitxpro, or bootcamps).
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign key for order table. For edX.org, it refers to order
+      table in MicroMasters application.
+  - name: line_id
+    description: int, foreign key for line table. For edX.org, it refers to line table
+      in MicroMasters application.
+  - name: coupon_code
+    description: string, discount code for the redeemed coupon if applicable
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table.
+      For edX.org, it refers to ecommerce_coupon table in MicroMasters application.
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: coupon_name
+    description: string, human readable name for the coupon payment
+  - name: coupon_redeemed_on
+    description: timestamp, specifying when the coupon was redeemed by the user for
+      for fulfilled or refunded orders
+  - name: coupon_type
+    description: string, type of the coupon which describes what circumstances the
+      coupon can be redeemed.
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
+  - name: courserun_id
+    description: int, foreign key in courses_courserun. Null for edX.org.
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: discount
+    description: str, discount applied to the order in a readable format. The value
+      is always an amount taken off the list price of the order, e.g., "$100" means
+      $100 was taken off the price. "30%" means the price was reduced by 30%.
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created. If this
+      is a b2b order it will be the timestamp that order was created otherwise it
+      will be when the regular order was created. For edX.org, it is the timestamp
+      that order was created in MicroMasters application.
+    tests:
+    - not_null
+  - name: order_reference_number
+    description: string, order reference number to identify an order in the corresponding
+      application database, e.g., mitxonline-production-20. For edX.org, it refers
+      to the order in MicroMasters application.
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "cancelled", "created", "declined",
+      "errored", "failed", "fulfilled", "refunded", "partially_refunded",  "pending",
+      "review".
+    tests:
+    - not_null
+  - name: order_tax_amount
+    description: numeric, the amount of tax paid. Only applicable for xPro for now.
+  - name: order_tax_country_code
+    description: str, the country code where the tax was applied. Only applicable
+      for xPro for now.
+  - name: order_tax_rate
+    description: numeric, the tax rate to apply. Only applicable for xPro for now.
+  - name: order_tax_rate_name
+    description: string, name of the tax rate assessed. Only applicable for xPro for
+      now.
+  - name: order_total_price_paid_plus_tax
+    description: numeric, total order amount plus the amount of tax paid. For xPro,
+      this is calculated order_total_price_paid+order_tax_amount. For other platform,
+      this is the same as order_total_price_paid
+  - name: order_total_price_paid
+    description: number, total order amount
+  - name: order_type
+    description: str, type of order for example- B2B, B2C, staff, or Boeing
+  - name: product_id
+    description: int, foreign key for product table. May be null for bootcamps and
+      edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: product_readable_id
+    description: string, the product identifier either referring to courserun_readable_id,
+      programrun_readable_id, or program_readable_id. May be null for bootcamps and
+      edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: product_type
+    description: string, readable product type - either course run or program. May
+      be null for bootcamps and edX.org
+  - name: receipt_authorization_code
+    description: str, either the authorization code from cybersource payment transaction,
+      or approvalCode from cybersource refund transaction (MITx Online only).
+  - name: receipt_bill_to_address_country
+    description: string, address country from cybersource payment
+  - name: receipt_bill_to_address_state
+    description: string, address state from cybersource payment
+  - name: receipt_payment_amount
+    description: numeric, total amount for the order - req_amount from cybersource
+      payment
+  - name: receipt_payment_currency
+    description: str, currency used for the order - req_currency from cybersource
+      payment transaction
+  - name: receipt_payment_card_number
+    description: str, last 4 digits credit card number from cybersource payment transaction
+  - name: receipt_payment_card_type
+    description: str, name of the card type, card_type_name from cybersource payment
+      transaction, e.g., Visa
+  - name: receipt_payment_method
+    description: string, payment method from cybersource payment transaction. Value
+      could be 'paypal' or 'card'.
+  - name: receipt_payment_timestamp
+    description: string, the signed_date_time from cybersource payment transaction
+  - name: receipt_payment_transaction_type
+    description: string, type of transaction - req_transaction_type from cybersource
+      payment transaction, e.g., sale
+  - name: receipt_payment_transaction_uuid
+    description: string, unique merchant-generated identifier - req_transaction_uuid
+      from cybersource payment transaction, e.g., 02815b4f08e56882751a043839b7b481
+  - name: receipt_payer_name
+    description: string, payer name from cybersource payment transaction
+  - name: receipt_payer_email
+    description: string, payer email address from cybersource payment transaction
+  - name: receipt_payer_ip_address
+    description: string, payer IP address from cybersource payment transaction
+  - name: receipt_transaction_id
+    description: string, unique identifier - either transaction_id from cybersource
+      payment or refund transaction, e.g., 3735553783662130706689, OR unique UUID
+      if no payment required.
+  - name: redeemed_email
+    description: string, email of MITxPRO purchaser
+  - name: req_reference_number
+    description: string, cybersource req_reference_number from cybersource payment
+      transaction, e.g., mitxonline-production-1
+  - name: unit_price
+    description: numeric, price for the order line item before discount
+  - name: user_email
+    description: str, user email associated with their account on the corresponding
+      platform
+  - name: user_id
+    description: int, foreign key to the user table on the corresponding platform
+  - name: user_hashed_id
+    description: str, foreign key to combined_users
+  - name: product_name
+    description: string, name of the product associated with the order line item.
+      May be null for bootcamps and edX.org.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["order_id", "line_id", "platform"]

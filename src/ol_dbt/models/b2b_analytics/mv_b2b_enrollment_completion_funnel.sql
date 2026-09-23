@@ -8,8 +8,10 @@
 -- Grain: org x contract x course_run. Refreshed by the Dagster b2b_organization MV-refresh asset.
 select
     org.organization_key,
+    org.sso_organization_id,
     org.organization_name,
     c.contract_pk,
+    c.contract_id,
     c.b2b_contract_name,
     cr.courserun_pk,
     cr.courserun_readable_id,
@@ -40,6 +42,6 @@ left join {{ source('dimensional', 'tfact_certificate') }} cert
 where org.platform = 'mitxonline'
   and cr.is_current = true
 group by
-    org.organization_key, org.organization_name,
-    c.contract_pk, c.b2b_contract_name,
+    org.organization_key, org.sso_organization_id, org.organization_name,
+    c.contract_pk, c.contract_id, c.b2b_contract_name,
     cr.courserun_pk, cr.courserun_readable_id, cr.courserun_title

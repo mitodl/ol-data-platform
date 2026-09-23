@@ -10,6 +10,7 @@ Checks:
   7. YAML integrity: YAML entries for models that have no corresponding .sql file
   8. SELECT *: models using SELECT * that hides column-level lineage
   9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
+ 10. QA branch contract: union models must declare their expected QA branches (RFC 12711)
 """
 
 from __future__ import annotations
@@ -17,8 +18,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from dataclasses import dataclass, field
-from enum import StrEnum
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -40,58 +40,36 @@ from ol_dbt_cli.lib.git_utils import (
     get_changed_yaml_models,
     get_repo_root,
 )
+from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
-from ol_dbt_cli.lib.sql_parser import ParsedModel, find_compiled_dir, get_columns_read_from_ref, parse_model_file
+from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
+from ol_dbt_cli.lib.qa_contract import (
+    QA_CONTRACT_CHECK,
+    check_qa_contracts,
+    check_qa_gaps,
+    qa_gaps,
+    write_qa_baseline,
+)
+from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, QA_GLUE_DATABASE, load_observation
+from ol_dbt_cli.lib.sql_parser import (
+    ParsedModel,
+    consumed_columns_by_ref_via_scope,
+    find_compiled_dir,
+    get_columns_read_from_ref,
+    parse_model_file,
+    resolve_star_columns,
+)
+from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
 console = Console()
 err_console = Console(stderr=True)
 
 
-class Severity(StrEnum):
-    ERROR = "ERROR"
-    WARNING = "WARNING"
-    INFO = "INFO"
-
-
-@dataclass
-class ValidationIssue:
-    check: str
-    severity: Severity
-    model: str
-    message: str
-    detail: str = ""
-
-
-@dataclass
-class ValidationReport:
-    issues: list[ValidationIssue] = field(default_factory=list)
-
-    def add(
-        self,
-        check: str,
-        severity: Severity,
-        model: str,
-        message: str,
-        detail: str = "",
-    ) -> None:
-        self.issues.append(
-            ValidationIssue(
-                check=check,
-                severity=severity,
-                model=model,
-                message=message,
-                detail=detail,
-            )
-        )
-
-    @property
-    def errors(self) -> list[ValidationIssue]:
-        return [i for i in self.issues if i.severity == Severity.ERROR]
-
-    @property
-    def warnings(self) -> list[ValidationIssue]:
-        return [i for i in self.issues if i.severity == Severity.WARNING]
+# Severity/ValidationIssue/ValidationReport moved to ol_dbt_cli.lib.validation so
+# checks that are not about the dbt manifest can reuse them; re-exported here
+# because callers and tests import them from this module.
+__all__ = ["Severity", "ValidationIssue", "ValidationReport", "validate"]
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +118,7 @@ def _check_yaml_sql_sync(
     if undocumented:
         report.add(
             "yaml_sql_sync",
-            Severity.WARNING,
+            Severity.ERROR,
             model_name,
             f"Columns in SQL output but not documented in YAML: {sorted(undocumented)}",
             "Add these columns to the model's YAML schema file.",
@@ -319,6 +297,39 @@ def _resolve_upstream_sql_columns(
     return combined if combined else None
 
 
+def _build_upstream_columns(
+    parsed: ParsedModel,
+    yaml_registry: YamlRegistry,
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+) -> dict[str, set[str]]:
+    """Map every ref/source *parsed* reads to its known column set.
+
+    Uses the same SQL-first resolution as :func:`_resolve_upstream_sql_columns`
+    for refs (most accurate for broken-column comparison) and manifest→YAML for
+    sources. Keyed by ref model name and ``source.table`` key so the result can
+    seed :func:`consumed_columns_via_scope`'s qualify schema. Refs/sources whose
+    columns are unknown are simply omitted.
+    """
+    upstream: dict[str, set[str]] = {}
+    for ref_name in parsed.refs:
+        cols = _resolve_upstream_sql_columns(ref_name, sql_models_by_name, manifest, yaml_registry)
+        if cols:
+            upstream[ref_name] = cols
+    for source_key in parsed.source_refs:
+        source_cols: set[str] | None = None
+        if manifest is not None:
+            source_model = manifest.get_source(source_key)
+            if source_model is not None and source_model.columns:
+                source_cols = source_model.column_names
+        if not source_cols and "." in source_key:
+            source_name, table_name = source_key.split(".", 1)
+            source_cols = yaml_registry.get_source_columns(source_name, table_name) or None
+        if source_cols:
+            upstream[source_key] = source_cols
+    return upstream
+
+
 def _check_broken_ref_columns(
     model_name: str,
     parsed: ParsedModel,
@@ -333,19 +344,43 @@ def _check_broken_ref_columns(
     upstream ref, then compares against that upstream's SQL output columns.
     Reports an ERROR for each column referenced that is absent from the upstream.
 
+    Column attribution uses the hand-rolled passthrough-alias heuristic first
+    (:func:`get_columns_read_from_ref`); when that bails — the downstream reads the
+    ref through a JOIN or a subquery ``FROM``, where bare-column attribution is
+    ambiguous — it falls back to sqlglot scope resolution
+    (:func:`consumed_columns_via_scope`), which anchors every column to its source
+    relation across the full JOIN/CTE graph. The fallback recovers coverage on the
+    ~7% of ref edges the heuristic skips and can still surface a broken column read
+    through a JOIN. It never mis-attributes a foreign column to this ref, so it
+    introduces no false positives (see that function's contract).
+
     Skips silently when:
     - The downstream SQL cannot be parsed (no compiled/raw SQL path available).
     - The upstream column set is unknown (unresolved SELECT *, no manifest/YAML).
-    - No columns can be attributed to a specific upstream ref.
+    - No columns can be attributed to a specific upstream ref by either method.
     """
-    for ref_name in parsed.refs:
-        upstream_cols = _resolve_upstream_sql_columns(ref_name, sql_models_by_name, manifest, yaml_registry)
+    upstream_columns_by_name = _build_upstream_columns(parsed, yaml_registry, manifest, sql_models_by_name)
+    # The scope fallback attributes every ref in one qualify() pass; compute it lazily
+    # and once per model (only when some ref actually needs it) rather than re-parsing
+    # and re-qualifying the same SQL per ref.
+    scope_consumed: dict[str, set[str]] | None = None
+    # parsed.refs preserves one entry per ref() call, so a self-join or a model that
+    # ref()s the same upstream in two CTEs lists it more than once (11 such models in
+    # the corpus). Deduplicate (order-preserving) so a broken column isn't reported twice.
+    for ref_name in dict.fromkeys(parsed.refs):
+        upstream_cols = upstream_columns_by_name.get(ref_name)
         if upstream_cols is None:
             continue  # can't determine upstream schema — skip
 
         consumed = get_columns_read_from_ref(parsed, ref_name)
         if consumed is None:
-            continue  # can't determine what downstream reads — skip
+            # Heuristic bailed (JOIN / subquery FROM). Fall back to sqlglot scope
+            # resolution, which needs every upstream's schema to anchor columns.
+            if scope_consumed is None:
+                scope_consumed = consumed_columns_by_ref_via_scope(parsed, upstream_columns_by_name)
+            consumed = scope_consumed.get(ref_name)
+        if consumed is None:
+            continue  # neither method could determine what downstream reads — skip
 
         broken = consumed - upstream_cols
         if broken:
@@ -556,6 +591,82 @@ def _check_dimensional_layering(
 
 
 # ---------------------------------------------------------------------------
+# Check 10: QA branch contract (RFC 12711)
+# ---------------------------------------------------------------------------
+
+
+def _check_qa_branch_contract(
+    manifest: ManifestRegistry | None,
+    inventory_dir: Path,
+    report: ValidationReport,
+    now: datetime | None = None,
+) -> None:
+    """Run the QA branch contract, or say why it cannot run.
+
+    Without a manifest or without inventory units every model reads zero units,
+    so no model counts as a union and a missing declaration would pass silently.
+    Without an observation only the gap half is skipped: the inventory half
+    needs nothing but text.
+    """
+    if manifest is None:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            "Skipped: QA branch contracts need manifest lineage",
+            "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
+        )
+        return
+    units = load_units(inventory_dir)
+    if not units:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            f"Skipped: no ingestion inventory units found under {inventory_dir}",
+            "The check maps sources to units through the inventory. Pass --inventory-dir when "
+            "the dbt project is not at <repo>/src/ol_dbt.",
+        )
+        return
+    check_qa_contracts(manifest, units, report)
+
+    observation = load_observation(inventory_dir / OBSERVATION_FILENAME)
+    if observation is None:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(qa observation)",
+            f"Skipped the QA gap half: no {OBSERVATION_FILENAME} under {inventory_dir}",
+            "Declared branches were checked against the inventory, not against what QA holds. "
+            "Take an observation with `ol-dbt inventory observe`.",
+        )
+        return
+    baseline = load_baseline(inventory_dir / QA_BASELINE_FILENAME)
+    check_qa_gaps(manifest, units, observation, baseline, now or datetime.now(tz=UTC), report)
+
+
+def _update_qa_baseline(manifest: ManifestRegistry | None, inventory_dir: Path) -> None:
+    units = load_units(inventory_dir)
+    observation = load_observation(inventory_dir / OBSERVATION_FILENAME)
+    if manifest is None or not units or observation is None:
+        console.print(
+            "[bold red]Error:[/] --update-qa-baseline needs manifest.json, inventory units and "
+            f"{OBSERVATION_FILENAME} under {inventory_dir}."
+        )
+        raise SystemExit(1)
+    if observation.glue_database != QA_GLUE_DATABASE:
+        console.print(
+            f"[bold red]Error:[/] {OBSERVATION_FILENAME} was taken from {observation.glue_database}, "
+            f"not {QA_GLUE_DATABASE}. A baseline built from it would hide every QA gap."
+        )
+        raise SystemExit(1)
+    gaps = qa_gaps(manifest, units, observation)
+    path = inventory_dir / QA_BASELINE_FILENAME
+    write_qa_baseline(path, gaps)
+    console.print(f"[green]Wrote {len(gaps)} QA gap(s)[/] to {path}.")
+
+
+# ---------------------------------------------------------------------------
 # Registry-aware SELECT * resolution
 # ---------------------------------------------------------------------------
 
@@ -611,6 +722,44 @@ def _resolve_star_with_registry(
             return cols
 
     return None
+
+
+def _resolve_star_with_qualify(
+    parsed: ParsedModel,
+    yaml_registry: YamlRegistry,
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+) -> set[str] | None:
+    """Resolve a ``SELECT *`` via sqlglot ``qualify()`` when the single-source lookup fails.
+
+    :func:`_resolve_star_with_registry` only expands a star that draws from one directly-named
+    ref/source. A star that chains through a UNION or multi-source CTE
+    (``select * from combined`` unioning two ``select * from ref`` CTEs) needs
+    full column-level qualification against every upstream's schema. This gathers
+    columns for *all* refs/sources the model reads — manifest first, then YAML,
+    then already-parsed SQL output — and lets ``qualify()`` expand the star
+    through the CTE graph. Returns ``None`` when no upstream schema is known.
+    """
+    upstream_columns: dict[str, set[str]] = {}
+    for ref_name in parsed.refs:
+        cols = _resolve_upstream_columns(ref_name, yaml_registry, manifest, sql_models_by_name)
+        if cols:
+            upstream_columns[ref_name] = cols
+    for source_key in parsed.source_refs:
+        source_cols: set[str] | None = None
+        if manifest is not None:
+            source_model = manifest.get_source(source_key)
+            if source_model is not None and source_model.columns:
+                source_cols = source_model.column_names
+        if not source_cols and "." in source_key:
+            source_name, table_name = source_key.split(".", 1)
+            source_cols = yaml_registry.get_source_columns(source_name, table_name) or None
+        if source_cols:
+            upstream_columns[source_key] = source_cols
+
+    if not upstream_columns:
+        return None
+    return resolve_star_columns(parsed, upstream_columns)
 
 
 # ---------------------------------------------------------------------------
@@ -882,6 +1031,16 @@ def validate(
             ),
         ),
     ] = "dev_local",
+    inventory_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--inventory-dir"],
+            help=(
+                "Ingestion inventory directory for the qa_branch_contract check. "
+                "Defaults to <repo>/ingestion/inventory, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     baseline_file: Annotated[
         str | None,
         Parameter(
@@ -903,10 +1062,21 @@ def validate(
             ),
         ),
     ] = False,
+    update_qa_baseline: Annotated[
+        bool,
+        Parameter(
+            name=["--update-qa-baseline"],
+            help=(
+                "Regenerate <inventory-dir>/qa_branch_baseline.txt from the declared QA branches "
+                "and the committed QA observation, and exit. Use after `ol-dbt inventory observe`, "
+                "or to acknowledge a QA gap a change introduces."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs nine checks:
+    Runs ten checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -918,6 +1088,10 @@ def validate(
     8. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
     9. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
                                (#2072 DoD); new violations error, known ones are baselined
+    10. qa_branch_contract   — models unioning several ingestion units declare config.meta
+                               qa_branches or qa_buildable: false, and each declared branch is
+                               one QA ingests or mirrors (RFC 12711); declared tables the QA
+                               observation shows empty or stale error unless baselined
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -983,6 +1157,7 @@ def validate(
         "yaml_integrity",
         "select_star",
         "dimensional_layering",
+        QA_CONTRACT_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1074,6 +1249,15 @@ def validate(
         except Exception as exc:  # noqa: BLE001
             if output_format == "text":
                 console.print(f"[yellow]Warning:[/] Could not load manifest ({exc}); using raw SQL parsing.")
+
+    inventory_dir = (
+        Path(inventory_dir_path).resolve() if inventory_dir_path else dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR
+    )
+    # Needs only the manifest, the units and the observation, so it exits before
+    # the per-model SQL parsing below.
+    if update_qa_baseline:
+        _update_qa_baseline(manifest, inventory_dir)
+        return
 
     # Build YAML registry
     yaml_registry = build_yaml_registry(models_dir)
@@ -1177,6 +1361,10 @@ def validate(
     for parsed_model in sql_models_by_name.values():
         if parsed_model.has_star:
             resolved_cols = _resolve_star_with_registry(parsed_model, yaml_registry, manifest, sql_models_by_name)
+            if resolved_cols is None:
+                # Single-source registry lookup failed; fall back to full-schema
+                # qualify() for stars that chain through UNION/multi-source CTEs.
+                resolved_cols = _resolve_star_with_qualify(parsed_model, yaml_registry, manifest, sql_models_by_name)
             if resolved_cols is not None:
                 parsed_model.output_columns = resolved_cols
                 parsed_model.has_star = False
@@ -1267,6 +1455,11 @@ def validate(
     if "dimensional_layering" not in skipped:
         baseline = load_baseline(baseline_path)
         _check_dimensional_layering(manifest, sql_models_by_name, sql_file_map_all, baseline, report)
+
+    # Global like dimensional_layering: a union model gains a branch by an edit to
+    # one of its ancestors, which --changed-only would never select.
+    if QA_CONTRACT_CHECK not in skipped:
+        _check_qa_branch_contract(manifest, inventory_dir, report)
 
     # Output
     if output_format == "json":

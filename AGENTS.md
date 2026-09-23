@@ -32,7 +32,8 @@ This guide provides essential information for coding agents working with the MIT
 ```bash
 # 1. Copy environment template
 cp .env.example .env
-# Edit .env with: GITHUB_TOKEN, DBT_TRINO_USERNAME, DBT_TRINO_PASSWORD, AWS keys, DBT_SCHEMA_SUFFIX
+# Edit .env with: DBT_TRINO_USERNAME, DBT_TRINO_PASSWORD, AWS keys, DBT_SCHEMA_SUFFIX
+# Vault needs no entry here -- `bin/vault-login` handles it via the browser flow
 
 # 2. Sync dependencies (10-30 seconds)
 uv sync
@@ -157,7 +158,7 @@ python bin/uv-operations.py lock --upgrade
   - `resources/`: Reusable connections (databases, APIs, Vault)
   - `io_managers/`: S3FileObjectIOManager, FileObjectIOManager for asset persistence
   - `lib/`: Utilities, constants, helpers
-- `dg_projects/`: 7 Dagster code locations (canvas, data_platform, edxorg, lakehouse, learning_resources, legacy_openedx, openedx)
+- `dg_projects/`: 10 Dagster code locations (b2b_organization, canvas, data_loading, data_platform, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add an 11th.**
   - Each has: `<project>/assets/`, `<project>/resources/`, `<project>/definitions.py`, `pyproject.toml`, `Dockerfile`
 - `dg_deployments/local/`: Local Docker deployment configuration
 - `src/ol_dbt/`: Complete dbt project
@@ -204,10 +205,7 @@ This is a **uv workspace** with unique dependency management:
 
 **Example**:
 ```python
-@asset(
-    group_name="openedx",
-    io_manager_key="s3file_io_manager"
-)
+@asset(group_name="openedx", io_manager_key="s3file_io_manager")
 def course_xml_data(context):
     # Asset implementation
     return data
@@ -340,13 +338,17 @@ incremental until `--full-refresh` is used.
 ## Environment Variables
 
 **Required in `.env`** (from `.env.example`):
-- `GITHUB_TOKEN`: GitHub PAT for auth
 - `DBT_TRINO_USERNAME`, `DBT_TRINO_PASSWORD`: Starburst credentials
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: S3 access
 - `DBT_SCHEMA_SUFFIX`: Your dev schema suffix (e.g., username)
 
 **Runtime**:
 - `DAGSTER_ENV`: dev|qa|production (selects resource config)
+- `DAGSTER_VAULT_ROLE`: Vault OIDC role to request locally (default `developer`)
+- `VAULT_TOKEN_CACHE_DIR`: where the Vault token cache lives (default
+  `~/.cache/vault`); compose points the containers at the read-only mount
+- `VAULT_OIDC_NONINTERACTIVE`: set in the containers so a cache miss fails with
+  "run `bin/vault-login`" instead of hanging on a browser that cannot open
 
 ## Trust These Instructions
 

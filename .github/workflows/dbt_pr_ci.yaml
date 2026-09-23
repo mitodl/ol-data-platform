@@ -15,6 +15,7 @@ on:
     paths:
     - "src/ol_dbt/**"
     - "src/ol_dbt_cli/**"
+    - "ingestion/inventory/**"
     - ".github/workflows/dbt_pr_ci.yaml"
   workflow_dispatch:
 
@@ -27,18 +28,19 @@ jobs:
       pull-requests: write   # ol-dbt impact posts a sticky PR comment
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0   # ol-dbt validate/impact diff against the base ref
+        persist-credentials: false
 
     - name: Fetch base ref
       if: github.event_name == 'pull_request'
-      run: git fetch --no-tags origin "${{ github.base_ref }}"
+      run: git fetch --no-tags origin "${GITHUB_BASE_REF}"
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v8.3.2
+      uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       with:
-        version: "0.11.26"
+        version: "0.12.17"
         enable-cache: true
 
     - name: Set up Python
@@ -66,10 +68,19 @@ jobs:
       working-directory: src/ol_dbt
       run: python3 "${{ github.workspace }}/.github/scripts/assert_manifest_has_source_lineage.py"
 
-    # Dimensional-layering gate (#2072 DoD): global, baselined — fails only on
-    # NEW marts/reporting → staging/intermediate references.
-    - name: Dimensional-layering lint
-      run: uv run ol-dbt validate --only dimensional_layering --format json
+    # Global gates. Dimensional layering (#2072 DoD) is baselined and fails only
+    # on NEW marts/reporting → staging/intermediate references. The QA branch
+    # contract (RFC 12711) fails when a model unioning several ingestion units
+    # declares no qa_branches/qa_buildable, declares a branch it cannot read, or
+    # declares one whose unit is strategies.qa: omit; an inventory edit can cause
+    # the last two. It also fails on a declared-branch table that the committed
+    # ingestion/inventory/qa_observation.json shows empty (or a stale mirror)
+    # unless ingestion/inventory/qa_branch_baseline.txt lists it.
+    - name: Dimensional-layering and QA branch contract lint
+      run: |
+        uv run ol-dbt validate \
+          --only dimensional_layering,qa_branch_contract \
+          --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
     # models so pre-existing issues elsewhere don't block unrelated PRs; a
@@ -79,8 +90,8 @@ jobs:
       run: |
         uv run ol-dbt validate \
           --changed-only \
-          --base-ref "origin/${{ github.base_ref }}" \
-          --skip dimensional_layering \
+          --base-ref "origin/${GITHUB_BASE_REF}" \
+          --skip dimensional_layering,qa_branch_contract \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.
@@ -91,13 +102,13 @@ jobs:
       run: |
         uv run ol-dbt impact \
           --format json \
-          --base-ref "origin/${{ github.base_ref }}" \
+          --base-ref "origin/${GITHUB_BASE_REF}" \
           > impact.json 2> impact.err || true
         echo "--- impact stderr ---"; cat impact.err || true
 
     - name: Post impact PR comment
       if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const fs = require('fs');
@@ -109,16 +120,38 @@ jobs:
           } catch (e) {
             // No changed models / non-JSON output → treat as no impact.
           }
-          const counts = { BREAKING: 0, WARNING: 0, INFO: 0 };
+          const counts = { BREAKING: 0, KEY_REGEN: 0, WARNING: 0, INFO: 0 };
           for (const a of alerts) { counts[a.level] = (counts[a.level] || 0) + 1; }
-          const emoji = { BREAKING: '🔴', WARNING: '⚠️', INFO: 'ℹ️' };
+          const emoji = { BREAKING: '🔴', KEY_REGEN: '🔑', WARNING: '⚠️', INFO: 'ℹ️' };
 
           let body = `${marker}\n## 🔎 ol-dbt impact — column-level blast radius\n\n`;
           if (alerts.length === 0) {
             body += '✅ No column-level downstream impact detected for the changed models.';
           } else {
-            body += `**${counts.BREAKING} breaking**, **${counts.WARNING} warning**, ${counts.INFO} info` +
+            body += `**${counts.BREAKING} breaking**, **${counts.KEY_REGEN} surrogate-key regeneration**, ` +
+                    `**${counts.WARNING} warning**, ${counts.INFO} info` +
                     ` across ${alerts.length} changed model(s).\n\n`;
+
+            // Surrogate-key drift gets its own section rather than a line in the
+            // collapsed list: it changes no column, so a reviewer scanning the
+            // details for a renamed field would never look for it — and unlike the
+            // other levels the follow-up is a production rebuild, not a code edit.
+            const keyRegen = alerts.filter(a => a.level === 'KEY_REGEN');
+            for (const a of keyRegen) {
+              const change = (a.column_changes || [])[0] || {};
+              const models = (a.downstream || []).map(d => d.model).join(' ');
+              body += `### 🔑 \`${a.changed_model}.${change.column}\` is hashed from different inputs\n\n`;
+              body += `\`${change.related || ''}\`\n\n`;
+              body += 'Every existing value changes on the next build, orphaning the copies ' +
+                      'these incremental models hold:\n\n';
+              for (const d of a.downstream || []) {
+                body += `- \`${d.model}\` (\`${(d.affected_columns || []).join(', ')}\`)\n`;
+              }
+              body += '\nThe production build repairs this automatically on the first run after ' +
+                      'merge (`lakehouse.lib.surrogate_key_drift`). To repair another environment ' +
+                      `by hand: \`dbt build --full-refresh --select ${models}\`.\n\n`;
+            }
+
             body += '<details><summary>Details</summary>\n\n';
             for (const a of alerts) {
               const cols = (a.column_changes || []).map(c => c.column).filter(Boolean).join(', ');

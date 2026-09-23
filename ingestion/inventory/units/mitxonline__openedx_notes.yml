@@ -1,0 +1,87 @@
+---
+# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
+# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mitxonline
+layer: openedx_notes
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: airbyte
+table_prefix: raw__mitxonline__openedx_notes__mysql__
+dagster_visible: false
+airbyte:
+  source_kind: source-mysql
+  replication_method: cursor
+  connections:
+  - environment: production
+    name: MITx Online Production edX Notes → Ol S3 Glue Data Lake - Production
+    status: inactive
+    sync_interval_hours: 24
+    streams:
+    - auth_group
+    - auth_group_permissions
+    - auth_permission
+    - auth_user
+    - auth_user_groups
+    - auth_user_user_permissions
+    - django_content_type
+    - v1_note
+tables:
+- name: auth_group
+  raw_table: raw__mitxonline__openedx_notes__mysql__auth_group
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_group_permissions
+  raw_table: raw__mitxonline__openedx_notes__mysql__auth_group_permissions
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_permission
+  raw_table: raw__mitxonline__openedx_notes__mysql__auth_permission
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user
+  raw_table: raw__mitxonline__openedx_notes__mysql__auth_user
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user_groups
+  raw_table: raw__mitxonline__openedx_notes__mysql__auth_user_groups
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: auth_user_user_permissions
+  raw_table: raw__mitxonline__openedx_notes__mysql__auth_user_user_permissions
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: django_content_type
+  raw_table: raw__mitxonline__openedx_notes__mysql__django_content_type
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false
+- name: v1_note
+  raw_table: raw__mitxonline__openedx_notes__mysql__v1_note
+  sync_mode: full_refresh_overwrite
+  namespace: edx_notes_api
+  primary_key:
+  - - id
+  modeled: false

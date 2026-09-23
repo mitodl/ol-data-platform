@@ -8,7 +8,10 @@ Provides commands for:
 
 from __future__ import annotations
 
+import datetime
 import os
+import re
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -32,6 +35,24 @@ if TYPE_CHECKING:
 DEFAULT_DUCKDB_PATH = Path.home() / ".ol-dbt" / "local.duckdb"
 DEFAULT_GLUE_DATABASE = "ol_warehouse_production_raw"
 
+# How old the newest successful Glue-scan entry may get before `register` and
+# `list-sources` warn about it. A registered view pins one Iceberg metadata.json; when production
+# rebuilds that table the old metadata file is eventually cleaned up, and the
+# pinned view starts failing with an S3 404 that says nothing about staleness
+# being the cause. Re-running `register` re-reads Glue and repoints the view, so
+# the warning exists to make "your registry is old" visible BEFORE a build fails
+# on it rather than after.
+#
+# One day, from measured churn rather than taste: against a registry 1.1 days old,
+# a dry run reported 142 of 158 intermediate-layer pointers moved (~90%) and 28 of
+# 29 mart pointers. At that rate a registry is materially stale within a day, and
+# a longer window would stay quiet through exactly the multi-day drift this is
+# meant to catch. Hours-old registries — the same session — still do not warn.
+REGISTRY_STALE_AFTER_DAYS = 1
+
+# Every layer a model can live in. This must stay in step with the Glue databases
+# macros/override_ref.sql derives from a model's schema: a layer that is derivable but not
+# registered turns an unbuilt ref into a missing-view error instead of a working fallback.
 LAYER_DATABASES = [
     "ol_warehouse_production_raw",
     "ol_warehouse_production_staging",
@@ -40,6 +61,8 @@ LAYER_DATABASES = [
     "ol_warehouse_production_mart",
     "ol_warehouse_production_reporting",
     "ol_warehouse_production_external",
+    "ol_warehouse_production_integrations",
+    "ol_warehouse_production_migration",
 ]
 
 PROTECTED_SCHEMAS = {
@@ -51,6 +74,8 @@ PROTECTED_SCHEMAS = {
     "ol_warehouse_production_mart",
     "ol_warehouse_production_reporting",
     "ol_warehouse_production_external",
+    "ol_warehouse_production_integrations",
+    "ol_warehouse_production_migration",
     "ol_warehouse_qa",
     "ol_warehouse_qa_raw",
     "ol_warehouse_qa_staging",
@@ -59,6 +84,8 @@ PROTECTED_SCHEMAS = {
     "ol_warehouse_qa_mart",
     "ol_warehouse_qa_reporting",
     "ol_warehouse_qa_external",
+    "ol_warehouse_qa_integrations",
+    "ol_warehouse_qa_migration",
 }
 
 TARGET_CONFIGS: dict[str, dict[str, str]] = {
@@ -81,8 +108,28 @@ TARGET_CONFIGS: dict[str, dict[str, str]] = {
 # ============================================================================
 
 
+# dbt materializes an Iceberg table by building `<name>__dbt_tmp` and renaming it,
+# leaving the previous relation behind as `<name>__dbt_backup`. Both are genuine
+# Iceberg tables that Glue reports with a real `metadata_location`, so they pass the
+# ICEBERG filter below and get registered like any other source — but they are build
+# artifacts. dbt deletes them on its next run, so a DuckDB view over one starts
+# returning `HTTP 404` reading its metadata JSON as soon as that happens, and the
+# table can disappear between `get_tables` and `CREATE VIEW` in a single register run.
+# Numbered variants (`__dbt_tmp1`) occur when a build is interrupted and retried.
+_DBT_SHADOW_TABLE_RE = re.compile(r"__dbt_(?:tmp|backup)\d*$")
+
+
+def _is_dbt_shadow_table(table_name: str) -> bool:
+    """Return True for dbt's create-temp-then-swap build artifacts, which must not be registered."""
+    return _DBT_SHADOW_TABLE_RE.search(table_name) is not None
+
+
 def _get_glue_tables(database: str) -> list[dict[str, Any]]:
-    """Fetch all Iceberg tables from an AWS Glue catalog database."""
+    """Fetch all Iceberg tables from an AWS Glue catalog database.
+
+    dbt build artifacts (`__dbt_tmp` / `__dbt_backup`) are excluded — see
+    ``_DBT_SHADOW_TABLE_RE``.
+    """
     glue = boto3.client("glue")
     tables: list[dict[str, Any]] = []
 
@@ -98,6 +145,10 @@ def _get_glue_tables(database: str) -> list[dict[str, Any]]:
             metadata_location = parameters.get("metadata_location", "")
             table_type = parameters.get("table_type", "")
 
+            if _is_dbt_shadow_table(table_name):
+                print(f"  ⊘ {table_name} (dbt build artifact, not a real source)")
+                continue
+
             if table_type.upper() == "ICEBERG" and metadata_location:
                 tables.append(
                     {
@@ -112,6 +163,127 @@ def _get_glue_tables(database: str) -> list[dict[str, Any]]:
                 print(f"  ⊘ {table_name} (not Iceberg or no metadata)")
 
     return tables
+
+
+def _classify_registration(previous_location: str | None, metadata_location: str) -> str:
+    """Classify what registering a table would do, from its recorded location.
+
+    Three outcomes, deliberately distinguished so the summary can answer "did
+    anything upstream actually move?":
+
+    - ``new``       — never registered before.
+    - ``updated``   — registered, and Glue now reports a DIFFERENT metadata
+                      location, i.e. production genuinely rebuilt the table.
+    - ``refreshed`` — registered, and Glue reports the SAME location. Re-issuing
+                      the view is a no-op, so this is only reached under
+                      ``--force``; without it the table is skipped instead.
+
+    Collapsing ``refreshed`` into ``updated`` (or, as before, reporting every
+    forced re-registration as ``new`` because the recorded locations were never
+    loaded under ``--force``) makes a forced run claim thousands of changes and
+    hides the only number that matters: how many pointers actually changed.
+    """
+    if previous_location is None:
+        return "new"
+    if previous_location == metadata_location:
+        return "refreshed"
+    return "updated"
+
+
+def _ensure_registry_tables(conn: duckdb.DuckDBPyConnection) -> None:
+    """Create local registry tables if they do not exist yet."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS _glue_source_registry (
+            view_name VARCHAR PRIMARY KEY,
+            glue_database VARCHAR,
+            glue_table VARCHAR,
+            metadata_location VARCHAR,
+            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS _glue_registry_scans (
+            glue_database VARCHAR PRIMARY KEY,
+            scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def _record_registry_scan(duckdb_path: Path, database_name: str) -> None:
+    """Record that a Glue database was successfully scanned in this run."""
+    with duckdb.connect(str(duckdb_path)) as conn:
+        _ensure_registry_tables(conn)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO _glue_registry_scans (glue_database, scanned_at)
+            VALUES (?, CURRENT_TIMESTAMP)
+            """,
+            (database_name,),
+        )
+
+
+def _registry_last_refreshed(
+    duckdb_path: Path,
+    databases: list[str],
+    conn: duckdb.DuckDBPyConnection | None = None,
+) -> datetime.datetime | None:
+    """Return the newest Glue scan timestamp across *databases*, or None if unknown.
+
+    None covers every "cannot tell" case — no DuckDB file, no scan table, no rows
+    for these databases — because the caller treats them identically: it has no
+    age to report and says so, rather than implying a fresh registry.
+
+    Pass *conn* when the caller already holds a connection to this file. DuckDB
+    refuses a second connection to the same path under a different configuration
+    ("Can't open a connection to same database file with a different
+    configuration than existing connections"), so opening a read_only handle of
+    our own beside an open read-write one raises, and the except below would turn
+    a perfectly readable stale registry into "unknown". That is what made
+    ``list-sources`` never report an age.
+    """
+    if not databases:
+        return None
+    if conn is None and not duckdb_path.exists():
+        return None
+    placeholders = ", ".join("?" for _ in databases)
+    sql = f"SELECT max(scanned_at) FROM _glue_registry_scans WHERE glue_database IN ({placeholders})"  # noqa: S608
+    try:
+        if conn is not None:
+            row = conn.execute(sql, databases).fetchone()
+        else:
+            with duckdb.connect(str(duckdb_path), read_only=True) as own_conn:
+                row = own_conn.execute(sql, databases).fetchone()
+    except Exception:  # noqa: BLE001
+        return None
+    return row[0] if row else None
+
+
+def _stale_threshold_phrase() -> str:
+    """Render the staleness threshold for humans, without "1 days"."""
+    days = REGISTRY_STALE_AFTER_DAYS
+    return "a day" if days == 1 else f"{days} days"
+
+
+def _describe_registry_age(last_refreshed: datetime.datetime | None) -> tuple[str, bool]:
+    """Render *last_refreshed* as a human phrase plus whether it counts as stale."""
+    if last_refreshed is None:
+        # "unknown", not "never": a locked or unreadable DuckDB file reaches this
+        # too, and asserting there was no prior registration would be a stronger
+        # claim than the caller can actually support.
+        return ("unknown (no readable prior registration)", False)
+    # Match the stored value's awareness rather than assuming UTC. `registered_at`
+    # is a naive TIMESTAMP and DuckDB's CURRENT_TIMESTAMP writes LOCAL time into
+    # it (verified: naive-local skew ~0s, naive-UTC skew = the zone offset), so
+    # tz=None here yields a naive-local `now` that lines up. Hardcoding UTC would
+    # overstate every age by the local offset.
+    now = datetime.datetime.now(tz=last_refreshed.tzinfo)
+    age = now - last_refreshed
+    age_days = age.total_seconds() / 86_400
+    if age_days >= 1:
+        phrase = f"{age_days:.1f} days ago"
+    else:
+        phrase = f"{age.total_seconds() / 3600:.1f} hours ago"
+    return (f"{phrase} ({last_refreshed:%Y-%m-%d %H:%M})", age_days >= REGISTRY_STALE_AFTER_DAYS)
 
 
 def _register_single_table(
@@ -131,11 +303,10 @@ def _register_single_table(
     metadata_location = table["metadata_location"]
     view_name = f"glue__{database_name}__{table_name}"
 
-    if not force and view_name in existing_registrations:
-        if existing_registrations[view_name] == metadata_location:
-            return ("skipped", view_name, None)
+    outcome = _classify_registration(existing_registrations.get(view_name), metadata_location)
+    if not force and outcome == "refreshed":
+        return ("skipped", view_name, None)
 
-    is_updated = view_name in existing_registrations
     # Escape single quotes in the S3 path so the SQL string literal is safe.
     escaped_location = metadata_location.replace("'", "''")
     # Double-quote and escape the view identifier so Glue names with hyphens
@@ -162,7 +333,7 @@ def _register_single_table(
     except Exception as e:  # noqa: BLE001
         return ("error", view_name, str(e))
 
-    return ("success", view_name, "updated" if is_updated else "new")
+    return ("success", view_name, outcome)
 
 
 def _register_tables_in_duckdb(
@@ -175,7 +346,7 @@ def _register_tables_in_duckdb(
     workers: int = 10,
 ) -> dict[str, int]:
     """Register Glue tables as DuckDB views, returning counts by status."""
-    results: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "updated": 0, "new": 0}
+    results: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "updated": 0, "new": 0, "refreshed": 0}
 
     if not dry_run:
         if verbose:
@@ -196,25 +367,22 @@ def _register_tables_in_duckdb(
             if verbose:
                 print("  ✓ AWS credentials loaded")
 
-            setup_conn.execute("""
-                CREATE TABLE IF NOT EXISTS _glue_source_registry (
-                    view_name VARCHAR PRIMARY KEY,
-                    glue_database VARCHAR,
-                    glue_table VARCHAR,
-                    metadata_location VARCHAR,
-                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+            _ensure_registry_tables(setup_conn)
 
-            if not force:
-                try:
-                    rows = setup_conn.execute(
-                        "SELECT view_name, metadata_location FROM _glue_source_registry WHERE glue_database = ?",
-                        (database_name,),
-                    ).fetchall()
-                    existing_registrations = {row[0]: row[1] for row in rows}
-                except Exception:  # noqa: BLE001
-                    existing_registrations = {}
+            # Loaded even under --force. force governs only whether an unchanged
+            # table is SKIPPED; the recorded locations are still what tells new
+            # from updated from merely-refreshed. Skipping this read under force
+            # (as this used to) left every table looking unregistered, so a forced
+            # run reported its whole catalog as "new" and could not show how many
+            # Glue pointers had really moved.
+            try:
+                rows = setup_conn.execute(
+                    "SELECT view_name, metadata_location FROM _glue_source_registry WHERE glue_database = ?",
+                    (database_name,),
+                ).fetchall()
+                existing_registrations = {row[0]: row[1] for row in rows}
+            except Exception:  # noqa: BLE001
+                existing_registrations = {}
         # setup_conn is now closed — worker threads open their own per-connection.
         # DuckDB persists extensions and the registry table to the file, so workers
         # only need to LOAD (not INSTALL) extensions in their own connections.
@@ -246,28 +414,23 @@ def _register_tables_in_duckdb(
             metadata_location = table["metadata_location"]
             view_name = f"glue__{database_name}__{table_name}"
 
-            if not force and view_name in existing_registrations:
-                if existing_registrations[view_name] == metadata_location:
-                    results["skipped"] += 1
-                    if verbose:
-                        print(f"  ⊘ {view_name} (unchanged)")
-                    continue
+            outcome = _classify_registration(existing_registrations.get(view_name), metadata_location)
+            if not force and outcome == "refreshed":
+                results["skipped"] += 1
+                if verbose:
+                    print(f"  ⊘ {view_name} (unchanged)")
+                continue
 
-            is_updated = view_name in existing_registrations
             escaped_location = metadata_location.replace("'", "''")
             quoted_view_name = '"' + view_name.replace('"', '""') + '"'
             create_view_sql = (
                 f"CREATE OR REPLACE VIEW {quoted_view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')"
             )
             if verbose:
-                status = "UPDATE" if is_updated else "NEW"
-                print(f"\n-- [{status}] {table_name}")
+                print(f"\n-- [{outcome.upper()}] {table_name}")
                 print(create_view_sql)
             results["success"] += 1
-            if is_updated:
-                results["updated"] += 1
-            else:
-                results["new"] += 1
+            results[outcome] += 1
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
@@ -294,7 +457,11 @@ def _register_tables_in_duckdb(
                     elif extra_info == "updated":
                         results["updated"] += 1
                         if verbose:
-                            print(f"  ↻ {view_name} (updated)")
+                            print(f"  ↻ {view_name} (updated — Glue pointer moved)")
+                    elif extra_info == "refreshed":
+                        results["refreshed"] += 1
+                        if verbose:
+                            print(f"  ✓ {view_name} (re-registered, unchanged)")
                     elif verbose:
                         print(f"  ✓ {view_name}")
                 elif status == "skipped":
@@ -339,6 +506,17 @@ def _show_registry(duckdb_path: Path) -> None:
             view_name, glue_db, _glue_table, registered = row
             print(f"{view_name:<60} {glue_db:<30} {registered!s}")
         print("=" * 100)
+
+        databases = sorted({row[1] for row in result})
+        # Reuse this function's connection — a second handle to the same file
+        # would be refused and silently degrade the age to "unknown".
+        newest_phrase, is_stale = _describe_registry_age(_registry_last_refreshed(duckdb_path, databases, conn=conn))
+        print(f"  Last refreshed: {newest_phrase}")
+        if is_stale:
+            print(
+                f"  ⚠ More than {_stale_threshold_phrase()} old. Run `ol-dbt local register --all-layers` "
+                "before trusting a dev_local build — stale views fail as S3 404s on the pinned metadata."
+            )
     except Exception as e:  # noqa: BLE001
         print(f"Error reading registry: {e}")
     finally:
@@ -585,7 +763,7 @@ def register(
     ] = False,
     force: Annotated[
         bool,
-        cyclopts.Parameter(help="Force re-registration of all tables (default: only new/changed)"),
+        cyclopts.Parameter(help="Re-issue every view, including unchanged ones (repairs local view state)"),
     ] = False,
     workers: Annotated[
         int,
@@ -595,8 +773,20 @@ def register(
     """Register AWS Glue Iceberg tables as DuckDB views.
 
     Queries AWS Glue to discover Iceberg tables and creates DuckDB views referencing
-    their S3 metadata. Incremental by default — only new or changed tables are
-    registered. Use --force to re-register all tables.
+    their S3 metadata.
+
+    Every run re-reads Glue, so a plain run already picks up upstream changes: a
+    table whose metadata location has moved is re-registered and reported as
+    `updated`. `--force` does NOT find more changes than that — it only re-issues
+    the CREATE VIEW for tables Glue reports as unchanged, which is a no-op unless
+    the local view itself is damaged. Reach for it to repair local state, not to
+    check for drift.
+
+    What a plain run cannot do is tell you it is overdue: the views it created
+    keep pointing at whatever metadata file was current when it last ran, and
+    nothing prompts you to run it again. So both this command and `list-sources`
+    report how long ago the registry was last refreshed, and warn once that is
+    more than a day — measured pointer churn is roughly 90% of a layer per day.
     """
     workers = max(1, min(workers, 20))
     verbose = not quiet
@@ -612,7 +802,19 @@ def register(
         databases = [DEFAULT_GLUE_DATABASE]
         print(f"\n🔄 Registering default database: {DEFAULT_GLUE_DATABASE}")
 
-    total: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0}
+    # Read before any registration writes, or it would report this run's own
+    # timestamp back as the previous refresh.
+    age_phrase, was_stale = _describe_registry_age(_registry_last_refreshed(duckdb_path, databases))
+    print(f"   Registry for these databases last refreshed: {age_phrase}")
+    if was_stale:
+        # A dry run changes nothing, so it must not claim to have fixed the staleness.
+        remedy = "Re-run without --dry-run to refresh them." if dry_run else "This run refreshes them."
+        print(
+            f"   ⚠ More than {_stale_threshold_phrase()} old — views may point at metadata files "
+            f"production has since replaced (Iceberg 404s on build). {remedy}"
+        )
+
+    total: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0, "refreshed": 0}
 
     for idx, db_name in enumerate(databases):
         print(f"\n{'=' * 70}")
@@ -624,6 +826,8 @@ def register(
         except Exception as e:  # noqa: BLE001
             print(f"  ✗ Error accessing database: {e}")
             continue
+        if not dry_run:
+            _record_registry_scan(duckdb_path, db_name)
 
         if not tables:
             print(f"  ⚠ No Iceberg tables found in {db_name}")
@@ -638,6 +842,8 @@ def register(
         if not verbose:
             print(f"  + {results['new']} new")
             print(f"  ↻ {results['updated']} updated")
+            if results["refreshed"] > 0:
+                print(f"  ✓ {results['refreshed']} re-registered (unchanged)")
             print(f"  ⊘ {results['skipped']} skipped")
             if results["error"] > 0:
                 print(f"  ✗ {results['error']} errors")
@@ -647,21 +853,27 @@ def register(
     print("=" * 70)
     print(f"  Databases processed: {len(databases)}")
     print(f"  + New tables: {total['new']}")
-    print(f"  ↻ Updated tables: {total['updated']}")
+    print(f"  ↻ Updated tables (Glue pointer moved): {total['updated']}")
+    if force:
+        print(f"  ✓ Re-registered unchanged: {total['refreshed']}")
     print(f"  ⊘ Skipped (unchanged): {total['skipped']}")
     print(f"  ✗ Errors: {total['error']}")
     print("=" * 70)
 
-    if not dry_run and (total["new"] > 0 or total["updated"] > 0):
-        changed = total["new"] + total["updated"]
+    # `refreshed` is deliberately excluded from "changed": under --force it counts
+    # every unchanged table, and folding it in is what made a forced run announce
+    # its whole catalog as freshly registered.
+    changed = total["new"] + total["updated"]
+    if not dry_run and changed > 0:
         print(f"\n✨ {changed} Iceberg tables registered/updated!")
         print(f"   DuckDB location: {duckdb_path}")
         if total["skipped"] > 0:
-            print(f"   ⊘ {total['skipped']} tables skipped (unchanged — use --force to re-register)")
+            print(f"   ⊘ {total['skipped']} unchanged in Glue, left as-is")
         print("\n   You can now run dbt with: --target dev_local")
-    elif not dry_run and total["skipped"] > 0:
-        print(f"\n✓ All {total['skipped']} tables already registered and up-to-date!")
-        print("   Use --force to re-register all tables")
+    elif not dry_run and (total["skipped"] > 0 or total["refreshed"] > 0):
+        seen = total["skipped"] + total["refreshed"]
+        print(f"\n✓ All {seen} tables already match Glue — nothing upstream has moved.")
+        print("   Your registry is up to date; --force would not surface anything further.")
 
 
 @local_app.command
@@ -673,6 +885,84 @@ def list_sources(
 ) -> None:
     """List currently registered Glue sources in DuckDB."""
     _show_registry(duckdb_path)
+
+
+@local_app.command
+def snapshot(
+    model: Annotated[str, cyclopts.Parameter(help="Model name to snapshot (its current build, via ref()).")],
+    as_name: Annotated[
+        str,
+        cyclopts.Parameter(name=["--as"], help="Name for the snapshot table, created in the target's own schema."),
+    ],
+    target: Annotated[
+        str,
+        cyclopts.Parameter(name=["--target", "-t"], help="dbt target to read/write on (default: dev_local)."),
+    ] = "dev_local",
+    dbt_dir_path: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            name=["--dbt-dir", "-d"],
+            help="Path to dbt project root (contains dbt_project.yml). Defaults to src/ol_dbt relative to repo root.",
+        ),
+    ] = None,
+) -> None:
+    """Copy a model's current build into a plain table under a new name.
+
+    For before/after comparisons of the SAME model (a code change, not a
+    migration to a differently-named model): build it, snapshot the build with
+    this command, make your change and rebuild, then compare with
+    `ol-dbt diff --old <as-name> --old-raw --new <model> --primary-key ...`.
+    Neither this command nor that diff touches Glue/production, so any
+    difference it finds reflects the code change alone, not upstream data
+    drift from asynchronous production rebuilds.
+    """
+    from ol_dbt_cli.commands.diff import InvalidIdentifierError, _validate_identifiers  # noqa: PLC0415
+    from ol_dbt_cli.commands.run import _find_dbt_dir  # noqa: PLC0415
+
+    try:
+        _validate_identifiers("model/snapshot name", [model, as_name])
+    except InvalidIdentifierError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    try:
+        dbt_dir = _find_dbt_dir(dbt_dir_path)
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    # _find_dbt_dir returns an explicit --dbt-dir as-is, without checking it's a
+    # real dbt project -- a typo'd path would otherwise only surface later as a
+    # confusing dbt-level error instead of a clear, early failure here.
+    if not (dbt_dir / "dbt_project.yml").exists():
+        print(
+            f"Error: dbt project not found at {dbt_dir}. "
+            "Pass --dbt-dir pointing at a directory containing dbt_project.yml."
+        )
+        sys.exit(1)
+
+    # Rendered into a Jinja template compiled by dbt (not executed as a raw query
+    # here), so the S608 heuristic is a false positive -- model/as_name were
+    # already validated as plain identifiers above.
+    # `}}` in an f-string is an escape for a single literal `}` (same as `{{` for
+    # `{`) -- each Jinja `{{ ... }}` block needs `{{{{`/`}}}}` from an f-string.
+    dst_expr = f"api.Relation.create(database=target.database, schema=target.schema, identifier='{as_name}')"
+    src_expr = f"ref('{model}')"
+    ctas_sql = f"create or replace table {{{{ {dst_expr} }}}} as select * from {{{{ {src_expr} }}}}"  # noqa: S608
+    cmd = ["dbt", "show", "--inline", ctas_sql, "--target", target, "--output", "json", "--limit", "-1"]
+    print(f"Running: {' '.join(cmd)}")
+    try:
+        subprocess.run(cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        print(f"Error: dbt show failed: {detail[-500:]}")
+        sys.exit(1)
+    except FileNotFoundError:
+        print("Error: 'dbt' command not found; install dbt and ensure it is on PATH.")
+        sys.exit(1)
+
+    print(f"✅ Snapshotted '{model}' as '{as_name}' (target={target}).")
+    print(f"   Compare with: ol-dbt diff --target {target} --old {as_name} --old-raw --new {model} --primary-key <key>")
 
 
 @local_app.command
@@ -1086,15 +1376,7 @@ def setup(
             conn.execute(f"INSTALL {ext}")
             conn.execute(f"LOAD {ext}")
         conn.execute("CALL load_aws_credentials()")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS _glue_source_registry (
-                view_name VARCHAR PRIMARY KEY,
-                glue_database VARCHAR,
-                glue_table VARCHAR,
-                metadata_location VARCHAR,
-                registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        _ensure_registry_tables(conn)
         conn.close()
         print(f"✓ DuckDB database initialized: {duckdb_path}")
 
@@ -1134,7 +1416,7 @@ def setup(
     databases = layer_map[layers]
     print(f"ℹ Layers: {layers} ({len(databases)} database(s))")
 
-    total_reg: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0}
+    total_reg: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0, "refreshed": 0}
     for idx, db_name in enumerate(databases):
         print(f"\n[{idx + 1}/{len(databases)}] Processing: {db_name}")
         try:
@@ -1142,6 +1424,7 @@ def setup(
         except Exception as e:  # noqa: BLE001
             print(f"  ✗ Error: {e}")
             continue
+        _record_registry_scan(duckdb_path, db_name)
 
         if not tables:
             print(f"  ⚠ No Iceberg tables found in {db_name}")
@@ -1150,7 +1433,10 @@ def setup(
         reg = _register_tables_in_duckdb(tables, db_name, duckdb_path, dry_run=False, verbose=False, force=True)
         for key in total_reg:
             total_reg[key] += reg[key]
-        print(f"  + {reg['new']} tables registered")
+        # setup() always forces, so most tables on a re-run land in `refreshed`,
+        # not `new`. Reporting only `new` made a correct re-setup read as "0
+        # tables registered".
+        print(f"  ✓ {reg['success']} tables registered ({reg['new']} new, {reg['updated']} updated)")
         if reg["error"] > 0:
             print(f"  ✗ {reg['error']} errors")
 

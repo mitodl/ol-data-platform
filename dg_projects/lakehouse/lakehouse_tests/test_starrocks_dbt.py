@@ -1,0 +1,477 @@
+"""Tests for the StarRocks dbt retry classifier and MV-relation derivation.
+
+The failure texts below are verbatim from the production Dagster run that
+motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
+the retry pattern is that it matches what StarRocks actually emits.
+"""
+
+import re
+
+import pytest
+from lakehouse.lib.starrocks_dbt import (
+    MAX_BUILD_ATTEMPTS,
+    RETRIABLE_ERROR_PATTERN,
+    RETRY_BASE_DELAY,
+    documented_columns,
+    drifted_relations,
+    live_column_query,
+    live_columns,
+    looks_retriable,
+    materialized_view_relations,
+    retry_delay,
+)
+from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
+
+# Verbatim from the failed run: an FE rolling restart began 39s into the build,
+# so the follower dbt was connected to could no longer forward DDL to the leader.
+FE_ROLLOUT_FAILURE = """The dbt CLI process with command
+
+`dbt build --target starrocks_production --select tag:starrocks`
+
+failed with exit code `2`.
+
+Errors parsed from dbt logs:
+
+2 of 7 ERROR creating sql materialized_view model \
+b2b_analytics.mv_b2b_contract_utilization  [ERROR in 46.99s]
+
+  Database Error in model mv_b2b_contract_utilization
+  1064 (HY000): java.net.SocketTimeoutException: Connect timed out
+
+Encountered an error:
+Database Error
+  1064 (HY000): forward failed: unknown result
+"""
+
+# Verbatim from the 2026-09-03 17:31 UTC run, after the Trino project rebuilt the
+# `dimensional` Iceberg tables.  dbt's first four concurrent models all failed on
+# dim_organization; models 5-8 built OK in that same invocation and a re-run 60s
+# later built all eight -- which is what makes this signature worth retrying.
+BASE_TABLE_DROPPED_FAILURE = """The dbt CLI process with command
+
+`dbt build --target starrocks_production --select tag:starrocks`
+
+failed with exit code `1`.
+
+Errors parsed from dbt logs:
+
+3 of 8 ERROR creating sql materialized_view model \
+b2b_analytics.mv_b2b_contract_monthly_engagement_trend  [ERROR in 0.61s]
+
+  Database Error in model mv_b2b_contract_monthly_engagement_trend
+  1064 (HY000): Getting analyzing error. Detail message: base-table dropped: \
+dim_organization.
+"""
+
+CLEAN_BUILD_OUTPUT = """
+1 of 7 OK created sql materialized_view model b2b_analytics.mv_b2b_program_funnel \
+[SUCCESS in 12.06s]
+Done. PASS=7 WARN=0 ERROR=0 SKIP=0 TOTAL=7
+"""
+
+
+class TestLooksRetriable:
+    def test_fe_rollout_failure_is_retriable(self):
+        """The whole point: both signatures arrive wrapped in a generic 1064,
+        so a numbers-only pattern would let this fail the build outright.
+        """
+        assert looks_retriable(Exception(FE_ROLLOUT_FAILURE))
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "1064 (HY000): forward failed: unknown result",
+            "1064 (HY000): java.net.SocketTimeoutException: Connect timed out",
+        ],
+    )
+    def test_fe_forwarding_signatures(self, message):
+        assert looks_retriable(Exception(message))
+
+    @pytest.mark.parametrize(
+        ("code", "meaning"),
+        [
+            (1044, "ER_DBACCESS_DENIED_ERROR -- Vault user not yet propagated"),
+            (1045, "ER_ACCESS_DENIED_ERROR -- Vault user not yet propagated"),
+            (2003, "CR_CONN_HOST_ERROR -- fresh connect to an FE that is gone"),
+            (2006, "CR_SERVER_GONE_ERROR"),
+            (2013, "CR_SERVER_LOST"),
+        ],
+    )
+    def test_wire_protocol_codes(self, code, meaning):
+        assert looks_retriable(Exception(f"{code} (HY000): {meaning}"))
+
+    def test_stale_external_base_table_is_retriable(self):
+        """A rebuilt Iceberg base table leaves StarRocks' cached handle stale for
+        a window.  The same invocation went on to build the remaining models and
+        a re-run went green, so this is worth another attempt rather than a red
+        asset.
+        """
+        assert looks_retriable(Exception(BASE_TABLE_DROPPED_FAILURE))
+
+    def test_base_table_dropped_signature(self):
+        assert looks_retriable(
+            Exception(
+                "1064 (HY000): Getting analyzing error. Detail message: "
+                "base-table dropped: dim_organization."
+            )
+        )
+
+    def test_successful_build_output_is_not_retriable(self):
+        assert not looks_retriable(Exception(CLEAN_BUILD_OUTPUT))
+
+    def test_unrelated_1064_is_not_retriable(self):
+        """A genuine SQL error also surfaces as 1064. Retrying a bad query three
+        more times just burns 210s before failing the same way.
+        """
+        assert not looks_retriable(
+            Exception(
+                "1064 (HY000): Getting analyzing error. Detail message: "
+                "Unknown table 'mv_b2b_typo'."
+            )
+        )
+
+    def test_embedded_digits_do_not_trip_the_word_boundary(self):
+        assert not looks_retriable(Exception("Rows affected: 20130, 12006, 110445"))
+
+
+class TestRetriableCodesAgreeWithTheResource:
+    def test_same_wire_protocol_codes_on_both_paths(self):
+        """The drift preflight runs through StarRocksResource, not through the
+        dbt build's retry loop, so a code the classifier here treats as
+        transient but the resource re-raises would abort the whole asset before
+        the build ever starts. 2003 CR_CONN_HOST_ERROR was exactly that gap.
+        """
+        classifier_codes = {
+            int(code) for code in re.findall(r"\d{4}", RETRIABLE_ERROR_PATTERN.pattern)
+        }
+        assert classifier_codes == set(_RETRIABLE_ERRORS)
+
+    def test_a_failed_connect_is_retriable(self):
+        assert 2003 in _RETRIABLE_ERRORS
+
+
+class TestRetryDelay:
+    def test_schedule_doubles(self):
+        assert [retry_delay(a) for a in range(1, MAX_BUILD_ATTEMPTS)] == [30, 60, 120]
+
+    def test_total_sleep_outlasts_an_fe_rolling_restart(self):
+        """The 2026-07-22 rollout ran 20:24:37 -> 20:27:33, i.e. 176s. Every
+        attempt has to not land inside the next one, or the retry is decorative:
+        the previous 3-attempt/1s-base schedule slept 3s in total and failed.
+        """
+        observed_rollout_seconds = 176
+        total = sum(retry_delay(a) for a in range(1, MAX_BUILD_ATTEMPTS))
+        assert total > observed_rollout_seconds
+
+    def test_initial_attempt_never_waits(self):
+        """Attempt 0 is the initial build, not a retry. `2 ** -1` would make
+        this 15.0 -- a float, and a nonsensical wait before the first try.
+        """
+        assert retry_delay(0) == 0
+        assert isinstance(retry_delay(0), int)
+
+    def test_every_delay_is_an_int(self):
+        """time.sleep tolerates a float, but the annotation says int and a
+        fractional delay would mean the schedule isn't what the comment claims.
+        """
+        assert all(isinstance(retry_delay(a), int) for a in range(MAX_BUILD_ATTEMPTS))
+
+    def test_first_retry_is_not_instant(self):
+        """A follower FE that just lost the leader needs the election to settle;
+        retrying a second later just burns an attempt.
+        """
+        assert retry_delay(1) == RETRY_BASE_DELAY
+        assert RETRY_BASE_DELAY >= 30
+
+
+def _model_node(name, *, schema="b2b_analytics", materialized, tags, columns=None):
+    return {
+        "resource_type": "model",
+        "schema": schema,
+        "alias": name,
+        "tags": tags,
+        "config": {"materialized": materialized, "tags": tags},
+        # dbt keys `columns` by name and nests the docs under it; only the keys
+        # matter here.
+        "columns": {name: {"name": name} for name in columns or []},
+    }
+
+
+def _manifest(nodes):
+    return {"nodes": {f"model.open_learning.{n['alias']}": n for n in nodes}}
+
+
+class TestMaterializedViewRelations:
+    def test_qualifies_with_the_schema_dbt_resolved(self):
+        """Not the connection's default database. This is the bug that produced
+        `Can not find materialized view` -- dbt built into one schema while the
+        refresh asset issued an unqualified statement against another.
+        """
+        manifest = _manifest(
+            [
+                _model_node(
+                    "mv_b2b_contract_utilization",
+                    materialized="materialized_view",
+                    tags=["starrocks"],
+                )
+            ]
+        )
+        assert materialized_view_relations(manifest) == [
+            "b2b_analytics.mv_b2b_contract_utilization"
+        ]
+
+    def test_follows_a_schema_change_without_a_python_edit(self):
+        manifest = _manifest(
+            [
+                _model_node(
+                    "mv_b2b_contract_utilization",
+                    schema="b2b_analytics_b2b_analytics",
+                    materialized="materialized_view",
+                    tags=["starrocks"],
+                )
+            ]
+        )
+        assert materialized_view_relations(manifest) == [
+            "b2b_analytics_b2b_analytics.mv_b2b_contract_utilization"
+        ]
+
+    def test_excludes_non_materialized_view_models(self):
+        """A starrocks-tagged model that materializes as a table must be left
+        out: REFRESH MATERIALIZED VIEW against a plain table is an error.
+        """
+        manifest = _manifest(
+            [
+                _model_node(
+                    "mv_b2b_program_funnel",
+                    materialized="materialized_view",
+                    tags=["starrocks"],
+                ),
+                _model_node(
+                    "b2b_seed_table",
+                    materialized="table",
+                    tags=["starrocks", "b2b_analytics"],
+                ),
+            ]
+        )
+        assert materialized_view_relations(manifest) == [
+            "b2b_analytics.mv_b2b_program_funnel"
+        ]
+
+    def test_excludes_models_not_tagged_starrocks(self):
+        manifest = _manifest(
+            [
+                _model_node(
+                    "mv_b2b_program_funnel",
+                    materialized="materialized_view",
+                    tags=["starrocks"],
+                ),
+                _model_node(
+                    "some_trino_mv",
+                    schema="ol_warehouse_production_mart",
+                    materialized="materialized_view",
+                    tags=["mart"],
+                ),
+            ]
+        )
+        assert materialized_view_relations(manifest) == [
+            "b2b_analytics.mv_b2b_program_funnel"
+        ]
+
+    def test_ignores_non_model_nodes(self):
+        manifest = _manifest(
+            [
+                _model_node(
+                    "mv_b2b_program_funnel",
+                    materialized="materialized_view",
+                    tags=["starrocks"],
+                )
+            ]
+        )
+        manifest["nodes"]["test.open_learning.not_null_x"] = {
+            "resource_type": "test",
+            "schema": "b2b_analytics",
+            "alias": "not_null_x",
+            "tags": ["starrocks"],
+            "config": {"materialized": "test", "tags": ["starrocks"]},
+        }
+        assert materialized_view_relations(manifest) == [
+            "b2b_analytics.mv_b2b_program_funnel"
+        ]
+
+    def test_result_is_sorted(self):
+        manifest = _manifest(
+            [
+                _model_node(name, materialized="materialized_view", tags=["starrocks"])
+                for name in ("mv_b2b_program_funnel", "mv_b2b_contract_utilization")
+            ]
+        )
+        assert materialized_view_relations(manifest) == [
+            "b2b_analytics.mv_b2b_contract_utilization",
+            "b2b_analytics.mv_b2b_program_funnel",
+        ]
+
+    def test_raises_rather_than_silently_refreshing_nothing(self):
+        """An empty list would let the asset report success while every MV goes
+        stale -- the exact failure the hand-maintained list could produce.
+        """
+        manifest = _manifest(
+            [_model_node("some_table", materialized="table", tags=["starrocks"])]
+        )
+        with pytest.raises(ValueError, match="No materialized_view models tagged"):
+            materialized_view_relations(manifest)
+
+
+def _mv_node(name, columns, *, schema="b2b_analytics"):
+    return _model_node(
+        name,
+        schema=schema,
+        materialized="materialized_view",
+        tags=["starrocks"],
+        columns=columns,
+    )
+
+
+def _rows(relation, columns):
+    schema, table = relation.split(".")
+    return [
+        {"table_schema": schema, "table_name": table, "column_name": column}
+        for column in columns
+    ]
+
+
+class TestDocumentedColumns:
+    def test_keys_by_relation_and_lowercases(self):
+        manifest = _manifest(
+            [_mv_node("mv_b2b_program_funnel", ["Org_Key", "STARTED"])]
+        )
+        assert documented_columns(manifest) == {
+            "b2b_analytics.mv_b2b_program_funnel": {"org_key", "started"}
+        }
+
+    def test_omits_models_with_no_documented_columns(self):
+        """An empty set differs from every live MV, so treating "undocumented"
+        as "expects nothing" would drop and recreate the view on every run.
+        `+meta: required_docs: true` should keep this unreachable.
+        """
+        manifest = _manifest([_mv_node("mv_b2b_program_funnel", [])])
+        assert documented_columns(manifest) == {}
+
+    def test_ignores_tables_and_other_engines(self):
+        manifest = _manifest(
+            [
+                _mv_node("mv_b2b_program_funnel", ["org_key"]),
+                _model_node(
+                    "b2b_seed_table",
+                    materialized="table",
+                    tags=["starrocks"],
+                    columns=["org_key"],
+                ),
+                _model_node(
+                    "some_trino_mv",
+                    schema="ol_warehouse_production_mart",
+                    materialized="materialized_view",
+                    tags=["mart"],
+                    columns=["org_key"],
+                ),
+            ]
+        )
+        assert set(documented_columns(manifest)) == {
+            "b2b_analytics.mv_b2b_program_funnel"
+        }
+
+
+class TestLiveColumnQuery:
+    def test_one_placeholder_per_distinct_schema(self):
+        query, params = live_column_query(
+            {
+                "b2b_analytics.mv_a": set(),
+                "b2b_analytics.mv_b": set(),
+                "b2b_analytics_qa.mv_a": set(),
+            }
+        )
+        assert params == ("b2b_analytics", "b2b_analytics_qa")
+        assert query.count("%s") == len(params)
+
+    def test_schema_names_are_bound_not_interpolated(self):
+        query, params = live_column_query({"b2b_analytics.mv_a": set()})
+        assert "b2b_analytics" not in query
+        assert params == ("b2b_analytics",)
+
+
+class TestLiveColumns:
+    def test_folds_rows_into_relations(self):
+        rows = _rows("b2b_analytics.mv_a", ["org_key", "started"]) + _rows(
+            "b2b_analytics.mv_b", ["org_key"]
+        )
+        assert live_columns(rows) == {
+            "b2b_analytics.mv_a": {"org_key", "started"},
+            "b2b_analytics.mv_b": {"org_key"},
+        }
+
+    def test_lowercases_column_names(self):
+        assert live_columns(_rows("b2b_analytics.mv_a", ["Org_Key"])) == {
+            "b2b_analytics.mv_a": {"org_key"}
+        }
+
+
+class TestDriftedRelations:
+    def test_added_column_is_drift(self):
+        """PR #2520: the dbt model grew five cohort columns and the deployed MV
+        kept the old SELECT, which a plain `dbt build` reports as success.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
+        live = {"b2b_analytics.mv_a": {"org_key"}}
+        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_renamed_column_is_drift(self):
+        documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
+        live = {"b2b_analytics.mv_a": {"org_key", "video_viewers"}}
+        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_removed_column_is_drift(self):
+        """Only reachable as equality, not as "documented columns are missing".
+        Safe to assert because ol-dbt validate errors on a SQL column the YAML
+        omits (#2555), so a live column absent from `documented` really is one
+        the model no longer emits -- not one nobody got around to documenting.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key"}}
+        live = {"b2b_analytics.mv_a": {"org_key", "dropped_col"}}
+        assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
+
+    def test_matching_columns_are_not_drift(self):
+        """The common case -- it must not force a full refresh, since that drops
+        and recreates views ol-analytics-api is serving from.
+        """
+        columns = {"org_key", "video_watchers"}
+        assert (
+            drifted_relations(
+                {"b2b_analytics.mv_a": columns}, {"b2b_analytics.mv_a": columns}
+            )
+            == []
+        )
+
+    def test_a_view_that_does_not_exist_yet_is_not_drift(self):
+        """This build creates it with the current SELECT; nothing to refresh."""
+        assert drifted_relations({"b2b_analytics.mv_new": {"org_key"}}, {}) == []
+
+    def test_ignores_live_relations_dbt_does_not_own(self):
+        """The query filters by schema, so tables created outside dbt come back
+        in the same result set.
+        """
+        documented = {"b2b_analytics.mv_a": {"org_key"}}
+        live = {
+            "b2b_analytics.mv_a": {"org_key"},
+            "b2b_analytics.some_manual_table": {"whatever"},
+        }
+        assert drifted_relations(documented, live) == []
+
+    def test_result_is_sorted(self):
+        documented = {
+            "b2b_analytics.mv_b": {"org_key", "new_col"},
+            "b2b_analytics.mv_a": {"org_key", "new_col"},
+        }
+        live = {"b2b_analytics.mv_a": {"org_key"}, "b2b_analytics.mv_b": {"org_key"}}
+        assert drifted_relations(documented, live) == [
+            "b2b_analytics.mv_a",
+            "b2b_analytics.mv_b",
+        ]

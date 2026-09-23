@@ -24,16 +24,11 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
         Vault: An authenticated Vault client.
     """
     if dagster_env == "dev":
-        if os.environ.get("GITHUB_TOKEN"):
-            auth_method = "github"
-            vault = Vault(vault_addr=vault_address, vault_auth_type=auth_method)
-        else:
-            auth_method = "oidc"
-            vault = Vault(
-                vault_addr=vault_address,
-                vault_auth_type=auth_method,
-                vault_role=os.environ.get("DAGSTER_VAULT_ROLE", "developer"),
-            )
+        vault = Vault(
+            vault_addr=vault_address,
+            vault_auth_type="oidc",
+            vault_role=os.environ.get("DAGSTER_VAULT_ROLE", "developer"),
+        )
     else:
         vault_role = os.getenv("DAGSTER_VAULT_ROLE", "dagster")
         vault_mount = os.getenv("DAGSTER_VAULT_MOUNT", "k8s-data")
@@ -45,6 +40,29 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
         )
     vault.authenticate()
     return vault
+
+
+def unauthenticated_vault(vault_address: str) -> Vault:
+    """Build an unauthenticated Vault resource for resilient-loading fallbacks.
+
+    Code locations catch authentication failures at import and fall back to mock
+    configuration. The fallback resource must still carry the same role as
+    authenticate_vault() would pick, because the OIDC token cache is keyed by
+    role: a resource built without one looks for a 'default' cache entry that
+    bin/vault-login never writes, so any later access to .client fails on a
+    cache miss instead of reusing the token that is sitting right there.
+
+    Parameters:
+        vault_address (str): The address of the Vault server.
+
+    Returns:
+        Vault: An unauthenticated Vault client.
+    """
+    return Vault(
+        vault_addr=vault_address,
+        vault_auth_type="oidc",
+        vault_role=os.environ.get("DAGSTER_VAULT_ROLE", "developer"),
+    )
 
 
 def s3_uploads_bucket(

@@ -48,10 +48,11 @@ with users as (
         , coalesce(mitxonline_users.user_industry, micromasters_users.user_company_industry) as user_industry
         , coalesce(mitxonline_users.user_job_title, micromasters_users.user_job_position) as user_job_title
         , coalesce(
-            mitxonline_users.user_address_country, micromasters_users.user_address_country
+            nullif(mitxonline_users.user_address_country, ''), nullif(micromasters_users.user_address_country, '')
         ) as user_address_country
         , coalesce(
-            mitxonline_users.user_address_state, micromasters_users.user_address_state_or_territory
+            nullif(mitxonline_users.user_address_state, '')
+            , nullif(micromasters_users.user_address_state_or_territory, '')
         ) as user_address_state
         , coalesce(
             mitxonline_users.user_highest_education, micromasters_users.user_highest_education
@@ -85,8 +86,12 @@ with users as (
         , micromasters_users.user_street_address
         , micromasters_users.user_address_city
         , true as is_edxorg_user
-        , coalesce(micromasters_users.user_full_name, edxorg_users.user_full_name) as user_full_name
-        , coalesce(micromasters_users.user_address_country, edxorg_users.user_country) as user_address_country
+        , coalesce(
+            nullif(micromasters_users.user_full_name, ''), nullif(edxorg_users.user_full_name, '')
+        ) as user_full_name
+        , coalesce(
+            nullif(micromasters_users.user_address_country, ''), nullif(edxorg_users.user_country, '')
+        ) as user_address_country
         , coalesce(
             micromasters_users.user_highest_education, edxorg_users.user_highest_education
         ) as user_highest_education
@@ -96,6 +101,74 @@ with users as (
         ) as user_birth_year
     from edxorg_users
     left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
+)
+
+---Primary link: the edX.org username on the MITx Online side. Sourced only from
+-- MicroMasters social auth, so populated for a minority of users.
+, username_links as (
+    select
+        mitxonline_users_view.user_mitxonline_id
+        , edxorg_users_view.user_edxorg_id
+    from mitxonline_users_view
+    inner join edxorg_users_view
+        on mitxonline_users_view.user_edxorg_username = edxorg_users_view.user_edxorg_username
+)
+
+, unlinked_mitxonline as (
+    select mitxonline_users_view.*
+    from mitxonline_users_view
+    left join username_links
+        on mitxonline_users_view.user_mitxonline_id = username_links.user_mitxonline_id
+    where username_links.user_mitxonline_id is null
+        and mitxonline_users_view.user_mitxonline_email is not null
+)
+
+, unlinked_edxorg as (
+    select edxorg_users_view.*
+    from edxorg_users_view
+    left join username_links on edxorg_users_view.user_edxorg_id = username_links.user_edxorg_id
+    where username_links.user_edxorg_id is null
+        and edxorg_users_view.user_edxorg_email is not null
+)
+
+---Fallback link on email, for users the username link cannot reach. A few addresses are
+-- shared by two accounts, so rank both directions and keep only mutual first choices:
+-- that caps the match at one account per side, which the unique tests depend on.
+, email_link_candidates as (
+    select
+        unlinked_mitxonline.user_mitxonline_id
+        , unlinked_edxorg.user_edxorg_id
+        , row_number() over (
+            partition by unlinked_mitxonline.user_mitxonline_id
+            order by
+                unlinked_edxorg.user_last_login desc nulls last
+                , unlinked_edxorg.user_joined_on desc nulls last
+                , unlinked_edxorg.user_edxorg_id asc
+        ) as edxorg_rank
+        , row_number() over (
+            partition by unlinked_edxorg.user_edxorg_id
+            order by
+                unlinked_mitxonline.user_last_login desc nulls last
+                , unlinked_mitxonline.user_joined_on desc nulls last
+                , unlinked_mitxonline.user_mitxonline_id asc
+        ) as mitxonline_rank
+    from unlinked_mitxonline
+    inner join unlinked_edxorg
+        on lower(unlinked_mitxonline.user_mitxonline_email) = lower(unlinked_edxorg.user_edxorg_email)
+)
+
+, email_links as (
+    select
+        user_mitxonline_id
+        , user_edxorg_id
+    from email_link_candidates
+    where edxorg_rank = 1 and mitxonline_rank = 1
+)
+
+, account_links as (
+    select * from username_links
+    union all
+    select * from email_links
 )
 
 , mitxonline_edxorg_users as (
@@ -118,13 +191,25 @@ with users as (
         , edxorg_users_view.user_address_city
         , coalesce(mitxonline_users_view.is_mitxonline_user is not null, false) as is_mitxonline_user
         , coalesce(edxorg_users_view.is_edxorg_user is not null, false) as is_edxorg_user
-        , coalesce(mitxonline_users_view.user_full_name, edxorg_users_view.user_full_name) as user_full_name
-        , coalesce(mitxonline_users_view.user_first_name, edxorg_users_view.user_first_name) as user_first_name
-        , coalesce(mitxonline_users_view.user_last_name, edxorg_users_view.user_last_name) as user_last_name
-        , coalesce(mitxonline_users_view.user_address_country, edxorg_users_view.user_address_country)
-            as user_address_country
-        , coalesce(mitxonline_users_view.user_address_state, edxorg_users_view.user_address_state_or_territory)
-            as user_address_state
+        -- nullif because the MITx Online legaladdress and name fields store blanks, not
+        -- nulls, and a blank would win the coalesce and mask a populated edX.org value.
+        , coalesce(
+            nullif(mitxonline_users_view.user_full_name, ''), nullif(edxorg_users_view.user_full_name, '')
+        ) as user_full_name
+        , coalesce(
+            nullif(mitxonline_users_view.user_first_name, ''), nullif(edxorg_users_view.user_first_name, '')
+        ) as user_first_name
+        , coalesce(
+            nullif(mitxonline_users_view.user_last_name, ''), nullif(edxorg_users_view.user_last_name, '')
+        ) as user_last_name
+        , coalesce(
+            nullif(mitxonline_users_view.user_address_country, '')
+            , nullif(edxorg_users_view.user_address_country, '')
+        ) as user_address_country
+        , coalesce(
+            nullif(mitxonline_users_view.user_address_state, '')
+            , nullif(edxorg_users_view.user_address_state_or_territory, '')
+        ) as user_address_state
         , coalesce(mitxonline_users_view.user_highest_education, edxorg_users_view.user_highest_education)
             as user_highest_education
         , coalesce(mitxonline_users_view.user_gender, edxorg_users_view.user_gender) as user_gender
@@ -139,8 +224,8 @@ with users as (
             mitxonline_users_view.user_micromasters_email, edxorg_users_view.user_micromasters_email
         ) as user_micromasters_email
     from mitxonline_users_view
-    full outer join edxorg_users_view
-        on mitxonline_users_view.user_edxorg_username = edxorg_users_view.user_edxorg_username
+    left join account_links on mitxonline_users_view.user_mitxonline_id = account_links.user_mitxonline_id
+    full outer join edxorg_users_view on account_links.user_edxorg_id = edxorg_users_view.user_edxorg_id
 )
 
 select
@@ -218,6 +303,11 @@ select
     , micromasters_users.user_company_industry as user_industry
     , micromasters_users.user_job_position as user_job_title
     , {{ generate_hash_id("cast(user_micromasters_id as varchar) || 'MicroMasters'") }} as user_hashed_id
+-- A person can hold two MicroMasters accounts, one reached from the edX.org side and one
+-- from MITx Online, but a collapsed row above keeps only one user_micromasters_id (MITx
+-- Online wins the coalesce). The other account is appended here and legitimately repeats
+-- the collapsed row's edX.org username, so user_edxorg_username is unique only per
+-- MicroMasters account -- see the compound test in _int_mitx__models.yml.
 from micromasters_users
 left join mitxonline_edxorg_users
     on micromasters_users.user_id = mitxonline_edxorg_users.user_micromasters_id

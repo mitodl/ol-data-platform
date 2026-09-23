@@ -1,7 +1,5 @@
 import hashlib
-import io
 import json
-import tarfile
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -21,6 +19,7 @@ from dagster._core.definitions.partitions.utils.multi import (
     MULTIPARTITION_KEY_DELIMITER,
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
     process_course_xml_blocks,
@@ -228,18 +227,12 @@ def extract_edxorg_courserun_metadata(  # noqa: PLR0915
             },
         )
 
-        # Materialize non-XML static assets to S3. Files are bundled into a single
-        # tar archive per course. The data_version is a content hash of the static
-        # files themselves, so it only changes when the assets actually change.
-        static_assets_file = Path(
-            NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
-        )
+        # Materialize non-XML static assets to S3. process_course_xml_blocks has
+        # already streamed them into a single tar archive per course; the
+        # data_version is a content hash of the static files themselves, so it
+        # only changes when the assets actually change.
+        static_assets_file = static_bundle.archive_path
         temp_files.append(static_assets_file)
-        with tarfile.open(static_assets_file, "w:gz") as assets_tar:
-            for relative_path, asset_bytes in static_bundle.files:
-                info = tarfile.TarInfo(name=relative_path)
-                info.size = len(asset_bytes)
-                assets_tar.addfile(info, io.BytesIO(asset_bytes))
         course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{static_bundle.data_version}.tar.gz"  # noqa: E501
         yield Output(
             (static_assets_file, course_static_assets_object_key),
@@ -353,9 +346,18 @@ def edxorg_course_content_webhook(
         )
 
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"Learn API webhook notification failed for course_id={course_id} "
-            f"with status code {error.response.status_code} and error: {error!s}"
+        context.log.exception(
+            "Learn API webhook notification failed for course_id=%s with status %s",
+            course_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise Exception(error_message) from error  # noqa: TRY002
+        # A 405 here means the endpoint does not accept the method we send, and
+        # no number of reruns changes that -- this one was retried 5,363 times
+        # over six days before anyone noticed (DAGSTER-13). http_failure sorts
+        # that from the 5xx worth another attempt, and puts the course id in
+        # metadata rather than in the issue title.
+        raise http_failure(
+            error,
+            "Learn API webhook notification failed",
+            metadata={"course_id": course_id, "source": "mit_edx"},
+        ) from error

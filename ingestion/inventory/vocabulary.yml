@@ -1,0 +1,91 @@
+---
+# Controlled vocabulary for the ingestion inventory's (deployment, layer) key.
+#
+# This is DATA, not code: adding a source is an edit here plus a unit file, and
+# nothing in ol_dbt_cli needs to change. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.7.
+#
+# The key semantics come from RFC 12711 §3: a unit is one (deployment, layer)
+# pair, because layers within a single deployment have independent ingestion
+# histories and a source-level key records facts that are false.
+
+# A deployment is a thing we run, or a vendor whose API we read. Vendor-owned
+# SaaS sources are deployments in their own right (decided 2026-08-14) rather
+# than sharing a `thirdparty` pseudo-deployment, so that (salesforce, api) and
+# (zendesk, api) are distinct keys instead of colliding.
+deployments:
+  # Open Learning deployments
+- bootcamps
+- edxorg
+- learn_ai
+- micromasters
+- mitlearn
+- mitx
+- mitxonline
+- mitxresidential
+- ocw
+- oll
+- open_discussions
+- ovs
+- xpro
+- mit_climate
+- mitpe
+  # Infrastructure we run rather than a learning platform, but the definition
+  # above is "a thing we run", and its user/group/role tables are identity
+  # facts the warehouse models against. Loaded by ol_dlt.sources.keycloak.
+- keycloak
+  # The podcast feeds we publish, read from their RSS. Not one deployment's
+  # data — the channel set is configured per run — so `podcast` names the
+  # collection, the same shape as `openedx` below.
+- podcast
+  # We run three Open edX instances — mitx, mitxonline and xpro, each its own
+  # deployment above. `openedx` is not a fourth: it names the shared pipeline
+  # that reads all three, whose output lands in one table rather than three.
+  # `raw__openedx__s3__course_xml_blocks` covers the three together and
+  # separates them with a `source_system` column. The vocabulary anticipated a
+  # layer that no single deployment owns; this is the same thing one level up,
+  # and naming it `openedx` keeps both halves of the key populated and matches
+  # the raw table name. Include it in the RFC 12711 amendment
+  # (tk-extend-rfc-12711-s-layer-enum-it-cannot-express--4a3ac9), because
+  # per-deployment QA scoping cannot apply to a unit spanning three of them.
+- openedx
+  # Partner / affiliate data sets
+- emeritus
+- global_alumni
+- irx
+  # Vendor SaaS, read through their APIs
+- github
+- hubspot
+- mailgun
+- salesforce
+- zendesk
+  # Vendor SaaS that reaches us as a file drop rather than an API: PostHog
+  # batch-exports every raw MIT Learn client event to the landing zone hourly,
+  # so its unit is (posthog, s3) and there is nothing to call.
+- posthog
+
+# A layer is the system within a deployment that the data comes out of. Two
+# layers of one deployment are separate units because they fail, and are
+# re-established, independently.
+layers:
+  # Databases behind an application
+- app_postgres          # the deployment's own application database
+- mysql                 # Open edX MySQL
+- mongodb               # Open edX forum
+- openedx_notes         # MITx Online's edX Notes MySQL — a DIFFERENT database
+                        # from `mysql`; folding the two loses one of them
+  # Extracted or served data
+- api                   # an HTTP API, including every vendor SaaS source
+- tracking_logs         # Open edX tracking log events
+- s3                    # files landed in a bucket
+- bigquery              # a BigQuery dataset shared with us
+- google_sheets         # a maintained spreadsheet
+- fastly                # Fastly access logs
+- rss                   # A published RSS feed, read as the source of record
+- course_structure      # Open edX course archives (course.xml bundles), parsed
+                        # into tables by a Dagster asset pipeline rather than
+                        # pulled by a loader. edxorg's are the only ones today.
+- hubspot               # HubSpot, which is per-deployment rather than shared,
+                        # so it cannot be a `hubspot` deployment + `api` layer
+
+# Layers whose data is not owned by a single deployment would go here if we ever
+# have one; today every unit is (deployment, layer) with both sides populated.

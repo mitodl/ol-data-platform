@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ol_dbt_cli.lib.sql_parser import find_compiled_dir, parse_model_file, parse_model_sql, strip_jinja
+from ol_dbt_cli.lib.sql_parser import (
+    consumed_columns_by_ref_via_scope,
+    consumed_columns_via_scope,
+    expand_star_with_schema,
+    find_compiled_dir,
+    get_columns_read_from_ref,
+    parse_model_file,
+    parse_model_sql,
+    resolve_star_columns,
+    strip_jinja,
+)
 
 
 class TestStripJinja:
@@ -352,6 +362,36 @@ class TestJinjaStrippingFixes:
         result = parse_model_sql("my_model", sql)
         assert result.parse_error is None
         assert "program_readable_id" in result.output_columns
+
+    def test_macro_as_first_function_argument_not_treated_as_cte(self) -> None:
+        r"""A macro call as a function argument must not be treated as a CTE placeholder.
+
+        `coalesce(\n    {{ macro(...) }},\n    regexp_extract(...)\n)` renders the
+        macro call to `__macro__,` alone on its line — the exact same shape the
+        trailing-comma-CTE rule (for `{{ deduplicate_raw_table(...) }},` between two
+        named CTEs) matches on. But here the placeholder is nested inside `coalesce(`'s
+        parens, not sitting between two top-level CTEs. Rewriting it as
+        `, __jinja_cte__ as (select 1),` corrupts the argument list; sqlglot's
+        error_level=IGNORE then silently degrades to a stray `select 1`, so the model
+        "parses" but yields zero output columns — a false-positive "columns missing
+        from SQL" error (tfact_chatbot_events regression). The two shapes are told
+        apart by the character preceding the placeholder line: a genuine CTE-position
+        macro always follows the closing `)` of the previous CTE, while a
+        function-argument macro follows the call's opening `(`.
+        """
+        sql = (
+            "with report as (select 1 as event_id, 'x' as event_value)\n"
+            "select\n"
+            "    report.event_id\n"
+            "    , coalesce(\n"
+            "        {{ json_query_string('event_value', \"'$.thread_id'\") }},\n"
+            "        regexp_extract(report.event_value, 'x', 1)\n"
+            "    ) as thread_id\n"
+            "from report"
+        )
+        result = parse_model_sql("my_model", sql)
+        assert result.parse_error is None
+        assert result.output_columns == {"event_id", "thread_id"}
 
     def test_var_in_where_clause_parseable(self) -> None:
         """A model with '{{ var(...) }}' in WHERE must parse without error."""
@@ -718,3 +758,241 @@ class TestJinja2Engine:
         # Both paths should produce the same placeholder
         regex_result = _strip_jinja_regex(sql)
         assert result.ref_names == regex_result.ref_names
+
+
+class TestExpandStarWithSchema:
+    """qualify()-based SELECT * expansion through UNION / multi-source CTE chains."""
+
+    def test_expands_star_through_union_cte_chain(self) -> None:
+        # The shape the hand-rolled heuristics cannot resolve: a star from a CTE
+        # that UNIONs two `select * from ref` CTEs (cf. int__combined__course_xml_blocks).
+        sql = """
+        with
+            a as (select * from {{ ref('up_a') }}),
+            b as (select * from {{ ref('up_b') }}),
+            combined as (select * from a union all select * from b)
+        select * from combined
+        """
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"up_a": {"id", "name"}, "up_b": {"id", "name"}},
+        )
+        assert cols == {"id", "name"}
+
+    def test_expands_star_from_source(self) -> None:
+        sql = "select * from {{ source('raw', 'users') }}"
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"raw.users": {"id", "email"}},
+        )
+        assert cols == {"id", "email"}
+
+    def test_returns_none_without_upstream_schema(self) -> None:
+        sql = "select * from {{ ref('up') }}"
+        stripped = strip_jinja(sql)
+        assert (
+            expand_star_with_schema(
+                stripped.clean_sql,
+                stripped.ref_placeholder_map,
+                stripped.source_placeholder_map,
+                {},
+            )
+            is None
+        )
+
+    def test_explicit_outer_projection_authoritative_despite_inner_star(self) -> None:
+        # An unexpandable star inside an inner CTE must NOT suppress a fully-known
+        # explicit outer projection — the outer column names are authoritative.
+        sql = (
+            "with u as (select * from {{ ref('other') }}),"
+            " x as (select * from {{ ref('unknown') }})"
+            " select id, name from x"
+        )
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"other": {"z"}},  # 'unknown' deliberately absent — its star cannot expand
+        )
+        assert cols == {"id", "name"}
+
+    def test_union_output_named_by_leftmost_schema_matched_branch(self) -> None:
+        # Outer `select *` over a UNION where only the leftmost branch has a schema:
+        # SQL set-operation semantics name the output from the leftmost branch, so the
+        # names are complete even though the right branch's star is not expanded.
+        sql = (
+            "with combined as ("
+            " select * from {{ ref('a') }} union all select * from {{ ref('b') }}"
+            " ) select * from combined"
+        )
+        stripped = strip_jinja(sql)
+        cols = expand_star_with_schema(
+            stripped.clean_sql,
+            stripped.ref_placeholder_map,
+            stripped.source_placeholder_map,
+            {"a": {"id", "name"}},  # 'b' absent
+        )
+        assert cols == {"id", "name"}
+
+    def test_returns_none_when_star_stays_unresolved(self) -> None:
+        # A star drawing from a physical table we have no schema for cannot be
+        # expanded even though an unrelated ref schema is supplied.
+        sql = "select * from some_physical_table where id in (select id from {{ ref('up') }})"
+        stripped = strip_jinja(sql)
+        assert (
+            expand_star_with_schema(
+                stripped.clean_sql,
+                stripped.ref_placeholder_map,
+                stripped.source_placeholder_map,
+                {"up": {"id"}},
+            )
+            is None
+        )
+
+
+class TestResolveStarColumns:
+    def test_reads_raw_source_and_expands(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("with c as (select * from {{ ref('up') }}) select * from c")
+        parsed = parse_model_file(model)
+        assert parsed.has_star
+        assert resolve_star_columns(parsed, {"up": {"a", "b"}}) == {"a", "b"}
+
+    def test_returns_none_when_no_star(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select a, b from {{ ref('up') }}")
+        parsed = parse_model_file(model)
+        assert not parsed.has_star
+        assert resolve_star_columns(parsed, {"up": {"a", "b"}}) is None
+
+    def test_returns_none_without_source_path(self) -> None:
+        parsed = parse_model_sql("m", "with c as (select * from {{ ref('up') }}) select * from c")
+        assert parsed.has_star
+        assert parsed.source_path is None
+        assert resolve_star_columns(parsed, {"up": {"a", "b"}}) is None
+
+
+class TestConsumedColumnsViaScope:
+    """Scope-based consumed-column attribution — the JOIN/subquery fallback.
+
+    Covers the shapes ``get_columns_read_from_ref`` deliberately bails on (JOIN to
+    a second table, subquery ``FROM``), where sqlglot ``qualify()`` + scope
+    traversal can still anchor each column to its source ref.
+    """
+
+    def test_attributes_columns_across_a_join_the_heuristic_skips(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.email, e.grade "
+            "from {{ ref('stg_users') }} as u "
+            "join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id "
+            "where u.status = 'active'"
+        )
+        parsed = parse_model_file(model)
+        schema = {
+            "stg_users": {"user_id", "email", "status", "unused"},
+            "stg_enroll": {"user_id", "grade"},
+        }
+        # The heuristic bails on the JOIN.
+        assert get_columns_read_from_ref(parsed, "stg_users") is None
+        # The scope fallback attributes SELECT/JOIN/WHERE columns to the right ref.
+        users = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert users is not None
+        assert {"user_id", "email", "status"} <= users
+        enroll = consumed_columns_via_scope(parsed, "stg_enroll", schema)
+        assert enroll is not None
+        assert {"user_id", "grade"} <= enroll
+
+    def test_surfaces_a_broken_column_read_through_a_join(self, tmp_path: Path) -> None:
+        """A directly-qualified column absent upstream is still catchable via a JOIN."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.nonexistent_col, e.grade "
+            "from {{ ref('stg_users') }} as u "
+            "join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email"}, "stg_enroll": {"user_id", "grade"}}
+        consumed = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert consumed is not None
+        # The broken reference surfaces so broken_ref_columns (consumed - upstream) flags it.
+        assert "nonexistent_col" in consumed
+        assert consumed - schema["stg_users"] == {"nonexistent_col"}
+
+    def test_does_not_misattribute_inner_subquery_column_to_outer_ref(self, tmp_path: Path) -> None:
+        """The historical FP shape: a nested IN-subquery column belongs to the inner ref."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "with src as (select * from {{ ref('outer_ref') }}) "
+            "select src.a from src "
+            "where src.b in (select i.c from {{ ref('inner_ref') }} as i where i.d = src.a)"
+        )
+        parsed = parse_model_file(model)
+        schema = {"outer_ref": {"a", "b"}, "inner_ref": {"c", "d"}}
+        outer = consumed_columns_via_scope(parsed, "outer_ref", schema)
+        inner = consumed_columns_via_scope(parsed, "inner_ref", schema)
+        assert outer is not None and inner is not None
+        # inner_ref's columns are NOT attributed to outer_ref (no cross-ref bleed).
+        assert "c" not in outer
+        assert "d" not in outer
+        assert {"c", "d"} <= inner
+
+    def test_attributes_columns_through_a_subquery_from(self, tmp_path: Path) -> None:
+        """A derived-table (subquery) FROM joined to a ref resolves per-ref, incl. inner-only cols."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select sub.user_id, sub.email, e.grade "
+            "from (select user_id, email from {{ ref('stg_users') }} where status = 'active') sub "
+            "join {{ ref('stg_enroll') }} as e on sub.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email", "status"}, "stg_enroll": {"user_id", "grade"}}
+        users = consumed_columns_via_scope(parsed, "stg_users", schema)
+        assert users is not None
+        # `status` is consumed only inside the derived table's WHERE — scope still sees it.
+        assert {"user_id", "email", "status"} <= users
+        enroll = consumed_columns_via_scope(parsed, "stg_enroll", schema)
+        assert enroll is not None
+        assert {"user_id", "grade"} <= enroll
+
+    def test_returns_none_when_target_schema_unknown(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, e.grade "
+            "from {{ ref('stg_users') }} as u join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        # Only the other ref's schema is known — the target can't be anchored.
+        assert consumed_columns_via_scope(parsed, "stg_users", {"stg_enroll": {"user_id", "grade"}}) is None
+
+    def test_returns_none_when_ref_not_read(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select a from {{ ref('stg_users') }}")
+        parsed = parse_model_file(model)
+        assert consumed_columns_via_scope(parsed, "some_other_model", {"some_other_model": {"a"}}) is None
+
+    def test_batch_attributes_every_ref_in_one_pass(self, tmp_path: Path) -> None:
+        """The batch entrypoint returns per-ref consumed sets for the whole model at once."""
+        model = tmp_path / "m.sql"
+        model.write_text(
+            "select u.user_id, u.email, e.grade "
+            "from {{ ref('stg_users') }} as u join {{ ref('stg_enroll') }} as e on u.user_id = e.user_id"
+        )
+        parsed = parse_model_file(model)
+        schema = {"stg_users": {"user_id", "email"}, "stg_enroll": {"user_id", "grade"}}
+        result = consumed_columns_by_ref_via_scope(parsed, schema)
+        assert {"user_id", "email"} <= result["stg_users"]
+        assert {"user_id", "grade"} <= result["stg_enroll"]
+
+    def test_batch_returns_empty_when_no_schema_known(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select user_id from {{ ref('stg_users') }}")
+        parsed = parse_model_file(model)
+        assert consumed_columns_by_ref_via_scope(parsed, {}) == {}

@@ -73,4 +73,6 @@ def build_source() -> Any:  # noqa: ANN401
     """Instantiate the source, honouring URL overrides from the environment."""
     explainers = os.getenv("MIT_CLIMATE_EXPLAINERS_API_URL", _EXPLAINERS_URL_DEFAULT)
     ask = os.getenv("ASK_MIT_CLIMATE_API_URL", _ASK_URL_DEFAULT)
-    return mit_climate_source(explainers_url=explainers, ask_url=ask)
+    return config.with_nullable_load_id(
+        mit_climate_source(explainers_url=explainers, ask_url=ask)
+    )

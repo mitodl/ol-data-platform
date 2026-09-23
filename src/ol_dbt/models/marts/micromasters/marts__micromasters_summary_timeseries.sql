@@ -200,7 +200,7 @@ select
     , course_certificates_combined.course_certificates
     , course_certificates_combined.unique_course_certificate_earners
     , program_certificates_combined.program_certificates
-    , to_iso8601(enrollments_combined.end_date) as end_date
+    , {{ cast_date_to_iso8601('enrollments_combined.end_date') }} as end_date
 from enrollments_combined
 left join course_certificates_combined
     on
@@ -219,4 +219,4 @@ left join program_certificates_combined
 order by
     enrollments_combined.micromasters_program_id
     , enrollments_combined.mitxonline_program_id
-    , to_iso8601(enrollments_combined.end_date)
+    , {{ cast_date_to_iso8601('enrollments_combined.end_date') }}

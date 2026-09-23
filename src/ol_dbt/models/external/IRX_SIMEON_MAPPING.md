@@ -1,0 +1,238 @@
+# irx__ models → Simeon file mapping
+
+Spec artifact for [#2359](https://github.com/mitodl/ol-data-platform/issues/2359). Verified
+2026-08-31 against the delivered files in the legacy buckets, the raw Iceberg tables, and
+[MIT-IR/simeon](https://github.com/MIT-IR/simeon) at `main`.
+
+## Which shape we deliver — decided
+
+There are two candidate targets and they are not the same.
+
+`README.md` in this directory records that the `irx__` models "were written to match the SQL file
+output of the edx-analytics-exporter", deliberately breaking with "a legacy interface that is no
+longer being used". On 2026-07-07 IRx replied on #2359: *"It would be great if the file format
+stays the same as the legacy data exports."* None of the six legacy CSV filenames appears anywhere
+in the Simeon source tree, and the legacy per-deployment layout is not the per-course layout Simeon
+walks — so "the same format" cannot mean both.
+
+**Decision (2026-08-31): the facade reproduces the shape we have been shipping all along — the six
+per-deployment CSVs, with the headers documented below.** We do not gate delivery on exact parity
+with Simeon's bundle. We deliver that shape, document it, and IRx adapts on their side or comes back
+with requested changes.
+
+That makes the legacy headers the build target and the acceptance criterion for the parallel run.
+The Simeon bundle mapping in the next section is documented because it is the destination the data
+eventually reaches, and because it is what makes several column decisions legible — not because it
+is what the facade emits.
+
+## What Simeon expects downstream (reference, not the build target)
+
+`simeon/report/utilities.py` defines `TARGET_FILES` and `_course_has_all_files(folder, ...)`, which
+checks *"a given course's folder from unpacking the SQL archive"*. The unit is a **course run**, not
+a deployment:
+
+```
+{course_dir}/
+├── auth_user-analytics.sql
+├── auth_userprofile-analytics.sql
+├── certificates_generatedcertificate-analytics.sql
+├── course-analytics.xml.tar.gz
+├── course_structure-analytics.json
+├── courseware_studentmodule-analytics.sql
+├── django_comment_client_role_users-analytics.sql
+├── forum.mongo
+├── grades_persistentcoursegrade-analytics.sql
+├── grades_persistentsubsectiongrade-analytics.sql
+├── student_courseaccessrole-analytics.sql
+├── student_courseenrollment-analytics.sql
+├── user_id_map-analytics.sql
+└── ora/{table}-analytics.sql        (carried by the unpacker; no report query reads these)
+```
+
+`format_sql_filename` (`simeon/download/utilities.py:181`) is what produces that layout from an
+edx.org GPG-encrypted bundle. The naming rule for our purposes is just
+`{table}-analytics.sql`, with the forum dump named `forum.mongo`.
+
+## Coverage: `irx__` model → Simeon filename
+
+The `irx__` model names were chosen to line up with `TARGET_FILES`, so the mapping is a pure name
+transform: `irx__{deployment}__openedx__mysql__{table}` → `{table}-analytics.sql`.
+
+| Simeon filename | `irx__` model (`{table}` part) | mitx | xpro | mitxonline |
+|---|---|:--:|:--:|:--:|
+| `auth_user-analytics.sql` | `auth_user` | ✅ | ✅ | ✅ |
+| `auth_userprofile-analytics.sql` | `auth_userprofile` | ✅ | ✅ | ✅ |
+| `certificates_generatedcertificate-analytics.sql` | `certificates_generatedcertificate` | ✅ | ✅ | ✅ |
+| `courseware_studentmodule-analytics.sql` | `courseware_studentmodule` | ✅ | ✅ | ✅ |
+| `django_comment_client_role_users-analytics.sql` | `django_comment_client_role_users` | ✅ | ✅ | ✅ |
+| `grades_persistentcoursegrade-analytics.sql` | `grades_persistentcoursegrade` | ✅ | ✅ | ✅ |
+| `grades_persistentsubsectiongrade-analytics.sql` | `grades_persistentsubsectiongrade` | ✅ | ✅ | ✅ |
+| `student_courseaccessrole-analytics.sql` | `student_courseaccessrole` | ✅ | ✅ | ✅ |
+| `student_courseenrollment-analytics.sql` | `student_courseenrollment` | ✅ | ✅ | ✅ |
+| `user_id_map-analytics.sql` | `user_id_map` | ✅ | ✅ | ✅ |
+| `course-analytics.xml.tar.gz` | — (openedx `course_xml` asset) | ✅ | ✅ | ✅ |
+| `course_structure-analytics.json` | — (openedx `course_structure` asset) | ✅ | ✅ | ✅ |
+| `forum.mongo` | `forum_contents`, delivered as `forum/contents.bson` | ✅ | ✅ | ✅ |
+
+Eleven of the thirteen are one rename away. `forum.mongo` is the forum `contents` collection as JSON
+lines; the facade delivers the same documents in the BSON dump format legacy shipped (see below). The `assessment_*`, `submissions_*` and `workflow_*`
+models map into `ora/` in the same way; no Simeon report query reads them, so they are carried, not
+consumed.
+
+## Legacy CSV → `irx__` model, column by column
+
+Headers below were read from the delivered objects (`20260830/*.csv` in each legacy bucket), not
+from the query builders. **They are byte-identical across all three deployments**, and so are the
+`irx__` model select lists, so this mapping is deployment-invariant.
+
+### `users_query.csv`
+`id,username,first_name,last_name,email,is_staff,is_active,is_superuser,last_login,date_joined,course_id`
+
+`irx__{d}__openedx__mysql__auth_user` emits 22 columns: the 10 shared ones plus `pass_word`,
+`status`, `email_key`, `avatar_type`, `country`, `show_country`, `date_of_birth`,
+`interesting_tags`, `ignored_tags`, `email_tag_filter_strategy`, `display_tag_filter_strategy`,
+`consecutive_days_visit_count` — all hardcoded `''`/`0`. Those are the Askbot forum-user columns
+the edX SQL bundle's `auth_user` carries, which is the contract the model was built for.
+
+**Gap, closed here:** `course_id` was not selected. The model already inner-joins
+`student_courseenrollment`, so one row was emitted per (user, enrollment) with no `course_id`
+column to tell them apart — on mitxonline that was 542,616 rows for 241,833 distinct users, i.e.
+300,783 indistinguishable duplicates. `course_id` is now carried from the existing join, and
+`(id, course_id)` is distinct at exactly the row count.
+
+### `enrollment_query.csv`
+`id,user_id,course_id,created,is_active,mode`
+
+`irx__{d}__openedx__mysql__student_courseenrollment` emits `course_id, mode, id, is_active`.
+
+**Gaps, closed here:** `user_id` and `created` were missing. Both exist on
+`raw__{d}__openedx__mysql__student_courseenrollment` (`id, mode, created, user_id, course_id,
+is_active`) and are now selected. `user_id` is load-bearing — an enrollment file without it is not
+usable.
+
+### `role_query.csv`
+`id,user_id,org,course_id,role` — from `student_courseaccessrole` (course *staff* access roles).
+
+`irx__{d}__openedx__mysql__student_courseaccessrole` emits `org, course_id, user_id, role`.
+
+**Gap, closed here:** `id` was missing. It is present on the raw table and is now selected.
+
+Note `student_courseaccessrole.org` is free text and drifts in case from the course key (mitxonline
+production has both `MITxt` and `MITxT`). Use the column, do not derive it.
+
+### `role_users.csv`
+`id,user_id,org,course_id,role` — same header as `role_query.csv`, different meaning: these are
+*forum* roles (Student, Moderator, Community TA), from `django_comment_client_role_users`.
+
+`irx__{d}__openedx__mysql__django_comment_client_role_users` emits `course_id, user_id, name`.
+
+**Gaps:**
+- `id` — **closed here**; it is present on
+  `raw__{d}__openedx__mysql__django_comment_client_role_users` and is now selected.
+- `name` → `role` — a rename the export applies when projecting the header. `name` stays correct
+  for the source shape, so this is not a model change.
+- `org` — **closed.** The legacy op joins `organizations_organizationcourse` and
+  `organizations_organization`. Both are ingested since #2665, and the model now carries
+  `organization.name as org` through left joins on them.
+
+  Deriving `org` from the course key instead would have been a 99.55% approximation, not an
+  equivalence: measured against the delivered mitxonline `role_users.csv` (549,130 rows), 2,476 rows
+  disagree, because the organization a course belongs to is not always its course-key org (e.g.
+  `course-v1:UAI_ET+UAI.1+2025_C503` belongs to organization `UAI_SOURCE`).
+
+  The model left-joins where legacy inner-joined, so it keeps forum roles on course runs with no
+  organization link. The export drops those rows (`org` is required), which is what legacy
+  delivered. A course run linked to two organizations gets a row per organization in both. One
+  mitxonline course run is, as of 2026-09-11; none in mitx or xpro.
+
+### `studentmodule_query.csv`
+`id,module_type,module_id,student_id,state,grade,created,modified,max_grade,done,course_id`
+
+`irx__{d}__openedx__mysql__courseware_studentmodule`, added for all three deployments.
+`raw__{d}__openedx__mysql__courseware_studentmodule` carries exactly those eleven columns, though
+in a different order (`id, done, grade, state, created, modified, course_id, max_grade, module_id,
+student_id, module_type`), so the model restates them in the delivered order — which is also the
+order `simeon/upload/schemas/schema_studentmodule.json` declares.
+
+**This source needs deduplicating, unlike the forum tables.** It syncs
+`incremental_deduped_history` with a `modified` cursor, so the raw table accumulates a row per
+version rather than per learner-block. The model therefore applies
+`deduplicate_raw_table(order_by='modified', partition_columns='course_id, student_id, module_id')`,
+matching the partition columns each deployment's own staging model already uses. Selecting straight
+from source would ship superseded versions alongside current state.
+
+The model is deliberately **unscoped**. The legacy op loops over `edx_course_ids` and filters
+`where course_id = <course>` per course; the facade applies that scoping at export time from the
+course list, so the same list drives the tabular files and the `courses/` prefix.
+
+Size caution: `legacy_openedx` carries a 32Gi memory limit in ol-infrastructure specifically
+"because of studentmodule loading to memory". `get_dbt_model_as_dataframe` returns a
+`pl.LazyFrame`, so the export asset must `sink_csv` it rather than `.collect().write_csv()` the way
+`b2b_organization/assets/data_export.py` does.
+
+### `course_ids.csv`
+`course_id` — single column. No `irx__` equivalent, and there does not need to be one. The legacy
+pipeline builds it from the Open edX course API via `list_courses`, and the facade makes the same
+`get_edx_course_ids()` call at export time. It does not serialise the `{deployment}_openedx_course_run`
+dynamic partition set, even though `course_run_sensor` fills it from the same API: that sensor only
+ever adds partitions, so the set accumulates course runs the LMS no longer lists.
+
+### `forum/contents.bson`
+Legacy mongodumps the forum database into `forum/`. Every deployment's Mongo forum moved to MySQL
+(forum-v2) in 2025–26, so that dump has been byte-identical since the day after each cutover, and
+nothing posted since has been delivered. Simeon reads only the `contents` collection, so the facade
+delivers only `contents.bson`, at the same path and in the same format: the documents' BSON back to
+back, unfiltered by course list as the dump was.
+
+`irx__{d}__openedx__mysql__forum_contents` unions `forum_commentthread` and `forum_comment` and
+aggregates votes and abuse flags onto them. The export (`openedx/assets/irx_export.py`) rebuilds each
+row as the Mongo document. Two things matter for Simeon:
+- `comment_thread_id` and `parent_id` are the **ObjectId of the post they point at**, as in Mongo,
+  not the MySQL bigint. Simeon's `forum_posts.sql` joins them to `mongoid` and drops unmatched rows
+  silently.
+- `forum_mongocontent` carries the ObjectId of every migrated post (content type resolved by name,
+  never by id). Posts created after the cutover get a minted ObjectId whose timestamp field is zero
+  (`00000000` + a thread/comment byte + the id), which cannot collide with a real one.
+
+Diffed by `_id` against the last legacy `contents.bson` (20260915): xpro 170,911 of 170,911 legacy
+posts present, mitx 17,758 of 17,809, mitxonline 103,585 of 103,590; no dangling thread or parent
+reference in any deployment. Differences are forum-v2's, and are delivered as they are:
+- `created_at`/`updated_at` were reset to the migration date for 3,976 mitx and ~97,600 mitxonline
+  posts.
+- `author_username` is null for 4,078 mitx and 96,655 mitxonline posts; `author_id` still joins to
+  `users_query.csv`.
+- `group_id` is null everywhere, and endorsement details survive only for post-cutover
+  endorsements.
+- `tags_array` and `edit_history` have no forum-v2 column; `at_position_list` is always empty.
+- About 1.2% of pre-cutover mitxonline posts have no ObjectId bridge row, so they and replies to them
+  carry minted ids.
+
+## Summary of gaps
+
+| gap | kind | status |
+|---|---|---|
+| `courseware_studentmodule` model absent (×3) | modelling | **closed** — added; plain `select`, column order matches the legacy file and `schema_studentmodule.json` |
+| `auth_user` missing `course_id` | modelling | **closed** — carried from the enrolment join that was already there |
+| `student_courseenrollment` missing `user_id`, `created` | modelling | **closed** |
+| `student_courseaccessrole` missing `id` | modelling | **closed** |
+| `django_comment_client_role_users` missing `id` | modelling | **closed**; `name`→`role` is a projection the export applies, not a model change |
+| `django_comment_client_role_users` missing `org` | ingestion | **closed** — both organizations tables ingested (#2665); the model left-joins them, the export drops rows with no organization as legacy's inner join did |
+| `course_ids.csv` has no warehouse source | none | not a gap — the export makes the same course API call legacy makes |
+| `forum.mongo` replacement | modelling | **closed** — `forum_contents` models, delivered as `forum/contents.bson` |
+
+The added columns are all additive: `ol-dbt impact` reports 0 breaking and 0 warnings across the 15
+changed models. Column order in the models is not the delivery order — the export projects the
+legacy header explicitly by name — so the new columns were appended rather than inserted, which
+keeps the existing `mit_irx` grants on these tables stable for anyone already querying them.
+
+The issue body calls the `irx__` set "a **superset**" of the six legacy CSVs. It is not. Correct
+that claim whenever #2359 is next updated.
+
+## Why this all lands in the `openedx` code location
+
+Decided 2026-08-31. The `irx_export` code location #2359 proposes is blocked by the code-location
+freeze, and `openedx` already holds three of the thirteen Simeon files locally — `course_xml`,
+`course_structure`, and the course-run enumeration that `course_ids.csv` is. The remaining ten come
+from Glue. The facade writes to the IRx bucket directly rather than through an io manager:
+`openedx`'s `s3file_io_manager` is bound to the landing-zone bucket
+(`openedx/definitions.py:155`), not to the IRx bucket.

@@ -1,15 +1,21 @@
 """ELT assets for the data lakehouse."""
 
+import json
 import os
 import re
+from datetime import timedelta
 
 from dagster import (
+    AssetCheckSeverity,
     AssetSelection,
     AssetSpec,
     AutomationConditionSensorDefinition,
     DefaultScheduleStatus,
+    DefaultSensorStatus,
     Definitions,
     ScheduleDefinition,
+    build_last_update_freshness_checks,
+    build_sensor_for_freshness_checks,
     define_asset_job,
     with_source_code_references,
 )
@@ -20,13 +26,18 @@ from dagster_airbyte import (
 )
 from dagster_dbt import (
     DbtCliResource,
+    build_dbt_asset_selection,
 )
+from dagster_dbt.asset_utils import get_asset_key_for_model
+from ol_dbt_cli.lib.inventory import load_units
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
-from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
+from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
@@ -39,14 +50,23 @@ from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
     dbt_docs_artifacts_job,
+    dbt_project,
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
+from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
+from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
+from lakehouse.lib.inventory import INVENTORY_DIR
+from lakehouse.lib.non_airbyte_staging import (
+    non_airbyte_raw_tables,
+    staging_models_reading,
+)
+from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
@@ -55,6 +75,8 @@ from lakehouse.sensors import (
     iceberg_snapshot_pointer_lag_sensor,
     iceberg_snapshot_pointer_repair_job,
 )
+
+init_sentry("lakehouse")
 
 trino_host_map = {
     "dev": "mitol-ol-data-lake-production.trino.galaxy.starburst.io",
@@ -79,14 +101,11 @@ starrocks_host_map = {
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
-# Matches the database-starrocks-{env} mount convention used by
-# bin/starrocks-auth and ol_dbt_cli/commands/starrocks.py.
-starrocks_vault_mount_map = {
-    "dev": "database-starrocks-qa",
-    "ci": "database-starrocks-qa",
-    "qa": "database-starrocks-qa",
-    "production": "database-starrocks-production",
-}
+# QA and Production each run their own, entirely separate Vault deployment, so
+# the mount name itself doesn't carry an env suffix -- the Vault server (not
+# the mount path) is what scopes the environment. Matches the "database-starrocks"
+# mount convention used by bin/starrocks-auth and ol_dbt_cli/commands/starrocks.py.
+STARROCKS_VAULT_MOUNT = "database-starrocks"
 
 airbyte_host_map = {
     "dev": "https://api-airbyte-qa.odl.mit.edu",
@@ -128,7 +147,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
     dagster_url = "http://localhost:3000"
 
@@ -144,6 +163,12 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # Attach to a sync that is already in flight rather than raising. The
+        # automation condition and Airbyte's own scheduler both launch syncs, so
+        # a tick landing on top of a running sync is routine, not exceptional --
+        # left at the library default of False it raised "Found sync job for
+        # connection_id=... already running" across ten connections.
+        poll_previous_running_sync=True,
     )
     if not SKIP_AIRBYTE
     else None
@@ -207,6 +232,13 @@ except Exception as e:  # noqa: BLE001
 # materialize the tables for that connection and any associated dbt staging models for
 # those tables. The eager auto materialize policy will then take effect for any
 # downstream dbt models that are dependent on those staging models being completed.
+#
+# That last sentence now holds only in DBT_AUTOMATION_ENVIRONMENTS. Outside it,
+# nothing downstream carries an AutomationCondition, so one of these
+# runs builds its staging models and stops -- deliberately, since a QA build of a
+# union model emits data that looks fine while silently dropping rows. It also
+# means starting one of these in QA cannot walk the graph to a full build; RFC
+# 12711 step 8 is what adds `qa` to DBT_AUTOMATION_ENVIRONMENTS.
 group_names: set[str] = set()
 for assets_def in airbyte_assets:
     group_names.update(g for g in assets_def.group_names_by_key.values())
@@ -379,6 +411,105 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Airbyte inventory drift. Daily, which is exactly step 8's acceptance
+# criterion — "a connection edited in the UI is reported within a day". Runs
+# ahead of the ingestion schedules, so a report describes the workspace as it
+# was configured for the day's syncs.
+#
+# Gated on SKIP_AIRBYTE with the assets above: the asset requires the `airbyte`
+# resource, which is not registered when that flag is set, and a definition
+# asking for an absent resource fails the whole code location at load.
+airbyte_drift_assets = [] if SKIP_AIRBYTE else [airbyte_inventory_drift]
+airbyte_drift_schedules = (
+    []
+    if SKIP_AIRBYTE
+    else [
+        (
+            "airbyte_inventory_drift_daily",
+            ScheduleDefinition(
+                name="airbyte_inventory_drift_daily_schedule",
+                job=define_asset_job(
+                    name="airbyte_inventory_drift_daily_job",
+                    selection=AssetSelection.assets(airbyte_inventory_drift),
+                ),
+                cron_schedule="0 3 * * *",
+                execution_timezone="UTC",
+            ),
+        )
+    ]
+)
+
+# Production only: the mirror reads production and writes QA, and QA's StarRocks
+# role is denied production Glue. Registered in no other environment, so there
+# is nothing a QA or dev code location could run against production by mistake.
+qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
+
+# The PostHog staging model is fed by a dlt source rather than an Airbyte
+# connection, so no `sync_and_stage_*` job covers it (see non_airbyte_staging).
+# It gets its own hourly schedule because the source lands an hour at a time;
+# the rest of that class is built daily below.
+#
+# data_loading lands the closed hour at :20 (see its posthog_events_ingest
+# schedule for the measured export lag); :35 leaves the load room to finish.
+POSTHOG_STAGING_MODEL = "stg__posthog__learn__s3__search_update_events"
+posthog_staging_schedule = ScheduleDefinition(
+    name="posthog_staging_hourly",
+    job=define_asset_job(
+        name="posthog_staging_job",
+        selection=AssetSelection.keys(
+            get_asset_key_for_model([full_dbt_project], POSTHOG_STAGING_MODEL)
+        ).downstream(depth=1, include_self=True),
+    ),
+    cron_schedule="35 * * * *",
+    execution_timezone="UTC",
+)
+
+# Every other staging model whose raw table the inventory assigns to a loader
+# other than Airbyte. For the dlt-fed ones, dbt_automation_sensor picks up the
+# downstream models once these materialize, because dlt materializes the raw
+# keys and so moves their data version. Nothing materializes the raw keys of the
+# `loader: dagster` units (the edxorg code location writes edxorg/processed_data),
+# so a rebuild of those staging models does not by itself re-trigger anything
+# downstream.
+#
+# Registered only when the selection is non-empty: an empty model list would
+# hand dbt an empty selector, which selects the whole project. The image copies
+# the inventory in, and airbyte_inventory_drift already fails naming the path
+# when it is missing.
+non_airbyte_staging_models = sorted(
+    staging_models_reading(
+        json.loads(dbt_project.manifest_path.read_text()),
+        non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
+    )
+    - {POSTHOG_STAGING_MODEL}
+)
+non_airbyte_staging_schedules = (
+    [
+        (
+            "non_airbyte_staging_daily",
+            ScheduleDefinition(
+                name="non_airbyte_staging_daily",
+                job=define_asset_job(
+                    name="non_airbyte_staging_job",
+                    selection=build_dbt_asset_selection(
+                        [full_dbt_project],
+                        dbt_select=" ".join(non_airbyte_staging_models),
+                    ),
+                ),
+                # After the cron-driven dlt ingests in data_loading (03:00 to
+                # 04:30 UTC). The edxorg table loads and the course structure
+                # assets are sensor-driven, so their staging can trail raw by up
+                # to a day.
+                cron_schedule="0 6 * * *",
+                execution_timezone="UTC",
+                default_status=DefaultScheduleStatus.RUNNING,
+            ),
+        )
+    ]
+    if non_airbyte_staging_models
+    else []
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -416,7 +547,7 @@ resources_dict = {
     "github_api": GithubApiClientFactory(vault=vault),
     "starrocks": StarRocksResource(
         vault=vault,
-        vault_mount_point=starrocks_vault_mount_map[DAGSTER_ENV],
+        vault_mount_point=STARROCKS_VAULT_MOUNT,
         host=starrocks_host_map[DAGSTER_ENV],
         database="b2b_analytics",
     ),
@@ -427,26 +558,79 @@ resources_dict = {
 if not SKIP_AIRBYTE:
     resources_dict["airbyte"] = airbyte_workspace
 
+# Freshness checks on the layers the business actually reads. Deliberately not
+# applied to every dbt asset: staging and intermediate models are refreshed on
+# their own cadences and would generate far more noise than signal.
+FRESHNESS_CHECKED_GROUPS = {"mart", "reporting", "dimensional"}
+freshness_checked_assets = [
+    key for key in dbt_model_keys if key.path[0] in FRESHNESS_CHECKED_GROUPS
+]
+
+# 26 hours, against the 24-hour default sync cadence -- a nightly build that
+# runs a little late must not page anyone.
+dbt_layer_freshness_checks = build_last_update_freshness_checks(
+    assets=freshness_checked_assets,
+    lower_bound_delta=timedelta(hours=26),
+    severity=AssetCheckSeverity.ERROR,
+)
+
+dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(
+    freshness_checks=dbt_layer_freshness_checks,
+    name="dbt_layer_freshness_sensor",
+    minimum_interval_seconds=3600,
+    default_status=DefaultSensorStatus.STOPPED,
+)
+
 defs = Definitions(
-    assets=[
-        *with_source_code_references([full_dbt_project]),
-        *with_source_code_references([starrocks_dbt_assets]),
-        *airbyte_assets,
-        *superset_assets,
-        *superset_starrocks_assets,
-        generate_instructor_onboarding_user_list,
-        update_access_forge_repo,
-        iceberg_dbt_layer_maintenance,
-        iceberg_raw_layer_maintenance,
-        refresh_starrocks_analytics_mvs,
-    ],
+    assets=with_failure_hooks(
+        [
+            *with_source_code_references([full_dbt_project]),
+            *with_source_code_references([starrocks_dbt_assets]),
+            *airbyte_assets,
+            *superset_assets,
+            *superset_starrocks_assets,
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
+            iceberg_dbt_layer_maintenance,
+            iceberg_raw_layer_maintenance,
+            refresh_starrocks_analytics_mvs,
+            *airbyte_drift_assets,
+            *qa_mirror_assets,
+        ]
+    ),
+    asset_checks=dbt_layer_freshness_checks,
     resources=resources_dict,
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
+        dbt_layer_freshness_sensor,
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour
-            # exclude staging as they are already handled by "sync_and_stage_" job
+            # Declared rather than left to the instance, which is how a QA code
+            # location came to build the production warehouse unattended. This
+            # only seeds the state on first deploy -- what enforces it is that
+            # outside DBT_AUTOMATION_ENVIRONMENTS the assets carry no
+            # AutomationCondition at all.
+            default_status=(
+                DefaultSensorStatus.RUNNING
+                if DBT_AUTOMATION_ENABLED
+                else DefaultSensorStatus.STOPPED
+            ),
+            # exclude staging as they are already handled by the "sync_and_stage_"
+            # jobs, or by the non-Airbyte staging schedules for dlt/Dagster sources
+            #
+            # Note what that exclusion costs in production, where staging models
+            # DO carry a condition: get_default_automation_condition_sensor_target
+            # takes every conditioned key this selection does not cover and
+            # synthesizes `default_automation_condition_sensor` over
+            # AssetSelection.all() minus this one. So staging is automatable there
+            # via a sensor no one declared. Pre-existing and STOPPED unless
+            # started by hand, but the same invisible instance state
+            # DBT_AUTOMATION_ENVIRONMENTS exists to remove -- see the open
+            # question recorded beside it.
+            #
+            # Where automation is off the question does not arise: no asset
+            # carries a condition, so there is nothing to synthesize over.
             target=(
                 AssetSelection.assets(full_dbt_project)
                 - AssetSelection.groups("staging")
@@ -460,12 +644,25 @@ defs = Definitions(
         iceberg_snapshot_pointer_repair_job,
         dbt_docs_artifacts_job,
     ],
-    schedules=[
-        *airbyte_update_schedules,
-        instructor_onboarding_schedule,
-        iceberg_dbt_maintenance_schedule,
-        iceberg_raw_maintenance_schedule,
-        dbt_docs_artifacts_schedule,
-        b2b_analytics_starrocks_schedule,
-    ],
+    # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
+    # on each of these only seeds the instance's instigator state on first
+    # deploy; a UI toggle overrides it forever after, so whether one of these
+    # ticked in QA was instance state nothing in this file had a say in. A
+    # schedule this filter drops is not stopped, it is absent -- there is
+    # nothing left to toggle. Note it also drops the job for the four that
+    # build one inline; see scheduled_automation for what that does and does
+    # not cost.
+    schedules=schedules_for_environment(
+        [
+            *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),
+            ("instructor_onboarding_daily_schedule", instructor_onboarding_schedule),
+            ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
+            ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
+            ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
+            ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
+            *airbyte_drift_schedules,
+            ("posthog_staging_hourly", posthog_staging_schedule),
+            *non_airbyte_staging_schedules,
+        ]
+    ),
 )

@@ -9,9 +9,48 @@ import pytest
 
 from ol_dbt_cli.commands.local_dev import (
     PROTECTED_SCHEMAS,
+    REGISTRY_STALE_AFTER_DAYS,
+    _classify_registration,
+    _describe_registry_age,
+    _get_glue_tables,
+    _is_dbt_shadow_table,
     _register_single_table,
+    _registry_last_refreshed,
+    _show_registry,
+    _stale_threshold_phrase,
     _validate_schema_safety,
+    snapshot,
 )
+
+
+class TestSnapshot:
+    def test_runs_ctas_with_validated_identifiers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import subprocess
+
+        (tmp_path / "dbt_project.yml").write_text("name: test\nprofile: test\n")
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        snapshot(
+            "enrollment_detail_report",
+            as_name="enrollment_detail_report_baseline",
+            dbt_dir_path=str(tmp_path),
+        )
+        assert len(calls) == 1
+        inline_idx = calls[0].index("--inline") + 1
+        inline_sql = calls[0][inline_idx]
+        assert "identifier='enrollment_detail_report_baseline'" in inline_sql
+        assert "ref('enrollment_detail_report')" in inline_sql
+        assert "--limit" in calls[0]
+        assert calls[0][calls[0].index("--limit") + 1] == "-1"
+
+    def test_rejects_invalid_identifier(self, tmp_path: Path) -> None:
+        with pytest.raises(SystemExit):
+            snapshot("m; drop table x", as_name="baseline", dbt_dir_path=str(tmp_path))
 
 
 class TestValidateSchemaSafety:
@@ -139,8 +178,13 @@ class TestRegisterSingleTable:
         assert status == "success"
         assert extra == "updated"
 
-    def test_force_re_registers_unchanged_table(self, tmp_path: Path) -> None:
-        """force=True bypasses the skip check, re-registering even unchanged tables."""
+    def test_force_re_registers_unchanged_table_as_refreshed(self, tmp_path: Path) -> None:
+        """force=True re-registers an unchanged table, reported as 'refreshed' not 'updated'.
+
+        'updated' is reserved for a table whose Glue metadata location actually
+        moved. Reporting a forced no-op re-registration as 'updated' would let a
+        forced run claim upstream changes that never happened.
+        """
         table = self._make_table()
         existing = {"glue__my_db__users": "s3://bucket/users/v1.json"}
 
@@ -153,7 +197,22 @@ class TestRegisterSingleTable:
             )
 
         assert status == "success"
-        assert extra == "updated"  # it was in existing_registrations → "updated"
+        assert extra == "refreshed"
+
+    def test_force_still_reports_a_moved_pointer_as_updated(self, tmp_path: Path) -> None:
+        """Under force, a genuinely changed location is still 'updated', not 'refreshed'."""
+        table = self._make_table(location="s3://bucket/users/v2.json")
+        existing = {"glue__my_db__users": "s3://bucket/users/v1.json"}
+
+        with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
+            mock_conn = MagicMock()
+            self._mock_duckdb_connect(mock_connect, mock_conn)
+
+            _status, _view_name, extra = _register_single_table(
+                table, "my_db", tmp_path / "test.duckdb", existing, force=True
+            )
+
+        assert extra == "updated"
 
     def test_returns_error_on_duckdb_exception(self, tmp_path: Path) -> None:
         """DuckDB errors (e.g. bad Iceberg manifest) are caught and returned as 'error'."""
@@ -223,6 +282,135 @@ class TestRegisterSingleTable:
             assert "glue__my_db__users" in row
             assert "my_db" in row
             assert "users" in row
+
+
+class TestClassifyRegistration:
+    """Tests for _classify_registration — the shared new/updated/refreshed decision."""
+
+    def test_unregistered_table_is_new(self) -> None:
+        assert _classify_registration(None, "s3://bucket/v1.json") == "new"
+
+    def test_moved_pointer_is_updated(self) -> None:
+        assert _classify_registration("s3://bucket/v1.json", "s3://bucket/v2.json") == "updated"
+
+    def test_identical_pointer_is_refreshed(self) -> None:
+        assert _classify_registration("s3://bucket/v1.json", "s3://bucket/v1.json") == "refreshed"
+
+
+class TestRegistryAge:
+    """Tests for registry staleness reporting — the signal the incident lacked."""
+
+    def _make_registry(self, db_path: Path, scanned_at_sql: str, glue_database: str = "my_db") -> None:
+        import duckdb
+
+        with duckdb.connect(str(db_path)) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS _glue_registry_scans (
+                    glue_database VARCHAR PRIMARY KEY,
+                    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                f"INSERT OR REPLACE INTO _glue_registry_scans VALUES (?, {scanned_at_sql})",  # noqa: S608
+                (glue_database,),
+            )
+
+    def test_reports_age_through_show_registry(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """_show_registry must report the age, not degrade it to "unknown".
+
+        Regression: _show_registry holds a read-write connection while asking for
+        the age. When _registry_last_refreshed opened its own read_only handle to
+        the same file, DuckDB refused it ("Can't open a connection to same
+        database file with a different configuration") and the broad except
+        turned a readable 3-day-old registry into "unknown" -- so list-sources
+        could never report an age or warn, on either a fresh or a stale registry.
+        """
+        import duckdb
+
+        db = tmp_path / "local.duckdb"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE _glue_source_registry (
+                    view_name VARCHAR PRIMARY KEY,
+                    glue_database VARCHAR,
+                    glue_table VARCHAR,
+                    metadata_location VARCHAR,
+                    registered_at TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "INSERT INTO _glue_source_registry VALUES ('glue__my_db__t', 'my_db', 't', 's3://x', CURRENT_TIMESTAMP)"
+            )
+            conn.execute("""
+                CREATE TABLE _glue_registry_scans (
+                    glue_database VARCHAR PRIMARY KEY,
+                    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("INSERT INTO _glue_registry_scans VALUES ('my_db', CURRENT_TIMESTAMP - INTERVAL 3 DAY)")
+
+        _show_registry(db)
+        out = capsys.readouterr().out
+        assert "unknown" not in out
+        assert "3.0 days ago" in out
+        assert "More than a day old" in out
+
+    def test_returns_none_when_no_database_file(self, tmp_path: Path) -> None:
+        assert _registry_last_refreshed(tmp_path / "missing.duckdb", ["my_db"]) is None
+
+    def test_returns_none_when_no_registry_table(self, tmp_path: Path) -> None:
+        """An existing DuckDB file with no registry table must not raise."""
+        import duckdb
+
+        db = tmp_path / "local.duckdb"
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("CREATE TABLE unrelated (x INTEGER)")
+        assert _registry_last_refreshed(db, ["my_db"]) is None
+
+    def test_returns_none_for_unregistered_database(self, tmp_path: Path) -> None:
+        """max() over zero matching rows is NULL, which must surface as None."""
+        db = tmp_path / "local.duckdb"
+        self._make_registry(db, "CURRENT_TIMESTAMP", glue_database="my_db")
+        assert _registry_last_refreshed(db, ["some_other_db"]) is None
+
+    def test_reads_newest_timestamp_for_targeted_databases(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        self._make_registry(db, "CURRENT_TIMESTAMP")
+        assert _registry_last_refreshed(db, ["my_db"]) is not None
+
+    def test_unknown_age_is_not_reported_as_stale(self) -> None:
+        """No readable registration is 'unknown', not 'stale' — do not cry wolf on first run."""
+        phrase, is_stale = _describe_registry_age(None)
+        assert is_stale is False
+        assert "unknown" in phrase
+
+    def test_threshold_phrase_is_not_ungrammatical_at_one_day(self) -> None:
+        """The banner interpolates this; at the default of 1 it must not read '1 days'."""
+        assert "1 days" not in _stale_threshold_phrase()
+
+    def test_fresh_registry_is_not_stale(self) -> None:
+        import datetime
+
+        recent = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(hours=1)
+        phrase, is_stale = _describe_registry_age(recent)
+        assert is_stale is False
+        assert "hours ago" in phrase
+
+    def test_old_registry_is_stale(self) -> None:
+        import datetime
+
+        old = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(days=REGISTRY_STALE_AFTER_DAYS + 1)
+        phrase, is_stale = _describe_registry_age(old)
+        assert is_stale is True
+        assert "days ago" in phrase
+
+    def test_naive_timestamp_does_not_raise(self) -> None:
+        """DuckDB hands back naive datetimes; subtracting an aware 'now' would raise."""
+        import datetime
+
+        naive = datetime.datetime.now() - datetime.timedelta(days=1)  # noqa: DTZ005
+        phrase, _is_stale = _describe_registry_age(naive)
+        assert "ago" in phrase
 
 
 class TestRegisterTablesInDuckdbDryRun:
@@ -298,3 +486,100 @@ class TestRegisterTablesInDuckdbDryRun:
         assert results["success"] == 0
         assert results["new"] == 0
         assert results["updated"] == 0
+
+
+def _glue_table(name: str, *, iceberg: bool = True) -> dict[str, object]:
+    """Build a Glue get_tables entry shaped like the real API response."""
+    params: dict[str, str] = {}
+    if iceberg:
+        params = {
+            "table_type": "ICEBERG",
+            "metadata_location": f"s3://bucket/{name}/metadata/00000-abc.metadata.json",
+        }
+    return {"Name": name, "StorageDescriptor": {"Location": f"s3://bucket/{name}"}, "Parameters": params}
+
+
+class TestIsDbtShadowTable:
+    """dbt's create-temp-then-swap artifacts must never be registered as sources."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # Measured in ol_warehouse_production_staging on 2026-09-09: all seven
+            # registered views whose Glue entry had already disappeared.
+            "stg__edxorg__bigquery__mitx_user_email_opt_in__dbt_tmp",
+            "stg__edxorg__bigquery__mitx_user_email_opt_in__dbt_backup",
+            "stg__edxorg__bigquery__mitx_user_info_combo__dbt_tmp",
+            "stg__edxorg__bigquery__mitx_user_info_combo__dbt_backup",
+            "stg__mitxpro__app__postgres__courses_coursetopic__dbt_tmp",
+            "stg__mitxpro__app__postgres__courses_platform__dbt_tmp",
+            "stg__mitxpro__app__postgres__courses_program__dbt_tmp",
+            # Numbered variants appear when a build is interrupted and retried.
+            "marts__combined_course_enrollment_detail__dbt_tmp1",
+            "some_model__dbt_backup2",
+        ],
+    )
+    def test_identifies_shadow_tables(self, name: str) -> None:
+        assert _is_dbt_shadow_table(name) is True
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "dim_course_run",
+            "marts__micromasters_dedp_exam_grades",
+            "stg__mitxonline__app__postgres__courses_courserun",
+            # The suffix only counts at the END of the name — a real table whose name
+            # merely contains the token must still be registered.
+            "int__dbt_tmp_usage_metrics",
+            "model__dbt_tmpfiles__summary",
+            # Near-misses that are not dbt's suffixes.
+            "model_dbt_tmp",
+            "model__dbt_temp",
+            "model__dbt_tmp_",
+        ],
+    )
+    def test_leaves_real_tables_alone(self, name: str) -> None:
+        assert _is_dbt_shadow_table(name) is False
+
+
+class TestGetGlueTablesFiltersShadowTables:
+    def test_excludes_shadow_tables_and_keeps_real_ones(self) -> None:
+        pages = [
+            {
+                "TableList": [
+                    _glue_table("dim_course_run"),
+                    _glue_table("dim_course_run__dbt_tmp"),
+                    _glue_table("dim_course_run__dbt_backup"),
+                    _glue_table("tfact_grade"),
+                    _glue_table("tfact_grade__dbt_tmp1"),
+                ]
+            }
+        ]
+        glue = MagicMock()
+        glue.get_paginator.return_value.paginate.return_value = pages
+
+        with patch("ol_dbt_cli.commands.local_dev.boto3.client", return_value=glue):
+            tables = _get_glue_tables("ol_warehouse_production_dimensional")
+
+        assert [t["name"] for t in tables] == ["dim_course_run", "tfact_grade"]
+
+    def test_shadow_table_is_filtered_before_the_iceberg_check(self) -> None:
+        """A shadow table with no Iceberg parameters must not be double-counted."""
+        pages = [{"TableList": [_glue_table("dim_course_run__dbt_tmp", iceberg=False)]}]
+        glue = MagicMock()
+        glue.get_paginator.return_value.paginate.return_value = pages
+
+        with patch("ol_dbt_cli.commands.local_dev.boto3.client", return_value=glue):
+            tables = _get_glue_tables("ol_warehouse_production_dimensional")
+
+        assert tables == []
+
+    def test_non_iceberg_tables_are_still_excluded(self) -> None:
+        pages = [{"TableList": [_glue_table("legacy_csv_table", iceberg=False), _glue_table("dim_course")]}]
+        glue = MagicMock()
+        glue.get_paginator.return_value.paginate.return_value = pages
+
+        with patch("ol_dbt_cli.commands.local_dev.boto3.client", return_value=glue):
+            tables = _get_glue_tables("ol_warehouse_production_dimensional")
+
+        assert [t["name"] for t in tables] == ["dim_course"]

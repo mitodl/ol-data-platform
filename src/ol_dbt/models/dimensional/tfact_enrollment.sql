@@ -280,16 +280,36 @@ with mitxonline_enrollments as (
     from {{ ref('dim_program') }}
 )
 
--- MicroMasters program lookup: maps courserun_readable_id to micromasters program_pk.
--- Used to enrich edxorg/mitxonline enrollment rows that belong to MM programs.
+-- MicroMasters program lookup: maps (courserun_readable_id, platform) to micromasters
+-- program_pk. Used to enrich edxorg/mitxonline enrollment rows that belong to MM
+-- programs. Platform-scoped (not just courserun_readable_id) so a mitxpro/residential/
+-- bootcamps enrollment can never inherit an MM program_fk, and deduped one row per
+-- (courserun_readable_id, platform) so a course run reused across two MM programs
+-- can't fan out the enrollment it's joined against.
 , micromasters_program_lookup as (
-    select distinct
+    select
         courserun_readable_id
-        , dim_program.program_pk as micromasters_program_pk
-    from {{ ref('int__micromasters__course_enrollments') }} as mm_enroll
-    inner join dim_program
-        on cast(mm_enroll.micromasters_program_id as varchar) = cast(dim_program.source_id as varchar)
-        and dim_program.platform_code = 'micromasters'
+        , platform
+        , micromasters_program_pk
+    from (
+        select
+            mm_enroll.courserun_readable_id
+            , case
+                when mm_enroll.platform = '{{ var("edxorg") }}' then 'edxorg'
+                when mm_enroll.platform = '{{ var("mitxonline") }}' then 'mitxonline'
+            end as platform
+            , dim_program.program_pk as micromasters_program_pk
+            , row_number() over (
+                partition by mm_enroll.courserun_readable_id, mm_enroll.platform
+                order by dim_program.program_pk
+            ) as _row_num
+        from {{ ref('int__micromasters__course_enrollments') }} as mm_enroll
+        inner join dim_program
+            on cast(mm_enroll.micromasters_program_id as varchar) = cast(dim_program.source_id as varchar)
+            and dim_program.platform_code = 'micromasters'
+    ) as deduped
+    where _row_num = 1
+        and platform is not null
 )
 
 -- dim_platform not in Phase 1-2
@@ -362,6 +382,7 @@ with mitxonline_enrollments as (
         and combined_enrollments.platform_code = dim_program.platform_code
     left join micromasters_program_lookup
         on combined_enrollments.courserun_readable_id = micromasters_program_lookup.courserun_readable_id
+        and combined_enrollments.platform = micromasters_program_lookup.platform
     left join dim_platform_lookup
         on combined_enrollments.platform = dim_platform_lookup.platform_readable_id
 )
@@ -380,6 +401,16 @@ with mitxonline_enrollments as (
         , max(coalesce(enrollment_updated_on, enrollment_created_on)) as max_activity_on
     from {{ this }}
     group by platform, enrollment_type
+)
+
+-- Snapshot of the target's current (enrollment_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        enrollment_key
+        , user_fk as stored_user_fk
+    from {{ this }}
 )
 {% endif %}
 
@@ -412,6 +443,12 @@ with mitxonline_enrollments as (
     left join incremental_watermarks w
         on w.watermark_platform = ewf.platform
         and w.watermark_enrollment_type = ewf.enrollment_scope
+    left join stale_user_fk_lookup as sufk
+        on sufk.enrollment_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(ewf.enrollment_id as varchar)",
+            "ewf.platform",
+            "ewf.enrollment_scope"
+        ]) }}
     where (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
@@ -424,6 +461,8 @@ with mitxonline_enrollments as (
             and ewf.enrollment_created_on >= {{ cast_timestamp_to_iso8601("current_timestamp - interval '7' day") }}
         )
         or ewf.enrollment_created_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from ewf.user_fk
     )
     {% endif %}
 )

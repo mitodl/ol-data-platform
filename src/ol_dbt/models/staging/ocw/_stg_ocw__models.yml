@@ -185,6 +185,10 @@ models:
       21A.850J
   - name: course_extra_course_numbers
     description: str, the extra course number extracted from sitemetadata. e.g., STS.484J
+  - name: course_image_text_id
+    description: str, uuid string referencing the websitecontent_text_id of the website
+      content record for the course's featured image, extracted from the course_image
+      field in sitemetadata
   - name: websitecontent_deleted_on
     description: timestamp, date and time for the soft delete
   - name: websitecontent_created_on

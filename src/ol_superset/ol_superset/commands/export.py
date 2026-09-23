@@ -6,6 +6,11 @@ from cyclopts import Parameter
 
 from ol_superset.commands.dedupe import dedupe
 from ol_superset.commands.normalize import normalize
+from ol_superset.lib.export_ignore import (
+    IGNORE_FILENAME,
+    load_ignore_patterns,
+    prune_ignored_assets,
+)
 from ol_superset.lib.utils import count_assets, get_assets_dir, run_sup_command
 
 
@@ -34,6 +39,13 @@ def export(
             help="Skip automatic YAML normalization after export",
         ),
     ] = False,
+    skip_ignore: Annotated[
+        bool,
+        Parameter(
+            name=["--skip-ignore"],
+            help=f"Skip pruning assets matched by {IGNORE_FILENAME}",
+        ),
+    ] = False,
 ) -> None:
     """
     Export all Superset assets from specified instance.
@@ -56,6 +68,9 @@ def export(
 
         Export without YAML normalization:
             ol-superset export --skip-normalize
+
+        Export without pruning .exportignore matches (full export):
+            ol-superset export --skip-ignore
 
         Export to custom directory:
             ol-superset export -f superset-qa -o /tmp/qa-backup
@@ -176,5 +191,34 @@ def export(
         print()
         print("ℹ️  Skipped normalization (--skip-normalize flag used)")
         print("   Run 'ol-superset normalize' to apply later.")
+
+    # Prune curated exclusions unless skipped. Runs last so it operates on the
+    # final deduped/normalized bundle.
+    if not skip_ignore:
+        patterns = load_ignore_patterns()
+        if patterns:
+            print()
+            print("=" * 50)
+            print(f"Step 6: Pruning {IGNORE_FILENAME} matches...")
+            print("=" * 50)
+            print()
+            report = prune_ignored_assets(assets_dir, patterns)
+            if report.total == 0:
+                print(
+                    f"No assets matched {IGNORE_FILENAME} ({len(patterns)} pattern(s))."
+                )
+            else:
+                print(
+                    f"Pruned {len(report.removed_dashboards)} dashboard(s) and "
+                    f"{len(report.removed_charts)} chart(s) "
+                    f"({len(report.orphaned_charts)} orphaned) "
+                    f"matching {IGNORE_FILENAME}."
+                )
+        else:
+            print()
+            print(f"ℹ️  No {IGNORE_FILENAME} patterns — nothing to prune.")
+    else:
+        print()
+        print(f"ℹ️  Skipped {IGNORE_FILENAME} pruning (--skip-ignore flag used)")
 
     print()

@@ -12,6 +12,7 @@ with instructors as (
 
 select distinct
     course_pages.course_id
+    , cast(instructors.wagtail_page_id as varchar) as instructor_source_id
     , instructors.instructor_name
     , instructors.instructor_title
     , instructors.instructor_bio_short

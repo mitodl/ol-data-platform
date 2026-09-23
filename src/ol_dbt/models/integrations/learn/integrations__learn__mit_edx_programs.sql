@@ -4,8 +4,12 @@
   Contract: docs/learn_marts_contract.md
 
   Source: raw__edxorg__discovery__api__programs, which is pre-filtered by the
-  dlt pipeline to active, MIT-authored, non-MicroMasters programs. MicroMasters
-  are covered by integrations__learn__micromasters_programs instead.
+  dlt pipeline to active, MIT-authored, non-MicroMasters programs. The
+  MicroMasters exclusion is deliberate and permanent: MIT Learn unpublished and
+  then deleted its MicroMasters resources (migrations 0117/0118) and dropped
+  `micromasters` from its ETLSource enum, so those programs are no longer
+  wanted as learning resources at all. Do not lift the filter to "restore"
+  them -- there is no longer a destination for them.
 
   raw__edxorg__discovery__api__programs is loaded with write_disposition=
   "merge" (primary_key=uuid): a program that becomes inactive/withdrawn simply

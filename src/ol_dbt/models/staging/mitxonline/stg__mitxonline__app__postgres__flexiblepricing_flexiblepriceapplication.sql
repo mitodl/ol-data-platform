@@ -4,6 +4,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__flexiblepricing_flexibleprice', partition_columns='id') }}
+
 , renamed as (
 
     select
@@ -25,7 +27,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('created_on') }} as flexiblepriceapplication_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as flexiblepriceapplication_updated_on
 
-    from source
+    from most_recent_source
 
 )
 

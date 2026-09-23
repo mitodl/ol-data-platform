@@ -92,6 +92,11 @@ models:
     description: str, course learning resource types or features in comma-separated
       list. e.g. Lecture Notes, Problem Sets with Solutions,... Full list https://github.com/mitodl/ocw-hugo-projects/blob/049c85e6544a36ba69a89602e5014f6085ef8831/
       ocw-course-v2/ocw-studio.yaml#L163-L207
+  - name: course_image_url
+    description: str, fully-qualified URL for the course's featured image, constructed
+      by prepending the ocw_production_url dbt variable to the file path of the website
+      content referenced by course_image_text_id. Null when the course has no featured
+      image.
 
 - name: int__ocw__course_topics
   description: supporting table containing tabular course topic data for OCW courses

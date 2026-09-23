@@ -79,4 +79,6 @@ mitpe_pipeline = config.pipeline_for("mitpe")
 
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the source, honouring the base-URL override from the env."""
-    return mitpe_source(base_url=os.getenv("MITPE_BASE_URL", _MITPE_BASE_URL_DEFAULT))
+    return config.with_nullable_load_id(
+        mitpe_source(base_url=os.getenv("MITPE_BASE_URL", _MITPE_BASE_URL_DEFAULT))
+    )

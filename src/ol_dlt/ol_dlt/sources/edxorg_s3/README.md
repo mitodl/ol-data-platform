@@ -326,6 +326,35 @@ MemoryError: Unable to allocate array
 - Reduce chunk size in `read_csv(chunksize=...)`
 - Use production environment with more resources
 
+### CSV Dialect Sniffing Errors
+
+```
+Invalid Input Error: Error when sniffing file "DUCKDB_INTERNAL_OBJECTSTORE://..."
+It was not possible to automatically detect the CSV parsing dialect
+```
+
+**Cause**: a free-text column (`auth_userprofile.bio`, `.goals`,
+`.mailing_address`, …) contains a bare `\r` or a `\r\n` while the rest of the
+file is `\n`-terminated. DuckDB's strict mode treats mixed newlines as a dialect
+violation, and the sniffer runs *before* `ignore_errors` applies — so one stray
+carriage return aborts the whole resource instead of skipping one row.
+
+**Solution**: already handled — the reader runs with `strict_mode=False` (see
+`_CSV_READER_OPTIONS` in `__init__.py`). If this resurfaces, check whether the
+options were changed rather than the data.
+
+The upstream `edxorg_archive` asset also writes with `quote_style="necessary"`,
+so fields containing a CR/LF/tab are quoted rather than emitted raw. That is the
+actual fix; `strict_mode=False` is the safety net for files written before it.
+
+### Doubled Quotes in `meta` (or Other JSON Columns)
+
+If a JSON-bearing column comes back as `{""key"": ""value""}` instead of
+`{"key": "value"}`, the reader lost its escape character. `_CSV_READER_OPTIONS`
+pins `quotechar='"'` and `escapechar='"'` precisely to undouble RFC-4180
+escaping — without them DuckDB's sniffer picks a pair that leaves the doubling
+in place, silently corrupting every quoted JSON value.
+
 ### Empty Results
 
 **Check**:

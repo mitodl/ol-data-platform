@@ -5,6 +5,12 @@ models:
 - name: int__micromasters__dedp_proctored_exam_grades
   description: DEDP proctored exam grades stored in MicroMasters database. We haven't
     had any new data for this table since 2022-09.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of the MicroMasters program
@@ -88,6 +94,12 @@ models:
   description: MicroMasters enrollments. Enrollments in courses that satisfy the requirements
     for multiple programs appear in multiple rows. User's profile fields are chosen
     in the order of MITx Online, MicroMasters, and edX.org, whichever is not null.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of micromasters program the course is part of
@@ -172,6 +184,11 @@ models:
       website
     tests:
     - not_null
+  - name: program_page_url
+    description: str, fully-qualified live URL of the program's page on MicroMasters.
+      NULL for unpublished pages.
+  - name: program_image_url
+    description: str, fully-qualified image URL for the program's thumbnail image
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       arguments:
@@ -209,11 +226,19 @@ models:
     description: int, indicating the number of required courses to earn certificate
     tests:
     - not_null
+  - name: course_position_in_program
+    description: int, sequential number indicating the course position in a program
 
 - name: int__micromasters__program_certificates
   description: MicroMasters program certificate earners. User's profile fields are
     chosen in the order of MITx Online, MicroMasters, and edX.org, whichever is not
     null.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform. For users who
@@ -292,6 +317,12 @@ models:
     edX.org. Certificates earned for courses that satisfy the requirements for multiple
     programs appear in multiple rows for each program. User's profile fields are chosen
     in the order of MITx Online, MicroMasters, and edX.org, whichever is not null.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of the program the course is part of
@@ -354,6 +385,12 @@ models:
     the requirements for multiple programs appear in multiple rows. User's profile
     fields are chosen in the order of MITx Online, MicroMasters, and edX.org, whichever
     is not null.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of program the course is part of
@@ -410,6 +447,10 @@ models:
 
 - name: int__micromasters__users
   description: MicroMasters users
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: user_id
     description: int, sequential ID representing a user in MicroMasters
@@ -511,6 +552,10 @@ models:
       arguments:
         compare_model: ref('__micromasters__users')
 - name: int__micromasters__orders
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
   columns:
   - name: order_id
     description: int, primary key representing a single  order
@@ -638,6 +683,12 @@ models:
         compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
 - name: int__micromasters__program_enrollments
   description: MicroMasters program enrolled users
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform. For users who

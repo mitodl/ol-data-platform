@@ -10,7 +10,9 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 
 b2b_bucket_map = {
     "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
@@ -19,6 +21,8 @@ b2b_bucket_map = {
     "production": {"bucket": "ol-b2b-partners-storage-production", "prefix": ""},
 }
 
+init_sentry("b2b_organization")
+
 # Initialize vault with resilient loading
 try:
     vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
@@ -26,13 +30,11 @@ try:
 except Exception as e:  # noqa: BLE001 (resilient loading)
     import warnings
 
-    from ol_orchestrate.resources.secrets.vault import Vault
-
     warnings.warn(
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 
@@ -53,7 +55,7 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
     },
-    assets=[export_b2b_organization_data],
+    assets=with_failure_hooks([export_b2b_organization_data]),
     jobs=[b2b_organization_data_export_job],
     sensors=[b2b_organization_list_sensor],
 )

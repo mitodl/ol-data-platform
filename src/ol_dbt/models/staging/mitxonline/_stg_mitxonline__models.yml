@@ -77,6 +77,34 @@ models:
         datepart: day
         field: from_iso8601_timestamp(courserunenrollment_created_on || 'Z')
         interval: 2
+- name: stg__mitxonline__app__postgres__courses_courserunenrollmentaudit
+  description: >
+    Audit log of changes to courses_courserunenrollment records, including
+    cases where an enrollment's owning user_id was reassigned (e.g. an admin
+    merging duplicate accounts).
+  columns:
+  - name: enrollmentaudit_id
+    description: int, sequential ID for this audit record
+    tests:
+    - unique
+    - not_null
+  - name: courserunenrollment_id
+    description: int, foreign key referencing courses_courserunenrollment
+    tests:
+    - not_null
+  - name: acting_user_id
+    description: int, ID of the user (often an admin/support account) who made the
+      change
+  - name: enrollmentaudit_data_before
+    description: JSON string, full enrollment record state before the change
+  - name: enrollmentaudit_data_after
+    description: JSON string, full enrollment record state after the change
+  - name: enrollmentaudit_created_on
+    description: timestamp, specifying when this audit record was created
+    tests:
+    - not_null
+  - name: enrollmentaudit_updated_on
+    description: timestamp, specifying when this audit record was last updated
 - name: stg__mitxonline__app__postgres__courses_programenrollment
   columns:
   - name: programenrollment_id
@@ -113,6 +141,35 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["program_id", "user_id"]
+
+- name: stg__mitxonline__app__postgres__courses_programenrollmentaudit
+  description: >
+    Audit log of changes to courses_programenrollment records, including
+    cases where an enrollment's owning user_id was reassigned (e.g. an admin
+    merging duplicate accounts).
+  columns:
+  - name: enrollmentaudit_id
+    description: int, sequential ID for this audit record
+    tests:
+    - unique
+    - not_null
+  - name: programenrollment_id
+    description: int, foreign key referencing courses_programenrollment
+    tests:
+    - not_null
+  - name: acting_user_id
+    description: int, ID of the user (often an admin/support account) who made the
+      change
+  - name: enrollmentaudit_data_before
+    description: JSON string, full enrollment record state before the change
+  - name: enrollmentaudit_data_after
+    description: JSON string, full enrollment record state after the change
+  - name: enrollmentaudit_created_on
+    description: timestamp, specifying when this audit record was created
+    tests:
+    - not_null
+  - name: enrollmentaudit_updated_on
+    description: timestamp, specifying when this audit record was last updated
 
 - name: stg__mitxonline__app__postgres__ecommerce_basketdiscount
   columns:
@@ -1776,6 +1833,9 @@ models:
   - name: course_video_url
     description: str, URL to the video to be displayed for this course. It can be
       an HLS or Youtube video URL.
+  - name: course_feature_image_id
+    description: int, foreign key to wagtailimages_image for the course's feature
+      image
 
 - name: stg__mitxonline__app__postgres__cms_programpage
   description: program page metadata sourced from Wagtail CMS
@@ -1817,6 +1877,9 @@ models:
   - name: program_video_url
     description: str, URL to the video to be displayed for this program. It can be
       an HLS or Youtube video URL.
+  - name: program_feature_image_id
+    description: int, foreign key to wagtailimages_image for the program's feature
+      image
 
 - name: stg__mitxonline__app__postgres__courses_coursetopic
   columns:
@@ -2138,6 +2201,9 @@ models:
   - name: image_file
     description: str, path to the image file in storage. May be an S3 key or a CDN-relative
       path - prepend the MITx Online media base URL to form a full image URL.
+  - name: image_url
+    description: str, fully-qualified image URL constructed by prepending mitxonline_media_url
+      to image_file
   - name: image_title
     description: str, title/label for the image as entered in the CMS
   - name: image_width
@@ -2164,3 +2230,282 @@ models:
     description: int, foreign key to users_user for the user who uploaded the image
   - name: image_description
     description: str, optional description of the image as entered in the CMS
+
+- name: stg__mitxonline__openedx__mysql__forum_commentthread
+  description: MITx Online open edX discussion forum threads
+  columns:
+  - name: forumthread_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for the thread author
+  - name: user_username
+    description: str, username of the thread author
+  - name: user_retired_username
+    description: str, placeholder username left behind when the author has been retired
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+  - name: forumthread_title
+    description: str, the thread title as authored by the learner
+  - name: forumthread_body
+    description: str, free-text thread body authored by the learner
+  - name: forumthread_type
+    description: str, discussion or question
+  - name: forumthread_commentable_id
+    description: str, id of the discussion topic the thread was posted under
+  - name: forumthread_context
+    description: str, where the thread lives, e.g. course
+  - name: forumthread_group_id
+    description: int, cohort the thread is scoped to, null when visible to everyone
+  - name: forumthread_is_closed
+    description: boolean, whether the thread has been closed to further replies
+  - name: forumthread_closed_by_user_id
+    description: int, foreign key to auth_user for whoever closed the thread
+  - name: forumthread_close_reason_code
+    description: str, reason code recorded when the thread was closed
+  - name: forumthread_is_pinned
+    description: boolean, whether the thread is pinned to the top of its topic
+  - name: forumthread_is_visible
+    description: boolean, whether the thread is visible, used as a soft delete
+  - name: forumthread_is_endorsed
+    description: boolean, whether the thread has an endorsed response
+  - name: forumthread_is_anonymous
+    description: boolean, whether the thread was posted anonymously
+  - name: forumthread_is_anonymous_to_peers
+    description: boolean, whether the thread is anonymous to other learners but not
+      to staff
+  - name: forumthread_created_on
+    description: timestamp, when the thread was posted
+  - name: forumthread_updated_on
+    description: timestamp, when the thread was last edited
+  - name: forumthread_last_activity_on
+    description: timestamp, when the thread last saw any activity
+
+- name: stg__mitxonline__openedx__mysql__forum_comment
+  description: MITx Online open edX discussion forum responses and comments
+  columns:
+  - name: forumcomment_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: forumthread_id
+    description: int, foreign key to forum_commentthread. This is the thread association;
+      in the pre-migration Mongo data the equivalent field held an ObjectId string
+      rather than an integer
+  - name: forumcomment_parent_id
+    description: int, foreign key to forum_comment for the response this comment replies
+      to. Null for a top-level response to the thread
+  - name: user_id
+    description: int, foreign key to auth_user for the comment author
+  - name: user_username
+    description: str, username of the comment author
+  - name: user_retired_username
+    description: str, placeholder username left behind when the author has been retired
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+  - name: forumcomment_body
+    description: str, free-text comment body authored by the learner
+  - name: forumcomment_depth
+    description: int, nesting depth, 0 for a direct response to the thread
+  - name: forumcomment_sort_key
+    description: str, ordering key used to sort sibling comments
+  - name: forumcomment_child_count
+    description: int, number of direct replies to this comment
+  - name: forumcomment_endorsement_data
+    description: str, JSON object holding the endorsing user and time. Empty object
+      when the comment is not endorsed
+  - name: forumcomment_is_endorsed
+    description: boolean, whether the comment has been endorsed by staff
+  - name: forumcomment_is_visible
+    description: boolean, whether the comment is visible, used as a soft delete
+  - name: forumcomment_is_anonymous
+    description: boolean, whether the comment was posted anonymously
+  - name: forumcomment_is_anonymous_to_peers
+    description: boolean, whether the comment is anonymous to other learners but not
+      to staff
+  - name: forumcomment_group_id
+    description: int, cohort the comment is scoped to, null when visible to everyone
+  - name: forumcomment_created_on
+    description: timestamp, when the comment was posted
+  - name: forumcomment_updated_on
+    description: timestamp, when the comment was last edited
+
+- name: stg__mitxonline__openedx__mysql__forum_uservote
+  description: MITx Online open edX votes cast on discussion forum content
+  columns:
+  - name: forumuservote_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for the voter
+  - name: forumuservote_value
+    description: int, +1 for an upvote and -1 for a downvote. Only upvotes occur in
+      practice, since the Open edX forum UI does not offer a downvote
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+
+- name: stg__mitxonline__openedx__mysql__forum_mongocontent
+  description: MITx Online open edX bridge from forum-v2 rows to their pre-migration
+    mongo objectids
+  columns:
+  - name: forummongocontent_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: forumcontent_mongo_id
+    description: str, the 24-character hex ObjectId this row carried in the pre-migration
+      Mongo forum database. Only content that existed at the migration has a row here,
+      so content created since has no ObjectId at all
+    tests:
+    - unique
+    - not_null
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+
+- name: stg__mitxonline__openedx__mysql__forum_abuseflagger
+  description: MITx Online open edX active abuse flags raised on discussion forum
+    content
+  columns:
+  - name: forumabuseflag_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for whoever raised the flag
+  - name: forumabuseflag_flagged_on
+    description: timestamp, when the content was flagged
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+
+- name: stg__mitxonline__openedx__mysql__forum_historicalabuseflagger
+  description: MITx Online open edX abuse flags that were raised on discussion forum
+    content and later cleared
+  columns:
+  - name: forumhistoricalabuseflag_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user for whoever raised the flag
+  - name: forumhistoricalabuseflag_flagged_on
+    description: timestamp, when the content was flagged
+  - name: forumcontent_type_id
+    description: int, Django content-type id identifying which forum table content_object_id
+      points at. The value is assigned per deployment by migration order, so it is
+      NOT comparable across deployments and must not be hardcoded; resolve it against
+      django_content_type
+  - name: forumcontent_object_id
+    description: int, id of the row in the table named by content_type_id. Comment
+      and CommentThread ids both start at 1 and overlap heavily, so this is only meaningful
+      together with content_type_id
+- name: stg__mitxonline__openedx__mysql__django_content_type
+  description: MITx Online open edX Django content types. Use to resolve the content_type_id
+    of a generic foreign key by app_label and model rather than by a hardcoded id.
+  columns:
+  - name: contenttype_id
+    description: int, primary key. Differs per deployment for the same model.
+    tests:
+    - unique
+    - not_null
+  - name: contenttype_app_label
+    description: str, Django app the model belongs to, e.g. forum
+    tests:
+    - not_null
+  - name: contenttype_model
+    description: str, lowercased model name, e.g. commentthread or comment
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["contenttype_app_label", "contenttype_model"]
+
+- name: stg__mitxonline__openedx__mysql__organizations_organization
+  description: MITx Online open edX organizations from the edx-organizations app
+  columns:
+  - name: organization_id
+    description: int, primary key
+    tests:
+    - unique
+    - not_null
+  - name: organization_name
+    description: str, display name of the organization
+    tests:
+    - not_null
+  - name: organization_short_name
+    description: str, short name of the organization, used in course keys
+    tests:
+    - unique
+    - not_null
+  - name: organization_description
+    description: str, description of the organization
+  - name: organization_logo
+    description: str, storage path of the organization logo
+  - name: organization_is_active
+    description: boolean, whether the organization is active
+  - name: organization_created_on
+    description: timestamp, when the row was created
+  - name: organization_updated_on
+    description: timestamp, when the row was last modified
+
+- name: stg__mitxonline__openedx__mysql__organizations_organizationcourse
+  description: MITx Online open edX links between course runs and organizations. The
+    authoritative source for a course run's organization, which is not always the
+    org segment of its course key.
+  columns:
+  - name: organizationcourse_id
+    description: int, primary key
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: organization_id
+    description: int, foreign key to stg__mitxonline__openedx__mysql__organizations_organization
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__openedx__mysql__organizations_organization')
+          field: organization_id
+  - name: organizationcourse_is_active
+    description: boolean, whether the link is active
+  - name: organizationcourse_created_on
+    description: timestamp, when the row was created
+  - name: organizationcourse_updated_on
+    description: timestamp, when the row was last modified
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_readable_id", "organization_id"]

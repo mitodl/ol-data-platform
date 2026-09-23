@@ -3,6 +3,12 @@ version: 2
 
 models:
 - name: int__mitxonline__bulk_email_optin
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: openedx_user_id
     description: int, unique ID for each user on the MITx Online open edX platform
@@ -78,6 +84,12 @@ models:
         compare_model: ref('stg__mitxonline__app__postgres__ecommerce_basket')
 - name: int__mitxonline__flexiblepricing_flexiblepriceapplication
   description: An application for an income based discount.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: flexiblepriceapplication_id
     description: int, primary key representing a flexible pricing application
@@ -498,6 +510,12 @@ models:
 - name: int__mitxonline__ecommerce_order
   description: MITx Online ecommerce order table at the grain of an order line. An
     order line is a single product within an order.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: order_id
     description: int, the primary key representing an order. An order can have multiple
@@ -515,6 +533,8 @@ models:
     - not_null
   - name: order_created_on
     description: timestamp, specifying when the order was initially created
+  - name: order_updated_on
+    description: timestamp, specifying when the order was most recently updated
   - name: order_reference_number
     description: string, readable id for the order. Shared with micromasters
     tests:
@@ -661,6 +681,12 @@ models:
         compare_model: ref('stg__mitxonline__app__postgres__ecommerce_product')
 - name: int__mitxonline__courserunenrollments
   description: Intermediate model of enrollments in MITx Online.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: courserunenrollment_id
     description: id for enrollment
@@ -685,6 +711,10 @@ models:
     - not_null
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
     tests:
     - not_null
   - name: courserunenrollment_enrollment_mode
@@ -763,6 +793,12 @@ models:
   description: Intermediate model of enrollments in MITx Online with programs that
     the enrollment counts towards. If the course is part of multiple programs, there
     are multiple lines for the same enrollment.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: courserunenrollment_id
     description: id for enrollment
@@ -873,6 +909,12 @@ models:
 
 - name: int__mitxonline__programenrollments
   description: Intermediate model of enrollments in MITx Online.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: programenrollment_id
     description: id for enrollment
@@ -893,6 +935,10 @@ models:
     - not_null
   - name: programenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - not_null
+  - name: programenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
     tests:
     - not_null
   - name: programenrollment_enrollment_mode
@@ -989,6 +1035,9 @@ models:
     description: timestamp, date and time when the course page was first published
   - name: course_page_last_published_on
     description: timestamp, date and time when the course page was last published
+  - name: course_image_url
+    description: str, fully-qualified URL for the course's featured image, resolved
+      from the course page's feature image in the Wagtail CMS
 
 - name: int__mitxonline__course_to_departments
   description: Intermediate model for MITxOnline course to department
@@ -1091,6 +1140,12 @@ models:
 
 - name: int__mitxonline__courserun_grades
   description: Intermediate model for MITxOnline course run grades
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: courserungrade_id
     description: int, primary key representing a single MITxOnline grade record
@@ -1173,6 +1228,12 @@ models:
       arguments:
         compare_model: ref('stg__mitxonline__app__postgres__courses_courserungrade')
 - name: int__mitxonline__courserun_certificates
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: courseruncertificate_id
     description: int, primary key representing a single MITxOnline course certificate
@@ -1337,6 +1398,9 @@ models:
     description: timestamp, date and time when the page was first published
   - name: program_page_last_published_on
     description: timestamp, date and time when the page was last published
+  - name: program_image_url
+    description: str, fully-qualified URL for the program's featured image, resolved
+      from the program page's feature image in the Wagtail CMS
 
 - name: int__mitxonline__program_requirements
   columns:
@@ -1384,8 +1448,17 @@ models:
     description: int, indicating the number of required courses to earn certificate
     tests:
     - not_null
+  - name: course_order_in_program
+    description: int, sequential number indicating the display order of the course
+      within the program, derived from the course node's path in the MITx Online CMS
 
 - name: int__mitxonline__program_certificates
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: programcertificate_id
     description: int, primary key representing a single MITxOnline program certificate
@@ -1463,6 +1536,12 @@ models:
         compare_model: ref('stg__mitxonline__app__postgres__courses_programcertificate')
 - name: int__mitxonline__users
   description: denormalized mitxonline users
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_id
     description: int, primary key
@@ -1878,6 +1957,14 @@ models:
 - name: int__mitxonline__user_courseactivities
   description: MITx Online open edX user activities aggregated statistics per course
     from tracking logs
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
@@ -2019,6 +2106,11 @@ models:
 - name: int__mitxonline__courserun_subsection_grades
   description: Persistent values for learners' subsection (aka sequential) grades
     combined with override grades
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/api
+      - mitxonline/mysql
   columns:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
@@ -2076,6 +2168,11 @@ models:
 
 - name: int__mitxonline__courserun_videos
   description: course videos on MITx Online open edx
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/mysql
+      - ovs/app_postgres
   columns:
   - name: courserun_readable_id
     description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
@@ -2109,6 +2206,13 @@ models:
 - name: int__mitxonline__proctored_exam_grades
   description: exam grades either from MITx Online exam course runs or the proctored
     exam unit in MITx Online courses
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -2171,6 +2275,9 @@ models:
     description: int, foreign key to the courses_course table
     tests:
     - not_null
+  - name: instructor_source_id
+    description: str, platform-native stable identifier for the instructor (the Wagtail
+      page ID of the instructor's CMS page, cast to varchar)
   - name: instructor_name
     description: str, the name of the instructor.
     tests:

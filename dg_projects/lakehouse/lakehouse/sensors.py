@@ -8,6 +8,8 @@ import logging
 
 from dagster import (
     DefaultSensorStatus,
+    Failure,
+    MetadataValue,
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
@@ -103,10 +105,18 @@ def repair_lagging_snapshot_pointers(context):
             )
 
     if failed:
-        raise Exception(  # noqa: TRY002
-            f"Snapshot pointer repair failed for {len(failed)} table(s): "
-            + ", ".join(failed)
-            + " — check the run logs for details."
+        # The table names go in metadata rather than the message: they were
+        # making every occurrence a differently-titled Sentry issue for what is
+        # one recurring problem.
+        raise Failure(
+            description=(
+                f"Snapshot pointer repair failed for {len(failed)} table(s) -- "
+                "check the run logs for details."
+            ),
+            metadata={
+                "failed_table_count": len(failed),
+                "failed_tables": MetadataValue.json(sorted(failed)),
+            },
         )
 
 

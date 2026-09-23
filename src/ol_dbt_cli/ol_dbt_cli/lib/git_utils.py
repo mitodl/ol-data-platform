@@ -179,6 +179,27 @@ def get_file_at_ref(path: Path, ref: str, repo_root: Path | None = None) -> str 
         return None
 
 
+def list_files_at_ref(directory: Path, ref: str, repo_root: Path | None = None) -> list[Path]:
+    """Return the paths tracked under *directory* at git *ref*.
+
+    Reading a whole directory as of the merge base needs the file list from the
+    tree, not from disk: the point of the comparison is to see the files the
+    branch deleted, and those are exactly the ones `rglob` cannot find.
+    """
+    root = repo_root or get_repo_root(directory)
+    try:
+        rel = directory.relative_to(root)
+    except ValueError:
+        rel = directory
+    try:
+        raw = _run_git(["ls-tree", "-r", "-z", "--name-only", ref, "--", str(rel)], cwd=root)
+    except RuntimeError:
+        # The directory did not exist at that ref — a first-time inventory has
+        # nothing to have removed.
+        return []
+    return [root / name for name in raw.split("\0") if name]
+
+
 def _is_under(path: Path, directory: Path) -> bool:
     """Return True if *path* is inside *directory*."""
     try:

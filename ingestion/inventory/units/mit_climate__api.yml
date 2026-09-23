@@ -1,0 +1,22 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: mit_climate
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__mit_climate__api__
+dlt:
+  source_module: ol_dlt.sources.mit_climate
+  write_disposition: merge
+tables:
+- name: raw__mit_climate__api__articles
+  raw_table: raw__mit_climate__api__articles
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - uuid
+  modeled: true

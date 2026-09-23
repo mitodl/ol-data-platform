@@ -144,6 +144,21 @@ class EdxorgArchiveProcessConfig(Config):
     )
 
 
+def _skip_upload_if_unchanged(archive_file: Path, object_path: str) -> bool:
+    """Delete ``archive_file`` and return True if ``object_path`` already exists.
+
+    object_key is a sha256 of the file contents, so an existing object at
+    object_path is guaranteed byte-identical to archive_file -- re-uploading
+    it would just assign S3 a fresh ETag to the same key. That races with any
+    edxorg_s3 dlt read that already listed the old ETag and is mid-fetch,
+    surfacing as s3fs.FileExpired/PreconditionFailed downstream.
+    """
+    if not UPath(object_path).exists():
+        return False
+    archive_file.unlink()
+    return True
+
+
 @op(
     name="process_edxorg_archive_bundle",
     required_resource_keys={"gcp_gcs"},
@@ -206,7 +221,7 @@ class EdxorgArchiveProcessConfig(Config):
         "db_table__workflow_assessmentworkflowstep": DynamicOut(is_required=False),
     },
 )
-def process_edxorg_archive_bundle(
+def process_edxorg_archive_bundle(  # noqa: PLR0915
     context: OpExecutionContext,
     config: EdxorgArchiveProcessConfig,
     edxorg_raw_data_archive: Path,
@@ -295,19 +310,33 @@ def process_edxorg_archive_bundle(
                         ),
                         # Create a row hash to allow for deduplicating data
                         plh.concat_str(pl.all().fill_null(""))
-                        .chash.sha256()
+                        .chash.sha2_256()
                         .alias("row_hash"),
                     )
                     df.sink_csv(
                         archive_file,
                         include_header=True,
                         separator="\t",
-                        # Use no quoting to match how the source TSVs are read
-                        # (quote_char=None in scan_csv). This prevents DuckDB from
-                        # seeing quoted vs. unquoted values for the same column across
-                        # files, which was a contributing factor to type inference
-                        # mismatches when loading into iceberg tables.
-                        quote_style="never",
+                        # Quote only the fields that need it. These tables carry
+                        # user-entered free text (auth_userprofile.bio, .goals,
+                        # .mailing_address), so a value occasionally contains a raw
+                        # CR/LF or tab. Writing those unquoted makes the row
+                        # unrecoverable -- the reader cannot tell a CR inside a bio
+                        # from a CR ending the record, so it drops the row, and a
+                        # bare CR additionally makes the file mixed-newline, which
+                        # aborts DuckDB's dialect sniffer for the whole file.
+                        #
+                        # This used to be quote_style="never" to keep DuckDB from
+                        # inferring different types for the same column across
+                        # quoted and unquoted files. That no longer applies: the
+                        # dlt reader passes all_varchar=True, so every column is
+                        # VARCHAR and quoted and unquoted input parse to identical
+                        # types and values.
+                        #
+                        # row_hash above is computed on the in-memory values, before
+                        # serialization, so quoting does not change any existing
+                        # row's hash or churn the downstream merge key.
+                        quote_style="necessary",
                         lazy=False,
                         check_extension=False,
                     )
@@ -337,6 +366,13 @@ def process_edxorg_archive_bundle(
             object_path = (
                 "s3://" + f"{config.s3_bucket}/{config.s3_prefix}/{object_key}"
             )
+            if _skip_upload_if_unchanged(archive_file, object_path):
+                context.log.debug(
+                    "Skipping upload of %s -- unchanged content already at %s",
+                    tinfo.name,
+                    object_path,
+                )
+                continue
             shared_metadata = {
                 "path": MetadataValue.path(object_path),
                 "object_key": object_key,

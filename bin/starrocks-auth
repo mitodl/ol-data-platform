@@ -10,7 +10,7 @@ Obtains credentials for StarRocks via one of three flows:
 Output modes:
   --output token  Print the raw access token / password
   --output env    Emit shell export statements (eval-able)
-  --output exec   Exec a command with credentials in the environment
+  --output exec   Run a command with credentials in the environment
   --output mysql  Open an interactive mysql session
 
 Tokens from the browser flow are cached in ~/.cache/starrocks-auth/<env>.json
@@ -105,33 +105,38 @@ import hvac
 # Environment configuration
 # ---------------------------------------------------------------------------
 
+# Vault's "database-starrocks" mount is not environment-specific -- each
+# environment runs its own, entirely separate Vault deployment, so the Vault
+# server (vault_addr below), not the mount path, is what scopes the environment.
+_VAULT_MOUNT = "database-starrocks"
+
 ENVS: dict[str, dict[str, str]] = {
     "qa": {
         "issuer": "https://sso-qa.ol.mit.edu/realms/ol-data-platform",
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-qa",
+        "eks_context": "data-qa",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": "database-starrocks-qa",
+        "vault_mount": _VAULT_MOUNT,
     },
     "production": {
         "issuer": "https://sso.ol.mit.edu/realms/ol-data-platform",
         "host": "lakehouse.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-production",
+        "eks_context": "data-production",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-production.odl.mit.edu",
-        "vault_mount": "database-starrocks-production",
+        "vault_mount": _VAULT_MOUNT,
     },
     "ci": {
         "issuer": "https://sso-ci.ol.mit.edu/realms/ol-data-platform",
         "host": "lakehouse.ci.starrocks.ol.mit.edu",
-        "eks_context": "arn:aws:eks:us-east-1:610119931565:cluster/data-ci",
+        "eks_context": "data-ci",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": "database-starrocks-ci",
+        "vault_mount": _VAULT_MOUNT,
     },
 }
 
@@ -624,7 +629,11 @@ def _output_exec(
         env["STARROCKS_PASSWORD"] = password
     else:
         env["STARROCKS_TOKEN"] = token
-    os.execvpe(cmd[0], cmd, env)  # noqa: S606
+    # A child process rather than exec: exec replaces this interpreter, so the
+    # atexit hook that stops --port-forward's kubectl never runs and the tunnel
+    # outlives the command, holding port 9030 against the next run.
+    result = subprocess.run(cmd, env=env, check=False)  # noqa: S603
+    sys.exit(result.returncode)
 
 
 def _mysql_supports_openid_connect() -> bool:
@@ -775,7 +784,7 @@ def main() -> None:
         "cmd",
         nargs=argparse.REMAINDER,
         metavar="CMD",
-        help="Command to exec (with --output exec); separate with --",
+        help="Command to run (with --output exec); separate with --",
     )
     args = parser.parse_args()
 

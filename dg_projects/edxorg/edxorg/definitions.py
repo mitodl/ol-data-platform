@@ -26,12 +26,17 @@ from ol_orchestrate.io_managers.filepath import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
-from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.lib.failed_partitions import (
+    build_failed_partition_checks,
+    failed_partition_check_schedule,
+)
+from ol_orchestrate.lib.failures import with_failure_hooks
+from ol_orchestrate.lib.sentry import init_sentry
+from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
-from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.sensors.object_storage import (
     gcs_multi_file_sensor,
     s3_multi_file_sensor,
@@ -67,6 +72,8 @@ from edxorg.ops.object_storage import (
     upload_files_to_s3,
 )
 
+init_sentry("edxorg")
+
 # Initialize vault with resilient loading
 try:
     vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
@@ -78,7 +85,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
         f"Failed to authenticate with Vault: {e}. Using mock configuration.",
         stacklevel=2,
     )
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
 
@@ -243,6 +250,17 @@ sensor_list = [
 ]
 
 # Create unified definitions
+# Group A lives here: these are the partitions that sit silently in a failed
+# state once the bounded retry has been spent, which is what the inventory
+# checks exist to surface.
+failed_partition_checks = build_failed_partition_checks(
+    [
+        extract_edxorg_courserun_metadata,
+        flatten_edxorg_course_structure,
+        edxorg_course_content_webhook,
+    ]
+)
+
 defs = Definitions(
     resources={
         "io_manager": FileObjectIOManager(
@@ -278,18 +296,24 @@ defs = Definitions(
         sync_edxorg_program_reports,
         gcs_sync_job,
     ],
-    assets=[
-        edxorg_raw_data_archive.to_source_asset(),
-        edxorg_raw_tracking_logs.to_source_asset(),
-        normalize_edxorg_tracking_log,
-        dummy_edxorg_course_structure,
-        flatten_edxorg_course_structure,
-        extract_edxorg_courserun_metadata,
-        dummy_edxorg_course_xml,
-        edxorg_course_content_webhook,
-        edxorg_program_metadata,
-        edxorg_mitx_course_metadata,
-        *edxorg_db_table_specs,
+    assets=with_failure_hooks(
+        [
+            edxorg_raw_data_archive.to_source_asset(),
+            edxorg_raw_tracking_logs.to_source_asset(),
+            normalize_edxorg_tracking_log,
+            dummy_edxorg_course_structure,
+            flatten_edxorg_course_structure,
+            extract_edxorg_courserun_metadata,
+            dummy_edxorg_course_xml,
+            edxorg_course_content_webhook,
+            edxorg_program_metadata,
+            edxorg_mitx_course_metadata,
+            *edxorg_db_table_specs,
+        ]
+    ),
+    asset_checks=failed_partition_checks,
+    schedules=[
+        edxorg_api_daily_schedule,
+        failed_partition_check_schedule(failed_partition_checks),
     ],
-    schedules=[edxorg_api_daily_schedule],
 )

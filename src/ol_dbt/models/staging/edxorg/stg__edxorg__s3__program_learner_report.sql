@@ -10,8 +10,8 @@ with source as (
             else
             -- Try parsing once and handle both formats
                 coalesce(
-                    try(to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ')))
-                    , to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%d %H:%i:%s Z'))
+                    try({{ cast_timestamp_to_iso8601(date_parse("\"date program certificate awarded\"", "'%Y-%m-%dT%H:%i:%sZ'")) }})
+                    , {{ cast_timestamp_to_iso8601(date_parse("\"date program certificate awarded\"", "'%Y-%m-%d %H:%i:%s Z'")) }}
                 )
 
         end as program_certificate_awarded_at
@@ -64,11 +64,11 @@ with source as (
             when "program uuid" like '%cd7c6461dd9b1d4' then 'Statistics and Data Science (Social Sciences Track)'
             else "program title"
         end as program_title
-        , to_iso8601(date_parse("course run start date", '%Y-%m-%d %H:%i:%s Z')) as courserun_start_on
-        , to_iso8601(date_parse("date first enrolled", '%Y-%m-%d %H:%i:%s Z')) as courserunenrollment_created_on
+        , {{ cast_timestamp_to_iso8601(date_parse("\"course run start date\"", "'%Y-%m-%d %H:%i:%s Z'")) }} as courserun_start_on
+        , {{ cast_timestamp_to_iso8601(date_parse("\"date first enrolled\"", "'%Y-%m-%d %H:%i:%s Z'")) }} as courserunenrollment_created_on
         , case
             when "date completed" = 'null' then null -- noqa: ST10
-            else to_iso8601(date_parse("date completed", '%Y-%m-%d %H:%i:%s Z'))
+            else {{ cast_timestamp_to_iso8601(date_parse("\"date completed\"", "'%Y-%m-%d %H:%i:%s Z'")) }}
         end as completed_course_on
         , case
             when "last activity date" = 'null' then null -- noqa: ST10
@@ -76,11 +76,11 @@ with source as (
         end as courseactivity_last_activity_date
         , case
             when "date last unenrolled" = 'null' then null -- noqa: ST10
-            else to_iso8601(date_parse("date last unenrolled", '%Y-%m-%d %H:%i:%s Z'))
+            else {{ cast_timestamp_to_iso8601(date_parse("\"date last unenrolled\"", "'%Y-%m-%d %H:%i:%s Z'")) }}
         end as courserunenrollment_unenrolled_on
         , case
             when "date first upgraded to verified" = 'null' then null -- noqa: ST10
-            else to_iso8601(date_parse("date first upgraded to verified", '%Y-%m-%d %H:%i:%s Z'))
+            else {{ cast_timestamp_to_iso8601(date_parse("\"date first upgraded to verified\"", "'%Y-%m-%d %H:%i:%s Z'")) }}
         end as courserunenrollment_upgraded_on
         , program_certificate_awarded_at as program_certificate_awarded_on
     from dedup_source

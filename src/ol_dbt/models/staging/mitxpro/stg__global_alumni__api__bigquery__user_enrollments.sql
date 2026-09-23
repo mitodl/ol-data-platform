@@ -5,7 +5,7 @@ with source as (
 -- The raw table is loaded using full refresh + appends sync mode.
 -- As a result, every sync will create duplicates of already existing data,
 -- so we need to deduplicate the data.
-{{ deduplicate_raw_table(order_by='_airbyte_generation_id', partition_columns='batch_id, email') }}
+{{ deduplicate_raw_table(raw_table='raw__global_alumni__bigquery__api_enrollments', partition_columns='batch_id, email') }}
 , cleaned as (
     select
         ---course run

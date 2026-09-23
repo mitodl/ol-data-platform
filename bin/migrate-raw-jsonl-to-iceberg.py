@@ -21,12 +21,18 @@ Usage::
 Safety:
 
     The original Glue table definition is saved before deletion.  If Iceberg
-    table creation fails, the original JSONL entry is automatically restored in
-    Glue so the table remains accessible.  JSONL files in S3 are never deleted
-    by this script.
+    table creation or the data append fails, the Iceberg entry is dropped, the
+    Iceberg data and metadata objects that attempt wrote are deleted, and the
+    original JSONL entry is restored in Glue so the table remains accessible.
+    JSONL files in S3 are never deleted by this script.
+
+    Each table is read fully into memory, so tables larger than
+    ``--max-table-bytes`` are reported and left as JSONL instead of being
+    attempted.  The check runs before the Glue entry is touched.
 """
 
 import logging
+import re
 import sys
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -35,10 +41,12 @@ import cyclopts
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.fs as pafs
+import pyarrow.json as pj
 from pyiceberg.catalog.glue import GlueCatalog
 
 if TYPE_CHECKING:
     import botocore.client
+    from pyiceberg.table import Table
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +54,18 @@ app = cyclopts.App(help="Migrate legacy JSONL raw-layer Glue tables to Iceberg f
 
 _RAW_DATABASE = "ol_warehouse_{env}_raw"
 _AWS_REGION = "us-east-1"
+
+# Migration reads a table's whole JSONL body into an Arrow table in memory, so
+# one oversized table can OOM a run that would otherwise convert thousands of
+# small ones. Tables above this are reported and left as JSONL rather than
+# attempted. 8 GiB of compressed JSON already expands well past that in Arrow;
+# raise it deliberately, on a machine sized for it, for a specific table.
+#
+# This is not hypothetical: in ol_warehouse_qa_raw (2026-09-08),
+# raw__irx__edxorg__s3__course_studentmodules is 652 GB across 3,114 files --
+# 97% of the 675 GB behind that database's whole legacy prefix, and read by no
+# dbt source. Without a guard it is the first table big enough to kill the run.
+_DEFAULT_MAX_TABLE_BYTES = 8 * 1024**3
 
 # Fields accepted by Glue CreateTable's TableInput (excludes server-managed fields
 # like CreateTime, UpdateTime, CreatedBy, IsRegisteredWithLakeFormation, etc.)
@@ -97,13 +117,18 @@ def _to_table_input(glue_table: dict[str, Any]) -> dict[str, Any]:
 def _list_json_files(
     s3_client: "botocore.client.S3",
     location: str,
-) -> list[str]:
-    """List JSON/JSONL files at location; returns '{bucket}/{key}' paths for pa.fs."""
+) -> tuple[list[str], int]:
+    """List JSON/JSONL files at location.
+
+    Returns '{bucket}/{key}' paths for pa.fs, plus their total size in bytes so
+    the caller can refuse a table too large to read into memory.
+    """
     path = location.removeprefix("s3://")
     bucket, _, prefix = path.partition("/")
     prefix = prefix.rstrip("/") + "/"
 
     files: list[str] = []
+    total_bytes = 0
     paginator = s3_client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
@@ -115,17 +140,179 @@ def _list_json_files(
                 and "/data/" not in key
             ):
                 files.append(f"{bucket}/{key}")
-    return files
+                total_bytes += obj["Size"]
+    return files, total_bytes
 
 
-def _schema_from_glue_columns(columns: list[dict[str, Any]]) -> pa.Schema:
-    """Build a minimal PyArrow schema from Glue column definitions.
+# Every scalar Glue type found on the legacy JSONL tables in qa and production
+# raw (2026-09-10). array and struct columns are left to inference because
+# their Glue types are not trustworthy: a production GitHub table declared
+# pull_requests as array<string> over a list of objects.
+_GLUE_SCALAR_TYPES = {
+    "string": pa.large_utf8(),
+    "boolean": pa.bool_(),
+    "int": pa.int32(),
+    "bigint": pa.int64(),
+    # Glue could only type the column as null, so it holds no values; Iceberg
+    # v2 has no null type, and string is the least committal concrete one.
+    "null": pa.large_utf8(),
+}
+# An omitted scale means 0; two QA columns are declared as decimal(38).
+_GLUE_DECIMAL = re.compile(r"decimal\((\d+)(?:,\s*(\d+))?\)")
 
-    Used only for empty tables that have no data files to infer a schema from.
-    Every field defaults to large_utf8 (string) since Glue type fidelity for
-    legacy JSONL tables is often poor.
+
+def _arrow_type(glue_type: str) -> pa.DataType | None:
+    if match := _GLUE_DECIMAL.fullmatch(glue_type):
+        return pa.decimal128(int(match[1]), int(match[2] or 0))
+    return _GLUE_SCALAR_TYPES.get(glue_type)
+
+
+def _empty_schema(columns: list[dict[str, Any]]) -> pa.Schema:
+    """Build the schema for a table with no data files to infer one from."""
+    return pa.schema(
+        [
+            pa.field(c["Name"], _arrow_type(c["Type"]) or pa.large_utf8())
+            for c in columns
+        ]
+    )
+
+
+def _parse_options(columns: list[dict[str, Any]]) -> pj.ParseOptions:
+    """Build parse options that take scalar column types from Glue, not inference.
+
+    pyarrow infers a column's type from the first block it reads. A decimal
+    column whose early rows are whole numbers becomes int64 and fails on the
+    first fractional value ("couldn't parse: 987.65"), and a column that is null
+    in every row becomes pa.null(), which Iceberg v2 rejects. Glue already
+    carries each column's type, so the scalar ones are declared up front.
+
+    Declaring every column as string would be simpler and does not work: the
+    reader refuses a JSON number or boolean in a string column.
     """
-    return pa.schema([pa.field(col["Name"], pa.large_utf8()) for col in columns])
+    declared = pa.schema(
+        [pa.field(c["Name"], t) for c in columns if (t := _arrow_type(c["Type"]))]
+    )
+    return pj.ParseOptions(explicit_schema=declared, unexpected_field_behavior="infer")
+
+
+def _without_null(arrow_type: pa.DataType) -> pa.DataType:
+    """Replace pa.null() with string, including inside structs and lists."""
+    if pa.types.is_null(arrow_type):
+        return pa.large_utf8()
+    if pa.types.is_struct(arrow_type):
+        return pa.struct(
+            [f.with_type(_without_null(f.type)) for f in arrow_type.fields]
+        )
+    if pa.types.is_large_list(arrow_type):
+        return pa.large_list(
+            arrow_type.value_field.with_type(_without_null(arrow_type.value_type))
+        )
+    if pa.types.is_list(arrow_type):
+        return pa.list_(
+            arrow_type.value_field.with_type(_without_null(arrow_type.value_type))
+        )
+    return arrow_type
+
+
+def _read_typed(
+    files: list[str],
+    columns: list[dict[str, Any]],
+    arrow_fs: pafs.FileSystem,
+) -> pa.Table:
+    # File by file: pyarrow.dataset's JsonFileFormat ignores explicit_schema
+    # (pyarrow 25), so a dataset scan would infer every column regardless. A
+    # key Glue never declared can infer differently per file; permissive
+    # concat widens it.
+    options = _parse_options(columns)
+    tables = []
+    for path in files:
+        with arrow_fs.open_input_stream(path) as stream:
+            tables.append(pj.read_json(stream, parse_options=options))
+    return pa.concat_tables(tables, promote_options="permissive")
+
+
+def _has_case_collision(schema: pa.Schema) -> bool:
+    return len({name.lower() for name in schema.names}) < len(schema.names)
+
+
+def _read_inferred(files: list[str], arrow_fs: pafs.FileSystem) -> pa.Table:
+    """Read each file on its own and widen the differences on concat."""
+    tables = []
+    for path in files:
+        with arrow_fs.open_input_stream(path) as stream:
+            tables.append(pj.read_json(stream))
+    return pa.concat_tables(tables, promote_options="permissive")
+
+
+# Errors that mean "this strategy cannot parse the table", so the next one is
+# worth trying. An OSError is not here on purpose: an archived or unreadable
+# object fails the table outright rather than being fetched twice more.
+_READ_ERRORS = (pa.ArrowInvalid, pa.ArrowNotImplementedError, pa.ArrowTypeError)
+
+
+def _read_jsonl(
+    files: list[str],
+    columns: list[dict[str, Any]],
+    arrow_fs: pafs.FileSystem,
+) -> pa.Table:
+    """Read a table with Glue's column types, falling back to inference.
+
+    Glue's types beat inference on most tables but are sometimes wrong, and a
+    declared type the data contradicts fails the read outright. Salesforce
+    tables fail it too: their JSON keys (Id) differ from Glue's lowercased
+    names (id) only by case, so a typed read yields both columns.
+
+    The two inference strategies fail on different tables and neither replaces
+    the other. Reading the whole table as one dataset applies the first file's
+    schema to every file, which is what lets production
+    salesforce contracthistory read a column that is a string in one file and a
+    timestamp in another. Reading file by file infers each file separately,
+    which is what lets salesforce matchingrule read a column that is null for a
+    whole block and a string later on. So each strategy is tried in turn and
+    the first table returned wins.
+    """
+    attempts = (
+        ("Glue types", lambda: _read_typed(files, columns, arrow_fs)),
+        (
+            "types inferred across the table",
+            lambda: ds.dataset(files, format="json", filesystem=arrow_fs).to_table(),
+        ),
+        ("types inferred file by file", lambda: _read_inferred(files, arrow_fs)),
+    )
+    last_error: Exception | None = None
+    for label, read in attempts:
+        try:
+            table = read()
+        except _READ_ERRORS as exc:
+            last_error = exc
+            log.info("  read with %s failed: %s", label, exc)
+            continue
+        if _has_case_collision(table.schema):
+            log.info("  read with %s gave columns differing only by case", label)
+            continue
+        # A key Glue never declared, or a field nested in an array or struct,
+        # can still be null in every row and infer as pa.null(); give it the
+        # same string type as a Glue null column.
+        return table.cast(
+            pa.schema([f.with_type(_without_null(f.type)) for f in table.schema])
+        )
+    if last_error is not None:
+        raise last_error
+    msg = "every read produced columns that differ only by case"
+    raise ValueError(msg)
+
+
+def _list_iceberg_objects(s3_client: "botocore.client.S3", location: str) -> set[str]:
+    """List the keys under a table location's Iceberg data/ and metadata/ dirs."""
+    bucket, _, prefix = location.removeprefix("s3://").partition("/")
+    paginator = s3_client.get_paginator("list_objects_v2")
+    keys: set[str] = set()
+    for subdir in ("data/", "metadata/"):
+        for page in paginator.paginate(
+            Bucket=bucket, Prefix=f"{prefix.rstrip('/')}/{subdir}"
+        ):
+            keys.update(obj["Key"] for obj in page.get("Contents", []))
+    return keys
 
 
 def _restore_glue_table(
@@ -138,7 +325,86 @@ def _restore_glue_table(
     log.info("  restored original JSONL Glue entry")
 
 
-def _migrate_one(  # noqa: PLR0913, C901, PLR0912
+def _roll_back(  # noqa: PLR0913
+    *,
+    glue: "botocore.client.Glue",
+    s3: "botocore.client.S3",
+    database: str,
+    table_name: str,
+    original_def: dict[str, Any],
+    location: str,
+    objects_before: set[str],
+) -> None:
+    """Return a table whose cutover failed to its JSONL state.
+
+    If create_table succeeded and the append failed, the name is held by an
+    Iceberg entry with no snapshot, which scans as an empty table. It has to be
+    dropped before the JSONL entry can be restored, and it would otherwise hide
+    the table from a retry, which only converts JSONL entries.
+    """
+    restored = False
+    try:
+        try:
+            current = glue.get_table(DatabaseName=database, Name=table_name)["Table"]
+        except glue.exceptions.EntityNotFoundException:
+            current = None
+        if current is not None and _is_iceberg(current):
+            glue.delete_table(DatabaseName=database, Name=table_name)
+            log.info("  dropped the Iceberg entry the failed attempt created")
+        _restore_glue_table(glue, database, original_def)
+        restored = True
+    except Exception:
+        log.exception(
+            "  CRITICAL: could not restore %s.%s — "
+            "table definition: %s  data still at: %s",
+            database,
+            table_name,
+            _to_table_input(original_def),
+            location,
+        )
+
+    # create_table writes a metadata file before registering in Glue, and a
+    # failed append can leave data files behind. No snapshot references them,
+    # and _list_json_files skips both dirs, so nothing else would find them.
+    written = sorted(_list_iceberg_objects(s3, location) - objects_before)
+    if not restored:
+        # Once a restore has failed, delete nothing more. If the drop was what
+        # failed, the Iceberg entry still points at these metadata files.
+        log.error(
+            "  left %d object(s) the failed attempt wrote, for manual repair: %s",
+            len(written),
+            written,
+        )
+        return
+    bucket = location.removeprefix("s3://").partition("/")[0]
+    for key in written:
+        s3.delete_object(Bucket=bucket, Key=key)
+    log.info("  deleted %d object(s) the failed attempt wrote", len(written))
+
+
+def _validate_snapshot(iceberg: "Table", source_count: int) -> None:
+    """Check the committed snapshot against the rows that were read.
+
+    A table with rows to write but no snapshot scans as empty rather than
+    failing, so it raises instead of counting as converted.
+    """
+    snapshot = iceberg.current_snapshot()
+    if snapshot is None or not snapshot.summary:
+        if source_count:
+            msg = f"append of {source_count} row(s) committed no snapshot"
+            raise RuntimeError(msg)
+        log.info("  created Iceberg table (empty)")
+        return
+    iceberg_count = int(snapshot.summary.get("total-records", "0"))
+    if iceberg_count != source_count:
+        log.warning(
+            "  row count mismatch: source=%d iceberg=%d", source_count, iceberg_count
+        )
+    else:
+        log.info("  validated: %d rows written", iceberg_count)
+
+
+def _migrate_one(  # noqa: PLR0913
     *,
     glue: "botocore.client.Glue",
     s3: "botocore.client.S3",
@@ -147,47 +413,66 @@ def _migrate_one(  # noqa: PLR0913, C901, PLR0912
     database: str,
     table_name: str,
     dry_run: bool,
+    max_table_bytes: int,
 ) -> bool:
     """Migrate a single JSONL Glue table to Iceberg.  Returns True on success."""
     resp = glue.get_table(DatabaseName=database, Name=table_name)
     original_def = resp["Table"]
     location = original_def["StorageDescriptor"]["Location"].rstrip("/")
 
-    files = _list_json_files(s3, location)
-    log.info("%s  location=%s  files=%d", table_name, location, len(files))
+    files, total_bytes = _list_json_files(s3, location)
+    log.info(
+        "%s  location=%s  files=%d  bytes=%d",
+        table_name,
+        location,
+        len(files),
+        total_bytes,
+    )
+
+    # Checked before the Glue entry is deleted, so refusing costs nothing.
+    if total_bytes > max_table_bytes:
+        log.warning(
+            "  %.2f GB exceeds the %.2f GB limit — leaving as JSONL. "
+            "Re-run with --table %s --max-table-bytes N on a host sized for it.",
+            total_bytes / 1024**3,
+            max_table_bytes / 1024**3,
+            table_name,
+        )
+        return False
+
+    glue_cols = original_def["StorageDescriptor"].get("Columns", [])
 
     if dry_run:
         log.info("  [dry-run] would migrate %d file(s)", len(files))
         if files:
-            sample = ds.dataset(files[:1], format="json", filesystem=arrow_fs)
-            log.info("  [dry-run] inferred schema from sample: %s", sample.schema)
-            log.info("  [dry-run] estimated rows: %d", sample.count_rows())
+            sample = _read_jsonl(files[:1], glue_cols, arrow_fs)
+            log.info("  [dry-run] schema from first file: %s", sample.schema)
+            log.info("  [dry-run] rows in first file: %d", len(sample))
         return True
 
     # ── Read ──────────────────────────────────────────────────────────────────
     if not files:
-        glue_cols = original_def["StorageDescriptor"].get("Columns", [])
         if not glue_cols:
             log.warning("  no data files and no column definitions — skipping")
             return False
         log.info(
             "  empty table; building schema from %d Glue column(s)", len(glue_cols)
         )
-        arrow_schema = _schema_from_glue_columns(glue_cols)
+        arrow_schema = _empty_schema(glue_cols)
         arrow_table = arrow_schema.empty_table()
     else:
         try:
-            dataset = ds.dataset(files, format="json", filesystem=arrow_fs)
-            arrow_schema = dataset.schema
-            arrow_table = dataset.to_table()
+            arrow_table = _read_jsonl(files, glue_cols, arrow_fs)
+            arrow_schema = arrow_table.schema
         except Exception:
             log.exception("  failed to read JSONL data — skipping table")
             return False
         log.info("  read %d row(s), %d field(s)", len(arrow_table), len(arrow_schema))
 
     source_count = len(arrow_table)
+    objects_before = _list_iceberg_objects(s3, location)
 
-    # ── Safe cutover: delete JSONL entry, create Iceberg, restore on failure ──
+    # ── Safe cutover: delete JSONL entry, create Iceberg, roll back on failure ─
     glue.delete_table(DatabaseName=database, Name=table_name)
     log.info("  deleted JSONL Glue entry")
 
@@ -199,37 +484,18 @@ def _migrate_one(  # noqa: PLR0913, C901, PLR0912
         )
         if source_count:
             iceberg.append(arrow_table)
-
-        # Validate row count from Iceberg snapshot metadata
-        snapshot = iceberg.current_snapshot()
-        if snapshot and snapshot.summary:
-            iceberg_count = int(snapshot.summary.get("total-records", "0"))
-            if iceberg_count != source_count:
-                log.warning(
-                    "  row count mismatch: source=%d iceberg=%d",
-                    source_count,
-                    iceberg_count,
-                )
-            else:
-                log.info("  validated: %d rows written", iceberg_count)
-        else:
-            log.info("  created Iceberg table (empty)")
-
+        _validate_snapshot(iceberg, source_count)
     except Exception:
-        log.exception(
-            "  Iceberg creation failed — attempting to restore original entry"
+        log.exception("  Iceberg creation failed — rolling back")
+        _roll_back(
+            glue=glue,
+            s3=s3,
+            database=database,
+            table_name=table_name,
+            original_def=original_def,
+            location=location,
+            objects_before=objects_before,
         )
-        try:
-            _restore_glue_table(glue, database, original_def)
-        except Exception:
-            log.exception(
-                "  CRITICAL: could not restore %s.%s — "
-                "table definition: %s  data still at: %s",
-                database,
-                table_name,
-                _to_table_input(original_def),
-                location,
-            )
         return False
 
     return True
@@ -251,12 +517,25 @@ def main(
         str,
         cyclopts.Parameter(help="AWS region for Glue and S3"),
     ] = _AWS_REGION,
+    max_table_bytes: Annotated[
+        int,
+        cyclopts.Parameter(
+            help="Skip tables whose JSONL body exceeds this many bytes "
+            "(migration reads each table fully into memory)"
+        ),
+    ] = _DEFAULT_MAX_TABLE_BYTES,
 ) -> None:
     """Migrate legacy JSONL raw-layer Glue tables to Apache Iceberg format."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     database = _RAW_DATABASE.format(env=env)
-    log.info("database=%s  dry_run=%s  table=%s", database, dry_run, table or "(all)")
+    log.info(
+        "database=%s  dry_run=%s  table=%s  max_table_bytes=%d",
+        database,
+        dry_run,
+        table or "(all)",
+        max_table_bytes,
+    )
 
     glue = boto3.client("glue", region_name=aws_region)
     s3 = boto3.client("s3", region_name=aws_region)
@@ -308,6 +587,7 @@ def main(
                 database=database,
                 table_name=name,
                 dry_run=dry_run,
+                max_table_bytes=max_table_bytes,
             )
             if ok:
                 succeeded += 1

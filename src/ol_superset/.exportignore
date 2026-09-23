@@ -1,0 +1,15 @@
+# ol-superset export ignore-list
+#
+# Glob patterns (gitignore-style) for Superset assets we deliberately do NOT
+# track in this repo. `ol-superset export` prunes any exported dashboard/chart
+# whose title, name, UUID, or filename matches a pattern here, so curated
+# exclusions stick instead of reappearing on every additive export.
+#
+# Matching is dependency-consistent: removing a dashboard also removes any chart
+# that is left referenced only by removed dashboards. Datasets are never pruned
+# (physical layer, shared, validated by `ol-superset validate --dbt-dir`).
+#
+# Bypass for a one-off full export with: `ol-superset export --skip-ignore`.
+
+# MicroMasters Finance dashboards + charts — unmaintained, dropped in ce937648.
+MM_Fin_*

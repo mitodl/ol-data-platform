@@ -21,6 +21,7 @@ with enrollment as (
 
 , course as (
     select * from {{ ref('dim_course') }}
+    where is_current = true
 )
 
 , f_certificate as (
@@ -97,10 +98,12 @@ with enrollment as (
 , discount_names as (
     select
         discount_code
+        , platform
         , discount_name
     from combined_discounts
     group by
         discount_code
+        , platform
         , discount_name
 )
 
@@ -153,10 +156,11 @@ with enrollment as (
 )
 
 select
-    enrollment.platform_display as platform
+    enrollment.enrollment_key
+    , enrollment.platform_display as platform
     , enrollment_id as courserunenrollment_id
-    , course_readable_id
-    , course_title
+    , course.course_readable_id
+    , course.course_title
     , {{ is_courserun_current('course_run.courserun_start_on', 'course_run.courserun_end_on') }}
         as courserun_is_current
     , course_run.courserun_readable_id
@@ -261,6 +265,7 @@ left join discount_type
     on f_order.discount_type_fk = discount_type.discount_type_pk
 left join discount_names
     on discount.discount_code = discount_names.discount_code
+    and enrollment.platform_display = discount_names.platform
 left join enrollment_upgrades
     on f_order.order_id = enrollment_upgrades.order_id
     and enrollment.platform_display = enrollment_upgrades.platform

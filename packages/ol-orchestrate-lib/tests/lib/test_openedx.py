@@ -2,15 +2,49 @@
 
 import json
 import tarfile
+import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import pytest
 from ol_orchestrate.lib.openedx import (
+    CourseExportNotQueuedError,
+    CourseExportOutcome,
     CourseStaticAssetsBundle,
     CourseXmlBlock,
+    classify_course_export_state,
+    course_export_task_id,
+    generate_block_indexes,
     process_course_xml_blocks,
+    un_nest_course_structure,
 )
+
+
+@pytest.fixture(autouse=True)
+def _bundle_archives_under_tmp_path(tmp_path, monkeypatch):
+    """Keep the tar.gz the bundle writes inside pytest's per-test temp dir.
+
+    ``process_course_xml_blocks`` streams the static assets to a NamedTemporaryFile
+    and hands ownership to the caller, so without this every test would leave one
+    behind in the system temp directory.
+    """
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+
+def bundle_members(bundle: CourseStaticAssetsBundle) -> list[tuple[str, bytes]]:
+    """Read back the (path, bytes) pairs the bundle actually wrote."""
+    with tarfile.open(bundle.archive_path, "r:gz") as tar:
+        return [
+            (member.name, tar.extractfile(member).read())  # type: ignore[union-attr]
+            for member in tar.getmembers()
+        ]
+
+
+def bundle_paths(bundle: CourseStaticAssetsBundle) -> list[str]:
+    """Read back just the paths the bundle wrote."""
+    with tarfile.open(bundle.archive_path, "r:gz") as tar:
+        return tar.getnames()
 
 
 @pytest.fixture
@@ -95,11 +129,31 @@ def sample_course_archive():
         '<lti_v2 display_name="Custom LTI" url_name="lti_block"/>\n'
     )
 
-    # static non-XML assets — in the excluded `static/` directory;
-    # these should NOT appear in the bundle (excluded by directory filter)
+    # static/ holds "the files used in a course, such as images or PDFs" per the
+    # OLX reference. Non-XML contents ARE collected; XML here is neither a block
+    # nor a document to extract.
     static_dir = course_root / "static"
     static_dir.mkdir()
     (static_dir / "logo.png").write_text("fake png data")
+    (static_dir / "syllabus.pdf").write_text("fake pdf bytes")
+    (static_dir / "subs_video1.srt.sjson").write_text('{"start": [0], "text": ["hi"]}')
+    (static_dir / "manifest.xml").write_text(
+        '<assets><asset name="logo.png"/></assets>'
+    )
+
+    # assets/ is not in the documented OLX export layout but appears in real
+    # archives, and is collected on the same reasoning as static/. Covered here
+    # rather than only in the integration suite, which CI skips.
+    assets_dir = course_root / "assets"
+    assets_dir.mkdir()
+    (assets_dir / "handout.pdf").write_text("fake handout bytes")
+
+    # drafts/ is the Studio draft workspace — unpublished, so nothing in it is
+    # collected or parsed, XML or otherwise.
+    drafts_dir = course_root / "drafts"
+    drafts_dir.mkdir()
+    (drafts_dir / "unpublished.pdf").write_text("draft pdf that must not ship")
+    (drafts_dir / "draft_block.xml").write_text('<html display_name="Draft"/>')
 
     # non-XML content files in non-excluded directories — these SHOULD be collected
     subtitles_dir = course_root / "subtitles"
@@ -239,23 +293,75 @@ def test_process_course_xml_blocks_static_assets(sample_course_archive):
     _, bundle = process_course_xml_blocks(archive_path, "prod")
 
     assert isinstance(bundle, CourseStaticAssetsBundle)
-    assert len(bundle.files) > 0, "Should have static assets"
-    for relative_path, asset_bytes in bundle.files:
+    members = bundle_members(bundle)
+    assert len(members) > 0, "Should have static assets"
+    for relative_path, asset_bytes in members:
         assert isinstance(relative_path, str), "Path should be a string"
         assert isinstance(asset_bytes, bytes), "Content should be bytes"
         assert len(asset_bytes) > 0, "Asset should not be empty"
 
-    paths = [p for p, _ in bundle.files]
+    paths = [p for p, _ in members]
     assert any("subtitle.srt" in p for p in paths), "Should include SRT file"
     assert any("content.html" in p for p in paths), "Should include HTML file"
 
-    # Files from excluded structural directories must not appear in the bundle
-    excluded_dirs = {"drafts", "assets", "static"}
+    # Only drafts/ is withheld. Its contents are unpublished by definition, so a
+    # draft PDF reaching the bundle would put unreviewed material in the catalogue.
     for path in paths:
-        top_dir = path.split("/")[0]
-        assert top_dir not in excluded_dirs, (
-            f"File from excluded directory '{top_dir}' should not be in bundle: {path}"
+        assert path.split("/")[0] != "drafts", (
+            f"Unpublished draft file must not be in bundle: {path}"
         )
+
+
+def test_process_course_xml_blocks_collects_static_content_files(sample_course_archive):
+    """static/ holds the course's real content files, so its payload is collected.
+
+    This is the input ContentFile text extraction consumes: uploaded PDFs and
+    subs_*.srt.sjson subtitles live in static/, and excluding them would make the
+    bundle structurally unable to carry course content.
+    """
+    archive_path, _ = sample_course_archive
+    _, bundle = process_course_xml_blocks(archive_path, "prod")
+    paths = bundle_paths(bundle)
+
+    assert "static/syllabus.pdf" in paths, "Uploaded PDFs must be collected"
+    assert "static/subs_video1.srt.sjson" in paths, "Subtitles must be collected"
+    assert "static/logo.png" in paths, "Uploaded images must be collected"
+    assert "assets/handout.pdf" in paths, "assets/ files must be collected too"
+
+
+def test_process_course_xml_blocks_file_storage_xml_is_neither(sample_course_archive):
+    """XML under static/ is neither a course block nor a collected content file.
+
+    Course XML comes from the block directories, and a document extractor has
+    nothing to do with an XML manifest, so it falls through both paths.
+    """
+    archive_path, _ = sample_course_archive
+    blocks, bundle = process_course_xml_blocks(archive_path, "prod")
+
+    assert "static" not in {b.block_type for b in blocks}
+    assert "static/manifest.xml" not in bundle_paths(bundle)
+
+
+def test_process_course_xml_blocks_drafts_never_collected(sample_course_archive):
+    """drafts/ is withheld from BOTH block parsing and file collection."""
+    archive_path, _ = sample_course_archive
+    blocks, bundle = process_course_xml_blocks(archive_path, "prod")
+
+    assert "drafts" not in {b.block_type for b in blocks}
+    assert not any(p.startswith("drafts/") for p in bundle_paths(bundle)), (
+        "Unpublished draft content must never be collected"
+    )
+
+
+def test_process_course_xml_blocks_manifest_types_content_files(sample_course_archive):
+    """The manifest carries the MIME type extraction dispatches on."""
+    archive_path, _ = sample_course_archive
+    _, bundle = process_course_xml_blocks(archive_path, "prod")
+
+    by_path = {entry["path"]: entry for entry in bundle.manifest["files"]}
+    assert by_path["static/syllabus.pdf"]["mime_type"] == "application/pdf"
+    assert by_path["static/logo.png"]["mime_type"] == "image/png"
+    assert bundle.manifest["file_count"] == len(bundle_paths(bundle))
 
 
 def test_process_course_xml_blocks_model_dump_serializable(sample_course_archive):
@@ -380,3 +486,254 @@ def test_process_course_xml_blocks_structural_dirs_excluded():
     assert "chapter" in block_types, "Real block types should still be included"
 
     temp_dir.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ("Succeeded", CourseExportOutcome.SUCCEEDED),
+        ("Failed", CourseExportOutcome.FAILED),
+        ("Canceled", CourseExportOutcome.FAILED),
+        # The regression: Studio uses Retrying for a task it is about to
+        # attempt again, and both poll loops used to count it as terminal.
+        ("Retrying", CourseExportOutcome.PENDING),
+        ("In Progress", CourseExportOutcome.PENDING),
+        ("Pending", CourseExportOutcome.PENDING),
+        # An undocumented or absent state keeps the caller waiting rather
+        # than inventing a verdict; the poll loop's timeout bounds it.
+        ("Something New", CourseExportOutcome.PENDING),
+        (None, CourseExportOutcome.PENDING),
+    ],
+)
+def test_classify_course_export_state(
+    state: str | None, expected: CourseExportOutcome
+) -> None:
+    """Retrying must not be terminal; unknown states must not be either."""
+    assert classify_course_export_state(state) == expected
+
+
+def test_retrying_then_succeeded_completes_the_export() -> None:
+    """A task that retries and then succeeds must finish, not fail.
+
+    This is the production sequence that broke: the first Retrying poll
+    marked the course failed, satisfied the loop's completion condition and
+    raised "Unable to export the course XML" while Studio was still working.
+    Driving the accumulate logic over the sequence shows the loop now runs to
+    the Succeeded state.
+    """
+    succeeded: set[str] = set()
+    failed: set[str] = set()
+    course_id = "course-v1:MITxT+MITx+0T2026"
+
+    for state in ("In Progress", "Retrying", "Retrying", "Succeeded"):
+        outcome = classify_course_export_state(state)
+        if outcome is CourseExportOutcome.SUCCEEDED:
+            succeeded.add(course_id)
+        elif outcome is CourseExportOutcome.FAILED:
+            failed.add(course_id)
+        # The loop keeps polling while neither set has the course in it.
+        if succeeded or failed:
+            break
+
+    assert succeeded == {course_id}
+    assert failed == set()
+
+
+COURSE_KEY = "course-v1:MITxT+MITx+0T2026"
+
+
+def test_course_export_task_id_returns_the_queued_task() -> None:
+    """The happy path hands back the task id the poll loop needs."""
+    response = {
+        "failed_uploads": {},
+        "upload_task_ids": {COURSE_KEY: "f65e2212-fd97-4645-83cd-7f1c442efb21"},
+        "upload_urls": {COURSE_KEY: "https://example.s3.amazonaws.com/course.tar.gz"},
+    }
+
+    assert (
+        course_export_task_id(COURSE_KEY, response)
+        == "f65e2212-fd97-4645-83cd-7f1c442efb21"
+    )
+
+
+def test_course_export_task_id_surfaces_studios_queue_failure() -> None:
+    """A declined course must report Studio's reason, not a KeyError.
+
+    export_courses returns HTTP 400 as a documented partial failure: the
+    course lands in failed_uploads and is absent from upload_task_ids. Reading
+    upload_task_ids directly gave an empty poll set, so the loop ran zero
+    times, nothing was recorded as failed, and the asset fell through to
+    `exported_courses["upload_urls"][course_key]` -- a bare KeyError that
+    threw away the explanation sitting in the response.
+    """
+    response = {
+        "failed_uploads": {COURSE_KEY: "Course not found"},
+        "upload_task_ids": {},
+        "upload_urls": {},
+    }
+
+    with pytest.raises(CourseExportNotQueuedError) as exc_info:
+        course_export_task_id(COURSE_KEY, response)
+
+    # Studio's explanation describes the defect and stays in the message; the
+    # course key identifies the instance and moves to an attribute, so every
+    # occurrence groups under one Sentry title.
+    assert "Course not found" in str(exc_info.value)
+    assert COURSE_KEY not in str(exc_info.value)
+    assert exc_info.value.course_key == COURSE_KEY
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"upload_task_ids": {}},
+        {"upload_task_ids": {"course-v1:Other+Course+1T2026": "abc"}},
+        {"upload_task_ids": {COURSE_KEY: None}},
+        {"upload_task_ids": {COURSE_KEY: ""}},
+        {},
+    ],
+    ids=["empty", "different-course", "null-task", "blank-task", "no-key"],
+)
+def test_course_export_task_id_rejects_a_response_with_no_task(
+    response: dict[str, Any],
+) -> None:
+    """No usable task id is terminal, whether or not Studio explained itself."""
+    with pytest.raises(CourseExportNotQueuedError) as exc_info:
+        course_export_task_id(COURSE_KEY, response)
+
+    assert COURSE_KEY not in str(exc_info.value)
+    assert exc_info.value.course_key == COURSE_KEY
+    assert exc_info.value.response == response
+
+
+def _block(category: str, children: list[str], display_name: str = "Block"):
+    return {
+        "category": category,
+        "children": children,
+        "metadata": {"display_name": display_name, "start": "2026-01-01T00:00:00Z"},
+    }
+
+
+def test_generate_block_indexes_walks_depth_first():
+    """Blocks are numbered in the order a learner encounters them."""
+    structure = {
+        "course": _block("course", ["chapter_1", "chapter_2"]),
+        "chapter_1": _block("chapter", ["seq_1"]),
+        "seq_1": _block("sequential", []),
+        "chapter_2": _block("chapter", []),
+    }
+
+    indexes = generate_block_indexes(structure, "course")
+
+    assert list(indexes) == ["course", "chapter_1", "seq_1", "chapter_2"]
+    assert indexes["course"] == 1
+    assert indexes["chapter_2"] == 4
+
+
+def test_generate_block_indexes_skips_children_absent_from_the_structure():
+    """A child named by its parent but missing from the document is skipped.
+
+    Courses that source content from a library do this: the parent lists the
+    block, but the block itself is not in the course structure document.
+    Indexing it by key raised
+    ``KeyError: 'block-v1:...+type@sequential+block@...'`` and failed the
+    whole course_structure asset for that course.
+    """
+    structure = {
+        "course": _block("course", ["chapter_1"]),
+        "chapter_1": _block("chapter", ["library_block", "seq_1"]),
+        "seq_1": _block("sequential", []),
+    }
+
+    indexes = generate_block_indexes(structure, "course")
+
+    assert "library_block" not in indexes
+    assert list(indexes) == ["course", "chapter_1", "seq_1"]
+    # The sequence stays contiguous over the blocks that actually exist.
+    assert list(indexes.values()) == [1, 2, 3]
+
+
+def test_generate_block_indexes_tolerates_a_missing_root():
+    """No block with category 'course' leaves root_block as an empty string."""
+    assert generate_block_indexes({"chapter_1": _block("chapter", [])}, "") == {}
+
+
+def test_un_nest_course_structure_survives_a_library_reference():
+    """The full un-nest path completes for a course with a library block."""
+    structure = {
+        "course": _block("course", ["chapter_1"], display_name="A Course"),
+        "chapter_1": _block("chapter", ["library_block"]),
+    }
+
+    blocks = un_nest_course_structure("course-v1:Org+Num+Run", structure, None)
+
+    assert {block["block_id"] for block in blocks} == {"course", "chapter_1"}
+
+
+def _archive_with_static(tmp_path: Path, name: str, static: dict[str, bytes]) -> Path:
+    """Build a minimal course archive carrying the given static files."""
+    root = tmp_path / name
+    (root / "course").mkdir(parents=True)
+    (root / "course.xml").write_bytes(
+        b'<course url_name="2024_Spring" org="TestX" course="TEST101"/>\n'
+    )
+    (root / "course" / "2024_Spring.xml").write_bytes(b'<course display_name="T"/>\n')
+    static_dir = root / "static"
+    static_dir.mkdir()
+    for filename, content in static.items():
+        (static_dir / filename).write_bytes(content)
+
+    archive_path = tmp_path / f"{name}.tar.gz"
+    with tarfile.open(archive_path, "w:gz") as tf:
+        tf.add(root, arcname=name)
+    return archive_path
+
+
+def test_data_version_changes_when_a_static_file_is_renamed(tmp_path):
+    """Renaming a static file must change the bundle's data_version.
+
+    The relative paths are part of the bundle's observable content -- they go
+    into the tar and the manifest, and downstream extraction keys rows by
+    file_path. Hashing only the bytes meant a rename produced an identical
+    data_version, so the S3 object key was reused and every
+    data_version_changed() check downstream missed the update.
+    """
+    before = _archive_with_static(tmp_path, "before", {"a.pdf": b"%PDF-identical"})
+    after = _archive_with_static(tmp_path, "after", {"b.pdf": b"%PDF-identical"})
+
+    _, bundle_before = process_course_xml_blocks(before, "prod")
+    _, bundle_after = process_course_xml_blocks(after, "prod")
+
+    assert bundle_paths(bundle_before) == ["static/a.pdf"]
+    assert bundle_paths(bundle_after) == ["static/b.pdf"]
+    assert bundle_before.data_version != bundle_after.data_version
+
+
+def test_data_version_is_stable_for_identical_content(tmp_path):
+    """The same paths and bytes must still hash the same, or nothing caches."""
+    one = _archive_with_static(tmp_path, "one", {"a.pdf": b"%PDF-x", "b.txt": b"hi"})
+    two = _archive_with_static(tmp_path, "two", {"a.pdf": b"%PDF-x", "b.txt": b"hi"})
+
+    _, bundle_one = process_course_xml_blocks(one, "prod")
+    _, bundle_two = process_course_xml_blocks(two, "prod")
+
+    assert bundle_one.data_version == bundle_two.data_version
+
+
+def test_data_version_distinguishes_a_shifted_path_content_boundary(tmp_path):
+    """A shifted path/content boundary must still be two different versions.
+
+    "ab" + "c" and "a" + "bc" are the ambiguous pair: naive concatenation makes
+    them identical. The names carry no extension on purpose -- with one, the
+    paths already differ before the boundary moves, so the case would be
+    trivially distinguishable and the test would prove nothing. Two things keep
+    it apart now: the path is length-prefixed, and what follows it is a
+    fixed-width per-file digest rather than the raw bytes.
+    """
+    one = _archive_with_static(tmp_path, "one", {"ab": b"c"})
+    two = _archive_with_static(tmp_path, "two", {"a": b"bc"})
+
+    _, bundle_one = process_course_xml_blocks(one, "prod")
+    _, bundle_two = process_course_xml_blocks(two, "prod")
+
+    assert bundle_one.data_version != bundle_two.data_version

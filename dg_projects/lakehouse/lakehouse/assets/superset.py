@@ -11,6 +11,7 @@ from dagster_dbt import get_asset_key_for_model
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 
 from lakehouse.assets.lakehouse.dbt import full_dbt_project
+from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 _DEFAULT_SCHEMA_BASE = "ol_warehouse_production"
@@ -54,7 +55,12 @@ def create_superset_asset(
     @asset(
         key=asset_key,
         deps=[get_asset_key_for_model([full_dbt_project], dbt_model_name)],
-        automation_condition=upstream_or_code_changes(),
+        # Gated with the dbt assets these follow: dbt_automation_sensor targets
+        # both, so leaving these conditions live would let a sensor started by
+        # hand in an automation-off environment still fire this half.
+        automation_condition=(
+            upstream_or_code_changes() if DBT_AUTOMATION_ENABLED else None
+        ),
         group_name=group_name,
     )
     def _superset_dataset(
@@ -66,12 +72,32 @@ def create_superset_asset(
         table_name = (
             dbt_model_name if database_name == "trino" else dbt_model_name.lower()
         )
-        dataset_id = superset_api.client.get_or_create_dataset(
-            schema_suffix=dbt_asset_group_name,
-            table_name=table_name,
-            database_id=database_id,
-            schema_base=schema_base,
-        )
+        # A dataset that Superset can't resolve or create is reported as an
+        # error Output rather than raised: these assets fan out one step per
+        # dbt model, and a single unusable dataset used to take the whole
+        # nightly run down with it.
+        try:
+            dataset_id = superset_api.client.get_or_create_dataset(
+                schema_suffix=dbt_asset_group_name,
+                table_name=table_name,
+                database_id=database_id,
+                schema_base=schema_base,
+            )
+        except (httpx.HTTPError, RuntimeError) as e:
+            context.log.exception(
+                "Failed to get or create dataset for %s.%s",
+                dbt_asset_group_name,
+                dbt_model_name,
+            )
+            return Output(
+                value=None,
+                metadata={
+                    "status": "error",
+                    "error": str(e),
+                    "dbt_asset_group_name": dbt_asset_group_name,
+                    "dbt_model_name": dbt_model_name,
+                },
+            )
 
         if dataset_id is None:
             context.log.warning(
@@ -114,9 +140,9 @@ def create_superset_asset(
                     "dbt_model_name": dbt_model_name,
                 },
             )
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPError as e:
             context.log.exception(
-                "HTTPStatusError while refreshing dataset for %s.%s",
+                "HTTP error while refreshing dataset for %s.%s",
                 dbt_asset_group_name,
                 dbt_model_name,
             )

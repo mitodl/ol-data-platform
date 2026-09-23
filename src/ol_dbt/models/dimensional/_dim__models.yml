@@ -5,6 +5,22 @@ models:
 - name: afact_video_engagement
   description: Aggregate fact table summarizing video engagement by video, learner,
     and a courserun.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -81,6 +97,15 @@ models:
 
 - name: dim_video
   description: video metadata across the Open edX platforms
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitx/mysql
+      - mitxonline/api
+      - mitxonline/mysql
+      - xpro/api
+      - xpro/mysql
   columns:
   - name: video_block_pk
     description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@video+block@{hash
@@ -124,6 +149,15 @@ models:
 
 - name: dim_problem
   description: problem metadata across the Open edX platforms
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/tracking_logs
   columns:
   - name: problem_block_pk
     description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@problem+block@{hash
@@ -167,6 +201,12 @@ models:
 
 - name: dim_discussion_topic
   description: discussion topics across the Open edX platforms
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitxonline/api
+      - xpro/api
   columns:
   - name: discussion_topic_pk
     description: string, primary key for this table
@@ -205,6 +245,12 @@ models:
   description: Slowly Changing Dimension model for course content, including courses,
     chapters, subsections, problems, videos, and other contents across the Open edX
     platforms.
+  config:
+    meta:
+      qa_branches:
+      - mitx/api
+      - mitxonline/api
+      - xpro/api
   columns:
   - name: content_block_pk
     description: string, primary key for this table
@@ -285,12 +331,38 @@ models:
   description: Eventually a dimensional model for users from different platforms.
     It will contain one record for a user that's potentially a part of different platforms
     where we are able to see they are the same person.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_pk
-    description: string, primary key for this user dim table
+    description: string, primary key for this user dim table. The grain is still one
+      row per shared email, but the key's value is derived from durable identifiers
+      - the user_global_id when the group has one, otherwise the highest-ranked platform
+      account id in the group - so it no longer changes when a user edits their email
+      address.
     tests:
     - not_null
     - unique
+  - name: user_pk_source
+    description: string, which identifier user_pk was derived from - global when the
+      group has a user_global_id, the platform name when it was keyed off a source
+      account id, or email when no durable id was available anywhere in the group.
+      Rows with email are the only ones that still re-key when the user edits their
+      email address. mitxonline covers accounts keyed off either the application user
+      id or the open edX user id.
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['global', 'mitlearn', 'mitxonline', 'edxorg', 'micromasters', 'mitxpro',
+          'residential', 'bootcamps', 'emeritus', 'global_alumni', 'email']
   - name: user_global_id
     description: string, a unique identifier for the user across all platforms
     tests:
@@ -411,6 +483,19 @@ models:
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -484,6 +569,19 @@ models:
 
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -570,6 +668,19 @@ models:
     both tracking log and studentmodule sources have the same attempt — and all
     showanswer events regardless of count. Incremental; full-refresh required when
     backfilling or after schema changes.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: event_id
     description: string, surrogate key uniquely identifying this event row, derived
@@ -583,6 +694,15 @@ models:
   - name: user_fk
     description: string, foreign key to dim_user, referencing the user who triggered
       the event
+    tests:
+    # warn until the post-cutover full refresh clears the user_fk values this table
+    # persisted under the old email-derived key; raise to error afterwards.
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -654,9 +774,28 @@ models:
 
     The seed column identifies which randomized variant of the problem the student
     received, enabling analysis of whether specific variants are harder than others.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: user_fk
     description: string, foreign key to dim_user
+    tests:
+    # warn until the post-cutover full refresh clears the user_fk values this table
+    # persisted under the old email-derived key; raise to error afterwards.
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
   - name: platform
     description: string, platform name (mitxonline, mitxpro, residential)
   - name: openedx_user_id
@@ -717,6 +856,19 @@ models:
         column_list: ["platform", "studentmodulehistoryextended_id"]
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
@@ -811,6 +963,22 @@ models:
 - name: afact_course_page_engagement
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -857,6 +1025,22 @@ models:
 - name: afact_problem_engagement
   description: Aggregate fact table summarizing problem engagement by learners within
     a course.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform
@@ -903,6 +1087,22 @@ models:
 - name: afact_discussion_engagement
   description: Aggregate fact table summarizing learner engagement in discussion posts
     within a course.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   columns:
   - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
@@ -966,6 +1166,18 @@ models:
 
 - name: tfact_chatbot_events
   description: Transactional fact table for learner chatbot events in a course
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: chatbot_source
     description: string, indicates the source of the chatbot event like 'open_edx'
@@ -1043,6 +1255,17 @@ models:
   description: Dimension table combining discount/coupon records across MITxOnline
     and MITxPro platforms. Each row represents a unique discount or coupon identified
     by a surrogate key derived from the source platform and source discount ID.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - source_discount_id
+      - platform_code
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
   columns:
   - name: discount_pk
     description: string, surrogate primary key for this table, generated from source_discount_id
@@ -1055,9 +1278,13 @@ models:
     tests:
     - not_null
   - name: source_discount_id
-    description: integer, original discount or coupon ID from the source platform
+    description: integer, original discount or coupon ID from the source platform.
+      For mitxpro b2b bulk-purchase coupons (which have no coupon_id), this is the
+      negated b2bcoupon_id instead, to keep it distinct from regular coupon IDs.
   - name: discount_code
-    description: string, the discount or coupon code used at checkout
+    description: string, the discount or coupon code used at checkout. If a discount's
+      code was changed over its lifetime, this reflects the most recently updated
+      code on file, not necessarily the code used on every order that redeemed it
   - name: discount_type
     description: string, type of discount. e.g. percent-off, dollars-off, fixed-price
   - name: discount_amount
@@ -1161,3 +1388,95 @@ models:
     - not_null
     - accepted_values:
         values: ['Night', 'Morning', 'Afternoon', 'Evening']
+
+- name: afact_learner_courserun_daily_activity
+  description: >
+    One row per (platform, learner, course run, day) with tracked course
+    activity: video plays, problem checks, course navigation, discussion
+    events, or Open edX chatbot submits. Days with no activity have no row, so
+    last_active_on is max(activity_date) and days_active is
+    count(distinct activity_date) over this table. Certificates and
+    enrollments don't count as activity here.
+
+    Keyed on user_fk instead of email, unlike organization_administration_report,
+    so a learner's rows don't split or drop when their account email changes.
+    Rebuilt in full every run, since a learner's user_fk can still be
+    re-resolved and an incremental table would leave old days under the
+    stale key.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - platform
+        - user_fk
+        - courserun_readable_id
+        - activity_date_key
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
+  columns:
+  - name: activity_key
+    description: string, surrogate key over (platform, user_fk, courserun_readable_id,
+      activity_date).
+    tests:
+    - unique
+    - not_null
+  - name: user_fk
+    description: string, foreign key to dim_user.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        config:
+          severity: warn
+  - name: courserun_fk
+    description: string, foreign key to dim_course_run, matched on (courserun_readable_id,
+      platform) against the current run. Null where the event's course id has no current
+      course run.
+  - name: platform
+    description: string, platform the activity happened on (mitxonline, mitxpro, residential,
+      edxorg).
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, course run id as recorded on the event.
+    tests:
+    - not_null
+  - name: activity_date_key
+    description: >
+      integer, foreign key to dim_date in YYYYMMDD format -- the event's own
+      date_fk, which the event facts derive from event_timestamp_iso8601 in the
+      source's timezone. Not a UTC day: 15.2M of tfact_discussion_events' rows
+      carry a local offset, and 2.9M of those fall on a different UTC day. Read
+      as a date via dim_date rather than casting the integer.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: videos_played
+    description: int, distinct video blocks with a play_video event that day. Same
+      definition as the report's videos_watched.
+  - name: problems_attempted
+    description: int, distinct problem blocks with a problem_check event that day.
+      Excludes showanswer, which the report's problems_count includes.
+  - name: navigation_events
+    description: int, course navigation events that day.
+  - name: discussion_events
+    description: int, discussion forum events that day.
+  - name: chatbot_interactions
+    description: int, distinct (session, block) pairs with an ol_openedx_chat.drawer.submit
+      event that day, Open edX chatbot only. Unlike the report, submits with no block_id
+      count.

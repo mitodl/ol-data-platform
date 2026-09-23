@@ -51,9 +51,13 @@ wiring into four credential/engine-gated phases.
 - **JSON output convention:** build a flat `list[dict]`, `print(json.dumps(data, indent=2))`
   (plain `print`, never rich). Text mode uses `console.print` + a trailing rich `Summary:`
   line. Dual consoles: `console = Console()`, `err_console = Console(stderr=True)`.
-- **Severity enums:** `impact` uses `AlertLevel(StrEnum) = BREAKING|WARNING|INFO`; `validate`
-  uses `Severity(StrEnum) = ERROR|WARNING|INFO`. Exit `1` when the top severity is present,
-  bare `return` for the clean/no-op case.
+- **Severity enums:** `impact` uses `AlertLevel(StrEnum) = BREAKING|KEY_REGEN|WARNING|INFO`;
+  `validate` uses `Severity(StrEnum) = ERROR|WARNING|INFO`. Exit `1` when the top severity is
+  present, bare `return` for the clean/no-op case. `KEY_REGEN` is deliberately outside that
+  exit-code rule: it reports a full-refresh model whose `generate_surrogate_key` inputs
+  changed, orphaning the FK copies its incremental descendants hold. Nothing in the PR is
+  wrong — the follow-up is a production rebuild, which `lakehouse.lib.surrogate_key_drift`
+  performs on the first build after merge.
 - **dbt invocation:** always `subprocess.run([...], cwd=str(dbt_dir))`, argv list, no
   `dbtRunner`. `run.py` passes `--profiles-dir str(dbt_dir)`; `impact`/`validate` rely on
   cwd. `DBT_PROFILES_DIR` is not set by the CLI.
@@ -119,14 +123,22 @@ New file `src/ol_dbt_cli/ol_dbt_cli/commands/diff.py`; register in `cli.py` via
 
 ```python
 def diff(
-    old: Annotated[str, Parameter(name=["--old"], help="Baseline model/relation name.")],
-    new: Annotated[str, Parameter(name=["--new"], help="Candidate model/relation name.")],
+    old: Annotated[
+        str, Parameter(name=["--old"], help="Baseline model/relation name.")
+    ],
+    new: Annotated[
+        str, Parameter(name=["--new"], help="Candidate model/relation name.")
+    ],
     dbt_dir_path: Annotated[str | None, Parameter(name=["--dbt-dir", "-d"])] = None,
     target: Annotated[str, Parameter(name=["--target", "-t"])] = "dev_local",
-    primary_key: Annotated[tuple[str, ...], Parameter(name=["--primary-key", "-k"])] = (),
-    exclude_columns: Annotated[tuple[str, ...], Parameter(name=["--exclude-columns"])] = (),
+    primary_key: Annotated[
+        tuple[str, ...], Parameter(name=["--primary-key", "-k"])
+    ] = (),
+    exclude_columns: Annotated[
+        tuple[str, ...], Parameter(name=["--exclude-columns"])
+    ] = (),
     output_format: Annotated[str, Parameter(name=["--format", "-f"])] = "text",
-    limit: Annotated[int, Parameter(name=["--limit"])] = 20,   # cap sample rows
+    limit: Annotated[int, Parameter(name=["--limit"])] = 20,  # cap sample rows
     auto_build: Annotated[bool, Parameter(name=["--auto-build"])] = False,
 ) -> None: ...
 ```
@@ -148,6 +160,38 @@ loudly instead of silently falling to text.
    email-keyed surrogate that collapses NULL emails — a naive full-row compare shows spurious
    mismatches; callers should pass `--primary-key` and/or `--exclude-columns` for known
    unstable columns.
+
+   **Correction (implementation reality).** `audit_helper` takes `primary_key` as an *opaque
+   string it interpolates directly into SQL*, never as a list, so a composite key cannot simply
+   be handed over as a Jinja list — doing so emits the literal text `['k1', 'k2']` into the
+   query. The two consumers need different forms:
+   - `compare_relations` → `compare_queries` uses `primary_key` **only** in the `order by` of
+     the `summarize=false` branch (it is unused when `summarize=true`). A comma-joined column
+     list (`'k1, k2'`) is the correct form there.
+   - `compare_column_values` (the per-column mismatch path) emits
+     `a_query.{{ primary_key }} = b_query.{{ primary_key }}`, so it requires a **scalar** column
+     name present in both sides. A composite key is therefore collapsed into a single hashed
+     join column inside the `a_query`/`b_query` blocks, and that column's name is what gets
+     passed. Build that column with the project's `diff_composite_key` macro
+     (`src/ol_dbt/macros/diff_composite_key.sql`) — **not**
+     `dbt_utils.generate_surrogate_key`, which joins components with a literal `-` without
+     encoding component boundaries, so `('a-b', 'c')` and `('a', 'b-c')` hash identically
+     (verified on dbt_utils 1.3.3). Two distinct keys would then pair as one row, reintroducing
+     the same many-to-many mispairing a composite key exists to prevent.
+     `diff_composite_key` length-prefixes each component (`<len>:<value>`, NULL as `~`) so no
+     character inside a value can shift a boundary.
+
+     This caveat is specific to using a hash as a **row-pairing join key across two
+     relations**. It is not a claim about the `*_pk` surrogates in the dimensional models,
+     which legitimately use `generate_surrogate_key`: there both sides of a join compute the
+     hash identically, and a boundary collision would make two rows share a `*_pk` and fail
+     that column's `unique` test rather than silently mispair.
+
+   Accept a composite key both comma-separated (`-k a,b,c`) and as a repeated flag
+   (`-k a -k b -k c`); cyclopts consumes one token per flag occurrence, so `-k a b c` would
+   otherwise silently truncate the key and spill the remaining tokens into `--dbt-dir`. Same
+   handling for `--exclude-columns`. Using the model's true grain is not cosmetic: a non-unique
+   key pairs rows many-to-many and reports join artifacts as mismatches.
 4. **Run the comparison.** Render an `audit_helper` operation via a small analysis/macro
    invocation and execute it with `dbt`. On `dev_local`, unbuilt sides resolve to the Glue
    DuckDB views through `override_ref`/`override_source` (zero-copy). `--auto-build` may first
@@ -164,7 +208,11 @@ loudly instead of silently falling to text.
   "primary_key": ["user_pk"], "excluded_columns": ["_loaded_at"],
   "column_reconciliation": {"only_in_old": [], "only_in_new": ["new_col"], "compared": ["..."]},
   "row_counts": {"old": 12345, "new": 12345, "delta": 0},
-  "column_mismatches": [{"column": "email", "mismatch_rate": 0.001, "mismatched_rows": 12}],
+  "unmatched_rows": 0,
+  "column_mismatches": [
+    {"column": "email", "mismatch_rate": 0.001, "mismatched_rows": 12,
+     "missing_in_old": 0, "missing_in_new": 0}
+  ],
   "sample_mismatches": [{"...": "capped at --limit rows"}],
   "verdict": "match | mismatch | schema_divergence"
 }
@@ -189,7 +237,8 @@ loudly instead of silently falling to text.
 ### 3.8 Acceptance criteria
 - [ ] `ol-dbt diff --old A --new B` runs on `dev_local` with zero cloud creds and prints a
       capped human summary.
-- [ ] `--format json` emits the schema in §3.5; `--primary-key`/`--exclude-columns` respected.
+- [ ] `--format json` emits the schema in §3.5; `--primary-key`/`--exclude-columns` respected,
+      in both their comma-separated and repeated-flag forms, single and composite.
 - [ ] Schema mismatch yields a structured message, not a raw SQL error.
 - [ ] Exit code 1 on any mismatch (CI-gateable).
 - [ ] `dbt_audit_helper` added to `packages.yml`; `test_diff.py` added; `cli.py` registers it.
@@ -212,7 +261,9 @@ run `dbt parse`/`compile` against `dev_local`, no warehouse network):
    the BREAKING/WARNING column-level blast radius as a **PR comment** (create-or-update a
    single sticky comment). BREAKING → non-zero (or convert to a required-review signal — decide
    at impl; default: annotate, do not hard-fail, to avoid blocking legitimate breaking changes
-   that are reviewed).
+   that are reviewed). KEY_REGEN alerts get their own section in that comment: they change no
+   column, so a reviewer scanning the collapsed details for a renamed field would not find
+   them.
 4. **dimensional-layering-lint** — see §5 (runs as `ol-dbt validate --only dimensional_layering`
    or a dedicated flag).
 5. **sqlfluff-lint** — run the same sqlfluff config used in pre-commit (today pre-commit only).

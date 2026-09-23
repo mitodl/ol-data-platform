@@ -6,10 +6,20 @@ sources:
     Dimensional-layer Iceberg tables, accessed from StarRocks via the
     `ol_data_lake_{qa,production}` external catalog. Same physical tables the
     Trino-backed ol_dbt project materializes into `ol_warehouse_{env}_dimensional`.
-  database: "{{ 'ol_data_lake_qa' if 'qa' in target.name else 'ol_data_lake_production'\
-    \ }}"
-  schema: "{{ 'ol_warehouse_qa_dimensional' if 'qa' in target.name else 'ol_warehouse_production_dimensional'\
-    \ }}"
+
+    Which catalog is read comes from DBT_DATA_LAKE_ENV, NOT from the target
+    name. The target names a CLUSTER and its auth; this names the lake the
+    cluster reads through its external catalog, and the two axes diverge: a
+    developer's StarRocks target port-forwards to the QA cluster but should
+    read production data. Inferring the lake from `'qa' in target.name` got
+    that case wrong and made these models undevelopable locally (RFC 12711
+    step 1). Set from a per-environment map that raises on an unknown
+    environment by lakehouse/assets/lakehouse/dbt.py (Dagster) and
+    ol_dbt_cli/commands/starrocks.py (local, CI); the default below is reached
+    only by a bare `dbt` invocation outside both, where reading production is
+    the sanctioned practice and a wrong value fails as a missing relation.
+  database: "ol_data_lake_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}"
+  schema: "ol_warehouse_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}_dimensional"
   tables:
   - name: dim_organization
     description: One row per organization per platform. organization_key is null for
@@ -34,18 +44,35 @@ sources:
     description: "Certificate fact. Grain: one row per certificate."
   - name: tfact_grade
     description: "Grade fact. Grain: one row per (user, course_run)."
+  - name: dim_user
+    description: >
+      User dimension. Grain: one row per person across platforms. Only the
+      learner-grain views read it, and user_global_id, not user_pk, is the
+      stable learner identifier.
+  - name: bridge_user_organization
+    description: >
+      MITx Online organization membership roster. Grain: one row per (user,
+      organization). Includes members with no enrollments.
+  - name: afact_learner_courserun_daily_activity
+    description: >
+      Per-learner course activity. Grain: one row per (platform, user, course
+      run, day) with any tracked activity. activity_date_key is a dim_date key
+      for the day the event happened in the source system's local time, not in
+      UTC. Only the learner-grain views read it.
+  - name: dim_date
+    description: "Date dimension. Grain: one row per day, keyed on date_key (YYYYMMDD)."
 - name: reporting
   description: >
     Reporting-layer Iceberg tables, accessed from StarRocks via the
-    `ol_data_lake_{qa,production}` external catalog.
-  database: "{{ 'ol_data_lake_qa' if 'qa' in target.name else 'ol_data_lake_production'\
-    \ }}"
-  schema: "{{ 'ol_warehouse_qa_reporting' if 'qa' in target.name else 'ol_warehouse_production_reporting'\
-    \ }}"
+    `ol_data_lake_{qa,production}` external catalog, selected by
+    DBT_DATA_LAKE_ENV rather than the target name (see the dimensional source
+    above for why).
+  database: "ol_data_lake_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}"
+  schema: "ol_warehouse_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}_reporting"
   tables:
   - name: organization_administration_report
     description: >
       Per-learner x course_run x activity_date engagement report. Grain:
       (courserun_readable_id, organization_key, user_email, activity_date).
       organization_key is COALESCE'd from contract mapping and a free-text
-      fallback field -- filter WHERE organization_key IS NOT NULL for B2B use.
+      fallback field. Filter WHERE organization_key IS NOT NULL for B2B use.

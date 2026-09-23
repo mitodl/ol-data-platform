@@ -226,6 +226,16 @@ with mitxonline_orders as (
     from {{ this }}
     group by platform
 )
+
+-- Snapshot of the target's current (order_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        order_key
+        , user_fk as stored_user_fk
+    from {{ this }}
+)
 {% endif %}
 
 , final as (
@@ -261,10 +271,18 @@ with mitxonline_orders as (
     -- past MITx Online order creation times, which would cause silent data loss.
     -- left join preserves orders from platforms not yet in the target table
     left join incremental_watermarks w on w.watermark_platform = owf.platform
+    left join stale_user_fk_lookup as sufk
+        on sufk.order_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(owf.order_id as varchar)",
+            "owf.line_id",
+            "owf.platform"
+        ]) }}
     where (
         w.max_updated_on is null  -- platform not yet in target, include all
         or owf.order_updated_on >= w.max_updated_on
         or owf.order_updated_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from owf.user_fk
     )
     {% endif %}
 )

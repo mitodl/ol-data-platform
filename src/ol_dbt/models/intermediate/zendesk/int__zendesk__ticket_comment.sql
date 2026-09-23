@@ -12,7 +12,12 @@ select
     , ticket_comment.comment_type
     , ticket_comment.comment_is_public
     , ticket_comment.comment_uploads
+    -- from ticket_comment, not user: a comment whose author is missing from
+    -- stg__zendesk__user must still carry its author id or the requester-vs-agent
+    -- comparison silently drops the row
+    , ticket_comment.comment_author_user_id
     , user.user_name as comment_author
+    , user.user_email as comment_author_email
     , ticket_comment.audit_id
     , ticket_comment.comment_html_body
     , ticket_comment.comment_plain_body

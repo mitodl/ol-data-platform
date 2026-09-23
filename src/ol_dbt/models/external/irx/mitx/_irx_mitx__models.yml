@@ -56,6 +56,10 @@ models:
     description: int, the auto-incremented ID for this table
   - name: is_active
     description: boolean, whether the user has been active in a course
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: created
+    description: timestamp, when the enrolment was created
 
 - name: irx__mitx__openedx__mysql__grades_persistentcoursegrade
   description: MITx open edX course grades
@@ -179,6 +183,43 @@ models:
     description: int, display_tag_filter_strategy
   - name: consecutive_days_visit_count
     description: int, consecutive_days_visit_count
+  - name: course_id
+    description: string, unique ID representing a single MITx course run the user
+      is enrolled in. A user appears once per enrolment.
+
+- name: irx__mitx__openedx__mysql__courseware_studentmodule
+  description: Current learner state per course block in MITx OpenedX. Backs the studentmodule
+    file in the IRx delivery; the column order matches that file.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, the auto-incremented ID for this table
+  - name: module_type
+    description: str, category/type of the block, referencing course_structure
+  - name: module_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+  - name: student_id
+    description: int, foreign key to auth_user
+  - name: state
+    description: str, JSON text indicating the learner's last known state within a
+      course
+  - name: grade
+    description: str, floating point value indicating the total unweighted grade the
+      learner scored for this problem
+  - name: created
+    description: timestamp, when the row was created
+  - name: modified
+    description: timestamp, when the row was last updated
+  - name: max_grade
+    description: str, floating point value indicating the total possible unweighted
+      grade for this problem
+  - name: done
+    description: str, not used. The value is 'na' in every row
+  - name: course_id
+    description: string, unique ID representing a single MITx course run
 
 - name: irx__mitx__openedx__mysql__courseware_studentmodulehistoryextended
   description: history of studentmodule in Residential MITx open edx platform
@@ -635,6 +676,12 @@ models:
     description: int, foreign key to auth_user
   - name: name
     description: string, name of the discussion role e.g. Moderator
+  - name: id
+    description: int, the auto-incremented ID for this table
+  - name: org
+    description: string, name of the organization the course run belongs to, via organizations_organizationcourse.
+      Null when the course run has no organization link. A course run linked to more
+      than one organization has a row per organization, as in the legacy role_users.csv
 
 - name: irx__mitx__openedx__mysql__student_anonymoususerid
   description: Mapping of MITx OpenedX learners to their anonymous user IDs per course
@@ -663,6 +710,8 @@ models:
     description: int, foreign key to auth_user
   - name: role
     description: string, the role name e.g. instructor, staff
+  - name: id
+    description: int, the auto-incremented ID for this table
 
 - name: irx__mitx__openedx__mysql__student_languageproficiency
   description: Language proficiency records for MITx OpenedX learners enrolled in
@@ -785,3 +834,94 @@ models:
     description: int, order of this step in the workflow
   - name: assessment_completed_at
     description: timestamp, when this step's assessment was completed
+
+- name: irx__mitx__openedx__mysql__forum_contents
+  description: One row per forum thread, response or comment in MITx OpenedX, in the
+    shape of the legacy Mongo forum `contents` collection. Backs forum/contents.bson
+    in the IRx delivery, which replaces the mongodump of the retired Mongo forum database.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: _type
+    description: string, 'CommentThread' for a thread, 'Comment' for a response or
+      a comment on a response
+  - name: id
+    description: int, forum_commentthread.id or forum_comment.id depending on _type.
+      The two id sequences overlap, so (_type, id) is the key
+  - name: mongoid
+    description: string, the 24-character hex Mongo ObjectId the post had before the
+      forum moved to MySQL. Null for posts created after the cutover
+  - name: comment_thread_id
+    description: int, forum_commentthread.id of the thread a response or comment belongs
+      to. Null for threads
+  - name: comment_thread_mongoid
+    description: string, Mongo ObjectId of the thread a response or comment belongs
+      to. Null for threads, and for threads created after the cutover
+  - name: parent_id
+    description: int, forum_comment.id of the response a comment replies to. Null
+      for threads and responses
+  - name: parent_mongoid
+    description: string, Mongo ObjectId of the response a comment replies to. Null
+      when parent_id is null or the response was created after the cutover
+  - name: course_id
+    description: string, unique ID representing a single MITx course run
+  - name: author_id
+    description: int, foreign key to auth_user
+  - name: author_username
+    description: string, username of the author
+  - name: title
+    description: string, thread title. Null for responses and comments
+  - name: body
+    description: string, text of the post as written by its author
+  - name: thread_type
+    description: string, 'discussion' or 'question'. Null for responses and comments
+  - name: context
+    description: string, 'course' or 'standalone'. Null for responses and comments
+  - name: commentable_id
+    description: string, ID of the discussion topic the thread is posted under. Null
+      for responses and comments
+  - name: group_id
+    description: int, the cohort the post is restricted to, if any
+  - name: closed
+    description: boolean, whether the thread is closed. Null for responses and comments
+  - name: pinned
+    description: boolean, whether the thread is pinned. Null for responses and comments
+  - name: endorsed
+    description: boolean, whether the post is endorsed
+  - name: endorsement
+    description: string, JSON object with the endorsing user_id and time, or '{}'
+      when not endorsed. Null for threads
+  - name: visible
+    description: boolean, whether the post is visible
+  - name: anonymous
+    description: boolean, whether the post is anonymous
+  - name: anonymous_to_peers
+    description: boolean, whether the post is anonymous to other learners but not
+      to staff
+  - name: depth
+    description: int, 0 for a response, 1 for a comment on a response. Null for threads
+  - name: child_count
+    description: int, number of comments on a response. Null for threads
+  - name: comment_count
+    description: int, number of responses and comments in a thread. Null for responses
+      and comments
+  - name: created_at
+    description: timestamp, when the post was created
+  - name: updated_at
+    description: timestamp, when the post was last updated
+  - name: last_activity_at
+    description: timestamp, the last activity in a thread. Null for responses and
+      comments
+  - name: votes_up
+    description: array of strings, ids of the users who upvoted the post. Null if
+      none
+  - name: votes_down
+    description: array of strings, ids of the users who downvoted the post. Null if
+      none
+  - name: abuse_flaggers
+    description: array of strings, ids of the users with an open abuse flag on the
+      post. Null if none
+  - name: historical_abuse_flaggers
+    description: array of strings, ids of the users whose abuse flags on the post
+      were cleared. Null if none

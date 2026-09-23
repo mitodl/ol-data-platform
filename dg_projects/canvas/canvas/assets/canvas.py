@@ -10,6 +10,7 @@ from dagster import (
     AssetOut,
     DataVersion,
     DynamicPartitionsDefinition,
+    Failure,
     Output,
     asset,
     multi_asset,
@@ -19,6 +20,8 @@ from ol_orchestrate.lib.constants import (
     EXPORT_TYPE_COMMON_CARTRIDGE,
     EXPORT_TYPE_EXTENSIONS,
 )
+from ol_orchestrate.lib.failures import permanent_failure
+from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.utils import compute_zip_content_hash
 
 canvas_course_ids = DynamicPartitionsDefinition(name="canvas_course_ids")
@@ -87,10 +90,27 @@ def export_course_content(context: AssetExecutionContext):
     export_type = EXPORT_TYPE_COMMON_CARTRIDGE
     extension = EXPORT_TYPE_EXTENSIONS[export_type]
 
-    course = context.resources.canvas_api.client.get_course(course_id)
-    export_course_response = context.resources.canvas_api.client.export_course_content(
-        course_id, export_type
-    )
+    try:
+        course = context.resources.canvas_api.client.get_course(course_id)
+        export_course_response = (
+            context.resources.canvas_api.client.export_course_content(
+                course_id, export_type
+            )
+        )
+    except httpx.HTTPStatusError as error:
+        # A 404 here is a partition for a course that has been deleted or is
+        # no longer visible to the service account. Nothing to export, and no
+        # number of reruns brings it back -- the partition needs removing.
+        context.log.exception(
+            "Unable to start a Canvas content export for course %s with status code %s",
+            course_id,
+            error.response.status_code,
+        )
+        raise http_failure(
+            error,
+            f"Unable to start a Canvas content export for course {course_id}",
+            metadata={"course_id": course_id},
+        ) from error
     context.log.info(
         "Initiated export of course ID %s: %s", course_id, export_course_response
     )
@@ -111,9 +131,21 @@ def export_course_content(context: AssetExecutionContext):
             )
             break
         elif export_status["workflow_state"] in ["failed", "error"]:
-            message = f"Export failed for course {course_id}"
-            context.log.error(message)
-            raise Exception(message)  # noqa: TRY002
+            context.log.error("Export failed for course %s", course_id)
+            # Canvas has reached a terminal state for this export. Asking again
+            # produces the same state, so this must not go back on the retry
+            # treadmill.
+            message = (
+                "Canvas reported a terminal failure state for this course "
+                "export. Rerunning will not change it."
+            )
+            raise permanent_failure(
+                message,
+                metadata={
+                    "course_id": course_id,
+                    "workflow_state": export_status["workflow_state"],
+                },
+            )
         else:
             context.log.info(
                 "Waiting for course content export (state: %s)",
@@ -122,9 +154,23 @@ def export_course_content(context: AssetExecutionContext):
             retry_count += 1
             time.sleep(120)
     else:
-        message = f"Course content export timed out for {course_id}"
-        context.log.error(message)
-        raise Exception(message)  # noqa: TRY002
+        context.log.error("Course content export timed out for %s", course_id)
+        # Deliberately NOT a permanent_failure. A slow export is the ordinary
+        # reason for this, and a later attempt can genuinely succeed -- the
+        # problem with DAGSTER-7 was never that it retried, it was that the
+        # retry was unbounded. The M1 cap in upstream_or_code_changes() is what
+        # bounds it; claiming permanence here would suppress a real retry.
+        raise Failure(
+            description=(
+                "Canvas did not finish the course content export within the "
+                "polling window. A later attempt may succeed."
+            ),
+            metadata={
+                "course_id": course_id,
+                "polling_attempts": retry_count,
+                "last_workflow_state": export_status["workflow_state"],
+            },
+        )
 
     course_content_path = Path(f"{course_id}_course_content.{extension}")
     downloaded_path = context.resources.canvas_api.client.download_course_export(
@@ -229,12 +275,15 @@ def course_content_metadata(
         "course_id": course_id,
         "course_name": metadata["name"],
         "course_code": metadata["course_code"],
-        "course_readable_id": metadata["sis_course_id"],
         "content_path": content_path,
         "metadata_path": metadata_path,
         "source": "canvas",
         "time": time.time(),
     }
+    # Learn rejects a null course_readable_id, which Canvas returns for any
+    # course with no SIS mapping.
+    if metadata["sis_course_id"]:
+        data["course_readable_id"] = metadata["sis_course_id"]
     context.log.info(
         "Sending webhook notification to Learn API for course_id=%s and data=%s",
         course_id,
@@ -258,9 +307,14 @@ def course_content_metadata(
         )
 
     except httpx.HTTPStatusError as error:
-        error_message = (
-            f"Learn API webhook notification failed for course_id={course_id} "
-            f"with status code {error.response.status_code} and error: {error!s}"
+        context.log.exception(
+            "Learn API webhook notification failed for course_id=%s with status "
+            "code %s",
+            course_id,
+            error.response.status_code,
         )
-        context.log.exception(error_message)
-        raise Exception(error_message) from error  # noqa: TRY002
+        raise http_failure(
+            error,
+            "Learn API webhook notification failed",
+            metadata={"course_id": course_id},
+        ) from error
