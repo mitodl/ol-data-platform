@@ -289,8 +289,8 @@ models:
   - name: is_in_cluster_scope
     description: boolean, true if the conversation's cluster assignment comes from
       the current clustering run. Filter on it to report only current clusters, because
-      conversations outside the run's date range keep an old cluster_key. It is false
-      for conversations that have no cluster assignment.
+      conversations outside the run's date range or platforms keep an old cluster_key.
+      It is false for conversations that have no cluster assignment.
     tests:
     - not_null
   - name: conversation_ingested_at
