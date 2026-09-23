@@ -98,7 +98,7 @@ class FeedbackEmbeddingsConfig(Config):
 
 
 @asset(
-    code_version="feedback_embeddings_v2",
+    code_version="feedback_embeddings_v3",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_embeddings"]),
     deps=[
