@@ -178,3 +178,48 @@ def test_a_load_after_the_plan_stops_the_reset(warehouse: Path) -> None:
     with pytest.raises(reset.StateMovedError):
         reset.apply_reset(plan)
     assert _rows("a") == 12001
+
+
+def test_a_load_on_a_later_table_stops_the_run_before_any_reset(
+    warehouse: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_exports(warehouse, "a", [12000])
+    _write_exports(warehouse, "b", [3000])
+    _load(warehouse, "a")
+    _load(warehouse, "b")
+    monkeypatch.setattr(
+        reset, "edxorg_s3_pipeline_for", lambda t: _pipeline(warehouse, t)
+    )
+    monkeypatch.setattr(reset.config, "active_table_format", lambda: "iceberg")
+
+    real_check = reset.check_unmoved
+
+    def load_b_then_check(plans: list[reset.ResetPlan]) -> None:
+        later = warehouse / "land" / "db_table" / "b" / "prod" / "late" / "late.tsv"
+        later.parent.mkdir(parents=True)
+        later.write_text("id\tvalue\nlate\tv\n")
+        os.utime(later, (1_800_000_000, 1_800_000_000))
+        _load(warehouse, "b")
+        real_check(plans)
+
+    monkeypatch.setattr(reset, "check_unmoved", load_b_then_check)
+
+    with pytest.raises(reset.StateMovedError):
+        reset.run("a", "b", dry_run=False)
+    assert _rows("a") == 12000
+
+
+def test_a_repeated_table_name_is_reset_once(
+    warehouse: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_exports(warehouse, "a", [12000])
+    _load(warehouse, "a")
+    monkeypatch.setattr(
+        reset, "edxorg_s3_pipeline_for", lambda t: _pipeline(warehouse, t)
+    )
+    monkeypatch.setattr(reset.config, "active_table_format", lambda: "iceberg")
+
+    reset.run("a", "a", dry_run=False)
+    _load(warehouse, "a")
+
+    assert _rows("a") == 12000

@@ -148,12 +148,10 @@ def plan_reset(pipeline: dlt.Pipeline, table_name: str) -> ResetPlan:
     )
 
 
-def apply_reset(plan: ResetPlan) -> None:
-    """Truncate the planned table and delete its cursor.
+def _unmoved(plan: ResetPlan) -> dlt.Pipeline:
+    """Return the plan's pipeline re-synced, if no load has committed since.
 
-    :param plan: From :func:`plan_reset`.
-    :raises StateMovedError: A load committed state since the plan was made, so
-        the table may hold rows the plan did not see. Nothing is changed.
+    :raises StateMovedError: A load committed state since the plan was made.
     """
     pipeline = _synced(plan.pipeline)
     if pipeline.state["_version_hash"] != plan.state_version_hash:
@@ -163,6 +161,29 @@ def apply_reset(plan: ResetPlan) -> None:
             "finish, and run this again."
         )
         raise StateMovedError(msg)
+    return pipeline
+
+
+def check_unmoved(plans: list[ResetPlan]) -> None:
+    """Confirm no planned table's pipeline has committed a load since planning.
+
+    Run over every plan before the first :func:`apply_reset`, so a load that
+    lands on a later table stops the run before an earlier one is changed.
+
+    :raises StateMovedError: For the first plan whose state moved.
+    """
+    for plan in plans:
+        _unmoved(plan)
+
+
+def apply_reset(plan: ResetPlan) -> None:
+    """Truncate the planned table and delete its cursor.
+
+    :param plan: From :func:`plan_reset`.
+    :raises StateMovedError: A load committed state since the plan was made, so
+        the table may hold rows the plan did not see. This table is unchanged.
+    """
+    pipeline = _unmoved(plan)
 
     # Truncate first. If the state commit below then fails, the table is empty
     # with its old cursor, which is visible and fixed by running this again. The
@@ -198,12 +219,15 @@ def run(*table_names: str, dry_run: bool = True) -> None:
         raise ValueError(msg)
     # Every table is resolved before any is changed, so a typo or an
     # already-reset table stops the run with nothing half done.
+    # dict.fromkeys dedupes in order: a repeated name would otherwise be reset
+    # twice, and the second apply would find the first one's state commit.
     plans = [
         plan_reset(edxorg_s3_pipeline_for(table_name), table_name)
-        for table_name in table_names
+        for table_name in dict.fromkeys(table_names)
     ]
     if dry_run:
         return
+    check_unmoved(plans)
     for plan in plans:
         apply_reset(plan)
 
