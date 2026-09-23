@@ -15,7 +15,7 @@ from dagster import (
     Output,
     multi_asset,
 )
-from ml.lib.cluster import NOISE_CLUSTER_ID
+from ml.lib.cluster import NOISE_CLUSTER_ID, filter_opened_since
 from ml.lib.cluster_identity import (
     CLUSTER_LINEAGE_SCHEMA,
     CLUSTER_SCHEMA,
@@ -126,6 +126,7 @@ def _active_cluster_members(
     embedding_model_version: str,
     embedding_dim: int,
     embedding_input_filter: str | None,
+    opened_since: str | None = None,
 ) -> dict[str, frozenset[str]]:
     """cluster_key -> its live member pks, for every currently-active key built
     from the same embedding_model_version/embedding_dim/embedding_input_filter
@@ -136,6 +137,10 @@ def _active_cluster_members(
     arm (summary vs concatenated_turns) was clustered -- keeps a cluster from a
     different config, or conversations incrementally placed from a different
     arm, out of this run's Jaccard comparison.
+
+    opened_since, the run's own date range, drops members opened before it, so
+    a date-limited run is compared only with the part of each cluster it could
+    have reproduced.
     """
     if not table_exists(
         catalog, f"{database_name}.feedback_cluster_membership"
@@ -157,7 +162,7 @@ def _active_cluster_members(
         )
         .collect()["cluster_key"]
     )
-    membership_df = (
+    membership_lf = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_membership"
         )
@@ -166,12 +171,23 @@ def _active_cluster_members(
             & pl.col("cluster_key").is_in(active_keys)
         )
         .select(["feedback_conversation_pk", "cluster_key"])
-        .collect()
     )
-    return {
+    membership_df = filter_opened_since(
+        membership_lf,
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="int__feedback__conversation"
+        ),
+        opened_since,
+    ).collect()
+    members_by_key = {
         cluster_key: frozenset(group["feedback_conversation_pk"])
         for (cluster_key,), group in membership_df.group_by("cluster_key")
     }
+    if opened_since is None:
+        return members_by_key
+    # Keep a key whose members are all older than the range: an empty set matches
+    # nothing, so match_clusters retires it instead of leaving it active forever.
+    return {key: members_by_key.get(key, frozenset()) for key in active_keys}
 
 
 def _other_config_active_keys(
@@ -236,7 +252,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_key"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v2",
+            code_version="feedback_cluster_identity_v3",
             automation_condition=upstream_or_code_changes(),
         ),
         "feedback_cluster_lineage": AssetOut(
@@ -247,7 +263,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v2",
+            code_version="feedback_cluster_identity_v3",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -260,7 +276,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_run_id"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v2",
+            code_version="feedback_cluster_identity_v3",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -334,7 +350,12 @@ def feedback_cluster_identity(
     }
 
     active_cluster_members = _active_cluster_members(
-        catalog, embedding_model_version, embedding_dim, embedding_input_filter
+        catalog,
+        embedding_model_version,
+        embedding_dim,
+        embedding_input_filter,
+        # A run table written before opened_since existed has no such key
+        run_row.get("opened_since"),
     )
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
@@ -357,9 +378,10 @@ def feedback_cluster_identity(
     # A bootstrap run (no active clusters yet) has every match resolve to 'new' by
     # construction -- that's the expected first run, not a bad configuration, so
     # the floor only applies once there's a prior cluster set to compare against.
+    # A key emptied by the run's date range counts as nothing to compare against.
     continuity = (
         1.0
-        if not active_cluster_members
+        if not any(active_cluster_members.values())
         else compute_continuity(matches, new_cluster_members)
     )
     yield AssetCheckResult(

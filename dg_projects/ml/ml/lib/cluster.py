@@ -56,23 +56,24 @@ DEFAULT_OPENED_SINCE = (
 
 
 def filter_opened_since(
-    embeddings_lf: pl.LazyFrame,
+    rows_lf: pl.LazyFrame,
     conversations_lf: pl.LazyFrame,
     opened_since: str | None,
 ) -> pl.LazyFrame:
-    """Keep embeddings whose conversation opened on or after opened_since.
+    """Keep rows whose conversation opened on or after opened_since.
 
-    opened_since is a YYYY-MM-DD date, or None to keep every row. Older rows stay
-    in feedback_embeddings; this only hides them from clustering and placement.
+    rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
+    cluster membership. opened_since is a YYYY-MM-DD date, or None to keep every
+    row. Older rows stay in their tables; this only hides them from the caller.
     """
     if opened_since is None:
-        return embeddings_lf
+        return rows_lf
     # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
     # compares correctly as text
     opened_pks = conversations_lf.filter(
         pl.col("conversation_opened_at") >= opened_since
     ).select("feedback_conversation_pk")
-    return embeddings_lf.join(opened_pks, on="feedback_conversation_pk", how="semi")
+    return rows_lf.join(opened_pks, on="feedback_conversation_pk", how="semi")
 
 
 # Column order matches how cluster_embeddings actually writes it: JOIN_COLS then
