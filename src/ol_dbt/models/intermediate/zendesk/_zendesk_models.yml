@@ -40,6 +40,9 @@ models:
     description: str, the relationship of the source channel to the ticket. e.g. "follow_up"
   - name: brand_name
     description: str, the name of the brand associated with the ticket
+  - name: brand_subdomain
+    description: str, the help centre subdomain of the ticket's brand, e.g. 'mitlearn'.
+      Stable across brand renames.
   - name: group_name
     description: str, the name of the group associated with the ticket
   - name: ticket_is_public

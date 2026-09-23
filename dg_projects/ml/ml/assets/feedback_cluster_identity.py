@@ -15,7 +15,11 @@ from dagster import (
     Output,
     multi_asset,
 )
-from ml.lib.cluster import NOISE_CLUSTER_ID, filter_opened_since
+from ml.lib.cluster import (
+    NOISE_CLUSTER_ID,
+    filter_conversation_scope,
+    platforms_from_run_value,
+)
 from ml.lib.cluster_identity import (
     CLUSTER_LINEAGE_SCHEMA,
     CLUSTER_SCHEMA,
@@ -121,12 +125,13 @@ def _select_run_to_process(
     return unprocessed["cluster_run_id"][0]
 
 
-def _active_cluster_members(
+def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
     catalog,
     embedding_model_version: str,
     embedding_dim: int,
     embedding_input_filter: str | None,
     opened_since: str | None = None,
+    platforms: list[str] | None = None,
 ) -> dict[str, frozenset[str]]:
     """cluster_key -> its live member pks, for every currently-active key built
     from the same embedding_model_version/embedding_dim/embedding_input_filter
@@ -138,9 +143,9 @@ def _active_cluster_members(
     different config, or conversations incrementally placed from a different
     arm, out of this run's Jaccard comparison.
 
-    opened_since, the run's own date range, drops members opened before it, so
-    a date-limited run is compared only with the part of each cluster it could
-    have reproduced.
+    opened_since and platforms, the run's own scope, drop members outside it, so
+    a date- or platform-limited run is compared only with the part of each
+    cluster it could have reproduced.
     """
     if not table_exists(
         catalog, f"{database_name}.feedback_cluster_membership"
@@ -172,21 +177,22 @@ def _active_cluster_members(
         )
         .select(["feedback_conversation_pk", "cluster_key"])
     )
-    membership_df = filter_opened_since(
+    membership_df = filter_conversation_scope(
         membership_lf,
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="int__feedback__conversation"
         ),
         opened_since,
+        platforms,
     ).collect()
     members_by_key = {
         cluster_key: frozenset(group["feedback_conversation_pk"])
         for (cluster_key,), group in membership_df.group_by("cluster_key")
     }
-    if opened_since is None:
+    if opened_since is None and platforms is None:
         return members_by_key
-    # Keep a key whose members are all older than the range: an empty set matches
-    # nothing, so match_clusters retires it instead of leaving it active forever.
+    # Keep a key whose members are all out of scope: an empty set matches nothing,
+    # so match_clusters retires it instead of leaving it active forever.
     return {key: members_by_key.get(key, frozenset()) for key in active_keys}
 
 
@@ -354,8 +360,9 @@ def feedback_cluster_identity(
         embedding_model_version,
         embedding_dim,
         embedding_input_filter,
-        # A run table written before opened_since existed has no such key
+        # A run table written before a scope column existed has no such key
         run_row.get("opened_since"),
+        platforms_from_run_value(run_row.get("platforms")),
     )
     existing_cluster_rows = _existing_cluster_rows(catalog)
 

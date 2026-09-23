@@ -58,6 +58,7 @@ def test_small_run_writes_a_failed_run_row_with_no_candidates() -> None:
                             embedding_model_version="text-embedding-3-small",
                             embedding_dim=8,
                             opened_since=None,
+                            platforms=None,
                         ).model_dump()
                     }
                 }

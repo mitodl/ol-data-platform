@@ -7,6 +7,13 @@ with feedback as (
     select * from {{ ref('tfact_feedback') }}
 )
 
+, platform as (
+    select
+        platform_pk
+        , platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , feedback_source as (
     select
         feedback_source_pk
@@ -20,6 +27,8 @@ select
     ) }} as feedback_conversation_pk
     , feedback_source.source_slug
     , feedback.conversation_id as conversation_ref
+    -- constant within a conversation: a ticket has one brand, a chat thread one agent
+    , max(platform.platform_readable_id) as platform
     , min(feedback.feedback_occurred_at) as conversation_opened_at
     , count(*) as turn_count
     , sum(feedback.feedback_text_chars) as conversation_text_chars
@@ -33,4 +42,6 @@ select
 from feedback
 inner join feedback_source
     on feedback.feedback_source_fk = feedback_source.feedback_source_pk
+left join platform
+    on feedback.platform_fk = platform.platform_pk
 group by feedback_source.source_slug, feedback.conversation_id

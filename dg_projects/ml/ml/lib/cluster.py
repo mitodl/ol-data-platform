@@ -38,6 +38,9 @@ CLUSTER_RUN_SCHEMA = {
     "is_promoted": pl.Boolean,
     "run_at": pl.Datetime(time_zone="UTC"),
     "opened_since": pl.String,
+    # Comma-joined and sorted, so two runs over the same platforms compare equal
+    # as plain strings; null means every platform.
+    "platforms": pl.String,
 }
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
@@ -51,29 +54,55 @@ DEFAULT_IS_PROMOTED = False
 # and growth sensor use, since they don't pass it. Set the env var to an empty
 # string to cluster the full history.
 DEFAULT_OPENED_SINCE = (
-    os.environ.get("FEEDBACK_CLUSTERS_OPENED_SINCE", "2026-01-01") or None
+    os.environ.get("FEEDBACK_CLUSTERS_OPENED_SINCE", "2025-01-01") or None
 )
 
 
-def filter_opened_since(
+# The default platforms for FeedbackSummariesConfig and FeedbackClustersConfig, and
+# what the weekly schedule and growth sensor use, since they don't pass it.
+DEFAULT_PLATFORMS: list[str] | None = ["mitlearn"]
+
+
+def platforms_to_run_value(platforms: list[str] | None) -> str | None:
+    """Encode platforms for feedback_cluster_run.platforms."""
+    return ",".join(sorted(platforms)) if platforms is not None else None
+
+
+def platforms_from_run_value(value: str | None) -> list[str] | None:
+    """Decode feedback_cluster_run.platforms back to a list."""
+    return value.split(",") if value is not None else None
+
+
+def filter_conversation_scope(
     rows_lf: pl.LazyFrame,
     conversations_lf: pl.LazyFrame,
     opened_since: str | None,
+    platforms: list[str] | None = None,
 ) -> pl.LazyFrame:
-    """Keep rows whose conversation opened on or after opened_since.
+    """Keep rows whose conversation opened on or after opened_since and whose
+    platform is in platforms.
 
     rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
-    cluster membership. opened_since is a YYYY-MM-DD date, or None to keep every
-    row. Older rows stay in their tables; this only hides them from the caller.
+    cluster membership. opened_since is a YYYY-MM-DD date, and platforms a list of
+    platform readable ids; None for either skips that filter. Other rows stay in
+    their tables; this only hides them from the caller.
     """
-    if opened_since is None:
+    if opened_since is None and platforms is None:
         return rows_lf
-    # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
-    # compares correctly as text
-    opened_pks = conversations_lf.filter(
-        pl.col("conversation_opened_at") >= opened_since
-    ).select("feedback_conversation_pk")
-    return rows_lf.join(opened_pks, on="feedback_conversation_pk", how="semi")
+    in_scope_lf = conversations_lf
+    if opened_since is not None:
+        # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
+        # compares correctly as text
+        in_scope_lf = in_scope_lf.filter(
+            pl.col("conversation_opened_at") >= opened_since
+        )
+    if platforms is not None:
+        in_scope_lf = in_scope_lf.filter(pl.col("platform").is_in(platforms))
+    return rows_lf.join(
+        in_scope_lf.select("feedback_conversation_pk"),
+        on="feedback_conversation_pk",
+        how="semi",
+    )
 
 
 # Column order matches how cluster_embeddings actually writes it: JOIN_COLS then

@@ -9,7 +9,9 @@ from dagster import (
 from ml.assets.feedback_clusters import database_name as cluster_database_name
 from ml.lib.cluster import (
     DEFAULT_OPENED_SINCE,
-    filter_opened_since,
+    DEFAULT_PLATFORMS,
+    filter_conversation_scope,
+    platforms_to_run_value,
     should_trigger_early_recluster,
 )
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
@@ -47,13 +49,14 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         & (pl.col("embedding_dim") == EMBEDDING_DIM)
     )
     embedding_count = (
-        filter_opened_since(
+        filter_conversation_scope(
             embeddings_lf,
             get_dbt_model_as_dataframe(
                 database_name=cluster_database_name,
                 table_name="int__feedback__conversation",
             ),
             DEFAULT_OPENED_SINCE,
+            DEFAULT_PLATFORMS,
         )
         .select(pl.len())
         .collect()
@@ -74,17 +77,22 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
             if "is_promoted" in runs_lazy.collect_schema().names()
             else pl.lit(False)  # noqa: FBT003
         )
-        # A run over a different date range is not a valid baseline either; a
-        # table pre-dating opened_since only holds full-history runs.
-        run_opened_since = (
-            pl.col("opened_since")
-            if "opened_since" in runs_lazy.collect_schema().names()
-            else pl.lit(None, dtype=pl.String)
-        )
-        same_opened_since = (
-            run_opened_since.is_null()
-            if DEFAULT_OPENED_SINCE is None
-            else run_opened_since == DEFAULT_OPENED_SINCE
+        # A run over a different date range or platform set is not a valid
+        # baseline either; a table pre-dating a scope column only holds runs
+        # without that filter.
+        run_columns = runs_lazy.collect_schema().names()
+
+        def same_scope(column: str, default: str | None) -> pl.Expr:
+            run_value = (
+                pl.col(column)
+                if column in run_columns
+                else pl.lit(None, dtype=pl.String)
+            )
+            return run_value.is_null() if default is None else run_value == default
+
+        same_opened_since = same_scope("opened_since", DEFAULT_OPENED_SINCE)
+        same_platforms = same_scope(
+            "platforms", platforms_to_run_value(DEFAULT_PLATFORMS)
         )
         # Same model/dim/arm as embedding_count above -- a promoted run from a
         # since-retired production config is not a valid baseline for the
@@ -100,6 +108,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
                 & (pl.col("embedding_dim") == EMBEDDING_DIM)
                 & (pl.col("embedding_input_filter") == "summary")
                 & same_opened_since
+                & same_platforms
             )
             .sort("run_at", descending=True)
             .select("total_conversations")

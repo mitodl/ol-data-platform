@@ -10,7 +10,7 @@ from dagster import (
     MetadataValue,
     asset,
 )
-from ml.lib.cluster import DEFAULT_OPENED_SINCE
+from ml.lib.cluster import DEFAULT_OPENED_SINCE, DEFAULT_PLATFORMS
 from ml.lib.summarize import (
     JOIN_COLS,
     SUMMARIZE_ALL_CONVERSATIONS,
@@ -57,6 +57,15 @@ class FeedbackSummariesConfig(Config):
             "Rows already in feedback_summaries from earlier runs are kept. Defaults "
             "to feedback_clusters' opened_since, so both cover the same range. Set "
             "to null to read the full history."
+        ),
+    )
+    platforms: list[str] | None = Field(
+        default=DEFAULT_PLATFORMS,
+        description=(
+            "Only summarize conversations whose platform is in this list, e.g. "
+            "['mitlearn']. Embeddings and clusters follow, because they read only "
+            "what feedback_summaries holds. Set to null to include every platform, "
+            "and conversations with no platform."
         ),
     )
     summarize_all_conversations: bool = Field(
@@ -144,6 +153,8 @@ def feedback_summaries(
         source_lazy = source_lazy.filter(
             pl.col("conversation_opened_at") >= config.opened_since
         )
+    if config.platforms is not None:
+        source_lazy = source_lazy.filter(pl.col("platform").is_in(config.platforms))
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
     source_df = source_lazy.collect()
