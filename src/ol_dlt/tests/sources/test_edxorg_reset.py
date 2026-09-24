@@ -61,7 +61,7 @@ def _source(root: Path, table_name: str) -> Any:  # noqa: ANN401
     def source() -> Iterator[Any]:
         files = edxorg_s3.edxorg_files(
             bucket_url=(root / "land").as_uri(),
-            file_glob=f"db_table/{table_name}/prod/**/*.tsv",
+            file_globs=[f"db_table/{table_name}/prod/**/*.tsv"],
             credentials=fsspec.filesystem("file"),
         )
         yield (

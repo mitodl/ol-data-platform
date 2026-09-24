@@ -483,7 +483,7 @@ def test_pipeline_loads_every_row_of_interleaved_multi_batch_files(
 
     files = edxorg_s3.edxorg_files(
         bucket_url=(tmp_path / "land").as_uri(),
-        file_glob="db_table/t/prod/**/*.tsv",
+        file_globs=["db_table/t/prod/**/*.tsv"],
         credentials=fsspec.filesystem("file"),
     )
     pipeline = dlt.pipeline(
