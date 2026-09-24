@@ -8,7 +8,7 @@ from dagster import (
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
 from ml.lib.cluster import (
-    DEFAULT_OPENED_SINCE,
+    DEFAULT_FEEDBACK_SINCE,
     DEFAULT_PLATFORMS,
     filter_conversation_scope,
     platforms_to_run_value,
@@ -55,7 +55,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
                 database_name=cluster_database_name,
                 table_name="int__feedback__conversation",
             ),
-            DEFAULT_OPENED_SINCE,
+            DEFAULT_FEEDBACK_SINCE,
             DEFAULT_PLATFORMS,
         )
         .select(pl.len())
@@ -90,7 +90,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
             )
             return run_value.is_null() if default is None else run_value == default
 
-        same_opened_since = same_scope("opened_since", DEFAULT_OPENED_SINCE)
+        same_feedback_since = same_scope("feedback_since", DEFAULT_FEEDBACK_SINCE)
         same_platforms = same_scope(
             "platforms", platforms_to_run_value(DEFAULT_PLATFORMS)
         )
@@ -107,7 +107,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
                 )
                 & (pl.col("embedding_dim") == EMBEDDING_DIM)
                 & (pl.col("embedding_input_filter") == "summary")
-                & same_opened_since
+                & same_feedback_since
                 & same_platforms
             )
             .sort("run_at", descending=True)

@@ -149,7 +149,7 @@ def test_should_trigger_early_recluster_at_or_above_growth_threshold() -> None:
     )
 
 
-def test_filter_conversation_scope_keeps_conversations_opened_since() -> None:
+def test_filter_conversation_scope_keeps_feedback_since_date() -> None:
     embeddings_lf = pl.LazyFrame({"feedback_conversation_pk": ["old", "same", "new"]})
     conversations_lf = pl.LazyFrame(
         {

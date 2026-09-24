@@ -14,8 +14,8 @@ from dagster import (
 from ml.lib.cluster import (
     CLUSTER_CANDIDATE_SCHEMA,
     CLUSTER_RUN_SCHEMA,
+    DEFAULT_FEEDBACK_SINCE,
     DEFAULT_IS_PROMOTED,
-    DEFAULT_OPENED_SINCE,
     DEFAULT_PLATFORMS,
     HDBSCAN_MIN_CLUSTER_SIZE,
     RANDOM_STATE,
@@ -93,14 +93,14 @@ class FeedbackClustersConfig(Config):
             "EMBEDDING_DIM (ml.lib.embed)."
         ),
     )
-    opened_since: str | None = Field(
-        default=DEFAULT_OPENED_SINCE,
+    feedback_since: str | None = Field(
+        default=DEFAULT_FEEDBACK_SINCE,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description=(
             "Only cluster conversations opened on or after this date (YYYY-MM-DD). "
             "Recorded on feedback_cluster_run so feedback_cluster_assignment places "
-            "the same range. Defaults to FEEDBACK_CLUSTERS_OPENED_SINCE, or "
-            "2025-01-01 when that is unset. Set to null to cluster the full history."
+            "the same range. Defaults to the FEEDBACK_SINCE env var; unset or null "
+            "clusters the full history."
         ),
     )
     platforms: list[str] | None = Field(
@@ -199,7 +199,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="int__feedback__conversation"
         ),
-        config.opened_since,
+        config.feedback_since,
         config.platforms,
     )
     embeddings_df = embeddings_lazy.select(
@@ -248,7 +248,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             is_promoted=config.is_promoted,
         )
         failed_metadata["run_at"] = datetime.now(tz=UTC)
-        failed_metadata["opened_since"] = config.opened_since
+        failed_metadata["feedback_since"] = config.feedback_since
         failed_metadata["platforms"] = platforms_to_run_value(config.platforms)
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
@@ -273,7 +273,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         is_promoted=config.is_promoted,
     )
     run_metadata["run_at"] = datetime.now(tz=UTC)
-    run_metadata["opened_since"] = config.opened_since
+    run_metadata["feedback_since"] = config.feedback_since
     run_metadata["platforms"] = platforms_to_run_value(config.platforms)
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
 
@@ -304,7 +304,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             "embedding_model_version": MetadataValue.text(embedding_model_version),
             "embedding_dim": MetadataValue.int(embedding_dim),
             "is_promoted": MetadataValue.bool(config.is_promoted),
-            "opened_since": MetadataValue.text(config.opened_since or ""),
+            "feedback_since": MetadataValue.text(config.feedback_since or ""),
             "platforms": MetadataValue.text(
                 platforms_to_run_value(config.platforms) or ""
             ),

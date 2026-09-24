@@ -131,7 +131,7 @@ def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
     embedding_model_version: str,
     embedding_dim: int,
     embedding_input_filter: str | None,
-    opened_since: str | None = None,
+    feedback_since: str | None = None,
     platforms: list[str] | None = None,
 ) -> dict[str, frozenset[str]]:
     """cluster_key -> its live member pks, for every currently-active key built
@@ -144,7 +144,7 @@ def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
     different config, or conversations incrementally placed from a different
     arm, out of this run's Jaccard comparison.
 
-    opened_since and platforms, the run's own scope, drop members outside it, so
+    feedback_since and platforms, the run's own scope, drop members outside it, so
     a date- or platform-limited run is compared only with the part of each
     cluster it could have reproduced.
     """
@@ -183,14 +183,14 @@ def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="int__feedback__conversation"
         ),
-        opened_since,
+        feedback_since,
         platforms,
     ).collect()
     members_by_key = {
         cluster_key: frozenset(group["feedback_conversation_pk"])
         for (cluster_key,), group in membership_df.group_by("cluster_key")
     }
-    if opened_since is None and platforms is None:
+    if feedback_since is None and platforms is None:
         return members_by_key
     # Keep a key whose members are all out of scope: an empty set matches nothing,
     # so match_clusters retires it instead of leaving it active forever.
@@ -242,7 +242,7 @@ def _scope_changed(catalog, run_row: dict[str, Any]) -> bool:
     # A run table written before a scope column existed has no such key
     return any(
         prior_run_row.get(column) != run_row.get(column)
-        for column in ("opened_since", "platforms")
+        for column in ("feedback_since", "platforms")
     )
 
 
@@ -381,7 +381,7 @@ def feedback_cluster_identity(
         embedding_dim,
         embedding_input_filter,
         # A run table written before a scope column existed has no such key
-        run_row.get("opened_since"),
+        run_row.get("feedback_since"),
         platforms_from_run_value(run_row.get("platforms")),
     )
     if _scope_changed(catalog, run_row):

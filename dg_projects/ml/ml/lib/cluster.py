@@ -37,7 +37,7 @@ CLUSTER_RUN_SCHEMA = {
     "run_status": pl.String,
     "is_promoted": pl.Boolean,
     "run_at": pl.Datetime(time_zone="UTC"),
-    "opened_since": pl.String,
+    "feedback_since": pl.String,
     # Comma-joined and sorted, so two runs over the same platforms compare equal
     # as plain strings; null means every platform.
     "platforms": pl.String,
@@ -50,12 +50,9 @@ CLUSTER_RUN_SCHEMA = {
 # weekly schedule and growth sensor explicitly opt into True.
 DEFAULT_IS_PROMOTED = False
 
-# The default for FeedbackClustersConfig.opened_since, and what the weekly schedule
-# and growth sensor use, since they don't pass it. Set the env var to an empty
-# string to cluster the full history.
-DEFAULT_OPENED_SINCE = (
-    os.environ.get("FEEDBACK_CLUSTERS_OPENED_SINCE", "2025-01-01") or None
-)
+# The default for FeedbackClustersConfig.feedback_since, and what the weekly schedule
+# and growth sensor use, since they don't pass it. Unset means the full history.
+DEFAULT_FEEDBACK_SINCE = os.environ.get("FEEDBACK_SINCE") or None
 
 
 # The default platforms for FeedbackSummariesConfig and FeedbackClustersConfig, and
@@ -76,25 +73,25 @@ def platforms_from_run_value(value: str | None) -> list[str] | None:
 def filter_conversation_scope(
     rows_lf: pl.LazyFrame,
     conversations_lf: pl.LazyFrame,
-    opened_since: str | None,
+    feedback_since: str | None,
     platforms: list[str] | None = None,
 ) -> pl.LazyFrame:
-    """Keep rows whose conversation opened on or after opened_since and whose
+    """Keep rows whose conversation opened on or after feedback_since and whose
     platform is in platforms.
 
     rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
-    cluster membership. opened_since is a YYYY-MM-DD date, and platforms a list of
+    cluster membership. feedback_since is a YYYY-MM-DD date, and platforms a list of
     platform readable ids; None for either skips that filter. Other rows stay in
     their tables; this only hides them from the caller.
     """
-    if opened_since is None and platforms is None:
+    if feedback_since is None and platforms is None:
         return rows_lf
     in_scope_lf = conversations_lf
-    if opened_since is not None:
+    if feedback_since is not None:
         # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
         # compares correctly as text
         in_scope_lf = in_scope_lf.filter(
-            pl.col("conversation_opened_at") >= opened_since
+            pl.col("conversation_opened_at") >= feedback_since
         )
     if platforms is not None:
         in_scope_lf = in_scope_lf.filter(pl.col("platform").is_in(platforms))

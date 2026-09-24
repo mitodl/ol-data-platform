@@ -67,7 +67,7 @@ SKIP_CHAR_THRESHOLD = 500
 # The default for FeedbackSummariesConfig.summarize_all_conversations, and what
 # automated runs use, since they don't pass run config.
 SUMMARIZE_ALL_CONVERSATIONS = (
-    os.environ.get("SUMMARIZE_ALL_CONVERSATIONS", "false").lower() == "true"
+    os.environ.get("SUMMARIZE_ALL_CONVERSATIONS", "true").lower() == "true"
 )
 
 

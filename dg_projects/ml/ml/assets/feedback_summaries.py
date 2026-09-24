@@ -10,7 +10,7 @@ from dagster import (
     MetadataValue,
     asset,
 )
-from ml.lib.cluster import DEFAULT_OPENED_SINCE, DEFAULT_PLATFORMS
+from ml.lib.cluster import DEFAULT_FEEDBACK_SINCE, DEFAULT_PLATFORMS
 from ml.lib.summarize import (
     JOIN_COLS,
     SUMMARIZE_ALL_CONVERSATIONS,
@@ -49,14 +49,14 @@ class FeedbackSummariesConfig(Config):
         default=None,
         description="Cap the number of upstream rows read, for fast local testing.",
     )
-    opened_since: str | None = Field(
-        default=DEFAULT_OPENED_SINCE,
+    feedback_since: str | None = Field(
+        default=DEFAULT_FEEDBACK_SINCE,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description=(
             "Only summarize conversations opened on or after this date (YYYY-MM-DD). "
             "Rows already in feedback_summaries from earlier runs are kept. Defaults "
-            "to feedback_clusters' opened_since, so both cover the same range. Set "
-            "to null to read the full history."
+            "to feedback_clusters' feedback_since, so both cover the same range. "
+            "Unset or null reads the full history."
         ),
     )
     platforms: list[str] | None = Field(
@@ -68,13 +68,20 @@ class FeedbackSummariesConfig(Config):
             "and conversations with no platform."
         ),
     )
+    source_slugs: list[str] | None = Field(
+        default=None,
+        description=(
+            "Only summarize conversations from these sources, e.g. ['zendesk']. "
+            "Unset or null includes every source."
+        ),
+    )
     summarize_all_conversations: bool = Field(
         default=SUMMARIZE_ALL_CONVERSATIONS,
         description=(
             "When true, every conversation that has text is summarized. When false, "
             "conversations with only one turn or fewer than 500 characters are "
             "skipped. The default comes from the SUMMARIZE_ALL_CONVERSATIONS env var, "
-            "which is false if not set."
+            "which is true if not set."
         ),
     )
     model_version: str | None = Field(
@@ -147,14 +154,18 @@ def feedback_summaries(
         database_name=database_name,
         table_name="int__feedback__conversation",
     )
-    if config.opened_since is not None:
+    if config.feedback_since is not None:
         # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
         # compares correctly as text
         source_lazy = source_lazy.filter(
-            pl.col("conversation_opened_at") >= config.opened_since
+            pl.col("conversation_opened_at") >= config.feedback_since
         )
     if config.platforms is not None:
         source_lazy = source_lazy.filter(pl.col("platform").is_in(config.platforms))
+    if config.source_slugs is not None:
+        source_lazy = source_lazy.filter(
+            pl.col("source_slug").is_in(config.source_slugs)
+        )
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
     source_df = source_lazy.collect()

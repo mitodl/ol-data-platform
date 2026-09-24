@@ -89,7 +89,7 @@ def _run_embedding_config(cluster_run_id: str) -> tuple[str, int, str | None]:
 
 
 def _run_scope(cluster_run_id: str | None) -> tuple[str | None, list[str] | None]:
-    """Return the (opened_since, platforms) that feedback_cluster_run recorded."""
+    """Return the (feedback_since, platforms) that feedback_cluster_run recorded."""
     if cluster_run_id is None:
         return None, None
     runs_lf = get_dbt_model_as_dataframe(
@@ -99,7 +99,7 @@ def _run_scope(cluster_run_id: str | None) -> tuple[str | None, list[str] | None
     # runs clustered without that filter.
     run_columns = runs_lf.collect_schema().names()
     scope_columns = [
-        column for column in ("opened_since", "platforms") if column in run_columns
+        column for column in ("feedback_since", "platforms") if column in run_columns
     ]
     if not scope_columns:
         return None, None
@@ -110,7 +110,7 @@ def _run_scope(cluster_run_id: str | None) -> tuple[str | None, list[str] | None
         .to_dicts()[0]
     )
     return (
-        run_row.get("opened_since"),
+        run_row.get("feedback_since"),
         platforms_from_run_value(run_row.get("platforms")),
     )
 
@@ -264,13 +264,13 @@ def _incrementally_place_new_embeddings(  # noqa: PLR0913 -- one filter per scop
     cluster_run_id: str | None,
     now: datetime,
     embedding_config: tuple[str, int, str | None],
-    opened_since: str | None = None,
+    feedback_since: str | None = None,
     platforms: list[str] | None = None,
 ) -> pl.DataFrame:
     """Place every conversation that needs (re-)placement against the current
     active clusters, scoped to one embedding_config (embedding_model_version,
     embedding_dim, embedding_input_filter), to conversations opened on or after
-    opened_since, and to platforms. A conversation out of that scope keeps its
+    feedback_since, and to platforms. A conversation out of that scope keeps its
     last membership row.
 
     "Needs (re-)placement" is: no membership row yet, an embedding newer than
@@ -310,7 +310,7 @@ def _incrementally_place_new_embeddings(  # noqa: PLR0913 -- one filter per scop
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="int__feedback__conversation"
         ),
-        opened_since,
+        feedback_since,
         platforms,
     )
 
