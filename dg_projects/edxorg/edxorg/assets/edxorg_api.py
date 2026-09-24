@@ -4,6 +4,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import jsonlines
 from dagster import (
@@ -15,6 +16,61 @@ from dagster import (
     multi_asset,
 )
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
+
+
+def program_record(program: dict[str, Any], *, retrieved_at: str) -> dict[str, Any]:
+    """Flatten one edX discovery API program into a program_metadata row.
+
+    Marketing URL, banner image and level override are what MIT Learn's program
+    records are built from, alongside the program's courses and their runs.
+    """
+    banner_image = program.get("banner_image") or {}
+    return {
+        "uuid": program["uuid"],
+        "title": program["title"],
+        "subtitle": program["subtitle"],
+        "type": program["type"],
+        "status": program["status"],
+        "authoring_organizations": ", ".join(
+            org["key"] for org in program["authoring_organizations"]
+        ),
+        "data_modified_timestamp": program["data_modified_timestamp"],
+        "marketing_url": program.get("marketing_url"),
+        "banner_image_url": (banner_image.get("medium") or {}).get("url"),
+        "level_type_override": program.get("level_type_override"),
+        "retrieved_at": retrieved_at,
+    }
+
+
+def program_course_records(
+    program: dict[str, Any], *, retrieved_at: str
+) -> list[dict[str, Any]]:
+    """Flatten a program's courses into program_course_metadata rows.
+
+    ``course_runs`` is kept whole as a JSON string: MIT Learn derives a program's
+    dates, price, pace and availability from these runs as the program API reports
+    them, and one string column keeps the Airbyte stream's schema flat.
+
+    ``retrieved_at`` marks the extraction a row came from. The raw table only ever
+    appends, so the rows sharing the latest ``retrieved_at`` are the program's
+    current courses; a course dropped from a program leaves no row there.
+    ``course_position`` keeps the API's course order, which MIT Learn uses to
+    order a program's courses.
+    """
+    return [
+        {
+            "program_uuid": program["uuid"],
+            "course_key": course["key"],
+            "course_position": position,
+            "course_title": course["title"],
+            "course_short_description": course["short_description"],
+            "course_type": course["course_type"],
+            "excluded_from_search": course["excluded_from_search"],
+            "course_runs": json.dumps(course["course_runs"]),
+            "retrieved_at": retrieved_at,
+        }
+        for position, course in enumerate(program["courses"], start=1)
+    ]
 
 
 @multi_asset(
@@ -57,31 +113,12 @@ def edxorg_program_metadata(
             total_extracted_count,
         )
         for program in result_batch:
-            program_uuid = program["uuid"]
-            org_keys = [org["key"] for org in program["authoring_organizations"]]
-            org = ", ".join(org_keys)
             edxorg_programs.append(
-                {
-                    "uuid": program_uuid,
-                    "title": program["title"],
-                    "subtitle": program["subtitle"],
-                    "type": program["type"],
-                    "status": program["status"],
-                    "authoring_organizations": org,
-                    "data_modified_timestamp": program["data_modified_timestamp"],
-                    "retrieved_at": data_retrieval_timestamp,
-                }
+                program_record(program, retrieved_at=data_retrieval_timestamp)
             )
-            for course in program["courses"]:
-                edxorg_program_courses.append(  # noqa: PERF401
-                    {
-                        "program_uuid": program_uuid,
-                        "course_key": course["key"],
-                        "course_title": course["title"],
-                        "course_short_description": course["short_description"],
-                        "course_type": course["course_type"],
-                    }
-                )
+            edxorg_program_courses.extend(
+                program_course_records(program, retrieved_at=data_retrieval_timestamp)
+            )
 
     context.log.info("Total extracted %d programs....", len(edxorg_programs))
     context.log.info(
