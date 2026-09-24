@@ -125,6 +125,8 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["is_promoted"] is False
     assert run_metadata["embedding_input_filter"] == "summary"
     assert run_metadata["random_state"] == 42
+    assert run_metadata["hdbscan_min_samples"] == cluster.HDBSCAN_MIN_SAMPLES
+    assert run_metadata["hdbscan_cluster_selection_method"] == "leaf"
     # Two well-separated blobs must not collapse into a single cluster.
     assert run_metadata["cluster_count"] >= 2
 

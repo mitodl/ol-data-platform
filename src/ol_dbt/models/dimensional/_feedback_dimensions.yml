@@ -157,6 +157,10 @@ models:
   - name: cluster_key
     description: str, the stable cluster this category labels. Null for seed/manual
       rows.
+  - name: cluster_status
+    description: str, 'active' or 'retired' -- the status of the cluster this category
+      labels. Filter on 'active' to list only the current LLM categories. Null for
+      seed/manual rows.
   - name: category_description
     description: str, the LLM-proposed one-line description of the category. Null
       for seed/manual rows.

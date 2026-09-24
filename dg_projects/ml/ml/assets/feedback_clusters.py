@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime
+from typing import Literal
 
 import polars as pl
 from dagster import (
@@ -17,7 +18,10 @@ from ml.lib.cluster import (
     DEFAULT_FEEDBACK_SINCE,
     DEFAULT_IS_PROMOTED,
     DEFAULT_PLATFORMS,
+    HDBSCAN_CLUSTER_SELECTION_METHOD,
     HDBSCAN_MIN_CLUSTER_SIZE,
+    HDBSCAN_MIN_SAMPLES,
+    MAX_CLUSTERS,
     RANDOM_STATE,
     UMAP_N_COMPONENTS,
     UMAP_N_NEIGHBORS,
@@ -72,6 +76,31 @@ class FeedbackClustersConfig(Config):
         default=HDBSCAN_MIN_CLUSTER_SIZE,
         description="HDBSCAN's min_cluster_size -- how many conversations before "
         "a group counts as systemic rather than a one-off.",
+    )
+    hdbscan_min_samples: int | None = Field(
+        default=HDBSCAN_MIN_SAMPLES,
+        ge=1,
+        description=(
+            "HDBSCAN's min_samples: how dense an area must be to count as a cluster. "
+            "Keep it small, so min_cluster_size alone controls cluster size. Null "
+            "reuses min_cluster_size, HDBSCAN's own default."
+        ),
+    )
+    max_clusters: int | None = Field(
+        default=MAX_CLUSTERS,
+        ge=1,
+        description=(
+            "Upper bound on clusters, and so on LLM categories. If a run finds more, "
+            "min_cluster_size grows until it fits; feedback_cluster_run records the "
+            "value used. Null disables the cap."
+        ),
+    )
+    hdbscan_cluster_selection_method: Literal["eom", "leaf"] = Field(
+        default=HDBSCAN_CLUSTER_SELECTION_METHOD,
+        description=(
+            "HDBSCAN's cluster_selection_method. 'leaf' keeps fine-grained clusters; "
+            "'eom' tends to merge them into one or two very large clusters."
+        ),
     )
     embedding_input_filter: str | None = Field(
         default="summary",
@@ -136,7 +165,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v3",
+            code_version="feedback_clusters_v4",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -146,7 +175,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v3",
+            code_version="feedback_clusters_v4",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -250,6 +279,11 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         failed_metadata["run_at"] = datetime.now(tz=UTC)
         failed_metadata["feedback_since"] = config.feedback_since
         failed_metadata["platforms"] = platforms_to_run_value(config.platforms)
+        failed_metadata["hdbscan_min_samples"] = config.hdbscan_min_samples
+        failed_metadata["hdbscan_cluster_selection_method"] = (
+            config.hdbscan_cluster_selection_method
+        )
+        failed_metadata["max_clusters"] = config.max_clusters
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
             output_name="feedback_cluster_run",
@@ -269,6 +303,9 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         embedding_provenance,
         umap_params=umap_params,
         min_cluster_size=config.min_cluster_size,
+        min_samples=config.hdbscan_min_samples,
+        cluster_selection_method=config.hdbscan_cluster_selection_method,
+        max_clusters=config.max_clusters,
         cluster_run_id=cluster_run_id,
         is_promoted=config.is_promoted,
     )

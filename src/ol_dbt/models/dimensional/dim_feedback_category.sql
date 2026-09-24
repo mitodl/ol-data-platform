@@ -23,6 +23,7 @@ with ticket as (
         , cast(null as varchar) as category_description
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
+        , cast(null as varchar) as cluster_status
     from ticket
     cross join unnest(ticket.ticket_tags) as tag (tag_label)
     inner join feedback_tag
@@ -41,6 +42,7 @@ with ticket as (
         , cast(null as varchar) as category_description
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
+        , cast(null as varchar) as cluster_status
     from ticket
     where ticket.group_name is not null
     group by 1
@@ -60,6 +62,7 @@ with ticket as (
         -- (ISO8601 strings throughout this layer, never a native timestamp).
         , {{ cast_timestamp_to_iso8601('proposed_at') }} as first_seen_at
         , {{ cast_timestamp_to_iso8601('proposed_at') }} as updated_at
+        , cluster_status
     from {{ ref('int__feedback__category_proposal') }}
 )
 
@@ -110,6 +113,7 @@ select
     , 'proposed' as category_status
     , ranked_combined.category_source
     , ranked_combined.cluster_key
+    , ranked_combined.cluster_status
     , ranked_combined.category_description
     , slug_dates.first_seen_at
     , slug_dates.updated_at
