@@ -53,8 +53,9 @@ RESOURCE_NAME = "raw__posthog__learn__s3__events"
 EXPORT_EPOCH = date(2025, 1, 1)
 
 # Rows per Arrow batch handed to dlt. `properties` and `person_properties`
-# together run to a few KB per event, so this is the knob that keeps peak RSS
-# proportional to a batch rather than to a whole 60-120 MB object.
+# together run to a few KB per event, so this bounds what extraction holds at
+# once. It does not bound the load step, which holds the whole load (see
+# BUDGET_BYTES).
 BATCH_SIZE = 10_000
 
 # Cold start window when nothing has been loaded and no explicit start date was
@@ -62,15 +63,25 @@ BATCH_SIZE = 10_000
 # partitions; the full history is a deliberate `start_date=EXPORT_EPOCH` run.
 DEFAULT_COLD_START_DAYS = 7
 
-# How far behind the cursor a resumed run re-reads. The cursor is one high-water
-# mark over window ends, so an hour that has not landed yet when a later one has
-# would be stepped over and never revisited: nothing afterwards satisfies
-# `after < window_end` for it. Re-reading is safe rather than merely tolerable,
-# because the raw table is append-only and the staging model deduplicates on the
-# PostHog event uuid. Three hours clears the 1.4-15.1 minute export lag measured
-# across the 168 objects written 2026-08-28 to 2026-09-03, with room for a run
-# that itself ran late.
+# How far behind the cursor a resumed run looks for objects. The cursor is one
+# high-water mark over window ends, so an hour that has not landed yet when a
+# later one has would be stepped over and never revisited: nothing afterwards
+# satisfies `after < window_end` for it. Three hours clears the 1.4-15.1 minute
+# export lag measured across the 168 objects written 2026-08-28 to 2026-09-03,
+# with room for a run that itself ran late. Objects already read inside this
+# window are skipped (see _READ_KEYS), so looking back does not re-load them.
 CURSOR_LOOKBACK = timedelta(hours=3)
+
+# Compressed export bytes one load may cover. dlt's Iceberg writer reads every
+# file of a table in a load into one Arrow table, so a load's peak memory tracks
+# the data in it, not BATCH_SIZE. Measured locally through the Iceberg write
+# path: two 55 MB hours peaked at 2.6 GB RSS, the largest hour of 2026-09-17 to
+# 2026-09-23 (346 MB) at 7.1 GB on its own, and that hour plus the next largest
+# (260 MB, 606 MB together) at 12.1 GB. An object is the smallest unit the
+# cursor advances by, so one larger than the budget still loads alone; the run
+# pod's memory limit (see data_loading's posthog schedule) is sized for that,
+# not for the budget.
+BUDGET_BYTES = 256 * 1024**2
 
 # Events are immutable and each hour object is read once, so rows are appended.
 # A run that fails after committing part of a load package and before dlt
@@ -84,6 +95,9 @@ WRITE_DISPOSITION = "append"
 SCHEMA_CONTRACT = config.JSON_API_SCHEMA_CONTRACT
 
 _STATE_KEY = "last_window_end"
+# Keys already read whose window still falls inside CURSOR_LOOKBACK. Pruned as the
+# cursor moves, so it holds a few hours of keys, not the export's history.
+_READ_KEYS = "read_objects"
 
 _ISO_HOUR = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2}"
 # The start/end separator is a bare `-`, which also appears inside both ISO
@@ -124,8 +138,8 @@ def list_export_objects(
     until: datetime,
     bucket: str = POSTHOG_LANDING_BUCKET,
     prefix: str = POSTHOG_EVENTS_PREFIX,
-) -> list[tuple[datetime, str]]:
-    """Return ``(window_end, key)`` for export objects with ``after < end <= until``.
+) -> list[tuple[datetime, str, int]]:
+    """Return ``(window_end, key, size)`` for objects with ``after < end <= until``.
 
     Listing is bounded to the day partitions the window touches instead of
     globbing the whole prefix: a resumed run reads one or two partitions where a
@@ -136,24 +150,25 @@ def list_export_objects(
     in the neighbouring day's directory. Objects are filtered on the parsed
     window afterwards, so the extra listing cannot pull in extra data.
     """
-    found: list[tuple[datetime, str]] = []
+    found: list[tuple[datetime, str, int]] = []
     for partition in day_partitions(
         (after - timedelta(days=1)).date(), (until + timedelta(days=1)).date()
     ):
         partition_prefix = f"{bucket}/{prefix}/{partition}"
         try:
-            keys = filesystem.ls(partition_prefix, detail=False)
+            entries = filesystem.ls(partition_prefix, detail=True)
         except FileNotFoundError:
             # Days before the export started, and the day after the current one.
             continue
-        for key in keys:
+        for entry in entries:
+            key = entry["name"]
             try:
                 _, window_end = parse_hour_window(key)
             except PostHogObjectNameError:
                 logger.warning("Skipping unrecognised PostHog export object %s", key)
                 continue
             if after < window_end <= until:
-                found.append((window_end, key))
+                found.append((window_end, key, int(entry["size"])))
     found.sort()
     return found
 
@@ -176,11 +191,39 @@ def _read_object(
             )
 
 
+def select_objects(
+    listed: list[tuple[datetime, str, int]],
+    *,
+    read_keys: set[str],
+    max_objects: int | None,
+    budget_bytes: int,
+) -> list[tuple[datetime, str, int]]:
+    """Return the unread objects one load should cover, oldest first.
+
+    Stops before the object that would take the load past ``budget_bytes``, but
+    always takes the first unread object, so one larger than the whole budget
+    still loads rather than stalling the cursor.
+    """
+    selected: list[tuple[datetime, str, int]] = []
+    total = 0
+    for window_end, key, size in listed:
+        if key in read_keys:
+            continue
+        if selected and total + size > budget_bytes:
+            break
+        if max_objects is not None and len(selected) == max_objects:
+            break
+        selected.append((window_end, key, size))
+        total += size
+    return selected
+
+
 @dlt.source(name="posthog_events_ingest")
 def posthog_events_source(
     start_date: date | None = None,
     end_date: date | None = None,
     max_objects: int | None = None,
+    budget_bytes: int = BUDGET_BYTES,
     bucket: str = POSTHOG_LANDING_BUCKET,
     prefix: str = POSTHOG_EVENTS_PREFIX,
     batch_size: int = BATCH_SIZE,
@@ -200,6 +243,9 @@ def posthog_events_source(
         max_objects: Cap on hour objects read in one run, so a backfill can be
             walked forward in bounded chunks instead of one run that has to
             survive 600 days of history.
+        budget_bytes: Compressed export bytes one load may cover (see
+            ``BUDGET_BYTES``). A caller walks a backlog by re-running the source
+            until a load reads nothing.
         bucket: Landing-zone bucket holding the export.
         prefix: Key prefix of the event export within that bucket.
         batch_size: Rows per Arrow batch (see ``BATCH_SIZE``).
@@ -242,17 +288,27 @@ def posthog_events_source(
         # credentials to s3fs strands a long run on an expired STS token.
         filesystem = s3fs.S3FileSystem()
 
-        objects = list_export_objects(
-            filesystem, after=after, until=until, bucket=bucket, prefix=prefix
+        # An explicit start date re-reads its range even where this pipeline has
+        # read it before, so a repeated backfill command repairs rather than
+        # silently skipping the last lookback hours it already covered.
+        read_keys = set() if start_date is not None else set(state.get(_READ_KEYS, []))
+        objects = select_objects(
+            list_export_objects(
+                filesystem, after=after, until=until, bucket=bucket, prefix=prefix
+            ),
+            read_keys=read_keys,
+            max_objects=max_objects,
+            budget_bytes=budget_bytes,
         )
-        if max_objects is not None:
-            objects = objects[:max_objects]
 
         logger.info(
-            "PostHog export: %d hour object(s) to read after %s", len(objects), after
+            "PostHog export: %d hour object(s), %d bytes, to read after %s",
+            len(objects),
+            sum(size for _, _, size in objects),
+            after,
         )
 
-        for window_end, key in objects:
+        for window_end, key, _size in objects:
             logger.info("Reading PostHog export object %s", key)
             yield from _read_object(filesystem, key, batch_size)
             # Advance only once an object is fully yielded. dlt persists resource
@@ -260,11 +316,19 @@ def posthog_events_source(
             # where the last successful one left it.
             #
             # Monotonic because a run starts CURSOR_LOOKBACK behind the cursor:
-            # if `max_objects` ends a run inside that re-read window, taking the
-            # raw window_end would walk the cursor backwards on every run.
+            # a late hour read inside that window must not walk it backwards.
             stored = state.get(_STATE_KEY)
             if stored is None or window_end > datetime.fromisoformat(stored):
                 state[_STATE_KEY] = window_end.isoformat()
+            # Remember the key while its window can still be listed again, so
+            # the next load's lookback skips it instead of appending it twice.
+            horizon = datetime.fromisoformat(state[_STATE_KEY]) - CURSOR_LOOKBACK
+            read_keys.add(key)
+            state[_READ_KEYS] = sorted(
+                read_key
+                for read_key in read_keys
+                if parse_hour_window(read_key)[1] > horizon
+            )
 
     yield events
 

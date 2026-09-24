@@ -125,14 +125,6 @@ youtube_assets = build_ingest_assets(
     source=youtube.build_source(),
     pipeline=youtube.youtube_pipeline,
 )
-# Resumes from the dlt cursor every run. A backfill is a deliberate
-# `posthog_events_source(start_date=...)` invocation (see the source's
-# __main__), not something a scheduled run can fall into.
-posthog_events_assets = build_ingest_assets(
-    name="posthog_events_ingest",
-    source=posthog_events.build_source(),
-    pipeline=posthog_events.posthog_events_pipeline,
-)
 
 
 # --- edxorg_s3: custom upstream deps + one op per table ---------------------
@@ -315,6 +307,24 @@ course_xml_blocks_assets = [
     )
     for raw_table, table in course_xml_blocks.TABLES.items()
 ]
+
+
+# Resumes from the dlt cursor every run. A backfill is a deliberate
+# `posthog_events_source(start_date=...)` invocation (see the source's
+# __main__), not something a scheduled run can fall into.
+#
+# Batched because a single load holds all of its data in memory: the 7-day cold
+# start (168 hourly objects) as one load OOMKilled every hourly run from
+# 2026-09-22 on, so the cursor never moved. Each load now covers at most
+# posthog_events.BUDGET_BYTES of export, and the loop stops at the first load
+# that reads nothing. An hour object with no rows ends a run's loop early if it
+# forms a load of its own; the next tick resumes from the cursor.
+posthog_events_assets = build_batched_assets(
+    name="posthog_events_ingest",
+    build_source=posthog_events.build_source,
+    pipeline=posthog_events.posthog_events_pipeline,
+    translator=RawDataDltTranslator(),
+)
 
 
 defs = Definitions(
