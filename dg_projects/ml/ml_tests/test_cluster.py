@@ -161,6 +161,23 @@ def test_reduce_and_cluster_raises_min_cluster_size_to_fit_max_clusters() -> Non
     assert count(capped_labels) <= 2
 
 
+def test_filter_conversation_scope_drops_conversations_below_source_minimum() -> None:
+    embeddings_lf = pl.LazyFrame(
+        {"feedback_conversation_pk": ["short", "long", "ticket"]}
+    )
+    conversations_lf = pl.LazyFrame(
+        {
+            "feedback_conversation_pk": ["short", "long", "ticket"],
+            "source_slug": ["learn_ai_tutor", "learn_ai_tutor", "zendesk"],
+            "conversation_text_chars": [26, 80, 10],
+        }
+    )
+
+    result = cluster.filter_conversation_scope(embeddings_lf, conversations_lf, None)
+
+    assert result.collect()["feedback_conversation_pk"].to_list() == ["long", "ticket"]
+
+
 def test_should_trigger_early_recluster_with_no_prior_completed_run() -> None:
     assert cluster.should_trigger_early_recluster(1, None) is True
     assert cluster.should_trigger_early_recluster(0, None) is False
@@ -195,11 +212,11 @@ def test_filter_conversation_scope_keeps_feedback_since_date() -> None:
     )
 
     result = cluster.filter_conversation_scope(
-        embeddings_lf, conversations_lf, "2024-01-01"
+        embeddings_lf, conversations_lf, "2024-01-01", min_chars_by_source=None
     )
 
     assert result.collect()["feedback_conversation_pk"].to_list() == ["same", "new"]
     unfiltered = cluster.filter_conversation_scope(
-        embeddings_lf, conversations_lf, None
+        embeddings_lf, conversations_lf, None, min_chars_by_source=None
     )
     assert unfiltered.collect().height == 3

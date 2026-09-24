@@ -10,7 +10,12 @@ from dagster import (
     MetadataValue,
     asset,
 )
-from ml.lib.cluster import DEFAULT_FEEDBACK_SINCE, DEFAULT_PLATFORMS
+from ml.lib.cluster import (
+    DEFAULT_FEEDBACK_SINCE,
+    DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
+    DEFAULT_PLATFORMS,
+    drop_short_conversations,
+)
 from ml.lib.summarize import (
     JOIN_COLS,
     SUMMARIZE_CHECKPOINT_BATCH_SIZE,
@@ -75,12 +80,14 @@ class FeedbackSummariesConfig(Config):
         ),
     )
     min_conversation_chars_by_source: dict[str, int] | None = Field(
-        default={"learn_ai_tutor": 50},
+        default=DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
         description=(
             "Skip conversations shorter than this many characters, per source. The "
             "default drops tutor chats that are only a suggested-question button, "
             "such as 'What is this course about?'. Sources not listed have no "
-            "minimum. Null skips none."
+            "minimum. Null skips none. Cluster steps always apply the default "
+            "(DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE), so change it there to change "
+            "both."
         ),
     )
     model_version: str | None = Field(
@@ -165,15 +172,9 @@ def feedback_summaries(
         source_lazy = source_lazy.filter(
             pl.col("source_slug").is_in(config.source_slugs)
         )
-    for source_slug, min_chars in (
-        config.min_conversation_chars_by_source or {}
-    ).items():
-        source_lazy = source_lazy.filter(
-            ~(
-                (pl.col("source_slug") == source_slug)
-                & (pl.col("conversation_text_chars").fill_null(0) < min_chars)
-            )
-        )
+    source_lazy = drop_short_conversations(
+        source_lazy, config.min_conversation_chars_by_source
+    )
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
     source_df = source_lazy.collect()

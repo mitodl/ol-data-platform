@@ -188,10 +188,11 @@ def test_summarize_conversations_types_null_columns_when_batch_is_all_skipped() 
     Regression: Polars infers dtype=Null for an all-None Series, which Iceberg
     (format v2) rejects outright when writing the table.
     """
-    df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
+    df = pl.DataFrame([_conversation_row(conversation_ref="1", conversation_text=None)])
 
     result = summarize.summarize_conversations(df, _FakeSummaryClient())
 
+    assert result["conversation_summary"].null_count() == result.height
     assert result.schema["conversation_summary"] == pl.String
     assert result.schema["summary_model_version"] == pl.String
     assert result.schema["prompt_version"] == pl.String

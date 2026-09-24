@@ -100,11 +100,13 @@ so its cost has to be stated rather than assumed away:
   *Superseded:* the original rule skipped `turn_count = 1` or under 500 characters for every source. The 500
   sat below the 601 p25 of multi-turn Zendesk tickets, but the single-turn clause dropped 77% of MIT Learn
   Zendesk tickets and 96% of tutor chats.
-- **Cost** (measured 2026-08-14, #2536): 52,218 multi-turn Zendesk conversations at a mean of 1,847
-  characters puts the one-time backfill at **~$37 on Haiku 4.5** via the Batch API (50% off, and a backfill is
-  exactly its shape), or ~$74 on Sonnet 5. Steady state (~24K conversations/yr, a fraction multi-turn) is
-  single-digit dollars a year. Applying the skip threshold above brings the backfill to ~$32, so the threshold
-  is a summary-quality decision rather than a cost lever.
+- **Volume (rev. 5, 2026-09-24):** scope is set by `feedback_summaries`' `platforms` filter (default
+  `['mitlearn']`). At that scope the rule summarizes ~46,600 conversations: 41,325 tutor chats (50+
+  characters) and 5,275 Zendesk tickets with text. Widening `platforms` to every platform would also submit all
+  ~190,800 Zendesk conversations with text, single-turn included, so re-estimate cost before doing that.
+- **Cost (historical, rev. 3, measured 2026-08-14, #2536):** under the original rule, 52,218 multi-turn Zendesk
+  conversations at a mean of 1,847 characters put the one-time backfill at ~$37 on Haiku 4.5 via the Batch API,
+  or ~$74 on Sonnet 5. These figures predate rev. 5 and understate the current scope.
 - **PII:** summaries are generated from Presidio-redacted text only and inherit that classification.
 
 ---
@@ -193,15 +195,15 @@ the ~1.18M turn-level corpus. Embedding cost returns to the original $2–16 ord
 | No public requester comment (never enter the fact) | 9,659 (4.8%) |
 | Conversations — the embedding input | **190,826** |
 | Turn-grain rows in `tfact_feedback` | **282,470** (1.5 turns/conversation) |
-| Multi-turn (≥2 turns) — the summarizer input | **52,218 (27.4%)** |
+| Multi-turn (≥2 turns) — the summarizer input under the original rule | **52,218 (27.4%)** |
 | Assembled characters, multi-turn conversations | p25 601 · p50 1,040 · p90 4,016 · p99 11,691 · max 553,230 · mean 1,847 |
-| Multi-turn conversations under 500 characters (skipped by §A.1) | 9,680 (18.5%) |
+| Multi-turn conversations under 500 characters (skipped by the original §A.1 rule) | 9,680 (18.5%) |
 | Multi-turn conversations under 1,000 characters (skipped at the rejected cutoff) | 25,326 (48.5%) |
 
 `tfact_feedback` carries 282,470 rows at 1.5 turns per conversation — immaterial for storage or batch
 runtime. `distinct conversation_id` is **190,826**: agent-only tickets carry no requester text and never enter
 the fact, so it runs 4.8% below the ticket count by construction. The summarizer runs on the 52,218 multi-turn
-conversations, which is what puts its cost at ~$37 (§A.1).
+conversations, which is what put its original cost at ~$37 (§A.1, historical).
 
 The character distribution set the original 500-character skip threshold (superseded in §A.1). It also argues for capping summarizer
 input: the p99 is 11,691 characters against a 553,230 maximum (~138K tokens), a tail thin enough that
