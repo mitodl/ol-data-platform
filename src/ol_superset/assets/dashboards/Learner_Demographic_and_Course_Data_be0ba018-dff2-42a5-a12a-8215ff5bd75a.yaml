@@ -5,18 +5,20 @@ dashboard_title: Learner Demographic and Course Data
 description: null
 metadata:
   chart_configuration:
-    '192':
+    '261':
       crossFilters:
         chartsInScope: []
         scope: global
-      id: 192
+      id: 261
+  chart_customization_config: []
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
+  default_filters: '{}'
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
-    - 68
+    - 261
     scope:
       excluded: []
       rootPath:
@@ -25,6 +27,8 @@ metadata:
   map_label_colors: {}
   native_filter_configuration:
   - cascadeParentIds: []
+    chartsInScope:
+    - 261
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -45,12 +49,16 @@ metadata:
       rootPath:
       - ROOT_ID
     sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
         name: platforms
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
+    chartsInScope:
+    - 261
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -71,12 +79,16 @@ metadata:
       rootPath:
       - ROOT_ID
     sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
         name: any_dedp_program_cert_ind
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
+    chartsInScope:
+    - 261
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -97,6 +109,8 @@ metadata:
       rootPath:
       - ROOT_ID
     sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
         name: dedp_course_cert_count
@@ -104,6 +118,8 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-cKjlGY1Lq
+    chartsInScope:
+    - 261
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -124,12 +140,16 @@ metadata:
       rootPath:
       - ROOT_ID
     sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
         name: user_email
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
+    chartsInScope:
+    - 261
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -150,30 +170,62 @@ metadata:
       rootPath:
       - ROOT_ID
     sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
         name: user_full_name
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-neydWriKnWkdQrS0Dh_w7
+    name: DEDP Program Enrolled Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: any_dedp_program_enroll_ind
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   refresh_frequency: 0
   shared_label_colors: []
   timed_refresh_immune_slices: []
 position:
-  CHART-pMiEJRHITe:
+  CHART-explore-261-1:
     children: []
-    id: CHART-pMiEJRHITe
+    id: CHART-explore-261-1
     meta:
-      chartId: 192
-      height: 81
+      chartId: 261
+      height: 73
       sliceName: Learner Demographic Including Income and Course Data
-      uuid: 11b1455f-25f1-45aa-8358-b8449013bb24
+      uuid: b15cfcd1-1828-4db7-a56a-18d13c2b741f
       width: 12
     parents:
     - ROOT_ID
     - GRID_ID
     - TABS-PDK8qDKql02nHysdBXvpC
     - TAB-dhOB0wMgmenerPbUQNy7K
-    - ROW-Bal4OfFqKi9HisKnpLBi8
+    - ROW-8OuapmUZPmg8WWMpOchnF
     type: CHART
   DASHBOARD_VERSION_KEY: v2
   GRID_ID:
@@ -210,10 +262,10 @@ position:
     - GRID_ID
     id: ROOT_ID
     type: ROOT
-  ROW-Bal4OfFqKi9HisKnpLBi8:
+  ROW-8OuapmUZPmg8WWMpOchnF:
     children:
-    - CHART-pMiEJRHITe
-    id: ROW-Bal4OfFqKi9HisKnpLBi8
+    - CHART-explore-261-1
+    id: ROW-8OuapmUZPmg8WWMpOchnF
     meta:
       background: BACKGROUND_TRANSPARENT
     parents:
@@ -249,7 +301,7 @@ position:
     type: TAB
   TAB-dhOB0wMgmenerPbUQNy7K:
     children:
-    - ROW-Bal4OfFqKi9HisKnpLBi8
+    - ROW-8OuapmUZPmg8WWMpOchnF
     id: TAB-dhOB0wMgmenerPbUQNy7K
     meta:
       defaultText: Tab title

@@ -5,10 +5,12 @@ dataset_uuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0  # learner_demographics_and_c
 description: null
 params:
   adhoc_filters: []
+  align_pn: false
   all_columns: []
+  allow_rearrange_columns: false
   allow_render_html: true
-  annotation_layers: []
   color_pn: true
+  comparison_color_enabled: false
   comparison_color_scheme: Green
   comparison_type: values
   conditional_formatting: []
@@ -33,16 +35,44 @@ params:
   - any_dedp_program_cert_ind
   - dedp_international_program_cert_ind
   - dedp_public_policy_program_cert_ind
+  - any_dedp_program_enroll_ind
+  include_search: false
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
   order_by_cols: []
-  order_desc: true
+  percent_metric_calculation: row_limit
   percent_metrics: []
   query_mode: aggregate
   row_limit: '500000'
+  server_page_length: 10
+  server_pagination: false
   show_cell_bars: true
+  show_totals: false
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
 slice_name: Learner Demographic Including Income and Course Data
-uuid: 11b1455f-25f1-45aa-8358-b8449013bb24
+uuid: b15cfcd1-1828-4db7-a56a-18d13c2b741f
 version: 1.0.0
 viz_type: table
