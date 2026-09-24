@@ -75,6 +75,15 @@ class FeedbackSummariesConfig(Config):
             "Unset or null includes every source."
         ),
     )
+    min_conversation_chars_by_source: dict[str, int] | None = Field(
+        default={"learn_ai_tutor": 50},
+        description=(
+            "Skip conversations shorter than this many characters, per source. The "
+            "default drops tutor chats that are only a suggested-question button, "
+            "such as 'What is this course about?'. Sources not listed have no "
+            "minimum. Null skips none."
+        ),
+    )
     summarize_all_conversations: bool = Field(
         default=SUMMARIZE_ALL_CONVERSATIONS,
         description=(
@@ -125,7 +134,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v2",
+    code_version="feedback_summaries_v3",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],
@@ -165,6 +174,15 @@ def feedback_summaries(
     if config.source_slugs is not None:
         source_lazy = source_lazy.filter(
             pl.col("source_slug").is_in(config.source_slugs)
+        )
+    for source_slug, min_chars in (
+        config.min_conversation_chars_by_source or {}
+    ).items():
+        source_lazy = source_lazy.filter(
+            ~(
+                (pl.col("source_slug") == source_slug)
+                & (pl.col("conversation_text_chars").fill_null(0) < min_chars)
+            )
         )
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
