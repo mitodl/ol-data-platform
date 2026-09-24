@@ -186,3 +186,18 @@ def test_posthog_schedule_skips_while_a_run_is_in_flight(
     assert runs_filter.tags == {
         "dagster/schedule_name": schedules.POSTHOG_SCHEDULE_NAME
     }
+
+
+def test_posthog_schedule_runs_get_the_memory_limit_and_runtime_cap() -> None:
+    """The run pod must get the 16Gi limit a single large hour needs.
+
+    Parsed the way K8sRunLauncher parses run tags, so a malformed or dropped tag
+    fails here rather than as an OOMKilled run.
+    """
+    from dagster_k8s.job import get_user_defined_k8s_config  # noqa: PLC0415
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    tags = schedules.posthog_events_ingest_schedule.tags
+    container = get_user_defined_k8s_config(tags).container_config
+    assert container["resources"]["limits"]["memory"] == "16Gi"
+    assert tags["dagster/max_runtime"] == str(6 * 60 * 60)
