@@ -53,13 +53,10 @@ select
         when 'mobile' then 'mobile'
     end as channel_slug
     , cast(null as varchar) as courserun_readable_id
-    -- MIT Learn first, by brand or group: Universal AI and upGrad UAI have their own
-    -- brands, and the MIT Learn team also works tickets from other help centers.
-    -- Other brands only where they map to one platform; MITx Support and the pilot
-    -- brands span several, so they stay null rather than guess.
+    -- MIT Learn by group: support routes it to three groups, two with their own
+    -- brand. Others by brand: their groups are support teams that span platforms.
     , case
-        when ticket.brand_subdomain in ('mitlearn', 'mituai', 'upgraduai')
-            or ticket.group_name in ('MIT Learn', 'Universal AI', 'upGrad UAI')
+        when ticket.group_name in ('MIT Learn', 'Universal AI', 'upGrad UAI')
             then 'mitlearn'
         when ticket.brand_subdomain = 'mitxonline' then 'mitxonline'
         when ticket.brand_subdomain = 'xpro' then 'mitxpro'
