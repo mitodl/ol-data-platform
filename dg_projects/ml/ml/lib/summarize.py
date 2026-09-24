@@ -95,6 +95,8 @@ BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
 # thinking plus the actual summary across whichever model is configured.
 SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 
+# Fallback only: production renders the Opik Prompt Library entry, so editing this
+# doesn't change production output or need a code_version bump.
 SUMMARY_PROMPT = (
     "You are analyzing feedback about MIT Learn, MIT Open Learning's platform for "
     "courses and AI learning assistants. The text below is feedback from a "

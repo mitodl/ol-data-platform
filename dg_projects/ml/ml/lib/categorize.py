@@ -63,6 +63,8 @@ BEDROCK_CATEGORY_MODEL_VERSION = os.environ.get(
 CATEGORY_MAX_TOKENS = int(os.environ.get("CATEGORY_MAX_TOKENS", "512"))
 
 CATEGORY_PROMPT_NAME = "feedback-category-proposal"
+# Fallback only: production renders the Opik Prompt Library entry, so editing this
+# doesn't change production output or need a code_version bump.
 CATEGORY_PROMPT = (
     "You are naming a group of similar learner feedback about MIT Learn, MIT Open "
     "Learning's platform for courses and AI learning assistants. The product team "
