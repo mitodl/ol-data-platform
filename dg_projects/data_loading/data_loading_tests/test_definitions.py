@@ -154,3 +154,35 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+class _FakeInstance:
+    def __init__(self, in_flight: bool) -> None:  # noqa: FBT001
+        self.in_flight = in_flight
+        self.filters: list[Any] = []
+
+    def get_run_records(self, filters: Any, limit: int) -> list[object]:  # noqa: ARG002
+        self.filters.append(filters)
+        return [object()] if self.in_flight else []
+
+
+class _FakeScheduleContext:
+    def __init__(self, instance: _FakeInstance) -> None:
+        self.instance = instance
+
+
+@pytest.mark.parametrize(("in_flight", "expected"), [(True, False), (False, True)])
+def test_posthog_schedule_skips_while_a_run_is_in_flight(
+    in_flight: bool,  # noqa: FBT001
+    expected: bool,  # noqa: FBT001
+) -> None:
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    instance = _FakeInstance(in_flight)
+    assert (
+        schedules.no_posthog_run_in_flight(_FakeScheduleContext(instance)) is expected
+    )
+    (runs_filter,) = instance.filters
+    assert runs_filter.tags == {
+        "dagster/schedule_name": schedules.POSTHOG_SCHEDULE_NAME
+    }
