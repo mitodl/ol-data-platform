@@ -18,7 +18,7 @@ Run standalone:
 import logging
 import shutil
 import tempfile
-from collections.abc import Generator, Iterable, Iterator
+from collections.abc import Generator, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -350,14 +350,20 @@ def read_edxorg_tsv(
 @dlt.resource(name="filesystem", primary_key="file_url", standalone=True)
 def edxorg_files(
     bucket_url: str,
-    file_glob: str,
+    file_globs: Sequence[str],
     credentials: Any,
     budget_bytes: int = _DEFAULT_BUDGET_BYTES,
     modification_date: incremental[Any] = dlt.sources.incremental(  # noqa: B008
         "modification_date"
     ),
 ) -> Iterator[list[FileItemDict]]:
-    """List one batch of unread TSVs, oldest first.
+    """List one batch of unread files, oldest first.
+
+    ``file_globs`` are relative to ``bucket_url`` and listed together, so one
+    cursor orders files across all of them. fsspec lists only the literal
+    prefix ahead of each glob's first wildcard, which is why a table spread
+    over several prefixes passes one glob per prefix rather than a single glob
+    rooted at the bucket.
 
     ``budget_bytes`` caps the files this batch yields past the cursor's
     second. The cursor's own second is deliberately exempt and is NOT capped
@@ -385,7 +391,11 @@ def edxorg_files(
     from dlt.common.storages.fsspec_filesystem import glob_files  # noqa: PLC0415
 
     listed = sorted(
-        glob_files(credentials, bucket_url, file_glob),
+        (
+            file_item
+            for file_glob in file_globs
+            for file_item in glob_files(credentials, bucket_url, file_glob)
+        ),
         key=lambda file_item: file_item["modification_date"],
     )
     cursor_value = modification_date.last_value
@@ -426,10 +436,10 @@ def edxorg_files(
         # batch of its own.
         if yielded_definitely_unread and batch_bytes + size > budget_bytes:
             logger.info(
-                "Listed %s bytes of edxorg TSV for %s against a %s byte "
-                "budget (%s more on the cursor boundary); ending this batch.",
+                "Listed %s bytes for %s against a %s byte budget (%s more on "
+                "the cursor boundary); ending this batch.",
                 batch_bytes,
-                file_glob,
+                ", ".join(file_globs),
                 budget_bytes,
                 boundary_bytes,
             )
@@ -498,7 +508,7 @@ def edxorg_s3_source(
         # and only until the budget is reached.
         files = edxorg_files(
             bucket_url=bucket_url,
-            file_glob=file_glob,
+            file_globs=[file_glob],
             credentials=fs,
             budget_bytes=budget_bytes,
         )

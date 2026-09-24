@@ -1,6 +1,7 @@
 """Schedules for data_loading ingest pipelines."""
 
 import dagster as dg
+from ol_dlt.sources import course_xml_blocks
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
@@ -103,6 +104,32 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# Loads the course XML blocks the edxorg and openedx archive assets land, ahead
+# of the lakehouse's non_airbyte_staging_daily at 06:00. The first run walks
+# the whole ~63 GB backlog a budget at a time; later runs read only new course
+# versions.
+#
+# RUNNING by default in production, unlike the schedules above. A schedule
+# without default_status starts STOPPED, which is how the PostHog ingest never
+# ran after it shipped. Elsewhere it stays stopped: the source always reads the
+# production landing zone.
+course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
+    name="course_xml_blocks_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        *(
+            ["ol_warehouse_raw_data", raw_table]
+            for raw_table in course_xml_blocks.TABLES
+        )
+    ),
+    cron_schedule="45 4 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -114,5 +141,6 @@ defs = dg.Definitions(
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         posthog_events_ingest_schedule,
+        course_xml_blocks_ingest_schedule,
     ],
 )

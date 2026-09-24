@@ -82,7 +82,7 @@ def _run(row_counts_per_batch: list[int]) -> tuple[Any, Any, tuple[Any, int, int
     outcome = assets.load_in_batches(
         context=context,
         dlt=dlt,
-        table_name="auth_user",
+        build_source=object,
         pipeline=pipeline,
         resource_name=_RESOURCE,
     )

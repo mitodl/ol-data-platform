@@ -1,0 +1,32 @@
+---
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+#
+# Split out of edxorg/course_structure because a different loader owns it: the
+# edxorg code location parses these blocks out of the course archives, and
+# ol_dlt.sources.course_xml_blocks loads the JSON Lines files it lands. The
+# other course_structure tables have neither.
+schema_version: 1
+deployment: edxorg
+scope: singleton
+layer: course_xml
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: dlt
+# The load appends one file per course version, so staging picks each block's
+# newest copy by the file it came from. Same reasoning as edxorg/mysql.
+raw_metadata_column: _file_modified_at
+table_prefix: raw__edxorg__s3__course_xml_blocks
+dlt:
+  source_module: ol_dlt.sources.course_xml_blocks
+  write_disposition: append
+tables:
+- name: raw__edxorg__s3__course_xml_blocks
+  raw_table: raw__edxorg__s3__course_xml_blocks
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: true
