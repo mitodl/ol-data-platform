@@ -1,6 +1,7 @@
-{% macro regexp_extract_or_null(subject, pattern) %}
+{% macro regexp_extract_or_null(subject, pattern, group=none) %}
   {#
-    First substring of `subject` matching `pattern`, or NULL when there is no match.
+    First substring of `subject` matching `pattern` (or its capture group `group`), or NULL
+    when there is no match.
 
     The NULL is the point. Trino's regexp_extract already returns NULL on no match, but
     DuckDB's returns an empty string, so callers that branch on `... is not null` (see
@@ -14,32 +15,32 @@
     one. This normalizes the no-match result to NULL on every adapter so `is not null`
     means the same thing everywhere.
 
-    Whole-match only -- no capture-group index. The same '' divergence also affects the
-    3-arg `regexp_extract(x, p, n)` calls in tfact_chatbot_events.sql (inside coalesce),
-    tfact_course_navigation_events.sql and stg__edxorg__s3__program_learner_report.sql.
-    Those are outside this PR's diff; add a group parameter here when they get fixed.
+    `group` selects a capture group; omitted, the whole match is returned. The same ''
+    divergence also affects the 3-arg `regexp_extract(x, p, n)` calls in
+    tfact_chatbot_events.sql (inside coalesce), tfact_course_navigation_events.sql and
+    stg__edxorg__s3__program_learner_report.sql, which could move onto `group`.
   #}
-  {{ return(adapter.dispatch('regexp_extract_or_null', 'open_learning')(subject, pattern)) }}
+  {{ return(adapter.dispatch('regexp_extract_or_null', 'open_learning')(subject, pattern, group)) }}
 {% endmacro %}
 
-{% macro trino__regexp_extract_or_null(subject, pattern) %}
+{% macro trino__regexp_extract_or_null(subject, pattern, group=none) %}
   {# Trino returns NULL on no match already. #}
-  regexp_extract({{ subject }}, {{ pattern }})
+  regexp_extract({{ subject }}, {{ pattern }}{% if group is not none %}, {{ group }}{% endif %})
 {% endmacro %}
 
-{% macro default__regexp_extract_or_null(subject, pattern) %}
+{% macro default__regexp_extract_or_null(subject, pattern, group=none) %}
   {# Default to Trino behavior for backward compatibility #}
-  {{ return(trino__regexp_extract_or_null(subject, pattern)) }}
+  {{ return(trino__regexp_extract_or_null(subject, pattern, group)) }}
 {% endmacro %}
 
-{% macro duckdb__regexp_extract_or_null(subject, pattern) %}
+{% macro duckdb__regexp_extract_or_null(subject, pattern, group=none) %}
   {# DuckDB returns '' (not NULL) when the pattern doesn't match, so map it back.
      https://duckdb.org/docs/stable/sql/functions/regular_expressions #}
-  nullif(regexp_extract({{ subject }}, {{ pattern }}), '')
+  nullif(regexp_extract({{ subject }}, {{ pattern }}{% if group is not none %}, {{ group }}{% endif %}), '')
 {% endmacro %}
 
-{% macro starrocks__regexp_extract_or_null(subject, pattern) %}
+{% macro starrocks__regexp_extract_or_null(subject, pattern, group=none) %}
   {# StarRocks requires the group index and, like DuckDB, returns '' on no match.
      Not exercised by any current caller against a live StarRocks target -- verify before relying on it. #}
-  nullif(regexp_extract({{ subject }}, {{ pattern }}, 0), '')
+  nullif(regexp_extract({{ subject }}, {{ pattern }}, {{ group if group is not none else 0 }}), '')
 {% endmacro %}
