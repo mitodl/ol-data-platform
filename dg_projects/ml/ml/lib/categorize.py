@@ -63,17 +63,22 @@ BEDROCK_CATEGORY_MODEL_VERSION = os.environ.get(
 CATEGORY_MAX_TOKENS = int(os.environ.get("CATEGORY_MAX_TOKENS", "512"))
 
 CATEGORY_PROMPT_NAME = "feedback-category-proposal"
+# Fallback only: production renders the Opik Prompt Library entry, so editing this
+# doesn't change production output or need a code_version bump.
 CATEGORY_PROMPT = (
-    "You are labeling a cluster of similar support conversations for an internal "
-    "support-ticket taxonomy. Below are a sample of redacted conversations from "
-    "this cluster, and the existing tags most commonly already applied to "
-    "conversations in it.\n\n"
-    "Existing dominant tags for this cluster: {{dominant_tags}}\n\n"
-    "Sample conversations:\n{{samples}}\n\n"
-    "Propose a short category label for this cluster. Prefer reusing or "
-    "lightly refining one of the existing dominant tags where it already fits; "
-    "only propose something new if none of them describe the cluster's actual "
-    "common theme.\n\n"
+    "You are naming a group of similar learner feedback about MIT Learn, MIT Open "
+    "Learning's platform for courses and AI learning assistants. The product team "
+    "uses these names to see which problems are most common and which features "
+    "learners ask for. The feedback comes from support tickets, messages to AI "
+    "assistants, forum posts, and comments on course content.\n\n"
+    "Support tags most often applied to feedback in this group (support tickets "
+    "only, so there may be none): {{dominant_tags}}\n\n"
+    "Sample feedback from this group:\n{{samples}}\n\n"
+    "Propose a short label of 2-6 words that names the learners' common need or "
+    'problem, for example "Certificate missing after payment" or "Asks for '
+    'course prerequisites". Use sentence case. If one of the support tags already '
+    "describes the common theme, reuse it or refine it lightly. Otherwise, propose "
+    "a new label. Describe what the group has in common, not a single example.\n\n"
     "Respond with only a JSON object, no other text, in this exact shape: "
     '{"category_label": "...", "category_description": "one sentence"}'
 )

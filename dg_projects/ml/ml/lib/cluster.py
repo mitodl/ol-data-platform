@@ -41,6 +41,9 @@ CLUSTER_RUN_SCHEMA = {
     # Comma-joined and sorted, so two runs over the same platforms compare equal
     # as plain strings; null means every platform.
     "platforms": pl.String,
+    "hdbscan_min_samples": pl.Int64,
+    "hdbscan_cluster_selection_method": pl.String,
+    "max_clusters": pl.Int64,
 }
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
@@ -122,6 +125,19 @@ UMAP_N_NEIGHBORS = int(os.environ.get("UMAP_N_NEIGHBORS", "15"))
 # number from the spec.
 HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "15"))
 
+# Unset, HDBSCAN reuses min_cluster_size here, so a larger min_cluster_size also
+# turns half the corpus into noise and then collapses it into 1-2 clusters.
+HDBSCAN_MIN_SAMPLES = int(os.environ.get("HDBSCAN_MIN_SAMPLES", "3"))
+
+# 'leaf', not the default 'eom', which tends to pick one huge parent cluster.
+HDBSCAN_CLUSTER_SELECTION_METHOD = os.environ.get(
+    "HDBSCAN_CLUSTER_SELECTION_METHOD", "leaf"
+)
+
+# More clusters than this means more categories than a person can act on, so
+# reduce_and_cluster raises min_cluster_size until the run fits.
+MAX_CLUSTERS = int(os.environ.get("CLUSTER_MAX_CLUSTERS", "50"))
+
 # Fixed rather than left to UMAP/HDBSCAN's own default (None -- a fresh random
 # state per call): a clustering run must be reproducible for the run-vs-run
 # comparison the §B.1 bake-off depends on.
@@ -202,17 +218,26 @@ def failed_run_metadata(  # noqa: PLR0913 -- same shape as cluster_embeddings's 
     }
 
 
-def reduce_and_cluster(
+def reduce_and_cluster(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     vectors: np.ndarray,
     umap_n_components: int = UMAP_N_COMPONENTS,
     umap_n_neighbors: int = UMAP_N_NEIGHBORS,
     min_cluster_size: int = HDBSCAN_MIN_CLUSTER_SIZE,
     random_state: int = RANDOM_STATE,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    *,
+    min_samples: int | None = HDBSCAN_MIN_SAMPLES,
+    cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    max_clusters: int | None = MAX_CLUSTERS,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """Reduce vectors' dimensionality via UMAP, then cluster via HDBSCAN.
 
-    Returns (labels, probabilities, reduced): reduced is the UMAP output HDBSCAN
-    clustered on, returned so silhouette can be scored in that same space.
+    If the run finds more than max_clusters clusters, min_cluster_size grows by
+    25% and HDBSCAN reruns on the same UMAP output until it fits. None disables
+    the cap.
+
+    Returns (labels, probabilities, reduced, min_cluster_size): reduced is the
+    UMAP output HDBSCAN clustered on, returned so silhouette can be scored in
+    that same space; min_cluster_size is the value the final run used.
     """
     # cosine, not UMAP's euclidean default: embeddings encode meaning in direction.
     reduced = UMAP(
@@ -221,9 +246,21 @@ def reduce_and_cluster(
         random_state=random_state,
         metric="cosine",
     ).fit_transform(vectors)
-    clusterer = HDBSCAN(min_cluster_size=min_cluster_size)
-    labels = clusterer.fit_predict(reduced)
-    return labels, clusterer.probabilities_, reduced
+    while True:
+        clusterer = HDBSCAN(
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            cluster_selection_method=cluster_selection_method,
+        )
+        labels = clusterer.fit_predict(reduced)
+        cluster_count = len(np.unique(labels[labels != NOISE_CLUSTER_ID]))
+        if (
+            max_clusters is None
+            or cluster_count <= max_clusters
+            or min_cluster_size >= len(reduced)
+        ):
+            return labels, clusterer.probabilities_, reduced, min_cluster_size
+        min_cluster_size = max(min_cluster_size + 1, round(min_cluster_size * 1.25))
 
 
 def _stratified_sample_indices(
@@ -318,6 +355,9 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     cluster_run_id: str | None = None,
     *,
     is_promoted: bool = DEFAULT_IS_PROMOTED,
+    min_samples: int | None = HDBSCAN_MIN_SAMPLES,
+    cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    max_clusters: int | None = MAX_CLUSTERS,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
     """Cluster every row's embedding_vector; produce this run's candidates + summary.
 
@@ -357,12 +397,15 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     # memory at the ~198K-conversation, 1024-dim scale this is meant to run at.
     vectors = embeddings_df["embedding_vector"].list.to_array(embedding_dim).to_numpy()
 
-    labels, probabilities, reduced = reduce_and_cluster(
+    labels, probabilities, reduced, min_cluster_size = reduce_and_cluster(
         vectors,
         umap_n_components=umap_n_components,
         umap_n_neighbors=umap_n_neighbors,
         min_cluster_size=min_cluster_size,
         random_state=random_state,
+        min_samples=min_samples,
+        cluster_selection_method=cluster_selection_method,
+        max_clusters=max_clusters,
     )
     # `reduced`, not `vectors`: score in the same space HDBSCAN clustered on.
     silhouette = compute_silhouette(reduced, labels, random_state=random_state)
@@ -391,5 +434,8 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         "silhouette_score": silhouette,
         "run_status": "completed",
         "is_promoted": is_promoted,
+        "hdbscan_min_samples": min_samples,
+        "hdbscan_cluster_selection_method": cluster_selection_method,
+        "max_clusters": max_clusters,
     }
     return candidates_df, run_metadata

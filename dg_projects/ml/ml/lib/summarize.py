@@ -95,10 +95,29 @@ BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
 # thinking plus the actual summary across whichever model is configured.
 SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 
+# Fallback only: production renders the Opik Prompt Library entry, so editing this
+# doesn't change production output or need a code_version bump.
 SUMMARY_PROMPT = (
-    "Summarize the following support conversation from the requester's point of "
-    "view. Focus on the problem reported and its resolution if one is present. "
-    "Do not include names or contact details.\n\n{{conversation_text}}"
+    "You are analyzing feedback about MIT Learn, MIT Open Learning's platform for "
+    "courses and AI learning assistants. The text below is feedback from a "
+    "learner. It may be a support ticket, messages to an AI assistant (a tutor, "
+    "syllabus, or course recommendation bot), a forum post, or a comment on a "
+    "piece of course content. Only the learner's own words are included, but they "
+    "may quote a reply.\n\n"
+    "In 1-3 sentences, describe from the learner's point of view:\n"
+    "- what they were trying to do,\n"
+    "- any problem, confusion, or blocker they had with the platform, a course or "
+    "its materials, or the assistant,\n"
+    "- any feature or content they asked for or said was missing.\n\n"
+    "Describe the need in general terms. Refer to courses by subject (for "
+    'example, "a finance course"), not by title. Do not describe how support '
+    "resolved it.\n\n"
+    "The text may be very short. Never ask for more text and never say there is "
+    "nothing to summarize. If the text is too short to tell what the learner "
+    "wanted, restate what it says in a few words.\n\n"
+    "Write plain text only, with no headings, lists, or Markdown. Do not include "
+    "names, email addresses, or other personal details.\n\n"
+    "<learner_text>\n{{conversation_text}}\n</learner_text>"
 )
 
 logger = logging.getLogger(__name__)

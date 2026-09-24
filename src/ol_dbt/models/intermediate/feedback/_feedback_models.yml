@@ -398,3 +398,6 @@ models:
     description: timestamp, when this proposal was generated.
     tests:
     - not_null
+  - name: cluster_status
+    description: str, 'active' or 'retired', from feedback_cluster. Null if feedback_cluster
+      has not materialized in this schema.
