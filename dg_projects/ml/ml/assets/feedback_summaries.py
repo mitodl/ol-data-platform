@@ -13,7 +13,6 @@ from dagster import (
 from ml.lib.cluster import DEFAULT_FEEDBACK_SINCE, DEFAULT_PLATFORMS
 from ml.lib.summarize import (
     JOIN_COLS,
-    SUMMARIZE_ALL_CONVERSATIONS,
     SUMMARIZE_CHECKPOINT_BATCH_SIZE,
     SUMMARIZE_MAX_CONCURRENCY,
     SUMMARY_PROMPT,
@@ -84,15 +83,6 @@ class FeedbackSummariesConfig(Config):
             "minimum. Null skips none."
         ),
     )
-    summarize_all_conversations: bool = Field(
-        default=SUMMARIZE_ALL_CONVERSATIONS,
-        description=(
-            "When true, every conversation that has text is summarized. When false, "
-            "conversations with only one turn or fewer than 500 characters are "
-            "skipped. The default comes from the SUMMARIZE_ALL_CONVERSATIONS env var, "
-            "which is true if not set."
-        ),
-    )
     model_version: str | None = Field(
         default=None,
         description=(
@@ -154,10 +144,10 @@ def feedback_summaries(
     llm: LLMClientFactory,
 ) -> pl.DataFrame:
     """
-    Summarize multi-turn conversations via LLM; skip single-turn/short ones (§A.1).
+    Summarize every in-scope conversation that has text via LLM.
 
-    The one per-record LLM call in the design - see feedback_ml_approach.md §A.1 for
-    the skip threshold and measured cost.
+    The one per-record LLM call in the design. Scope comes from the config filters,
+    including min_conversation_chars_by_source for sources with low-signal rows.
     """
     source_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
@@ -223,7 +213,6 @@ def feedback_summaries(
         already_summarized_df,
         current_model_version=client.model_version,
         current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT),
-        summarize_all=config.summarize_all_conversations,
     )
 
     errors: list[str] = []
@@ -237,14 +226,13 @@ def feedback_summaries(
         errors=errors,
         max_concurrency=config.max_concurrency,
         context=context,
-        summarize_all=config.summarize_all_conversations,
     )
 
     llm_call_count = summaries_df.filter(
         pl.col("summary_model_version").is_not_null()
     ).height
     # A failed conversation is dropped from summaries_df entirely (unlike a
-    # skipped-by-length-rule row, which is kept with a null summary), so this
+    # row with no text, which is kept with a null summary), so this
     # difference is exactly the failure count -- including rows never attempted
     # because of an early abort.
     failed_count = unsummarized_df.height - summaries_df.height
@@ -253,7 +241,7 @@ def feedback_summaries(
     attempted_count = llm_call_count + len(errors)
 
     context.log.info(
-        "Processed %d conversations (%d LLM calls, %d skipped by the length rule, "
+        "Processed %d conversations (%d LLM calls, %d skipped for no text, "
         "%d failed, %d already summarized, %d total upstream)",
         summaries_df.height,
         llm_call_count,

@@ -46,7 +46,7 @@ insert-only and has no late-arriving update path at all. All ML output lands on
 
 ```
 int__feedback__conversation (redacted turns assembled per conversation) [dbt]
-  → summarize    : turns → conversation_summary               [py; SKIPPED for single-turn/short — §A.1]
+  → summarize    : turns → conversation_summary               [py; SKIPPED below a per-source minimum length — §A.1]
   → embed        : summary or turns → vector                  [py]
   → assign       : new vector → nearest live cluster_key       [py; every embedding refresh, §C.1]
   → recluster    : all vectors → new partition, matched to     [py; scheduled/triggered, + feedback_cluster_run]
@@ -92,12 +92,14 @@ for `embedding_input` — which is the same lever §B.1 already identified as th
 cluster quality on short, noisy ticket text. Rev. 3 promotes it from an eval arm to a first-class artifact,
 so its cost has to be stated rather than assumed away:
 
-- **Skip rule:** conversations with `turn_count = 1` or under **500 characters** of assembled turns are
-  **not** summarized — the raw text already is the summary. `summary_model_version` stays null and
-  `embedding_input` is `concatenated_turns`. ORA and the edX plugin are single-turn by construction and are
-  free. The 500-character cutoff comes from the measured distribution (§B.2): it sits below the 601 p25, so it
-  skips 9,680 of the 52,218 multi-turn Zendesk conversations (18.5%) — the ones that amount to two short
-  replies. A 1,000-character cutoff would sit at the 1,040 median and skip 48.5%.
+- **Skip rule (rev. 5):** every in-scope conversation with text is summarized, except conversations below a
+  per-source minimum length (`min_conversation_chars_by_source`, default `{"learn_ai_tutor": 50}`). Skipped
+  conversations get no `feedback_summaries` row. The tutor minimum drops chats that are only a
+  suggested-question button, such as "What is this course about?" (11,775 chats); Zendesk has no minimum,
+  because a single-turn ticket is a full email.
+  *Superseded:* the original rule skipped `turn_count = 1` or under 500 characters for every source. The 500
+  sat below the 601 p25 of multi-turn Zendesk tickets, but the single-turn clause dropped 77% of MIT Learn
+  Zendesk tickets and 96% of tutor chats.
 - **Cost** (measured 2026-08-14, #2536): 52,218 multi-turn Zendesk conversations at a mean of 1,847
   characters puts the one-time backfill at **~$37 on Haiku 4.5** via the Batch API (50% off, and a backfill is
   exactly its shape), or ~$74 on Sonnet 5. Steady state (~24K conversations/yr, a fraction multi-turn) is
@@ -201,7 +203,7 @@ runtime. `distinct conversation_id` is **190,826**: agent-only tickets carry no 
 the fact, so it runs 4.8% below the ticket count by construction. The summarizer runs on the 52,218 multi-turn
 conversations, which is what puts its cost at ~$37 (§A.1).
 
-The character distribution sets §A.1's 500-character skip threshold. It also argues for capping summarizer
+The character distribution set the original 500-character skip threshold (superseded in §A.1). It also argues for capping summarizer
 input: the p99 is 11,691 characters against a 553,230 maximum (~138K tokens), a tail thin enough that
 truncating the longest conversations costs nothing in coverage while bounding the cost of outliers.
 
@@ -262,7 +264,7 @@ cohesion signal that lets a human say "this is recurring."
   `embedding_input = 'summary'` and `embedding_input = 'concatenated_turns'` on the labeled sample
   (silhouette + tag-agreement + human coherence). Adopt the summary as the embedding input only where the
   measured lift justifies its per-conversation LLM cost — expected to help most on long multi-turn Zendesk
-  tickets and not at all on single-turn sources, which the §A.1 skip rule never summarizes anyway.
+  tickets and least on short single-turn sources.
 - **Re-clustering is cheap, expected, and automatic** (rev. 4, §C.1): each run writes a new `cluster_run_id`
   to `feedback_cluster_run` and its raw assignments to `feedback_cluster_candidate`. An identity-matching step
   then maps the run's clusters onto the existing `cluster_key`s and rewrites `feedback_cluster_membership`.
