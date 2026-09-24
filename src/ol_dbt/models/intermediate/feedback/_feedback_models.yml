@@ -65,9 +65,8 @@ models:
   - name: courserun_readable_id
     description: str, null for Zendesk, which is not course-scoped.
   - name: platform
-    description: str, platform readable id mapped from the ticket's brand subdomain
-      - 'mitlearn', 'mitxonline', 'mitxpro', 'ocw' or 'micromasters'. Null for brands
-      that span several platforms, such as MITx Support.
+    description: str, platform readable id. 'mitlearn' for tickets in the MIT Learn,
+      Universal AI or upGrad UAI group; other platforms come from the brand.
   - name: explicit_rating
     description: str, the ticket satisfaction rating score - 'good', 'bad' or 'offered'.
       A ticket-level signal, so it repeats across a ticket's turns.
