@@ -93,11 +93,19 @@ with ticket as (
         and category_slug != ''
 )
 
-, slug_dates as (
+, slug_rollup as (
     select
         category_slug
         , min(first_seen_at) as first_seen_at
         , max(updated_at) as updated_at
+        -- Per slug, not from the ranked row: several clusters can share a slug, and
+        -- the category stays active while any one of them is.
+        , case
+            when bool_or(category_source = 'llm_discovered' and cluster_status = 'active')
+                then 'active'
+            when bool_or(category_source = 'llm_discovered' and cluster_status = 'retired')
+                then 'retired'
+        end as cluster_status
     from combined
     where category_slug is not null
         and category_slug != ''
@@ -113,11 +121,11 @@ select
     , 'proposed' as category_status
     , ranked_combined.category_source
     , ranked_combined.cluster_key
-    , ranked_combined.cluster_status
+    , slug_rollup.cluster_status
     , ranked_combined.category_description
-    , slug_dates.first_seen_at
-    , slug_dates.updated_at
+    , slug_rollup.first_seen_at
+    , slug_rollup.updated_at
 from ranked_combined
-inner join slug_dates
-    on ranked_combined.category_slug = slug_dates.category_slug
+inner join slug_rollup
+    on ranked_combined.category_slug = slug_rollup.category_slug
 where ranked_combined.category_rank = 1

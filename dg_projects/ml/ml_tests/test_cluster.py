@@ -131,6 +131,36 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["cluster_count"] >= 2
 
 
+def test_reduce_and_cluster_raises_min_cluster_size_to_fit_max_clusters() -> None:
+    rng = np.random.default_rng(0)
+    vectors = np.vstack(
+        [rng.normal(loc=offset, scale=0.1, size=(20, 5)) for offset in (0, 20, 40, 60)]
+    )
+
+    def count(labels: np.ndarray) -> int:
+        return len(set(labels.tolist()) - {cluster.NOISE_CLUSTER_ID})
+
+    uncapped_labels, _, _, uncapped_size = cluster.reduce_and_cluster(
+        vectors,
+        umap_n_components=2,
+        umap_n_neighbors=5,
+        min_cluster_size=5,
+        max_clusters=None,
+    )
+    capped_labels, _, _, capped_size = cluster.reduce_and_cluster(
+        vectors,
+        umap_n_components=2,
+        umap_n_neighbors=5,
+        min_cluster_size=5,
+        max_clusters=2,
+    )
+
+    assert uncapped_size == 5
+    assert count(uncapped_labels) > 2
+    assert capped_size > 5
+    assert count(capped_labels) <= 2
+
+
 def test_should_trigger_early_recluster_with_no_prior_completed_run() -> None:
     assert cluster.should_trigger_early_recluster(1, None) is True
     assert cluster.should_trigger_early_recluster(0, None) is False
