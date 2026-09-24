@@ -9,13 +9,16 @@ columns every row carries -- which is where the subtle correctness bugs lived.
 import contextlib
 import io
 import json
+import os
 import tempfile
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import dlt
 import duckdb
+import fsspec
 import pyarrow as pa
 import pytest
 
@@ -454,6 +457,52 @@ def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
 
     assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
     assert rows[39]["bio"] == '"I love MIT'
+
+
+def test_pipeline_loads_every_row_of_interleaved_multi_batch_files(
+    tmp_path: Path,
+) -> None:
+    """dlt interleaves the per-file reader generators; none may cut another short.
+
+    Between #2695 and #2725 every read shared DuckDB's default connection, so
+    starting the next file's read ended the suspended one after its first batch
+    without an error. Every multi-batch file but the last loaded exactly
+    ``chunk_size`` rows: 3,507 of courseware_studentmodule's 4,503 files landed
+    in production with 5,000.
+    """
+    row_counts = [12000, 7000, 3000, 16000]
+    prefix = tmp_path / "land" / "db_table" / "t" / "prod"
+    for i, rows in enumerate(row_counts):
+        path = prefix / f"course{i}" / f"export{i}.tsv"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "id\tmodule_type\n" + "".join(f"{i}-{j}\tproblem\n" for j in range(rows))
+        )
+        modified = _MODIFIED_AT.timestamp() + i
+        os.utime(path, (modified, modified))
+
+    files = edxorg_s3.edxorg_files(
+        bucket_url=(tmp_path / "land").as_uri(),
+        file_glob="db_table/t/prod/**/*.tsv",
+        credentials=fsspec.filesystem("file"),
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="edxorg_interleave",
+        destination=dlt.destinations.duckdb(str(tmp_path / "out.duckdb")),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    pipeline.run(
+        (files | edxorg_s3.read_edxorg_tsv(**edxorg_s3._CSV_READER_OPTIONS)).with_name(  # noqa: SLF001
+            "t"
+        )
+    )
+
+    with pipeline.sql_client() as client:
+        loaded = dict(
+            client.execute_sql("select _source_file, count(*) from t group by 1")
+        )
+    assert sorted(loaded.values()) == sorted(row_counts)
 
 
 def test_reader_recovers_a_legacy_file_while_another_read_is_in_flight(

@@ -26,13 +26,6 @@ from typing import Any, Literal
 import dlt
 from dlt.destinations import filesystem
 
-# Point dlt at this project's .dlt/ (config.toml, .pyiceberg.yaml) and pyiceberg
-# at the Glue catalog config, unless the runtime (e.g. Docker) already set them.
-_PROJECT_DIR = Path(__file__).resolve().parent.parent
-_DLT_DIR = _PROJECT_DIR / ".dlt"
-os.environ.setdefault("DLT_PROJECT_DIR", str(_PROJECT_DIR))
-os.environ.setdefault("PYICEBERG_HOME", str(_DLT_DIR))
-
 DEFAULT_PROFILE = "dev"
 
 # Profiles that write Iceberg tables to S3 and register them in the Glue catalog.
