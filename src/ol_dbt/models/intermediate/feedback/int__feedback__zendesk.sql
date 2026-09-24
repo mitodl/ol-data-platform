@@ -53,14 +53,18 @@ select
         when 'mobile' then 'mobile'
     end as channel_slug
     , cast(null as varchar) as courserun_readable_id
-    -- Only brands that map to exactly one platform; MITx Support and the pilot brands
-    -- span several, so they stay null rather than guess.
-    , case ticket.brand_subdomain
-        when 'mitlearn' then 'mitlearn'
-        when 'mitxonline' then 'mitxonline'
-        when 'xpro' then 'mitxpro'
-        when 'mitocw' then 'ocw'
-        when 'mitx-micromasters' then 'micromasters'
+    -- MIT Learn first, by brand or group: Universal AI and upGrad UAI have their own
+    -- brands, and the MIT Learn team also works tickets from other help centers.
+    -- Other brands only where they map to one platform; MITx Support and the pilot
+    -- brands span several, so they stay null rather than guess.
+    , case
+        when ticket.brand_subdomain in ('mitlearn', 'mituai', 'upgraduai')
+            or ticket.group_name in ('MIT Learn', 'Universal AI', 'upGrad UAI')
+            then 'mitlearn'
+        when ticket.brand_subdomain = 'mitxonline' then 'mitxonline'
+        when ticket.brand_subdomain = 'xpro' then 'mitxpro'
+        when ticket.brand_subdomain = 'mitocw' then 'ocw'
+        when ticket.brand_subdomain = 'mitx-micromasters' then 'micromasters'
     end as platform
     -- The Appzi URL decode is not implemented: where Appzi stores the viewed URL is
     -- unconfirmed, and guessing would populate subject_url with an untrustworthy value
