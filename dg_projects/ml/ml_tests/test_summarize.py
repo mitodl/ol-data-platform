@@ -58,6 +58,12 @@ def test_needs_summary_summarizes_long_multi_turn_conversations() -> None:
     assert summarize.needs_summary(row) is True
 
 
+def test_needs_summary_summarizes_everything_with_text_when_summarize_all() -> None:
+    row = _conversation_row(turn_count=1, conversation_text_chars=10)
+
+    assert summarize.needs_summary(row, summarize_all=True) is True
+
+
 def test_needs_summary_rejects_null_conversation_text() -> None:
     """conversation_text_chars is pre-redaction length; conversation_text can be
     null (the redaction join isn't wired in upstream yet) even when chars clears
@@ -812,3 +818,26 @@ def test_summarize_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
     # Aborted after the first fully-failed chunk, not all 10 rows.
     assert len(errors) == batch_size
     assert len(errors) < df.height
+
+
+def test_filter_unsummarized_resubmits_skipped_rows_when_summarize_all() -> None:
+    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
+    # Stored as skipped last run: summary_model_version is null.
+    already_summarized_df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1"],
+            "source_slug": ["zendesk"],
+            "conversation_ref": ["1"],
+            "turn_count": [1],
+            "summary_model_version": [None],
+        },
+        schema_overrides={"summary_model_version": pl.String},
+    )
+
+    default_run = summarize.filter_unsummarized(source_df, already_summarized_df)
+    summarize_all_run = summarize.filter_unsummarized(
+        source_df, already_summarized_df, summarize_all=True
+    )
+
+    assert default_run.height == 0
+    assert summarize_all_run["conversation_ref"].to_list() == ["1"]

@@ -65,8 +65,9 @@ models:
   - name: courserun_readable_id
     description: str, null for Zendesk, which is not course-scoped.
   - name: platform
-    description: str, null for Zendesk. Re-evaluate once brand_name is assessed against
-      dim_platform.
+    description: str, platform readable id mapped from the ticket's brand subdomain
+      - 'mitlearn', 'mitxonline', 'mitxpro', 'ocw' or 'micromasters'. Null for brands
+      that span several platforms, such as MITx Support.
   - name: explicit_rating
     description: str, the ticket satisfaction rating score - 'good', 'bad' or 'offered'.
       A ticket-level signal, so it repeats across a ticket's turns.
@@ -151,7 +152,9 @@ models:
   - name: courserun_readable_id
     description: str, the course run the chat concerns.
   - name: platform
-    description: str, the platform readable id the course run belongs to, e.g. 'mitxonline'.
+    description: str, the platform the learner chatted on - 'mitlearn' for every agent
+      except CanvasSyllabusBot, which is null. The course run's own platform is in
+      source_metadata as courserun_platform.
   - name: explicit_rating
     description: str, the chat response's rating, where given.
   - name: created_at
@@ -234,7 +237,8 @@ models:
   - name: courserun_readable_id
     description: str, course run the feedback concerns, for course-scoped sources.
   - name: platform
-    description: str, platform the feedback concerns, for course-scoped sources.
+    description: str, platform readable id where the learner gave the feedback. Null
+      where the source does not map to one platform.
   - name: explicit_rating
     description: str, the source's own explicit rating signal, where it has one.
   - name: source_tags
@@ -278,6 +282,13 @@ models:
     description: str, the source-native thread id.
     tests:
     - not_null
+  - name: platform
+    description: str, platform readable id where the learner gave the feedback, from
+      the fact's platform_fk. The summary and clustering assets filter on it.
+  - name: conversation_opened_at
+    description: str, ISO8601 time of the conversation's first turn. The summary and
+      clustering assets use it to process only conversations opened on or after their
+      feedback_since date.
   - name: turn_count
     description: int, number of kept turns. At least 1 - a conversation with no kept
       turns does not appear here.

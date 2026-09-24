@@ -15,7 +15,11 @@ from dagster import (
     Output,
     multi_asset,
 )
-from ml.lib.cluster import NOISE_CLUSTER_ID
+from ml.lib.cluster import (
+    NOISE_CLUSTER_ID,
+    filter_conversation_scope,
+    platforms_from_run_value,
+)
 from ml.lib.cluster_identity import (
     CLUSTER_LINEAGE_SCHEMA,
     CLUSTER_SCHEMA,
@@ -26,6 +30,7 @@ from ml.lib.cluster_identity import (
     compute_continuity,
     match_clusters,
 )
+from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -71,9 +76,9 @@ def _select_run_to_process(
 
     "Already processed" is tracked in feedback_cluster_identity_run rather than by
     the presence of feedback_cluster_lineage rows for the run -- a completed run
-    whose clusters are all noise (or whose only clusters are 'new', with none
-    retired) produces zero lineage rows, so lineage-row existence alone can never
-    mark it processed and it would be reselected on every tick.
+    that is all noise while no cluster is active (so nothing is 'new' or 'retired')
+    produces zero lineage rows, so lineage-row existence alone can never mark it
+    processed and it would be reselected on every tick.
     """
     if config.cluster_run_id is not None:
         return config.cluster_run_id
@@ -121,11 +126,13 @@ def _select_run_to_process(
     return unprocessed["cluster_run_id"][0]
 
 
-def _active_cluster_members(
+def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
     catalog,
     embedding_model_version: str,
     embedding_dim: int,
     embedding_input_filter: str | None,
+    feedback_since: str | None = None,
+    platforms: list[str] | None = None,
 ) -> dict[str, frozenset[str]]:
     """cluster_key -> its live member pks, for every currently-active key built
     from the same embedding_model_version/embedding_dim/embedding_input_filter
@@ -136,6 +143,10 @@ def _active_cluster_members(
     arm (summary vs concatenated_turns) was clustered -- keeps a cluster from a
     different config, or conversations incrementally placed from a different
     arm, out of this run's Jaccard comparison.
+
+    feedback_since and platforms, the run's own scope, drop members outside it, so
+    a date- or platform-limited run is compared only with the part of each
+    cluster it could have reproduced.
     """
     if not table_exists(
         catalog, f"{database_name}.feedback_cluster_membership"
@@ -157,7 +168,7 @@ def _active_cluster_members(
         )
         .collect()["cluster_key"]
     )
-    membership_df = (
+    membership_lf = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_membership"
         )
@@ -166,12 +177,24 @@ def _active_cluster_members(
             & pl.col("cluster_key").is_in(active_keys)
         )
         .select(["feedback_conversation_pk", "cluster_key"])
-        .collect()
     )
-    return {
+    membership_df = filter_conversation_scope(
+        membership_lf,
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="int__feedback__conversation"
+        ),
+        feedback_since,
+        platforms,
+    ).collect()
+    members_by_key = {
         cluster_key: frozenset(group["feedback_conversation_pk"])
         for (cluster_key,), group in membership_df.group_by("cluster_key")
     }
+    if feedback_since is None and platforms is None:
+        return members_by_key
+    # Keep a key whose members are all out of scope: an empty set matches nothing,
+    # so match_clusters retires it instead of leaving it active forever.
+    return {key: members_by_key.get(key, frozenset()) for key in active_keys}
 
 
 def _other_config_active_keys(
@@ -201,6 +224,25 @@ def _other_config_active_keys(
             )
         )
         .collect()["cluster_key"]
+    )
+
+
+def _scope_changed(catalog, run_row: dict[str, Any]) -> bool:
+    prior_run_id = latest_identity_processed_run(catalog, database_name)
+    if prior_run_id is None:
+        return False
+    prior_run_row = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster_run"
+        )
+        .filter(pl.col("cluster_run_id") == prior_run_id)
+        .collect()
+        .to_dicts()[0]
+    )
+    # A run table written before a scope column existed has no such key
+    return any(
+        prior_run_row.get(column) != run_row.get(column)
+        for column in ("feedback_since", "platforms")
     )
 
 
@@ -236,7 +278,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_key"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v2",
+            code_version="feedback_cluster_identity_v3",
             automation_condition=upstream_or_code_changes(),
         ),
         "feedback_cluster_lineage": AssetOut(
@@ -247,7 +289,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v2",
+            code_version="feedback_cluster_identity_v3",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -260,7 +302,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_run_id"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v2",
+            code_version="feedback_cluster_identity_v3",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -334,8 +376,17 @@ def feedback_cluster_identity(
     }
 
     active_cluster_members = _active_cluster_members(
-        catalog, embedding_model_version, embedding_dim, embedding_input_filter
+        catalog,
+        embedding_model_version,
+        embedding_dim,
+        embedding_input_filter,
+        # A run table written before a scope column existed has no such key
+        run_row.get("feedback_since"),
+        platforms_from_run_value(run_row.get("platforms")),
     )
+    if _scope_changed(catalog, run_row):
+        # Empty sets match nothing: every old key retires and the floor is skipped
+        active_cluster_members = dict.fromkeys(active_cluster_members, frozenset())
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
     matches, lineage_rows = match_clusters(
@@ -357,9 +408,10 @@ def feedback_cluster_identity(
     # A bootstrap run (no active clusters yet) has every match resolve to 'new' by
     # construction -- that's the expected first run, not a bad configuration, so
     # the floor only applies once there's a prior cluster set to compare against.
+    # A key emptied by the run's date range counts as nothing to compare against.
     continuity = (
         1.0
-        if not active_cluster_members
+        if not any(active_cluster_members.values())
         else compute_continuity(matches, new_cluster_members)
     )
     yield AssetCheckResult(

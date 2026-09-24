@@ -43,7 +43,11 @@ select
     -- Zendesk resolves none of these; the course-scoped sources populate them
     , cast(null as varchar) as courserun_fk
     , cast(null as varchar) as content_block_fk
-    , cast(null as varchar) as platform_fk
+    -- the case keeps a null platform null; generate_surrogate_key would hash it
+    , case
+        when unioned.platform is not null
+            then {{ dbt_utils.generate_surrogate_key(['unioned.platform']) }}
+    end as platform_fk
     , cast(null as varchar) as organization_fk
     , {{ iso8601_to_date_key('unioned.occurred_at') }} as occurred_date_fk
     , {{ iso8601_to_time_key('unioned.occurred_at') }} as occurred_time_fk

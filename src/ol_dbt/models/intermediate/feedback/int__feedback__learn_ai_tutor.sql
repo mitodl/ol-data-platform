@@ -141,7 +141,11 @@ select
     , cast(null as varchar) as source_url
     , 'chat' as channel_slug
     , human_turns.courserun_readable_id
-    , course_run.platform
+    -- Where the learner chatted, not the course's platform: every agent but
+    -- CanvasSyllabusBot is served through MIT Learn.
+    , case
+        when human_turns.chatsession_agent != 'CanvasSyllabusBot' then 'mitlearn'
+    end as platform
     , case human_turns.chatsession_agent
         when 'TutorBot' then 'courseware_block'
         when 'VideoGPTBot' then 'courseware_block'
@@ -158,6 +162,7 @@ select
         'chatsession_agent': human_turns.chatsession_agent
         , 'checkpoint_source': human_turns.checkpoint_source
         , 'checkpoint_type': human_turns.checkpoint_type
+        , 'courserun_platform': course_run.platform
     ) as source_metadata
 from human_turns
 left join course_run

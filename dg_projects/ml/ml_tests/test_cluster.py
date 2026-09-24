@@ -147,3 +147,27 @@ def test_should_trigger_early_recluster_at_or_above_growth_threshold() -> None:
     assert (
         cluster.should_trigger_early_recluster(1_200, 900, growth_trigger=200) is True
     )
+
+
+def test_filter_conversation_scope_keeps_feedback_since_date() -> None:
+    embeddings_lf = pl.LazyFrame({"feedback_conversation_pk": ["old", "same", "new"]})
+    conversations_lf = pl.LazyFrame(
+        {
+            "feedback_conversation_pk": ["old", "same", "new"],
+            "conversation_opened_at": [
+                "2023-12-31T23:59:59.000",
+                "2024-01-01T00:00:00.000",
+                "2025-06-01T12:00:00.000",
+            ],
+        }
+    )
+
+    result = cluster.filter_conversation_scope(
+        embeddings_lf, conversations_lf, "2024-01-01"
+    )
+
+    assert result.collect()["feedback_conversation_pk"].to_list() == ["same", "new"]
+    unfiltered = cluster.filter_conversation_scope(
+        embeddings_lf, conversations_lf, None
+    )
+    assert unfiltered.collect().height == 3

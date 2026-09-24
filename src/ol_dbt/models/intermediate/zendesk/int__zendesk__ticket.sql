@@ -96,6 +96,7 @@ select
     , followers.followers as ticket_followers
     , collaborators.collaborators as ticket_collaborators
     , brand.brand_name
+    , brand.brand_subdomain
     , groups.group_name
     , organization.organization_name
     , named_custom_fields.custom_fields

@@ -14,13 +14,17 @@ from dagster import (
 from ml.lib.cluster import (
     CLUSTER_CANDIDATE_SCHEMA,
     CLUSTER_RUN_SCHEMA,
+    DEFAULT_FEEDBACK_SINCE,
     DEFAULT_IS_PROMOTED,
+    DEFAULT_PLATFORMS,
     HDBSCAN_MIN_CLUSTER_SIZE,
     RANDOM_STATE,
     UMAP_N_COMPONENTS,
     UMAP_N_NEIGHBORS,
     cluster_embeddings,
     failed_run_metadata,
+    filter_conversation_scope,
+    platforms_to_run_value,
 )
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -89,6 +93,25 @@ class FeedbackClustersConfig(Config):
             "EMBEDDING_DIM (ml.lib.embed)."
         ),
     )
+    feedback_since: str | None = Field(
+        default=DEFAULT_FEEDBACK_SINCE,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description=(
+            "Only cluster conversations opened on or after this date (YYYY-MM-DD). "
+            "Recorded on feedback_cluster_run so feedback_cluster_assignment places "
+            "the same range. Defaults to the FEEDBACK_SINCE env var; unset or null "
+            "clusters the full history."
+        ),
+    )
+    platforms: list[str] | None = Field(
+        default=DEFAULT_PLATFORMS,
+        description=(
+            "Only cluster conversations whose platform is in this list, e.g. "
+            "['mitlearn']. Recorded on feedback_cluster_run so "
+            "feedback_cluster_assignment places the same platforms. Set to null to "
+            "cluster every platform, and conversations with no platform."
+        ),
+    )
     is_promoted: bool = Field(
         default=DEFAULT_IS_PROMOTED,
         description=(
@@ -113,7 +136,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v2",
+            code_version="feedback_clusters_v3",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -123,7 +146,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v2",
+            code_version="feedback_clusters_v3",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -171,6 +194,14 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         embeddings_lazy = embeddings_lazy.filter(
             pl.col("embedding_input") == config.embedding_input_filter
         )
+    embeddings_lazy = filter_conversation_scope(
+        embeddings_lazy,
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="int__feedback__conversation"
+        ),
+        config.feedback_since,
+        config.platforms,
+    )
     embeddings_df = embeddings_lazy.select(
         [
             "feedback_conversation_pk",
@@ -217,6 +248,8 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             is_promoted=config.is_promoted,
         )
         failed_metadata["run_at"] = datetime.now(tz=UTC)
+        failed_metadata["feedback_since"] = config.feedback_since
+        failed_metadata["platforms"] = platforms_to_run_value(config.platforms)
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
             output_name="feedback_cluster_run",
@@ -240,6 +273,8 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         is_promoted=config.is_promoted,
     )
     run_metadata["run_at"] = datetime.now(tz=UTC)
+    run_metadata["feedback_since"] = config.feedback_since
+    run_metadata["platforms"] = platforms_to_run_value(config.platforms)
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
 
     context.log.info(
@@ -269,5 +304,9 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             "embedding_model_version": MetadataValue.text(embedding_model_version),
             "embedding_dim": MetadataValue.int(embedding_dim),
             "is_promoted": MetadataValue.bool(config.is_promoted),
+            "feedback_since": MetadataValue.text(config.feedback_since or ""),
+            "platforms": MetadataValue.text(
+                platforms_to_run_value(config.platforms) or ""
+            ),
         },
     )

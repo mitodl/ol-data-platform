@@ -64,6 +64,13 @@ MAX_CONSECUTIVE_FAILED_CHUNKS = int(
 # for a bigger cost cut.
 SKIP_CHAR_THRESHOLD = 500
 
+# The default for FeedbackSummariesConfig.summarize_all_conversations, and what
+# automated runs use, since they don't pass run config.
+SUMMARIZE_ALL_CONVERSATIONS = (
+    os.environ.get("SUMMARIZE_ALL_CONVERSATIONS", "true").lower() == "true"
+)
+
+
 # Defaults to an Anthropic model id, matching LLMClientFactory's own
 # client_class="anthropic" default. A model id is only valid for one vendor's API,
 # so switching client_class to "openai"/"openai_compatible" requires overriding
@@ -212,6 +219,8 @@ def filter_unsummarized(
     already_summarized_df: pl.DataFrame,
     current_model_version: str | None = None,
     current_prompt_version: str | None = None,
+    *,
+    summarize_all: bool = False,
 ) -> pl.DataFrame:
     """Drop conversations already summarized with their current turn_count/model/prompt.
 
@@ -221,6 +230,9 @@ def filter_unsummarized(
     null there) isn't touched by either change, since the skip decision was never
     model/prompt-dependent. current_model_version/current_prompt_version=None
     disables the respective check.
+
+    summarize_all=True also re-submits every row skipped last time that has text,
+    so switching it on reaches conversations the skip rule already passed over.
     """
     already_summarized_cols = [*JOIN_COLS, "turn_count"]
     checks = [
@@ -256,20 +268,35 @@ def filter_unsummarized(
             pl.col(f"{col}_summarized").is_not_null()
             & (pl.col(f"{col}_summarized") != current)
         )
+    if summarize_all and "summary_model_version" in already_summarized_df.columns:
+        # A skipped row is stored with a null summary_model_version; a failed one
+        # is not stored at all, so it is already new above.
+        skipped_df = (
+            already_summarized_df.filter(pl.col("summary_model_version").is_null())
+            .select(JOIN_COLS)
+            .with_columns(pl.lit(True).alias("was_skipped"))  # noqa: FBT003
+        )
+        joined = joined.join(skipped_df, on=JOIN_COLS, how="left")
+        is_new_or_changed = is_new_or_changed | (
+            pl.col("was_skipped").fill_null(False)  # noqa: FBT003
+            & pl.col("conversation_text").is_not_null()
+        )
     return joined.filter(is_new_or_changed).select(source_df.columns)
 
 
-def needs_summary(row: dict[str, Any]) -> bool:
+def needs_summary(row: dict[str, Any], *, summarize_all: bool = False) -> bool:
     """Apply the skip rule: single-turn or short conversations are not summarized.
 
     The raw text already is the summary in those cases, so embedding_input falls back
-    to concatenated_turns rather than an LLM call. A null conversation_text (the
-    redaction join upstream isn't wired in yet) is also rejected here, rather than
-    sending the literal string "None" to the LLM.
+    to concatenated_turns rather than an LLM call. summarize_all=True turns the rule
+    off. A null conversation_text (the redaction join upstream isn't wired in yet) is
+    always rejected, rather than sending the literal string "None" to the LLM.
     """
-    if row["turn_count"] == 1:
-        return False
     if row["conversation_text"] is None:
+        return False
+    if summarize_all:
+        return True
+    if row["turn_count"] == 1:
         return False
     text_chars = row["conversation_text_chars"]
     return text_chars is not None and text_chars >= SKIP_CHAR_THRESHOLD
@@ -318,6 +345,8 @@ def summarize_conversations(
     client: SummaryClient,
     errors: list[str] | None = None,
     max_concurrency: int = SUMMARIZE_MAX_CONCURRENCY,
+    *,
+    summarize_all: bool = False,
 ) -> pl.DataFrame:
     """Summarize each conversation that clears the skip rule.
 
@@ -334,6 +363,8 @@ def summarize_conversations(
             independent, blocking network request, so this is the lever for
             wall-clock time at scale -- unlike embed_batch, there's no way to
             cover several conversations in one request here.
+        summarize_all: summarize every conversation with text, ignoring the
+            skip rule.
 
     Returns:
         pl.DataFrame: feedback_conversation_pk, source_slug, conversation_ref,
@@ -353,7 +384,11 @@ def summarize_conversations(
     # everything as "prompt changed".
     prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     rows = df.to_dicts()
-    needs_summary_indices = [i for i, row in enumerate(rows) if needs_summary(row)]
+    needs_summary_indices = [
+        i
+        for i, row in enumerate(rows)
+        if needs_summary(row, summarize_all=summarize_all)
+    ]
     results: dict[int, _SummarizeOutcome] = {}
     if needs_summary_indices:
         with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
@@ -476,6 +511,8 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     errors: list[str] | None = None,
     max_concurrency: int = SUMMARIZE_MAX_CONCURRENCY,
     context: AssetExecutionContext | None = None,
+    *,
+    summarize_all: bool = False,
 ) -> pl.DataFrame:
     """Summarize unsummarized_df in chunks, upserting each as it completes.
 
@@ -505,7 +542,11 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
         chunk = unsummarized_df.slice(chunk_start, batch_size)
         chunk_summaries = summarize_conversations(
-            chunk, client, errors=errors, max_concurrency=max_concurrency
+            chunk,
+            client,
+            errors=errors,
+            max_concurrency=max_concurrency,
+            summarize_all=summarize_all,
         )
         summary_chunks.append(chunk_summaries)
         checkpoint_chunk(catalog, table_identifier, chunk_summaries)

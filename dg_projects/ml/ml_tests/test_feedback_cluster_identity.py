@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import polars as pl
 from ml.assets.feedback_cluster_identity import (
     FeedbackClusterIdentityConfig,
+    _active_cluster_members,
     _other_config_active_keys,
     _select_run_to_process,
 )
@@ -170,3 +171,55 @@ def test_select_run_to_process_explicit_override_bypasses_filter() -> None:
         FeedbackClusterIdentityConfig(cluster_run_id="bake-off-run"),
     )
     assert result == "bake-off-run"
+
+
+def _active_members_frames(table_name: str, **_: Any) -> pl.LazyFrame:
+    frames = {
+        "feedback_cluster": _lazyframe(
+            {
+                "cluster_key": ["mixed", "old-only"],
+                "cluster_status": ["active", "active"],
+                "embedding_model_version": ["model", "model"],
+                "embedding_dim": [8, 8],
+                "embedding_input_filter": ["summary", "summary"],
+            }
+        ),
+        "feedback_cluster_membership": _lazyframe(
+            {
+                "feedback_conversation_pk": ["old-1", "new-1", "old-2"],
+                "cluster_key": ["mixed", "mixed", "old-only"],
+            }
+        ),
+        "int__feedback__conversation": _lazyframe(
+            {
+                "feedback_conversation_pk": ["old-1", "new-1", "old-2"],
+                "conversation_opened_at": [
+                    "2025-06-01T00:00:00.000",
+                    "2026-02-01T00:00:00.000",
+                    "2025-07-01T00:00:00.000",
+                ],
+            }
+        ),
+    }
+    return frames[table_name]
+
+
+def test_active_cluster_members_keeps_only_members_in_the_run_date_range() -> None:
+    with (
+        patch("ml.assets.feedback_cluster_identity.table_exists", return_value=True),
+        patch(
+            "ml.assets.feedback_cluster_identity.get_dbt_model_as_dataframe",
+            side_effect=_active_members_frames,
+        ),
+    ):
+        full_history = _active_cluster_members(MagicMock(), "model", 8, "summary")
+        since_2026 = _active_cluster_members(
+            MagicMock(), "model", 8, "summary", "2026-01-01"
+        )
+
+    assert full_history == {
+        "mixed": frozenset({"old-1", "new-1"}),
+        "old-only": frozenset({"old-2"}),
+    }
+    # old-only stays, empty, so match_clusters retires it rather than dropping it
+    assert since_2026 == {"mixed": frozenset({"new-1"}), "old-only": frozenset()}

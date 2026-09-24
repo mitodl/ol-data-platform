@@ -53,7 +53,15 @@ select
         when 'mobile' then 'mobile'
     end as channel_slug
     , cast(null as varchar) as courserun_readable_id
-    , cast(null as varchar) as platform
+    -- Only brands that map to exactly one platform; MITx Support and the pilot brands
+    -- span several, so they stay null rather than guess.
+    , case ticket.brand_subdomain
+        when 'mitlearn' then 'mitlearn'
+        when 'mitxonline' then 'mitxonline'
+        when 'xpro' then 'mitxpro'
+        when 'mitocw' then 'ocw'
+        when 'mitx-micromasters' then 'micromasters'
+    end as platform
     -- The Appzi URL decode is not implemented: where Appzi stores the viewed URL is
     -- unconfirmed, and guessing would populate subject_url with an untrustworthy value
     , 'unspecified' as subject_type
@@ -71,6 +79,7 @@ select
         , 'ticket_priority': ticket.ticket_priority
         , 'ticket_due_at': ticket.ticket_due_at
         , 'brand_name': ticket.brand_name
+        , 'brand_subdomain': ticket.brand_subdomain
         , 'group_name': ticket.group_name
         , 'organization_name': ticket.organization_name
     ) as source_metadata

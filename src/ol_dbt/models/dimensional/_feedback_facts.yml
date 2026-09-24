@@ -62,8 +62,13 @@ models:
     description: str, foreign key to dim_course_content, resolving subject_ref. Null
       until the edX feedback plugin source arrives.
   - name: platform_fk
-    description: str, foreign key to dim_platform. Null for Zendesk; whether brands
-      map onto dim_platform is unresolved.
+    description: str, foreign key to dim_platform for where the learner gave the feedback.
+      Null where the source does not map to one platform.
+    tests:
+    - relationships:
+        arguments:
+          to: ref('dim_platform')
+          field: platform_pk
   - name: organization_fk
     description: str, foreign key to dim_organization. Null for Zendesk, which supplies
       neither of the platform and source_id that key organization_pk; the Zendesk
@@ -281,6 +286,13 @@ models:
       (placed by nearest active centroid).
   - name: cluster_run_id
     description: str, which clustering run produced this assignment.
+  - name: is_in_cluster_scope
+    description: boolean, true if the conversation's cluster assignment comes from
+      the current clustering run. Filter on it to report only current clusters, because
+      conversations outside the run's date range or platforms keep an old cluster_key.
+      It is false for conversations that have no cluster assignment.
+    tests:
+    - not_null
   - name: conversation_ingested_at
     description: str, ISO8601 timestamp this row was materialized.
 
