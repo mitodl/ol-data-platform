@@ -126,27 +126,6 @@ services:
     - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
     - ./dg_projects/canvas/canvas:/app/canvas
 
-  # Code location: data_platform
-  dagster_data_platform:
-    container_name: dagster_data_platform
-    image: mitodl/dagster-data_platform:dev
-    build:
-      context: .
-      dockerfile: dg_projects/data_platform/Dockerfile
-    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4001",
-      "--module-name", "data_platform.definitions"]
-    ports:
-    - "4001:4001"
-    environment:
-      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-data_platform:dev"
-      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
-      VAULT_OIDC_NONINTERACTIVE: "1"
-      DAGSTER_ENV: dev
-    volumes:
-    - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
-    - ./dg_projects/data_platform/data_platform:/app/data_platform
-
   # Code location: edxorg
   dagster_edxorg:
     container_name: dagster_edxorg
