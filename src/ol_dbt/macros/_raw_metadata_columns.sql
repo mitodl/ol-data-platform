@@ -5,8 +5,9 @@
     this file and ingestion/inventory/ disagree.
 
     Maps each declared raw table to the column a staging model orders by to
-    pick the newest copy of a record key. `none` means the table carries no
-    metadata column, so it must not be deduplicated.
+    pick the newest copy of a record key, or a list of columns in precedence
+    order. `none` means the table carries no metadata column, so it must not
+    be deduplicated.
 -#}
 {% macro raw_metadata_column_map() %}
     {% do return({
@@ -46,12 +47,12 @@
         'raw__bootcamps__hubspot__workflows': '_airbyte_extracted_at',
         'raw__edxorg__discovery__api__programs': '_dlt_load_id',
         'raw__edxorg__program_entitlement': '_airbyte_extracted_at',
-        'raw__edxorg__program_learner_report': '_airbyte_extracted_at',
+        'raw__edxorg__program_learner_report': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__edxorg__s3__course_blocks': '_airbyte_extracted_at',
-        'raw__edxorg__s3__course_structure__course_certificate_signatory': none,
-        'raw__edxorg__s3__course_structure__course_metadata': none,
-        'raw__edxorg__s3__course_structure__course_policy': none,
-        'raw__edxorg__s3__course_structure__course_video': none,
+        'raw__edxorg__s3__course_structure__course_certificate_signatory': '_airbyte_extracted_at',
+        'raw__edxorg__s3__course_structure__course_metadata': '_airbyte_extracted_at',
+        'raw__edxorg__s3__course_structure__course_policy': '_airbyte_extracted_at',
+        'raw__edxorg__s3__course_structure__course_video': '_airbyte_extracted_at',
         'raw__edxorg__s3__course_xml_blocks': none,
         'raw__edxorg__s3__mitx_course': '_airbyte_extracted_at',
         'raw__edxorg__s3__mitx_course_run': '_airbyte_extracted_at',
@@ -64,7 +65,7 @@
         'raw__edxorg__s3__tables__grades_persistentcoursegrade': '_file_modified_at',
         'raw__edxorg__s3__tables__student_courseaccessrole': '_file_modified_at',
         'raw__edxorg__s3__tables__student_courseenrollment': '_file_modified_at',
-        'raw__edxorg__s3__tracking_logs': '_airbyte_extracted_at',
+        'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__emeritus__bigquery__api_enrollments': '_airbyte_extracted_at',
         'raw__global_alumni__bigquery__api_enrollments': '_airbyte_extracted_at',
         'raw__irx__edxorg__bigquery__email_opt_in': '_airbyte_extracted_at',
@@ -335,7 +336,7 @@
         'raw__mitx__openedx__mysql__user_api_userorgtag': '_airbyte_extracted_at',
         'raw__mitx__openedx__mysql__workflow_assessmentworkflow': '_airbyte_extracted_at',
         'raw__mitx__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
-        'raw__mitx__openedx__tracking_logs': '_airbyte_extracted_at',
+        'raw__mitx__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__mitxonline__app__postgres__b2b_contractpage': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__b2b_discountcontractattachmentredemption': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__b2b_organizationindexpage': '_airbyte_extracted_at',
@@ -492,7 +493,7 @@
         'raw__mitxonline__openedx__mysql__workflow_assessmentworkflow': '_airbyte_extracted_at',
         'raw__mitxonline__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
         'raw__mitxonline__openedx__mysql__workflow_teamassessmentworkflow': '_airbyte_extracted_at',
-        'raw__mitxonline__openedx__tracking_logs': '_airbyte_extracted_at',
+        'raw__mitxonline__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__mitxonline__openedx_notes__mysql__auth_group': '_airbyte_extracted_at',
         'raw__mitxonline__openedx_notes__mysql__auth_group_permissions': '_airbyte_extracted_at',
         'raw__mitxonline__openedx_notes__mysql__auth_permission': '_airbyte_extracted_at',
@@ -964,6 +965,6 @@
         'raw__xpro__openedx__mysql__user_api_userorgtag': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflow': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
-        'raw__xpro__openedx__tracking_logs': '_airbyte_extracted_at',
+        'raw__xpro__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
     }) %}
 {% endmacro %}

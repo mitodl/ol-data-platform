@@ -52,8 +52,10 @@
       "description": "Declared, never parsed from table names (§1.1). Conventionally ends in `__` to name a family, but a single-table unit whose one table is not a `__`-terminated family — a deployment's tracking logs, say — declares that table's full name instead. Requiring the trailing `__` made those units unexpressible: their only `__`-terminated prefix is the deployment's whole Open edX namespace, which swallows its mysql, api and mongodb units. Prefixes are documentation, not routing keys: they may nest, and ownership comes from `tables[].raw_table`, which is globally unique across units. Neither this pattern nor any overlap rule establishes it."
     },
     "raw_metadata_column": {
-      "type": ["string", "null"],
-      "description": "Column a staging model orders by to pick the newest copy of a record key. Omit to take the loader default: `airbyte` -> `_airbyte_extracted_at`, `dlt` and `dagster` -> null. Null is a real answer meaning \"no metadata column, so do not deduplicate\" — measured, not assumed: the Iceberg schemas dlt writes here carry no metadata columns at all, neither `_airbyte_*` nor `_dlt_*`. Declare explicitly only where a table departs from its loader's convention, such as the Airbyte-loaded edxorg/mysql tables, which order by `_file_modified_at`. Set here it covers every table in the unit; a table's own value wins."
+      "type": ["string", "array", "null"],
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "Column a staging model orders by to pick the newest copy of a record key. Omit to take the loader default: `airbyte` -> `_airbyte_extracted_at`, `dlt` -> `_dlt_load_id`, `dagster` -> null. Null is a real answer meaning \"no metadata column, so do not deduplicate\": dagster's bespoke asset pipelines stamp nothing, and a dlt unit whose tables predate the `add_dlt_load_id` flag declares null until its first load writes the column. Declare explicitly only where a table departs from its loader's convention, such as the Airbyte-loaded edxorg/mysql tables, which order by `_file_modified_at`. A list orders by each column in turn, for tables whose models break ties on a second loader column, such as `[_airbyte_extracted_at, _ab_source_file_last_modified]` on Airbyte S3-source tables. Set here it covers every table in the unit; a table's own value wins."
     },
     "dagster_visible": {
       "type": "boolean",
@@ -198,8 +200,10 @@
             "description": "True iff this table is declared in the dbt sources YAML (§1.4)."
           },
           "raw_metadata_column": {
-            "type": ["string", "null"],
-            "description": "Overrides the unit's `raw_metadata_column` for this table alone. Same meaning, including explicit null."
+            "type": ["string", "array", "null"],
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": "Overrides the unit's `raw_metadata_column` for this table alone. Same meaning, including explicit null and lists."
           },
           "renamed_from": {
             "type": "string",
