@@ -64,6 +64,9 @@ DBT_TARGET_MAP: Mapping[str, str] = {
 # StarRocks. These name a CLUSTER and its auth, not a data lake: dev and qa
 # share starrocks_qa_vault because a developer port-forwards to the QA cluster.
 # Which catalog each then reads is DATA_LAKE_ENV_MAP's job, not this map's.
+# `dev` is a placeholder for the planned local environment (RFC 12711
+# Local-2/3/4); until that exists it resolves exactly like `qa` here and in
+# DATA_LAKE_ENV_MAP.
 # Matches the dbt_target choices in ol_dbt_cli/commands/starrocks.py's _ENVS.
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "starrocks_qa_vault",
@@ -149,8 +152,11 @@ DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 # Which lake each environment READS. Mirrors trino_catalog_map in
 # definitions.py (which cannot be imported here -- it imports the modules that
 # import this one); keep the two in step when adding an environment.
+#
+# `dev` reads the QA lake, not production: ol-infrastructure#6023 removed the
+# production catalog from the QA cluster that `dev` connects to.
 DATA_LAKE_ENV_MAP: Mapping[str, str] = {
-    "dev": "production",
+    "dev": "qa",
     "ci": "qa",
     "qa": "qa",
     "production": "production",
