@@ -121,17 +121,17 @@ with chatbot as (
     select * from tutorbot_turns
 )
 
--- courserun_readable_id alone isn't a unique key on dim_course_run (its surrogate
--- key is platform + courserun_readable_id), so pick one deterministically rather
--- than fan out a turn across every platform sharing that readable_id.
+-- The chat doesn't say which platform, and edxorg and mitxonline share some readable
+-- ids. Learn AI serves MITx Online courses, so prefer it; any other conflict stays null.
 , course_run as (
     select
         courserun_readable_id
-        , platform
-        , row_number() over (
-            partition by courserun_readable_id order by platform
-        ) as platform_rank
+        , case
+            when count(distinct platform) = 1 then min(platform)
+            when count_if(platform = 'mitxonline') > 0 then 'mitxonline'
+        end as platform
     from {{ ref('dim_course_run') }}
+    group by courserun_readable_id
 )
 
 select
@@ -174,4 +174,3 @@ select
 from human_turns
 left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id
-    and course_run.platform_rank = 1
