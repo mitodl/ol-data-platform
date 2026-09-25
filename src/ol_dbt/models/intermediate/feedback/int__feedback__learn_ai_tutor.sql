@@ -18,7 +18,11 @@ with chatbot as (
             as occurred_at
         , chatbot.chatsession_updated_on
         , chatbot.courserun_readable_id
-        , chatbot.block_id
+        -- VideoGPTBot's object id is a transcript asset, so use the video it belongs to
+        , case chatbot.chatsession_agent
+            when 'TutorBot' then chatbot.chatsession_object_id
+            when 'VideoGPTBot' then chatbot.video_block_id
+        end as block_id
         , row_number() over (
             partition by chatbot.chatsession_thread_id
             order by chatbot.checkpoint_step, chatbot.djangocheckpoint_id
