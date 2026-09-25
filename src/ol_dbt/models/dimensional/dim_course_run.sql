@@ -45,6 +45,32 @@ with micromasters_courseruns as (
     where _row_num = 1
 )
 
+-- Some MITxOnline proctored exams are embedded units inside ordinary course runs
+-- rather than separate MicroMasters exam runs, and cannot be linked to micromasters_examruns.
+-- This CTE reproduces the 'proctored exam' block predicate from
+-- int__mitxonline__proctored_exam_grades to gate the semester fallback.
+--
+-- Dedup to the newest snapshot per block, mirroring int__mitxonline__courserun_subsection_grades.
+-- Do not switch to coursestructure_is_latest: that flag drops runs whose exam block was later
+-- removed from the course structure but whose graded attempts remain, nulling a semester the
+-- mart previously populated.
+, mitxonline_course_structure_current_blocks as (
+    select
+        courserun_readable_id
+        , coursestructure_block_title
+        , row_number() over (
+            partition by courserun_readable_id, coursestructure_block_id
+            order by coursestructure_retrieved_at desc
+        ) as row_num
+    from {{ ref('int__mitxonline__course_structure') }}
+)
+
+, mitxonline_courseruns_with_exam_unit as (
+    select distinct courserun_readable_id
+    from mitxonline_course_structure_current_blocks
+    where lower(coursestructure_block_title) = 'proctored exam' and row_num = 1
+)
+
 , mitxonline_courseruns as (
     select
         cr.courserun_readable_id
@@ -58,13 +84,20 @@ with micromasters_courseruns as (
         , cr.courserun_is_live
         , cr.courserun_created_on
         , cs.course_readable_id
-        , er.examrun_semester as semester
+        -- Gated on xu: ungated, this would label every MITxOnline course run with a term,
+        -- including the thousands that have no proctored exam.
+        , coalesce(
+            er.examrun_semester
+            , case when xu.courserun_readable_id is not null then cr.courserun_tag end
+        ) as semester
         , er.examrun_passing_grade as passing_grade
         , 'mitxonline' as platform
         , cr.courserun_upgrade_deadline
     from {{ ref('int__mitxonline__course_runs') }} as cr
     left join micromasters_examruns as er
         on cr.courserun_readable_id = er.examrun_readable_id
+    left join mitxonline_courseruns_with_exam_unit as xu
+        on cr.courserun_readable_id = xu.courserun_readable_id
     left join {{ ref('stg__mitxonline__app__postgres__courses_course') }} as cs
         on cr.course_id = cs.course_id
 )
