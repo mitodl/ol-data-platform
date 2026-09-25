@@ -198,6 +198,8 @@ def _active_members_frames(table_name: str, **_: Any) -> pl.LazyFrame:
                     "2026-02-01T00:00:00.000",
                     "2025-07-01T00:00:00.000",
                 ],
+                "source_slug": ["zendesk"] * 3,
+                "conversation_text_chars": [600] * 3,
             }
         ),
     }

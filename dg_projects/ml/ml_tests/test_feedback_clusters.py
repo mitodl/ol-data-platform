@@ -30,6 +30,9 @@ def _small_embeddings_lazyframe(n: int) -> pl.LazyFrame:
             "embedding_vector": [[0.1] * 8 for _ in range(n)],
             "embedding_model_version": ["text-embedding-3-small"] * n,
             "embedding_dim": [8] * n,
+            # Doubles as the int__feedback__conversation mock, which the scope
+            # filter reads for each source's minimum length.
+            "conversation_text_chars": [600] * n,
         }
     ).lazy()
 

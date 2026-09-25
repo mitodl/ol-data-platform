@@ -63,6 +63,11 @@ DEFAULT_FEEDBACK_SINCE = os.environ.get("FEEDBACK_SINCE") or None
 DEFAULT_PLATFORMS: list[str] | None = ["mitlearn"]
 
 
+# The default minimum length per source for FeedbackSummariesConfig, and what every
+# cluster step applies, so an older summary can't carry a shorter chat into a cluster.
+DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE: dict[str, int] = {"learn_ai_tutor": 50}
+
+
 def platforms_to_run_value(platforms: list[str] | None) -> str | None:
     """Encode platforms for feedback_cluster_run.platforms."""
     return ",".join(sorted(platforms)) if platforms is not None else None
@@ -73,21 +78,38 @@ def platforms_from_run_value(value: str | None) -> list[str] | None:
     return value.split(",") if value is not None else None
 
 
+def drop_short_conversations(
+    conversations_lf: pl.LazyFrame, min_chars_by_source: dict[str, int] | None
+) -> pl.LazyFrame:
+    """Drop conversations below their source's minimum length; others stay."""
+    for source_slug, min_chars in (min_chars_by_source or {}).items():
+        conversations_lf = conversations_lf.filter(
+            ~(
+                (pl.col("source_slug") == source_slug)
+                & (pl.col("conversation_text_chars").fill_null(0) < min_chars)
+            )
+        )
+    return conversations_lf
+
+
 def filter_conversation_scope(
     rows_lf: pl.LazyFrame,
     conversations_lf: pl.LazyFrame,
     feedback_since: str | None,
     platforms: list[str] | None = None,
+    min_chars_by_source: dict[str, int]
+    | None = DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
 ) -> pl.LazyFrame:
-    """Keep rows whose conversation opened on or after feedback_since and whose
-    platform is in platforms.
+    """Keep rows whose conversation opened on or after feedback_since, whose
+    platform is in platforms, and that meets its source's minimum length.
 
     rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
-    cluster membership. feedback_since is a YYYY-MM-DD date, and platforms a list of
-    platform readable ids; None for either skips that filter. Other rows stay in
-    their tables; this only hides them from the caller.
+    cluster membership. feedback_since is a YYYY-MM-DD date, platforms a list of
+    platform readable ids, and min_chars_by_source a {source_slug: characters} map;
+    None for any skips that filter. Other rows stay in their tables; this only hides
+    them from the caller.
     """
-    if feedback_since is None and platforms is None:
+    if feedback_since is None and platforms is None and not min_chars_by_source:
         return rows_lf
     in_scope_lf = conversations_lf
     if feedback_since is not None:
@@ -98,6 +120,7 @@ def filter_conversation_scope(
         )
     if platforms is not None:
         in_scope_lf = in_scope_lf.filter(pl.col("platform").is_in(platforms))
+    in_scope_lf = drop_short_conversations(in_scope_lf, min_chars_by_source)
     return rows_lf.join(
         in_scope_lf.select("feedback_conversation_pk"),
         on="feedback_conversation_pk",

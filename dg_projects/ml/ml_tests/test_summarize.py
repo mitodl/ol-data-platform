@@ -40,45 +40,28 @@ def _conversation_row(**overrides: object) -> dict[str, object]:
     return row
 
 
-def test_needs_summary_skips_single_turn_conversations() -> None:
-    row = _conversation_row(turn_count=1, conversation_text_chars=10_000)
-
-    assert summarize.needs_summary(row) is False
-
-
-def test_needs_summary_skips_short_multi_turn_conversations() -> None:
-    row = _conversation_row(conversation_text_chars=499)
-
-    assert summarize.needs_summary(row) is False
-
-
-def test_needs_summary_summarizes_long_multi_turn_conversations() -> None:
-    row = _conversation_row(conversation_text_chars=500)
+def test_needs_summary_summarizes_any_conversation_with_text() -> None:
+    row = _conversation_row(turn_count=1, conversation_text_chars=10)
 
     assert summarize.needs_summary(row) is True
 
 
-def test_needs_summary_summarizes_everything_with_text_when_summarize_all() -> None:
-    row = _conversation_row(turn_count=1, conversation_text_chars=10)
-
-    assert summarize.needs_summary(row, summarize_all=True) is True
-
-
 def test_needs_summary_rejects_null_conversation_text() -> None:
-    """conversation_text_chars is pre-redaction length; conversation_text can be
-    null (the redaction join isn't wired in upstream yet) even when chars clears
-    the threshold. Sending None to the LLM must never happen.
+    """conversation_text can be null (redaction hasn't reached it yet) even when
+    conversation_text_chars is set. Sending None to the LLM must never happen.
     """
     row = _conversation_row(conversation_text=None, conversation_text_chars=10_000)
 
     assert summarize.needs_summary(row) is False
 
 
-def test_summarize_conversations_applies_skip_rule() -> None:
+def test_summarize_conversations_skips_rows_without_text() -> None:
     df = pl.DataFrame(
         [
             _conversation_row(conversation_ref="1"),
-            _conversation_row(conversation_ref="2", turn_count=1),
+            _conversation_row(
+                conversation_ref="2", turn_count=1, conversation_text=None
+            ),
         ]
     )
 
@@ -205,10 +188,11 @@ def test_summarize_conversations_types_null_columns_when_batch_is_all_skipped() 
     Regression: Polars infers dtype=Null for an all-None Series, which Iceberg
     (format v2) rejects outright when writing the table.
     """
-    df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
+    df = pl.DataFrame([_conversation_row(conversation_ref="1", conversation_text=None)])
 
     result = summarize.summarize_conversations(df, _FakeSummaryClient())
 
+    assert result["conversation_summary"].null_count() == result.height
     assert result.schema["conversation_summary"] == pl.String
     assert result.schema["summary_model_version"] == pl.String
     assert result.schema["prompt_version"] == pl.String
@@ -458,28 +442,6 @@ def test_filter_unsummarized_resubmits_on_stale_model_version() -> None:
     )
 
     assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unsummarized_does_not_resubmit_skipped_rows_on_model_change() -> None:
-    """A row skipped last time (null summary_model_version) isn't touched by a
-    model change -- the skip decision was never model-dependent.
-    """
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
-    already_summarized_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [1],
-            "summary_model_version": [None],
-        }
-    )
-
-    result = summarize.filter_unsummarized(
-        source_df, already_summarized_df, current_model_version="new-model"
-    )
-
-    assert result.height == 0
 
 
 def test_filter_unsummarized_resubmits_on_stale_prompt_version() -> None:
@@ -820,24 +782,30 @@ def test_summarize_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
     assert len(errors) < df.height
 
 
-def test_filter_unsummarized_resubmits_skipped_rows_when_summarize_all() -> None:
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
-    # Stored as skipped last run: summary_model_version is null.
+def test_filter_unsummarized_resubmits_skipped_rows_that_have_text() -> None:
+    source_df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1", turn_count=1),
+            _conversation_row(
+                feedback_conversation_pk="pk-2",
+                conversation_ref="2",
+                turn_count=1,
+                conversation_text=None,
+            ),
+        ]
+    )
+    # Both stored as skipped last run: summary_model_version is null.
     already_summarized_df = pl.DataFrame(
         {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [1],
-            "summary_model_version": [None],
+            "feedback_conversation_pk": ["pk-1", "pk-2"],
+            "source_slug": ["zendesk", "zendesk"],
+            "conversation_ref": ["1", "2"],
+            "turn_count": [1, 1],
+            "summary_model_version": [None, None],
         },
         schema_overrides={"summary_model_version": pl.String},
     )
 
-    default_run = summarize.filter_unsummarized(source_df, already_summarized_df)
-    summarize_all_run = summarize.filter_unsummarized(
-        source_df, already_summarized_df, summarize_all=True
-    )
+    result = summarize.filter_unsummarized(source_df, already_summarized_df)
 
-    assert default_run.height == 0
-    assert summarize_all_run["conversation_ref"].to_list() == ["1"]
+    assert result["conversation_ref"].to_list() == ["1"]
