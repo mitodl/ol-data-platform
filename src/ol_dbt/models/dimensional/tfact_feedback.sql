@@ -22,7 +22,7 @@ with unioned as (
 )
 
 , dim_course_content as (
-    select content_block_pk, block_id, platform
+    select content_block_pk, courserun_readable_id, block_id, platform
     from {{ ref('dim_course_content') }}
     where is_latest = true
 )
@@ -49,6 +49,14 @@ with unioned as (
     select * from {{ redacted.relation_ref }}
 {% endif %}
 )
+
+{% if is_incremental() %}
+, watermarks as (
+    select feedback_source_fk, max(feedback_updated_at) as max_updated_at
+    from {{ this }}
+    group by feedback_source_fk
+)
+{% endif %}
 
 select
     {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
@@ -97,11 +105,19 @@ left join dim_course_run
     and unioned.courserun_platform = dim_course_run.platform
 left join dim_course_content
     on unioned.block_id = dim_course_content.block_id
+    and unioned.courserun_readable_id = dim_course_content.courserun_readable_id
     and unioned.courserun_platform = dim_course_content.platform
 left join redacted
     on unioned.source_slug = redacted.source_slug
     and unioned.source_record_ref = redacted.source_record_ref
 {% if is_incremental() %}
+-- Joins, not correlated subqueries, for the checks below: those took minutes on Trino.
+left join watermarks
+    on watermarks.feedback_source_fk
+        = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }}
+left join {{ this }} as existing
+    on existing.feedback_pk
+        = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
     -- Watermark on the CONVERSATION's updated_at, not the turn's: a ticket that gains a
     -- rating, a status change or a late-syncing comment re-enters with all of its turns,
     -- so delete+insert replaces them together. Filtering to unseen turns instead would
@@ -112,37 +128,25 @@ left join redacted
     -- source's entire (older) history would never pass the filter. coalesce's fallback
     -- covers a source with no rows in the table yet, so its first run backfills
     -- everything instead of needing a manual --full-refresh.
-    where unioned.updated_at > coalesce(
-        (
-            select max(stale.feedback_updated_at)
-            from {{ this }} as stale
-            where stale.feedback_source_fk
-                = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }}
-        ),
-        '0001-01-01T00:00:00'
-    )
+    where unioned.updated_at > coalesce(watermarks.max_updated_at, '0001-01-01T00:00:00')
     -- Backfill: a row inserted before feedback_redacted existed carries the old
     -- feedback_text = null stub forever under the watermark above alone, because
     -- redaction landing does not bump the source ticket's updated_at. Reselect any
     -- row still null in the fact where redaction has since produced real text.
-    or exists (
-        select 1
-        from {{ this }} as stale
-        inner join redacted
-            on stale.source_record_id = redacted.source_record_ref
-            and stale.feedback_source_fk = {{ dbt_utils.generate_surrogate_key(['redacted.source_slug']) }}
-        where stale.source_record_id = unioned.source_record_ref
-            and stale.feedback_source_fk = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }}
-            and stale.feedback_text is null
-            and redacted.text_redacted is not null
+    or (
+        existing.feedback_pk is not null
+        and existing.feedback_text is null
+        and redacted.text_redacted is not null
     )
-    -- dim_user re-key: a stored user_fk that no longer matches the current dim_user
-    -- resolution means the turn's subject_user_ref was re-keyed after ingestion, and
-    -- the source row's updated_at won't have moved to trigger the watermark above.
-    or exists (
-        select 1
-        from {{ this }} as stale
-        where stale.feedback_pk = {{ dbt_utils.generate_surrogate_key(['unioned.source_slug', 'unioned.source_record_ref']) }}
-            and stale.user_fk is distinct from users.user_pk
+    -- Re-key: a stored key that no longer matches the current resolution won't move
+    -- updated_at to trigger the watermark. user_fk changes on a dim_user re-key;
+    -- content_block_fk on a new course structure snapshot, since content_block_pk
+    -- hashes retrieved_at. existing.feedback_pk is null for a turn not stored yet.
+    or (
+        existing.feedback_pk is not null
+        and (
+            existing.user_fk is distinct from users.user_pk
+            or existing.content_block_fk is distinct from dim_course_content.content_block_pk
+        )
     )
 {% endif %}
