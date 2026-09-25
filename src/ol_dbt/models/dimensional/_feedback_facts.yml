@@ -56,11 +56,27 @@ models:
           where: "user_fk is not null"
           severity: warn
   - name: courserun_fk
-    description: str, foreign key to dim_course_run. Null for Zendesk, which is not
-      course-scoped.
+    description: str, foreign key to dim_course_run. Null for Zendesk and for chats
+      with no resolved course run.
+    tests:
+    - relationships:
+        arguments:
+          to: ref('dim_course_run')
+          field: courserun_pk
+        config:
+          where: "courserun_fk is not null"
   - name: content_block_fk
-    description: str, foreign key to dim_course_content, resolving subject_ref. Null
-      until the edX feedback plugin source arrives.
+    description: str, foreign key to dim_course_content for the latest version of
+      the block in subject_ref, or of the video in source_metadata.video_block_id
+      for VideoGPTBot. Null for Zendesk and for blocks missing from the latest course
+      structure.
+    tests:
+    - relationships:
+        arguments:
+          to: ref('dim_course_content')
+          field: content_block_pk
+        config:
+          where: "content_block_fk is not null"
   - name: platform_fk
     description: str, foreign key to dim_platform for where the learner gave the feedback.
       Null where the source does not map to one platform.
@@ -199,6 +215,9 @@ models:
   - name: opened_by_user_fk
     description: str, foreign key to dim_user for the author of the opening turn.
       Nullable on the same terms as tfact_feedback.user_fk.
+  - name: courserun_fk
+    description: str, foreign key to dim_course_run for the course run the conversation
+      is about. Null where tfact_feedback.courserun_fk is.
   - name: opened_date_fk
     description: int, foreign key to dim_date for the conversation's first turn.
     tests:
@@ -339,6 +358,19 @@ unit_tests:
       source_record_ref: "TICKET-1"
       title_redacted: "Title"
       text_redacted: "Some feedback text"
+    # The Zendesk row above has no course run or block, so these only need to match nothing.
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
   - input: this
     # Carries the pre-rekey user_fk; a lone row already fails the `>` watermark, isolating
     # the stale-user_fk check.

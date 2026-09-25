@@ -30,6 +30,8 @@ with conversation as (
         -- the opening turn's author, not min() over the group: an arbitrary pick
         -- disagrees wherever one turn resolves an identity and another does not
         , max(case when is_conversation_opening then user_fk end) as opened_by_user_fk
+        -- a conversation is about one course run, so every turn carries the same key
+        , max(courserun_fk) as courserun_fk
         , max(nullif(explicit_rating, '')) as explicit_rating
     from feedback
     group by conversation_id, feedback_source_fk
@@ -142,6 +144,7 @@ select
     , conversation.conversation_ref as conversation_id
     , turn_aggregates.feedback_source_fk
     , turn_aggregates.opened_by_user_fk
+    , turn_aggregates.courserun_fk
     , turn_aggregates.opened_date_fk
     , turn_aggregates.last_turn_date_fk
     , conversation.turn_count

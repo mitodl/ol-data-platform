@@ -17,6 +17,7 @@ with chatsession as (
 , video as (
     select distinct
         courserun_readable_id
+        , block_id
         , retrieved_at
         , {{ json_query_string('block_metadata', "'$.transcripts.en'") }} as transcript_id
     from {{ ref('dim_course_content') }}
@@ -26,10 +27,11 @@ with chatsession as (
 , videos_with_ranking as (
     select
         video.courserun_readable_id
+        , video.block_id
         , chatsession.chatsession_object_id
         , row_number() over (
             partition by chatsession.chatsession_object_id
-            order by video.retrieved_at asc
+            order by video.retrieved_at asc, video.block_id
         ) as row_num
     from chatsession
     inner join video
@@ -53,6 +55,7 @@ select
     , chatsession.chatsession_agent
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id
+    , videos_with_ranking.block_id as video_block_id
     , chatsession.user_id
     , users.user_email
     , users.user_full_name

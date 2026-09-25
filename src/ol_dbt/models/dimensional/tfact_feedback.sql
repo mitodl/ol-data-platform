@@ -6,11 +6,32 @@
 ) }}
 
 with unioned as (
-    select * from {{ ref('int__feedback__unioned') }}
+    select
+        *
+        , {{ json_query_string('source_metadata', "'$.courserun_platform'") }}
+            as courserun_platform
+        -- VideoGPTBot's subject_ref is a transcript asset; its video block is in source_metadata
+        , coalesce(
+            nullif({{ json_query_string('source_metadata', "'$.video_block_id'") }}, 'null')
+            , subject_ref
+        ) as block_id
+    from {{ ref('int__feedback__unioned') }}
 )
 
 -- dim_user is unique on email but has no test enforcing it; if that changes, this join
 -- fans out and feedback_pk's unique test fails, which is the failure we want.
+, dim_course_run as (
+    select courserun_pk, courserun_readable_id, platform
+    from {{ ref('dim_course_run') }}
+    where is_current = true
+)
+
+, dim_course_content as (
+    select content_block_pk, block_id, platform
+    from {{ ref('dim_course_content') }}
+    where is_latest = true
+)
+
 , users as (
     select
         user_pk
@@ -40,9 +61,8 @@ select
     , {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }} as feedback_source_fk
     , {{ dbt_utils.generate_surrogate_key(['unioned.channel_slug']) }} as feedback_channel_fk
     , users.user_pk as user_fk
-    -- Zendesk resolves none of these; the course-scoped sources populate them
-    , cast(null as varchar) as courserun_fk
-    , cast(null as varchar) as content_block_fk
+    , dim_course_run.courserun_pk as courserun_fk
+    , dim_course_content.content_block_pk as content_block_fk
     -- the case keeps a null platform null; generate_surrogate_key would hash it
     , case
         when unioned.platform is not null
@@ -77,6 +97,12 @@ select
 from unioned
 left join users
     on lower(unioned.subject_user_ref) = users.email
+left join dim_course_run
+    on unioned.courserun_readable_id = dim_course_run.courserun_readable_id
+    and unioned.courserun_platform = dim_course_run.platform
+left join dim_course_content
+    on unioned.block_id = dim_course_content.block_id
+    and unioned.courserun_platform = dim_course_content.platform
 left join redacted
     on unioned.source_slug = redacted.source_slug
     and unioned.source_record_ref = redacted.source_record_ref
