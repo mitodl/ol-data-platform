@@ -140,12 +140,14 @@ left join {{ this }} as existing
     )
     -- Re-key: a stored key that no longer matches the current resolution won't move
     -- updated_at to trigger the watermark. user_fk changes on a dim_user re-key;
+    -- courserun_fk when a course run lands in dim_course_run after the turn;
     -- content_block_fk on a new course structure snapshot, since content_block_pk
     -- hashes retrieved_at. existing.feedback_pk is null for a turn not stored yet.
     or (
         existing.feedback_pk is not null
         and (
             existing.user_fk is distinct from users.user_pk
+            or existing.courserun_fk is distinct from dim_course_run.courserun_pk
             or existing.content_block_fk is distinct from dim_course_content.content_block_pk
         )
     )

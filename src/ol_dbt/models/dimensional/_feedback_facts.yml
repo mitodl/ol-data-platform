@@ -426,3 +426,94 @@ unit_tests:
       feedback_occurred_at: "2024-01-15T00:00:00"
       feedback_created_at: "2024-01-15T00:00:00"
       feedback_updated_at: "2024-01-15T00:00:00"
+- name: test_tfact_feedback_resolves_course_keys_and_refreshes_stale_ones
+  description: >
+    A course-scoped chat turn resolves courserun_fk and content_block_fk, and the
+    incremental filter re-selects a stored turn whose key is stale: one row carries
+    a
+    content_block_fk from an older course structure snapshot, the other a null
+    courserun_fk from before its course run reached dim_course_run.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-1"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      courserun_readable_id: "course-v1:MITx+1.00x+1T2025"
+      block_id: "block-v1:MITx+1.00x+1T2025+type@problem+block@p1"
+      platform: "mitlearn"
+      subject_type: "courseware_block"
+      source_metadata: '{"chatsession_agent": "TutorBot", "courserun_platform": "mitxonline"}'
+      occurred_at: "2025-01-10T00:00:00"
+      created_at: "2025-01-10T00:00:00"
+      updated_at: "2025-01-10T00:00:00"
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-2"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 2
+      is_conversation_opening: false
+      courserun_readable_id: "course-v1:MITx+1.00x+1T2025"
+      block_id: "block-v1:MITx+1.00x+1T2025+type@problem+block@p1"
+      platform: "mitlearn"
+      subject_type: "courseware_block"
+      source_metadata: '{"chatsession_agent": "TutorBot", "courserun_platform": "mitxonline"}'
+      occurred_at: "2025-01-10T00:00:00"
+      created_at: "2025-01-10T00:00:00"
+      updated_at: "2025-01-10T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "someone@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-1"
+      text_redacted: "How do I start problem 1?"
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-2"
+      text_redacted: "Thanks"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:MITx+1.00x+1T2025"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:MITx+1.00x+1T2025"
+      block_id: "block-v1:MITx+1.00x+1T2025+type@problem+block@p1"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Both rows fail the `>` watermark and already have text, so only a re-key
+    # check can select them.
+    rows:
+    - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      courserun_fk: "COURSERUN_PK"
+      content_block_fk: "OLD_SNAPSHOT_CONTENT_BLOCK_PK"
+      feedback_text: "How do I start problem 1?"
+      feedback_updated_at: "2025-01-10T00:00:00"
+    - feedback_pk: "9df5bc9092464addd8a04dab4cd3b22d"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      courserun_fk:
+      content_block_fk: "CONTENT_BLOCK_PK"
+      feedback_text: "Thanks"
+      feedback_updated_at: "2025-01-10T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
+      courserun_fk: "COURSERUN_PK"
+      content_block_fk: "CONTENT_BLOCK_PK"
+    - feedback_pk: "9df5bc9092464addd8a04dab4cd3b22d"  # pragma: allowlist secret
+      courserun_fk: "COURSERUN_PK"
+      content_block_fk: "CONTENT_BLOCK_PK"
