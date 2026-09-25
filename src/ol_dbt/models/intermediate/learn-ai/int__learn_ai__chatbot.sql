@@ -17,6 +17,7 @@ with chatsession as (
 , video as (
     select distinct
         courserun_readable_id
+        , block_id
         , retrieved_at
         , {{ json_query_string('block_metadata', "'$.transcripts.en'") }} as transcript_id
     from {{ ref('dim_course_content') }}
@@ -26,10 +27,11 @@ with chatsession as (
 , videos_with_ranking as (
     select
         video.courserun_readable_id
+        , video.block_id
         , chatsession.chatsession_object_id
         , row_number() over (
             partition by chatsession.chatsession_object_id
-            order by video.retrieved_at asc
+            order by video.retrieved_at asc, video.block_id
         ) as row_num
     from chatsession
     inner join video
@@ -77,6 +79,7 @@ select
         , videos_with_ranking.courserun_readable_id
         , problem.courserun_readable_id
     ) as courserun_readable_id
+    , videos_with_ranking.block_id as video_block_id
 from djangocheckpoint
 inner join chatsession on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
 left join responserating on djangocheckpoint.djangocheckpoint_id = responserating.djangocheckpoint_id

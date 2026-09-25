@@ -18,6 +18,11 @@ with chatbot as (
             as occurred_at
         , chatbot.chatsession_updated_on
         , chatbot.courserun_readable_id
+        -- VideoGPTBot's object id is a transcript asset, so use the video it belongs to
+        , case chatbot.chatsession_agent
+            when 'TutorBot' then chatbot.chatsession_object_id
+            when 'VideoGPTBot' then chatbot.video_block_id
+        end as block_id
         , row_number() over (
             partition by chatbot.chatsession_thread_id
             order by chatbot.checkpoint_step, chatbot.djangocheckpoint_id
@@ -99,6 +104,7 @@ with chatbot as (
         , tutorbot_deduplicated.chatsession_created_on as occurred_at
         , tutorbot_deduplicated.chatsession_updated_on
         , tutorbot_deduplicated.courserun_readable_id
+        , tutorbot_deduplicated.edx_module_id as block_id
         , row_number() over (
             partition by tutorbot_deduplicated.chatsession_thread_id
             order by tutorbot_deduplicated.message_index
@@ -115,17 +121,17 @@ with chatbot as (
     select * from tutorbot_turns
 )
 
--- courserun_readable_id alone isn't a unique key on dim_course_run (its surrogate
--- key is platform + courserun_readable_id), so pick one deterministically rather
--- than fan out a turn across every platform sharing that readable_id.
+-- The chat doesn't say which platform, and edxorg and mitxonline share some readable
+-- ids. Learn AI serves MITx Online courses, so prefer it; any other conflict stays null.
 , course_run as (
     select
         courserun_readable_id
-        , platform
-        , row_number() over (
-            partition by courserun_readable_id order by platform
-        ) as platform_rank
+        , case
+            when count(distinct platform) = 1 then min(platform)
+            when count_if(platform = 'mitxonline') > 0 then 'mitxonline'
+        end as platform
     from {{ ref('dim_course_run') }}
+    group by courserun_readable_id
 )
 
 select
@@ -141,6 +147,7 @@ select
     , cast(null as varchar) as source_url
     , 'chat' as channel_slug
     , human_turns.courserun_readable_id
+    , human_turns.block_id
     -- Where the learner chatted, not the course's platform: every agent but
     -- CanvasSyllabusBot is served through MIT Learn.
     , case
@@ -167,4 +174,3 @@ select
 from human_turns
 left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id
-    and course_run.platform_rank = 1
