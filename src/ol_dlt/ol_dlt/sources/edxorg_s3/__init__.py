@@ -43,6 +43,9 @@ _EDXORG_LANDING_BUCKET = (
 
 _EDXORG_PRIMARY_KEY = ["row_hash", "extracted_course_key"]
 
+_MAX_LINE_BYTES = 16 * 1024**2
+_CSV_BUFFER_BYTES = 32 * 1024**2
+
 # Options handed to DuckDB's CSV reader for every edxorg TSV.
 _CSV_READER_OPTIONS: dict[str, Any] = {
     "delimiter": "\t",  # TSV files use tabs
@@ -81,6 +84,20 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
     # files (e.g. TIMESTAMP vs VARCHAR for a column that is empty in some
     # files). dbt casts downstream.
     "all_varchar": True,
+    # DuckDB's default limit is 2,000,000 bytes per record, and a
+    # courseware_studentmodule `state` value can hold a learner's whole problem
+    # history: MITx-7.00x-3T2023/ac1cb2f24d85....tsv has three records over
+    # 2 MB, the largest about 5.9 MB. Near the start of a file an over-limit
+    # record fails the read (the unquoted fallback hits the same limit); deeper
+    # in, ignore_errors drops it without a word.
+    #
+    # buffer_size is pinned because DuckDB otherwise grows its read buffer with
+    # max_line_size and holds one per thread in flight: reading a 1.7 GB file
+    # with only short records peaked at 692 MB with the defaults, 1,883 MB with
+    # a 64 MiB limit and the default buffer, and 787 MB with these two values.
+    # buffer_size has to exceed max_line_size.
+    "max_line_size": _MAX_LINE_BYTES,
+    "buffer_size": _CSV_BUFFER_BYTES,
 }
 
 # Quoting off, for the legacy unquoted dumps. Their quotes are literal text
