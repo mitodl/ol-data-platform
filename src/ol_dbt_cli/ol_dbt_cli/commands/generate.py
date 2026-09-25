@@ -21,6 +21,8 @@ import duckdb
 import yaml
 from cyclopts import App, Parameter
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
+
 generate_app = App(
     name="generate",
     help="Scaffold dbt sources and staging models.",
@@ -43,9 +45,9 @@ def _run_dbt_command(
 ) -> subprocess.CompletedProcess[str]:
     """Run a dbt command or run-operation, returning the CompletedProcess result."""
     if len(command) == 1 and command[0] in {"parse", "compile", "run", "test", "snapshot"}:
-        dbt_cmd = ["dbt", "--quiet", "--no-write-json", *command]
+        dbt_cmd = [dbt_executable(), "--quiet", "--no-write-json", *command]
     else:
-        dbt_cmd = ["dbt", "--quiet", "--no-write-json", "run-operation"]
+        dbt_cmd = [dbt_executable(), "--quiet", "--no-write-json", "run-operation"]
         dbt_cmd.extend(command)
 
     dbt_cmd.extend(
