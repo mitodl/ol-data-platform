@@ -2,10 +2,12 @@
 
 legacy_openedx queries each deployment's edxapp MySQL every night and uploads
 six CSVs for MIT Institutional Research, plus a mongodump of the forum database.
-This writes the same six files, with the same headers and value formatting, and
-the forum's contents collection in the same BSON format, from tables the
-warehouse already maintains. The column-level contract is in
-src/ol_dbt/models/external/IRX_SIMEON_MAPPING.md.
+This writes the same six CSVs, with the same headers and value formatting, from
+tables the warehouse already maintains. The forum is delivered as a flat
+Parquet export of the irx__ model instead of a reconstructed Mongo dump: Mongo
+has not backed the forum since the forum-v2 cutover, so there is no dump shape
+left to match, and IRx adapts their tooling to the columns we actually have.
+The column-level contract is in src/ol_dbt/models/external/IRX_SIMEON_MAPPING.md.
 """
 
 import hashlib
@@ -13,12 +15,9 @@ import io
 import json
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, cast
 
-import bson
 import polars as pl
-from bson import ObjectId
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -56,30 +55,6 @@ MANIFEST_NAME = "_MANIFEST.json"
 MANIFEST_FILE_FIELDS = ("row_count", "size_bytes", "sha256")
 
 FORUM_CONTENTS_MODEL = "forum_contents"
-# Which fields the retired cs_comments_service stored on each kind of post, read
-# off the last mongodump legacy_openedx shipped.
-FORUM_SHARED_FIELDS = (
-    "course_id",
-    "author_username",
-    "body",
-    "group_id",
-    "visible",
-    "anonymous",
-    "anonymous_to_peers",
-    "created_at",
-    "updated_at",
-)
-FORUM_THREAD_FIELDS = (
-    "title",
-    "thread_type",
-    "context",
-    "commentable_id",
-    "closed",
-    "pinned",
-    "comment_count",
-    "last_activity_at",
-)
-FORUM_COMMENT_FIELDS = ("endorsed", "depth", "child_count")
 
 
 @dataclass(frozen=True)
@@ -232,96 +207,37 @@ def write_legacy_csv(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int,
     return writer.digest.hexdigest(), writer.size, writer.records - 1
 
 
-def mint_objectid(content_type: str, content_id: int) -> ObjectId:
-    """Stand in for the ObjectId of a post created after the Mongo cutover.
+class _HashingWriter(io.RawIOBase):
+    """Hash and count bytes on their way to the object store."""
 
-    An ObjectId opens with its creation time in seconds, and forum ObjectIds
-    date from 2012 on, so a zero timestamp cannot collide with a real one. The
-    byte after it keeps threads and comments apart, because their ids overlap.
+    def __init__(self, sink: Any):
+        self._sink = sink
+        self.digest = hashlib.sha256()
+        self.size = 0
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, data: Any) -> int:
+        self.digest.update(data)
+        self.size += len(data)
+        return self._sink.write(data)
+
+
+def write_parquet(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int, int]:
+    """Stream a frame to the drop as Parquet; return its sha256, size, and row count.
+
+    Streamed, never collected, same as write_legacy_csv. Row count comes from a
+    separate `len()` aggregate rather than the byte-level counting
+    _DigestingWriter does for CSV: Parquet's row groups do not delimit records
+    the way CRLFs do, but a count is a running total the engine streams
+    through in the same bounded memory as the write itself.
     """
-    kind = 0 if content_type == "CommentThread" else 1
-    return ObjectId(f"{0:08x}{kind:02x}{content_id:014x}")
-
-
-def _forum_objectid(
-    mongoid: str | None, content_type: str, content_id: int | None
-) -> ObjectId | None:
-    if content_id is None:
-        return None
-    return ObjectId(mongoid) if mongoid else mint_objectid(content_type, content_id)
-
-
-def forum_document(row: Mapping[str, Any]) -> dict[str, Any]:
-    """Rebuild one post as the Mongo document legacy's mongodump carried.
-
-    Simeon's forum loader reads comment_thread_id and parent_id as the
-    ObjectId of the post they point at, and joins them to _id. Emitting the
-    MySQL foreign keys instead would make those joins match nothing, and its
-    forum_posts query drops the rows rather than failing.
-
-    User ids are strings, as Mongo stored them, and a field with no value is
-    left out rather than written as null.
-    """
-    content_type = row["_type"]
-    document_id = _forum_objectid(row["mongoid"], content_type, row["id"])
-    up, down = row["votes_up"] or [], row["votes_down"] or []
-    document: dict[str, Any] = {
-        "_id": document_id,
-        "_type": content_type,
-        "author_id": str(row["author_id"]),
-        "votes": {
-            "up": up,
-            "down": down,
-            "up_count": len(up),
-            "down_count": len(down),
-            "count": len(up) + len(down),
-            "point": len(up) - len(down),
-        },
-        "abuse_flaggers": row["abuse_flaggers"] or [],
-        "historical_abuse_flaggers": row["historical_abuse_flaggers"] or [],
-        # Only ever empty in the last dump, and forum-v2 has no column for it.
-        "at_position_list": [],
-    }
-    fields: tuple[str, ...]
-    if content_type == "CommentThread":
-        fields = FORUM_THREAD_FIELDS
-    else:
-        fields = FORUM_COMMENT_FIELDS
-        parent_id = _forum_objectid(row["parent_mongoid"], "Comment", row["parent_id"])
-        document["comment_thread_id"] = _forum_objectid(
-            row["comment_thread_mongoid"], "CommentThread", row["comment_thread_id"]
-        )
-        document["parent_id"] = parent_id
-        # Open edX nests comments one level under a response, so a comment's
-        # only ancestor below the thread is its parent. Mongo held the whole
-        # chain, which differs only for 187 mitx posts from 2012.
-        document["parent_ids"] = [parent_id] if parent_id else []
-        document["sk"] = f"{parent_id}-{document_id}" if parent_id else str(document_id)
-        if endorsement := json.loads(row["endorsement"] or "{}"):
-            document["endorsement"] = {
-                "user_id": endorsement["user_id"],
-                "time": datetime.fromisoformat(endorsement["time"]),
-            }
-    document.update((name, row[name]) for name in (*FORUM_SHARED_FIELDS, *fields))
-    return {name: value for name, value in document.items() if value is not None}
-
-
-def write_forum_bson(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int, int]:
-    """Write posts as a mongodump collection file; return sha256, size, count.
-
-    A mongodump .bson file is the documents' BSON encodings back to back.
-    Sorted so an unchanged forum writes an unchanged file.
-    """
-    digest, size, count = hashlib.sha256(), 0, 0
+    row_count = frame.select(pl.len()).collect().item()
     with destination.open("wb") as sink:
-        for batch in frame.sort("_type", "id").collect_batches():
-            for row in batch.iter_rows(named=True):
-                data = bson.encode(forum_document(row))
-                digest.update(data)
-                size += len(data)
-                count += 1
-                sink.write(data)
-    return digest.hexdigest(), size, count
+        writer = _HashingWriter(sink)
+        frame.sink_parquet(writer)
+    return writer.digest.hexdigest(), writer.size, row_count
 
 
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
@@ -354,8 +270,8 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                 AssetKey(["external", irx_model_name(deployment, FORUM_CONTENTS_MODEL)])
             ],
             description=(
-                "forum/contents.bson: every forum post, as the Mongo contents "
-                "collection legacy dumped."
+                "forum_contents.parquet: every forum post in the irx__ model's "
+                "own columns, not a reconstructed Mongo document."
             ),
             code_version="irx_export_v1",
         ),
@@ -454,14 +370,14 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         # Not cut to the course list: legacy dumped the whole forum database,
         # posts in runs the LMS no longer lists included.
         frame, metadata = _scan_pinned(irx_model_name(deployment, FORUM_CONTENTS_MODEL))
-        delivered["forum/contents.bson"] = _export(
+        delivered["forum_contents.parquet"] = _export(
             forum_key,
-            write_forum_bson,
+            write_parquet,
             frame,
-            drop / "forum" / "contents.bson",
+            drop / "forum_contents.parquet",
             metadata,
         )
-        yield delivered["forum/contents.bson"]
+        yield delivered["forum_contents.parquet"]
 
         manifest = build_manifest(deployment, drop_date, context.run.run_id, delivered)
         yield _write_manifest(manifest_key, manifest, manifest_path)

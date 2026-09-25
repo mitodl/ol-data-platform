@@ -19,8 +19,28 @@ from openedx.assets.irx_export import (
     build_irx_export_asset,
     legacy_csv_columns,
     write_legacy_csv,
+    write_parquet,
 )
 from upath import UPath
+
+FORUM_ROWS: list[dict[str, Any]] = [
+    {
+        "_type": "CommentThread",
+        "id": 1,
+        "votes_up": ["11"],
+        "votes_down": [],
+        "abuse_flaggers": [],
+        "historical_abuse_flaggers": [],
+    },
+    {
+        "_type": "Comment",
+        "id": 2,
+        "votes_up": [],
+        "votes_down": ["22"],
+        "abuse_flaggers": ["33"],
+        "historical_abuse_flaggers": [],
+    },
+]
 
 # Naive, as MySQL DATETIME and Iceberg timestamp both are.
 ROWS: list[dict[str, Any]] = [
@@ -92,6 +112,23 @@ def test_row_count_ignores_crlf_inside_quoted_fields_at_any_chunk_boundary() -> 
         assert writer.records - 1 == 3, split
 
 
+def test_write_parquet_round_trips_array_columns_and_counts_rows(tmp_path) -> None:
+    frame = pl.LazyFrame(FORUM_ROWS)
+    destination = UPath(tmp_path / "out.parquet")
+
+    sha256, size, row_count = write_parquet(frame, destination)
+
+    written = destination.read_bytes()
+    assert sha256 == hashlib.sha256(written).hexdigest()
+    assert size == len(written)
+    assert row_count == len(FORUM_ROWS)
+    read_back = pl.read_parquet(written)
+    assert read_back["votes_up"].to_list() == [row["votes_up"] for row in FORUM_ROWS]
+    assert read_back["abuse_flaggers"].to_list() == [
+        row["abuse_flaggers"] for row in FORUM_ROWS
+    ]
+
+
 def test_role_users_projects_name_to_the_role_header() -> None:
     role_users = next(f for f in IRX_EXPORT_FILES if f.name == "role_users")
 
@@ -145,7 +182,7 @@ class _Table:
 
 def _irx_frame(table: _Table) -> pl.LazyFrame:
     if table.name.endswith("forum_contents"):
-        return pl.LazyFrame(schema={"_type": pl.String, "id": pl.Int64})
+        return pl.LazyFrame(FORUM_ROWS)
     export = next(f for f in IRX_EXPORT_FILES if table.name.endswith(f.model))
     model_names = {new: old for old, new in export.renames.items()}
     row = {model_names.get(c, c): "x" for c in export.columns} | {
@@ -165,7 +202,7 @@ def drop_root(tmp_path, monkeypatch) -> UPath:
     )
     drop = UPath(tmp_path) / "mitx" / DROP_DATE.replace("-", "")
     # S3 has no directories to create; a local path does.
-    (drop / "forum").mkdir(parents=True)
+    drop.mkdir(parents=True)
     return drop
 
 
@@ -197,15 +234,19 @@ def test_manifest_lists_every_delivered_file(drop_root, monkeypatch) -> None:
     expected = [
         "course_ids.csv",
         *(f"{f.name}.csv" for f in IRX_EXPORT_FILES),
-        "forum/contents.bson",
+        "forum_contents.parquet",
     ]
     assert [entry["name"] for entry in manifest["files"]] == expected
     for entry in manifest["files"]:
         data = (drop_root / entry["name"]).read_bytes()
         assert entry["sha256"] == hashlib.sha256(data).hexdigest()
         assert entry["size_bytes"] == len(data)
-    # The course list filters out the unlisted run.
-    assert {entry["row_count"] for entry in manifest["files"][:-1]} == {1}
+    row_counts = {entry["name"]: entry["row_count"] for entry in manifest["files"]}
+    # The course list filters out the unlisted run in the five course-scoped files.
+    assert {row_counts[f"{f.name}.csv"] for f in IRX_EXPORT_FILES} == {1}
+    assert row_counts["course_ids.csv"] == 1
+    # Forum isn't cut to the course list, so both fixture rows are delivered.
+    assert row_counts["forum_contents.parquet"] == len(FORUM_ROWS)
 
 
 def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> None:
