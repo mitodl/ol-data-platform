@@ -148,12 +148,15 @@ if not set(VALID_DAGSTER_ENVS) >= DBT_AUTOMATION_ENVIRONMENTS:
 
 DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 
-# Which lake each environment READS. Mirrors trino_catalog_map in
-# definitions.py (which cannot be imported here -- it imports the modules that
-# import this one); keep the two in step when adding an environment.
+# Which lake each StarRocks environment READS. Mirrors the `data_lake_env`
+# entries in _ENVS in ol_dbt_cli/commands/starrocks.py; keep the two in step.
 #
-# `dev` reads the QA lake, not production: the QA cluster `dev` connects to
-# has no production lake access (ol-infrastructure#5472/#5670, #6023).
+# Matches trino_catalog_map in definitions.py for every environment except
+# `dev`, deliberately. Trino `dev` still reads production through the
+# production Galaxy cluster, but StarRocks `dev` connects to the QA cluster,
+# which has no production lake access (ol-infrastructure#5472/#5670, #6023).
+# Syncing this entry back to trino_catalog_map["dev"] breaks every dev b2b
+# build.
 DATA_LAKE_ENV_MAP: Mapping[str, str] = {
     "dev": "qa",
     "ci": "qa",
