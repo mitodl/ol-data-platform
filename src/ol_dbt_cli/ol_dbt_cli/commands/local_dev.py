@@ -23,6 +23,7 @@ import duckdb
 import trino
 from trino.auth import OAuth2Authentication
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import get_repo_root
 
 if TYPE_CHECKING:
@@ -949,7 +950,7 @@ def snapshot(
     dst_expr = f"api.Relation.create(database=target.database, schema=target.schema, identifier='{as_name}')"
     src_expr = f"ref('{model}')"
     ctas_sql = f"create or replace table {{{{ {dst_expr} }}}} as select * from {{{{ {src_expr} }}}}"  # noqa: S608
-    cmd = ["dbt", "show", "--inline", ctas_sql, "--target", target, "--output", "json", "--limit", "-1"]
+    cmd = [dbt_executable(), "show", "--inline", ctas_sql, "--target", target, "--output", "json", "--limit", "-1"]
     print(f"Running: {' '.join(cmd)}")
     try:
         subprocess.run(cmd, cwd=str(dbt_dir), capture_output=True, text=True, check=True)  # noqa: S603
@@ -958,7 +959,7 @@ def snapshot(
         print(f"Error: dbt show failed: {detail[-500:]}")
         sys.exit(1)
     except FileNotFoundError:
-        print("Error: 'dbt' command not found; install dbt and ensure it is on PATH.")
+        print(f"Error: {dbt_executable()} not found; run `uv sync` from the repo root to install dbt.")
         sys.exit(1)
 
     print(f"✅ Snapshotted '{model}' as '{as_name}' (target={target}).")
