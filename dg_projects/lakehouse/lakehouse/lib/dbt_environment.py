@@ -12,10 +12,9 @@ exists to undo:
 * **data lake env** -- which ``ol_data_lake_<env>`` catalog to READ.
 * **automation** -- whether the dbt asset graph materializes itself here.
 
-They diverge for ``dev``: a developer's StarRocks target port-forwards to the
-QA cluster but should read production data. The b2b sources used to infer the
-lake from ``'qa' in target.name``, which got that case wrong and made those
-models undevelopable locally.
+They diverge for ``ci``: its StarRocks target is ``starrocks_production``, but
+it reads the QA lake. The b2b sources used to infer the lake from
+``'qa' in target.name``, which conflated the two.
 
 Every environment appears in every map. There is deliberately no fallback --
 ``qa`` used to be absent from the Trino map and fell through to ``production``,
@@ -25,16 +24,16 @@ had to say what it meant.
 
 Adding an environment
 ---------------------
-A fifth environment, ``local`` (k3d + Tilt, its own object store and Iceberg
-catalog), is planned -- see RFC 12711's Local-2/3/4 tasks, which specify that
-``local`` extends *this* convention rather than introducing a third resolution
-style. It is NOT a rename of ``dev``: ``dev`` connects to the remote QA cluster
-and reads the production lake, while ``local`` reaches neither and is fed by
-local ingest and fixtures. Both will need to exist.
+``dev`` is meant to target a local environment (k3d + Tilt, its own object
+store and Iceberg catalog), planned in RFC 12711's Local-2/3/4 tasks, which
+specify that it extends *this* convention rather than introducing a third
+resolution style. That environment does not exist yet, so until it does the
+StarRocks entries for ``dev`` resolve exactly like ``qa``. When it lands,
+repoint ``dev`` in every map below and in ``_ENVS`` in
+``ol_dbt_cli/commands/starrocks.py``, which mirrors these.
 
-When it lands, ``DAGSTER_ENV`` gains the value and every map below needs an
-entry -- plus ``_ENVS`` in ``ol_dbt_cli/commands/starrocks.py``, which mirrors
-these. Until then ``resolve_for_environment`` raises on it, which is the point:
+A genuinely new ``DAGSTER_ENV`` value needs an entry in every map below, and
+until it has one ``resolve_for_environment`` raises on it, which is the point:
 the failure is a missing declaration, not a silently inherited warehouse.
 Automation is the exception to that rule and deliberately so: a new environment
 is simply absent from ``DBT_AUTOMATION_ENVIRONMENTS`` and therefore does not

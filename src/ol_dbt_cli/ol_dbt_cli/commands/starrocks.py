@@ -18,7 +18,6 @@ Workflow::
     # Explicit env / role
     ol-dbt starrocks run --env production --vault-role readonly
 
-
     # Pass dbt flags through
     ol-dbt starrocks run --full-refresh --select my_model+
 
