@@ -72,10 +72,11 @@ transform: `irx__{deployment}__openedx__mysql__{table}` → `{table}-analytics.s
 | `user_id_map-analytics.sql` | `user_id_map` | ✅ | ✅ | ✅ |
 | `course-analytics.xml.tar.gz` | — (openedx `course_xml` asset) | ✅ | ✅ | ✅ |
 | `course_structure-analytics.json` | — (openedx `course_structure` asset) | ✅ | ✅ | ✅ |
-| `forum.mongo` | `forum_contents`, delivered as `forum/contents.bson` | ✅ | ✅ | ✅ |
+| `forum.mongo` | `forum_contents`, delivered as `forum_contents.parquet` | ✅ | ✅ | ✅ |
 
-Eleven of the thirteen are one rename away. `forum.mongo` is the forum `contents` collection as JSON
-lines; the facade delivers the same documents in the BSON dump format legacy shipped (see below). The `assessment_*`, `submissions_*` and `workflow_*`
+Eleven of the thirteen are one rename away. `forum.mongo` is not: see the decision below — the
+facade no longer reconstructs it, and delivers the `forum_contents` model's own columns instead.
+The `assessment_*`, `submissions_*` and `workflow_*`
 models map into `ora/` in the same way; no Simeon report query reads them, so they are carried, not
 consumed.
 
@@ -177,26 +178,46 @@ pipeline builds it from the Open edX course API via `list_courses`, and the faca
 dynamic partition set, even though `course_run_sensor` fills it from the same API: that sensor only
 ever adds partitions, so the set accumulates course runs the LMS no longer lists.
 
-### `forum/contents.bson`
-Legacy mongodumps the forum database into `forum/`. Every deployment's Mongo forum moved to MySQL
-(forum-v2) in 2025–26, so that dump has been byte-identical since the day after each cutover, and
-nothing posted since has been delivered. Simeon reads only the `contents` collection, so the facade
-delivers only `contents.bson`, at the same path and in the same format: the documents' BSON back to
-back, unfiltered by course list as the dump was.
+### `forum_contents.parquet` (was `forum/contents.bson`)
 
-`irx__{d}__openedx__mysql__forum_contents` unions `forum_commentthread` and `forum_comment` and
-aggregates votes and abuse flags onto them. The export (`openedx/assets/irx_export.py`) rebuilds each
-row as the Mongo document. Two things matter for Simeon:
-- `comment_thread_id` and `parent_id` are the **ObjectId of the post they point at**, as in Mongo,
+**Decision (2026-09-25), reversing the one below: stop reconstructing the Mongo dump.** Legacy
+mongodumped the forum database into `forum/contents.bson`, and the facade originally rebuilt that
+same BSON document shape from `forum_contents` so Simeon's existing `forum_posts.sql` (which joins
+`comment_thread_id`/`parent_id` as ObjectIds against `mongoid`) would keep working unmodified. But
+Mongo has not backed any deployment's forum since the forum-v2 cutover, so there is no live dump
+shape left to match — only a frozen legacy one. Reconstructing it meant minting synthetic ObjectIds
+for every post created after the cutover and hand-encoding BSON row by row, which also turned out to
+be the export's memory hot spot: unlike the five CSVs, that path required a full in-memory sort of
+`forum_contents` before it could write a single row (`frame.sort(...).collect_batches()` in
+`openedx/assets/irx_export.py`), the likely cause of an OOM on the mitxonline drop.
+
+IRx is not yet ingesting the Parquet shape, so there was no live consumer to coordinate a cutover
+with. The facade now delivers `forum_contents.parquet`: the `irx__{d}__openedx__mysql__forum_contents`
+model's own columns, streamed straight out (`sink_parquet`, no sort, no BSON encoding), unfiltered by
+course list as the legacy dump was. IRx adapts `forum_posts.sql` to the MySQL bigint `id`/
+`comment_thread_id`/`parent_id` columns directly, rather than the facade continuing to forge
+ObjectIds to match a join that predates forum-v2.
+
+`mongoid`, `comment_thread_mongoid` and `parent_mongoid` stay in the model and the export: they are
+real values from `forum_mongocontent` for posts migrated out of Mongo (null for anything created
+after the cutover), kept for historical continuity, not manufactured to fill a shape.
+
+<details>
+<summary>Original decision (2026-08-31, superseded above)</summary>
+
+Simeon reads only the `contents` collection, so the facade delivered only `contents.bson`, at the
+same path and in the same format: the documents' BSON back to back, unfiltered by course list as the
+dump was. Two things mattered for Simeon under that design:
+- `comment_thread_id` and `parent_id` were the **ObjectId of the post they point at**, as in Mongo,
   not the MySQL bigint. Simeon's `forum_posts.sql` joins them to `mongoid` and drops unmatched rows
   silently.
 - `forum_mongocontent` carries the ObjectId of every migrated post (content type resolved by name,
-  never by id). Posts created after the cutover get a minted ObjectId whose timestamp field is zero
+  never by id). Posts created after the cutover got a minted ObjectId whose timestamp field is zero
   (`00000000` + a thread/comment byte + the id), which cannot collide with a real one.
 
 Diffed by `_id` against the last legacy `contents.bson` (20260915): xpro 170,911 of 170,911 legacy
 posts present, mitx 17,758 of 17,809, mitxonline 103,585 of 103,590; no dangling thread or parent
-reference in any deployment. Differences are forum-v2's, and are delivered as they are:
+reference in any deployment. Differences were forum-v2's:
 - `created_at`/`updated_at` were reset to the migration date for 3,976 mitx and ~97,600 mitxonline
   posts.
 - `author_username` is null for 4,078 mitx and 96,655 mitxonline posts; `author_id` still joins to
@@ -205,7 +226,9 @@ reference in any deployment. Differences are forum-v2's, and are delivered as th
   endorsements.
 - `tags_array` and `edit_history` have no forum-v2 column; `at_position_list` is always empty.
 - About 1.2% of pre-cutover mitxonline posts have no ObjectId bridge row, so they and replies to them
-  carry minted ids.
+  carried minted ids.
+
+</details>
 
 ## Summary of gaps
 
@@ -218,7 +241,7 @@ reference in any deployment. Differences are forum-v2's, and are delivered as th
 | `django_comment_client_role_users` missing `id` | modelling | **closed**; `name`→`role` is a projection the export applies, not a model change |
 | `django_comment_client_role_users` missing `org` | ingestion | **closed** — both organizations tables ingested (#2665); the model left-joins them, the export drops rows with no organization as legacy's inner join did |
 | `course_ids.csv` has no warehouse source | none | not a gap — the export makes the same course API call legacy makes |
-| `forum.mongo` replacement | modelling | **closed** — `forum_contents` models, delivered as `forum/contents.bson` |
+| `forum.mongo` replacement | modelling | **closed** — `forum_contents` models, delivered as `forum_contents.parquet`; IRx adapts `forum_posts.sql` to the flat columns (2026-09-25) |
 
 The added columns are all additive: `ol-dbt impact` reports 0 breaking and 0 warnings across the 15
 changed models. Column order in the models is not the delivery order — the export projects the
