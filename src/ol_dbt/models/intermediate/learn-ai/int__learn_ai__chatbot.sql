@@ -55,7 +55,6 @@ select
     , chatsession.chatsession_agent
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id
-    , videos_with_ranking.block_id as video_block_id
     , chatsession.user_id
     , users.user_email
     , users.user_full_name
@@ -80,6 +79,7 @@ select
         , videos_with_ranking.courserun_readable_id
         , problem.courserun_readable_id
     ) as courserun_readable_id
+    , coalesce(videos_with_ranking.block_id, problem.problem_block_pk) as block_id
 from djangocheckpoint
 inner join chatsession on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
 left join responserating on djangocheckpoint.djangocheckpoint_id = responserating.djangocheckpoint_id

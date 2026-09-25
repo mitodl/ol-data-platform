@@ -23,6 +23,7 @@ select
     , source_url
     , channel_slug
     , courserun_readable_id
+    , block_id
     , platform
     , subject_type
     , subject_ref
@@ -51,6 +52,7 @@ select
     , source_url
     , channel_slug
     , courserun_readable_id
+    , block_id
     , platform
     , subject_type
     , subject_ref

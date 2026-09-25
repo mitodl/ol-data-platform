@@ -88,12 +88,12 @@ models:
     description: str, the initial question of the chat session.
   - name: chatsession_object_id
     description: str, course ID or video transcript asset ID. May be blank for ResourceRecommendationBot.
-  - name: video_block_id
-    description: str, block ID of the video whose English transcript is chatsession_object_id.
-      Populated for VideoGPTBot only.
   - name: courserun_readable_id
     description: str, the course readable ID for the chat session. Populated for VideoGPTBot
       and TutorBot in a course context.
+  - name: block_id
+    description: str, the edX block the chat concerns - the video block for VideoGPTBot,
+      the problem block for TutorBot. Null for other agents.
   - name: user_id
     description: int, user ID in learn AI application. Null if the user is not logged
       in.

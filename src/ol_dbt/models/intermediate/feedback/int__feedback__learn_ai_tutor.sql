@@ -9,7 +9,6 @@ with chatbot as (
         , chatbot.chatsession_agent
         , chatbot.chatsession_title
         , chatbot.chatsession_object_id
-        , chatbot.video_block_id
         , chatbot.user_global_id
         , chatbot.human_message
         , chatbot.rating as explicit_rating
@@ -19,6 +18,7 @@ with chatbot as (
             as occurred_at
         , chatbot.chatsession_updated_on
         , chatbot.courserun_readable_id
+        , chatbot.block_id
         , row_number() over (
             partition by chatbot.chatsession_thread_id
             order by chatbot.checkpoint_step, chatbot.djangocheckpoint_id
@@ -92,7 +92,6 @@ with chatbot as (
         , tutorbot_deduplicated.chatsession_agent
         , tutorbot_deduplicated.chatsession_title
         , tutorbot_deduplicated.edx_module_id as chatsession_object_id
-        , cast(null as varchar) as video_block_id
         , tutorbot_deduplicated.user_global_id
         , tutorbot_deduplicated.human_message
         , cast(null as varchar) as explicit_rating
@@ -101,6 +100,7 @@ with chatbot as (
         , tutorbot_deduplicated.chatsession_created_on as occurred_at
         , tutorbot_deduplicated.chatsession_updated_on
         , tutorbot_deduplicated.courserun_readable_id
+        , tutorbot_deduplicated.edx_module_id as block_id
         , row_number() over (
             partition by tutorbot_deduplicated.chatsession_thread_id
             order by tutorbot_deduplicated.message_index
@@ -143,6 +143,7 @@ select
     , cast(null as varchar) as source_url
     , 'chat' as channel_slug
     , human_turns.courserun_readable_id
+    , human_turns.block_id
     -- Where the learner chatted, not the course's platform: every agent but
     -- CanvasSyllabusBot is served through MIT Learn.
     , case
@@ -165,7 +166,6 @@ select
         , 'checkpoint_source': human_turns.checkpoint_source
         , 'checkpoint_type': human_turns.checkpoint_type
         , 'courserun_platform': course_run.platform
-        , 'video_block_id': human_turns.video_block_id
     ) as source_metadata
 from human_turns
 left join course_run

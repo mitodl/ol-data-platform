@@ -10,11 +10,6 @@ with unioned as (
         *
         , {{ json_query_string('source_metadata', "'$.courserun_platform'") }}
             as courserun_platform
-        -- VideoGPTBot's subject_ref is a transcript asset; its video block is in source_metadata
-        , coalesce(
-            nullif({{ json_query_string('source_metadata', "'$.video_block_id'") }}, 'null')
-            , subject_ref
-        ) as block_id
     from {{ ref('int__feedback__unioned') }}
 )
 

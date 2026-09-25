@@ -67,9 +67,8 @@ models:
           where: "courserun_fk is not null"
   - name: content_block_fk
     description: str, foreign key to dim_course_content for the latest version of
-      the block in subject_ref, or of the video in source_metadata.video_block_id
-      for VideoGPTBot. Null for Zendesk and for blocks missing from the latest course
-      structure.
+      the edX block the feedback concerns. Null for Zendesk and for blocks missing
+      from the latest course structure.
     tests:
     - relationships:
         arguments:

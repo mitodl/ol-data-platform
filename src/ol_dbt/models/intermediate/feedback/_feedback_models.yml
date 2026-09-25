@@ -64,6 +64,8 @@ models:
     description: str, canonical deep link to the subject. Null at MVP.
   - name: courserun_readable_id
     description: str, null for Zendesk, which is not course-scoped.
+  - name: block_id
+    description: str, null for Zendesk, which is not course-scoped.
   - name: platform
     description: str, platform readable id. 'mitlearn' for tickets in the MIT Learn,
       Universal AI or upGrad UAI group; other platforms come from the brand.
@@ -150,6 +152,9 @@ models:
     description: str, null. Not resolved at this stage.
   - name: courserun_readable_id
     description: str, the course run the chat concerns.
+  - name: block_id
+    description: str, the edX block the chat concerns - the video block for VideoGPTBot,
+      the problem block for TutorBot. Null for other agents.
   - name: platform
     description: str, the platform the learner chatted on - 'mitlearn' for every agent
       except CanvasSyllabusBot, which is null. The course run's own platform is in
@@ -235,6 +240,8 @@ models:
     description: str, canonical deep link to the subject.
   - name: courserun_readable_id
     description: str, course run the feedback concerns, for course-scoped sources.
+  - name: block_id
+    description: str, edX block the feedback concerns, for block-scoped sources.
   - name: platform
     description: str, platform readable id where the learner gave the feedback. Null
       where the source does not map to one platform.
