@@ -79,8 +79,9 @@ _ENVS: dict[str, dict[str, Any]] = {
     # (k3d, its own object store and catalog), which does not exist yet. Until
     # it does, `dev` is the QA cluster reading the QA lake, same as `qa`. It
     # used to read the production lake through the QA cluster, which stopped
-    # working when ol-infrastructure#6023 removed the production catalog from
-    # the QA cluster. Repointing at the production cluster instead would have
+    # working once the QA cluster lost production lake access (Glue deny from
+    # ol-infrastructure#5472/#5670, then #6023 dropped its production policy
+    # and catalog). Repointing at the production cluster instead would have
     # developer builds writing into it.
     # Matches DATA_LAKE_ENV_MAP["dev"] so `ol-dbt starrocks --env dev` and a
     # bare `dagster dev` resolve identically.

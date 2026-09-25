@@ -153,8 +153,8 @@ DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 # definitions.py (which cannot be imported here -- it imports the modules that
 # import this one); keep the two in step when adding an environment.
 #
-# `dev` reads the QA lake, not production: ol-infrastructure#6023 removed the
-# production catalog from the QA cluster that `dev` connects to.
+# `dev` reads the QA lake, not production: the QA cluster `dev` connects to
+# has no production lake access (ol-infrastructure#5472/#5670, #6023).
 DATA_LAKE_ENV_MAP: Mapping[str, str] = {
     "dev": "qa",
     "ci": "qa",

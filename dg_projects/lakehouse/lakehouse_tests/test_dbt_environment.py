@@ -86,9 +86,9 @@ def test_both_dbt_projects_agree_on_environment(environment, monkeypatch):
 def test_dev_reads_the_lake_its_cluster_can_see():
     """`dev` connects to the QA StarRocks cluster, so it must read the QA lake.
 
-    It used to read production through the QA cluster. ol-infrastructure#6023
-    removed the production catalog from that cluster, so any other value here
-    fails every dev b2b build with an unknown catalog.
+    It used to read production through the QA cluster, which has no
+    production lake access (ol-infrastructure#5472/#5670, #6023), so any other
+    value here fails every dev b2b build.
     """
     assert STARROCKS_DBT_TARGET_MAP["dev"] == STARROCKS_DBT_TARGET_MAP["qa"]
     assert DATA_LAKE_ENV_MAP["dev"] == DATA_LAKE_ENV_MAP["qa"] == "qa"
