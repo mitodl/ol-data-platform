@@ -145,6 +145,34 @@ def test_reader_options_do_not_pad_ragged_rows() -> None:
     assert relation.columns == ["id", "bio"]
 
 
+def test_reader_reads_records_longer_than_duckdbs_default_line_limit() -> None:
+    """DuckDB's 2,000,000-byte default made a whole studentmodule export
+    unreadable over one learner's 5.9 MB `state` value."""
+    # RFC-4180 doubling, as the archive writes it: {"history": ["x", ...]}
+    state = '"{""history"": [' + ",".join(['""x""'] * 350_000) + ']}"'
+    assert len(state) > 2_000_000
+    tsv = f"id\tstate\tgrade\n1\t{state}\t1.0\n2\tshort\t0.5\n".encode()
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/long.tsv", tsv)]))
+
+    assert [r["id"] for r in rows] == ["1", "2"]
+    assert rows[0]["state"].startswith('{"history": ["x"')
+    assert rows[0]["grade"] == "1.0"
+
+
+def test_reader_keeps_a_long_record_deep_in_the_file() -> None:
+    """Past DuckDB's first buffer, an over-limit record is not an error:
+    ignore_errors drops it and the read carries on one row short."""
+    state = '"{""history"": [' + ",".join(['""x""'] * 350_000) + ']}"'
+    short = "".join(f"{i}\tshort\t0.5\n" for i in range(100_000))
+    tsv = f"id\tstate\tgrade\n{short}long\t{state}\t1.0\nlast\tshort\t0.5\n".encode()
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/deep.tsv", tsv)]))
+
+    assert len(rows) == 100_002
+    assert rows[-2]["id"] == "long"
+
+
 def test_source_yields_one_resource_per_table() -> None:
     source = edxorg_s3.edxorg_s3_source(
         tables=["auth_user", "student_courseenrollment"]
