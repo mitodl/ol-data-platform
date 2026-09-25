@@ -137,8 +137,10 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
 # 09-25 Dagster run retries showed it: each retry got past the MV that failed
 # the attempt before and failed on the next MV in the list.
 #
-# Neither needs more than a second REFRESH once the new table is in place. The
-# delay covers a swap still in progress (the 09-25 CREATE TABLE ran 22s).
+# The recreate error was observed clearing on the next REFRESH. The mid-swap
+# error wasn't retried on 09-25 (the retries never got back to that MV), so
+# that it clears once the new table exists is inferred. The delay covers a
+# swap still in progress (the 09-25 CREATE TABLE ran 22s).
 MV_REFRESH_RETRIABLE_PATTERN = re.compile(
     r"does not exist when collecting snapshot infos"
     r"|was recreated but its table type is not supported for automatic meta repair"

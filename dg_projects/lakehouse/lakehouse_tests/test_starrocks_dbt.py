@@ -577,9 +577,14 @@ class TestRefreshMaterializedViews:
         starrocks = ScriptedStarRocks(
             {"b2b_analytics.mv_a": [BASE_TABLE_RECREATED_FAILURE] * 10}
         )
+        sleeps: list[float] = []
         with pytest.raises(MaterializedViewRefreshError):
-            _refresh(starrocks, ["b2b_analytics.mv_a"], [])
+            _refresh(starrocks, ["b2b_analytics.mv_a"], sleeps)
         assert len(starrocks.statements) == MAX_MV_REFRESH_ATTEMPTS
+        # No sleep after the final attempt.
+        assert sleeps == [MV_REFRESH_RETRY_DELAY_SECONDS] * (
+            MAX_MV_REFRESH_ATTEMPTS - 1
+        )
 
     def test_one_failure_does_not_stop_the_rest(self):
         """On 09-25 the first failure ended the asset, so every MV after it in
