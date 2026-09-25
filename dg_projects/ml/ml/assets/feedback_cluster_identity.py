@@ -144,8 +144,8 @@ def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
     different config, or conversations incrementally placed from a different
     arm, out of this run's Jaccard comparison.
 
-    feedback_since and platforms, the run's own scope, drop members outside it, so
-    a date- or platform-limited run is compared only with the part of each
+    feedback_since, platforms, and the per-source minimum length drop members
+    outside the run's scope, so a run is compared only with the part of each
     cluster it could have reproduced.
     """
     if not table_exists(
@@ -190,10 +190,9 @@ def _active_cluster_members(  # noqa: PLR0913 -- one filter per scope dimension
         cluster_key: frozenset(group["feedback_conversation_pk"])
         for (cluster_key,), group in membership_df.group_by("cluster_key")
     }
-    if feedback_since is None and platforms is None:
-        return members_by_key
-    # Keep a key whose members are all out of scope: an empty set matches nothing,
-    # so match_clusters retires it instead of leaving it active forever.
+    # Keep a key whose members are all out of scope (such as all-short chats): an
+    # empty set matches nothing, so match_clusters retires it instead of leaving it
+    # active forever.
     return {key: members_by_key.get(key, frozenset()) for key in active_keys}
 
 
