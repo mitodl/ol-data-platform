@@ -7,8 +7,10 @@ parsed dbt manifest is already on disk. Nothing in this module imports dagster
 or dbt.
 """
 
+import logging
 import re
-from collections.abc import Iterator, Mapping
+import time
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any
 
 # Retries are of the whole `dbt build`, since dbt-starrocks has no adapter-level
@@ -117,6 +119,96 @@ def materialized_view_relations(manifest: Mapping[str, Any]) -> list[str]:
         )
         raise ValueError(msg)
     return relations
+
+
+# Two ways a REFRESH fails because the Trino project rebuilt an Iceberg base
+# table under it. Every `dimensional` table the MVs read is materialized='table',
+# so each Trino build replaces it with a new Iceberg table, and the automation
+# sensor runs that build several times a day on no fixed schedule.
+#
+# "does not exist when collecting snapshot infos" -- the REFRESH landed inside
+# the swap itself. On 2026-09-25 run 1889c9b0 rebuilt bridge_organization_courserun
+# from 06:04:10 to 06:04:33 UTC and the nightly began refreshing
+# mv_b2b_learner_enrollment at 06:04:22.
+#
+# "was recreated but its table type is not supported for automatic meta
+# repair" -- the first REFRESH of an MV after the swap. StarRocks marks the MV
+# inactive and asks for a manual refresh, which is the next REFRESH. The
+# 09-25 Dagster run retries showed it: each retry got past the MV that failed
+# the attempt before and failed on the next MV in the list.
+#
+# Neither needs more than a second REFRESH once the new table is in place. The
+# delay covers a swap still in progress (the 09-25 CREATE TABLE ran 22s).
+MV_REFRESH_RETRIABLE_PATTERN = re.compile(
+    r"does not exist when collecting snapshot infos"
+    r"|was recreated but its table type is not supported for automatic meta repair"
+)
+MAX_MV_REFRESH_ATTEMPTS = 3
+MV_REFRESH_RETRY_DELAY_SECONDS = 30
+
+
+class MaterializedViewRefreshError(Exception):
+    """One or more MVs still failed to refresh after their retries."""
+
+    def __init__(self, failures: Mapping[str, Exception]) -> None:
+        self.failures = dict(failures)
+        detail = "\n".join(f"{name}: {exc}" for name, exc in self.failures.items())
+        super().__init__(
+            f"{len(self.failures)} materialized view(s) failed to refresh:\n{detail}"
+        )
+
+
+def refresh_materialized_views(
+    relations: Iterable[str],
+    execute: Callable[[str], None],
+    *,
+    log: logging.Logger,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Refresh every MV in *relations*, retrying base-table-rebuild failures.
+
+    One MV failing doesn't stop the rest. Before this, the first failure ended
+    the asset and every MV after it in the list kept the previous day's data. A
+    failure outside `MV_REFRESH_RETRIABLE_PATTERN` is not retried, but it is
+    still reported with the others at the end.
+
+    :param relations: Schema-qualified MV names, as `materialized_view_relations`
+        returns them.
+    :param execute: Runs one SQL statement. `StarRocksResource.execute` in the
+        asset.
+    :param log: Where progress goes. `context.log` in the asset.
+    :param sleep: Injected so tests don't wait out the retry delay.
+    :raises MaterializedViewRefreshError: if any MV still failed.
+    """
+    failures: dict[str, Exception] = {}
+    for relation in relations:
+        log.info("Refreshing %s", relation)
+        for attempt in range(1, MAX_MV_REFRESH_ATTEMPTS + 1):
+            try:
+                execute(f"REFRESH MATERIALIZED VIEW {relation} WITH SYNC MODE")
+            except Exception as exc:
+                if (
+                    attempt == MAX_MV_REFRESH_ATTEMPTS
+                    or not MV_REFRESH_RETRIABLE_PATTERN.search(str(exc))
+                ):
+                    log.exception("Refresh of %s failed", relation)
+                    failures[relation] = exc
+                    break
+                log.warning(
+                    "Refresh of %s failed on a rebuilt base table (attempt %d/%d), "
+                    "retrying in %ds: %s",
+                    relation,
+                    attempt,
+                    MAX_MV_REFRESH_ATTEMPTS,
+                    MV_REFRESH_RETRY_DELAY_SECONDS,
+                    exc,
+                )
+                sleep(MV_REFRESH_RETRY_DELAY_SECONDS)
+            else:
+                log.info("Refreshed %s", relation)
+                break
+    if failures:
+        raise MaterializedViewRefreshError(failures)
 
 
 def _materialized_view_nodes(
