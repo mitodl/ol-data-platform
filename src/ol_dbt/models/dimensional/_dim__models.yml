@@ -399,6 +399,23 @@ models:
     description: string, user id on Emeritus platform
   - name: global_alumni_user_id
     description: string, user id on Global Alumni platform
+  - name: emeritus_identity_key
+    description: string, identifies the user's Emeritus account - the Emeritus user
+      id, or the email as Emeritus sent it (not lowercased) when Emeritus sent no
+      user id. Null if the user has no Emeritus account. May contain an email address.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "emeritus_user_id is not null"
+  - name: global_alumni_identity_key
+    description: string, identifies the user's Global Alumni account - the email as
+      Global Alumni sent it (not lowercased), falling back to the user id. Email comes
+      first because a Global Alumni user id is not unique per person. Null if the
+      user has no Global Alumni account.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        arguments:
+          row_condition: "global_alumni_user_id is not null"
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
@@ -480,6 +497,13 @@ models:
     description: str, the currency code (e.g. USD, EUR) of the original income reported
       in the user's most recent flexible pricing application on MITxOnline. Null if
       no application exists.
+  tests:
+  # An Emeritus identity key only falls back to email when the user has no Emeritus id.
+  - dbt_expectations.expect_column_pair_values_to_be_equal:
+      arguments:
+        column_A: emeritus_identity_key
+        column_B: emeritus_user_id
+        row_condition: "emeritus_user_id is not null"
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
