@@ -31,6 +31,7 @@ from ol_orchestrate.lib.utils import (
     unauthenticated_vault,
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
 from delivery.assets.mit_climate import mit_climate_webhook
@@ -154,6 +155,9 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
+        # opens the unpublish-review issues mit_edx_programs_webhook files when edX
+        # lists no program
+        "github_api": GithubApiClientFactory(vault=vault),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
             client_class="MITLearnApiClient",
