@@ -313,6 +313,11 @@ def _sources_from_inventory(inventory_dir: Path, dbt_project_dir: Path) -> None:
         sys.exit(1)
 
     models_dir = dbt_project_dir / "models"
+    if not models_dir.is_dir():
+        # From anywhere but the repo root this finds no files, and an empty
+        # plan would read as "already agree".
+        print(f"✗ No dbt models directory at {models_dir}; run from the repo root.")
+        sys.exit(1)
     files = sorted({*models_dir.rglob("*.yml"), *models_dir.rglob("*.yaml")})
     plan = plan_sources(units, files)
 

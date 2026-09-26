@@ -22,6 +22,7 @@ to change are never rewritten.
 
 from __future__ import annotations
 
+import copy
 import io
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -90,10 +91,14 @@ def _split_by_loader(block: CommentedMap, loaders: dict[str, str], changes: list
 
     blocks = []
     for index, (loader, tables) in enumerate(groups.items()):
-        target = block if index == 0 else CommentedMap((k, v) for k, v in block.items() if k != "tables")
+        # Deep copies, because a nested value (`freshness`, `meta`) shared
+        # between two blocks is serialized as a YAML anchor and alias.
+        target = block if index == 0 else CommentedMap((k, copy.deepcopy(v)) for k, v in block.items() if k != "tables")
+        # None is the group of undeclared tables in a block that had no loader;
+        # they keep having none rather than gaining a `loader:` null.
         if "loader" in target:
             target["loader"] = loader
-        else:
+        elif loader is not None:
             target.insert(1, "loader", loader)
         target["tables"] = CommentedSeq(tables)
         blocks.append(target)

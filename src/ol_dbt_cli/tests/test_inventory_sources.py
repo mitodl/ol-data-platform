@@ -159,6 +159,44 @@ sources:
         assert plan.contents == {}
         assert plan.loader_changes == []
 
+    def test_a_split_copies_nested_keys_instead_of_aliasing_them(self, inventory: Path, tmp_path: Path) -> None:
+        content = f"""---
+version: 2
+sources:
+- name: {RAW_SOURCE_NAME}
+  loader: airbyte
+  freshness:
+    warn_after: {{count: 1, period: day}}
+  tables:
+  - name: {EDX}bigquery__mitx_course
+  - name: {EDX}s3__auth_user
+  - name: {EDX}s3__auth_userprofile
+"""
+        path = _write(tmp_path, "_edxorg_sources.yml", content)
+        output = plan_sources(load_units(inventory), [path]).contents[path]
+
+        assert "&" not in output
+        assert "*" not in output
+        assert [block["freshness"] for block in yaml.safe_load(output)["sources"]] == [
+            {"warn_after": {"count": 1, "period": "day"}}
+        ] * 2
+
+    def test_undeclared_tables_in_a_loaderless_block_gain_no_null_loader(self, inventory: Path, tmp_path: Path) -> None:
+        content = f"""---
+version: 2
+sources:
+- name: {RAW_SOURCE_NAME}
+  tables:
+  - name: {EDX}retired_table
+  - name: {EDX}s3__auth_user
+  - name: {EDX}s3__auth_userprofile
+"""
+        path = _write(tmp_path, "_edxorg_sources.yml", content)
+        blocks = yaml.safe_load(plan_sources(load_units(inventory), [path]).contents[path])["sources"]
+
+        assert "loader" not in blocks[0]
+        assert blocks[1]["loader"] == "dlt"
+
     def test_non_raw_sources_are_left_alone(self, inventory: Path, tmp_path: Path) -> None:
         other = MIXED.replace(f"- name: {RAW_SOURCE_NAME}", "- name: dimensional")
         path = _write(tmp_path, "_b2b_sources.yml", other)
