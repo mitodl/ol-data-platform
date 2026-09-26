@@ -1098,6 +1098,10 @@ models:
     What each listed edX.org program takes from the courses MIT Learn publishes:
     topics through the MIT Learn topic crosswalk, summed weeks and averaged weekly
     hours from each course's best run.
+  config:
+    meta:
+      qa_branches:
+      - mitlearn/app_postgres
   columns:
   - name: readable_id
     description: str, the program's edX uuid
