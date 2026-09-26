@@ -120,6 +120,24 @@ sources:
     - name: topic_uuid
       description: str, unique identifier for the learning resource topic
 
+  - name: raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping
+    description: Per-offeror crosswalk from an offeror's own topic names to MIT Learn
+      topics
+    columns:
+    - name: id
+      description: int, primary key for the topic mapping
+    - name: topic_id
+      description: int, foreign key to the MIT Learn topic the offeror topic maps
+        to
+    - name: offeror_id
+      description: str, code of the offeror whose topic name is mapped, e.g. mitx
+    - name: topic_name
+      description: str, the offeror's own topic name
+    - name: created_on
+      description: timestamp, when the mapping was created
+    - name: updated_on
+      description: timestamp, when the mapping was last updated
+
   - name: raw__mitlearn__app__postgres__profiles_profile_topic_interests
     description: learning resource topic interests for user profiles
     columns:
