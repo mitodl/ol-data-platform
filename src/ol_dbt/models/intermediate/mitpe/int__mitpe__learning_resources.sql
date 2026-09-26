@@ -45,7 +45,7 @@ with source as (
         end as delivery
         , case
             when course_learning_format in ('In Person', 'On Campus', 'Blended')
-                then course_location
+                then coalesce(course_location, '')
             else ''
         end as location
         , coalesce(course_duration, '') as duration

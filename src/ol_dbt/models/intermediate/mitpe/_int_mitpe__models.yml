@@ -52,6 +52,8 @@ models:
   - name: location
     description: str, the item's location for in-person and blended formats, else
       empty
+    tests:
+    - not_null
   - name: duration
     description: str, the feed's duration text, empty if none
   - name: min_weeks
@@ -171,7 +173,7 @@ unit_tests:
       price: null}
     - {readable_id: b, resource_type: course, title: b, delivery: online, location: "",
       duration: "3.5 Days", min_weeks: 1, max_weeks: 1, price: null}
-    - {readable_id: c, resource_type: program, title: c, delivery: hybrid, location: null,
+    - {readable_id: c, resource_type: program, title: c, delivery: hybrid, location: "",
       duration: "7 half days", min_weeks: 2, max_weeks: 2, price: null}
     - {readable_id: d, resource_type: program, title: d, delivery: online, location: "",
       duration: "12 weeks", min_weeks: 12, max_weeks: 12, price: null}

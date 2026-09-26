@@ -83,6 +83,7 @@ models:
     tests: [not_null]
   - name: location
     description: str, location for in-person and blended formats, else empty.
+    tests: [not_null]
   - name: duration
     description: str, the feed's duration text, empty if none.
   - name: min_weeks
@@ -134,6 +135,7 @@ models:
     tests: [not_null]
   - name: location
     description: str, location for in-person and blended formats, else empty.
+    tests: [not_null]
   - name: duration
     description: str, the feed's duration text, empty if none.
   - name: min_weeks
