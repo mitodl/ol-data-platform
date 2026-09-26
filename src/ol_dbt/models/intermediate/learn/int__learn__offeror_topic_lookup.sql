@@ -6,7 +6,13 @@
   Encodes the two rules MIT Learn's transform_topics applied:
   1. A name with explicit mappings for the offeror resolves to every mapped topic.
   2. Otherwise the name resolves to itself if it is exactly an MIT Learn topic name.
+
+  The staging refs below are not read. dbt only lets a multi-parent test gate a model
+  that descends from all of the test's parents, so they make
+  assert_learn_topic_seeds_match_mitlearn block this model (and delivery) on drift.
 #}
+-- depends_on: {{ ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic') }}
+-- depends_on: {{ ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping') }}
 
 with topics as (
     select * from {{ ref('learn_topics') }}

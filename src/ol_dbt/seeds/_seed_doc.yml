@@ -123,7 +123,9 @@ seeds:
     rather than inside MIT Learn. Until the MIT Learn ETL cutover, MIT Learn's own
     data_fixtures migrations still write the taxonomy, so
     tests/assert_learn_topic_seeds_match_mitlearn.sql fails on any drift between this
-    seed and MIT Learn's replicated tables. When it fails, update the seed to match.
+    seed and MIT Learn's replicated tables. int__learn__offeror_topic_lookup depends
+    on the replicated tables too, so in `dbt build` a failure skips the lookup and
+    the delivery models downstream of it. When it fails, update the seed to match.
     Generated from MIT Learn's production tables as replicated to the warehouse, not
     from topics.yaml or a fresh migrate: data_fixtures migrations 0022/0023 create
     topics with random UUIDs and later full-file upserts drop mappings that
