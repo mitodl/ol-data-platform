@@ -241,6 +241,10 @@ models:
     edxorg code location's programs API extraction (int__edxorg__mitx_learn_programs)
     and the MITx catalog (int__edxorg__mitx_learn_program_rollups). Evaluated when
     built.
+  config:
+    meta:
+      qa_branches:
+      - mitlearn/app_postgres
   columns:
   - name: readable_id
     description: str, the program's edX uuid; also its run id.
