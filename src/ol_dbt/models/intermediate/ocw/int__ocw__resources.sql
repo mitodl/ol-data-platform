@@ -3,7 +3,17 @@ with websites as (
 )
 
 , websitecontents as (
-    select * from {{ ref('stg__ocw__studio__postgres__websites_websitecontent') }}
+    select
+        *
+        , nullif(nullif(
+            {{ json_query_string('websitecontent_metadata', "'$.video_files.archive_url'") }}, ''
+        ), 'null') as video_archive_url
+    from {{ ref('stg__ocw__studio__postgres__websites_websitecontent') }}
+)
+
+, drivefiles as (
+    select * from {{ ref('stg__ocw__studio__postgres__gdrive_sync_drivefile') }}
+    where lower(drivefile_mime_type) like 'video/%'
 )
 
 , websitestarters as (
@@ -30,6 +40,7 @@ select
     , websitecontents.websitecontent_metadata as metadata --noqa: disable=RF04
     , websitecontents.metadata_draft as resource_draft
     , websitecontents.websitecontent_filename as resource_filename
+    , nullif(drivefiles.drivefile_name, '') as resource_uploaded_filename
     , websitecontents.websitecontent_title as resource_title
     , websitecontents.metadata_resource_type as resource_type
     , websitecontents.websitecontent_text_id as resource_uuid
@@ -111,9 +122,8 @@ select
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
     ), ''), 'null') as video_youtube_tags
     -- video_files for video resources
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_files.archive_url' omit quotes
-    ), ''), 'null') as video_archive_url
+    , websitecontents.video_archive_url
+    , {{ filename_from_url('websitecontents.video_archive_url') }} as video_archive_filename
     , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
     ), ''), 'null') as video_captions_file
@@ -154,6 +164,9 @@ select
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
+left join drivefiles
+    on websitecontents.websitecontent_id = drivefiles.websitecontent_id
+    and websitecontents.metadata_resource_type = 'Video'
 left join sitemetadata
     on websites.website_uuid = sitemetadata.website_uuid
 inner join websitestarters

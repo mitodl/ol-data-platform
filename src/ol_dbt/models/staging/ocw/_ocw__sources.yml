@@ -7,6 +7,17 @@ sources:
   database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
+  - name: raw__ocw__studio__postgres__gdrive_sync_drivefile
+    columns:
+    - name: file_id
+      description: str, Google Drive file ID
+    - name: name
+      description: str, filename in Google Drive, including the extension
+    - name: mime_type
+      description: str, MIME type of the Google Drive file
+    - name: resource_id
+      description: int, foreign key to websites_websitecontent
+
   - name: raw__ocw__studio__postgres__websites_website
     columns:
     - name: uuid

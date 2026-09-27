@@ -137,7 +137,7 @@ tables:
   namespace: public
   primary_key:
   - - file_id
-  modeled: false
+  modeled: true
 - name: guardian_groupobjectpermission
   raw_table: raw__ocw__studio__postgres__guardian_groupobjectpermission
   sync_mode: incremental_deduped_history

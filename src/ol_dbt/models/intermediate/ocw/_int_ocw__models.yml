@@ -302,9 +302,12 @@ models:
   - name: resource_draft
     description: boolean, whether the resource is draft
   - name: resource_filename
-    description: str, filename of the resource file
+    description: str, resource page slug used in the resource URL, without an extension
     tests:
     - not_null
+  - name: resource_uploaded_filename
+    description: str, video filename including extension from the linked Google Drive
+      upload (DriveFile.name); null when unavailable
   - name: resource_live_url
     description: str, live URL of the resource on production
   - name: resource_title
@@ -336,6 +339,9 @@ models:
     description: str, level of the resource as a JSON array
   - name: video_archive_url
     description: str, archive URL of the video
+  - name: video_archive_filename
+    description: str, filename extracted from video_archive_url, excluding query parameters
+      and fragments; null when unavailable
   - name: video_captions_file
     description: str, captions file of the video resource
   - name: video_thumbnail_file
