@@ -257,6 +257,19 @@ if DAGSTER_ENV == "production":
         # sync to daily without a word, so refuse to load instead.
         msg = f"No sync intervals rendered from the inventory at {INVENTORY_DIR}."
         raise RuntimeError(msg)
+    # A single live group the inventory does not cover (a connection created or
+    # renamed in the UI) warns rather than raises. There is one today, the
+    # edx.org course-metadata connection pending deletion, and failing here
+    # would take the whole code location down for it. airbyte_inventory_drift
+    # reports the connection behind it as undeclared.
+    if uncovered := sorted(group_names - group_name_to_interval.keys()):
+        import warnings
+
+        warnings.warn(
+            f"No inventory sync interval for Airbyte group(s) {uncovered}; "
+            "they fall back to 24 hours.",
+            stacklevel=2,
+        )
 
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
