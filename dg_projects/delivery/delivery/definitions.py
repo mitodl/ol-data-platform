@@ -10,6 +10,9 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 
 The extraction halves of these pipelines (sloan_course_metadata, video_api,
 video_metadata) still live here and move on to INGEST later.
+
+It also registers the deployment-wide failure notification sensors, which
+watch every code location and must be registered from exactly one.
 """
 
 from dagster import (
@@ -32,6 +35,7 @@ from ol_orchestrate.lib.utils import (
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
+from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
@@ -195,6 +199,7 @@ defs = Definitions(
             ovs_videos_discovery_sensor,
             ovs_videos_stale_cleanup_sensor,
             ovs_videos_delete_partition_cleanup_sensor,
+            *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),
     jobs=[
