@@ -58,6 +58,8 @@ from delivery.assets.ovs_videos import (
 from delivery.assets.podcasts import podcast_webhook
 from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
+    AIRBYTE_SYNC_AND_STAGE_CRON,
+    NON_AIRBYTE_STAGING_CRON,
     deliver_after_upstream,
     instigators_for_environment,
 )
@@ -89,19 +91,31 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
 # runs once a day after its integrations models are rebuilt -- see
 # deliver_after_upstream for why this is not a cron schedule.
 mit_climate_webhook, mit_climate_delivery_sensor = deliver_after_upstream(
-    mit_climate_webhook, "mit_climate_delivery_sensor"
+    mit_climate_webhook,
+    "mit_climate_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 mitpe_webhook, mitpe_delivery_sensor = deliver_after_upstream(
-    mitpe_webhook, "mitpe_delivery_sensor"
+    mitpe_webhook,
+    "mitpe_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 oll_webhook, oll_delivery_sensor = deliver_after_upstream(
-    oll_webhook, "oll_delivery_sensor"
+    oll_webhook,
+    "oll_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstream(
-    mit_edx_programs_webhook, "mit_edx_programs_delivery_sensor"
+    mit_edx_programs_webhook,
+    "mit_edx_programs_delivery_sensor",
+    # Built from the Airbyte-loaded edxorg S3 extraction and MIT Learn's
+    # Postgres, both staged by the midnight sync_and_stage jobs.
+    staging_cron=AIRBYTE_SYNC_AND_STAGE_CRON,
 )
 podcast_webhook, podcast_delivery_sensor = deliver_after_upstream(
-    podcast_webhook, "podcast_delivery_sensor"
+    podcast_webhook,
+    "podcast_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 
 # Daily schedule for learning resource API extraction

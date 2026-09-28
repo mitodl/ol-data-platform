@@ -155,11 +155,16 @@ and a full-sync batch built from stale data unpublishes whatever changed
 upstream since. Declare its deps with the key lakehouse emits,
 `AssetKey(["integrations", "<model name>"])`, and wrap it with
 `deliver_after_upstream`, which runs it once a day after every dep has
-materialized since 06:00 UTC:
+materialized since the tick of the lakehouse job that stages the source's
+inputs (`NON_AIRBYTE_STAGING_CRON` for dlt/Dagster-loaded sources,
+`AIRBYTE_SYNC_AND_STAGE_CRON` for Airbyte ones). Pass the wrong one and the
+delivery never fires, because the models were rebuilt before the tick:
 
 ```python
 my_source_webhook, my_source_delivery_sensor = deliver_after_upstream(
-    my_source_webhook, "my_source_delivery_sensor"
+    my_source_webhook,
+    "my_source_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 ```
 

@@ -64,10 +64,15 @@ from dagster import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
-# The day boundary for webhook delivery: lakehouse's non_airbyte_staging_daily
-# fires at this tick, and dbt_automation_sensor rebuilds the integrations models
-# from that staging afterwards.
-LEARN_DELIVERY_CRON = "0 6 * * *"
+# The ticks that start each day's staging in lakehouse, which is what a delivery
+# has to wait out. dbt_automation_sensor rebuilds the integrations models from
+# that staging afterwards. A source is delivered against the tick of whichever
+# job stages *its* inputs: waiting on a later tick than that never fires, since
+# the models were already rebuilt before it.
+# non_airbyte_staging_daily: dlt- and Dagster-loaded sources.
+NON_AIRBYTE_STAGING_CRON = "0 6 * * *"
+# daily_sync_and_stage_<group> for a 24-hour Airbyte group.
+AIRBYTE_SYNC_AND_STAGE_CRON = "0 0 * * *"
 LEARN_DELIVERY_SENSOR_INTERVAL_SECONDS = 300
 
 INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
@@ -171,6 +176,7 @@ def deliver_after_upstream(
     webhook: AssetsDefinition,
     sensor_name: str,
     *,
+    staging_cron: str,
     environment: str = DAGSTER_ENV,
 ) -> tuple[AssetsDefinition, AutomationConditionSensorDefinition]:
     """Deliver *webhook* once a day, after everything it reads is rebuilt.
@@ -178,10 +184,16 @@ def deliver_after_upstream(
     Replaces a cron schedule, which POSTed whatever the integrations model held
     at the tick. Those ticks (06:00-07:00) landed at or before the 06:00 staging
     build the models are derived from, so each delivery sent yesterday's data.
-    ``on_cron`` waits past the tick until every dep has materialized since it,
-    then requests once. If a dep is not rebuilt that day (dbt_automation_sensor
-    skips a model whose inputs did not change) nothing is delivered, which is
-    also what a full-sync receiver needs: the previous batch is still current.
+    ``on_cron`` waits past *staging_cron* until every dep has materialized
+    since it, then requests once. If a dep is not rebuilt that day
+    (dbt_automation_sensor skips a model whose inputs did not change) nothing is
+    delivered, which is also what a full-sync receiver needs: the previous batch
+    is still current.
+
+    A rebuild after the tick that is not driven by fresh staging (a deploy that
+    changes the model's SQL, a manual materialization) also counts, and uses up
+    that day's delivery on the previous day's inputs. Narrow, and the next day
+    corrects it, but it is not ruled out.
 
     The deps live in lakehouse. The automation daemon evaluates against the
     workspace asset graph, so a dep in another code location is observed the
@@ -196,6 +208,8 @@ def deliver_after_upstream(
     :param webhook: The delivery asset.
     :param sensor_name: Its sensor's name, which must have an entry in
         :data:`INSTIGATOR_ENVIRONMENTS`.
+    :param staging_cron: The tick of the lakehouse job that stages this
+        source's inputs, e.g. :data:`NON_AIRBYTE_STAGING_CRON`.
     :param environment: The environment to build for.
     :returns: The asset, conditioned where it may run, and its sensor.
     :rtype: tuple[AssetsDefinition, AutomationConditionSensorDefinition]
@@ -208,7 +222,7 @@ def deliver_after_upstream(
     )
     if environment not in INSTIGATOR_ENVIRONMENTS[sensor_name]:
         return webhook, sensor
-    condition = AutomationCondition.on_cron(LEARN_DELIVERY_CRON)
+    condition = AutomationCondition.on_cron(staging_cron)
     conditioned = webhook.map_asset_specs(
         lambda spec: spec.replace_attributes(automation_condition=condition)
     )
