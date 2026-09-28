@@ -1,51 +1,48 @@
 {#
   integrations__learn__mit_edx_programs
-  Exposes MIT-authored edX.org programs for MIT Learn's ETL (Trino-pull or webhook).
+  The edX.org programs MIT Learn lists, for webhook delivery: MITx and MITx_PRO
+  programs that edX currently lists as active, excluding MicroMasters, which MIT Learn
+  deleted and has no destination for. One row per program with the single run MIT
+  Learn models a program as. Instructors are in
+  integrations__learn__mit_edx_program_instructors.
   Contract: docs/learn_marts_contract.md
-
-  Source: raw__edxorg__discovery__api__programs, which is pre-filtered by the
-  dlt pipeline to active, MIT-authored, non-MicroMasters programs. The
-  MicroMasters exclusion is deliberate and permanent: MIT Learn unpublished and
-  then deleted its MicroMasters resources (migrations 0117/0118) and dropped
-  `micromasters` from its ETLSource enum, so those programs are no longer
-  wanted as learning resources at all. Do not lift the filter to "restore"
-  them -- there is no longer a destination for them.
-
-  raw__edxorg__discovery__api__programs is loaded with write_disposition=
-  "merge" (primary_key=uuid): a program that becomes inactive/withdrawn simply
-  stops being yielded by the dlt pipeline, so merge leaves its existing row in
-  place rather than deleting it. `published` is therefore NOT a constant --
-  it's true only for programs whose _dlt_load_id matches the table's most
-  recent load, i.e. programs the pipeline actually reconfirmed as active in
-  the latest successful run. A program merge left behind from an older run
-  gets published = false here instead of appearing live forever.
-
-  The subjects and courses columns retain their JSON array format from the API
-  because no cross-db macro is available to flatten JSON arrays to a
-  comma-separated string. Consuming applications must parse the JSON.
 #}
 
 with programs as (
-    select * from {{ ref('stg__edxorg__discovery__api__programs') }}
+    select * from {{ ref('int__edxorg__mitx_learn_programs') }}
+)
+
+, rollups as (
+    select * from {{ ref('int__edxorg__mitx_learn_program_rollups') }}
 )
 
 select
-    program_uuid                                            as readable_id
-    , program_title                                         as title
-    , {{ cast_timestamp_to_iso8601('current_timestamp') }}  as last_modified
-    , 'mit_edx'                                             as etl_source
-    , program_description                                   as description
-    , program_marketing_url                                 as url
-    , program_image_url                                     as image_url
-    -- subjects as JSON string: [{"name": "Engineering"}, ...]
-    -- consumers should parse this JSON array to extract topic names
-    , program_subjects_json                                 as topics_json
-    -- course keys as JSON string: [{"key": "MITx/6.00.1x"}, ...]
-    -- consumers should parse this JSON array to extract readable_ids
-    , program_courses_json                                  as courses_json
-    , (
-        program_dlt_load_id = max(program_dlt_load_id) over ()
-    )                                                        as published
-    , 'edxorg'                                              as platform
-    , 'program'                                             as resource_type
+    programs.readable_id
+    , programs.title
+    , programs.description
+    , programs.url
+    , programs.image_url
+    , programs.last_modified
+    , programs.level
+    , programs.start_date
+    , programs.end_date
+    , programs.enrollment_start
+    , programs.enrollment_end
+    , programs.price
+    , programs.currency
+    , programs.pace
+    , programs.availability
+    , rollups.topics
+    , rollups.duration
+    , rollups.min_weeks
+    , rollups.max_weeks
+    , rollups.time_commitment
+    , rollups.min_weekly_hours
+    , rollups.max_weekly_hours
+    , programs.course_readable_ids
+    , programs.retrieved_at
+    , 'mit_edx' as etl_source
+    , 'edx' as platform
+    , 'program' as resource_type
 from programs
+inner join rollups on programs.readable_id = rollups.readable_id
