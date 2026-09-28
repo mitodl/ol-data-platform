@@ -8,6 +8,8 @@ from delivery.lib.sanitize import (
     clean_html,
 )
 
+from delivery_tests.test_mitpe import course_row
+
 
 def test_clean_html_strips_script_tags():
     """Script tags and their contents must not survive sanitization."""
@@ -102,16 +104,12 @@ def test_clean_html_preserves_empty_string():
 def test_row_to_resource_sanitizes_description():
     """The mitpe payload builder delivers a sanitized description."""
     resource = _row_to_resource(
-        {
-            "readable_id": "mitpe-course-1",
-            "title": "A Course",
-            "description": "<p>Real copy</p><script>alert('xss')</script>",
-        }
+        course_row(description="<p>Real copy</p><script>alert('xss')</script>"), []
     )
     assert resource["description"] == "<p>Real copy</p>"
 
 
 def test_row_to_resource_keeps_missing_description_none():
     """A row with no description delivers None, not an empty string."""
-    resource = _row_to_resource({"readable_id": "mitpe-course-2", "title": "A Course"})
+    resource = _row_to_resource(course_row(description=None), [])
     assert resource["description"] is None
