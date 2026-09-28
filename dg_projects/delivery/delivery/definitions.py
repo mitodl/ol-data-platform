@@ -58,6 +58,7 @@ from delivery.assets.ovs_videos import (
 from delivery.assets.podcasts import podcast_webhook
 from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
+    deliver_after_upstream,
     instigators_for_environment,
 )
 from delivery.sensors.ovs_videos import (
@@ -84,43 +85,23 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault_authenticated = False
 
 
-# Daily schedules for REST API webhook delivery sources.
-# All run after 06:00 UTC to allow upstream APIs to settle overnight.
-mit_climate_schedule = ScheduleDefinition(
-    name="mit_climate_schedule",
-    target=AssetSelection.assets(mit_climate_webhook),
-    cron_schedule="0 6 * * *",
-    execution_timezone="Etc/UTC",
+# Webhook delivery, one sensor per source so each is enabled on its own. Each
+# runs once a day after its integrations models are rebuilt -- see
+# deliver_after_upstream for why this is not a cron schedule.
+mit_climate_webhook, mit_climate_delivery_sensor = deliver_after_upstream(
+    mit_climate_webhook, "mit_climate_delivery_sensor"
 )
-
-mitpe_schedule = ScheduleDefinition(
-    name="mitpe_schedule",
-    target=AssetSelection.assets(mitpe_webhook),
-    cron_schedule="15 6 * * *",
-    execution_timezone="Etc/UTC",
+mitpe_webhook, mitpe_delivery_sensor = deliver_after_upstream(
+    mitpe_webhook, "mitpe_delivery_sensor"
 )
-
-oll_schedule = ScheduleDefinition(
-    name="oll_schedule",
-    target=AssetSelection.assets(oll_webhook),
-    cron_schedule="30 6 * * *",
-    execution_timezone="Etc/UTC",
+oll_webhook, oll_delivery_sensor = deliver_after_upstream(
+    oll_webhook, "oll_delivery_sensor"
 )
-
-mit_edx_programs_schedule = ScheduleDefinition(
-    name="mit_edx_programs_schedule",
-    target=AssetSelection.assets(mit_edx_programs_webhook),
-    cron_schedule="45 6 * * *",
-    execution_timezone="Etc/UTC",
+mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstream(
+    mit_edx_programs_webhook, "mit_edx_programs_delivery_sensor"
 )
-
-# Cohort 3 media/feed delivery. Podcasts deliver a nested channel+episode
-# payload, so this runs after the Cohort 2 slots rather than sharing one.
-podcast_schedule = ScheduleDefinition(
-    name="podcast_schedule",
-    target=AssetSelection.assets(podcast_webhook),
-    cron_schedule="0 7 * * *",
-    execution_timezone="Etc/UTC",
+podcast_webhook, podcast_delivery_sensor = deliver_after_upstream(
+    podcast_webhook, "podcast_delivery_sensor"
 )
 
 # Daily schedule for learning resource API extraction
@@ -231,11 +212,6 @@ defs = Definitions(
         [
             extract_api_daily_schedule,
             ovs_videos_api_schedule,
-            mit_climate_schedule,
-            mitpe_schedule,
-            oll_schedule,
-            mit_edx_programs_schedule,
-            podcast_schedule,
             instructor_onboarding_schedule,
         ]
     ),
@@ -244,6 +220,11 @@ defs = Definitions(
             ovs_videos_discovery_sensor,
             ovs_videos_stale_cleanup_sensor,
             ovs_videos_delete_partition_cleanup_sensor,
+            mit_climate_delivery_sensor,
+            mitpe_delivery_sensor,
+            oll_delivery_sensor,
+            mit_edx_programs_delivery_sensor,
+            podcast_delivery_sensor,
             *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),

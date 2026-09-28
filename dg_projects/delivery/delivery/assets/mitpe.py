@@ -13,7 +13,8 @@ Data flow:
             → integrations__learn__mitpe_{courses,programs,runs} (dbt)
                 → MIT Learn webhook (this asset)
 
-Scheduling: daily at 06:15 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -175,9 +176,9 @@ def _read_table(context: AssetExecutionContext, table: str) -> pl.DataFrame:
         "signed webhook batch to MIT Learn."
     ),
     deps=[
-        AssetKey(["integrations", "learn", _COURSES_TABLE]),
-        AssetKey(["integrations", "learn", _PROGRAMS_TABLE]),
-        AssetKey(["integrations", "learn", _RUNS_TABLE]),
+        AssetKey(["integrations", _COURSES_TABLE]),
+        AssetKey(["integrations", _PROGRAMS_TABLE]),
+        AssetKey(["integrations", _RUNS_TABLE]),
     ],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )

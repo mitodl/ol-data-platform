@@ -28,7 +28,8 @@ plus an empty episode table empties every delivered podcast while leaving the
 podcasts themselves published, which is the failure that looks most like a
 success.
 
-Scheduling: daily at 07:00 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -333,8 +334,8 @@ def build_podcast_resources(
         "Iceberg tables and POST as a signed webhook batch to MIT Learn."
     ),
     deps=[
-        AssetKey(["integrations", "learn", "integrations__learn__podcasts"]),
-        AssetKey(["integrations", "learn", "integrations__learn__podcast_episodes"]),
+        AssetKey(["integrations", "integrations__learn__podcasts"]),
+        AssetKey(["integrations", "integrations__learn__podcast_episodes"]),
     ],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
