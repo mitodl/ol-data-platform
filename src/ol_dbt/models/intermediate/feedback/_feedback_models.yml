@@ -179,6 +179,15 @@ models:
     conformed to the common feedback event contract. Each submission is its own single-turn
     conversation. Sentiment-only submissions are dropped, because they have no text
     to summarize.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
   columns:
   - name: source_slug
     description: str, the feedback source this row came from. Always 'content_feedback'
