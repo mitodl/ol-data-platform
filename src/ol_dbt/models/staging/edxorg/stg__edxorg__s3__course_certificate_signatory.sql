@@ -1,18 +1,12 @@
-with source_files as (
-    select
-        *
-        , dense_rank() over (partition by course_id order by _ab_source_file_last_modified desc) as dense_row
-    from {{ source('ol_warehouse_raw_data', 'raw__edxorg__s3__course_structure__course_certificate_signatory') }}
+with source as (
+    select * from {{ source('ol_warehouse_raw_data', 'raw__edxorg__s3__course_structure__course_certificate_signatory') }}
 )
 
-, source as (
-    select * from source_files
-    where dense_row = 1
-)
-
+{#- Newest file per course, so a signatory removed from a course drops out. #}
 {{ deduplicate_raw_table(
     raw_table='raw__edxorg__s3__course_structure__course_certificate_signatory'
     , partition_columns='id, course_id'
+    , snapshot_by='course_id'
 ) }}
 
 , cleaned as (

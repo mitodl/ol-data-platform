@@ -49,7 +49,7 @@
         'raw__edxorg__program_entitlement': '_airbyte_extracted_at',
         'raw__edxorg__program_learner_report': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__edxorg__s3__course_blocks': '_airbyte_extracted_at',
-        'raw__edxorg__s3__course_structure__course_certificate_signatory': '_airbyte_extracted_at',
+        'raw__edxorg__s3__course_structure__course_certificate_signatory': ['_ab_source_file_last_modified', '_airbyte_extracted_at'],
         'raw__edxorg__s3__course_structure__course_metadata': '_airbyte_extracted_at',
         'raw__edxorg__s3__course_structure__course_policy': '_airbyte_extracted_at',
         'raw__edxorg__s3__course_structure__course_video': '_airbyte_extracted_at',

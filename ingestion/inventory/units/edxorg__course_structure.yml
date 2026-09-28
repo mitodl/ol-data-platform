@@ -22,7 +22,10 @@ tables:
   raw_table: raw__edxorg__s3__course_structure__course_certificate_signatory
   sync_mode: full_refresh_overwrite
   modeled: true
-  raw_metadata_column: _airbyte_extracted_at
+  # Source file first: the model keeps each course's newest file (snapshot_by).
+  raw_metadata_column:
+  - _ab_source_file_last_modified
+  - _airbyte_extracted_at
   mirror:
     columns:
       _airbyte_extracted_at: copy

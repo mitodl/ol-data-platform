@@ -37,7 +37,7 @@
 {% endmacro %}
 
 
-{% macro deduplicate_raw_table(raw_table=none, order_by=none, partition_columns='id', then_by=none, source_cte='source') %}
+{% macro deduplicate_raw_table(raw_table=none, order_by=none, partition_columns='id', then_by=none, source_cte='source', snapshot_by=none) %}
     {#
         Collapse duplicate raw rows to the most recent copy per record key, emitting a
         `most_recent_<source_cte>` CTE (`most_recent_source` by default) for the model
@@ -53,6 +53,12 @@
 
         `source_cte` names the CTE to read, for a model that deduplicates more than
         one raw table.
+
+        `snapshot_by` first keeps only the rows carrying the newest value of the
+        leading resolved column within each `snapshot_by` partition, so a table
+        whose leading column is its source file's mtime is cut to the newest file
+        per partition before rows are deduplicated. A record absent from that file
+        is dropped, where plain dedup would keep its copy from an older file.
 
         Where the resolved column is none, this emits a PASS-THROUGH: the raw table
         carries no metadata column, so there is nothing to order by and nothing to
@@ -81,6 +87,22 @@
     )
     {%- else %}
     {%- set ordering = ([resolved] if resolved is string else resolved) + ([then_by] if then_by is not none else []) %}
+    {%- set dedup_input = source_cte ~ '_snapshot' if snapshot_by is not none else source_cte %}
+    {%- if snapshot_by is not none %}
+    , {{ source_cte }}_snapshot_ranked as (
+        select
+            *
+            , dense_rank() over (
+                partition by {{ snapshot_by }}
+                order by {{ ordering[0] }} desc nulls last
+            ) as snapshot_rank
+        from {{ source_cte }}
+    )
+    , {{ source_cte }}_snapshot as (
+        select * from {{ source_cte }}_snapshot_ranked
+        where snapshot_rank = 1
+    )
+    {%- endif %}
     , {{ source_cte }}_sorted as (
         select
             *
@@ -96,7 +118,7 @@
                 partition by {{ partition_columns }}
                 order by {% for column in ordering %}{{ column }} desc nulls last{% if not loop.last %}, {% endif %}{% endfor %}
             ) as row_num
-        from {{ source_cte }}
+        from {{ dedup_input }}
     )
     , most_recent_{{ source_cte }} as (
         select * from {{ source_cte }}_sorted
