@@ -14,6 +14,7 @@ select
     , duration                                  as episode_duration_raw
     , pub_date                                  as episode_published_on_raw
     , image_url                                 as episode_image_url
+    , rss                                       as episode_rss
     -- Merge-loaded like the channels table: an episode dropped from a feed is
     -- left un-upserted rather than deleted, so its _dlt_load_id marks the last
     -- load that saw it. See integrations__learn__podcast_episodes.

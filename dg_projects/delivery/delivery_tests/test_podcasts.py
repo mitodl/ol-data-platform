@@ -82,6 +82,7 @@ def episode_row():
         "image_url": None,
         "duration_raw": "1:02:03",
         "published_on_raw": "Wed, 02 Oct 2002 13:00:00 GMT",
+        "rss": None,
     }
 
 
@@ -295,10 +296,20 @@ def test_episode_payload_shape(podcast_row, episode_row):
     }
 
 
-def test_episode_omits_rss(podcast_row, episode_row):
-    """`rss` is left out so update_or_create does not blank an existing value."""
-    [podcast] = build_podcast_resources([podcast_row], [episode_row])
+@pytest.mark.parametrize("rss", [None, ""])
+def test_episode_omits_missing_rss(podcast_row, episode_row, rss):
+    """A missing `rss` is left out so update_or_create keeps the stored value."""
+    [podcast] = build_podcast_resources([podcast_row], [{**episode_row, "rss": rss}])
     assert "rss" not in podcast["episodes"][0]["podcast_episode"]
+
+
+def test_episode_carries_rss(podcast_row, episode_row):
+    """MIT Learn's transcript job reads <podcast:transcript> out of `rss`."""
+    rss = '<item><podcast:transcript url="https://example.com/t.vtt" /></item>'
+    [podcast] = build_podcast_resources([podcast_row], [{**episode_row, "rss": rss}])
+    episode = podcast["episodes"][0]["podcast_episode"]
+    assert episode["rss"] == rss
+    assert "transcript" not in episode
 
 
 def test_episode_inherits_channel_topics_and_offered_by(podcast_row, episode_row):

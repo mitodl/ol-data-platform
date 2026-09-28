@@ -82,5 +82,10 @@ sources:
       description: >
         str, episode cover art — itunes:image/@href when present, otherwise the
         parent channel's image URL
+    - name: rss
+      description: >
+        str, the RSS <item> element serialized as XML, with the Podcasting 2.0
+        namespace written as the "podcast" prefix. NULL for rows last loaded
+        before the source captured it.
     - name: etl_source
       description: str, always 'podcast'

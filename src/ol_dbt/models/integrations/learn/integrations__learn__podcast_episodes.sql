@@ -66,6 +66,8 @@ select
     , current_episodes.episode_duration_raw                  as duration_raw
     -- RFC 2822 <pubDate>; parsed by the delivery asset into last_modified.
     , current_episodes.episode_published_on_raw              as published_on_raw
+    -- The <item> XML; MIT Learn reads <podcast:transcript> tags back out of it.
+    , current_episodes.episode_rss                           as rss
     -- Topics and offered_by are inherited from the parent podcast, matching
     -- transform_episode() in learning_resources/etl/podcast.py.
     , podcasts.topics                                        as topics

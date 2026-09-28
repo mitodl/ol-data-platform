@@ -60,6 +60,34 @@ def test_parse_episode_record_skips_items_without_audio() -> None:
     assert ep2 is None
 
 
+_TRANSCRIPT_RSS_XML = b"""<?xml version="1.0"?>
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <item>
+      <guid>ep-t</guid>
+      <enclosure url="https://example.com/ept.mp3" type="audio/mpeg"/>
+      <podcast:transcript url="https://example.com/ept.vtt" type="text/vtt"/>
+    </item>
+  </channel>
+</rss>
+"""
+
+
+def test_parse_episode_record_keeps_the_podcast_transcript_prefix() -> None:
+    """MIT Learn's transcript job drops any transcript tag not prefixed "podcast"."""
+    root = ET.fromstring(_TRANSCRIPT_RSS_XML)  # noqa: S314
+    item = root.find("channel/item")
+    assert item is not None
+    record = podcast_rss._parse_episode_record(item, "chan", "rss", None)
+    assert record is not None
+    assert "<podcast:transcript " in record["rss"]
+    assert 'xmlns:podcast="https://podcastindex.org/namespace/1.0"' in record["rss"]
+    reparsed = ET.fromstring(record["rss"])  # noqa: S314
+    transcript = reparsed.find("{https://podcastindex.org/namespace/1.0}transcript")
+    assert transcript is not None
+    assert transcript.get("url") == "https://example.com/ept.vtt"
+
+
 def _fake_get(url: str, **_kwargs: object) -> FakeResponse:
     if "contents" in url:
         return FakeResponse(

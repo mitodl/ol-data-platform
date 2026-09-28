@@ -215,12 +215,21 @@ def _episode_to_resource(
 ) -> dict[str, Any]:
     """Map an episodes row to MIT Learn's podcast_episode payload shape.
 
-    ``podcast_episode.rss`` (the raw <item> XML the Celery ETL stores) is
-    deliberately omitted: the dlt source does not capture per-item XML, and
-    the field is nullable. Omitting it leaves any existing value intact,
-    because ``load_podcast_episode`` passes this dict as ``defaults=`` to
-    ``update_or_create`` -- absent keys are not written.
+    ``podcast_episode.rss`` is the <item> XML MIT Learn's transcript job reads
+    <podcast:transcript> tags from, so an episode created without it never
+    gets a transcript. It is sent only when present: rows last loaded before
+    the dlt source captured it have none, and ``load_podcast_episode`` passes
+    this dict as ``defaults=`` to ``update_or_create``, so an explicit None
+    would blank the value the Celery ETL stored while an absent key is left
+    alone. ``transcript`` is never sent, for the same reason.
     """
+    podcast_episode = {
+        "audio_url": row["audio_url"],
+        "episode_link": row.get("episode_link"),
+        "duration": _iso8601_duration(row.get("duration_raw")),
+    }
+    if row.get("rss"):
+        podcast_episode["rss"] = row["rss"]
     return {
         "readable_id": row["readable_id"],
         "etl_source": "podcast",
@@ -233,11 +242,7 @@ def _episode_to_resource(
         "last_modified": _parse_pub_date(row.get("published_on_raw")),
         "published": True,
         "topics": topics,
-        "podcast_episode": {
-            "audio_url": row["audio_url"],
-            "episode_link": row.get("episode_link"),
-            "duration": _iso8601_duration(row.get("duration_raw")),
-        },
+        "podcast_episode": podcast_episode,
         "availability": "anytime",
     }
 

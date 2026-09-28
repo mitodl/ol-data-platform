@@ -136,6 +136,11 @@ models:
     description: >
       Raw RFC 2822 <pubDate>. Parsed into the resource's last_modified by the
       delivery asset.
+  - name: rss
+    description: >
+      The RSS <item> element as XML, delivered as podcast_episode.rss. MIT
+      Learn's transcript job reads the <podcast:transcript> tags out of it, so
+      an episode delivered without it never gets a transcript.
   - name: topics
     description: >
       Comma-separated topic labels inherited from the parent podcast.
