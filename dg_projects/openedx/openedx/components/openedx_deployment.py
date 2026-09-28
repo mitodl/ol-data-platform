@@ -223,14 +223,16 @@ class OpenEdxDeploymentComponent:
             name=f"{self.deployment_name}_irx_export_job",
             selection=AssetSelection.assets(assets["irx_export_asset"]),
             tags={
-                # The ceiling legacy_openedx needed for loading studentmodule
-                # whole. The export streams it, so the real peak should be far
-                # lower; it has not been measured yet.
+                # Reading one data file at a time, the first 10 GB of mitx's
+                # studentmodule export held at 2.5 GB, and an idle run pod
+                # sits near 0.9 GB. Karpenter places pods by their request, so
+                # a request below the real peak lets a node overcommit until
+                # the kubelet evicts the run under memory pressure.
                 "dagster-k8s/config": {
                     "container_config": {
                         "resources": {
-                            "requests": {"memory": "2Gi"},
-                            "limits": {"memory": "32Gi"},
+                            "requests": {"memory": "4Gi"},
+                            "limits": {"memory": "8Gi"},
                         }
                     }
                 }

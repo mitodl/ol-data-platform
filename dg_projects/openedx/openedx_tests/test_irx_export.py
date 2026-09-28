@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+from collections.abc import Iterator
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
@@ -80,14 +81,16 @@ def _legacy_bytes() -> bytes:
 
 
 def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
-    frame = pl.LazyFrame(
+    frame = pl.DataFrame(
         [{**row, "s": text} for row, text in zip(ROWS, STRINGS, strict=True)]
     )
+    projected = frame.select(legacy_csv_columns(frame.schema, COLUMNS))
     destination = UPath(tmp_path / "out.csv")
 
+    # An empty leading batch, as read_data_files yields, then the rows split
+    # across batches: one header, and no batch boundary shows in the bytes.
     sha256, size, row_count = write_legacy_csv(
-        frame.select(legacy_csv_columns(frame.collect_schema(), COLUMNS)),
-        destination,
+        [projected.clear(), projected.head(1), projected.tail(3)], destination
     )
 
     written = destination.read_bytes()
@@ -113,10 +116,12 @@ def test_row_count_ignores_crlf_inside_quoted_fields_at_any_chunk_boundary() -> 
 
 
 def test_write_parquet_round_trips_array_columns_and_counts_rows(tmp_path) -> None:
-    frame = pl.LazyFrame(FORUM_ROWS)
+    frame = pl.DataFrame(FORUM_ROWS)
     destination = UPath(tmp_path / "out.parquet")
 
-    sha256, size, row_count = write_parquet(frame, destination)
+    sha256, size, row_count = write_parquet(
+        [frame.clear(), frame.head(1), frame.tail(1)], destination
+    )
 
     written = destination.read_bytes()
     assert sha256 == hashlib.sha256(written).hexdigest()
@@ -180,15 +185,15 @@ class _Table:
         return _Snapshot()
 
 
-def _irx_frame(table: _Table) -> pl.LazyFrame:
+def _irx_frame(table: _Table) -> pl.DataFrame:
     if table.name.endswith("forum_contents"):
-        return pl.LazyFrame(FORUM_ROWS)
+        return pl.DataFrame(FORUM_ROWS)
     export = next(f for f in IRX_EXPORT_FILES if table.name.endswith(f.model))
     model_names = {new: old for old, new in export.renames.items()}
     row = {model_names.get(c, c): "x" for c in export.columns} | {
         "course_id": COURSE_ID
     }
-    return pl.LazyFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
+    return pl.DataFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
 
 
 @pytest.fixture
@@ -207,12 +212,16 @@ def drop_root(tmp_path, monkeypatch) -> UPath:
 
 
 def _run_export(monkeypatch, fail_on: str | None = None):
-    def scan(table: _Table, _snapshot_id: int) -> pl.LazyFrame:
+    def read(table: _Table, _snapshot_id: int) -> Iterator[pl.DataFrame]:
         if fail_on and table.name.endswith(fail_on):
             raise RuntimeError
-        return _irx_frame(table)
+        frame = _irx_frame(table)
+        # One batch per row, after the empty schema batch, so the drop is
+        # assembled across batches the way a multi-file table's would be.
+        yield frame.clear()
+        yield from frame.iter_slices(1)
 
-    monkeypatch.setattr(irx_export, "scan_dbt_model_table", scan)
+    monkeypatch.setattr(irx_export, "read_data_files", read)
     openedx = SimpleNamespace(
         client=SimpleNamespace(get_edx_course_ids=lambda: [[{"id": COURSE_ID}]])
     )

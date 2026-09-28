@@ -12,12 +12,14 @@ The column-level contract is in src/ol_dbt/models/external/IRX_SIMEON_MAPPING.md
 
 import hashlib
 import io
+import itertools
 import json
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
 import polars as pl
+import pyarrow.parquet as pq
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -32,7 +34,9 @@ from dagster import (
     multi_asset,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from ol_orchestrate.lib.glue_helper import load_dbt_model_table, scan_dbt_model_table
+from ol_orchestrate.lib.glue_helper import load_dbt_model_table
+from pyiceberg.io.pyarrow import ArrowScan, schema_to_pyarrow
+from pyiceberg.table import Table
 from upath import UPath
 
 IRX_EXPORT_GROUP = "irx_export"
@@ -156,6 +160,18 @@ def legacy_csv_columns(schema: pl.Schema, columns: Sequence[str]) -> list[pl.Exp
     return exprs
 
 
+def legacy_batch(
+    batch: pl.DataFrame, export: IrxExportFile, course_ids: Sequence[str]
+) -> pl.DataFrame:
+    """Cut one batch of an irx model down to its legacy CSV's rows and columns."""
+    batch = (
+        batch.rename(dict(export.renames))
+        .filter(pl.col("course_id").is_in(course_ids))
+        .drop_nulls(list(export.required))
+    )
+    return batch.select(legacy_csv_columns(batch.schema, export.columns))
+
+
 class _DigestingWriter(io.RawIOBase):
     """Hash and count bytes and CSV records on their way to the object store.
 
@@ -193,17 +209,21 @@ class _DigestingWriter(io.RawIOBase):
         return self._sink.write(data)
 
 
-def write_legacy_csv(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int, int]:
-    """Stream a frame to the drop as CSV; return its sha256, size, and row count.
+def write_legacy_csv(
+    batches: Iterable[pl.DataFrame], destination: UPath
+) -> tuple[str, int, int]:
+    """Write batches to the drop as CSV; return its sha256, size, and row count.
 
-    Streamed, never collected: studentmodule_query.csv runs to 59 GB for mitx,
-    and legacy_openedx needed a 32Gi memory limit for loading it whole. Row
-    count is counted off the bytes as they're written (minus the header line)
-    rather than from a second full scan of the frame.
+    One batch at a time, each written before the next is pulled:
+    studentmodule_query.csv runs to 59 GB for mitx. The header comes from the
+    first batch, so callers pass at least one, empty if need be. Row count is
+    counted off the bytes as they're written (minus the header line) rather
+    than from a second pass over the data.
     """
     with destination.open("wb") as sink:
         writer = _DigestingWriter(sink)
-        frame.sink_csv(writer, line_terminator="\r\n")
+        for index, batch in enumerate(batches):
+            batch.write_csv(writer, include_header=index == 0, line_terminator="\r\n")
     return writer.digest.hexdigest(), writer.size, writer.records - 1
 
 
@@ -224,20 +244,52 @@ class _HashingWriter(io.RawIOBase):
         return self._sink.write(data)
 
 
-def write_parquet(frame: pl.LazyFrame, destination: UPath) -> tuple[str, int, int]:
-    """Stream a frame to the drop as Parquet; return its sha256, size, and row count.
+def write_parquet(
+    batches: Iterable[pl.DataFrame], destination: UPath
+) -> tuple[str, int, int]:
+    """Write batches to the drop as Parquet; return its sha256, size, and row count.
 
-    Streamed, never collected, same as write_legacy_csv. Row count comes from a
-    separate `len()` aggregate rather than the byte-level counting
-    _DigestingWriter does for CSV: Parquet's row groups do not delimit records
-    the way CRLFs do, but a count is a running total the engine streams
-    through in the same bounded memory as the write itself.
+    One row group per batch, each written before the next is pulled, same as
+    write_legacy_csv. The schema comes from the first batch.
     """
-    row_count = frame.select(pl.len()).collect().item()
+    batches = iter(batches)
+    first = next(batches)
+    row_count = 0
     with destination.open("wb") as sink:
-        writer = _HashingWriter(sink)
-        frame.sink_parquet(writer)
-    return writer.digest.hexdigest(), writer.size, row_count
+        hashing = _HashingWriter(sink)
+        with pq.ParquetWriter(hashing, first.to_arrow().schema) as writer:
+            for batch in itertools.chain([first], batches):
+                if batch.height:
+                    writer.write_table(batch.to_arrow())
+                    row_count += batch.height
+    return hashing.digest.hexdigest(), hashing.size, row_count
+
+
+def read_data_files(table: Table, snapshot_id: int) -> Iterator[pl.DataFrame]:
+    """Read an Iceberg snapshot one data file at a time, after an empty batch.
+
+    Not pl.scan_iceberg: with the pyiceberg reader glue_helper forces, it reads
+    through pyiceberg's to_arrow_batch_reader, which hands every data file to a
+    thread pool at once and keeps each decoded file until the consumer reaches
+    it. An S3 upload drains far slower than the pool reads, so the run ends up
+    holding most of the table (mitxonline's studentmodule peaked at 29 GB, and
+    mitx's is twice the size). Polars' streaming sinks also read ahead of a slow
+    Python sink, so the writers take plain batches instead of a LazyFrame.
+
+    The leading empty batch carries the schema, so a table with no data files
+    still gets a CSV header or a Parquet schema.
+    """
+    scan = table.scan(snapshot_id=snapshot_id)
+    projection = scan.projection()
+    reader = ArrowScan(
+        table.metadata, table.io, projection, scan.row_filter, scan.case_sensitive
+    )
+    yield cast(
+        "pl.DataFrame", pl.from_arrow(schema_to_pyarrow(projection).empty_table())
+    )
+    for task in scan.plan_files():
+        for batch in reader.to_record_batches([task]):
+            yield cast("pl.DataFrame", pl.from_arrow(batch))
 
 
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
@@ -342,26 +394,19 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         delivered["course_ids.csv"] = _export(
             course_ids_key,
             write_legacy_csv,
-            pl.LazyFrame({"course_id": course_ids}, schema={"course_id": pl.String}),
+            [pl.DataFrame({"course_id": course_ids}, schema={"course_id": pl.String})],
             drop / "course_ids.csv",
             {},
         )
         yield delivered["course_ids.csv"]
 
         for export in IRX_EXPORT_FILES:
-            frame, metadata = _scan_pinned(irx_model_name(deployment, export.model))
-            frame = (
-                frame.rename(dict(export.renames))
-                .filter(pl.col("course_id").is_in(course_ids))
-                .drop_nulls(list(export.required))
-            )
+            batches, metadata = _read_pinned(irx_model_name(deployment, export.model))
             file_name = f"{export.name}.csv"
             delivered[file_name] = _export(
                 AssetKey([deployment, IRX_EXPORT_GROUP, export.name]),
                 write_legacy_csv,
-                frame.select(
-                    legacy_csv_columns(frame.collect_schema(), export.columns)
-                ),
+                (legacy_batch(batch, export, course_ids) for batch in batches),
                 drop / file_name,
                 metadata,
             )
@@ -369,11 +414,13 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
 
         # Not cut to the course list: legacy dumped the whole forum database,
         # posts in runs the LMS no longer lists included.
-        frame, metadata = _scan_pinned(irx_model_name(deployment, FORUM_CONTENTS_MODEL))
+        batches, metadata = _read_pinned(
+            irx_model_name(deployment, FORUM_CONTENTS_MODEL)
+        )
         delivered["forum_contents.parquet"] = _export(
             forum_key,
             write_parquet,
-            frame,
+            batches,
             drop / "forum_contents.parquet",
             metadata,
         )
@@ -385,8 +432,8 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
     return irx_export
 
 
-def _scan_pinned(table_name: str) -> tuple[pl.LazyFrame, dict[str, str]]:
-    """Scan an irx table at its current snapshot.
+def _read_pinned(table_name: str) -> tuple[Iterator[pl.DataFrame], dict[str, str]]:
+    """Read an irx table at its current snapshot.
 
     Pinned so the row count and the file are read from the same snapshot even
     if dbt rebuilds the model mid-export.
@@ -400,7 +447,7 @@ def _scan_pinned(table_name: str) -> tuple[pl.LazyFrame, dict[str, str]]:
                 "nothing to export."
             )
         )
-    return scan_dbt_model_table(table, snapshot.snapshot_id), {
+    return read_data_files(table, snapshot.snapshot_id), {
         "source_table": f"{IRX_GLUE_DATABASE}.{table_name}",
         "source_snapshot_id": str(snapshot.snapshot_id),
     }
@@ -453,12 +500,12 @@ def _write_manifest(
 
 def _export(
     key: AssetKey,
-    write: Callable[[pl.LazyFrame, UPath], tuple[str, int, int]],
-    frame: pl.LazyFrame,
+    write: Callable[[Iterable[pl.DataFrame], UPath], tuple[str, int, int]],
+    batches: Iterable[pl.DataFrame],
     destination: UPath,
     metadata: Mapping[str, Any],
 ) -> MaterializeResult:
-    sha256, size, row_count = write(frame, destination)
+    sha256, size, row_count = write(batches, destination)
     get_dagster_logger().info(
         "Wrote %s rows (%d bytes) to %s", row_count, size, destination
     )
