@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import polars as pl
+import pyarrow as pa
 import pytest
 from dagster import AssetKey, materialize
 from openedx.assets import irx_export
@@ -19,9 +20,13 @@ from openedx.assets.irx_export import (
     _DigestingWriter,
     build_irx_export_asset,
     legacy_csv_columns,
+    read_data_files,
     write_legacy_csv,
     write_parquet,
 )
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.expressions import AlwaysTrue
+from pyiceberg.table import Table
 from upath import UPath
 
 FORUM_ROWS: list[dict[str, Any]] = [
@@ -285,3 +290,75 @@ def test_rerun_fails_when_the_old_manifest_cannot_be_deleted(
 
     assert not result.success
     assert (drop_root / "users_query.csv").stat().st_mtime_ns == written
+
+
+ICEBERG_SCHEMA = pa.schema(
+    [("id", pa.int64()), ("course_id", pa.string()), ("unexported", pa.string())]
+)
+
+
+def _iceberg_table(tmp_path, data_files: int) -> Table:
+    """Build a local Iceberg table with one data file per append."""
+    catalog = SqlCatalog(
+        "irx",
+        uri=f"sqlite:///{tmp_path}/catalog.db",
+        warehouse=f"file://{tmp_path}",
+    )
+    catalog.create_namespace("irx")
+    table = catalog.create_table("irx.studentmodule", schema=ICEBERG_SCHEMA)
+    for n in range(data_files):
+        table.append(
+            pa.table(
+                {
+                    "id": [2 * n, 2 * n + 1],
+                    "course_id": [COURSE_ID] * 2,
+                    "unexported": ["x"] * 2,
+                },
+                schema=ICEBERG_SCHEMA,
+            )
+        )
+    return table
+
+
+def test_read_data_files_reads_one_data_file_per_pull(tmp_path, monkeypatch) -> None:
+    table = _iceberg_table(tmp_path, data_files=3)
+    tasks_per_read: list[int] = []
+    to_record_batches = irx_export.ArrowScan.to_record_batches
+
+    def spy(scan: Any, tasks: Any) -> Iterator[pa.RecordBatch]:
+        tasks = list(tasks)
+        tasks_per_read.append(len(tasks))
+        return to_record_batches(scan, tasks)
+
+    monkeypatch.setattr(irx_export.ArrowScan, "to_record_batches", spy)
+
+    batches = read_data_files(
+        table, table.current_snapshot().snapshot_id, ("id", "course_id")
+    )
+    schema_batch = next(batches)
+    assert schema_batch.height == 0
+    assert schema_batch.columns == ["id", "course_id"]
+    assert tasks_per_read == []
+    first = next(batches)
+    # Pulling the first rows reads the first data file and nothing past it.
+    assert tasks_per_read == [1]
+    rest = list(batches)
+
+    assert tasks_per_read == [1, 1, 1]
+    assert pl.concat([first, *rest])["id"].sort().to_list() == list(range(6))
+
+
+def test_read_data_files_yields_the_schema_for_a_snapshot_with_no_data_files(
+    tmp_path,
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    table.delete(delete_filter=AlwaysTrue())
+
+    batches = list(
+        read_data_files(
+            table, table.current_snapshot().snapshot_id, ("id", "course_id")
+        )
+    )
+
+    assert [batch.height for batch in batches] == [0]
+    assert batches[0].columns == ["id", "course_id"]
