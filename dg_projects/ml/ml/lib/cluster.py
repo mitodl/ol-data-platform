@@ -65,7 +65,11 @@ DEFAULT_PLATFORMS: list[str] | None = ["mitlearn"]
 
 # The default minimum length per source for FeedbackSummariesConfig, and what every
 # cluster step applies, so an older summary can't carry a shorter chat into a cluster.
-DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE: dict[str, int] = {"learn_ai_tutor": 50}
+DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE: dict[str, int] = {
+    "learn_ai_tutor": 50,
+    # one-word praise ("good", "yes"); the rating already carries it
+    "content_feedback": 20,
+}
 
 
 def platforms_to_run_value(platforms: list[str] | None) -> str | None:
