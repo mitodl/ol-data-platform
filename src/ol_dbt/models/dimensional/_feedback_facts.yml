@@ -43,8 +43,8 @@ models:
           field: feedback_channel_pk
   - name: user_fk
     description: str, foreign key to dim_user. Nullable, and deliberately not coalesced
-      to a sentinel - Zendesk resolves identity by email alone, so an unresolved author
-      is a null rather than a wrong join.
+      to a sentinel, so an unresolved author is a null rather than a wrong join. Resolved
+      by dim_user.user_global_id first (MIT Learn sources), then by email (Zendesk).
     tests:
     # warn, not error: dim_user coverage gaps are a finding about identity resolution,
     # not a reason to fail the build. Matches the other facts' dim_user tests.

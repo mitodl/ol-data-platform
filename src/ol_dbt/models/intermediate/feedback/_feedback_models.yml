@@ -231,7 +231,8 @@ models:
   - name: channel_slug
     description: str, always 'in_product_widget'.
   - name: subject_user_ref
-    description: str, the learner's MIT Learn global id. Null if the user was deleted.
+    description: str, the learner's MIT Learn global id, or their email if they have
+      none. Null for an anonymous submission or a user not in users_user.
   - name: source_url
     description: str, null. MIT Learn has no admin view of a single submission.
   - name: subject_type

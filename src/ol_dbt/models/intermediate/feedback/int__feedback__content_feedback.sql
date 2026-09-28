@@ -8,6 +8,7 @@ with content_feedback as (
     select
         user_id
         , user_global_id
+        , user_email
     from {{ ref('stg__mitlearn__app__postgres__users_user') }}
 )
 
@@ -35,7 +36,8 @@ select
     , cast(content_feedback.contentfeedback_id as varchar) as conversation_ref
     , 1 as turn_index
     , true as is_conversation_opening
-    , users.user_global_id as subject_user_ref
+    -- The event contract allows email only when the user has no global id
+    , coalesce(users.user_global_id, users.user_email) as subject_user_ref
     , cast(null as varchar) as source_url
     , 'in_product_widget' as channel_slug
     , content_feedback.courserun_readable_id
