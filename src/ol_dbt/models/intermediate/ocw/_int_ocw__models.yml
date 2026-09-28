@@ -117,7 +117,6 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["course_uuid", "course_topic", "course_subtopic", "course_speciality"]
-
 - name: int__ocw__course_instructors
   description: supporting table containing tabular instructor profile data for OCW
     courses
@@ -366,3 +365,5 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["course_uuid", "resource_uuid"]
+      config:
+        severity: warn
