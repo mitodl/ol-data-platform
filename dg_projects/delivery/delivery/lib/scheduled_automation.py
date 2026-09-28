@@ -71,6 +71,10 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "mitpe_schedule": frozenset({"production"}),
     "oll_schedule": frozenset({"production"}),
     "mit_edx_programs_schedule": frozenset({"production"}),
+    # Cohort 3 delivery (podcasts), on the same terms as Cohort 2: registered
+    # STOPPED in production, and not to be started before mit-learn #3557
+    # lands the endpoint it POSTs to.
+    "podcast_schedule": frozenset({"production"}),
     # Dispatches ovs_videos_webhook_job per discovered partition. RUNNING in
     # production.
     "ovs_videos_discovery_sensor": frozenset({"production"}),

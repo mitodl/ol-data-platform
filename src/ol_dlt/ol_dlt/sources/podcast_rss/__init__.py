@@ -18,7 +18,7 @@ import base64
 import logging
 from collections.abc import Generator
 from typing import Any
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element, register_namespace, tostring
 
 import dlt
 import yaml
@@ -32,6 +32,15 @@ logger = logging.getLogger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
 ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+PODCAST_NS = "https://podcastindex.org/namespace/1.0"
+
+# MIT Learn's transcript job selects episodes whose stored <item> XML contains
+# ":transcript" and then keeps only tags prefixed "podcast" (or unprefixed), so
+# ElementTree's default "ns0:transcript" would be selected and then silently
+# dropped. One URI per prefix: registering a second URI as "podcast" evicts the
+# first, so the pre-2021 namespace URI still serializes as ns0.
+register_namespace("itunes", ITUNES_NS)
+register_namespace("podcast", PODCAST_NS)
 # Browser-like UA to avoid RSS feed bot-blocking
 _RSS_HEADERS = {
     "User-Agent": (
@@ -180,6 +189,9 @@ def _parse_episode_record(
         "duration": itunes_duration.text if itunes_duration is not None else None,
         "pub_date": _elem_text(item_elem, "pubDate"),
         "image_url": episode_image_url,
+        # The <item> fragment, stored by MIT Learn as PodcastEpisode.rss. Its
+        # transcript job reads the <podcast:transcript> tags back out of it.
+        "rss": tostring(item_elem, encoding="unicode"),
         "etl_source": "podcast",
     }
 
