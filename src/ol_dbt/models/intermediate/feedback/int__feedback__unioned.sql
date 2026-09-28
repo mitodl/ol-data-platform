@@ -10,6 +10,10 @@ with zendesk as (
     select * from {{ ref('int__feedback__learn_ai_tutor') }}
 )
 
+, content_feedback as (
+    select * from {{ ref('int__feedback__content_feedback') }}
+)
+
 select
     source_slug
     , occurred_at
@@ -64,3 +68,31 @@ select
     , source_metadata
     , length(text) as feedback_text_chars
 from learn_ai_tutor
+
+union all
+
+select
+    source_slug
+    , occurred_at
+    , source_record_ref
+    , text
+    , title
+    , conversation_ref
+    , turn_index
+    , is_conversation_opening
+    , subject_user_ref
+    , source_url
+    , channel_slug
+    , courserun_readable_id
+    , block_id
+    , platform
+    , subject_type
+    , subject_ref
+    , subject_url
+    , explicit_rating
+    , created_at
+    , updated_at
+    , {{ null_varchar_array() }} as source_tags
+    , source_metadata
+    , length(text) as feedback_text_chars
+from content_feedback

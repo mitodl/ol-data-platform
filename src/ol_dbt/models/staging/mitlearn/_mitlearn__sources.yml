@@ -246,3 +246,36 @@ sources:
       description: Timestamp when this relationship was created
     - name: updated_on
       description: Timestamp when this relationship was last updated
+
+  - name: raw__mitlearn__app__postgres__content_feedback_contentfeedback
+    description: Learner feedback on a single piece of MIT Learn course content (a
+      leaf block). Append-only - a learner can submit more than once on the same block.
+    columns:
+    - name: id
+      description: int, primary key for the content feedback record
+    - name: user_id
+      description: int, foreign key to users_user. Null if the user was deleted.
+    - name: course_id
+      description: str, the course run the block belongs to, e.g. course-v1:org+course+run
+    - name: course_name
+      description: str, the course title at submission time. Blank if not sent.
+    - name: block_usage_key
+      description: str, the Open edX usage key of the block the feedback is about
+    - name: block_type
+      description: str, the block type, e.g. html, problem, video. Blank if not sent.
+    - name: block_display_name
+      description: str, the block's display name. Blank if not sent.
+    - name: unit_title
+      description: str, the title of the unit that contains the block. Blank if not
+        sent.
+    - name: url
+      description: str, the courseware URL the learner was on. Blank if not sent.
+    - name: sentiment
+      description: str, the learner's reaction - positive, negative or idea
+    - name: comment
+      description: str, optional free-text comment, truncated to 1000 characters.
+        Blank if the learner gave only a sentiment.
+    - name: created_on
+      description: timestamp, when the feedback was submitted
+    - name: updated_on
+      description: timestamp, when the feedback record was last updated

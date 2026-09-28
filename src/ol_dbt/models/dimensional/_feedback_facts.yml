@@ -56,8 +56,8 @@ models:
           where: "user_fk is not null"
           severity: warn
   - name: courserun_fk
-    description: str, foreign key to dim_course_run. Null for Zendesk and for chats
-      with no resolved course run.
+    description: str, foreign key to dim_course_run. Null for Zendesk and for tutor
+      chats or content feedback with no resolved course run.
     tests:
     - relationships:
         arguments:
@@ -154,7 +154,8 @@ models:
       redaction.
   - name: explicit_rating
     description: str, the source's explicit rating signal. For Zendesk the satisfaction
-      rating score - 'good', 'bad' or 'offered' - which is non-numeric.
+      rating score - 'good', 'bad' or 'offered' - which is non-numeric. For MIT Learn
+      content feedback the learner's sentiment - 'positive', 'negative' or 'idea'.
   - name: source_metadata
     description: str, JSON of every attribute that has not earned a conformed column
       under the two-or-more-sources rule. This is what makes a new source additive.
@@ -245,12 +246,14 @@ models:
     description: str, current-state snapshot of the conversation's priority.
   - name: explicit_rating
     description: str, the conversation-level explicit rating - Zendesk 'good'/'bad'/'offered',
-      Learn AI tutor 'like'/'dislike'. Non-numeric, so it does not average.
+      Learn AI tutor 'like'/'dislike', MIT Learn content feedback 'positive'/'negative'/'idea'.
+      Non-numeric, so it does not average.
   - name: sentiment_fk
     description: str, foreign key to dim_sentiment. Populated at MVP from the explicit
       rating alone. Only a verdict ('good'/'bad' for Zendesk, 'like'/'dislike' for
-      Learn AI tutor) resolves this; an unoffered or unanswered survey leaves it null,
-      because it is an absence of signal, not a neutral one.
+      Learn AI tutor, 'positive'/'negative' for MIT Learn content feedback) resolves
+      this; an unoffered or unanswered survey leaves it null, because it is an absence
+      of signal, not a neutral one. Content feedback's 'idea' also stays null.
     tests:
     - relationships:
         arguments:

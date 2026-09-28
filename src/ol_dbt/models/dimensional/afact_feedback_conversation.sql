@@ -153,18 +153,22 @@ select
     , ticket.ticket_status as final_status
     , ticket.ticket_priority as final_priority
     , turn_aggregates.explicit_rating
-    -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad' and tutor 'like'/'dislike'
-    -- are verdicts; Zendesk's 'unoffered' (no survey sent) and 'offered' (sent,
-    -- unanswered) are kinds of absence rather than neutral ratings, so both stay
+    -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad', tutor 'like'/'dislike'
+    -- and content feedback 'positive'/'negative' are verdicts; Zendesk's 'unoffered'
+    -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence, and
+    -- content feedback's 'idea' is a suggestion, not a verdict, so all three stay
     -- null for the model tier to fill.
     , case turn_aggregates.explicit_rating
         when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
+        when 'positive' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
         when 'dislike' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+        when 'negative' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
     end as sentiment_fk
     , case
-        when turn_aggregates.explicit_rating in ('good', 'bad', 'like', 'dislike')
+        when turn_aggregates.explicit_rating
+            in ('good', 'bad', 'like', 'dislike', 'positive', 'negative')
             then 'explicit_rating'
     end as sentiment_source
     , summary.conversation_summary
