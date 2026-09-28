@@ -407,6 +407,8 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
           row_condition: "emeritus_user_id is not null"
+        config:
+          error_if: ">0"
   - name: global_alumni_identity_key
     description: string, identifies the user's Global Alumni account - the email as
       Global Alumni sent it (not lowercased), falling back to the user id. Email comes
@@ -416,6 +418,8 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
           row_condition: "global_alumni_user_id is not null"
+        config:
+          error_if: ">0"
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
@@ -504,6 +508,8 @@ models:
         column_A: emeritus_identity_key
         column_B: emeritus_user_id
         row_condition: "emeritus_user_id is not null"
+      config:
+        error_if: ">0"
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course

@@ -1,3 +1,5 @@
+{{ config(error_if='>0') }}
+
 -- Learners Emeritus or Global Alumni sent without a user id are only identifiable through
 -- the identity keys, so each one must reach dim_user with a key. Where the learner has no
 -- Emeritus id at all, or is a Global Alumni learner (email-first), the key must be one of
