@@ -367,6 +367,7 @@ unit_tests:
   - input: ref('dim_course_content')
     rows:
     - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
       block_id: "block-v1:none"
       platform: "mitxonline"
       is_latest: true
