@@ -16,7 +16,7 @@ FROM python:3.14-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # renovate: datasource=github-releases depName=dagster-io/dagster
-ARG DAGSTER_VERSION=1.13.23
+ARG DAGSTER_VERSION=1.13.24
 
 # Set working directory
 WORKDIR /opt/dagster/app
