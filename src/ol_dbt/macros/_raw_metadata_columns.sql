@@ -172,6 +172,7 @@
         'raw__mitlearn__app__postgres__channels_fields_fieldlist': '_airbyte_extracted_at',
         'raw__mitlearn__app__postgres__channels_fields_subfield': '_airbyte_extracted_at',
         'raw__mitlearn__app__postgres__channels_subchannel': '_airbyte_extracted_at',
+        'raw__mitlearn__app__postgres__content_feedback_contentfeedback': '_airbyte_extracted_at',
         'raw__mitlearn__app__postgres__discussions_channel': '_airbyte_extracted_at',
         'raw__mitlearn__app__postgres__django_admin_log': '_airbyte_extracted_at',
         'raw__mitlearn__app__postgres__django_content_type': '_airbyte_extracted_at',

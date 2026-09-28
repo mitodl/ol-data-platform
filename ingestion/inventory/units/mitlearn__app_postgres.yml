@@ -37,6 +37,7 @@ airbyte:
     - channels_fields_fieldlist
     - channels_fields_subfield
     - channels_subchannel
+    - content_feedback_contentfeedback
     - discussions_channel
     - django_admin_log
     - django_content_type
@@ -244,6 +245,13 @@ tables:
   primary_key:
   - - id
   modeled: false
+- name: content_feedback_contentfeedback
+  raw_table: raw__mitlearn__app__postgres__content_feedback_contentfeedback
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
 - name: discussions_channel
   raw_table: raw__mitlearn__app__postgres__discussions_channel
   sync_mode: incremental_deduped_history

@@ -3,7 +3,11 @@ with source as (
     from {{ source('ol_warehouse_raw_data', 'raw__mitlearn__app__postgres__content_feedback_contentfeedback') }}
 )
 
-{{ deduplicate_raw_table(order_by='updated_on', partition_columns='id') }}
+{{ deduplicate_raw_table(
+    raw_table='raw__mitlearn__app__postgres__content_feedback_contentfeedback'
+    , first_by='updated_on'
+    , partition_columns='id'
+) }}
 
 , cleaned as (
     select
