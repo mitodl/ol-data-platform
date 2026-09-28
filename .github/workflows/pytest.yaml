@@ -9,18 +9,32 @@ on:
     branches:
     - main
     paths:
-    - "packages/**/*.py"
+    - "packages/**"
     - "src/**/*.py"
-    - "dg_projects/**/*.py"
+    - "src/ol_dbt_cli/**"
+    - "src/ol_dlt/**"
+    - "src/ol_orchestrate/**"
+    - "src/ol_superset/**"
+    - "src/ol_dbt/macros/_raw_metadata_columns.sql"
+    - "dg_projects/**"
+    - "ingestion/inventory/**"
     - "**/pyproject.toml"
+    - "**/uv.lock"
     - ".github/workflows/pytest.yaml"
     - ".github/scripts/discover_pytest_suites.py"
   pull_request:
     paths:
-    - "packages/**/*.py"
+    - "packages/**"
     - "src/**/*.py"
-    - "dg_projects/**/*.py"
+    - "src/ol_dbt_cli/**"
+    - "src/ol_dlt/**"
+    - "src/ol_orchestrate/**"
+    - "src/ol_superset/**"
+    - "src/ol_dbt/macros/_raw_metadata_columns.sql"
+    - "dg_projects/**"
+    - "ingestion/inventory/**"
     - "**/pyproject.toml"
+    - "**/uv.lock"
     - ".github/workflows/pytest.yaml"
     - ".github/scripts/discover_pytest_suites.py"
   workflow_dispatch:
