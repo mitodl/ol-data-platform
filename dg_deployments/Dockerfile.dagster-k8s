@@ -32,7 +32,11 @@ COPY dg_deployments/reconcile_edxorg_partitions.py /opt/dagster/app/reconcile_ed
 # kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x does
 # not handle, raising AttributeError at launch time. Pin until dagster-k8s upstream
 # resolves the incompatibility.
-RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib dagster==${DAGSTER_VERSION} dagster-azure dagster-postgres dagster-k8s "kubernetes<36" dagster-aws dagster-gcp dagster-graphql dagster-webserver
+# sqlalchemy<2.1 for the same reason as the constraint in pyproject.toml: 2.1 makes
+# a bare postgresql:// URL default to psycopg 3, which this image does not install,
+# and dagster-postgres does not support it yet. This install does not read uv.lock,
+# so the constraint has to be repeated here.
+RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib dagster==${DAGSTER_VERSION} dagster-azure dagster-postgres dagster-k8s "kubernetes<36" "sqlalchemy<2.1" dagster-aws dagster-gcp dagster-graphql dagster-webserver
 
 # OpenTelemetry auto-instrumentation for the webserver and the daemon.
 #
