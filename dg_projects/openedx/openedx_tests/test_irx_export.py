@@ -189,9 +189,10 @@ def _irx_frame(table: _Table) -> pl.DataFrame:
     if table.name.endswith("forum_contents"):
         return pl.DataFrame(FORUM_ROWS)
     export = next(f for f in IRX_EXPORT_FILES if table.name.endswith(f.model))
-    model_names = {new: old for old, new in export.renames.items()}
-    row = {model_names.get(c, c): "x" for c in export.columns} | {
-        "course_id": COURSE_ID
+    # A model column the CSV doesn't carry, which the read has to project away.
+    row = dict.fromkeys(export.source_columns, "x") | {
+        "course_id": COURSE_ID,
+        "unexported": "x",
     }
     return pl.DataFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
 
@@ -212,10 +213,14 @@ def drop_root(tmp_path, monkeypatch) -> UPath:
 
 
 def _run_export(monkeypatch, fail_on: str | None = None):
-    def read(table: _Table, _snapshot_id: int) -> Iterator[pl.DataFrame]:
+    def read(
+        table: _Table, _snapshot_id: int, columns: tuple[str, ...]
+    ) -> Iterator[pl.DataFrame]:
         if fail_on and table.name.endswith(fail_on):
             raise RuntimeError
         frame = _irx_frame(table)
+        if columns != ("*",):
+            frame = frame.select(columns)
         # One batch per row, after the empty schema batch, so the drop is
         # assembled across batches the way a multi-file table's would be.
         yield frame.clear()

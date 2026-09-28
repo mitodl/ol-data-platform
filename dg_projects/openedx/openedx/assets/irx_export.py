@@ -71,6 +71,12 @@ class IrxExportFile:
     renames: Mapping[str, str] = field(default_factory=dict)
     required: tuple[str, ...] = ()
 
+    @property
+    def source_columns(self) -> tuple[str, ...]:
+        """The model columns the CSV is cut from, under their model names."""
+        model_names = {new: old for old, new in self.renames.items()}
+        return tuple(model_names.get(column, column) for column in self.columns)
+
 
 IRX_EXPORT_FILES = (
     IrxExportFile(
@@ -257,7 +263,9 @@ def write_parquet(
     row_count = 0
     with destination.open("wb") as sink:
         hashing = _HashingWriter(sink)
-        with pq.ParquetWriter(hashing, first.to_arrow().schema) as writer:
+        with pq.ParquetWriter(
+            hashing, first.to_arrow().schema, compression="zstd"
+        ) as writer:
             for batch in itertools.chain([first], batches):
                 if batch.height:
                     writer.write_table(batch.to_arrow())
@@ -265,7 +273,9 @@ def write_parquet(
     return hashing.digest.hexdigest(), hashing.size, row_count
 
 
-def read_data_files(table: Table, snapshot_id: int) -> Iterator[pl.DataFrame]:
+def read_data_files(
+    table: Table, snapshot_id: int, columns: Sequence[str] = ("*",)
+) -> Iterator[pl.DataFrame]:
     """Read an Iceberg snapshot one data file at a time, after an empty batch.
 
     Not pl.scan_iceberg: with the pyiceberg reader glue_helper forces, it reads
@@ -279,7 +289,7 @@ def read_data_files(table: Table, snapshot_id: int) -> Iterator[pl.DataFrame]:
     The leading empty batch carries the schema, so a table with no data files
     still gets a CSV header or a Parquet schema.
     """
-    scan = table.scan(snapshot_id=snapshot_id)
+    scan = table.scan(snapshot_id=snapshot_id, selected_fields=tuple(columns))
     projection = scan.projection()
     reader = ArrowScan(
         table.metadata, table.io, projection, scan.row_filter, scan.case_sensitive
@@ -401,7 +411,9 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         yield delivered["course_ids.csv"]
 
         for export in IRX_EXPORT_FILES:
-            batches, metadata = _read_pinned(irx_model_name(deployment, export.model))
+            batches, metadata = _read_pinned(
+                irx_model_name(deployment, export.model), export.source_columns
+            )
             file_name = f"{export.name}.csv"
             delivered[file_name] = _export(
                 AssetKey([deployment, IRX_EXPORT_GROUP, export.name]),
@@ -432,7 +444,9 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
     return irx_export
 
 
-def _read_pinned(table_name: str) -> tuple[Iterator[pl.DataFrame], dict[str, str]]:
+def _read_pinned(
+    table_name: str, columns: Sequence[str] = ("*",)
+) -> tuple[Iterator[pl.DataFrame], dict[str, str]]:
     """Read an irx table at its current snapshot.
 
     Pinned so the row count and the file are read from the same snapshot even
@@ -447,7 +461,7 @@ def _read_pinned(table_name: str) -> tuple[Iterator[pl.DataFrame], dict[str, str
                 "nothing to export."
             )
         )
-    return read_data_files(table, snapshot.snapshot_id), {
+    return read_data_files(table, snapshot.snapshot_id, columns), {
         "source_table": f"{IRX_GLUE_DATABASE}.{table_name}",
         "source_snapshot_id": str(snapshot.snapshot_id),
     }
