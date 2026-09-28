@@ -18,8 +18,6 @@ dedp_financial_assistance -> int__mitxonline__course_runs
 dedp_financial_assistance -> int__mitxonline__flexiblepricing_flexiblepriceapplication
 dedp_financial_assistance -> int__mitxonline__users
 engagement_problem_completion_raw -> int__combined__course_runs
-engagement_problem_completion_summary -> stg__mitxonline__app__postgres__courses_course
-engagement_problem_completion_summary -> stg__mitxonline__app__postgres__courses_courserun
 learner_engagement_report -> int__combined__course_runs
 marts__combined__orders -> int__bootcamps__ecommerce_order
 marts__combined__orders -> int__bootcamps__ecommerce_receipt

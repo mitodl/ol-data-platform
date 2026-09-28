@@ -4,6 +4,7 @@ import httpx2 as httpx
 import pytest
 from dagster import Failure
 from ol_orchestrate.lib.http_errors import (
+    RESPONSE_BODY_LIMIT,
     PermanentHTTPFailure,
     TransientHTTPFailure,
     http_failure,
@@ -13,9 +14,9 @@ from ol_orchestrate.lib.http_errors import (
 WEBHOOK_URL = "https://api.learn.mit.edu/api/v1/webhooks/content_files/"
 
 
-def _error(status_code: int) -> httpx.HTTPStatusError:
+def _error(status_code: int, content: bytes = b"") -> httpx.HTTPStatusError:
     request = httpx.Request("POST", WEBHOOK_URL)
-    response = httpx.Response(status_code, request=request)
+    response = httpx.Response(status_code, request=request, content=content)
     return httpx.HTTPStatusError(
         f"HTTP {status_code}", request=request, response=response
     )
@@ -93,3 +94,47 @@ def test_failure_carries_structured_metadata() -> None:
     assert metadata["status_code"].value == 502
     assert metadata["retryable"].value is True
     assert metadata["course_id"].value == 155
+
+
+def test_failure_carries_the_rejection_reason_from_the_body() -> None:
+    """MIT Learn names the rejected field in the body; that is the diagnosis.
+
+    DAGSTER-53/54 reported an OVS webhook 400 for a week with nothing to say
+    which field was wrong, because the body was discarded here.
+    """
+    body = b'{"video": {"thumbnail_url": ["URL host is not allowed."]}}'
+    failure = http_failure(_error(400, body), "OVS video webhook notification failed")
+
+    assert failure.metadata["response_body"].value == body.decode()
+    assert "thumbnail_url" not in str(failure.description), (
+        "the body belongs in metadata; in the description it changes the title "
+        "for every distinct payload"
+    )
+
+
+def test_a_long_body_is_truncated() -> None:
+    failure = http_failure(_error(502, b"x" * (RESPONSE_BODY_LIMIT * 3)), "boom")
+
+    assert len(failure.metadata["response_body"].value) == RESPONSE_BODY_LIMIT
+
+
+def test_an_empty_body_adds_no_metadata() -> None:
+    assert "response_body" not in http_failure(_error(404), "boom").metadata
+
+
+def test_an_unread_streamed_body_adds_no_metadata() -> None:
+    """A ``raise_for_status()`` inside ``stream()`` fires before the body is read.
+
+    Touching ``.text`` there raises ``ResponseNotRead``, which would replace the
+    HTTP failure with an error about the error.
+    """
+    request = httpx.Request("GET", WEBHOOK_URL)
+    response = httpx.Response(
+        404, request=request, stream=httpx.ByteStream(b"not found")
+    )
+    error = httpx.HTTPStatusError("HTTP 404", request=request, response=response)
+
+    failure = http_failure(error, "boom")
+
+    assert "response_body" not in failure.metadata
+    assert failure.metadata["status_code"].value == 404

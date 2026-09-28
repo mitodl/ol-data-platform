@@ -8,28 +8,77 @@ deployment: edxorg
 scope: singleton
 layer: course_structure
 strategies:
-  qa: omit
+  qa: mirror
   local: fixture
+mirror_max_age_days: 90
 loader: dagster
 table_prefix: raw__edxorg__s3__course_
 tables:
+# The pipeline writes files; an Airbyte S3 connection loads them into the four
+# course_structure tables, which carry _airbyte_extracted_at and
+# _ab_source_file_* (production Glue, 2026-09-15). The dagster default of null
+# would switch their dedup off.
 - name: raw__edxorg__s3__course_structure__course_certificate_signatory
   raw_table: raw__edxorg__s3__course_structure__course_certificate_signatory
   sync_mode: full_refresh_overwrite
   modeled: true
+  # Source file first: the model keeps each course's newest file (snapshot_by).
+  raw_metadata_column:
+  - _ab_source_file_last_modified
+  - _airbyte_extracted_at
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      name: copy
+      title: copy
+      course_id: copy
+      organization: copy
+      certificate_id: copy
+      signature_image_path: copy
+      _ab_source_file_last_modified: copy
 - name: raw__edxorg__s3__course_structure__course_metadata
   raw_table: raw__edxorg__s3__course_structure__course_metadata
   sync_mode: full_refresh_overwrite
   modeled: true
+  raw_metadata_column: _airbyte_extracted_at
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      title: copy
+      semester: copy
+      course_id: copy
+      course_end: copy
+      self_paced: copy
+      institution: copy
+      course_start: copy
+      course_number: copy
+      enrollment_end: copy
+      instructor_info: copy
+      enrollment_start: copy
 - name: raw__edxorg__s3__course_structure__course_policy
   raw_table: raw__edxorg__s3__course_structure__course_policy
   sync_mode: full_refresh_overwrite
   modeled: true
+  raw_metadata_column: _airbyte_extracted_at
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      tabs: copy
+      course_id: copy
+      self_paced: copy
+      advanced_modules: copy
+      discussions_settings: copy
+      display_coursenumber: copy
 - name: raw__edxorg__s3__course_structure__course_video
   raw_table: raw__edxorg__s3__course_structure__course_video
   sync_mode: full_refresh_overwrite
   modeled: true
-- name: raw__edxorg__s3__course_xml_blocks
-  raw_table: raw__edxorg__s3__course_xml_blocks
-  sync_mode: full_refresh_overwrite
-  modeled: true
+  raw_metadata_column: _airbyte_extracted_at
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      duration: copy
+      course_id: copy
+      edx_video_id: copy
+      video_block_id: copy

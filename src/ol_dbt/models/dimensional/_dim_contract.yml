@@ -6,6 +6,10 @@ models:
   description: >
     MITx Online B2B contracts dimension. Each contract defines the terms under which
     an organization gains access to one or more course runs. Grain: one row per contract.
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
   columns:
   - name: contract_pk
     description: Surrogate primary key derived from b2b_contract_id.

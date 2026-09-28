@@ -10,6 +10,7 @@ Checks:
   7. YAML integrity: YAML entries for models that have no corresponding .sql file
   8. SELECT *: models using SELECT * that hides column-level lineage
   9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
+ 10. QA branch contract: union models must declare their expected QA branches (RFC 12711)
 """
 
 from __future__ import annotations
@@ -17,12 +18,14 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, cast
 
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.dimensional_layering import (
     LayeringViolation,
     classify_layer,
@@ -38,7 +41,17 @@ from ol_dbt_cli.lib.git_utils import (
     get_changed_yaml_models,
     get_repo_root,
 )
+from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
+from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
+from ol_dbt_cli.lib.qa_contract import (
+    QA_CONTRACT_CHECK,
+    check_qa_contracts,
+    check_qa_gaps,
+    qa_gaps,
+    write_qa_baseline,
+)
+from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, QA_GLUE_DATABASE, load_observation
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
     consumed_columns_by_ref_via_scope,
@@ -579,6 +592,82 @@ def _check_dimensional_layering(
 
 
 # ---------------------------------------------------------------------------
+# Check 10: QA branch contract (RFC 12711)
+# ---------------------------------------------------------------------------
+
+
+def _check_qa_branch_contract(
+    manifest: ManifestRegistry | None,
+    inventory_dir: Path,
+    report: ValidationReport,
+    now: datetime | None = None,
+) -> None:
+    """Run the QA branch contract, or say why it cannot run.
+
+    Without a manifest or without inventory units every model reads zero units,
+    so no model counts as a union and a missing declaration would pass silently.
+    Without an observation only the gap half is skipped: the inventory half
+    needs nothing but text.
+    """
+    if manifest is None:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            "Skipped: QA branch contracts need manifest lineage",
+            "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
+        )
+        return
+    units = load_units(inventory_dir)
+    if not units:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            f"Skipped: no ingestion inventory units found under {inventory_dir}",
+            "The check maps sources to units through the inventory. Pass --inventory-dir when "
+            "the dbt project is not at <repo>/src/ol_dbt.",
+        )
+        return
+    check_qa_contracts(manifest, units, report)
+
+    observation = load_observation(inventory_dir / OBSERVATION_FILENAME)
+    if observation is None:
+        report.add(
+            QA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(qa observation)",
+            f"Skipped the QA gap half: no {OBSERVATION_FILENAME} under {inventory_dir}",
+            "Declared branches were checked against the inventory, not against what QA holds. "
+            "Take an observation with `ol-dbt inventory observe`.",
+        )
+        return
+    baseline = load_baseline(inventory_dir / QA_BASELINE_FILENAME)
+    check_qa_gaps(manifest, units, observation, baseline, now or datetime.now(tz=UTC), report)
+
+
+def _update_qa_baseline(manifest: ManifestRegistry | None, inventory_dir: Path) -> None:
+    units = load_units(inventory_dir)
+    observation = load_observation(inventory_dir / OBSERVATION_FILENAME)
+    if manifest is None or not units or observation is None:
+        console.print(
+            "[bold red]Error:[/] --update-qa-baseline needs manifest.json, inventory units and "
+            f"{OBSERVATION_FILENAME} under {inventory_dir}."
+        )
+        raise SystemExit(1)
+    if observation.glue_database != QA_GLUE_DATABASE:
+        console.print(
+            f"[bold red]Error:[/] {OBSERVATION_FILENAME} was taken from {observation.glue_database}, "
+            f"not {QA_GLUE_DATABASE}. A baseline built from it would hide every QA gap."
+        )
+        raise SystemExit(1)
+    gaps = qa_gaps(manifest, units, observation)
+    path = inventory_dir / QA_BASELINE_FILENAME
+    write_qa_baseline(path, gaps)
+    console.print(f"[green]Wrote {len(gaps)} QA gap(s)[/] to {path}.")
+
+
+# ---------------------------------------------------------------------------
 # Registry-aware SELECT * resolution
 # ---------------------------------------------------------------------------
 
@@ -943,6 +1032,16 @@ def validate(
             ),
         ),
     ] = "dev_local",
+    inventory_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--inventory-dir"],
+            help=(
+                "Ingestion inventory directory for the qa_branch_contract check. "
+                "Defaults to <repo>/ingestion/inventory, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     baseline_file: Annotated[
         str | None,
         Parameter(
@@ -964,10 +1063,21 @@ def validate(
             ),
         ),
     ] = False,
+    update_qa_baseline: Annotated[
+        bool,
+        Parameter(
+            name=["--update-qa-baseline"],
+            help=(
+                "Regenerate <inventory-dir>/qa_branch_baseline.txt from the declared QA branches "
+                "and the committed QA observation, and exit. Use after `ol-dbt inventory observe`, "
+                "or to acknowledge a QA gap a change introduces."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs nine checks:
+    Runs ten checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -979,6 +1089,10 @@ def validate(
     8. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
     9. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
                                (#2072 DoD); new violations error, known ones are baselined
+    10. qa_branch_contract   — models unioning several ingestion units declare config.meta
+                               qa_branches or qa_buildable: false, and each declared branch is
+                               one QA ingests or mirrors (RFC 12711); declared tables the QA
+                               observation shows empty or stale error unless baselined
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1044,6 +1158,7 @@ def validate(
         "yaml_integrity",
         "select_star",
         "dimensional_layering",
+        QA_CONTRACT_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1091,7 +1206,7 @@ def validate(
     # Auto-compile: run dbt parse to regenerate manifest.json before validation.
     # Uses dev_local (DuckDB) by default — no network or credentials required.
     if auto_compile:
-        cmd = ["dbt", "parse", "--target", compile_target]
+        cmd = [dbt_executable(), "parse", "--target", compile_target]
         if output_format == "text":
             console.print(f"[dim]Running: {' '.join(cmd)} ...[/]")
         try:
@@ -1108,8 +1223,8 @@ def validate(
             err_console.print(f"[yellow]Warning:[/] dbt parse failed: {exc.stderr[-200:] if exc.stderr else exc}")
             err_console.print("  Validation will continue with existing or no manifest.")
         except FileNotFoundError:
-            err_console.print("[yellow]Warning:[/] 'dbt' command not found; skipping auto-compile.")
-            err_console.print("  Install dbt and ensure it is on PATH, or run dbt parse manually.")
+            err_console.print(f"[yellow]Warning:[/] {dbt_executable()} not found; skipping auto-compile.")
+            err_console.print("  Run `uv sync` from the repo root to install dbt, or run dbt parse manually.")
 
     # Resolve compiled SQL directory (Jinja-free, most accurate)
     compiled_dir: Path | None = None
@@ -1135,6 +1250,15 @@ def validate(
         except Exception as exc:  # noqa: BLE001
             if output_format == "text":
                 console.print(f"[yellow]Warning:[/] Could not load manifest ({exc}); using raw SQL parsing.")
+
+    inventory_dir = (
+        Path(inventory_dir_path).resolve() if inventory_dir_path else dbt_dir.parents[1] / DEFAULT_INVENTORY_DIR
+    )
+    # Needs only the manifest, the units and the observation, so it exits before
+    # the per-model SQL parsing below.
+    if update_qa_baseline:
+        _update_qa_baseline(manifest, inventory_dir)
+        return
 
     # Build YAML registry
     yaml_registry = build_yaml_registry(models_dir)
@@ -1332,6 +1456,11 @@ def validate(
     if "dimensional_layering" not in skipped:
         baseline = load_baseline(baseline_path)
         _check_dimensional_layering(manifest, sql_models_by_name, sql_file_map_all, baseline, report)
+
+    # Global like dimensional_layering: a union model gains a branch by an edit to
+    # one of its ancestors, which --changed-only would never select.
+    if QA_CONTRACT_CHECK not in skipped:
+        _check_qa_branch_contract(manifest, inventory_dir, report)
 
     # Output
     if output_format == "json":

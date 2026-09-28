@@ -21,6 +21,33 @@ dlthub_telemetry = true
 workers = 1
 max_parallel_items = 20
 
+# Stamp every loaded row with the load package id (`_dlt_load_id`).
+#
+# dlt only turns this on by default for the JSON normalizer; the parquet
+# normalizer defaults both `add_dlt_id` and `add_dlt_load_id` to False
+# (dlt/normalize/configuration.py). Every ol_dlt relational source builds its
+# resources with `backend="pyarrow"` (ol_dlt/database.py), so without this the
+# raw tables carry no metadata column at all -- which is how the dlt-loaded
+# staging models came to dedup on Airbyte's `_airbyte_extracted_at`, a column
+# their tables never had (ol-data-platform#2443).
+#
+# `_dlt_load_id` is `str(increasing_precise_time())` and dlt guarantees it
+# increases over time for a given schema/destination/dataset, so it is a valid
+# "latest load wins" ordering key.
+#
+# This lands ahead of the dbt side on purpose. Writing the column is inert until
+# something reads it, and it has to be written before the staging models can be
+# pointed at it -- ordering by a column no load has stamped yet is the same
+# COLUMN_NOT_FOUND this is meant to end. #2650 is what teaches the dedup macro to
+# resolve it through the ingestion inventory.
+#
+# `add_dlt_id` is deliberately left off: on the pyarrow path `_dlt_id` is a
+# random per-row value (arrow.py generates it with `generate_dlt_ids`, and the
+# deterministic key_hash/row_hash variants are only wired into the relational
+# normalizer), so it orders nothing and costs a column.
+[normalize.parquet_normalizer]
+add_dlt_load_id = true
+
 # Iceberg Catalog Configuration
 #
 # dlt reads [iceberg_catalog] (flat, not named sub-sections). The "aws_glue"

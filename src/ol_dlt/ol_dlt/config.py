@@ -26,13 +26,6 @@ from typing import Any, Literal
 import dlt
 from dlt.destinations import filesystem
 
-# Point dlt at this project's .dlt/ (config.toml, .pyiceberg.yaml) and pyiceberg
-# at the Glue catalog config, unless the runtime (e.g. Docker) already set them.
-_PROJECT_DIR = Path(__file__).resolve().parent.parent
-_DLT_DIR = _PROJECT_DIR / ".dlt"
-os.environ.setdefault("DLT_PROJECT_DIR", str(_PROJECT_DIR))
-os.environ.setdefault("PYICEBERG_HOME", str(_DLT_DIR))
-
 DEFAULT_PROFILE = "dev"
 
 # Profiles that write Iceberg tables to S3 and register them in the Glue catalog.
@@ -46,6 +39,47 @@ TableFormat = Literal["iceberg", "delta", "hive", "native"]
 # Object-store layout shared by every filesystem destination (matches the
 # per-source [destination.*] blocks that used to live in .dlt/config.toml).
 _LAYOUT = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# `_dlt_load_id` declared NULLABLE, overriding dlt's own definition.
+#
+# dlt defines the column as `nullable: False` (schema/utils.py dlt_load_id_column)
+# and falls back to that definition only when a resource has not declared the
+# column itself (extract/extractors.py). The nullability flows straight through
+# to the Arrow field (libs/pyarrow.py add_dlt_load_id_column), and dlt evolves an
+# Iceberg table with `update.union_by_name(arrow_schema)` -- so a non-nullable
+# Arrow field asks pyiceberg to add a REQUIRED column.
+#
+# pyiceberg refuses that on any table that already holds rows:
+#
+#     ValueError: Incompatible change: cannot add required column: _dlt_load_id
+#
+# because format-version 1 and 2 carry no initial-value to backfill existing rows
+# with (table/update/schema.py). Every raw table we already load is v2 with rows,
+# so leaving dlt's default in place breaks the first load of every existing
+# source the moment `add_dlt_load_id` is on. Verified both ways against pyiceberg
+# 0.11.1: a nullable Arrow field unions in as optional and leaves existing rows
+# null; a non-nullable one is refused.
+#
+# Nullable is also the honest declaration. Rows written before a unit turned the
+# flag on genuinely have no load id, which is why the dbt dedup macro orders
+# `NULLS LAST` -- a stamped row wins over an unstamped one.
+DLT_LOAD_ID_COLUMN: dict[str, dict[str, Any]] = {
+    "_dlt_load_id": {"data_type": "text", "nullable": True, "precision": 64},
+}
+
+
+def with_nullable_load_id(source: Any) -> Any:  # noqa: ANN401
+    """Declare `_dlt_load_id` nullable on every resource of ``source``.
+
+    Applied by each source's ``build_source()`` rather than at each resource: a
+    source that misses this does not fail at import, it fails on its next load
+    against an existing table, which is the failure mode this exists to remove.
+    ``tests/test_load_id_column.py`` asserts every source applies it.
+    """
+    for resource in source.resources.values():
+        resource.apply_hints(columns=DLT_LOAD_ID_COLUMN)
+    return source
+
 
 # Schema contract for JSON API sources (mit_climate, mitpe, mit_edx_programs).
 # New tables/columns evolve freely — upstream APIs add fields routinely and

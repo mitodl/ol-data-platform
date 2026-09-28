@@ -1,0 +1,53 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__posthog__learn__s3__events
+    description: >
+      Every raw PostHog event for the MIT Learn project, as batch-exported by
+      PostHog to the landing zone one Parquet object per closed hour and loaded
+      by the posthog_events dlt pipeline. One row per event.
+
+      Rows are appended, keyed on the hour window parsed out of the export
+      object's name. A run that fails after committing part of a load and before
+      dlt persists its cursor re-reads the hours it already wrote, so the table
+      is at-least-once at hour granularity; s3_object_key identifies the rows
+      from any hour that landed twice.
+    columns:
+    - name: uuid
+      description: str, PostHog's per-event identifier. The event grain.
+    - name: event
+      description: >
+        str, event name. Autocaptured PostHog events are $-prefixed
+        ($autocapture, $pageview, $pageleave, $web_vitals); MIT Learn's own
+        events are not (search_update, lrd_view, lrd_open, cta_clicked).
+    - name: timestamp
+      description: timestamp, when the event happened on the client
+    - name: created_at
+      description: timestamp, when PostHog created the event record
+    - name: _inserted_at
+      description: timestamp, when PostHog inserted the row into the export
+    - name: distinct_id
+      description: >
+        str, PostHog's per-device identifier. Becomes the Keycloak global_id for
+        a signed-in user once the frontend calls posthog.identify.
+    - name: person_id
+      description: str, PostHog's resolved person identifier across distinct_ids
+    - name: elements_chain
+      description: str, DOM element chain PostHog records for autocaptured events
+    - name: properties
+      description: >
+        str, JSON object holding the full PostHog client context for the event.
+        Preserved as JSON rather than flattened: the property set is open-ended
+        and per-event, so a column per property is not expressible.
+    - name: person_properties
+      description: str, JSON object holding PostHog's person-level properties
+    - name: s3_object_key
+      description: >
+        str, the export object this row was read from, including the hour window
+        in its name. Added by the loader, not by PostHog.

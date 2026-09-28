@@ -119,6 +119,37 @@ returning a person), select named columns rather than `*`, put a floor on group
 sizes, and remember your home directory is a persistent volume — a CSV of
 learner rows written there outlives the question you wrote it to answer.
 
+## Claude
+
+Claude runs on AWS Bedrock with no key to manage: the environment's AWS role is
+already allowed to call it, and the AWS region is set in the environment.
+
+**Writing notebooks** — marimo's AI assistant (the chat panel and AI edits to
+cells) is set to Claude by default. Pick a different model under
+Settings > AI and your choice sticks. Model names are
+`bedrock/<inference profile>`, e.g. `bedrock/us.anthropic.claude-sonnet-5`.
+
+**In a cell** — add `boto3` to the `/// script` header, then:
+
+```python
+import boto3
+
+bedrock = boto3.client("bedrock-runtime")
+response = bedrock.converse(
+    modelId="us.anthropic.claude-sonnet-5",
+    messages=[{"role": "user", "content": [{"text": "Summarise this table..."}]}],
+)
+response["output"]["message"]["content"][0]["text"]
+```
+
+Use the `us.`-prefixed inference profile ID. Newer models reject the bare model
+ID. Models already enabled for the AWS account work straight away. A
+third-party model nobody has used here yet may answer for a few minutes, then
+returns `AccessDeniedException` until the platform team enables it, which is a
+one-time step. Calls go through the environment's shared role, not your SSO
+identity, so AWS doesn't record which user made them. The personal-data guidance above
+applies to what you put in a prompt too.
+
 ## Limits
 
 Standard is 2 CPU / 8 GB, Large is 4 CPU / 32 GB. Home is 5 GB and persists.

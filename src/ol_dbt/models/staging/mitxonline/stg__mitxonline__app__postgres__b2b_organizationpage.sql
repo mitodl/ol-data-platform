@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__b2b_organizationpage') }}
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='page_ptr_id') }}
+{{ deduplicate_raw_table(raw_table='raw__mitxonline__app__postgres__b2b_organizationpage', partition_columns='page_ptr_id') }}
 
 , cleaned as (
     select

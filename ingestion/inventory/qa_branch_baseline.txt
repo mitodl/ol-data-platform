@@ -1,0 +1,60 @@
+# QA branch-contract baseline (RFC 12711 step 5).
+#
+# Each line is a table of a declared QA branch that the committed QA
+# observation (qa_observation.json) shows empty, a mirror past its
+# mirror_max_age_days, or a table the observation does not cover yet
+# (unobserved). These are operational lapses, tolerated so QA builds
+# keep running while they are repaired. A gap NOT listed here fails
+# `ol-dbt validate`. Contradictions between qa_branches and the inventory
+# are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.
+#
+# Regenerate with: ol-dbt validate --update-qa-baseline
+
+learn_ai/app_postgres raw__learn_ai__app__postgres__ai_chatbots_chatresponserating: empty
+learn_ai/app_postgres raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint: empty
+learn_ai/app_postgres raw__learn_ai__app__postgres__ai_chatbots_tutorbotoutput: empty
+learn_ai/app_postgres raw__learn_ai__app__postgres__ai_chatbots_userchatsession: empty
+learn_ai/app_postgres raw__learn_ai__app__postgres__users_user: empty
+mitlearn/app_postgres raw__mitlearn__app__postgres__learning_resources_learningresourcetopic: empty
+mitlearn/app_postgres raw__mitlearn__app__postgres__profiles_profile: empty
+mitlearn/app_postgres raw__mitlearn__app__postgres__profiles_profile_topic_interests: empty
+mitlearn/app_postgres raw__mitlearn__app__postgres__users_user: empty
+mitx/api raw__mitx__openedx__api__course_blocks: empty
+mitx/mysql raw__mitx__openedx__mysql__auth_user: empty
+mitx/mysql raw__mitx__openedx__mysql__auth_userprofile: empty
+mitx/mysql raw__mitx__openedx__mysql__course_overviews_courseoverview: empty
+mitx/mysql raw__mitx__openedx__mysql__courseware_studentmodulehistory: empty
+mitx/mysql raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended: empty
+mitx/mysql raw__mitx__openedx__mysql__edxval_coursevideo: empty
+mitx/mysql raw__mitx__openedx__mysql__edxval_video: empty
+mitx/mysql raw__mitx__openedx__mysql__student_courseaccessrole: empty
+mitx/mysql raw__mitx__openedx__mysql__student_courseenrollment: empty
+mitx/tracking_logs raw__mitx__openedx__tracking_logs: empty
+mitxonline/api raw__mitxonline__openedx__api__course_blocks: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__auth_user: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__bulk_email_optout: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__courseware_studentmodule: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__edxval_coursevideo: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__edxval_video: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__student_courseaccessrole: empty
+mitxonline/tracking_logs raw__mitxonline__openedx__tracking_logs: empty
+ocw/app_postgres raw__ocw__studio__postgres__websites_websitecontent: empty
+openedx/s3 raw__openedx__s3__course_xml_blocks: empty
+ovs/app_postgres raw__ovs__postgres__dj_elastictranscoder_encodejob: empty
+ovs/app_postgres raw__ovs__postgres__ui_collection: empty
+ovs/app_postgres raw__ovs__postgres__ui_collectionedxendpoint: empty
+ovs/app_postgres raw__ovs__postgres__ui_edxendpoint: empty
+ovs/app_postgres raw__ovs__postgres__ui_encodejob: empty
+ovs/app_postgres raw__ovs__postgres__ui_video: empty
+xpro/api raw__xpro__openedx__api__course_blocks: empty
+xpro/mysql raw__xpro__openedx__mysql__auth_user: empty
+xpro/mysql raw__xpro__openedx__mysql__courseware_studentmodule: empty
+xpro/mysql raw__xpro__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended: empty
+xpro/mysql raw__xpro__openedx__mysql__edxval_coursevideo: empty
+xpro/mysql raw__xpro__openedx__mysql__edxval_video: empty
+xpro/mysql raw__xpro__openedx__mysql__student_courseaccessrole: empty
+xpro/mysql raw__xpro__openedx__mysql__student_courseenrollment: empty
+xpro/tracking_logs raw__xpro__openedx__tracking_logs: empty

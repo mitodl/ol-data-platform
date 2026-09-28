@@ -24,7 +24,7 @@ correctly identified as unretryable and then retried 5,363 times.
 from typing import Any
 
 from dagster import Failure, MetadataValue
-from httpx2 import HTTPStatusError
+from httpx2 import HTTPStatusError, ResponseNotRead
 
 from ol_orchestrate.lib.failures import PermanentFailure
 
@@ -34,6 +34,9 @@ HTTP_SERVER_ERROR_CEILING = 600
 # The two 4xx codes that explicitly invite another attempt. Everything else in
 # the 4xx range says the request itself is wrong, which a rerun does not change.
 RETRYABLE_CLIENT_ERRORS = frozenset({408, 429})
+
+# Enough for a DRF validation error dict; an HTML error page gets cut off.
+RESPONSE_BODY_LIMIT = 4096
 
 
 class PermanentHTTPFailure(PermanentFailure):
@@ -63,6 +66,26 @@ def is_retryable(status_code: int) -> bool:
     return HTTP_SERVER_ERROR_FLOOR <= status_code < HTTP_SERVER_ERROR_CEILING
 
 
+def response_body_excerpt(error: HTTPStatusError) -> str | None:
+    """Return the first ``RESPONSE_BODY_LIMIT`` characters of the error response.
+
+    The body is where the server says *why* it rejected the request -- MIT
+    Learn's webhook serializers name the offending field there. Without it the
+    OVS webhook 400s (DAGSTER-53/54) sat in Sentry for a week saying only
+    "HTTP 400".
+
+    ``None`` for an empty body, and for a streamed response that failed
+    ``raise_for_status()`` before anything read it. No caller passes one today,
+    but ``.text`` raises on it, and an error raised while building the failure
+    would hide the HTTP error it was built to report.
+    """
+    try:
+        body = error.response.text
+    except ResponseNotRead:
+        return None
+    return body[:RESPONSE_BODY_LIMIT] or None
+
+
 def http_failure(
     error: HTTPStatusError,
     description: str,
@@ -73,6 +96,9 @@ def http_failure(
     ``description`` should say what the caller was trying to do, in terms a
     reader of the Sentry issue can act on. The status code, method and URL are
     appended, so leave those out of it.
+
+    The response body goes into metadata, not the description, so the issue
+    title stays the same from one rejected payload to the next.
 
     Returned rather than raised so the call site keeps ``raise ... from error``
     and the original traceback survives.
@@ -85,6 +111,7 @@ def http_failure(
         if retryable
         else "Retrying cannot clear this -- the request itself is being rejected."
     )
+    body = response_body_excerpt(error)
     failure_cls = TransientHTTPFailure if retryable else PermanentHTTPFailure
     return failure_cls(
         description=(
@@ -96,6 +123,7 @@ def http_failure(
             "url": MetadataValue.text(str(request.url)),
             "method": request.method,
             "retryable": retryable,
+            **({"response_body": MetadataValue.text(body)} if body else {}),
             **(metadata or {}),
         },
         allow_retries=retryable,

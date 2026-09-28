@@ -1,19 +1,28 @@
 """Unit tests for the edxorg_s3 source.
 
 Materialization is not tested here: the source reads TSVs from the production S3
-landing zone and cannot run hermetically. Coverage focuses on the pure per-run
-deduplication logic and on the DuckDB CSV reader options, which are where the
-subtle correctness bugs lived.
+landing zone and cannot run hermetically. Coverage focuses on the reader -- the
+DuckDB CSV options, how each file is handed to DuckDB, and the provenance
+columns every row carries -- which is where the subtle correctness bugs lived.
 """
 
+import contextlib
 import io
 import json
+import os
+import tempfile
+from collections.abc import Iterable, Iterator
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+import dlt
 import duckdb
+import fsspec
 import pyarrow as pa
 import pytest
 
+from ol_dlt import file_metadata
 from ol_dlt.sources import edxorg_s3
 
 
@@ -35,51 +44,6 @@ _MIXED_NEWLINE_TSV = (
 
 # The same table with consistent LF endings: must parse the same either way.
 _CLEAN_TSV = b"id\tuser_id\tbio\tgoals\n1\t10\tbio one\tlearn\n2\t20\tbio two\tgrow\n"
-
-
-def test_deduplicator_drops_repeat_keys_within_run() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    first = _table(
-        [
-            {"row_hash": "h1", "extracted_course_key": "c1", "v": "a"},
-            {"row_hash": "h1", "extracted_course_key": "c1", "v": "b"},  # dup key
-            {"row_hash": "h2", "extracted_course_key": "c1", "v": "c"},
-        ]
-    )
-    out = dedup(first)
-    assert out.num_rows == 2  # noqa: PLR2004
-    # The same key appearing in a later batch is also dropped (stateful).
-    second = _table([{"row_hash": "h1", "extracted_course_key": "c1", "v": "d"}])
-    assert dedup(second).num_rows == 0
-
-
-def test_deduplicator_keeps_same_hash_different_course() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    tbl = _table(
-        [
-            {"row_hash": "h1", "extracted_course_key": "c1"},
-            {"row_hash": "h1", "extracted_course_key": "c2"},
-        ]
-    )
-    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
-
-
-def test_deduplicator_keeps_null_distinct_from_empty_string() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    tbl = _table(
-        [
-            {"row_hash": None, "extracted_course_key": "c1"},
-            {"row_hash": "", "extracted_course_key": "c1"},
-        ]
-    )
-    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
-
-
-def test_deduplicator_passes_through_without_key_columns() -> None:
-    dedup = edxorg_s3._make_deduplicator()
-    tbl = _table([{"some_col": "x"}, {"some_col": "x"}])
-    # Missing primary-key columns: do not drop anything.
-    assert dedup(tbl).num_rows == 2  # noqa: PLR2004
 
 
 def test_reader_options_parse_tsv_with_mixed_newlines() -> None:
@@ -181,6 +145,34 @@ def test_reader_options_do_not_pad_ragged_rows() -> None:
     assert relation.columns == ["id", "bio"]
 
 
+def test_reader_reads_records_longer_than_duckdbs_default_line_limit() -> None:
+    """DuckDB's 2,000,000-byte default made a whole studentmodule export
+    unreadable over one learner's 5.9 MB `state` value."""
+    # RFC-4180 doubling, as the archive writes it: {"history": ["x", ...]}
+    state = '"{""history"": [' + ",".join(['""x""'] * 350_000) + ']}"'
+    assert len(state) > 2_000_000
+    tsv = f"id\tstate\tgrade\n1\t{state}\t1.0\n2\tshort\t0.5\n".encode()
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/long.tsv", tsv)]))
+
+    assert [r["id"] for r in rows] == ["1", "2"]
+    assert rows[0]["state"].startswith('{"history": ["x"')
+    assert rows[0]["grade"] == "1.0"
+
+
+def test_reader_keeps_a_long_record_deep_in_the_file() -> None:
+    """Past DuckDB's first buffer, an over-limit record is not an error:
+    ignore_errors drops it and the read carries on one row short."""
+    state = '"{""history"": [' + ",".join(['""x""'] * 350_000) + ']}"'
+    short = "".join(f"{i}\tshort\t0.5\n" for i in range(100_000))
+    tsv = f"id\tstate\tgrade\n{short}long\t{state}\t1.0\nlast\tshort\t0.5\n".encode()
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/deep.tsv", tsv)]))
+
+    assert len(rows) == 100_002
+    assert rows[-2]["id"] == "long"
+
+
 def test_source_yields_one_resource_per_table() -> None:
     source = edxorg_s3.edxorg_s3_source(
         tables=["auth_user", "student_courseenrollment"]
@@ -232,12 +224,20 @@ def test_pipeline_for_shares_destination_with_singleton_pipeline() -> None:
 # ── read_edxorg_tsv ───────────────────────────────────────────────────────────
 
 
-class _FakeFileItem(dict[str, Any]):
-    """The three FileItemDict members the reader touches."""
+_MODIFIED_AT = datetime(2026, 3, 7, 10, 25, tzinfo=UTC)
 
-    def __init__(self, url: str, content: bytes) -> None:
+
+class _FakeFileItem(dict[str, Any]):
+    """The FileItemDict members the reader touches."""
+
+    def __init__(
+        self, url: str, content: bytes, modification_date: datetime = _MODIFIED_AT
+    ) -> None:
         super().__init__(
-            file_url=url, file_name=url.rsplit("/", 1)[-1], size_in_bytes=len(content)
+            file_url=url,
+            file_name=url.rsplit("/", 1)[-1],
+            size_in_bytes=len(content),
+            modification_date=modification_date,
         )
         self._content = content
 
@@ -245,13 +245,195 @@ class _FakeFileItem(dict[str, Any]):
         return io.BytesIO(self._content)
 
 
-def _read(items: list[_FakeFileItem]) -> list[pa.Table]:
+def _read(items: Iterable[_FakeFileItem]) -> list[pa.Table]:
     """Drive the reader's generator directly, past dlt's transformer wrapper."""
     return list(
         edxorg_s3.read_edxorg_tsv._pipe.gen(  # noqa: SLF001
             items, **edxorg_s3._CSV_READER_OPTIONS
         )
     )
+
+
+def _rows(batches: list[pa.Table]) -> list[dict[str, Any]]:
+    return [row for batch in batches for row in batch.to_pylist()]
+
+
+def test_reader_stamps_every_row_with_its_source_file() -> None:
+    """Rows must carry the file they came from and when it was written.
+
+    Two exports of the same course produce byte-identical rows apart from
+    these columns, so without them the post-load dedupe cannot tell a
+    re-exported copy from a distinct row, and staging has nothing to order
+    versions of a record by.
+    """
+    earlier = datetime(2026, 2, 21, 7, 50, tzinfo=UTC)
+    rows = _rows(
+        _read(
+            [
+                _FakeFileItem("s3://bucket/old.tsv", _CLEAN_TSV, earlier),
+                _FakeFileItem("s3://bucket/new.tsv", _CLEAN_TSV),
+            ]
+        )
+    )
+
+    assert [r[file_metadata.SOURCE_FILE_COLUMN] for r in rows] == [
+        "s3://bucket/old.tsv",
+        "s3://bucket/old.tsv",
+        "s3://bucket/new.tsv",
+        "s3://bucket/new.tsv",
+    ]
+    assert [r[file_metadata.FILE_MODIFIED_AT_COLUMN] for r in rows] == [
+        earlier,
+        earlier,
+        _MODIFIED_AT,
+        _MODIFIED_AT,
+    ]
+
+
+def test_reader_stamps_rows_recovered_by_the_unquoted_fallback() -> None:
+    """The fallback path yields its own batches and must stamp them too."""
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert {r[file_metadata.SOURCE_FILE_COLUMN] for r in rows} == {
+        "s3://bucket/legacy.tsv"
+    }
+
+
+def test_resources_append_rather_than_merge() -> None:
+    """Merge on (row_hash, extracted_course_key) can never update anything.
+
+    row_hash covers every original CSV column, so a matched row is one whose
+    content did not change between two exports of a course; the
+    merge only bought one Iceberg commit per 1,000 rows and a whole load held
+    in memory. Duplicates are removed after the load instead.
+    """
+    source = edxorg_s3.edxorg_s3_source(tables=["auth_user"])
+    table = source.resources[
+        "raw__edxorg__s3__tables__auth_user"
+    ].compute_table_schema()
+
+    assert table["write_disposition"] == "append"
+    for column in (
+        file_metadata.SOURCE_FILE_COLUMN,
+        file_metadata.FILE_MODIFIED_AT_COLUMN,
+    ):
+        assert table["columns"][column]["nullable"] is True
+
+
+def test_reader_hands_duckdb_a_path_not_a_file_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression guard for the OOMKills a file object caused.
+
+    Given a file object, DuckDB ``read()``s the whole thing into its in-memory
+    object store before parsing, which put a 14.5 GB courseware_studentmodule
+    export entirely in RAM.
+    """
+    sources: list[object] = []
+    real_from_csv_auto = duckdb.DuckDBPyConnection.from_csv_auto
+
+    def spy(
+        connection: duckdb.DuckDBPyConnection,
+        source: Any,  # noqa: ANN401
+        **kwargs: Any,
+    ) -> duckdb.DuckDBPyRelation:
+        sources.append(source)
+        return real_from_csv_auto(connection, source, **kwargs)
+
+    monkeypatch.setattr(duckdb.DuckDBPyConnection, "from_csv_auto", spy)
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)]))
+
+    assert [r["id"] for r in rows] == ["1", "2"]
+    assert len(sources) == 1
+    assert isinstance(sources[0], str)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(_CLEAN_TSV, id="read"),
+        pytest.param(b'id\tname\tbio\n1\t"open\tb\n2\n', id="unreadable"),
+    ],
+)
+def test_reader_removes_its_local_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, content: bytes
+) -> None:
+    """Each download is deleted once its file is done, even when it fails.
+
+    Left behind, a table's worth of downloads would fill the node's disk.
+    """
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    with contextlib.suppress(edxorg_s3.EdxorgTSVUnreadableError):
+        _read([_FakeFileItem("s3://bucket/file.tsv", content)])
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_read_tsv_streams_instead_of_buffering_the_whole_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression guard for the OOMKills this streaming rewrite fixed.
+
+    ``isgeneratorfunction`` alone would not catch a regression to
+    ``yield from list(fetch_arrow(...))``, which still contains a ``yield``
+    but buffers the whole file before producing anything -- exactly the
+    OOMKill this rewrite fixed on courseware_studentmodule and
+    auth_user/auth_userprofile once #2663 stopped those files' dialect
+    failures from short-circuiting the read. Driving a fake ``fetch_arrow``
+    through ``_read_tsv`` and checking what has been pulled after each
+    ``next()`` proves the second batch is not produced until asked for.
+    """
+    pulled: list[int] = []
+
+    def fake_fetch_arrow(_relation: object, _chunk_size: int) -> Iterator[int]:
+        for i in range(2):
+            pulled.append(i)
+            yield i
+
+    monkeypatch.setattr(edxorg_s3, "fetch_arrow", fake_fetch_arrow)
+
+    path = tmp_path / "clean.tsv"
+    path.write_bytes(_CLEAN_TSV)
+    reader = edxorg_s3._read_tsv(  # noqa: SLF001
+        path,
+        5000,
+        edxorg_s3._CSV_READER_OPTIONS,  # noqa: SLF001
+    )
+
+    assert next(reader) == 0
+    assert pulled == [0], "the second batch must not be pulled until requested"
+
+    assert next(reader) == 1
+    assert pulled == [0, 1]
+
+
+def test_reader_does_not_retry_unquoted_after_streaming_has_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A duckdb.Error after the first batch must fail loudly, not retry.
+
+    Retrying unquoted here would re-read the whole file under a different
+    dialect and splice it onto rows already yielded downstream from the
+    pinned-dialect attempt -- duplicated, inconsistently parsed data reaching
+    the destination instead of the loud failure the module otherwise insists
+    on (see _read_unquoted_tsv's docstring).
+    """
+
+    def fake_fetch_arrow(
+        _relation: object, _chunk_size: int
+    ) -> Iterator[pa.RecordBatch]:
+        yield _table([{"id": "1"}]).to_batches()[0]
+        msg = "simulated mid-scan failure"
+        raise duckdb.Error(msg)
+
+    monkeypatch.setattr(edxorg_s3, "fetch_arrow", fake_fetch_arrow)
+
+    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError, match="partway"):
+        _read([_FakeFileItem("s3://bucket/clean.tsv", _CLEAN_TSV)])
 
 
 def test_reader_returns_rows_for_a_well_formed_file() -> None:
@@ -279,21 +461,139 @@ def test_reader_skips_an_empty_file_instead_of_failing_the_table() -> None:
     assert [r["id"] for r in rows] == ["1", "2"], "the readable file still loads"
 
 
-def test_reader_names_the_s3_object_it_could_not_read() -> None:
-    """DAGSTER-1C..1V reported a sniffing failure against
-    ``DUCKDB_INTERNAL_OBJECTSTORE://e3d60147029d6cb5`` -- DuckDB's handle for
-    the open file object, which maps to nothing anyone can go and look at.
+# A legacy unquoted dump, shaped like the auth_userprofile file behind
+# DAGSTER-30: every line is one record and the JSON quotes are literal text, but
+# one bio happens to start with `"`, which under the pinned quote character
+# opens a field that never closes.
+_LEGACY_STRAY_QUOTE_TSV = (
+    b"id\tbio\tmeta\n"
+    + b"".join(f'{i}\tbio {i}\t{{""k"": ""v{i}""}}\n'.encode() for i in range(1, 40))
+    + b'40\t"I love MIT\t{}\n'
+    + b"".join(f"{i}\tbio {i}\t{{}}\n".encode() for i in range(41, 80))
+)
 
-    Whatever the underlying cause turns out to be, the error has to say which
-    object it was or nobody can reproduce it.
-    """
-    # Two header fields, a data row with far more -- unreadable under the pinned
-    # dialect with strict mode off and null padding deliberately unset.
-    unreadable = b'id\tname\n1\t"unterminated quote\n'
 
-    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
-        _read(
-            [_FakeFileItem("s3://bucket/db_table/auth_user/prod/x/bad.tsv", unreadable)]
+def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
+    with pytest.raises(duckdb.InvalidInputException, match="sniffing"):
+        duckdb.from_csv_auto(
+            io.BytesIO(_LEGACY_STRAY_QUOTE_TSV), **edxorg_s3._CSV_READER_OPTIONS
         )
 
-    assert "s3://bucket/db_table/auth_user/prod/x/bad.tsv" in str(raised.value)
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
+    assert rows[39]["bio"] == '"I love MIT'
+
+
+def test_pipeline_loads_every_row_of_interleaved_multi_batch_files(
+    tmp_path: Path,
+) -> None:
+    """dlt interleaves the per-file reader generators; none may cut another short.
+
+    Between #2695 and #2725 every read shared DuckDB's default connection, so
+    starting the next file's read ended the suspended one after its first batch
+    without an error. Every multi-batch file but the last loaded exactly
+    ``chunk_size`` rows: 3,507 of courseware_studentmodule's 4,503 files landed
+    in production with 5,000.
+    """
+    row_counts = [12000, 7000, 3000, 16000]
+    prefix = tmp_path / "land" / "db_table" / "t" / "prod"
+    for i, rows in enumerate(row_counts):
+        path = prefix / f"course{i}" / f"export{i}.tsv"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "id\tmodule_type\n" + "".join(f"{i}-{j}\tproblem\n" for j in range(rows))
+        )
+        modified = _MODIFIED_AT.timestamp() + i
+        os.utime(path, (modified, modified))
+
+    files = edxorg_s3.edxorg_files(
+        bucket_url=(tmp_path / "land").as_uri(),
+        file_globs=["db_table/t/prod/**/*.tsv"],
+        credentials=fsspec.filesystem("file"),
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="edxorg_interleave",
+        destination=dlt.destinations.duckdb(str(tmp_path / "out.duckdb")),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    pipeline.run(
+        (files | edxorg_s3.read_edxorg_tsv(**edxorg_s3._CSV_READER_OPTIONS)).with_name(  # noqa: SLF001
+            "t"
+        )
+    )
+
+    with pipeline.sql_client() as client:
+        loaded = dict(
+            client.execute_sql("select _source_file, count(*) from t group by 1")
+        )
+    assert sorted(loaded.values()) == sorted(row_counts)
+
+
+def test_reader_recovers_a_legacy_file_while_another_read_is_in_flight(
+    tmp_path: Path,
+) -> None:
+    """The fallback must survive a read that is suspended mid-stream.
+
+    dlt invokes this transformer once per page and interleaves the generators,
+    so a file suspended at a yield still holds its ``fetch_arrow_reader`` open.
+    On duckdb's module-level default connection that open reader holds a
+    transaction, the next file's sniff failure aborts it, and the unquoted
+    retry dies with "Current transaction is aborted (please ROLLBACK)" without
+    reading anything -- which is why DAGSTER-30 kept failing on a file the
+    fallback reads fine on its own. Each read owns its connection now.
+    """
+    in_flight_file = tmp_path / "in_flight.tsv"
+    in_flight_file.write_bytes(
+        b"id\tbio\tmeta\n"
+        + b"".join(f"{i}\tbio {i}\t{{}}\n".encode() for i in range(12000))
+    )
+    in_flight = edxorg_s3._read_tsv(  # noqa: SLF001
+        in_flight_file,
+        5000,
+        edxorg_s3._CSV_READER_OPTIONS,  # noqa: SLF001
+    )
+    next(in_flight)  # suspended mid-file, its reader still open
+
+    rows = _rows(
+        _read([_FakeFileItem("s3://bucket/legacy.tsv", _LEGACY_STRAY_QUOTE_TSV)])
+    )
+
+    assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV.rstrip(b"\n"), id="no_trailing_newline"),
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV + b"\n", id="trailing_blank_line"),
+        pytest.param(_LEGACY_STRAY_QUOTE_TSV + b"\r\n", id="trailing_crlf_blank_line"),
+        pytest.param(
+            _LEGACY_STRAY_QUOTE_TSV.replace(b"50\tbio 50\t{}\n", b"50\tbio 50\t{}\n\n"),
+            id="mid_file_blank_line",
+        ),
+    ],
+)
+def test_unquoted_fallback_line_count_matches_what_duckdb_reads(data: bytes) -> None:
+    """DuckDB skips blank lines, so the row-count guard must not count them."""
+    assert len(_rows(_read([_FakeFileItem("s3://bucket/legacy.tsv", data)]))) == 79  # noqa: PLR2004
+
+
+def test_reader_names_the_s3_object_it_could_not_read() -> None:
+    """A file neither read can take whole fails loudly, naming the object.
+
+    The pinned read cannot sniff this file, and the unquoted read silently drops
+    the short row, so it is refused rather than partially loaded. DAGSTER-1C..1V
+    reported DuckDB's ``DUCKDB_INTERNAL_OBJECTSTORE://...`` handle instead of the
+    S3 URL, which nobody can open.
+    """
+    unreadable = b'id\tname\tbio\n1\t"open\tb\n2\n'
+    url = "s3://bucket/db_table/auth_userprofile/prod/x/bad.tsv"
+
+    with pytest.raises(edxorg_s3.EdxorgTSVUnreadableError) as raised:
+        _read([_FakeFileItem(url, unreadable)])
+
+    assert url in str(raised.value)

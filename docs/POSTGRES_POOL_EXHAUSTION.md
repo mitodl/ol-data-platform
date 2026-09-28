@@ -127,7 +127,8 @@ Add to your Dagster instance:
 ```python
 # In your definitions.py or dagster.yaml
 import logging
-logging.getLogger('sqlalchemy.pool').setLevel(logging.DEBUG)
+
+logging.getLogger("sqlalchemy.pool").setLevel(logging.DEBUG)
 ```
 
 This logs every connection checkout/checkin.
@@ -140,6 +141,7 @@ Add Python code to log pool stats:
 from dagster import get_dagster_logger
 
 logger = get_dagster_logger()
+
 
 # In your asset/op
 def my_asset(context):
@@ -193,11 +195,8 @@ application → pgBouncer (1000s of connections) → Postgres (100 connections)
 Limit concurrent asset materializations:
 
 ```python
-@asset(
-    op_tags={"dagster/concurrency_key": "database_ops"}
-)
-def my_asset():
-    ...
+@asset(op_tags={"dagster/concurrency_key": "database_ops"})
+def my_asset(): ...
 ```
 
 Configure concurrency limits in dagster.yaml:

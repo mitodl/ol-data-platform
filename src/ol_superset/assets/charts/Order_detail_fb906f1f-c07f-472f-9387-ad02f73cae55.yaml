@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555  # marts__combined__orders
+dataset_uuid: d00acae6-be70-4e6f-a399-1b3027a33563  # orders_with_product_report
 description: null
 params:
   adhoc_filters: []
@@ -13,28 +13,32 @@ params:
   - order_id
   - product_type
   - product_readable_id
+  - product_name
   - order_created_on
-  - order_created_date
+  - expressionType: SQL
+    label: order_created_date
+    sqlExpression: SUBSTRING(order_created_on, 6, 2) || '/' || SUBSTRING(order_created_on,
+      9, 2) || '/' || SUBSTRING(order_created_on, 1, 4)
   - order_state
   - unit_price
   - discount
-  - order_total_price_paid
   - order_tax_amount
   - order_total_price_paid_plus_tax
+  - order_total_price_paid
   - receipt_payment_amount
-  - coupon_code
   - coupon_name
-  - coupon_type
+  - coupon_code
   - coupon_redeemed_on
+  - coupon_type
   - receipt_payer_name
   - receipt_payer_email
   - receipt_payment_card_type
-  - receipt_bill_to_address_state
   - receipt_payment_method
-  - order_tax_country_code
+  - receipt_bill_to_address_state
   - order_tax_rate_name
-  - receipt_authorization_code
+  - order_tax_country_code
   - receipt_payment_card_number
+  - receipt_authorization_code
   - receipt_payment_currency
   - product_id
   - line_id
@@ -43,8 +47,8 @@ params:
   - receipt_payer_ip_address
   - receipt_transaction_id
   - b2border_contract_number
-  - order_type
   - redeemed_email
+  - order_type
   allow_rearrange_columns: true
   allow_render_html: true
   color_pn: false

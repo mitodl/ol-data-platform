@@ -6,7 +6,7 @@ deployment: mitlearn
 layer: app_postgres
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__mitlearn__app__postgres__

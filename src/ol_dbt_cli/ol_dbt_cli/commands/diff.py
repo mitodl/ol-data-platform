@@ -40,6 +40,7 @@ from typing import Annotated, Any, Literal
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import get_repo_root
 from ol_dbt_cli.lib.manifest import (
     ManifestRegistry,
@@ -337,7 +338,7 @@ def _run_dbt_show(
     can surface a clean error and exit non-zero.
     """
     cmd = [
-        "dbt",
+        dbt_executable(),
         "show",
         "--inline",
         inline_sql,
@@ -361,7 +362,7 @@ def _run_dbt_show(
         msg = f"dbt show failed: {detail[-500:]}"
         raise RuntimeError(msg) from exc
     except FileNotFoundError as exc:
-        msg = "'dbt' command not found; install dbt and ensure it is on PATH."
+        msg = f"{dbt_executable()} not found; run `uv sync` from the repo root to install dbt."
         raise RuntimeError(msg) from exc
 
     rows = _extract_show_rows(result.stdout)
@@ -1037,7 +1038,7 @@ def diff(
             notes.append("--auto-build skipped: both --old and --new are raw relations (nothing to build).")
         else:
             # Single space-joined --select value, consistent with ol-dbt run/impact.
-            build_cmd = ["dbt", "build", "--target", target, "--select", " ".join(build_targets)]
+            build_cmd = [dbt_executable(), "build", "--target", target, "--select", " ".join(build_targets)]
             if output_format == "text":
                 console.print(f"[dim]Running: {' '.join(build_cmd)} ...[/]")
             try:
@@ -1048,7 +1049,9 @@ def diff(
                 err_console.print(f"[red]Error:[/] dbt build failed: {detail[-500:]}")
                 sys.exit(1)
             except FileNotFoundError:
-                err_console.print("[red]Error:[/] 'dbt' command not found; install dbt and ensure it is on PATH.")
+                err_console.print(
+                    f"[red]Error:[/] {dbt_executable()} not found; run `uv sync` from the repo root to install dbt."
+                )
                 sys.exit(1)
 
     # --- Comparison ---

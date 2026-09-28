@@ -14,6 +14,12 @@ models:
     and the three core courses to earn the International Development credential. Starting
     from fall 2023, completing 14.009x will only be credited towards the Public Policy
     Track.' Users can recieve both DEDP certificates but only count 14.009x once
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: courserunenrollment_id
     description: int, sequential ID representing an enrollment in 14.009x

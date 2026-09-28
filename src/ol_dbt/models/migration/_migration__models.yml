@@ -4,6 +4,11 @@ version: 2
 models:
 - name: edxorg_to_mitxonline_course_runs
   description: Course runs not yet migrated to MITx Online from edx.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
   columns:
   - name: mitxonline_course_id
     description: int, foreign key to courses table in the mitxonline database
@@ -53,6 +58,14 @@ models:
 
 - name: edxorg_to_mitxonline_enrollments
   description: Enrollments not yet migrated to MITx Online from edx.org
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
   columns:
   - name: user_edxorg_id
     description: int, user ID on the edxorg platform.
@@ -115,6 +128,14 @@ models:
     edX.org learners (certificate holders, program entitlement holders, and future
     enrollment users) in scope for migration to MITx Online, whether or not they
     already have an MITx Online account
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
   columns:
   - name: user_email
     description: string, user email that user registered on edX.org platform.
@@ -141,6 +162,12 @@ models:
 
 - name: edxorg_to_mitxonline_program_certificates
   description: edX.org MITx program certificates not yet migrated to MITx Online
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: user_edxorg_id
     data_type: integer
@@ -184,6 +211,12 @@ models:
 
 - name: edxorg_to_mitxonline_program_entitlements
   description: Program entitlements to program orders to be migrated to MITx Online
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_id
     data_type: integer

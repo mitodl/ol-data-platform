@@ -4,6 +4,10 @@ version: 2
 models:
 - name: marts__ocw_courses
   description: OCW courses managed in OCW Studio
+  config:
+    meta:
+      qa_branches:
+      - ocw/app_postgres
   columns:
   - name: course_short_id
     description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022

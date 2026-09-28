@@ -107,6 +107,14 @@ raw__podcast__rss__channels                ← MIT Learn podcast channels from R
 raw__podcast__rss__episodes                ← MIT Learn podcast episodes from RSS
 ```
 
+### Client analytics (via dlt)
+
+```
+raw__posthog__learn__s3__events            ← PostHog's hourly batch export of every
+                                             raw MIT Learn client event
+                                             (subsystem=learn is PostHog's project)
+```
+
 ### External partner data
 
 ```
@@ -124,12 +132,11 @@ Set the `name` in each `@dlt.resource` decorator:
 
 ```python
 @dlt.resource(
-    name="raw__mitpe__api__courses",   # ← full canonical name
+    name="raw__mitpe__api__courses",  # ← full canonical name
     primary_key=["title", "url"],
     write_disposition="replace",
 )
-def courses() -> Generator[dict[str, Any], None, None]:
-    ...
+def courses() -> Generator[dict[str, Any], None, None]: ...
 ```
 
 dlt writes the Iceberg table using this name exactly. The asset key in Dagster

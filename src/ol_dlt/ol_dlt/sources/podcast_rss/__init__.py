@@ -289,4 +289,4 @@ podcast_rss_pipeline = config.pipeline_for("podcast", pipeline_name="podcast_rss
 
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the podcast source (uniform entrypoint for the wrapper)."""
-    return podcast_rss_source()
+    return config.with_nullable_load_id(podcast_rss_source())

@@ -6,7 +6,10 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_project,
 )
-from lakehouse.lib.starrocks_dbt import materialized_view_relations
+from lakehouse.lib.starrocks_dbt import (
+    materialized_view_relations,
+    refresh_materialized_views,
+)
 from lakehouse.resources.starrocks import StarRocksResource
 
 
@@ -35,7 +38,6 @@ def refresh_starrocks_analytics_mvs(
     `Can not find materialized view` at runtime.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
-    for relation in materialized_view_relations(manifest):
-        context.log.info("Refreshing %s", relation)
-        starrocks.execute(f"REFRESH MATERIALIZED VIEW {relation} WITH SYNC MODE")
-        context.log.info("Refreshed %s", relation)
+    refresh_materialized_views(
+        materialized_view_relations(manifest), starrocks.execute, log=context.log
+    )

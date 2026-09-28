@@ -36,6 +36,18 @@ with combined__users as (
     group by user_email
 )
 
+, dedp_enroll_indicators as (
+    select
+        user_email
+        , 1 as Any_DEDP_Program_Enrollment_Indicator
+    from program_enrollment_detail
+    where program_title in
+        ('Data, Economics, and Design of Policy'
+        , 'Data, Economics, and Design of Policy: International Development'
+        , 'Data, Economics, and Design of Policy: Public Policy')
+    group by user_email
+)
+
 , dedp_certs as (
     select
         combined_course_enrollment_detail.user_email
@@ -73,9 +85,12 @@ select
     , case when dedp_indicators.Any_DEDP_Program_Indicator= 1 then 'Y' else null end as any_dedp_program_cert_ind
     , case when dedp_indicators.DEDP_International_Program_Indicator= 1 then 'Y' else null end as dedp_international_program_cert_ind
     , case when dedp_indicators.DEDP_Public_Policy_Program_Indicator= 1 then 'Y' else null end as dedp_public_policy_program_cert_ind
+    , case when dedp_enroll_indicators.Any_DEDP_Program_Enrollment_Indicator= 1 then 'Y' else null end as any_dedp_program_enroll_ind
 from combined__users
 left join dedp_indicators
     on combined__users.user_email = dedp_indicators.user_email
 left join dedp_certs
     on combined__users.user_email = dedp_certs.user_email
+left join dedp_enroll_indicators
+    on combined__users.user_email = dedp_enroll_indicators.user_email
 where combined__users.user_hashed_id is not null

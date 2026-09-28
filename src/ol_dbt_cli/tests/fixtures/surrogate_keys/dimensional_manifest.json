@@ -1,0 +1,4778 @@
+{
+ "macros": {},
+ "nodes": {
+  "model.open_learning.afact_course_page_engagement": {
+   "columns": {
+    "block_fk": {
+     "description": ""
+    },
+    "chapter_block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "last_view_timestamp": {
+     "description": ""
+    },
+    "num_of_views": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "sequential_block_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_content",
+     "model.open_learning.tfact_course_navigation_events"
+    ]
+   },
+   "name": "afact_course_page_engagement",
+   "original_file_path": "models/dimensional/afact_course_page_engagement.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.afact_course_page_engagement"
+  },
+  "model.open_learning.afact_discussion_engagement": {
+   "columns": {
+    "chapter_block_fk": {
+     "description": ""
+    },
+    "commentable_id": {
+     "description": ""
+    },
+    "content_block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "discussion_topic_fk": {
+     "description": ""
+    },
+    "discussion_type": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "post_commented": {
+     "description": ""
+    },
+    "post_created": {
+     "description": ""
+    },
+    "post_id": {
+     "description": ""
+    },
+    "post_replied": {
+     "description": ""
+    },
+    "post_title": {
+     "description": ""
+    },
+    "post_viewed": {
+     "description": ""
+    },
+    "post_voted": {
+     "description": ""
+    },
+    "response_voted": {
+     "description": ""
+    },
+    "sequential_block_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.tfact_discussion_events",
+     "model.open_learning.dim_discussion_topic",
+     "model.open_learning.dim_course_content"
+    ]
+   },
+   "name": "afact_discussion_engagement",
+   "original_file_path": "models/dimensional/afact_discussion_engagement.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.afact_discussion_engagement"
+  },
+  "model.open_learning.afact_feedback_conversation": {
+   "columns": {
+    "category_fk": {
+     "description": ""
+    },
+    "cluster_id": {
+     "description": ""
+    },
+    "cluster_probability": {
+     "description": ""
+    },
+    "cluster_run_id": {
+     "description": ""
+    },
+    "conversation_id": {
+     "description": ""
+    },
+    "conversation_ingested_at": {
+     "description": ""
+    },
+    "conversation_summary": {
+     "description": ""
+    },
+    "conversation_text_chars": {
+     "description": ""
+    },
+    "embedded_at": {
+     "description": ""
+    },
+    "embedding_dim": {
+     "description": ""
+    },
+    "embedding_input": {
+     "description": ""
+    },
+    "embedding_model_version": {
+     "description": ""
+    },
+    "embedding_vector": {
+     "description": ""
+    },
+    "explicit_rating": {
+     "description": ""
+    },
+    "feedback_conversation_pk": {
+     "description": ""
+    },
+    "feedback_source_fk": {
+     "description": ""
+    },
+    "final_priority": {
+     "description": ""
+    },
+    "final_status": {
+     "description": ""
+    },
+    "last_turn_date_fk": {
+     "description": ""
+    },
+    "opened_by_user_fk": {
+     "description": ""
+    },
+    "opened_date_fk": {
+     "description": ""
+    },
+    "participant_count": {
+     "description": ""
+    },
+    "sentiment_fk": {
+     "description": ""
+    },
+    "sentiment_source": {
+     "description": ""
+    },
+    "summarized_at": {
+     "description": ""
+    },
+    "summary_model_version": {
+     "description": ""
+    },
+    "turn_count": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.tfact_feedback",
+     "model.open_learning.bridge_feedback_tag",
+     "model.open_learning.dim_feedback_tag",
+     "model.open_learning.dim_feedback_category"
+    ]
+   },
+   "name": "afact_feedback_conversation",
+   "original_file_path": "models/dimensional/afact_feedback_conversation.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.afact_feedback_conversation"
+  },
+  "model.open_learning.afact_problem_engagement": {
+   "columns": {
+    "chapter_block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "last_attempt_timestamp": {
+     "description": ""
+    },
+    "num_of_attempts": {
+     "description": ""
+    },
+    "num_of_correct_attempts": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "problem_block_fk": {
+     "description": ""
+    },
+    "sequential_block_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_content",
+     "model.open_learning.tfact_problem_events"
+    ]
+   },
+   "name": "afact_problem_engagement",
+   "original_file_path": "models/dimensional/afact_problem_engagement.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.afact_problem_engagement"
+  },
+  "model.open_learning.afact_video_engagement": {
+   "columns": {
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "estimated_time_played": {
+     "description": ""
+    },
+    "latest_activity_timestamp": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "section_content_fk": {
+     "description": ""
+    },
+    "section_title": {
+     "description": ""
+    },
+    "subsection_content_fk": {
+     "description": ""
+    },
+    "subsection_title": {
+     "description": ""
+    },
+    "unit_content_fk": {
+     "description": ""
+    },
+    "unit_title": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    },
+    "video_completed_count": {
+     "description": ""
+    },
+    "video_id": {
+     "description": ""
+    },
+    "video_played_count": {
+     "description": ""
+    },
+    "video_title": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_content",
+     "model.open_learning.tfact_video_events",
+     "model.open_learning.dim_video"
+    ]
+   },
+   "name": "afact_video_engagement",
+   "original_file_path": "models/dimensional/afact_video_engagement.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.afact_video_engagement"
+  },
+  "model.open_learning.bridge_course_department": {
+   "columns": {
+    "course_fk": {
+     "description": ""
+    },
+    "department_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course",
+     "model.open_learning.dim_department"
+    ]
+   },
+   "name": "bridge_course_department",
+   "original_file_path": "models/dimensional/bridge_course_department.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_course_department"
+  },
+  "model.open_learning.bridge_course_instructor": {
+   "columns": {
+    "course_fk": {
+     "description": ""
+    },
+    "instructor_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course",
+     "model.open_learning.dim_instructor"
+    ]
+   },
+   "name": "bridge_course_instructor",
+   "original_file_path": "models/dimensional/bridge_course_instructor.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_course_instructor"
+  },
+  "model.open_learning.bridge_course_topic": {
+   "columns": {
+    "course_fk": {
+     "description": ""
+    },
+    "topic_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course",
+     "model.open_learning.dim_topic"
+    ]
+   },
+   "name": "bridge_course_topic",
+   "original_file_path": "models/dimensional/bridge_course_topic.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_course_topic"
+  },
+  "model.open_learning.bridge_feedback_tag": {
+   "columns": {
+    "feedback_pk": {
+     "description": ""
+    },
+    "feedback_tag_pk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_feedback_tag",
+     "model.open_learning.tfact_feedback"
+    ]
+   },
+   "name": "bridge_feedback_tag",
+   "original_file_path": "models/dimensional/bridge_feedback_tag.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_feedback_tag"
+  },
+  "model.open_learning.bridge_organization_courserun": {
+   "columns": {
+    "contract_fk": {
+     "description": ""
+    },
+    "courserun_fk": {
+     "description": ""
+    },
+    "organization_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_contract",
+     "model.open_learning.dim_course_run"
+    ]
+   },
+   "name": "bridge_organization_courserun",
+   "original_file_path": "models/dimensional/bridge_organization_courserun.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_organization_courserun"
+  },
+  "model.open_learning.bridge_program_course": {
+   "columns": {
+    "course_fk": {
+     "description": ""
+    },
+    "course_order": {
+     "description": ""
+    },
+    "is_required": {
+     "description": ""
+    },
+    "program_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_program",
+     "model.open_learning.dim_course"
+    ]
+   },
+   "name": "bridge_program_course",
+   "original_file_path": "models/dimensional/bridge_program_course.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_program_course"
+  },
+  "model.open_learning.bridge_user_account_link": {
+   "columns": {
+    "from_platform": {
+     "description": ""
+    },
+    "from_user_id": {
+     "description": ""
+    },
+    "observed_on": {
+     "description": ""
+    },
+    "to_platform": {
+     "description": ""
+    },
+    "to_user_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "bridge_user_account_link",
+   "original_file_path": "models/dimensional/bridge_user_account_link.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_user_account_link"
+  },
+  "model.open_learning.bridge_user_courserun_role": {
+   "columns": {
+    "courseaccess_role": {
+     "description": ""
+    },
+    "courserun_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "platform_code": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_course_run"
+    ]
+   },
+   "name": "bridge_user_courserun_role",
+   "original_file_path": "models/dimensional/bridge_user_courserun_role.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_user_courserun_role"
+  },
+  "model.open_learning.bridge_user_organization": {
+   "columns": {
+    "organization_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "userorganization_is_manager": {
+     "description": ""
+    },
+    "userorganization_keep_until_seen": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_organization"
+    ]
+   },
+   "name": "bridge_user_organization",
+   "original_file_path": "models/dimensional/bridge_user_organization.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.bridge_user_organization"
+  },
+  "model.open_learning.dim_certificate_type": {
+   "columns": {
+    "certificate_requires_id_verification": {
+     "description": ""
+    },
+    "certificate_type_code": {
+     "description": ""
+    },
+    "certificate_type_name": {
+     "description": ""
+    },
+    "certificate_type_pk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_certificate_type",
+   "original_file_path": "models/dimensional/dim_certificate_type.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_certificate_type"
+  },
+  "model.open_learning.dim_contract": {
+   "columns": {
+    "b2b_contract_description": {
+     "description": ""
+    },
+    "b2b_contract_end_date": {
+     "description": ""
+    },
+    "b2b_contract_enrollment_fixed_price": {
+     "description": ""
+    },
+    "b2b_contract_is_active": {
+     "description": ""
+    },
+    "b2b_contract_max_learners": {
+     "description": ""
+    },
+    "b2b_contract_membership_type": {
+     "description": ""
+    },
+    "b2b_contract_name": {
+     "description": ""
+    },
+    "b2b_contract_start_date": {
+     "description": ""
+    },
+    "contract_id": {
+     "description": ""
+    },
+    "contract_pk": {
+     "description": ""
+    },
+    "organization_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_organization"
+    ]
+   },
+   "name": "dim_contract",
+   "original_file_path": "models/dimensional/dim_contract.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_contract"
+  },
+  "model.open_learning.dim_course": {
+   "columns": {
+    "course_description": {
+     "description": ""
+    },
+    "course_is_live": {
+     "description": ""
+    },
+    "course_number": {
+     "description": ""
+    },
+    "course_pk": {
+     "description": ""
+    },
+    "course_readable_id": {
+     "description": ""
+    },
+    "course_title": {
+     "description": ""
+    },
+    "effective_date": {
+     "description": ""
+    },
+    "end_date": {
+     "description": ""
+    },
+    "is_current": {
+     "description": ""
+    },
+    "primary_platform": {
+     "description": ""
+    },
+    "source_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_course",
+   "original_file_path": "models/dimensional/dim_course.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_course"
+  },
+  "model.open_learning.dim_course_content": {
+   "columns": {
+    "block_category": {
+     "description": ""
+    },
+    "block_id": {
+     "description": ""
+    },
+    "block_index": {
+     "description": ""
+    },
+    "block_metadata": {
+     "description": ""
+    },
+    "block_title": {
+     "description": ""
+    },
+    "chapter_block_id": {
+     "description": ""
+    },
+    "content_block_pk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "is_latest": {
+     "description": ""
+    },
+    "parent_block_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "retrieved_at": {
+     "description": ""
+    },
+    "sequential_block_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_course_content",
+   "original_file_path": "models/dimensional/dim_course_content.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_course_content"
+  },
+  "model.open_learning.dim_course_run": {
+   "columns": {
+    "course_fk": {
+     "description": ""
+    },
+    "courserun_created_on": {
+     "description": ""
+    },
+    "courserun_end_date_key": {
+     "description": ""
+    },
+    "courserun_end_on": {
+     "description": ""
+    },
+    "courserun_is_live": {
+     "description": ""
+    },
+    "courserun_pk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "courserun_start_date_key": {
+     "description": ""
+    },
+    "courserun_start_on": {
+     "description": ""
+    },
+    "courserun_title": {
+     "description": ""
+    },
+    "courserun_upgrade_deadline": {
+     "description": ""
+    },
+    "effective_date": {
+     "description": ""
+    },
+    "end_date": {
+     "description": ""
+    },
+    "enrollment_end": {
+     "description": ""
+    },
+    "enrollment_end_date_key": {
+     "description": ""
+    },
+    "enrollment_start": {
+     "description": ""
+    },
+    "enrollment_start_date_key": {
+     "description": ""
+    },
+    "is_current": {
+     "description": ""
+    },
+    "passing_grade": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "semester": {
+     "description": ""
+    },
+    "source_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "dim_course_run",
+   "original_file_path": "models/dimensional/dim_course_run.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_course_run"
+  },
+  "model.open_learning.dim_date": {
+   "columns": {
+    "academic_term": {
+     "description": ""
+    },
+    "academic_year": {
+     "description": ""
+    },
+    "date": {
+     "description": ""
+    },
+    "date_key": {
+     "description": ""
+    },
+    "day": {
+     "description": ""
+    },
+    "day_name": {
+     "description": ""
+    },
+    "day_of_week": {
+     "description": ""
+    },
+    "fiscal_quarter": {
+     "description": ""
+    },
+    "fiscal_year": {
+     "description": ""
+    },
+    "is_weekend": {
+     "description": ""
+    },
+    "month": {
+     "description": ""
+    },
+    "quarter": {
+     "description": ""
+    },
+    "week_of_year": {
+     "description": ""
+    },
+    "year": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_date",
+   "original_file_path": "models/dimensional/dim_date.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_date"
+  },
+  "model.open_learning.dim_department": {
+   "columns": {
+    "department_name": {
+     "description": ""
+    },
+    "department_number": {
+     "description": ""
+    },
+    "department_pk": {
+     "description": ""
+    },
+    "primary_platform": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_department",
+   "original_file_path": "models/dimensional/dim_department.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_department"
+  },
+  "model.open_learning.dim_discount": {
+   "columns": {
+    "activated_on": {
+     "description": ""
+    },
+    "created_on": {
+     "description": ""
+    },
+    "discount_amount": {
+     "description": ""
+    },
+    "discount_code": {
+     "description": ""
+    },
+    "discount_pk": {
+     "description": ""
+    },
+    "discount_source": {
+     "description": ""
+    },
+    "discount_type": {
+     "description": ""
+    },
+    "expires_on": {
+     "description": ""
+    },
+    "max_redemptions": {
+     "description": ""
+    },
+    "platform_code": {
+     "description": ""
+    },
+    "redemption_type": {
+     "description": ""
+    },
+    "source_discount_id": {
+     "description": ""
+    },
+    "updated_on": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_discount",
+   "original_file_path": "models/dimensional/dim_discount.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_discount"
+  },
+  "model.open_learning.dim_discount_type": {
+   "columns": {
+    "discount_type_code": {
+     "description": ""
+    },
+    "discount_type_name": {
+     "description": ""
+    },
+    "discount_type_pk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_discount_type",
+   "original_file_path": "models/dimensional/dim_discount_type.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_discount_type"
+  },
+  "model.open_learning.dim_discussion_topic": {
+   "columns": {
+    "category_name": {
+     "description": ""
+    },
+    "commentable_id": {
+     "description": ""
+    },
+    "content_block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "discussion_block_pk": {
+     "description": ""
+    },
+    "discussion_topic_pk": {
+     "description": ""
+    },
+    "discussion_type": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "topic_name": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_content"
+    ]
+   },
+   "name": "dim_discussion_topic",
+   "original_file_path": "models/dimensional/dim_discussion_topic.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_discussion_topic"
+  },
+  "model.open_learning.dim_feedback_category": {
+   "columns": {
+    "category_label": {
+     "description": ""
+    },
+    "category_parent_slug": {
+     "description": ""
+    },
+    "category_slug": {
+     "description": ""
+    },
+    "category_source": {
+     "description": ""
+    },
+    "category_status": {
+     "description": ""
+    },
+    "cluster_run_id": {
+     "description": ""
+    },
+    "feedback_category_pk": {
+     "description": ""
+    },
+    "first_seen_at": {
+     "description": ""
+    },
+    "updated_at": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_feedback_tag"
+    ]
+   },
+   "name": "dim_feedback_category",
+   "original_file_path": "models/dimensional/dim_feedback_category.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_feedback_category"
+  },
+  "model.open_learning.dim_feedback_channel": {
+   "columns": {
+    "channel_name": {
+     "description": ""
+    },
+    "channel_slug": {
+     "description": ""
+    },
+    "feedback_channel_pk": {
+     "description": ""
+    },
+    "is_solicited": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_feedback_channel",
+   "original_file_path": "models/dimensional/dim_feedback_channel.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_feedback_channel"
+  },
+  "model.open_learning.dim_feedback_source": {
+   "columns": {
+    "feedback_source_pk": {
+     "description": ""
+    },
+    "is_conversational": {
+     "description": ""
+    },
+    "is_course_scoped": {
+     "description": ""
+    },
+    "source_audience_scope": {
+     "description": ""
+    },
+    "source_medium": {
+     "description": ""
+    },
+    "source_name": {
+     "description": ""
+    },
+    "source_slug": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_feedback_source",
+   "original_file_path": "models/dimensional/dim_feedback_source.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_feedback_source"
+  },
+  "model.open_learning.dim_feedback_tag": {
+   "columns": {
+    "feedback_tag_pk": {
+     "description": ""
+    },
+    "source_slug": {
+     "description": ""
+    },
+    "tag_label": {
+     "description": ""
+    },
+    "tag_slug": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_feedback_tag",
+   "original_file_path": "models/dimensional/dim_feedback_tag.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_feedback_tag"
+  },
+  "model.open_learning.dim_instructor": {
+   "columns": {
+    "instructor_bio_long": {
+     "description": ""
+    },
+    "instructor_bio_short": {
+     "description": ""
+    },
+    "instructor_name": {
+     "description": ""
+    },
+    "instructor_pk": {
+     "description": ""
+    },
+    "instructor_source_id": {
+     "description": ""
+    },
+    "instructor_title": {
+     "description": ""
+    },
+    "primary_platform": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_instructor",
+   "original_file_path": "models/dimensional/dim_instructor.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_instructor"
+  },
+  "model.open_learning.dim_ocw_course": {
+   "columns": {
+    "course_department_numbers": {
+     "description": ""
+    },
+    "course_extra_course_numbers": {
+     "description": ""
+    },
+    "course_first_published_on": {
+     "description": ""
+    },
+    "course_has_never_published": {
+     "description": ""
+    },
+    "course_is_unpublished": {
+     "description": ""
+    },
+    "course_learning_resource_types": {
+     "description": ""
+    },
+    "course_level": {
+     "description": ""
+    },
+    "course_live_url": {
+     "description": ""
+    },
+    "course_name": {
+     "description": ""
+    },
+    "course_publish_date_updated_on": {
+     "description": ""
+    },
+    "course_readable_id": {
+     "description": ""
+    },
+    "course_term": {
+     "description": ""
+    },
+    "course_topics": {
+     "description": ""
+    },
+    "course_year": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_ocw_course",
+   "original_file_path": "models/dimensional/dim_ocw_course.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_ocw_course"
+  },
+  "model.open_learning.dim_ocw_resource": {
+   "columns": {
+    "content_type": {
+     "description": ""
+    },
+    "course_live_url": {
+     "description": ""
+    },
+    "course_name": {
+     "description": ""
+    },
+    "course_number": {
+     "description": ""
+    },
+    "course_term": {
+     "description": ""
+    },
+    "course_title": {
+     "description": ""
+    },
+    "course_uuid": {
+     "description": ""
+    },
+    "course_year": {
+     "description": ""
+    },
+    "external_resource_backup_url": {
+     "description": ""
+    },
+    "external_resource_backup_url_status_code": {
+     "description": ""
+    },
+    "external_resource_is_broken": {
+     "description": ""
+    },
+    "external_resource_license_warning": {
+     "description": ""
+    },
+    "external_resource_status": {
+     "description": ""
+    },
+    "external_resource_url": {
+     "description": ""
+    },
+    "external_resource_url_status_code": {
+     "description": ""
+    },
+    "external_resource_wayback_url": {
+     "description": ""
+    },
+    "image_alt_text": {
+     "description": ""
+    },
+    "image_caption": {
+     "description": ""
+    },
+    "image_credit": {
+     "description": ""
+    },
+    "learning_resource_types": {
+     "description": ""
+    },
+    "resource_audience": {
+     "description": ""
+    },
+    "resource_description": {
+     "description": ""
+    },
+    "resource_draft": {
+     "description": ""
+    },
+    "resource_file_size": {
+     "description": ""
+    },
+    "resource_file_type": {
+     "description": ""
+    },
+    "resource_filename": {
+     "description": ""
+    },
+    "resource_level": {
+     "description": ""
+    },
+    "resource_license": {
+     "description": ""
+    },
+    "resource_live_url": {
+     "description": ""
+    },
+    "resource_ocw_type": {
+     "description": ""
+    },
+    "resource_title": {
+     "description": ""
+    },
+    "resource_type": {
+     "description": ""
+    },
+    "resource_uuid": {
+     "description": ""
+    },
+    "studio_url": {
+     "description": ""
+    },
+    "video_archive_url": {
+     "description": ""
+    },
+    "video_captions_file": {
+     "description": ""
+    },
+    "video_thumbnail_file": {
+     "description": ""
+    },
+    "video_transcript_file": {
+     "description": ""
+    },
+    "video_youtube_description": {
+     "description": ""
+    },
+    "video_youtube_id": {
+     "description": ""
+    },
+    "video_youtube_speakers": {
+     "description": ""
+    },
+    "video_youtube_tags": {
+     "description": ""
+    },
+    "website_title": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_ocw_resource",
+   "original_file_path": "models/dimensional/dim_ocw_resource.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_ocw_resource"
+  },
+  "model.open_learning.dim_organization": {
+   "columns": {
+    "organization_description": {
+     "description": ""
+    },
+    "organization_id": {
+     "description": ""
+    },
+    "organization_key": {
+     "description": ""
+    },
+    "organization_logo": {
+     "description": ""
+    },
+    "organization_name": {
+     "description": ""
+    },
+    "organization_pk": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "sso_organization_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_organization",
+   "original_file_path": "models/dimensional/dim_organization.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_organization"
+  },
+  "model.open_learning.dim_payment_method": {
+   "columns": {
+    "payment_method_code": {
+     "description": ""
+    },
+    "payment_method_name": {
+     "description": ""
+    },
+    "payment_method_pk": {
+     "description": ""
+    },
+    "payment_method_provider": {
+     "description": ""
+    },
+    "payment_method_type": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_payment_method",
+   "original_file_path": "models/dimensional/dim_payment_method.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_payment_method"
+  },
+  "model.open_learning.dim_platform": {
+   "columns": {
+    "platform_description": {
+     "description": ""
+    },
+    "platform_domain": {
+     "description": ""
+    },
+    "platform_name": {
+     "description": ""
+    },
+    "platform_pk": {
+     "description": ""
+    },
+    "platform_readable_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_platform",
+   "original_file_path": "models/dimensional/dim_platform.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_platform"
+  },
+  "model.open_learning.dim_problem": {
+   "columns": {
+    "content_block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "due_date": {
+     "description": ""
+    },
+    "markdown": {
+     "description": ""
+    },
+    "max_attempts": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "problem_block_pk": {
+     "description": ""
+    },
+    "problem_name": {
+     "description": ""
+    },
+    "problem_types": {
+     "description": ""
+    },
+    "start_date": {
+     "description": ""
+    },
+    "weight": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_content"
+    ]
+   },
+   "name": "dim_problem",
+   "original_file_path": "models/dimensional/dim_problem.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_problem"
+  },
+  "model.open_learning.dim_product": {
+   "columns": {
+    "courserun_fk": {
+     "description": ""
+    },
+    "created_date_key": {
+     "description": ""
+    },
+    "effective_date": {
+     "description": ""
+    },
+    "end_date": {
+     "description": ""
+    },
+    "is_current": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "product_currency": {
+     "description": ""
+    },
+    "product_is_active": {
+     "description": ""
+    },
+    "product_pk": {
+     "description": ""
+    },
+    "product_price": {
+     "description": ""
+    },
+    "product_type": {
+     "description": ""
+    },
+    "program_fk": {
+     "description": ""
+    },
+    "source_product_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_run",
+     "model.open_learning.dim_program",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "dim_product",
+   "original_file_path": "models/dimensional/dim_product.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_product"
+  },
+  "model.open_learning.dim_program": {
+   "columns": {
+    "enrollment_end_date": {
+     "description": ""
+    },
+    "enrollment_start_date": {
+     "description": ""
+    },
+    "first_published_date": {
+     "description": ""
+    },
+    "is_active": {
+     "description": ""
+    },
+    "is_external": {
+     "description": ""
+    },
+    "partner_platform_name": {
+     "description": ""
+    },
+    "platform_code": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "platform_readable_id": {
+     "description": ""
+    },
+    "program_availability": {
+     "description": ""
+    },
+    "program_certification_type": {
+     "description": ""
+    },
+    "program_description": {
+     "description": ""
+    },
+    "program_effort": {
+     "description": ""
+    },
+    "program_is_dedp": {
+     "description": ""
+    },
+    "program_is_micromasters": {
+     "description": ""
+    },
+    "program_length": {
+     "description": ""
+    },
+    "program_name": {
+     "description": ""
+    },
+    "program_pk": {
+     "description": ""
+    },
+    "program_prerequisites": {
+     "description": ""
+    },
+    "program_price": {
+     "description": ""
+    },
+    "program_readable_id": {
+     "description": ""
+    },
+    "program_title": {
+     "description": ""
+    },
+    "program_track": {
+     "description": ""
+    },
+    "program_type": {
+     "description": ""
+    },
+    "program_what_you_learn": {
+     "description": ""
+    },
+    "published_date": {
+     "description": ""
+    },
+    "published_date_key": {
+     "description": ""
+    },
+    "source_id": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "dim_program",
+   "original_file_path": "models/dimensional/dim_program.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_program"
+  },
+  "model.open_learning.dim_sentiment": {
+   "columns": {
+    "polarity_score_bucket": {
+     "description": ""
+    },
+    "sentiment_pk": {
+     "description": ""
+    },
+    "sentiment_slug": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_sentiment",
+   "original_file_path": "models/dimensional/dim_sentiment.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_sentiment"
+  },
+  "model.open_learning.dim_tax_rate": {
+   "columns": {
+    "country_code": {
+     "description": ""
+    },
+    "is_active": {
+     "description": ""
+    },
+    "tax_rate": {
+     "description": ""
+    },
+    "tax_rate_name": {
+     "description": ""
+    },
+    "tax_rate_pk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_tax_rate",
+   "original_file_path": "models/dimensional/dim_tax_rate.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_tax_rate"
+  },
+  "model.open_learning.dim_time": {
+   "columns": {
+    "am_pm": {
+     "description": ""
+    },
+    "hour": {
+     "description": ""
+    },
+    "hour_12": {
+     "description": ""
+    },
+    "hour_of_day_label": {
+     "description": ""
+    },
+    "minute": {
+     "description": ""
+    },
+    "minute_of_day": {
+     "description": ""
+    },
+    "time_key": {
+     "description": ""
+    },
+    "time_of_day_bucket": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_time",
+   "original_file_path": "models/dimensional/dim_time.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_time"
+  },
+  "model.open_learning.dim_topic": {
+   "columns": {
+    "parent_topic_fk": {
+     "description": ""
+    },
+    "parent_topic_name": {
+     "description": ""
+    },
+    "primary_platform": {
+     "description": ""
+    },
+    "topic_name": {
+     "description": ""
+    },
+    "topic_pk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_topic",
+   "original_file_path": "models/dimensional/dim_topic.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_topic"
+  },
+  "model.open_learning.dim_user": {
+   "columns": {
+    "address_country": {
+     "description": ""
+    },
+    "address_state": {
+     "description": ""
+    },
+    "birth_year": {
+     "description": ""
+    },
+    "bootcamps_application_user_id": {
+     "description": ""
+    },
+    "certificate_desired": {
+     "description": ""
+    },
+    "company": {
+     "description": ""
+    },
+    "completed_onboarding": {
+     "description": ""
+    },
+    "delivery_preference": {
+     "description": ""
+    },
+    "edxorg_openedx_user_id": {
+     "description": ""
+    },
+    "email": {
+     "description": ""
+    },
+    "emeritus_user_id": {
+     "description": ""
+    },
+    "full_name": {
+     "description": ""
+    },
+    "gender": {
+     "description": ""
+    },
+    "global_alumni_user_id": {
+     "description": ""
+    },
+    "goals": {
+     "description": ""
+    },
+    "highest_education": {
+     "description": ""
+    },
+    "industry": {
+     "description": ""
+    },
+    "job_title": {
+     "description": ""
+    },
+    "latest_income_usd": {
+     "description": ""
+    },
+    "latest_original_currency": {
+     "description": ""
+    },
+    "latest_original_income": {
+     "description": ""
+    },
+    "micromasters_user_id": {
+     "description": ""
+    },
+    "mitlearn_openedx_user_id": {
+     "description": ""
+    },
+    "mitlearn_user_id": {
+     "description": ""
+    },
+    "mitxonline_application_user_id": {
+     "description": ""
+    },
+    "mitxonline_openedx_user_id": {
+     "description": ""
+    },
+    "mitxpro_application_user_id": {
+     "description": ""
+    },
+    "mitxpro_openedx_user_id": {
+     "description": ""
+    },
+    "residential_openedx_user_id": {
+     "description": ""
+    },
+    "topic_interests": {
+     "description": ""
+    },
+    "user_edxorg_username": {
+     "description": ""
+    },
+    "user_global_id": {
+     "description": ""
+    },
+    "user_is_active_on_bootcamps": {
+     "description": ""
+    },
+    "user_is_active_on_edxorg": {
+     "description": ""
+    },
+    "user_is_active_on_mitlearn": {
+     "description": ""
+    },
+    "user_is_active_on_mitxonline": {
+     "description": ""
+    },
+    "user_is_active_on_mitxpro": {
+     "description": ""
+    },
+    "user_is_active_on_residential": {
+     "description": ""
+    },
+    "user_joined_on_bootcamps": {
+     "description": ""
+    },
+    "user_joined_on_edxorg": {
+     "description": ""
+    },
+    "user_joined_on_mitlearn": {
+     "description": ""
+    },
+    "user_joined_on_mitxonline": {
+     "description": ""
+    },
+    "user_joined_on_mitxpro": {
+     "description": ""
+    },
+    "user_joined_on_residential": {
+     "description": ""
+    },
+    "user_mitxonline_username": {
+     "description": ""
+    },
+    "user_mitxpro_username": {
+     "description": ""
+    },
+    "user_pk": {
+     "description": ""
+    },
+    "user_pk_source": {
+     "description": ""
+    },
+    "user_residential_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "dim_user",
+   "original_file_path": "models/dimensional/dim_user.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_user"
+  },
+  "model.open_learning.dim_video": {
+   "columns": {
+    "content_block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "due_date": {
+     "description": ""
+    },
+    "edx_video_id": {
+     "description": ""
+    },
+    "html5_sources": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "start_date": {
+     "description": ""
+    },
+    "transcripts": {
+     "description": ""
+    },
+    "video_block_pk": {
+     "description": ""
+    },
+    "video_duration": {
+     "description": ""
+    },
+    "video_edx_uuid": {
+     "description": ""
+    },
+    "video_name": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_course_content"
+    ]
+   },
+   "name": "dim_video",
+   "original_file_path": "models/dimensional/dim_video.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.dim_video"
+  },
+  "model.open_learning.tfact_certificate": {
+   "columns": {
+    "certificate_created_on": {
+     "description": ""
+    },
+    "certificate_id": {
+     "description": ""
+    },
+    "certificate_is_revoked": {
+     "description": ""
+    },
+    "certificate_issued_date_key": {
+     "description": ""
+    },
+    "certificate_issued_on": {
+     "description": ""
+    },
+    "certificate_key": {
+     "description": ""
+    },
+    "certificate_scope": {
+     "description": ""
+    },
+    "certificate_type_fk": {
+     "description": ""
+    },
+    "certificate_updated_on": {
+     "description": ""
+    },
+    "certificate_uuid": {
+     "description": ""
+    },
+    "courserun_fk": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "program_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_course_run",
+     "model.open_learning.dim_platform",
+     "model.open_learning.dim_certificate_type",
+     "model.open_learning.dim_program"
+    ]
+   },
+   "name": "tfact_certificate",
+   "original_file_path": "models/dimensional/tfact_certificate.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_certificate"
+  },
+  "model.open_learning.tfact_chatbot_events": {
+   "columns": {
+    "block_id": {
+     "description": ""
+    },
+    "block_name": {
+     "description": ""
+    },
+    "chatbot_source": {
+     "description": ""
+    },
+    "chatbot_type": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "date_fk": {
+     "description": ""
+    },
+    "event_json": {
+     "description": ""
+    },
+    "event_timestamp": {
+     "description": ""
+    },
+    "event_timestamp_iso8601": {
+     "description": ""
+    },
+    "event_type": {
+     "description": ""
+    },
+    "event_value": {
+     "description": ""
+    },
+    "learn_ai_checkpoint_pk": {
+     "description": ""
+    },
+    "learn_ai_thread_id": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "org_id": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "session_id": {
+     "description": ""
+    },
+    "time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user"
+    ]
+   },
+   "name": "tfact_chatbot_events",
+   "original_file_path": "models/dimensional/tfact_chatbot_events.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_chatbot_events"
+  },
+  "model.open_learning.tfact_course_navigation_events": {
+   "columns": {
+    "block_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "date_fk": {
+     "description": ""
+    },
+    "ending_position": {
+     "description": ""
+    },
+    "event_json": {
+     "description": ""
+    },
+    "event_timestamp": {
+     "description": ""
+    },
+    "event_timestamp_iso8601": {
+     "description": ""
+    },
+    "event_type": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "starting_position": {
+     "description": ""
+    },
+    "time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "tfact_course_navigation_events",
+   "original_file_path": "models/dimensional/tfact_course_navigation_events.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_course_navigation_events"
+  },
+  "model.open_learning.tfact_discussion_events": {
+   "columns": {
+    "commentable_id": {
+     "description": ""
+    },
+    "courserun_fk": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "date_fk": {
+     "description": ""
+    },
+    "discussion_component_id": {
+     "description": ""
+    },
+    "discussion_component_name": {
+     "description": ""
+    },
+    "event_json": {
+     "description": ""
+    },
+    "event_timestamp": {
+     "description": ""
+    },
+    "event_timestamp_iso8601": {
+     "description": ""
+    },
+    "event_type": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "page_url": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "post_content": {
+     "description": ""
+    },
+    "post_id": {
+     "description": ""
+    },
+    "post_title": {
+     "description": ""
+    },
+    "time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_forums_roles": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_course_run",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "tfact_discussion_events",
+   "original_file_path": "models/dimensional/tfact_discussion_events.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_discussion_events"
+  },
+  "model.open_learning.tfact_enrollment": {
+   "columns": {
+    "courserun_fk": {
+     "description": ""
+    },
+    "enrollment_created_on": {
+     "description": ""
+    },
+    "enrollment_date_key": {
+     "description": ""
+    },
+    "enrollment_id": {
+     "description": ""
+    },
+    "enrollment_is_active": {
+     "description": ""
+    },
+    "enrollment_is_edx_enrolled": {
+     "description": ""
+    },
+    "enrollment_key": {
+     "description": ""
+    },
+    "enrollment_mode": {
+     "description": ""
+    },
+    "enrollment_status": {
+     "description": ""
+    },
+    "enrollment_type": {
+     "description": ""
+    },
+    "enrollment_updated_on": {
+     "description": ""
+    },
+    "order_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "program_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_course_run",
+     "model.open_learning.dim_program",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "tfact_enrollment",
+   "original_file_path": "models/dimensional/tfact_enrollment.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_enrollment"
+  },
+  "model.open_learning.tfact_enrollment_order": {
+   "columns": {
+    "discount_fk": {
+     "description": ""
+    },
+    "discount_type_fk": {
+     "description": ""
+    },
+    "enrollment_key": {
+     "description": ""
+    },
+    "line_price": {
+     "description": ""
+    },
+    "order_fk": {
+     "description": ""
+    },
+    "order_id": {
+     "description": ""
+    },
+    "order_reference_number": {
+     "description": ""
+    },
+    "order_state": {
+     "description": ""
+    },
+    "order_updated_on": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.tfact_enrollment",
+     "model.open_learning.dim_product",
+     "model.open_learning.tfact_order"
+    ]
+   },
+   "name": "tfact_enrollment_order",
+   "original_file_path": "models/dimensional/tfact_enrollment_order.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_enrollment_order"
+  },
+  "model.open_learning.tfact_feedback": {
+   "columns": {
+    "content_block_fk": {
+     "description": ""
+    },
+    "conversation_id": {
+     "description": ""
+    },
+    "courserun_fk": {
+     "description": ""
+    },
+    "created_date_fk": {
+     "description": ""
+    },
+    "created_time_fk": {
+     "description": ""
+    },
+    "explicit_rating": {
+     "description": ""
+    },
+    "feedback_channel_fk": {
+     "description": ""
+    },
+    "feedback_created_at": {
+     "description": ""
+    },
+    "feedback_ingested_at": {
+     "description": ""
+    },
+    "feedback_occurred_at": {
+     "description": ""
+    },
+    "feedback_pk": {
+     "description": ""
+    },
+    "feedback_source_fk": {
+     "description": ""
+    },
+    "feedback_text": {
+     "description": ""
+    },
+    "feedback_text_chars": {
+     "description": ""
+    },
+    "feedback_title": {
+     "description": ""
+    },
+    "feedback_updated_at": {
+     "description": ""
+    },
+    "is_conversation_opening": {
+     "description": ""
+    },
+    "occurred_date_fk": {
+     "description": ""
+    },
+    "occurred_time_fk": {
+     "description": ""
+    },
+    "organization_fk": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "source_metadata": {
+     "description": ""
+    },
+    "source_record_id": {
+     "description": ""
+    },
+    "source_url": {
+     "description": ""
+    },
+    "subject_ref": {
+     "description": ""
+    },
+    "subject_type": {
+     "description": ""
+    },
+    "subject_url": {
+     "description": ""
+    },
+    "subject_user_ref": {
+     "description": ""
+    },
+    "turn_index": {
+     "description": ""
+    },
+    "updated_date_fk": {
+     "description": ""
+    },
+    "updated_time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user"
+    ]
+   },
+   "name": "tfact_feedback",
+   "original_file_path": "models/dimensional/tfact_feedback.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_feedback"
+  },
+  "model.open_learning.tfact_grade": {
+   "columns": {
+    "courserun_fk": {
+     "description": ""
+    },
+    "grade_created_on": {
+     "description": ""
+    },
+    "grade_date_key": {
+     "description": ""
+    },
+    "grade_id": {
+     "description": ""
+    },
+    "grade_key": {
+     "description": ""
+    },
+    "grade_updated_on": {
+     "description": ""
+    },
+    "grade_value": {
+     "description": ""
+    },
+    "is_passing": {
+     "description": ""
+    },
+    "letter_grade": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_course_run",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "tfact_grade",
+   "original_file_path": "models/dimensional/tfact_grade.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_grade"
+  },
+  "model.open_learning.tfact_order": {
+   "columns": {
+    "discount_fk": {
+     "description": ""
+    },
+    "discount_type_fk": {
+     "description": ""
+    },
+    "line_id": {
+     "description": ""
+    },
+    "line_price": {
+     "description": ""
+    },
+    "order_date_key": {
+     "description": ""
+    },
+    "order_id": {
+     "description": ""
+    },
+    "order_key": {
+     "description": ""
+    },
+    "order_reference_number": {
+     "description": ""
+    },
+    "order_state": {
+     "description": ""
+    },
+    "order_tax_amount": {
+     "description": ""
+    },
+    "order_tax_rate": {
+     "description": ""
+    },
+    "order_total_price_paid": {
+     "description": ""
+    },
+    "order_total_price_paid_plus_tax": {
+     "description": ""
+    },
+    "order_updated_date_key": {
+     "description": ""
+    },
+    "order_updated_on": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "product_fk": {
+     "description": ""
+    },
+    "tax_rate_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_discount_type",
+     "model.open_learning.dim_product",
+     "model.open_learning.dim_platform",
+     "model.open_learning.dim_discount",
+     "model.open_learning.dim_tax_rate"
+    ]
+   },
+   "name": "tfact_order",
+   "original_file_path": "models/dimensional/tfact_order.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_order"
+  },
+  "model.open_learning.tfact_payment": {
+   "columns": {
+    "order_id": {
+     "description": ""
+    },
+    "payment_date_key": {
+     "description": ""
+    },
+    "payment_id": {
+     "description": ""
+    },
+    "payment_key": {
+     "description": ""
+    },
+    "payment_method_fk": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "transaction_amount": {
+     "description": ""
+    },
+    "transaction_created_on": {
+     "description": ""
+    },
+    "transaction_status": {
+     "description": ""
+    },
+    "transaction_type": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_platform",
+     "model.open_learning.dim_payment_method"
+    ]
+   },
+   "name": "tfact_payment",
+   "original_file_path": "models/dimensional/tfact_payment.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_payment"
+  },
+  "model.open_learning.tfact_problem_events": {
+   "columns": {
+    "answers": {
+     "description": ""
+    },
+    "attempt": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "date_fk": {
+     "description": ""
+    },
+    "event_id": {
+     "description": ""
+    },
+    "event_json": {
+     "description": ""
+    },
+    "event_timestamp": {
+     "description": ""
+    },
+    "event_timestamp_iso8601": {
+     "description": ""
+    },
+    "event_type": {
+     "description": ""
+    },
+    "grade": {
+     "description": ""
+    },
+    "max_grade": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "problem_block_fk": {
+     "description": ""
+    },
+    "success": {
+     "description": ""
+    },
+    "time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_platform",
+     "model.open_learning.tfact_studentmodule_problems"
+    ]
+   },
+   "name": "tfact_problem_events",
+   "original_file_path": "models/dimensional/tfact_problem_events.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_problem_events"
+  },
+  "model.open_learning.tfact_studentmodule_problems": {
+   "columns": {
+    "answers": {
+     "description": ""
+    },
+    "attempt": {
+     "description": ""
+    },
+    "correct_map": {
+     "description": ""
+    },
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "date_fk": {
+     "description": ""
+    },
+    "event_timestamp": {
+     "description": ""
+    },
+    "event_timestamp_iso8601": {
+     "description": ""
+    },
+    "grade": {
+     "description": ""
+    },
+    "max_grade": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "problem_block_id": {
+     "description": ""
+    },
+    "seed": {
+     "description": ""
+    },
+    "studentmodule_id": {
+     "description": ""
+    },
+    "studentmodulehistoryextended_id": {
+     "description": ""
+    },
+    "success": {
+     "description": ""
+    },
+    "time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "incremental"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user"
+    ]
+   },
+   "name": "tfact_studentmodule_problems",
+   "original_file_path": "models/dimensional/tfact_studentmodule_problems.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_studentmodule_problems"
+  },
+  "model.open_learning.tfact_video_events": {
+   "columns": {
+    "courserun_readable_id": {
+     "description": ""
+    },
+    "date_fk": {
+     "description": ""
+    },
+    "ending_position": {
+     "description": ""
+    },
+    "event_json": {
+     "description": ""
+    },
+    "event_timestamp": {
+     "description": ""
+    },
+    "event_timestamp_iso8601": {
+     "description": ""
+    },
+    "event_type": {
+     "description": ""
+    },
+    "openedx_user_id": {
+     "description": ""
+    },
+    "platform": {
+     "description": ""
+    },
+    "platform_fk": {
+     "description": ""
+    },
+    "starting_position": {
+     "description": ""
+    },
+    "time_fk": {
+     "description": ""
+    },
+    "user_fk": {
+     "description": ""
+    },
+    "user_username": {
+     "description": ""
+    },
+    "video_block_fk": {
+     "description": ""
+    },
+    "video_duration": {
+     "description": ""
+    },
+    "video_position": {
+     "description": ""
+    }
+   },
+   "config": {
+    "materialized": "table"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": [
+     "model.open_learning.dim_user",
+     "model.open_learning.dim_platform"
+    ]
+   },
+   "name": "tfact_video_events",
+   "original_file_path": "models/dimensional/tfact_video_events.sql",
+   "resource_type": "model",
+   "schema": "ol_warehouse_production_dimensional",
+   "unique_id": "model.open_learning.tfact_video_events"
+  },
+  "test.open_learning.relationships_afact_feedback_conversation_feedback_source_fk__feedback_source_pk__ref_dim_feedback_source_.cf48ead2ec": {
+   "attached_node": "model.open_learning.afact_feedback_conversation",
+   "column_name": "feedback_source_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_afact_feedback_conversation_feedback_source_fk__feedback_source_pk__ref_dim_feedback_source_",
+   "original_file_path": "models/dimensional/_feedback_facts.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "feedback_source_fk",
+     "field": "feedback_source_pk",
+     "model": "{{ get_where_subquery(ref('afact_feedback_conversation')) }}",
+     "to": "ref('dim_feedback_source')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_afact_feedback_conversation_feedback_source_fk__feedback_source_pk__ref_dim_feedback_source_.cf48ead2ec"
+  },
+  "test.open_learning.relationships_afact_feedback_conversation_sentiment_fk__sentiment_pk__ref_dim_sentiment_.e4a83cc59d": {
+   "attached_node": "model.open_learning.afact_feedback_conversation",
+   "column_name": "sentiment_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_afact_feedback_conversation_sentiment_fk__sentiment_pk__ref_dim_sentiment_",
+   "original_file_path": "models/dimensional/_feedback_facts.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "sentiment_fk",
+     "field": "sentiment_pk",
+     "model": "{{ get_where_subquery(ref('afact_feedback_conversation')) }}",
+     "to": "ref('dim_sentiment')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_afact_feedback_conversation_sentiment_fk__sentiment_pk__ref_dim_sentiment_.e4a83cc59d"
+  },
+  "test.open_learning.relationships_bridge_course_department_course_fk__course_pk__ref_dim_course_.5939f8572b": {
+   "attached_node": "model.open_learning.bridge_course_department",
+   "column_name": "course_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_course_department_course_fk__course_pk__ref_dim_course_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "course_fk",
+     "field": "course_pk",
+     "model": "{{ get_where_subquery(ref('bridge_course_department')) }}",
+     "to": "ref('dim_course')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_course_department_course_fk__course_pk__ref_dim_course_.5939f8572b"
+  },
+  "test.open_learning.relationships_bridge_course_department_department_fk__department_pk__ref_dim_department_.9c30cf8b68": {
+   "attached_node": "model.open_learning.bridge_course_department",
+   "column_name": "department_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_course_department_department_fk__department_pk__ref_dim_department_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "department_fk",
+     "field": "department_pk",
+     "model": "{{ get_where_subquery(ref('bridge_course_department')) }}",
+     "to": "ref('dim_department')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_course_department_department_fk__department_pk__ref_dim_department_.9c30cf8b68"
+  },
+  "test.open_learning.relationships_bridge_course_instructor_course_fk__course_pk__ref_dim_course_.fb27b1e26a": {
+   "attached_node": "model.open_learning.bridge_course_instructor",
+   "column_name": "course_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_course_instructor_course_fk__course_pk__ref_dim_course_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "course_fk",
+     "field": "course_pk",
+     "model": "{{ get_where_subquery(ref('bridge_course_instructor')) }}",
+     "to": "ref('dim_course')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_course_instructor_course_fk__course_pk__ref_dim_course_.fb27b1e26a"
+  },
+  "test.open_learning.relationships_bridge_course_instructor_instructor_fk__instructor_pk__ref_dim_instructor_.a760e7613d": {
+   "attached_node": "model.open_learning.bridge_course_instructor",
+   "column_name": "instructor_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_course_instructor_instructor_fk__instructor_pk__ref_dim_instructor_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "instructor_fk",
+     "field": "instructor_pk",
+     "model": "{{ get_where_subquery(ref('bridge_course_instructor')) }}",
+     "to": "ref('dim_instructor')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_course_instructor_instructor_fk__instructor_pk__ref_dim_instructor_.a760e7613d"
+  },
+  "test.open_learning.relationships_bridge_course_topic_course_fk__course_pk__ref_dim_course_.0e8de2afd0": {
+   "attached_node": "model.open_learning.bridge_course_topic",
+   "column_name": "course_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_course_topic_course_fk__course_pk__ref_dim_course_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "course_fk",
+     "field": "course_pk",
+     "model": "{{ get_where_subquery(ref('bridge_course_topic')) }}",
+     "to": "ref('dim_course')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_course_topic_course_fk__course_pk__ref_dim_course_.0e8de2afd0"
+  },
+  "test.open_learning.relationships_bridge_course_topic_topic_fk__topic_pk__ref_dim_topic_.a5166aeefc": {
+   "attached_node": "model.open_learning.bridge_course_topic",
+   "column_name": "topic_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_course_topic_topic_fk__topic_pk__ref_dim_topic_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "topic_fk",
+     "field": "topic_pk",
+     "model": "{{ get_where_subquery(ref('bridge_course_topic')) }}",
+     "to": "ref('dim_topic')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_course_topic_topic_fk__topic_pk__ref_dim_topic_.a5166aeefc"
+  },
+  "test.open_learning.relationships_bridge_feedback_tag_feedback_pk__feedback_pk__ref_tfact_feedback_.5157661797": {
+   "attached_node": "model.open_learning.bridge_feedback_tag",
+   "column_name": "feedback_pk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_feedback_tag_feedback_pk__feedback_pk__ref_tfact_feedback_",
+   "original_file_path": "models/dimensional/_feedback_bridge.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "feedback_pk",
+     "field": "feedback_pk",
+     "model": "{{ get_where_subquery(ref('bridge_feedback_tag')) }}",
+     "to": "ref('tfact_feedback')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_feedback_tag_feedback_pk__feedback_pk__ref_tfact_feedback_.5157661797"
+  },
+  "test.open_learning.relationships_bridge_feedback_tag_feedback_tag_pk__feedback_tag_pk__ref_dim_feedback_tag_.16f3598534": {
+   "attached_node": "model.open_learning.bridge_feedback_tag",
+   "column_name": "feedback_tag_pk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_feedback_tag_feedback_tag_pk__feedback_tag_pk__ref_dim_feedback_tag_",
+   "original_file_path": "models/dimensional/_feedback_bridge.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "feedback_tag_pk",
+     "field": "feedback_tag_pk",
+     "model": "{{ get_where_subquery(ref('bridge_feedback_tag')) }}",
+     "to": "ref('dim_feedback_tag')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_feedback_tag_feedback_tag_pk__feedback_tag_pk__ref_dim_feedback_tag_.16f3598534"
+  },
+  "test.open_learning.relationships_bridge_organization_courserun_contract_fk__contract_pk__ref_dim_contract_.37a50fe178": {
+   "attached_node": "model.open_learning.bridge_organization_courserun",
+   "column_name": "contract_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_organization_courserun_contract_fk__contract_pk__ref_dim_contract_",
+   "original_file_path": "models/dimensional/_dim_organization.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "contract_fk",
+     "field": "contract_pk",
+     "model": "{{ get_where_subquery(ref('bridge_organization_courserun')) }}",
+     "to": "ref('dim_contract')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_organization_courserun_contract_fk__contract_pk__ref_dim_contract_.37a50fe178"
+  },
+  "test.open_learning.relationships_bridge_organization_courserun_courserun_fk__courserun_pk__ref_dim_course_run_.bcc6a85185": {
+   "attached_node": "model.open_learning.bridge_organization_courserun",
+   "column_name": "courserun_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_organization_courserun_courserun_fk__courserun_pk__ref_dim_course_run_",
+   "original_file_path": "models/dimensional/_dim_organization.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_fk",
+     "field": "courserun_pk",
+     "model": "{{ get_where_subquery(ref('bridge_organization_courserun')) }}",
+     "to": "ref('dim_course_run')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_organization_courserun_courserun_fk__courserun_pk__ref_dim_course_run_.bcc6a85185"
+  },
+  "test.open_learning.relationships_bridge_organization_courserun_organization_fk__organization_pk__ref_dim_organization_.b7eefb95c1": {
+   "attached_node": "model.open_learning.bridge_organization_courserun",
+   "column_name": "organization_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_organization_courserun_organization_fk__organization_pk__ref_dim_organization_",
+   "original_file_path": "models/dimensional/_dim_organization.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "organization_fk",
+     "field": "organization_pk",
+     "model": "{{ get_where_subquery(ref('bridge_organization_courserun')) }}",
+     "to": "ref('dim_organization')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_organization_courserun_organization_fk__organization_pk__ref_dim_organization_.b7eefb95c1"
+  },
+  "test.open_learning.relationships_bridge_program_course_course_fk__course_pk__ref_dim_course_.4c5011b69f": {
+   "attached_node": "model.open_learning.bridge_program_course",
+   "column_name": "course_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_program_course_course_fk__course_pk__ref_dim_course_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "course_fk",
+     "field": "course_pk",
+     "model": "{{ get_where_subquery(ref('bridge_program_course')) }}",
+     "to": "ref('dim_course')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_program_course_course_fk__course_pk__ref_dim_course_.4c5011b69f"
+  },
+  "test.open_learning.relationships_bridge_program_course_program_fk__program_pk__ref_dim_program_.7abedd51f0": {
+   "attached_node": "model.open_learning.bridge_program_course",
+   "column_name": "program_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_program_course_program_fk__program_pk__ref_dim_program_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "program_fk",
+     "field": "program_pk",
+     "model": "{{ get_where_subquery(ref('bridge_program_course')) }}",
+     "to": "ref('dim_program')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_program_course_program_fk__program_pk__ref_dim_program_.7abedd51f0"
+  },
+  "test.open_learning.relationships_bridge_user_courserun_role_courserun_fk__courserun_pk__ref_dim_course_run_.9e58c2e6dc": {
+   "attached_node": "model.open_learning.bridge_user_courserun_role",
+   "column_name": "courserun_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_user_courserun_role_courserun_fk__courserun_pk__ref_dim_course_run_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_fk",
+     "field": "courserun_pk",
+     "model": "{{ get_where_subquery(ref('bridge_user_courserun_role')) }}",
+     "to": "ref('dim_course_run')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_user_courserun_role_courserun_fk__courserun_pk__ref_dim_course_run_.9e58c2e6dc"
+  },
+  "test.open_learning.relationships_bridge_user_courserun_role_user_fk__user_pk__ref_dim_user_.d09080058c": {
+   "attached_node": "model.open_learning.bridge_user_courserun_role",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_user_courserun_role_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('bridge_user_courserun_role')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_user_courserun_role_user_fk__user_pk__ref_dim_user_.d09080058c"
+  },
+  "test.open_learning.relationships_bridge_user_organization_organization_fk__organization_pk__ref_dim_organization_.2cb52cf87b": {
+   "attached_node": "model.open_learning.bridge_user_organization",
+   "column_name": "organization_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_user_organization_organization_fk__organization_pk__ref_dim_organization_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "organization_fk",
+     "field": "organization_pk",
+     "model": "{{ get_where_subquery(ref('bridge_user_organization')) }}",
+     "to": "ref('dim_organization')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_user_organization_organization_fk__organization_pk__ref_dim_organization_.2cb52cf87b"
+  },
+  "test.open_learning.relationships_bridge_user_organization_user_fk__user_pk__ref_dim_user_.bef8b230f5": {
+   "attached_node": "model.open_learning.bridge_user_organization",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_bridge_user_organization_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_bridge_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('bridge_user_organization')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_bridge_user_organization_user_fk__user_pk__ref_dim_user_.bef8b230f5"
+  },
+  "test.open_learning.relationships_dim_contract_organization_fk__organization_pk__ref_dim_organization_.db862a5d14": {
+   "attached_node": "model.open_learning.dim_contract",
+   "column_name": "organization_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_contract_organization_fk__organization_pk__ref_dim_organization_",
+   "original_file_path": "models/dimensional/_dim_contract.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "organization_fk",
+     "field": "organization_pk",
+     "model": "{{ get_where_subquery(ref('dim_contract')) }}",
+     "to": "ref('dim_organization')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_contract_organization_fk__organization_pk__ref_dim_organization_.db862a5d14"
+  },
+  "test.open_learning.relationships_dim_course_run_course_fk__course_pk__ref_dim_course_.170b8ba846": {
+   "attached_node": "model.open_learning.dim_course_run",
+   "column_name": "course_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_course_run_course_fk__course_pk__ref_dim_course_",
+   "original_file_path": "models/dimensional/_dim_course_run.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "course_fk",
+     "field": "course_pk",
+     "model": "{{ get_where_subquery(ref('dim_course_run')) }}",
+     "to": "ref('dim_course')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_course_run_course_fk__course_pk__ref_dim_course_.170b8ba846"
+  },
+  "test.open_learning.relationships_dim_course_run_courserun_end_date_key__date_key__ref_dim_date_.28b0c89ff5": {
+   "attached_node": "model.open_learning.dim_course_run",
+   "column_name": "courserun_end_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_course_run_courserun_end_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_dim_course_run.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_end_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('dim_course_run')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_course_run_courserun_end_date_key__date_key__ref_dim_date_.28b0c89ff5"
+  },
+  "test.open_learning.relationships_dim_course_run_courserun_start_date_key__date_key__ref_dim_date_.303d53be0d": {
+   "attached_node": "model.open_learning.dim_course_run",
+   "column_name": "courserun_start_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_course_run_courserun_start_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_dim_course_run.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_start_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('dim_course_run')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_course_run_courserun_start_date_key__date_key__ref_dim_date_.303d53be0d"
+  },
+  "test.open_learning.relationships_dim_feedback_tag_source_slug__source_slug__ref_dim_feedback_source_.f8b7491bc4": {
+   "attached_node": "model.open_learning.dim_feedback_tag",
+   "column_name": "source_slug",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_feedback_tag_source_slug__source_slug__ref_dim_feedback_source_",
+   "original_file_path": "models/dimensional/_feedback_dimensions.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "source_slug",
+     "field": "source_slug",
+     "model": "{{ get_where_subquery(ref('dim_feedback_tag')) }}",
+     "to": "ref('dim_feedback_source')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_feedback_tag_source_slug__source_slug__ref_dim_feedback_source_.f8b7491bc4"
+  },
+  "test.open_learning.relationships_dim_product_courserun_fk__courserun_pk__ref_dim_course_run_.db60315c2f": {
+   "attached_node": "model.open_learning.dim_product",
+   "column_name": "courserun_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_product_courserun_fk__courserun_pk__ref_dim_course_run_",
+   "original_file_path": "models/dimensional/_dim_product.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_fk",
+     "field": "courserun_pk",
+     "model": "{{ get_where_subquery(ref('dim_product')) }}",
+     "to": "ref('dim_course_run')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_product_courserun_fk__courserun_pk__ref_dim_course_run_.db60315c2f"
+  },
+  "test.open_learning.relationships_dim_product_created_date_key__date_key__ref_dim_date_.aa48fec436": {
+   "attached_node": "model.open_learning.dim_product",
+   "column_name": "created_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_product_created_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_dim_product.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "created_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('dim_product')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_product_created_date_key__date_key__ref_dim_date_.aa48fec436"
+  },
+  "test.open_learning.relationships_dim_product_program_fk__program_pk__ref_dim_program_.edb044018f": {
+   "attached_node": "model.open_learning.dim_product",
+   "column_name": "program_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_product_program_fk__program_pk__ref_dim_program_",
+   "original_file_path": "models/dimensional/_dim_product.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "program_fk",
+     "field": "program_pk",
+     "model": "{{ get_where_subquery(ref('dim_product')) }}",
+     "to": "ref('dim_program')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_product_program_fk__program_pk__ref_dim_program_.edb044018f"
+  },
+  "test.open_learning.relationships_dim_program_published_date_key__date_key__ref_dim_date_.df193ceccc": {
+   "attached_node": "model.open_learning.dim_program",
+   "column_name": "published_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_dim_program_published_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_dim_program.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "published_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('dim_program')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_dim_program_published_date_key__date_key__ref_dim_date_.df193ceccc"
+  },
+  "test.open_learning.relationships_tfact_certificate_certificate_issued_date_key__date_key__ref_dim_date_.52f87d9ce7": {
+   "attached_node": "model.open_learning.tfact_certificate",
+   "column_name": "certificate_issued_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_certificate_certificate_issued_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "certificate_issued_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('tfact_certificate')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_certificate_certificate_issued_date_key__date_key__ref_dim_date_.52f87d9ce7"
+  },
+  "test.open_learning.relationships_tfact_certificate_certificate_type_fk__certificate_type_pk__ref_dim_certificate_type_.4e8ad043cc": {
+   "attached_node": "model.open_learning.tfact_certificate",
+   "column_name": "certificate_type_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_certificate_certificate_type_fk__certificate_type_pk__ref_dim_certificate_type_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "certificate_type_fk",
+     "field": "certificate_type_pk",
+     "model": "{{ get_where_subquery(ref('tfact_certificate')) }}",
+     "to": "ref('dim_certificate_type')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_certificate_certificate_type_fk__certificate_type_pk__ref_dim_certificate_type_.4e8ad043cc"
+  },
+  "test.open_learning.relationships_tfact_certificate_courserun_fk__courserun_pk__ref_dim_course_run_.929c56062f": {
+   "attached_node": "model.open_learning.tfact_certificate",
+   "column_name": "courserun_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_certificate_courserun_fk__courserun_pk__ref_dim_course_run_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_fk",
+     "field": "courserun_pk",
+     "model": "{{ get_where_subquery(ref('tfact_certificate')) }}",
+     "to": "ref('dim_course_run')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_certificate_courserun_fk__courserun_pk__ref_dim_course_run_.929c56062f"
+  },
+  "test.open_learning.relationships_tfact_certificate_platform_fk__platform_pk__ref_dim_platform_.4778b9058f": {
+   "attached_node": "model.open_learning.tfact_certificate",
+   "column_name": "platform_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_certificate_platform_fk__platform_pk__ref_dim_platform_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "platform_fk",
+     "field": "platform_pk",
+     "model": "{{ get_where_subquery(ref('tfact_certificate')) }}",
+     "to": "ref('dim_platform')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_certificate_platform_fk__platform_pk__ref_dim_platform_.4778b9058f"
+  },
+  "test.open_learning.relationships_tfact_certificate_program_fk__program_pk__ref_dim_program_.94c4128ffc": {
+   "attached_node": "model.open_learning.tfact_certificate",
+   "column_name": "program_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_certificate_program_fk__program_pk__ref_dim_program_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "program_fk",
+     "field": "program_pk",
+     "model": "{{ get_where_subquery(ref('tfact_certificate')) }}",
+     "to": "ref('dim_program')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_certificate_program_fk__program_pk__ref_dim_program_.94c4128ffc"
+  },
+  "test.open_learning.relationships_tfact_certificate_user_fk__user_pk__ref_dim_user_.a004b8dc56": {
+   "attached_node": "model.open_learning.tfact_certificate",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_certificate_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_certificate')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_certificate_user_fk__user_pk__ref_dim_user_.a004b8dc56"
+  },
+  "test.open_learning.relationships_tfact_enrollment_courserun_fk__courserun_pk__ref_dim_course_run_.c52010472a": {
+   "attached_node": "model.open_learning.tfact_enrollment",
+   "column_name": "courserun_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_courserun_fk__courserun_pk__ref_dim_course_run_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_fk",
+     "field": "courserun_pk",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment')) }}",
+     "to": "ref('dim_course_run')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_courserun_fk__courserun_pk__ref_dim_course_run_.c52010472a"
+  },
+  "test.open_learning.relationships_tfact_enrollment_enrollment_date_key__date_key__ref_dim_date_.ca6457c182": {
+   "attached_node": "model.open_learning.tfact_enrollment",
+   "column_name": "enrollment_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_enrollment_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "enrollment_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_enrollment_date_key__date_key__ref_dim_date_.ca6457c182"
+  },
+  "test.open_learning.relationships_tfact_enrollment_order_discount_fk__discount_pk__ref_dim_discount_.095aba9244": {
+   "attached_node": "model.open_learning.tfact_enrollment_order",
+   "column_name": "discount_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_order_discount_fk__discount_pk__ref_dim_discount_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "discount_fk",
+     "field": "discount_pk",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment_order')) }}",
+     "to": "ref('dim_discount')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_order_discount_fk__discount_pk__ref_dim_discount_.095aba9244"
+  },
+  "test.open_learning.relationships_tfact_enrollment_order_discount_type_fk__discount_type_pk__ref_dim_discount_type_.d20a7f48c6": {
+   "attached_node": "model.open_learning.tfact_enrollment_order",
+   "column_name": "discount_type_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_order_discount_type_fk__discount_type_pk__ref_dim_discount_type_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "discount_type_fk",
+     "field": "discount_type_pk",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment_order')) }}",
+     "to": "ref('dim_discount_type')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_order_discount_type_fk__discount_type_pk__ref_dim_discount_type_.d20a7f48c6"
+  },
+  "test.open_learning.relationships_tfact_enrollment_order_enrollment_key__enrollment_key__ref_tfact_enrollment_.904c575173": {
+   "attached_node": "model.open_learning.tfact_enrollment_order",
+   "column_name": "enrollment_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_order_enrollment_key__enrollment_key__ref_tfact_enrollment_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "enrollment_key",
+     "field": "enrollment_key",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment_order')) }}",
+     "to": "ref('tfact_enrollment')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_order_enrollment_key__enrollment_key__ref_tfact_enrollment_.904c575173"
+  },
+  "test.open_learning.relationships_tfact_enrollment_order_order_fk__order_key__ref_tfact_order_.eb964b4fb5": {
+   "attached_node": "model.open_learning.tfact_enrollment_order",
+   "column_name": "order_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_order_order_fk__order_key__ref_tfact_order_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "order_fk",
+     "field": "order_key",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment_order')) }}",
+     "to": "ref('tfact_order')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_order_order_fk__order_key__ref_tfact_order_.eb964b4fb5"
+  },
+  "test.open_learning.relationships_tfact_enrollment_platform_fk__platform_pk__ref_dim_platform_.b5921b339b": {
+   "attached_node": "model.open_learning.tfact_enrollment",
+   "column_name": "platform_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_platform_fk__platform_pk__ref_dim_platform_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "platform_fk",
+     "field": "platform_pk",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment')) }}",
+     "to": "ref('dim_platform')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_platform_fk__platform_pk__ref_dim_platform_.b5921b339b"
+  },
+  "test.open_learning.relationships_tfact_enrollment_program_fk__program_pk__ref_dim_program_.72c9ec309b": {
+   "attached_node": "model.open_learning.tfact_enrollment",
+   "column_name": "program_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_program_fk__program_pk__ref_dim_program_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "program_fk",
+     "field": "program_pk",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment')) }}",
+     "to": "ref('dim_program')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_program_fk__program_pk__ref_dim_program_.72c9ec309b"
+  },
+  "test.open_learning.relationships_tfact_enrollment_user_fk__user_pk__ref_dim_user_.f8b363749b": {
+   "attached_node": "model.open_learning.tfact_enrollment",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_enrollment_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_enrollment')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_enrollment_user_fk__user_pk__ref_dim_user_.f8b363749b"
+  },
+  "test.open_learning.relationships_tfact_feedback_feedback_channel_fk__feedback_channel_pk__ref_dim_feedback_channel_.c57c406a59": {
+   "attached_node": "model.open_learning.tfact_feedback",
+   "column_name": "feedback_channel_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_feedback_feedback_channel_fk__feedback_channel_pk__ref_dim_feedback_channel_",
+   "original_file_path": "models/dimensional/_feedback_facts.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "feedback_channel_fk",
+     "field": "feedback_channel_pk",
+     "model": "{{ get_where_subquery(ref('tfact_feedback')) }}",
+     "to": "ref('dim_feedback_channel')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_feedback_feedback_channel_fk__feedback_channel_pk__ref_dim_feedback_channel_.c57c406a59"
+  },
+  "test.open_learning.relationships_tfact_feedback_feedback_source_fk__feedback_source_pk__ref_dim_feedback_source_.ebdd014b97": {
+   "attached_node": "model.open_learning.tfact_feedback",
+   "column_name": "feedback_source_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_feedback_feedback_source_fk__feedback_source_pk__ref_dim_feedback_source_",
+   "original_file_path": "models/dimensional/_feedback_facts.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "feedback_source_fk",
+     "field": "feedback_source_pk",
+     "model": "{{ get_where_subquery(ref('tfact_feedback')) }}",
+     "to": "ref('dim_feedback_source')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_feedback_feedback_source_fk__feedback_source_pk__ref_dim_feedback_source_.ebdd014b97"
+  },
+  "test.open_learning.relationships_tfact_feedback_user_fk__user_pk__ref_dim_user_.ccf6bef76b": {
+   "attached_node": "model.open_learning.tfact_feedback",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_feedback_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_feedback_facts.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_feedback')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_feedback_user_fk__user_pk__ref_dim_user_.ccf6bef76b"
+  },
+  "test.open_learning.relationships_tfact_grade_courserun_fk__courserun_pk__ref_dim_course_run_.031404a850": {
+   "attached_node": "model.open_learning.tfact_grade",
+   "column_name": "courserun_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_grade_courserun_fk__courserun_pk__ref_dim_course_run_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "courserun_fk",
+     "field": "courserun_pk",
+     "model": "{{ get_where_subquery(ref('tfact_grade')) }}",
+     "to": "ref('dim_course_run')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_grade_courserun_fk__courserun_pk__ref_dim_course_run_.031404a850"
+  },
+  "test.open_learning.relationships_tfact_grade_grade_date_key__date_key__ref_dim_date_.80b5f61d90": {
+   "attached_node": "model.open_learning.tfact_grade",
+   "column_name": "grade_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_grade_grade_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "grade_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('tfact_grade')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_grade_grade_date_key__date_key__ref_dim_date_.80b5f61d90"
+  },
+  "test.open_learning.relationships_tfact_grade_platform_fk__platform_pk__ref_dim_platform_.8c450418e3": {
+   "attached_node": "model.open_learning.tfact_grade",
+   "column_name": "platform_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_grade_platform_fk__platform_pk__ref_dim_platform_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "platform_fk",
+     "field": "platform_pk",
+     "model": "{{ get_where_subquery(ref('tfact_grade')) }}",
+     "to": "ref('dim_platform')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_grade_platform_fk__platform_pk__ref_dim_platform_.8c450418e3"
+  },
+  "test.open_learning.relationships_tfact_grade_user_fk__user_pk__ref_dim_user_.60ae35e54b": {
+   "attached_node": "model.open_learning.tfact_grade",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_grade_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_grade')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_grade_user_fk__user_pk__ref_dim_user_.60ae35e54b"
+  },
+  "test.open_learning.relationships_tfact_order_discount_fk__discount_pk__ref_dim_discount_.fdda9ac321": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "discount_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_discount_fk__discount_pk__ref_dim_discount_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "discount_fk",
+     "field": "discount_pk",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_discount')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_discount_fk__discount_pk__ref_dim_discount_.fdda9ac321"
+  },
+  "test.open_learning.relationships_tfact_order_order_date_key__date_key__ref_dim_date_.bd5b81da3e": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "order_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_order_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "order_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_order_date_key__date_key__ref_dim_date_.bd5b81da3e"
+  },
+  "test.open_learning.relationships_tfact_order_order_updated_date_key__date_key__ref_dim_date_.8842e9fc5d": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "order_updated_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_order_updated_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "order_updated_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_order_updated_date_key__date_key__ref_dim_date_.8842e9fc5d"
+  },
+  "test.open_learning.relationships_tfact_order_platform_fk__platform_pk__ref_dim_platform_.2c8af08c1b": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "platform_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_platform_fk__platform_pk__ref_dim_platform_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "platform_fk",
+     "field": "platform_pk",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_platform')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_platform_fk__platform_pk__ref_dim_platform_.2c8af08c1b"
+  },
+  "test.open_learning.relationships_tfact_order_product_fk__product_pk__ref_dim_product_.95d0840096": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "product_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_product_fk__product_pk__ref_dim_product_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "product_fk",
+     "field": "product_pk",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_product')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_product_fk__product_pk__ref_dim_product_.95d0840096"
+  },
+  "test.open_learning.relationships_tfact_order_tax_rate_fk__tax_rate_pk__ref_dim_tax_rate_.124c4f12c7": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "tax_rate_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_tax_rate_fk__tax_rate_pk__ref_dim_tax_rate_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "tax_rate_fk",
+     "field": "tax_rate_pk",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_tax_rate')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_tax_rate_fk__tax_rate_pk__ref_dim_tax_rate_.124c4f12c7"
+  },
+  "test.open_learning.relationships_tfact_order_user_fk__user_pk__ref_dim_user_.62220e9215": {
+   "attached_node": "model.open_learning.tfact_order",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_order_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_order')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_order_user_fk__user_pk__ref_dim_user_.62220e9215"
+  },
+  "test.open_learning.relationships_tfact_payment_payment_date_key__date_key__ref_dim_date_.952ac7e6c7": {
+   "attached_node": "model.open_learning.tfact_payment",
+   "column_name": "payment_date_key",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_payment_payment_date_key__date_key__ref_dim_date_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "payment_date_key",
+     "field": "date_key",
+     "model": "{{ get_where_subquery(ref('tfact_payment')) }}",
+     "to": "ref('dim_date')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_payment_payment_date_key__date_key__ref_dim_date_.952ac7e6c7"
+  },
+  "test.open_learning.relationships_tfact_payment_payment_method_fk__payment_method_pk__ref_dim_payment_method_.442de8b9cd": {
+   "attached_node": "model.open_learning.tfact_payment",
+   "column_name": "payment_method_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_payment_payment_method_fk__payment_method_pk__ref_dim_payment_method_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "payment_method_fk",
+     "field": "payment_method_pk",
+     "model": "{{ get_where_subquery(ref('tfact_payment')) }}",
+     "to": "ref('dim_payment_method')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_payment_payment_method_fk__payment_method_pk__ref_dim_payment_method_.442de8b9cd"
+  },
+  "test.open_learning.relationships_tfact_payment_platform_fk__platform_pk__ref_dim_platform_.938e3b55d7": {
+   "attached_node": "model.open_learning.tfact_payment",
+   "column_name": "platform_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_payment_platform_fk__platform_pk__ref_dim_platform_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "platform_fk",
+     "field": "platform_pk",
+     "model": "{{ get_where_subquery(ref('tfact_payment')) }}",
+     "to": "ref('dim_platform')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_payment_platform_fk__platform_pk__ref_dim_platform_.938e3b55d7"
+  },
+  "test.open_learning.relationships_tfact_payment_user_fk__user_pk__ref_dim_user_.a31e008e8c": {
+   "attached_node": "model.open_learning.tfact_payment",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_payment_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_fact_tables.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_payment')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_payment_user_fk__user_pk__ref_dim_user_.a31e008e8c"
+  },
+  "test.open_learning.relationships_tfact_problem_events_user_fk__user_pk__ref_dim_user_.fb74ee8234": {
+   "attached_node": "model.open_learning.tfact_problem_events",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_problem_events_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_dim__models.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_problem_events')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_problem_events_user_fk__user_pk__ref_dim_user_.fb74ee8234"
+  },
+  "test.open_learning.relationships_tfact_studentmodule_problems_user_fk__user_pk__ref_dim_user_.d669541014": {
+   "attached_node": "model.open_learning.tfact_studentmodule_problems",
+   "column_name": "user_fk",
+   "config": {
+    "materialized": "test"
+   },
+   "database": "ol_data_lake_production",
+   "depends_on": {
+    "macros": [],
+    "nodes": []
+   },
+   "name": "relationships_tfact_studentmodule_problems_user_fk__user_pk__ref_dim_user_",
+   "original_file_path": "models/dimensional/_dim__models.yml",
+   "resource_type": "test",
+   "schema": "ol_warehouse_production_dbt_test__audit",
+   "test_metadata": {
+    "kwargs": {
+     "column_name": "user_fk",
+     "field": "user_pk",
+     "model": "{{ get_where_subquery(ref('tfact_studentmodule_problems')) }}",
+     "to": "ref('dim_user')"
+    },
+    "name": "relationships"
+   },
+   "unique_id": "test.open_learning.relationships_tfact_studentmodule_problems_user_fk__user_pk__ref_dim_user_.d669541014"
+  }
+ },
+ "sources": {}
+}

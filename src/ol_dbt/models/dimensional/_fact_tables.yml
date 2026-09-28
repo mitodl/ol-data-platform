@@ -12,6 +12,16 @@ models:
       - enrollment_id
       - platform
       - enrollment_type
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: enrollment_key
     description: >
@@ -127,6 +137,16 @@ models:
     watermark has no visibility into order-side changes (refunds, price updates,
     fulfillment).
     Grain: one row per enrollment_key.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: enrollment_key
     description: Foreign key to tfact_enrollment.enrollment_key
@@ -192,6 +212,16 @@ models:
       - order_id
       - line_id
       - platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: order_key
     description: >
@@ -249,10 +279,14 @@ models:
   - name: discount_fk
     description: >
       Foreign key to dim_discount (null when no discount applied on this line).
-      dim_discount is full-refresh and this table is incremental — a
-      dim_discount.discount_pk hashing change requires a `dbt run --select
-      tfact_order --full-refresh` immediately after to avoid orphaning
-      discount_fk on historical order lines.
+      dim_discount is full-refresh and this table is incremental, so changing
+      what discount_pk is hashed from orphans discount_fk on every historical
+      order line. That no longer needs remembering: `ol-dbt impact` reports it
+      on the PR as KEY_REGEN, and the production build full-refreshes this
+      table on the first run after the change lands (see
+      lakehouse.lib.surrogate_key_drift). The relationships test below is what
+      the detector reads to know this column points at dim_discount.discount_pk
+      — dropping it would take tfact_order out of that repair.
     tests:
     - relationships:
         to: ref('dim_discount')
@@ -307,6 +341,16 @@ models:
       combination_of_columns:
       - payment_id
       - platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: payment_key
     description: Surrogate key for payment
@@ -382,6 +426,16 @@ models:
       - certificate_id
       - platform
       - certificate_scope
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: certificate_key
     description: Surrogate key for certificate
@@ -481,6 +535,16 @@ models:
       combination_of_columns:
       - grade_id
       - platform
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
   columns:
   - name: grade_key
     description: Surrogate key for grade record

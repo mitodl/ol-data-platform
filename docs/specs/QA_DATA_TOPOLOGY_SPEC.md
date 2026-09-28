@@ -140,6 +140,71 @@ exactly — and `meta.qa_buildable: false` suppresses the check entirely for mod
 QA-buildable form. A model that is `qa_buildable: false` must not also declare `qa_branches`;
 that combination is itself an unbaselineable `ERROR`.
 
+### Step 4 as built (2026-09-16)
+
+The keys live in `config.meta`. A model is a union, and so must declare one of them, when it
+sits outside `staging/` and its manifest lineage reaches more than one inventory unit (a source
+maps to the unit declaring its `raw_table`; retired and dbt-built sources map to none). The
+`qa_branch_contract` check in `ol-dbt validate` enforces that, plus the shape rules above and one
+more: a declared branch must be upstream of the model. It runs globally in `dbt_pr_ci.yaml`,
+because a union gains a branch through an edit to an ancestor that `--changed-only` never selects.
+Checking declarations against `strategies.qa` and against what QA holds is still step 5's, and
+extends the same check.
+
+The initial 168 declarations list the `scoped` units that can reach each model's output,
+singletons excluded. Table lineage alone over-counts: `dim_contract` reads `dim_organization`
+but keeps only `platform = 'mitxonline'`, so xPro rows never reach it. Each model's SQL was
+read for its union arms, platform filters and platform-keyed joins (including joins on
+platform-hashed keys such as `course_pk` and `instructor_pk`), and those facts were propagated
+per platform through the DAG. That narrowed 25 models. A unit that only enriches columns still
+counts: MicroMasters exam runs set semester and passing grade on MITx Online rows of
+`dim_course_run`, so an empty MicroMasters branch changes that model's output. Joins the review
+could not show to be platform-scoped were kept, so the lists err toward over-declaring. This is
+the RFC's intended QA topology, not the measured one. Nearly every unit is still
+`strategies.qa: omit`, so most declarations contradict the inventory today, on purpose: step 5's
+unbaselineable finding is what forces step 3 to decide each branch, either by marking the unit
+`ingest`/`mirror` from measured state or by dropping the branch from the models that declare it.
+
+`irx/bigquery` was reclassified `scoped` → `singleton` in the same change. Its tables are
+`raw__irx__edxorg__bigquery__*`, staged under `staging/edxorg`: edX.org data delivered through
+IRx's BigQuery, with no QA counterpart. Left `scoped`, it would have been declared a QA branch
+of 135 models.
+
+### Step 5 as built (2026-09-18)
+
+Both rows of the table above are now part of `qa_branch_contract`.
+
+The first row needs only text. A declared branch that no unit declares, or whose unit is
+`strategies.qa: omit`, is an ERROR on every model that declares it. After step 3 no declaration
+hits this. Flipping `mitlearn/app_postgres` to `omit` fails 44 models.
+
+The second row needs to know what QA holds, and the CI job has no AWS credentials. So
+`ol-dbt inventory observe` reads the QA Glue database and each table's current Iceberg snapshot
+(the same method as §7) for every table of an `ingest` or `mirror` unit, and writes
+`ingestion/inventory/qa_observation.json`. That file is committed and CI reads it. A table counts
+as empty when it is absent, not Iceberg, has no current snapshot, or has zero rows. A `mirror`
+table is stale when its snapshot is older than `mirror_max_age_days` at observation time. Staleness
+is measured against the observation time, not the CI run time, so an old observation can't
+invent staleness. An observation older than 30 days is a WARNING. An observation of any database
+other than `ol_warehouse_qa_raw` is an ERROR, because it would hide every gap.
+
+A declared table the observation doesn't cover is an `unobserved` gap, not a warning. That is
+what a branch looks like when a PR newly declares it, or flips its unit from `omit` to `ingest`,
+which is when QA is least likely to hold it. The PR either refreshes the observation or baselines
+the gap, and both are visible in review.
+
+Only tables that a declaring model reads count, through manifest lineage. The baseline
+(`ingestion/inventory/qa_branch_baseline.txt`) is keyed per table, not per branch: a model that
+starts reading an empty table of an already-baselined branch is a new finding. New findings are
+reported as one ERROR per branch. `ol-dbt validate --update-qa-baseline` rewrites the baseline.
+
+The first observation (2026-09-18) gives 48 baselined tables across 14 branches, all `empty`.
+No `stale` finding can fire yet, because step 4 declared only scoped units and no model declares
+a mirror branch. That changes once step 6 lands mirrors and models start declaring them.
+
+The observation is refreshed by hand for now. A refresh that shows a table has emptied fails the
+refresh PR, which is where the lapse should surface.
+
 ---
 
 ## 3. Specified: per-environment strategy map (task Local-1)
@@ -259,3 +324,326 @@ RFC 12711's other three open questions are not resolved here and do not gate any
 | 7 — narrow StarRocks grant | step 6 | Blocked |
 | 8 — B2B pilot | step 1 | Blocked on step 1 only |
 | 9 — engagement path | steps 5, 8 | Blocked |
+
+---
+
+## 7. Measured QA state and the strategies it set (step 3, 2026-09-17)
+
+Every unit's `strategies.qa` now follows one rule:
+
+- `ingest`: the unit is `scoped` and at least one model declares it in `meta.qa_branches`.
+  keycloak is `ingest` too, since a dlt loader already writes it in QA.
+- `mirror` with `mirror_max_age_days: 90`: the unit is a `singleton` with modeled tables. 90 days
+  fits the quarterly partner drops; edxorg is frozen.
+- `omit`: every other unit. No union model declares these, so they can't break a contract.
+
+`ol-dbt inventory validate` now rejects `scoped` + `mirror` and `singleton` + `ingest`.
+
+Most `ingest` and every `mirror` unit is empty or stale in QA. That's the gap step 5 baselines
+(§2's second row), not a reason to mark the unit `omit`. Marking it `omit` would turn the `qa_branches`
+declarations on 165 models into unbaselineable errors.
+
+### How it was measured
+
+- **Presence:** `aws glue get-tables` on `ol_warehouse_qa_raw` (2,766 tables) and
+  `ol_warehouse_production_raw` (2,087), joined case-insensitively to each unit's
+  `tables[].raw_table`. Glue stores names lowercased, and salesforce's inventory names are not.
+- **Non-empty and snapshot date:** the current snapshot in each table's Iceberg
+  `metadata_location` file, using `total-records` and `timestamp-ms`. Glue `UpdateTime` is
+  useless here. 2,354 QA tables carry a 2026-09-08 `UpdateTime`, the date of the QA
+  JSONL→Iceberg conversion (step 8), and 190 more carry 09-11 or 09-14. The conversion also wrote
+  snapshot dates for the tables that held data. So a 2026-09-08 to 09-14 snapshot on
+  a converted table dates the conversion, not the data. Converted empty shells have no snapshot
+  at all.
+- **QA loaders:** `bin/airbyte-inventory.py dump --environment qa`. The workspace has 28
+  connections, 9 marked active. The public jobs API returns no job history for any of them. Only
+  five target the Iceberg `S3 Data Lake` destination (xPro app DB, Bootcamps app DB, and the
+  edxorg/Open edX course XML and API connections). The rest write the legacy JSONL Glue
+  destination that neither StarRocks nor dlt can read. The QA Dagster sync schedules are stopped
+  (step 8). So the only QA writers are the two dlt units.
+
+### `ingest` (18)
+
+"Present" counts tables in QA Glue out of those declared. "Non-empty" counts tables with a snapshot holding rows.
+
+| Unit | Present | Non-empty | Modeled non-empty | QA loader | Gap |
+|---|---|---|---|---|---|
+| keycloak/app_postgres | 14/14 | 14 | — | dlt, writing 2026-09-17 | none |
+| mitxonline/app_postgres | 64/64 | 64 | 50/50 | dlt, run by hand 2026-09-08; schedule stopped | not scheduled; unit still says `loader: airbyte` |
+| micromasters/app_postgres | 39/39 | 39 | 28/28 | Airbyte, inactive, legacy destination | converted legacy data, no loader |
+| xpro/app_postgres | 178/178 | 159 | 54/55 | Airbyte, active, Iceberg destination, no jobs | newest snapshot 2025-02-25 |
+| ocw/app_postgres | 32/34 | 20 | 2/3 | Airbyte, inactive, legacy destination | converted legacy data, no loader |
+| ovs/app_postgres | 25/26 | 0 | 0/6 | Airbyte, inactive, legacy destination | empty |
+| mitx/mysql | 56/74 | 8 | 7/61 | Airbyte, inactive, legacy destination | nearly empty |
+| mitxonline/mysql | 55/68 | 0 | 0/56 | Airbyte, active, legacy destination, no jobs | empty |
+| xpro/mysql | 57/70 | 0 | 0/54 | Airbyte, inactive, legacy destination | empty |
+| mitx/tracking_logs | 1/1 | not Iceberg | 0/1 | Airbyte, inactive | legacy JSON, data 2024-08-28 |
+| mitxonline/tracking_logs | 1/1 | not Iceberg | 0/1 | Airbyte, inactive | legacy JSON, data 2024-08-28 |
+| xpro/tracking_logs | 1/1 | not Iceberg | 0/1 | Airbyte, inactive | legacy JSON, data 2024-08-27 |
+| mitx/api | 0/2 | 0 | 0/1 | none | never ingested |
+| mitxonline/api | 0/2 | 0 | 0/2 | none | never ingested |
+| xpro/api | 0/2 | 0 | 0/2 | none | never ingested |
+| mitlearn/app_postgres | 0/98 | 0 | 0/9 | none | never ingested |
+| learn_ai/app_postgres | 0/28 | 0 | 0/5 | none | never ingested |
+| openedx/s3 | 0/1 | 0 | 0/1 | none | also absent from production raw |
+
+### `mirror`, 90 days (11)
+
+The step 6 mirror asset doesn't exist yet, so none of these has a mirror. What QA holds for
+edxorg/s3 (2/6, non-empty) and irx/bigquery (4/4, legacy JSON) are pre-existing copies, not mirrors.
+
+| Unit | Production present | Production newest snapshot |
+|---|---|---|
+| edxorg/api | 0/1 | absent |
+| edxorg/course_structure | 4/5 | 2026-08-14 |
+| edxorg/google_sheets | 1/1 | 2026-09-17 |
+| edxorg/mysql | 3/7 | 2026-09-17 |
+| edxorg/s3 | 6/6 | 2026-09-17 |
+| edxorg/tracking_logs | 1/1 | 2026-09-14 |
+| emeritus/bigquery | 1/1 | 2026-09-17 |
+| global_alumni/bigquery | 1/1 | 2026-05-04 |
+| irx/bigquery | 4/4 | 2026-09-17 |
+| salesforce/api | 3/3 | 2026-06-16 |
+| zendesk/api | 26/26 | 2026-09-17 |
+
+A mirror copies production, so `mirror_max_age_days` measures time since the copy, not source
+freshness. global_alumni and salesforce are already months stale in production.
+
+### `omit` (14)
+
+bootcamps/hubspot, mailgun/api, mit_climate/api, mitpe/api, mitx/mongodb, mitxonline/mongodb,
+xpro/mongodb, mitxonline/hubspot, xpro/hubspot, mitxonline/openedx_notes, oll/google_sheets,
+open_discussions/app_postgres, podcast/rss, posthog/s3.
+
+QA holds converted forum data for the three mongodb units (3 non-empty tables each). Nothing
+reads it. Scope for mailgun, posthog, podcast, oll, mit_climate, mitpe and bootcamps/hubspot is
+still unaudited. It doesn't affect anything until a model declares one of them.
+
+### QA raw cleanup (§5)
+
+The 43 units own 538 of QA raw's 2,766 tables. The other 2,228 belong to no unit, so no
+`qa_branches` contract can depend on them. Whether a dbt source or anything outside dbt still
+reads them was not checked here. That check is what the cleanup decision still needs.
+
+---
+
+## 8. The singleton mirror (step 6, 2026-09-18)
+
+### It runs from production, not QA
+
+The RFC assumed the QA StarRocks cluster would read production through the catalog it already
+carries. That is no longer true. Since ol-infrastructure #5472 (2026-08-17) and #5670
+(2026-08-31), the QA StarRocks IRSA role carries
+`data-lake-cross-environment-glue-denial-policy-qa`. On 2026-09-18 the IAM policy simulator
+returned `explicitDeny` for `glue:GetTable` on `ol_warehouse_production_raw` tables from
+`data-qa-starrocks-lakehouse-trust-role`. The production role was allowed to read production
+and to create and drop tables in `ol_warehouse_qa_raw`.
+
+So the mirror runs on production StarRocks, from the production lakehouse code location. The
+assets are registered only when `DAGSTER_ENV == "production"`. Production pushes an allowlisted
+subset into QA, and QA never reads production. That changes step 7. The QA cluster has no
+mirror role to narrow a grant to, and its production catalog is already unusable at the IAM
+layer. What is left is to drop `ol_data_lake_production` from the QA cluster's
+`_DATA_LAKE_ENVS`, so the SQL grants stop advertising access IAM denies.
+
+### The declaration
+
+Each mirrored table carries a `mirror:` block in its unit file:
+
+```yaml
+- name: api_enrollments
+  raw_table: raw__emeritus__bigquery__api_enrollments
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      email: hash
+      first_name: redact
+      batch_id: copy
+    where: "..."        # optional
+```
+
+`columns` is the allowlist. A production column it does not name is not copied. The modes:
+
+- `copy` keeps the value.
+- `hash` writes `sha2(value, 256)`, leaving blanks blank and NULLs NULL. It keeps a key
+  distinct and joinable within mirrored data. It is pseudonymization, not anonymization: an
+  unsalted digest of a known email can be matched, and a digest of a common name can be reversed
+  from a name list. A blank is kept rather than hashed, or every blank username would share one
+  digest, and rather than nulled, or emeritus full names built from blank parts would fail their
+  `not_null` test (475 production rows have a blank first or last name).
+- `redact` writes the literal `'redacted'` where the value is not NULL. It carries no
+  information and keeps the column's NULLs where production has them, so a `not_null` test
+  fails in QA exactly when it would in production.
+- `nullify` keeps the column with every value NULL, typed through a dead `CASE` branch so QA
+  gets production's type. For non-string and JSON-shaped columns, where a literal would break a
+  cast or a JSON parse.
+
+`hash` and `redact` take string columns only, so a cast in a staging model never meets a hex
+digest or the word `redacted`. Staging models select PII columns by name, so a dropped column
+fails the QA build. A nullified column builds, but fails any `not_null` test on it, which is
+why string PII uses `redact`.
+
+`where` is one predicate. `{source}` stands for the production relation, so a filter can be
+measured from the table's own newest row. A paused feed then still copies rows, which a filter
+on `now()` would not.
+
+`ol-dbt inventory validate` rejects a `mirror:` block on a unit whose `strategies.qa` is not
+`mirror`, a `where` containing `;` or a set operator (a `UNION` there could read production
+columns the allowlist leaves out), and an allowlist without the table's resolved raw metadata
+column. The dedup macro reads that column through the inventory, so no analysis of the model's
+SQL sees the read.
+
+The asset checks every table's declaration in the unit against `DESCRIBE` of the production
+table, then `EXPLAIN`s each rendered query, before it drops any QA copy. An allowlisted column
+that production lacks, and `hash` or `redact` on a non-string column, fail in the declaration
+check. That check also rejects a `mirror.where` that is a statement rather than a predicate,
+but it never resolves the predicate's own columns. The `EXPLAIN` is what covers those: a column
+the `where` names, or that its `{source}` subquery names, is resolved against production here
+rather than reaching StarRocks for the first time in the CTAS.
+
+What `EXPLAIN` settles is whether every name and every function signature resolves. An
+expression StarRocks has an implicit cast for is planned rather than rejected, so it is not a
+type check. Measured on QA StarRocks 2026-09-21 (below): an unresolvable column, an unknown
+function, a wrong argument count and an argument type no signature accepts (`array_length` on a
+varchar) all raise `1064 Getting analyzing error` at plan time, while
+`varchar >= varchar - 86400000`, `date_add` on a varchar and a bare non-boolean predicate all
+plan without complaint. So a `where` wrong in that second way still fails from the CTAS, after
+that table's `DROP`, leaving the unit partly refreshed and the failed table absent -- as does
+any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
+
+The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
+other 23 what it adds over the declaration check is that the masking expressions themselves
+plan. That is one more connection and one more Vault dynamic credential per table per refresh.
+
+### What was not built
+
+A static check that no model reads a column the mirror drops. The sqlglot scope resolution in
+`ol-dbt validate` expands `select *` to the whole schema it is given, so it cannot see a
+dropped column. Strict qualification against the mirrored schema fails on 29 of the 32 models
+that read a mirrored table even when given the full production schema, because it cannot see
+through the dedup macro's CTE or other macro calls. A dropped column instead fails the QA dbt
+build of that staging model with the column's name, which is loud and in the right place.
+
+### The allowlists
+
+25 tables across 9 units. Each allowlist is the columns the reading models name, found by
+text-matching the production column list against each model and the macros it calls, plus the
+raw metadata column. Unread columns are dropped, which is how `mitx_person_course`'s `ip`,
+`city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
+masked:
+
+- `hash`: emails, usernames, tracking-log session ids, the certificate key and uuids in
+  `mitx_user_info_combo` (edX's public certificate pages, keyed by those, show the learner's
+  name), and emeritus first and last names. `stg__emeritus__api__bigquery__user_enrollments`
+  deduplicates on `batch_id, email, first_name, last_name`, and every `'(blank)'` email hashes to
+  one digest, so redacted names would collapse all blank-email learners in a batch into one
+  row. A side effect: the model maps `'(blank)'` to a NULL `user_email`, and the digest of
+  `'(blank)'` does not match, so in QA those rows carry a digest instead of NULL.
+- `redact`: names, street address, city, zip code, job title and company, phone, alias,
+  signature and zendesk user `details`, profile goals and mailing address, certificate name,
+  zendesk organization and user notes, salesforce `nextstep` and line-item `description`.
+- `nullify`: IP, year of birth, certificate download URLs, and the JSON-shaped `profile_meta`,
+  zendesk user `photo` and `user_fields`.
+
+Two tables are filtered:
+
+- `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
+  files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
+  mirror keeps the last day of syncs by `_airbyte_extracted_at` (epoch milliseconds). That is
+  one full report while syncs run a day apart, and two if a gap is shorter. The staging model
+  dedupes on user, course run and program either way.
+- `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
+  drops `edx.user.settings.changed` events.
+
+Tracking-log `event` and `context` payloads are copied as they are, because the staging model
+parses them. `edx.user.settings.changed` is excluded because edx-platform logs the old and new
+email, name and address in its payload, and no model reads it. Forum events carry post bodies
+and are kept, because `tfact_discussion_events` reads them. That text is copied into QA. The
+30-day filter bounds how much lands, but no column mode can mask inside a JSON payload.
+
+Not declared, so not mirrored:
+
+- edxorg/mysql's `auth_user`, `certificates_generatedcertificate` and
+  `grades_persistentcoursegrade`. They resolve to `_file_modified_at`, which production does
+  not have yet (ol-data-platform#2443).
+- Tables absent from production raw: `raw__edxorg__discovery__api__programs`,
+  `raw__edxorg__s3__course_xml_blocks`, and edxorg/mysql's `auth_userprofile`,
+  `courseware_studentmodule`, `student_courseenrollment` and `student_courseaccessrole`.
+- Unmodeled tables (most of zendesk, salesforce `Account`), which nothing reads.
+- zendesk `tickets` and `ticket_comments`. Their `via` JSON holds the requester's email at
+  `$.source.from.address`, and the staging models parse `$.channel` from it into a column with
+  a `not_null` test. `copy` leaks the email, and `redact` or `nullify` fail the test. A mode that
+  keeps named JSON keys would fix both, and is left as a follow-up.
+
+The salesforce `Opportunity` and `OpportunityLineItem` tables declared `_airbyte_emitted_at`
+as their raw metadata column, as if they were still on Airbyte's v1 destination. Production
+Glue shows the v2 quartet (`_airbyte_raw_id`, `_airbyte_extracted_at`, `_airbyte_meta`,
+`_airbyte_generation_id`) and neither `_airbyte_ab_id` nor `_airbyte_emitted_at`. The override is
+removed, and `_salesforce__sources.yml` no longer documents the two v1 columns. Neither staging
+model read them, since both order by `systemmodstamp`.
+
+### Refresh and staleness
+
+Each unit is one asset, `qa_mirror/<deployment>/<layer>`, materialized by hand. There is no
+schedule, no partitions and no `AutomationCondition` (§1). A refresh drops each QA table with
+`FORCE`, which deletes its data files, then runs the CTAS. StarRocks cannot rename an Iceberg
+table, so there is no swap. A CTAS that fails inside StarRocks drops the table it created
+(`StmtExecutor.handleCreateTableAsSelectStmt` on branch-4.1), and the next QA observation
+reports it as empty. The CTAS is never retried by the StarRocks
+resource: an FE lost mid-statement can leave the table behind, and a retry would fail on
+"already exists" and hide the real error. The next manual run's `DROP` clears it.
+
+Because that sequence drops before it creates, two runs of one unit must not overlap: the second
+`DROP` can take the table out from under the first CTAS, and the row count either run reports can
+be taken over the other's copy. Each asset therefore declares the pool
+`qa_mirror_<deployment>_<layer>`. Per unit rather than one shared pool, since units touch disjoint
+tables and a shared one would queue a small unit behind the 760 GB `program_learner_report` copy.
+
+Naming the pool only makes the limit settable. The instance config sets no
+`concurrency.pools.default_limit` (ol-infrastructure `dagster_instance.yaml`), so until each of
+the nine pools is given a slot limit of 1 under Deployment -> Concurrency, concurrent runs of one
+unit are still unbounded. Setting those limits is a deploy-time step, not something this repo can
+assert.
+
+The `DROP` goes through the Iceberg catalog, so it cannot remove a Glue entry that is not an
+Iceberg table, and the CTAS then fails on the name. One mirrored name had such an entry in QA:
+`raw__irx__edxorg__bigquery__email_opt_in`, a legacy JSON table last written 2024-08-26. Its Glue
+entry was deleted on 2026-09-19. The JSON files under
+`s3://ol-data-lake-raw-qa/raw/irx/edxorg/bigquery/email_opt_in/` were left in place.
+
+§1 called for a copy-time stamp in table metadata. The CTAS writes a single snapshot, and
+`ol-dbt inventory observe` already reads that snapshot's time as the copy time. So no separate
+property is written.
+
+### Checked on QA StarRocks (2026-09-19)
+
+The rendered SQL was run QA-to-QA, from `raw__edxorg__s3__mitx_course` into a scratch table,
+through the `admin` Vault role the production resource uses:
+
+- `DESCRIBE` on an Iceberg table returns `Field` and `Type`, which the asset reads.
+- The CTAS with the `SET_VAR(query_timeout, insert_timeout)` hint and a `{source}` subquery in
+  its `WHERE` created the table and copied all 448 rows as one `append` snapshot.
+- A nullified `BIGINT` column stayed `BIGINT` with no non-NULL values, and a hashed column was
+  64-character hex in every row.
+- `DROP TABLE ... FORCE` removed the Glue entry and the data files. It left a zero-byte
+  `data/load_spill/` marker, and because `ol-data-lake-raw-qa` is versioned the dropped files
+  remain as noncurrent versions until the bucket's 90-day `expire-noncurrent-versions` rule
+  removes them. So each refresh keeps the previous copy billed for up to 90 days.
+
+### Checked on QA StarRocks (2026-09-21)
+
+`EXPLAIN` of the same rendered SELECT, QA-to-QA against `raw__edxorg__s3__mitx_course`, through
+the `readonly` Vault role, since planning reads no data:
+
+- `EXPLAIN SELECT /*+ SET_VAR(query_timeout = 14400, insert_timeout = 14400) */ ...` over an
+  Iceberg table is accepted with the hint in place and returns a plan. So is the same query
+  with a `{source}` subquery in its `WHERE`, which is how both declared filters are shaped.
+- Raised at plan time, as `1064 Getting analyzing error`: an unresolvable column in the select
+  list, in the predicate, and inside the `{source}` subquery; an unknown function; a wrong
+  argument count (`sha2(x)`); a wrong argument type (`array_length` on a varchar).
+- Planned without complaint, so *not* caught: `varchar >= varchar - 86400000`, `date_add` on a
+  varchar, and a bare non-boolean predicate. StarRocks coerces all three.
+- A literal `%` in the predicate (`LIKE '%sandbox%'`) plans normally once the statement is sent
+  with no parameter tuple. Sent with an empty one, pymysql's `query % args` raises
+  `ProgrammingError: not enough arguments for format string` before StarRocks sees it, which is
+  why `StarRocksResource.fetch` defaults `params` to None rather than `()`.

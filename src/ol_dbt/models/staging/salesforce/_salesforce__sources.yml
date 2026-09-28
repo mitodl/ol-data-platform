@@ -178,12 +178,9 @@ sources:
       description: string, owner ID for this opportunity
     - name: isdeleted
       description: boolean, indicating whether the record has been deleted
-    - name: _airbyte_ab_id
-      description: string, uuid assigned to each row of the data by Airbyte connector
-    - name: _airbyte_emitted_at
-      description: string, unix time string when the record was emitted and recorded
-        by Airbyte connector. This field should be used internally to deduplicate
-        records.
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte. Staging models
+        order by it to pick the newest copy of a record.
 
   - name: raw__thirdparty__salesforce___destination_v2__OpportunityLineItem
     description: >
@@ -246,9 +243,6 @@ sources:
         modified this line item
     - name: isdeleted
       description: boolean, indicating whether the record has been deleted
-    - name: _airbyte_ab_id
-      description: string, uuid assigned to each row of the data by Airbyte connector
-    - name: _airbyte_emitted_at
-      description: string, unix time string when the record was emitted and recorded
-        by Airbyte connector. This field should be used internally to deduplicate
-        records.
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte. Staging models
+        order by it to pick the newest copy of a record.

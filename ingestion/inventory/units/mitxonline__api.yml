@@ -6,7 +6,7 @@ deployment: mitxonline
 layer: api
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__mitxonline__openedx__api__

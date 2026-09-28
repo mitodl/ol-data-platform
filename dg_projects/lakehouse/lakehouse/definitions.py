@@ -1,12 +1,12 @@
 """ELT assets for the data lakehouse."""
 
+import json
 import os
 import re
 from datetime import timedelta
 
 from dagster import (
     AssetCheckSeverity,
-    AssetKey,
     AssetSelection,
     AssetSpec,
     AutomationConditionSensorDefinition,
@@ -26,7 +26,10 @@ from dagster_airbyte import (
 )
 from dagster_dbt import (
     DbtCliResource,
+    build_dbt_asset_selection,
 )
+from dagster_dbt.asset_utils import get_asset_key_for_model
+from ol_dbt_cli.lib.inventory import load_units, render_dagster_intervals
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
@@ -34,6 +37,7 @@ from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
+from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
@@ -46,15 +50,22 @@ from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
     dbt_docs_artifacts_job,
+    dbt_project,
     full_dbt_project,
 )
 from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
+from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
+from lakehouse.lib.inventory import INVENTORY_DIR
+from lakehouse.lib.non_airbyte_staging import (
+    non_airbyte_raw_tables,
+    staging_models_reading,
+)
 from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
@@ -232,43 +243,33 @@ group_names: set[str] = set()
 for assets_def in airbyte_assets:
     group_names.update(g for g in assets_def.group_names_by_key.values())
 
-# Define a mapping of group_name to interval (6, 12 or 24 hours) on production
+# Sync cadence per Airbyte group, rendered from each connection's
+# `sync_interval_hours` in ingestion/inventory (INGESTION_INVENTORY_SPEC §5). A
+# group missing here falls through to the 24-hour default below with no error,
+# which is why this is generated rather than typed: the hand-kept literal it
+# replaces had to match connection-derived names character for character.
 group_name_to_interval: dict[str, int] = {}
 if DAGSTER_ENV == "production":
-    group_name_to_interval = {
-        "bootcamps_production_app_db__s3_data_lake": 24,
-        "edxorg_production_course_structure_s3_data_lake": 24,
-        "edxorg_production_course_tables__s3_data_lake": 24,
-        "edxorg_tracking_logs__s3_data_lake": 24,
-        "emeritus_bigquery__s3_data_lake": 24,
-        "irx_bigquery__s3_data_lake": 24,
-        "irx_bigquery_email_opt_in__s3_data_lake": 24,
-        "mailgun__s3_data_lake": 24,
-        "micromasters_production_app_db__s3_data_lake": 24,
-        "mit_learn_production__s3_data_lake": 24,
-        "ol_salesforce__s3_data_lake": 24,
-        "s3_edxorg_course_and_program__s3_data_lake": 24,
-        "s3_edxorg_program_credentials__s3_data_lake": 24,
-        "mitx_forum_production__s3_data_lake": 12,
-        "mitx_online_open_edx_db__s3_data_lake": 12,
-        "mitx_online_production_open_edx_student_module_history__s3_data_lake": 12,
-        "mitx_online_tracking_logs__s3_data_lake": 12,
-        "mitxonline_forum_production__s3_data_lake": 12,
-        "mitx_residential_open_edx_db__s3_data_lake": 12,
-        "mitx_residential_open_edx_db_studentmodule_history__s3_data_lake": 12,
-        "mitx_tracking_logs__s3_data_lake": 12,
-        "s3_mitx_online_open_edx_extracts__s3_data_lake": 12,
-        "s3_mitx_open_edx_extracts__s3_data_lake": 12,
-        "s3_xpro_open_edx_extracts__s3_data_lake": 12,
-        "xpro_forum_production__s3_data_lake": 12,
-        "xpro_open_edx_db__s3_data_lake": 12,
-        "xpro_tracking_logs__s3_data_lake": 12,
-        "xpro_production_app_db__s3_data_lake": 6,
-        "mitx_online_production_app_db__s3_data_lake": 6,
-        "ocw_studio_app_db__s3_data_lake": 6,
-        "odl_video_service__s3_data_lake": 6,
-        "learn_ai_production__s3_data_lake": 6,
-    }
+    group_name_to_interval = render_dagster_intervals(load_units(INVENTORY_DIR))
+    if not group_name_to_interval:
+        # An empty render means the inventory was not found or holds no
+        # production connection. Carrying on would drop every 6- and 12-hour
+        # sync to daily without a word, so refuse to load instead.
+        msg = f"No sync intervals rendered from the inventory at {INVENTORY_DIR}."
+        raise RuntimeError(msg)
+    # A single live group the inventory does not cover (a connection created or
+    # renamed in the UI) warns rather than raises. There is one today, the
+    # edx.org course-metadata connection pending deletion, and failing here
+    # would take the whole code location down for it. airbyte_inventory_drift
+    # reports the connection behind it as undeclared.
+    if uncovered := sorted(group_names - group_name_to_interval.keys()):
+        import warnings
+
+        warnings.warn(
+            f"No inventory sync interval for Airbyte group(s) {uncovered}; "
+            "they fall back to 24 hours.",
+            stacklevel=2,
+        )
 
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
@@ -400,58 +401,116 @@ b2b_analytics_starrocks_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
-# MIT Learn delivery chain: refresh the dbt models the mit_learn_delivery
-# webhook assets read, between the dlt ingests and the delivery POSTs.
+# Airbyte inventory drift. Daily, which is exactly step 8's acceptance
+# criterion — "a connection edited in the UI is reported within a day". Runs
+# ahead of the ingestion schedules, so a report describes the workspace as it
+# was configured for the day's syncs.
 #
-# Without this the delivery assets POST whatever was last materialized. The gap
-# is not obvious from any one file, so, concretely: the dlt ingest schedules in
-# the data_loading location materialize ONLY the raw tables (03:00-04:00 UTC);
-# `dbt_automation_sensor` below covers the integrations models but explicitly
-# excludes the `staging` group; and the `sync_and_stage_*` jobs that are meant
-# to cover staging are built from the Airbyte source groups, so they never touch
-# these dlt-sourced staging models. That leaves stg__mit_climate__*,
-# stg__mitpe__*, stg__oll__*, stg__edxorg__discovery__api__programs and
-# stg__podcast__rss__* with no scheduled materialization at all, and the
-# integrations models above them reading yesterday's staging.
-#
-# These live in the lakehouse location because a Dagster job cannot span code
-# locations -- the delivery assets are in `learning_resources` and cannot
-# materialize dbt assets defined here, so the refresh has to be driven from
-# this side rather than by widening the delivery schedules.
-#
-# Keys are listed explicitly rather than selected by group: `integrations` and
-# `staging` both hold many models unrelated to MIT Learn, and `.upstream()`
-# from the integrations models would pull in the whole edxorg lineage.
-LEARN_DELIVERY_MODEL_KEYS = [
-    # staging
-    AssetKey(["staging", "mit_climate", "stg__mit_climate__api__articles"]),
-    AssetKey(["staging", "mitpe", "stg__mitpe__api__courses"]),
-    AssetKey(["staging", "oll", "stg__oll__google_sheets__courses"]),
-    AssetKey(["staging", "edxorg", "stg__edxorg__discovery__api__programs"]),
-    AssetKey(["staging", "podcast", "stg__podcast__rss__channels"]),
-    AssetKey(["staging", "podcast", "stg__podcast__rss__episodes"]),
-    # integrations
-    AssetKey(["integrations", "learn", "integrations__learn__mit_climate_articles"]),
-    AssetKey(["integrations", "learn", "integrations__learn__mitpe_courses"]),
-    AssetKey(["integrations", "learn", "integrations__learn__oll_courses"]),
-    AssetKey(["integrations", "learn", "integrations__learn__mit_edx_programs"]),
-    AssetKey(["integrations", "learn", "integrations__learn__podcasts"]),
-    AssetKey(["integrations", "learn", "integrations__learn__podcast_episodes"]),
-]
+# Gated on SKIP_AIRBYTE with the assets above: the asset requires the `airbyte`
+# resource, which is not registered when that flag is set, and a definition
+# asking for an absent resource fails the whole code location at load.
+airbyte_drift_assets = [] if SKIP_AIRBYTE else [airbyte_inventory_drift]
+airbyte_drift_schedules = (
+    []
+    if SKIP_AIRBYTE
+    else [
+        (
+            "airbyte_inventory_drift_daily",
+            ScheduleDefinition(
+                name="airbyte_inventory_drift_daily_schedule",
+                job=define_asset_job(
+                    name="airbyte_inventory_drift_daily_job",
+                    selection=AssetSelection.assets(airbyte_inventory_drift),
+                ),
+                cron_schedule="0 3 * * *",
+                execution_timezone="UTC",
+                # RUNNING, unlike the maintenance schedules above that someone
+                # starts by hand: left at Dagster's STOPPED default this never
+                # ticked in production (no SchedulerDaemon evaluation of it in
+                # the 30 days to 2026-09-26). It only reads, and
+                # SCHEDULE_ENVIRONMENTS registers it in production alone.
+                default_status=DefaultScheduleStatus.RUNNING,
+            ),
+        )
+    ]
+)
 
-# 05:00 UTC sits after the last dlt ingest (podcast_rss at 04:00) and before the
-# first delivery POST (mit_climate at 06:00). STOPPED by default, matching the
-# delivery schedules it feeds -- enabling this without enabling those is safe
-# and is the right order to turn them on.
-learn_delivery_models_schedule = ScheduleDefinition(
-    name="learn_delivery_models_daily",
+# Production only: the mirror reads production and writes QA, and QA's StarRocks
+# role is denied production Glue. Registered in no other environment, so there
+# is nothing a QA or dev code location could run against production by mistake.
+qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
+
+# The PostHog staging model is fed by a dlt source rather than an Airbyte
+# connection, so no `sync_and_stage_*` job covers it (see non_airbyte_staging).
+# It gets its own hourly schedule because the source lands an hour at a time;
+# the rest of that class is built daily below.
+#
+# data_loading lands the closed hour at :20 (see its posthog_events_ingest
+# schedule for the measured export lag); :35 leaves the load room to finish.
+POSTHOG_STAGING_MODEL = "stg__posthog__learn__s3__search_update_events"
+posthog_staging_schedule = ScheduleDefinition(
+    name="posthog_staging_hourly",
     job=define_asset_job(
-        name="learn_delivery_models_job",
-        selection=AssetSelection.assets(*LEARN_DELIVERY_MODEL_KEYS),
+        name="posthog_staging_job",
+        selection=AssetSelection.keys(
+            get_asset_key_for_model([full_dbt_project], POSTHOG_STAGING_MODEL)
+        ).downstream(depth=1, include_self=True),
     ),
-    cron_schedule="0 5 * * *",
+    cron_schedule="35 * * * *",
     execution_timezone="UTC",
-    default_status=DefaultScheduleStatus.STOPPED,
+)
+
+# Every other staging model whose raw table the inventory assigns to a loader
+# other than Airbyte. For the dlt-fed ones, dbt_automation_sensor picks up the
+# downstream models once these materialize, because dlt materializes the raw
+# keys and so moves their data version. Nothing materializes the raw keys of the
+# `loader: dagster` units (the edxorg code location writes edxorg/processed_data),
+# so a rebuild of those staging models does not by itself re-trigger anything
+# downstream.
+#
+# Registered only when the selection is non-empty: an empty model list would
+# hand dbt an empty selector, which selects the whole project. The image copies
+# the inventory in, and airbyte_inventory_drift already fails naming the path
+# when it is missing.
+#
+# Left out until its raw table exists: raw__edxorg__discovery__api__programs has
+# never been created, because edX.org lists no active non-MicroMasters MIT
+# program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
+# table from an empty load. Building it would fail the whole job every day.
+AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
+non_airbyte_staging_models = sorted(
+    staging_models_reading(
+        json.loads(dbt_project.manifest_path.read_text()),
+        non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
+    )
+    - {POSTHOG_STAGING_MODEL}
+    - AWAITING_RAW_TABLE
+)
+non_airbyte_staging_schedules = (
+    [
+        (
+            "non_airbyte_staging_daily",
+            ScheduleDefinition(
+                name="non_airbyte_staging_daily",
+                job=define_asset_job(
+                    name="non_airbyte_staging_job",
+                    selection=build_dbt_asset_selection(
+                        [full_dbt_project],
+                        dbt_select=" ".join(non_airbyte_staging_models),
+                    ),
+                ),
+                # After the cron-driven dlt ingests in data_loading (03:00 to
+                # 04:30 UTC). The edxorg table loads and the course structure
+                # assets are sensor-driven, so their staging can trail raw by up
+                # to a day.
+                cron_schedule="0 6 * * *",
+                execution_timezone="UTC",
+                default_status=DefaultScheduleStatus.RUNNING,
+            ),
+        )
+    ]
+    if non_airbyte_staging_models
+    else []
 )
 
 # Instructor onboarding schedule
@@ -538,6 +597,8 @@ defs = Definitions(
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             refresh_starrocks_analytics_mvs,
+            *airbyte_drift_assets,
+            *qa_mirror_assets,
         ]
     ),
     asset_checks=dbt_layer_freshness_checks,
@@ -558,7 +619,8 @@ defs = Definitions(
                 if DBT_AUTOMATION_ENABLED
                 else DefaultSensorStatus.STOPPED
             ),
-            # exclude staging as they are already handled by "sync_and_stage_" job
+            # exclude staging as they are already handled by the "sync_and_stage_"
+            # jobs, or by the non-Airbyte staging schedules for dlt/Dagster sources
             #
             # Note what that exclusion costs in production, where staging models
             # DO carry a condition: get_default_automation_condition_sensor_target
@@ -601,7 +663,9 @@ defs = Definitions(
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
-            ("learn_delivery_models_daily", learn_delivery_models_schedule),
+            *airbyte_drift_schedules,
+            ("posthog_staging_hourly", posthog_staging_schedule),
+            *non_airbyte_staging_schedules,
         ]
     ),
 )

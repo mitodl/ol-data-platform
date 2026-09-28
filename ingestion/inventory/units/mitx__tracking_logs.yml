@@ -6,7 +6,7 @@ deployment: mitx
 layer: tracking_logs
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: airbyte
 table_prefix: raw__mitx__openedx__tracking_logs
@@ -27,3 +27,6 @@ tables:
   cursor_field:
   - _ab_source_file_last_modified
   modeled: true
+  raw_metadata_column:
+  - _airbyte_extracted_at
+  - _ab_source_file_last_modified

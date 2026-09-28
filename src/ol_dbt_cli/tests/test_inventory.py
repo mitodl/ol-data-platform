@@ -15,7 +15,14 @@ from typing import Any
 import pytest
 import yaml
 
-from ol_dbt_cli.lib.inventory import validate_inventory
+from ol_dbt_cli.lib.inventory import (
+    Unit,
+    load_units,
+    raw_metadata_column,
+    raw_metadata_columns,
+    render_dbt_metadata_columns,
+    validate_inventory,
+)
 from ol_dbt_cli.lib.validation import ValidationReport
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -164,6 +171,61 @@ class TestSchemaShape:
         assert "mirror" in _messages(report)
 
 
+def _mirrored_unit(mirror: dict[str, Any]) -> dict[str, Any]:
+    unit = copy.deepcopy(DLT_UNIT)
+    unit.update(strategies={"qa": "mirror", "local": "fixture"}, mirror_max_age_days=90)
+    unit["tables"][0]["mirror"] = mirror
+    return unit
+
+
+class TestMirrorRules:
+    def test_a_well_formed_mirror_passes(self, inventory: Path) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "copy", "email": "hash"}}))
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    def test_mirror_on_a_unit_qa_does_not_mirror_is_rejected(self, inventory: Path) -> None:
+        unit = copy.deepcopy(APP_UNIT)
+        unit["tables"][0]["mirror"] = {"columns": {"_airbyte_extracted_at": "copy"}}
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert "strategies.qa is not `mirror`" in _messages(report)
+
+    def test_mirror_must_keep_the_raw_metadata_column(self, inventory: Path) -> None:
+        # The dedup macro reads it through the inventory, where no SQL analysis
+        # of the staging model can see the read.
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"email": "hash"}}))
+        report = _run(inventory)
+        assert "drops its raw metadata column '_dlt_load_id'" in _messages(report)
+
+    def test_mirror_must_keep_every_column_of_a_list_declaration(self, inventory: Path) -> None:
+        unit = _mirrored_unit({"columns": {"_airbyte_extracted_at": "copy"}})
+        unit["raw_metadata_column"] = ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+        _write(inventory, "edxorg__s3", unit)
+        report = _run(inventory)
+        assert "drops its raw metadata column '_ab_source_file_last_modified'" in _messages(report)
+        assert "'_airbyte_extracted_at'" not in _messages(report)
+
+    def test_unknown_mode_is_rejected_by_the_schema(self, inventory: Path) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "scramble"}}))
+        report = _run(inventory)
+        assert "scramble" in _messages(report)
+
+    @pytest.mark.parametrize(
+        "where",
+        [
+            "true; DROP TABLE x",
+            "true) UNION ALL SELECT email FROM ol_data_lake_production.db.t WHERE (true",
+        ],
+    )
+    def test_where_is_a_predicate_not_a_statement(self, inventory: Path, where: str) -> None:
+        # A UNION would read production columns the allowlist leaves out.
+        mirror = {"columns": {"_dlt_load_id": "copy"}, "where": where}
+        _write(inventory, "edxorg__s3", _mirrored_unit(mirror))
+        report = _run(inventory)
+        assert "contains `;` or a set operator" in _messages(report)
+
+
 class TestRules:
     def test_local_ingest_requires_a_dlt_unit(self, inventory: Path) -> None:
         _mutate(
@@ -208,6 +270,22 @@ class TestRules:
         )
         report = _run(inventory)
         assert "mirror_max_age_days is not set" in _messages(report)
+
+    def test_scoped_unit_cannot_mirror(self, inventory: Path) -> None:
+        _mutate(
+            inventory,
+            "mitxonline__mysql",
+            APP_UNIT,
+            strategies={"qa": "mirror", "local": "fixture"},
+            mirror_max_age_days=30,
+        )
+        report = _run(inventory)
+        assert "strategies.qa is `mirror` but the unit is scoped" in _messages(report)
+
+    def test_singleton_cannot_ingest_in_qa(self, inventory: Path) -> None:
+        _mutate(inventory, "edxorg__s3", DLT_UNIT, strategies={"qa": "ingest", "local": "fixture"})
+        report = _run(inventory)
+        assert "strategies.qa is `ingest` but the unit is singleton" in _messages(report)
 
     def test_max_age_without_mirror_is_rejected(self, inventory: Path) -> None:
         _mutate(inventory, "mitxonline__mysql", APP_UNIT, mirror_max_age_days=30)
@@ -460,3 +538,127 @@ class TestCrossUnit:
         _write(inventory, "edxorg__s3_again", clone)
         report = _run(inventory)
         assert "already defined by" in _messages(report)
+
+
+class TestRawMetadataColumn:
+    """The loader-agnostic dedup seam (ol-data-platform#2443).
+
+    The bug being fixed was silent: staging models ordered by
+    `_airbyte_extracted_at` against dlt-produced tables that never had it, so
+    these assert the None case as hard as the Airbyte one.
+    """
+
+    def test_airbyte_unit_resolves_to_the_airbyte_column(self) -> None:
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=copy.deepcopy(APP_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+
+    def test_dlt_unit_resolves_to_the_dlt_load_id(self) -> None:
+        # ol_dlt enables normalize.parquet_normalizer.add_dlt_load_id for every
+        # pipeline, so a dlt unit stamps a monotonic load id to order by.
+        unit = Unit(path=Path("edxorg__s3.yml"), data=copy.deepcopy(DLT_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0]) == "_dlt_load_id"
+
+    def test_dagster_unit_resolves_to_none(self) -> None:
+        data = copy.deepcopy(DLT_UNIT)
+        data["loader"] = "dagster"
+        del data["dlt"]
+        unit = Unit(path=Path("openedx__s3.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_table_override_wins_over_the_loader_default(self) -> None:
+        # The two Salesforce tables still on Airbyte v1's column pair.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = "_airbyte_emitted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_emitted_at"
+
+    def test_unit_override_applies_to_every_table(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["raw_metadata_column"] = "_airbyte_emitted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert all(raw_metadata_column(unit, table) == "_airbyte_emitted_at" for table in unit.tables)
+
+    def test_table_override_wins_over_the_unit_override(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["raw_metadata_column"] = "_airbyte_emitted_at"
+        data["tables"][0]["raw_metadata_column"] = "_airbyte_extracted_at"
+        unit = Unit(path=Path("salesforce__api.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+
+    def test_explicit_null_override_beats_an_airbyte_loader(self) -> None:
+        # `raw_metadata_column:` with no value is a declaration, not an omission,
+        # so it must not fall through to the loader default.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = None
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_list_declaration_keeps_its_precedence_order(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+        unit = Unit(path=Path("edxorg__tracking_logs.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+
+    def test_map_covers_every_declared_table(self, inventory: Path) -> None:
+        units = load_units(inventory)
+        mapping = raw_metadata_columns(units)
+        declared = {table["raw_table"] for unit in units for table in unit.tables}
+        assert set(mapping) == declared
+
+    def test_real_inventory_orders_edxorg_tables_by_source_file_mtime(self) -> None:
+        # edxorg/mysql appends, and a backfill walks the landing zone in
+        # whatever order it likes, so `_dlt_load_id` records ingest order
+        # rather than which export a row came from. The source file's mtime is
+        # what picks the newest version of a record.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__tables__auth_user"] == "_file_modified_at"
+
+    def test_dagster_units_resolve_to_none(self) -> None:
+        # A dagster-loaded unit writes no metadata column, so its tables must
+        # not be deduplicated: ordering a table by a column it does not carry
+        # is the regression this seam was filed for (ol-data-platform#2443).
+        # Synthetic because every real dagster-unit table now declares the
+        # column of the loader that actually lands it in raw.
+        data = copy.deepcopy(APP_UNIT)
+        data["loader"] = "dagster"
+        unit = Unit(path=Path("edxorg__course_structure.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) is None
+
+    def test_real_inventory_gives_reloaded_dlt_units_the_load_id(self) -> None:
+        # A dlt unit carrying no override takes the new default, which is what
+        # makes the edxorg entry above removable rather than permanent.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
+
+    def test_real_inventory_dedups_airbyte_loaded_course_structure_tables(self) -> None:
+        # The unit is a Dagster pipeline, but an Airbyte S3 connection loads the
+        # files it writes, so the tables carry Airbyte's columns. The dagster
+        # default of None would silently switch their dedup off.
+        mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
+        assert mapping["raw__edxorg__s3__course_structure__course_video"] == "_airbyte_extracted_at"
+
+
+class TestGeneratedMetadataMacro:
+    def test_generated_macro_is_current(self) -> None:
+        """The committed macro must match the inventory it is generated from.
+
+        Without this the failure is silent in the worst way: an inventory edit
+        lands, the macro keeps the old answer, and dbt goes on deduplicating a
+        cutover source on a column it no longer has.
+        """
+        expected = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        macro = REPO_ROOT / "src" / "ol_dbt" / "macros" / "_raw_metadata_columns.sql"
+        assert macro.read_text() == expected, "Run `ol-dbt inventory metadata-columns --write`."
+
+    def test_rendered_macro_emits_none_unquoted(self) -> None:
+        # `'none'` would be a truthy string in Jinja and silently order by a
+        # column named none; the bare literal is what makes the pass-through fire.
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = None
+        rendered = render_dbt_metadata_columns([Unit(path=Path("mitxonline__mysql.yml"), data=data)])
+        assert f"'{data['tables'][0]['raw_table']}': none," in rendered
+
+    def test_rendered_macro_emits_a_list_as_a_jinja_list(self) -> None:
+        rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
+        expected = "'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
+        assert expected in rendered

@@ -25,6 +25,16 @@ def _():
 
 
 @app.cell
+def _():
+    import altair as alt
+    import numpy as np
+    import pandas as pd
+    import polars as pl
+
+    return alt, pl
+
+
+@app.cell
 def _(mo):
     mo.md(r"""
     # A tour of the OL warehouse in marimo
@@ -953,16 +963,6 @@ def _(mo):
     | `ModuleNotFoundError` after `pip install` | Sandbox mode. Add the package to the `/// script` header and restart the kernel. |
     """)
     return
-
-
-@app.cell
-def _():
-    import altair as alt
-    import numpy as np
-    import pandas as pd
-    import polars as pl
-
-    return alt, pl
 
 
 if __name__ == "__main__":

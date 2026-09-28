@@ -5,6 +5,11 @@ models:
 - name: marts__mitxonline_course_certificates
   description: course certificates from MITx Online app
   config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
     grants:
       select: ['mit_irx']
   columns:
@@ -46,6 +51,15 @@ models:
 - name: marts__mitxonline_user_profiles
   description: MITx Online user profiles
   config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
     grants:
       select: ['mit_irx']
   columns:
@@ -90,6 +104,12 @@ models:
 
 - name: marts__mitxonline_course_enrollments
   description: learners MITx Online course enrollments and demographics
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -157,6 +177,13 @@ models:
 
 - name: marts__mitxonline_course_engagements_daily
   description: MITx Online learners daily course engagement statistics
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: courseactivity_date
     description: date, date that user has any interactions within a course
@@ -202,6 +229,15 @@ models:
 - name: marts__mitxonline_video_engagements
   description: MITx Online learners video engagements - play, pause, seek or stop
     video action
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ovs/app_postgres
   columns:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
@@ -267,6 +303,13 @@ models:
 
 - name: marts__mitxonline_problem_submissions
   description: MITx Online learners problem submissions
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: user_username
     description: str, username of the open edX user
@@ -341,6 +384,13 @@ models:
 - name: marts__mitxonline_problem_summary
   description: MITx Online learners problem performance summary with a particular
     problem
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: user_username
     description: str, username of the open edX user
@@ -387,6 +437,13 @@ models:
 - name: marts__mitxonline_discussions
   description: MITx Online learners discussion engagements - created, viewed, responded
     to any thread or post, etc.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.

@@ -4,6 +4,13 @@ version: 2
 models:
 - name: marts__micromasters_dedp_exam_grades
   description: DEDP proctored exam grades combined from MicroMasters and MITx Online
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: course_title
     description: str, title of the course associated with the exam grade
@@ -51,6 +58,12 @@ models:
     certificates are downloadable and not revoked from MITx Online, MicroMaster and
     edX.org. Certificates earned for courses that satisfy the requirements for multiple
     programs appear in multiple rows for each program
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, title of the program the course is part of
@@ -113,6 +126,12 @@ models:
 
 - name: marts__micromasters_summary_timeseries
   description: Time series of MicroMasters aggregate statistics.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: end_date
     description: date, the aggregate statistics in this report are calculated for
@@ -159,6 +178,12 @@ models:
 
 - name: marts__micromasters_summary
   description: MicroMasters aggregate statistics
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: program_title
     description: str, Micromasters program tile
@@ -210,6 +235,11 @@ models:
     selected in the order of MITx Online, MicroMasters, and edX.org, whichever is
     not null.
   config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
     grants:
       select: ['mit_irx']
   columns:

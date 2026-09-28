@@ -5,19 +5,24 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import logging
 import re
 
 import pytest
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    MAX_MV_REFRESH_ATTEMPTS,
+    MV_REFRESH_RETRY_DELAY_SECONDS,
     RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
+    MaterializedViewRefreshError,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
     materialized_view_relations,
+    refresh_materialized_views,
     retry_delay,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
@@ -475,3 +480,129 @@ class TestDriftedRelations:
             "b2b_analytics.mv_a",
             "b2b_analytics.mv_b",
         ]
+
+
+# Verbatim (stack traces trimmed) from the 2026-09-25 b2b_analytics_starrocks_job
+# runs 4b143bb3 and 46b45b4f, which overlapped a Trino rebuild of
+# bridge_organization_courserun.
+BASE_TABLE_MID_SWAP_FAILURE = (
+    "(1064, 'execute task mv-1199507 failed: Refresh mv mv_b2b_learner_enrollment "
+    "failed after 1 times, try lock failed: 0, error-msg : "
+    "com.starrocks.sql.common.DmlException: Materialized view "
+    "b2b_learner_records.mv_b2b_learner_enrollment refresh failed: base table "
+    "ol_data_lake_production.ol_warehouse_production_dimensional."
+    "bridge_organization_courserun does not exist when collecting snapshot infos')"
+)
+BASE_TABLE_RECREATED_FAILURE = (
+    '(1064, "execute task mv-1199471 failed: Refresh mv mv_b2b_contract_utilization '
+    "failed after 1 times, try lock failed: 0, error-msg : "
+    "com.starrocks.sql.common.DmlException: Materialized view "
+    "b2b_analytics.mv_b2b_contract_utilization set inactive: base table "
+    "'bridge_organization_courserun' (catalog=ol_data_lake_production, "
+    "db=ol_warehouse_production_dimensional) was recreated but its table type is "
+    "not supported for automatic meta repair. Only Hive tables support automatic "
+    'repair. Please manually refresh the MV.")'
+)
+UNRELATED_REFRESH_FAILURE = (
+    "(1064, 'Getting analyzing error. Detail message: Unknown column org_key.')"
+)
+
+
+class ScriptedStarRocks:
+    """Plays back a per-relation sequence of failures, then succeeds."""
+
+    def __init__(self, failures: dict[str, list[str]]) -> None:
+        self.failures = {name: list(msgs) for name, msgs in failures.items()}
+        self.statements: list[str] = []
+
+    def execute(self, sql: str) -> None:
+        self.statements.append(sql)
+        relation = sql.split()[3]
+        pending = self.failures.get(relation)
+        if pending:
+            raise RuntimeError(pending.pop(0))
+
+
+def _refresh(starrocks, relations, sleeps):
+    refresh_materialized_views(
+        relations,
+        starrocks.execute,
+        log=logging.getLogger("test"),
+        sleep=sleeps.append,
+    )
+
+
+class TestRefreshMaterializedViews:
+    @pytest.mark.parametrize(
+        "message", [BASE_TABLE_MID_SWAP_FAILURE, BASE_TABLE_RECREATED_FAILURE]
+    )
+    def test_a_rebuilt_base_table_is_retried(self, message):
+        """Both 09-25 failures clear on the next REFRESH once the new table exists."""
+        starrocks = ScriptedStarRocks({"b2b_analytics.mv_a": [message]})
+        sleeps: list[float] = []
+        _refresh(starrocks, ["b2b_analytics.mv_a"], sleeps)
+        assert (
+            starrocks.statements
+            == ["REFRESH MATERIALIZED VIEW b2b_analytics.mv_a WITH SYNC MODE"] * 2
+        )
+        assert sleeps == [MV_REFRESH_RETRY_DELAY_SECONDS]
+
+    def test_the_recreate_error_after_a_mid_swap_failure(self):
+        """The 09-25 sequence on one MV: first the swap, then the meta-repair
+        refusal on the first REFRESH that sees the new table.
+        """
+        starrocks = ScriptedStarRocks(
+            {
+                "b2b_analytics.mv_a": [
+                    BASE_TABLE_MID_SWAP_FAILURE,
+                    BASE_TABLE_RECREATED_FAILURE,
+                ]
+            }
+        )
+        _refresh(starrocks, ["b2b_analytics.mv_a"], [])
+        assert len(starrocks.statements) == MAX_MV_REFRESH_ATTEMPTS
+
+    def test_an_unrelated_error_is_not_retried(self):
+        starrocks = ScriptedStarRocks(
+            {"b2b_analytics.mv_a": [UNRELATED_REFRESH_FAILURE]}
+        )
+        sleeps: list[float] = []
+        with pytest.raises(MaterializedViewRefreshError) as excinfo:
+            _refresh(starrocks, ["b2b_analytics.mv_a"], sleeps)
+        assert len(starrocks.statements) == 1
+        assert sleeps == []
+        assert set(excinfo.value.failures) == {"b2b_analytics.mv_a"}
+
+    def test_gives_up_after_the_last_attempt(self):
+        starrocks = ScriptedStarRocks(
+            {"b2b_analytics.mv_a": [BASE_TABLE_RECREATED_FAILURE] * 10}
+        )
+        sleeps: list[float] = []
+        with pytest.raises(MaterializedViewRefreshError):
+            _refresh(starrocks, ["b2b_analytics.mv_a"], sleeps)
+        assert len(starrocks.statements) == MAX_MV_REFRESH_ATTEMPTS
+        # No sleep after the final attempt.
+        assert sleeps == [MV_REFRESH_RETRY_DELAY_SECONDS] * (
+            MAX_MV_REFRESH_ATTEMPTS - 1
+        )
+
+    def test_one_failure_does_not_stop_the_rest(self):
+        """On 09-25 the first failure ended the asset, so every MV after it in
+        the list kept the previous day's data.
+        """
+        starrocks = ScriptedStarRocks(
+            {"b2b_analytics.mv_a": [UNRELATED_REFRESH_FAILURE]}
+        )
+        with pytest.raises(MaterializedViewRefreshError) as excinfo:
+            _refresh(starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], [])
+        assert starrocks.statements[-1] == (
+            "REFRESH MATERIALIZED VIEW b2b_analytics.mv_b WITH SYNC MODE"
+        )
+        assert set(excinfo.value.failures) == {"b2b_analytics.mv_a"}
+
+    def test_clean_run_does_not_sleep(self):
+        starrocks = ScriptedStarRocks({})
+        sleeps: list[float] = []
+        _refresh(starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], sleeps)
+        assert len(starrocks.statements) == 2
+        assert sleeps == []

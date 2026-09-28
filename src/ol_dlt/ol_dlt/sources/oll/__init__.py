@@ -65,4 +65,4 @@ oll_pipeline = config.pipeline_for("oll")
 
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the OLL source (uniform entrypoint for the Dagster wrapper)."""
-    return oll_source()
+    return config.with_nullable_load_id(oll_source())

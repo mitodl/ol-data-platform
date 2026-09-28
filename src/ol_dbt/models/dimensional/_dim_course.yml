@@ -15,6 +15,11 @@ models:
     than a QUALIFY clause because Trino does not support QUALIFY; the semantics are
     identical — exactly one row is retained per course_readable_id.
   meta:
+    qa_branches:
+    - micromasters/app_postgres
+    - mitxonline/app_postgres
+    - ocw/app_postgres
+    - xpro/app_postgres
     owner: data_team
   columns:
   - name: course_pk

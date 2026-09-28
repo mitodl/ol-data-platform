@@ -81,7 +81,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         )["data"]
         return creds["username"], creds["password"]
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, *, idempotent: bool = True) -> None:
         """Run *sql*, retrying with fresh Vault credentials on a transient error.
 
         A fresh set of dynamic credentials is generated on every attempt (not just
@@ -89,24 +89,41 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         just-created user not yet being visible on the FE node we connect to --
         generating a new one and retrying gives replication another round to catch
         up rather than reusing credentials known to be affected.
-        """
-        self._run(sql)
 
-    def fetch(self, sql: str, params: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+        Pass ``idempotent=False`` for a statement that cannot be re-run after
+        dying partway, such as CREATE TABLE AS SELECT: an FE lost mid-statement
+        can leave the table created, so a retry fails on "already exists" and
+        hides the original error. Such a statement is still retried when the
+        connection itself fails, since then it never started.
+        """
+        self._run(sql, retry_statement=idempotent)
+
+    def fetch(
+        self, sql: str, params: tuple[str, ...] | None = None
+    ) -> list[dict[str, Any]]:
         """Run *sql* and return its rows, with `execute`'s credential retry.
 
         *params* are passed through to the driver's own placeholder
         substitution (`%s`) rather than interpolated into *sql*.
 
-        Retrying a SELECT is unconditionally safe; `execute` shares this path
-        because everything it runs (REFRESH MATERIALIZED VIEW, DDL) is
-        idempotent too, and a retry only happens when the previous attempt
-        failed to connect or died mid-statement.
+        The default is None rather than an empty tuple because pymysql applies
+        `query % args` for any args that is not None -- including `()`, which
+        binds nothing but still makes a literal `%` in *sql* (a `LIKE '%x%'`,
+        a `date_format` pattern) raise "not enough arguments for format
+        string". Statements with no placeholders have to skip the binding
+        rather than pass an empty one. `execute` already passes None.
+
+        Retrying a SELECT is unconditionally safe. A retry only happens when
+        the previous attempt failed to connect or died mid-statement.
         """
         return self._run(sql, params) or []
 
     def _run(
-        self, sql: str, params: tuple[str, ...] | None = None
+        self,
+        sql: str,
+        params: tuple[str, ...] | None = None,
+        *,
+        retry_statement: bool = True,
     ) -> list[dict[str, Any]] | None:
         last_exc: OperationalError | None = None
         for attempt in range(_MAX_ATTEMPTS):
@@ -145,7 +162,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                     rows = cursor.fetchall()
                 conn.commit()
             except OperationalError as exc:
-                if exc.args[0] not in _RETRIABLE_ERRORS:
+                if not retry_statement or exc.args[0] not in _RETRIABLE_ERRORS:
                     raise
                 last_exc = exc
                 continue

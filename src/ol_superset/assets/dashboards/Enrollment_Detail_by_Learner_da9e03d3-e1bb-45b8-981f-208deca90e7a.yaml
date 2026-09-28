@@ -5,6 +5,13 @@ dashboard_title: Enrollment Detail by Learner
 description: null
 metadata:
   chart_configuration:
+    '108':
+      crossFilters:
+        chartsInScope:
+        - 64
+        - 111
+        scope: global
+      id: 108
     '111':
       crossFilters:
         chartsInScope:
@@ -19,13 +26,6 @@ metadata:
         - 111
         scope: global
       id: 64
-    '108':
-      crossFilters:
-        chartsInScope:
-        - 64
-        - 111
-        scope: global
-      id: 108
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

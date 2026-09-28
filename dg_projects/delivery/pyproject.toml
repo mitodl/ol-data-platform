@@ -1,0 +1,67 @@
+[project]
+name = "delivery"
+requires-python = ">=3.14,<3.15"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.12.10",
+    "dagster-aws ~=0.29.0",
+    "dagster-k8s>=0.27.15",
+    "dagster-postgres>=0.27.13",
+    "httpx2 >= 2.2.0",
+    "jsonlines ~= 4.0.0",
+    # Same sanitizer MIT Learn's clean_data() uses, so the webhook path strips
+    # third-party RSS HTML exactly the way the Celery ETL does.
+    "nh3 >= 0.2.0",
+    "ol-orchestrate-lib",
+    "pygsheets>=2.0.6",
+    "ffmpeg-python>=0.2.0",
+    "python-dateutil>=2.8.2",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.0",
+]
+
+[project.entry-points]
+"dagster.components" = { delivery = "delivery.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.12.10",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "delivery.definitions"
+project_name = "delivery"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "delivery"
+
+[tool.setuptools.packages.find]
+exclude=["delivery_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
+
+# Pin grpcio-health-checking below 1.82.0: that release bundles health_pb2.py
+# pre-generated with protobuf 7.35.0 gencode while declaring protobuf>=6.33.5,
+# so it crashes at import time under dagster's required protobuf<7 (upstream
+# metadata/gencode mismatch in the 1.82.0 release).
+[tool.uv]
+override-dependencies = [
+    "grpcio-health-checking<1.82.0",
+]
+
+# Keep sqlalchemy below 2.1: 2.1 makes a bare postgresql:// URL default to
+# psycopg 3, and dagster-postgres 1.13.24 breaks on it (bound NOTIFY payload,
+# psycopg2-only pgcode, and set_pg_statement_timeout closing the connection).
+# Tracked upstream in dagster-io/dagster#34232, #34235 and #33959.
+constraint-dependencies = [
+    "sqlalchemy<2.1",
+]

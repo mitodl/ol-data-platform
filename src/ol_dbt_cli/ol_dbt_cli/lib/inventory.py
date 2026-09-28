@@ -42,6 +42,48 @@ INCREMENTAL_PREFIX = "incremental"
 XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
 AIRBYTE_LOADER = "airbyte"
+DLT_LOADER = "dlt"
+DAGSTER_LOADER = "dagster"
+
+# The raw-metadata column a staging model can order by to pick the newest copy
+# of a record key. Resolved per raw table, because one dbt source mixes tables
+# from units with different loaders and edxorg alone nests three of them.
+#
+# Airbyte's current destination writes `_airbyte_extracted_at`, and every
+# Airbyte table in the inventory now takes that default. The declaration seam
+# stays because the departures are not loader-shaped: edxorg/mysql is an
+# Airbyte unit ordering by `_file_modified_at`, and a dbt source mixes tables
+# from units with different loaders (INGESTION_INVENTORY_SPEC.md §1.2).
+AIRBYTE_METADATA_COLUMN = "_airbyte_extracted_at"
+
+# dlt stamps each row with the load package id once
+# `normalize.parquet_normalizer.add_dlt_load_id` is on, which ol_dlt enables for
+# every pipeline in src/ol_dlt/.dlt/config.toml. That config lands ahead of this
+# map and its first load has to be confirmed to stamp the column, because
+# resolving to a column no load has written is the failure this whole seam
+# exists to end. It is
+# `str(increasing_precise_time())` and dlt guarantees it increases over time for
+# a given schema/destination/dataset, so "highest load id wins" is a valid
+# latest-version ordering — the same shape as Airbyte's extracted-at column.
+#
+# `_dlt_id` is deliberately NOT the answer: on the pyarrow backend every ol_dlt
+# source uses, it is a random per-row value. dlt's deterministic key_hash and
+# row_hash variants exist only in the relational (dict) normalizer, and the
+# arrow path carries an explicit TODO saying so.
+#
+# A dlt unit whose tables predate the flag has no such column yet, and declares
+# `raw_metadata_column: null` until its first load stamps one. That is the
+# inventory recording reality rather than this map guessing at it.
+#
+# dagster units get None and stay there: those tables come from bespoke asset
+# pipelines under dg_projects/, not from a loader that stamps anything.
+DLT_METADATA_COLUMN = "_dlt_load_id"
+
+LOADER_METADATA_COLUMNS: dict[str, str | None] = {
+    AIRBYTE_LOADER: AIRBYTE_METADATA_COLUMN,
+    DLT_LOADER: DLT_METADATA_COLUMN,
+    DAGSTER_LOADER: None,
+}
 # Which Airbyte deployment a connection belongs to when it does not say.
 # Units written before connections carried `environment` describe the
 # production workspace, the only one the generator could reach.
@@ -170,6 +212,20 @@ def _check_strategies(unit: Unit, report: ValidationReport) -> None:
             "and no other loader has a local path (RFC 12711 §3).",
         )
 
+    # RFC 12711 Option 3: a scoped unit is ingested from the QA deployment, a
+    # singleton has no QA deployment and is mirrored from production or omitted.
+    qa = strategies.get("qa")
+    scope = unit.data.get("scope")
+    if (scope, qa) in {("scoped", MIRROR_STRATEGY), ("singleton", "ingest")}:
+        report.add(
+            CHECK,
+            Severity.ERROR,
+            unit.key,
+            f"strategies.qa is `{qa}` but the unit is {scope}",
+            "A scoped unit has a QA deployment to ingest from, and mirroring production rows into "
+            "QA breaks joins on environment-scoped identity. A singleton has no QA deployment.",
+        )
+
     mirrors = MIRROR_STRATEGY in strategies.values()
     declared = "mirror_max_age_days" in unit.data
     if mirrors and not declared:
@@ -250,6 +306,68 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
             "database that has ever wrapped around. See "
             "tk-determine-per-source-incremental-cursor-viabilit-51f299.",
         )
+
+
+_SET_OPERATOR = re.compile(r"\b(union|intersect|except|minus)\b", re.IGNORECASE)
+
+MIRROR_WHERE_VIOLATION = "contains `;` or a set operator"
+"""Shared between `inventory validate` and the renderer so both report the same reason."""
+
+
+def mirror_where_is_a_statement(where: str | None) -> bool:
+    """Report whether `mirror.where` is more than the predicate it is spliced in as.
+
+    Lives here rather than in `lib.qa_mirror` so `render_mirror` can call it
+    too: the mirror asset loads the inventory directly and never runs
+    `validate_inventory`, so a check that existed only on the CLI path would
+    let a `UNION` reach the CTAS and append production columns the allowlist
+    leaves out.
+    """
+    if not where:
+        return False
+    return ";" in where or bool(_SET_OPERATOR.search(where))
+
+
+def _check_mirror(unit: Unit, report: ValidationReport) -> None:
+    """Rules on the per-table `mirror:` block the QA mirror asset executes (QA_DATA_TOPOLOGY_SPEC.md §8)."""
+    mirrored_in_qa = (unit.data.get("strategies") or {}).get("qa") == MIRROR_STRATEGY
+    for table in unit.tables:
+        mirror = table.get("mirror")
+        if mirror is None:
+            continue
+        raw_table = table.get("raw_table", "")
+        if not mirrored_in_qa:
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table} declares `mirror:` but the unit's strategies.qa is not `mirror`",
+                "Nothing would execute it, and a scoped unit must never have production rows copied into QA.",
+            )
+        # The dedup macro resolves this column from the inventory rather than
+        # naming it in the model, so no SQL analysis sees the read. A mirror that
+        # drops it breaks every staging model deduplicating the table.
+        metadata_column = raw_metadata_column(unit, table)
+        metadata_columns = [metadata_column] if isinstance(metadata_column, str) else metadata_column or []
+        for column in metadata_columns:
+            if column not in mirror["columns"]:
+                report.add(
+                    CHECK,
+                    Severity.ERROR,
+                    unit.key,
+                    f"{raw_table}'s mirror drops its raw metadata column {column!r}",
+                    "deduplicate_raw_table orders by it. Add it as `copy`, or correct the table's "
+                    "raw_metadata_column if the table does not carry it.",
+                )
+        if mirror_where_is_a_statement(mirror.get("where", "")):
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table}'s mirror.where {MIRROR_WHERE_VIOLATION}",
+                "It is one predicate spliced into a CREATE TABLE AS SELECT. A UNION there could "
+                "read production columns the allowlist leaves out.",
+            )
 
 
 def _is_cursorless_incremental(table: dict[str, Any]) -> bool:
@@ -386,6 +504,7 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
         _check_strategies(unit, report)
         _check_loader_block(unit, report)
         _check_tables(unit, report)
+        _check_mirror(unit, report)
         _check_connections(unit, report)
         well_formed.append(unit)
 
@@ -399,6 +518,83 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
 # ---------------------------------------------------------------------------
 # §7.2 — the graveyard, and the removal/rename check
 # ---------------------------------------------------------------------------
+
+
+def raw_metadata_column(unit: Unit, table: dict[str, Any]) -> str | list[str] | None:
+    """Resolve the raw-metadata ordering column(s) for one declared table.
+
+    Returns the column name, a list of names in precedence order, or None meaning
+    "this table has no metadata column, so do not deduplicate it". Precedence: the
+    table's own declaration, then the unit's, then the loader default.
+
+    Resolution is per TABLE rather than per source because a dbt source mixes
+    tables from units with different loaders — dbt's own `source.loader` is not
+    usable for this (INGESTION_INVENTORY_SPEC.md §1.2: `_edxorg_sources.yml`
+    says `loader: airbyte` over 18 dlt-produced tables).
+    """
+    for holder in (table, unit.data):
+        if "raw_metadata_column" in holder:
+            declared = holder["raw_metadata_column"]
+            # `raw_metadata_column: null` is a real answer ("no column"), which
+            # is why this tests for the KEY rather than for truthiness.
+            return declared if isinstance(declared, (str, list)) else None
+    loader = unit.data.get("loader")
+    return LOADER_METADATA_COLUMNS.get(loader) if isinstance(loader, str) else None
+
+
+def raw_metadata_columns(units: list[Unit]) -> dict[str, str | list[str] | None]:
+    """Map every declared raw table to its metadata column(s) (or None).
+
+    Keyed on `raw_table`, which §3.3 rule 8 guarantees names exactly one unit,
+    so the mapping is unambiguous even where prefixes nest.
+    """
+    resolved: dict[str, str | list[str] | None] = {}
+    for unit in units:
+        for table in unit.tables:
+            raw_table = table.get("raw_table")
+            if isinstance(raw_table, str) and raw_table:
+                resolved[raw_table] = raw_metadata_column(unit, table)
+    return resolved
+
+
+GENERATED_MACRO_NAME = "_raw_metadata_columns"
+
+
+def render_dbt_metadata_columns(units: list[Unit]) -> str:
+    """Render the inventory's metadata-column map as a dbt macro.
+
+    dbt's Jinja cannot read a YAML file, so the inventory has to be projected
+    into something the macros can call. A generated macro (rather than a var or
+    a seed) is what makes every dbt invocation agree — local, CI and Dagster
+    alike — with no runtime plumbing to forget.
+    """
+    mapping = raw_metadata_columns(units)
+    lines = [
+        "{#-",
+        "    GENERATED FILE - DO NOT EDIT.",
+        "",
+        "    Regenerate with `ol-dbt inventory metadata-columns --write`; CI fails if",
+        "    this file and ingestion/inventory/ disagree.",
+        "",
+        "    Maps each declared raw table to the column a staging model orders by to",
+        "    pick the newest copy of a record key, or a list of columns in precedence",
+        "    order. `none` means the table carries no metadata column, so it must not",
+        "    be deduplicated.",
+        "-#}",
+        "{% macro raw_metadata_column_map() %}",
+        "    {% do return({",
+    ]
+    for raw_table in sorted(mapping):
+        column = mapping[raw_table]
+        if column is None:
+            rendered = "none"
+        elif isinstance(column, str):
+            rendered = f"'{column}'"
+        else:
+            rendered = "[" + ", ".join(f"'{name}'" for name in column) + "]"
+        lines.append(f"        '{raw_table}': {rendered},")
+    lines += ["    }) %}", "{% endmacro %}", ""]
+    return "\n".join(lines)
 
 
 def unit_key(data: dict[str, Any]) -> str:
@@ -950,3 +1146,318 @@ def reconcile_dbt(
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Drift (§4, step 8): the inventory against the live Airbyte workspace
+# ---------------------------------------------------------------------------
+#
+# The failure this project exists to end is a static file that quietly stops
+# describing reality, and the divergence nothing else can catch is somebody
+# editing a connection in the Airbyte UI. Steps 5-6 were struck (§6.0), so
+# Airbyte's configuration is hand-managed and this check is the only thing that
+# notices. It compares against `render_airbyte`, which is already the inventory
+# expressed in Airbyte's own shape.
+
+DRIFT_CHECK = "inventory_drift"
+
+MANUAL_SCHEDULE = "manual"
+
+# How Airbyte spells a Postgres replication method, mapped to the inventory's
+# vocabulary. Mirrors `bin/airbyte-inventory.py`, which cannot be imported from
+# here — it is a script, not a package.
+REPLICATION_METHODS = {"xmin": "xmin", "standard": "cursor", "cursor": "cursor", "cdc": "cdc"}
+
+
+def _live_replication_method(configuration: dict[str, Any] | None) -> str:
+    """Read a source's replication method out of its configuration, whatever shape it takes."""
+    if not isinstance(configuration, dict):
+        return "n/a"
+    method = configuration.get("replication_method")
+    if isinstance(method, dict):
+        raw = str(method.get("method") or method.get("replication_slot") or "unknown")
+    elif isinstance(method, str):
+        raw = method
+    else:
+        return "n/a"
+    return REPLICATION_METHODS.get(raw.lower(), "n/a")
+
+
+def _live_connections(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {str(c.get("name", "")): c for c in snapshot.get("connections") or []}
+
+
+def _declared_connections(rendered: dict[str, Any]) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
+    """Map connection name to (connection, its unit), as the render emits them."""
+    return {
+        str(connection.get("name", "")): (connection, unit)
+        for unit in rendered.get("units") or []
+        for connection in unit.get("connections") or []
+    }
+
+
+def _live_streams(connection: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+    """Index a connection's live streams, or None if the snapshot never captured them.
+
+    An explicitly empty list means every stream really was deselected, which is
+    drift worth shouting about. A *missing* `configurations.streams` means the
+    dump failed to read them: the dumper re-fetches a connection whose list
+    response omitted its streams, but leaves the key absent when that GET also
+    fails. Collapsing the two into `[]` would turn one transient API failure
+    into "every declared stream has been dropped" across the whole workspace.
+    """
+    configurations = connection.get("configurations")
+    if not isinstance(configurations, dict) or "streams" not in configurations:
+        return None
+    return {str(s.get("name", "")): s for s in configurations.get("streams") or []}
+
+
+def _normalise_live_stream(stream: dict[str, Any]) -> dict[str, Any]:
+    """Put a live stream in the render's vocabulary, dropping empty values.
+
+    The render omits a field it has nothing to say about; Airbyte returns `[]`.
+    Comparing those raw would report drift on every stream that simply has no
+    cursor, which is most of them.
+    """
+    normalised: dict[str, Any] = {"sync_mode": stream.get("syncMode")}
+    if stream.get("namespace"):
+        normalised["namespace"] = stream["namespace"]
+    if stream.get("cursorField"):
+        normalised["cursor_field"] = list(stream["cursorField"])
+    if stream.get("primaryKey"):
+        normalised["primary_key"] = [list(path) for path in stream["primaryKey"]]
+    return normalised
+
+
+def _normalise_declared_stream(stream: dict[str, Any]) -> dict[str, Any]:
+    """Take the same view of a rendered stream, minus what Airbyte cannot be asked for.
+
+    `excluded_columns` is dropped rather than compared: Airbyte holds the
+    complement (`selectedFields`), and computing it needs the source's
+    discovered schema, which the inventory deliberately does not hold (§2).
+    Comparing an exclusion against a selection would report drift on every
+    stream that has one.
+    """
+    return {key: value for key, value in stream.items() if key not in {"name", "excluded_columns"}}
+
+
+def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationReport) -> None:
+    """Report every way the live workspace differs from what the inventory declares.
+
+    Severity follows what the finding says about the inventory. A declaration
+    the workspace does not honour means the inventory is *wrong* — a model may
+    be reading a table nothing loads — and is an ERROR. Something live the
+    inventory does not cover is a WARNING: it is usually config that should
+    have been deleted, and it costs nothing until somebody depends on it.
+    """
+    rendered = render_airbyte(units)
+    live = _live_connections(snapshot)
+    declared = _declared_connections(rendered)
+    # The render carries stream names, not the raw tables they land in — that
+    # stays on the unit (§2). Keyed per connection, never globally: a stream
+    # name is only unique within its unit, and `users` alone belongs to three
+    # Mongo forums and to Zendesk.
+    raw_tables = {
+        str(connection.get("name", "")): {
+            str(table.get("name", "")): str(table.get("raw_table", "")) for table in unit.tables
+        }
+        for unit in units
+        for connection in unit.connections
+    }
+    live_sources = {str(s.get("sourceId", "")): s for s in snapshot.get("sources") or []}
+
+    for name in sorted(set(declared) - set(live)):
+        _, unit = declared[name]
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            f"{unit['deployment']}/{unit['layer']}",
+            f"connection {name!r} is declared but no longer exists in Airbyte",
+            "Either it was deleted in the UI and the tables it loaded have "
+            "stopped arriving, or it was renamed — and a rename also breaks "
+            "Dagster's selector and its interval map, which key on this exact "
+            "string (§1.3).",
+        )
+
+    for name in sorted(set(live) - set(declared)):
+        report.add(
+            DRIFT_CHECK,
+            Severity.WARNING,
+            "(undeclared)",
+            f"connection {name!r} exists in Airbyte but no unit declares it",
+            "Either it was created in the UI, or it is config we meant to "
+            "delete and did not. Retiring a connection means deleting it in "
+            "Airbyte as well as recording its tables in retired.yml.",
+        )
+
+    for name in sorted(set(live) & set(declared)):
+        connection, unit = declared[name]
+        _compare_connection(
+            name,
+            live[name],
+            connection,
+            unit,
+            raw_tables.get(name, {}),
+            live_sources,
+            report,
+        )
+
+
+def _compare_source(  # noqa: PLR0913
+    name: str,
+    live: dict[str, Any],
+    unit: dict[str, Any],
+    live_sources: dict[str, dict[str, Any]],
+    report: ValidationReport,
+    key: str,
+) -> None:
+    """Compare the source behind a connection, which the streams do not describe.
+
+    `replication_method` is recorded deliberately and is not decorative (§3.4):
+    it is what `tk-determine-per-source-incremental-cursor-viabilit-51f299`
+    reads to decide which connections need a replacement cursor before dlt can
+    take over. A source flipped from xmin to a cursor column changes nothing
+    about the streams, so comparing streams alone would report no drift while
+    that answer silently went wrong.
+    """
+    source = live_sources.get(str(live.get("sourceId", "")))
+    if source is None:
+        return
+
+    # The inventory spells a connector `source-postgres`; the API says
+    # `postgres`.
+    live_kind = f"source-{source.get('sourceType')}" if source.get("sourceType") else None
+    if live_kind and live_kind != unit.get("source_kind"):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} now uses connector {live_kind!r}, unit declares {unit.get('source_kind')!r}",
+            "A different connector reads the source differently, so the unit's "
+            "sync modes and cursors describe a pipeline that no longer exists.",
+        )
+
+    live_method = _live_replication_method(source.get("configuration"))
+    declared_method = unit.get("replication_method")
+    if declared_method and live_method != declared_method:
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} replicates by {live_method!r}, unit declares {declared_method!r}",
+            "§3.4 records this so `rg replication_method: xmin` answers which "
+            "connections need a replacement cursor before dlt can take them. A "
+            "stale value makes that answer wrong without changing any stream.",
+        )
+
+
+def _compare_connection(  # noqa: PLR0913
+    name: str,
+    live: dict[str, Any],
+    declared: dict[str, Any],
+    unit: dict[str, Any],
+    raw_tables: dict[str, str],
+    live_sources: dict[str, dict[str, Any]],
+    report: ValidationReport,
+) -> None:
+    key = f"{unit['deployment']}/{unit['layer']}"
+    _compare_source(name, live, unit, live_sources, report, key)
+
+    if (live_status := live.get("status")) != declared.get("status"):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} is {live_status!r} in Airbyte but declared {declared.get('status')!r}",
+            "A connection paused in the UI stops loading silently; one resumed "
+            "without the inventory saying so is loading tables nothing declares.",
+        )
+
+    schedule_type = (live.get("schedule") or {}).get("scheduleType")
+    if schedule_type and schedule_type != MANUAL_SCHEDULE:
+        # A paused connection cannot double-schedule anything, so this is a
+        # warning until somebody resumes it — at which point it runs on both
+        # Airbyte's timer and Dagster's.
+        running = live_status == "active"
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR if running else Severity.WARNING,
+            key,
+            f"connection {name!r} carries its own Airbyte schedule ({schedule_type!r})",
+            "Dagster is meant to be the sole trigger, so this is double-scheduled "
+            "and `sync_interval_hours` describes only half of what runs (§6.4)."
+            if running
+            else "It is paused, so nothing runs twice today — but resuming it "
+            "would double-schedule it against Dagster (§6.4).",
+        )
+
+    live_streams = _live_streams(live)
+    declared_streams = {str(s.get("name", "")): s for s in declared.get("streams") or []}
+
+    if live_streams is None:
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"the snapshot holds no stream configuration for connection {name!r}",
+            "The dump could not read them, so this says nothing about drift. "
+            "Re-dump before trusting the report — an absent configuration is "
+            "not an empty one, and treating it as empty would claim every "
+            "declared stream had been dropped.",
+        )
+        return
+
+    for stream in sorted(set(declared_streams) - set(live_streams)):
+        report.add(
+            DRIFT_CHECK,
+            Severity.ERROR,
+            key,
+            f"connection {name!r} no longer carries declared stream {stream!r}",
+            "The unit still declares a table for it, so anything modelling that "
+            "table is going stale. Retire it, or re-select the stream.",
+        )
+
+    for stream in sorted(set(live_streams) - set(declared_streams)):
+        report.add(
+            DRIFT_CHECK,
+            Severity.WARNING,
+            key,
+            f"connection {name!r} carries stream {stream!r}, which the unit does not declare",
+            "It is being loaded and nothing records that it is.",
+        )
+
+    # Where a raw table actually lands, rather than whether the unit's
+    # documentation prefix still looks plausible. Comparing `table_prefix`
+    # against Airbyte's `prefix` cannot work in either direction: the mongodb
+    # units legitimately declare `…__mongodb__` while Airbyte writes
+    # `…__mongodb__forum_`, and 12 connections carry no prefix at all because
+    # their stream names are already whole raw table names. `prefix + stream`
+    # is what Airbyte lands, and it reproduces all 949 declared raw tables
+    # exactly — so clearing a prefix, which the earlier check skipped as
+    # falsey, now shows up as every table in that connection moving.
+    live_prefix = live.get("prefix") or ""
+    for stream in sorted(set(live_streams) & set(declared_streams)):
+        landed = f"{live_prefix}{stream}"
+        expected = raw_tables.get(stream)
+        if expected and landed != expected:
+            report.add(
+                DRIFT_CHECK,
+                Severity.ERROR,
+                key,
+                f"{name!r} stream {stream!r} now lands in {landed!r}, not the declared {expected!r}",
+                "The connection's prefix changed, so the table the unit "
+                "declares stops being written and anything modelling it goes "
+                "stale against whatever it last held.",
+            )
+
+        want = _normalise_declared_stream(declared_streams[stream])
+        got = _normalise_live_stream(live_streams[stream])
+        for attribute in sorted(set(want) | set(got)):
+            if want.get(attribute) != got.get(attribute):
+                report.add(
+                    DRIFT_CHECK,
+                    Severity.ERROR,
+                    key,
+                    f"{name!r} stream {stream!r}: {attribute} is {got.get(attribute)!r} in Airbyte, "
+                    f"declared {want.get(attribute)!r}",
+                )

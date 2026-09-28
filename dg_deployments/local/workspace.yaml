@@ -7,10 +7,6 @@ load_from:
     port: 4000
     location_name: 'canvas'
 - grpc_server:
-    host: dagster_data_platform
-    port: 4001
-    location_name: 'data_platform'
-- grpc_server:
     host: dagster_edxorg
     port: 4002
     location_name: 'edxorg'
@@ -19,9 +15,9 @@ load_from:
     port: 4003
     location_name: 'lakehouse'
 - grpc_server:
-    host: dagster_learning_resources
+    host: dagster_delivery
     port: 4004
-    location_name: 'learning_resources'
+    location_name: 'delivery'
 - grpc_server:
     host: dagster_legacy_openedx
     port: 4005
@@ -38,3 +34,7 @@ load_from:
     host: dagster_ml
     port: 4008
     location_name: 'ml'
+- grpc_server:
+    host: dagster_data_loading
+    port: 4009
+    location_name: 'data_loading'

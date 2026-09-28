@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import sentry_sdk
-from dagster import AssetsDefinition, HookContext, failure_hook
+from dagster import AssetsDefinition, Failure, HookContext, failure_hook
 from sentry_sdk.integrations.logging import LoggingIntegration, ignore_logger
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -50,6 +50,14 @@ INTERRUPTION_ERRORS = frozenset(
         "DagsterExecutionInterruptedError",
         "KeyboardInterrupt",
     }
+)
+
+# The Failure metadata keys that reach Sentry: the ones http_failure writes.
+# An allowlist rather than every key, because metadata is free text and some of
+# it carries credentials -- the legacy Open edX forum export puts the mongodump
+# command line, --password included, into its Failure metadata.
+HTTP_FAILURE_CONTEXT_KEYS = frozenset(
+    {"response_body", "status_code", "method", "url", "retryable"}
 )
 
 
@@ -197,6 +205,17 @@ def capture_exception_to_sentry(context: HookContext) -> None:
             context.step_key,
             type(exception).__name__,
         )
+        # capture_exception sends the message and frames, not a Failure's
+        # metadata -- which is where http_failure puts the server's reason for
+        # rejecting the request. Without this it is visible only in Dagster.
+        if isinstance(exception, Failure):
+            http_context = {
+                key: entry.value
+                for key, entry in exception.metadata.items()
+                if key in HTTP_FAILURE_CONTEXT_KEYS
+            }
+            if http_context:
+                scope.set_context("http_failure", http_context)
         sentry_sdk.capture_exception(exception)
 
     sentry_sdk.flush(timeout=SENTRY_FLUSH_TIMEOUT_SECONDS)
