@@ -53,6 +53,7 @@ select
         when 'mobile' then 'mobile'
     end as channel_slug
     , cast(null as varchar) as courserun_readable_id
+    , cast(null as varchar) as block_id
     -- MIT Learn by group: support routes it to three groups, two with their own
     -- brand. Others by brand: their groups are support teams that span platforms.
     , case
