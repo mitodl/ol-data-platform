@@ -15,65 +15,26 @@ FROM python:3.14-slim
 # Install uv for faster Python dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# renovate: datasource=github-releases depName=dagster-io/dagster
-ARG DAGSTER_VERSION=1.13.24
-
 # Set working directory
 WORKDIR /opt/dagster/app
 
-# Copy ol-orchestrate-lib package
+# The path source in dg_deployments/dagster-k8s/pyproject.toml is relative, so
+# both trees keep their repository layout under /opt/dagster.
 COPY packages/ol-orchestrate-lib /opt/dagster/packages/ol-orchestrate-lib
+COPY dg_deployments/dagster-k8s /opt/dagster/dg_deployments/dagster-k8s
 
 # Temporary script for edxorg cleanup
 COPY dg_deployments/reconcile_edxorg_partitions.py /opt/dagster/app/reconcile_edxorg_partitions.py
 
-# Install ol-orchestrate-lib and its dependencies
-# This makes the pooled Postgres storage classes available
-# kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x does
-# not handle, raising AttributeError at launch time. Pin until dagster-k8s upstream
-# resolves the incompatibility.
-# sqlalchemy<2.1 for the same reason as the constraint in pyproject.toml: 2.1 makes
-# a bare postgresql:// URL default to psycopg 3, which this image does not install,
-# and dagster-postgres does not support it yet. This install does not read uv.lock,
-# so the constraint has to be repeated here.
-RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib dagster==${DAGSTER_VERSION} dagster-azure dagster-postgres dagster-k8s "kubernetes<36" "sqlalchemy<2.1" dagster-aws dagster-gcp dagster-graphql dagster-webserver
-
-# OpenTelemetry auto-instrumentation for the webserver and the daemon.
-#
-# Installed outside the pinned line above because these are agent packages, not
-# runtime dependencies: nothing in ol-orchestrate-lib imports them, and the
-# whole agent can be added or removed without a resolve. Only the HTTP OTLP
-# exporter is installed -- the SDK default "otlp" resolves to the gRPC exporter,
-# so ol-infrastructure sets OTEL_TRACES_EXPORTER=otlp_proto_http to match.
-#
-# The instrumentation list is explicit rather than whatever opentelemetry-bootstrap
-# would select, because bootstrap picks psycopg2 alongside sqlalchemy and that
-# emits two spans for every query.
-#
-# PINNED, and the pins are load-bearing rather than routine hygiene. The
-# preemption budget ol-infrastructure sets for run workers
-# (dagster_instance.yaml: OTEL_BSP_SCHEDULE_DELAY, OTEL_EXPORTER_OTLP_TIMEOUT)
-# is derived from opentelemetry-sdk 1.44.0 internals, and two of them are not
-# stable API:
-#   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.44.0 -- BatchProcessor stores
-#     _export_timeout_millis and never reads it -- so the shutdown drain runs at
-#     a hardcoded 30s join. A release that wires it up changes the budget.
-#   - The Python HTTP exporter reads OTEL_EXPORTER_OTLP_TIMEOUT in SECONDS
-#     (DEFAULT_TIMEOUT = 10  # in seconds), contradicting the OTel spec, which
-#     defines it in milliseconds. An upstream fix would silently reinterpret
-#     ol-infrastructure's "2" as 2ms and fail every export.
-# opentelemetry-sdk is pinned explicitly rather than left to the distro's range
-# for that reason: it is the package the reasoning actually depends on.
-# Re-check that reasoning when bumping these, not just the test suite.
-RUN uv pip install --system \
-        opentelemetry-distro==0.65b0 \
-        opentelemetry-sdk==1.44.0 \
-        opentelemetry-exporter-otlp-proto-http==1.44.0 \
-        opentelemetry-instrumentation-sqlalchemy==0.65b0 \
-        opentelemetry-instrumentation-grpc==0.65b0 \
-        opentelemetry-instrumentation-botocore==0.65b0 \
-        opentelemetry-instrumentation-requests==0.65b0 \
-        opentelemetry-instrumentation-urllib3==0.65b0
+# Install the locked dependency set (dg_deployments/dagster-k8s/uv.lock) into the
+# system Python: dagster and its plugins, ol-orchestrate-lib for the pooled Postgres
+# storage classes, and the OpenTelemetry agent. --inexact keeps pip and setuptools
+# from the base image instead of pruning them. --locked fails the build if the lock
+# is out of date rather than resolving fresh, which is how an unlocked install
+# picked up SQLAlchemy 2.1 and broke the daemon.
+RUN UV_PROJECT_ENVIRONMENT=/usr/local uv sync \
+        --project /opt/dagster/dg_deployments/dagster-k8s \
+        --locked --inexact
 
 # A stable path to the agent directory, so ol-infrastructure can turn
 # instrumentation on with PYTHONPATH without encoding this image's Python

@@ -1,0 +1,84 @@
+# Dependencies for the Dagster webserver and daemon image
+# (dg_deployments/Dockerfile.dagster-k8s). Not a package: the Dockerfile syncs the
+# locked set into the image's system Python. The code locations have their own
+# projects under dg_projects/.
+[project]
+name = "dagster-k8s-image"
+version = "0.1.0"
+description = "Locked dependency set for the Dagster webserver and daemon image"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    # Provides the pooled Postgres storage classes that dagster_instance.yaml
+    # points the instance at.
+    "ol-orchestrate-lib",
+    # The Dagster plugins pin dagster exactly, so this line decides which
+    # plugin versions the ranges below resolve to.
+    "dagster==1.13.24",
+    "dagster-aws~=0.29.0",
+    "dagster-azure~=0.29.0",
+    "dagster-graphql==1.13.24",
+    "dagster-k8s~=0.29.0",
+    "dagster-postgres~=0.29.0",
+    "dagster-webserver==1.13.24",
+    # kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x
+    # does not handle, raising AttributeError at launch time. Pin until dagster-k8s
+    # upstream resolves the incompatibility.
+    "kubernetes<36",
+    # OpenTelemetry auto-instrumentation for the webserver and the daemon.
+    #
+    # These are agent packages, not runtime dependencies: nothing in
+    # ol-orchestrate-lib imports them. Only the HTTP OTLP exporter is included --
+    # the SDK default "otlp" resolves to the gRPC exporter, so ol-infrastructure
+    # sets OTEL_TRACES_EXPORTER=otlp_proto_http to match.
+    #
+    # The instrumentation list is explicit rather than whatever
+    # opentelemetry-bootstrap would select, because bootstrap picks psycopg2
+    # alongside sqlalchemy and that emits two spans for every query.
+    #
+    # PINNED, and the pins are load-bearing rather than routine hygiene. The
+    # preemption budget ol-infrastructure sets for run workers
+    # (dagster_instance.yaml: OTEL_BSP_SCHEDULE_DELAY, OTEL_EXPORTER_OTLP_TIMEOUT)
+    # is derived from opentelemetry-sdk 1.44.0 internals, and two of them are not
+    # stable API:
+    #   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.44.0 -- BatchProcessor stores
+    #     _export_timeout_millis and never reads it -- so the shutdown drain runs at
+    #     a hardcoded 30s join. A release that wires it up changes the budget.
+    #   - The Python HTTP exporter reads OTEL_EXPORTER_OTLP_TIMEOUT in SECONDS
+    #     (DEFAULT_TIMEOUT = 10  # in seconds), contradicting the OTel spec, which
+    #     defines it in milliseconds. An upstream fix would silently reinterpret
+    #     ol-infrastructure's "2" as 2ms and fail every export.
+    # opentelemetry-sdk is pinned explicitly rather than left to the distro's range
+    # for that reason: it is the package the reasoning actually depends on.
+    # Re-check that reasoning when bumping these, not just the test suite.
+    "opentelemetry-distro==0.65b0",
+    "opentelemetry-sdk==1.44.0",
+    "opentelemetry-exporter-otlp-proto-http==1.44.0",
+    "opentelemetry-instrumentation-sqlalchemy==0.65b0",
+    "opentelemetry-instrumentation-grpc==0.65b0",
+    "opentelemetry-instrumentation-botocore==0.65b0",
+    "opentelemetry-instrumentation-requests==0.65b0",
+    "opentelemetry-instrumentation-urllib3==0.65b0",
+]
+
+[tool.uv]
+package = false
+# Same pins as the workspace root pyproject.toml, which this project is not a
+# member of. Lift them together.
+#
+# grpcio-health-checking 1.82.0 bundles health_pb2.py pre-generated with protobuf
+# 7.35.0 gencode while declaring protobuf>=6.33.5, so it crashes at import time
+# under dagster's required protobuf<7. dagster 1.13.24 caps it below 1.82 itself;
+# this keeps the cap once dagster lifts its own.
+override-dependencies = [
+    "grpcio-health-checking<1.82.0",
+]
+# sqlalchemy 2.1 makes a bare postgresql:// URL default to psycopg 3, which this
+# image does not install, and dagster-postgres 1.13.24 breaks on it (bound NOTIFY
+# payload, psycopg2-only pgcode, and set_pg_statement_timeout closing the
+# connection). Tracked upstream in dagster-io/dagster#34232, #34235 and #33959.
+constraint-dependencies = [
+    "sqlalchemy<2.1",
+]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib" }
