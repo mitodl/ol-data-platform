@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -22,6 +23,8 @@ import yaml
 from cyclopts import App, Parameter
 
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
+from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
+from ol_dbt_cli.lib.inventory_sources import plan_sources
 
 generate_app = App(
     name="generate",
@@ -302,10 +305,48 @@ def _build_staging_sql_from_columns(
 # ============================================================================
 
 
+def _sources_from_inventory(inventory_dir: Path, dbt_project_dir: Path) -> None:
+    """Bring the raw-source declarations in line with the inventory (spec §5, step 7)."""
+    units = load_units(inventory_dir)
+    if not units:
+        print(f"✗ No inventory units under {inventory_dir}.")
+        sys.exit(1)
+
+    models_dir = dbt_project_dir / "models"
+    if not models_dir.is_dir():
+        # From anywhere but the repo root this finds no files, and an empty
+        # plan would read as "already agree".
+        print(f"✗ No dbt models directory at {models_dir}; run from the repo root.")
+        sys.exit(1)
+    files = sorted({*models_dir.rglob("*.yml"), *models_dir.rglob("*.yaml")})
+    plan = plan_sources(units, files)
+
+    for change in plan.loader_changes:
+        print(f"  loader {change.previous} → {change.loader}: {change.raw_table}")
+    for raw_table, path in plan.added.items():
+        print(f"  added {raw_table} to {path} (no columns; describe them before modelling it)")
+    for path, content in plan.contents.items():
+        path.write_text(content)
+        print(f"Updated {path}")
+
+    if not plan.contents:
+        print("dbt sources already agree with the inventory.")
+    else:
+        print("Run `pre-commit run yamlfmt --files <the files above>` to restore the repo's line wrapping.")
+
+    if plan.unplaced:
+        # Exits non-zero after writing the rest: the other changes are still
+        # right, but a modeled table with no dbt source is one the next
+        # `ol-dbt inventory reconcile` will keep reporting until someone places it.
+        for raw_table in plan.unplaced:
+            print(f"✗ {raw_table} is modeled but no sources block holds a table from its unit; add it by hand.")
+        sys.exit(1)
+
+
 @generate_app.command
-def sources(  # noqa: C901, PLR0915
-    schema: str,
-    prefix: str,
+def sources(  # noqa: C901, PLR0913, PLR0915
+    schema: str | None = None,
+    prefix: str | None = None,
     output_directory: str = ".",
     database: str | None = None,
     target: str | None = None,
@@ -317,6 +358,18 @@ def sources(  # noqa: C901, PLR0915
         Path,
         Parameter(help="Path to local DuckDB database file."),
     ] = _DEFAULT_DUCKDB_PATH,
+    *,
+    from_inventory: Annotated[
+        bool,
+        Parameter(
+            help="Set each raw table's loader and add missing modeled tables from ingestion/inventory "
+            "instead of discovering tables. Takes no schema or prefix."
+        ),
+    ] = False,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(help="Directory holding the inventory's units/ (--from-inventory only)."),
+    ] = DEFAULT_INVENTORY_DIR,
 ) -> list[str] | None:
     """Generate a dbt sources YAML file for tables matching a schema and prefix.
 
@@ -327,6 +380,11 @@ def sources(  # noqa: C901, PLR0915
     Writes (or merges into) a _<domain>__sources.yml file in the appropriate
     staging subdirectory.
 
+    With --from-inventory, reads no warehouse at all: every sources file gets
+    the loader the inventory records for each of its raw tables, and each
+    `modeled: true` table dbt does not declare yet is added beside the other
+    tables of its unit.
+
     Args:
         schema: Glue database / Trino schema to discover tables from.
         prefix: Table name prefix to filter by (e.g., raw__mitlearn__app__postgres__).
@@ -335,9 +393,20 @@ def sources(  # noqa: C901, PLR0915
         target: Optional dbt target to use (Trino path only).
         use_local_db: Use local DuckDB instead of Trino.
         duckdb_path: Path to the local DuckDB file.
+        from_inventory: Generate from the ingestion inventory instead.
+        inventory_dir: Directory holding the inventory's units/.
 
     """
     dbt_project_dir = Path("src") / "ol_dbt"
+    if from_inventory:
+        if schema or prefix:
+            print("✗ --from-inventory takes no schema or prefix; it covers every unit.")
+            sys.exit(1)
+        _sources_from_inventory(inventory_dir, dbt_project_dir)
+        return None
+    if schema is None or prefix is None:
+        print("✗ Pass a schema and a prefix, or --from-inventory.")
+        sys.exit(1)
     domain = _extract_domain(prefix)
     staging_dir = dbt_project_dir / "models" / "staging"
     if domain:
