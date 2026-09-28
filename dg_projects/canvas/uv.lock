@@ -8,6 +8,7 @@ resolution-markers = [
 ]
 
 [manifest]
+constraints = [{ name = "sqlalchemy", specifier = "<2.1" }]
 overrides = [{ name = "grpcio-health-checking", specifier = "<1.82.0" }]
 
 [[package]]
