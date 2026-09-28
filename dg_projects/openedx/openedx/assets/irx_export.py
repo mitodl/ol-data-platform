@@ -40,6 +40,7 @@ from pyiceberg.table import Table
 from upath import UPath
 
 IRX_EXPORT_GROUP = "irx_export"
+IRX_EXPORT_CODE_VERSION = "irx_export_v2"
 IRX_GLUE_DATABASE = "ol_warehouse_production_external"
 
 # end_offset=1 makes today the latest partition, so the scheduled run on
@@ -315,14 +316,14 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         AssetSpec(
             key=course_ids_key,
             description="course_ids.csv: the course runs the Open edX API lists.",
-            code_version="irx_export_v1",
+            code_version=IRX_EXPORT_CODE_VERSION,
         ),
         *(
             AssetSpec(
                 key=AssetKey([deployment, IRX_EXPORT_GROUP, export.name]),
                 deps=[AssetKey(["external", irx_model_name(deployment, export.model)])],
                 description=f"{export.name}.csv in the nightly IRx drop.",
-                code_version="irx_export_v1",
+                code_version=IRX_EXPORT_CODE_VERSION,
             )
             for export in IRX_EXPORT_FILES
         ),
@@ -335,7 +336,7 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                 "forum_contents.parquet: every forum post in the irx__ model's "
                 "own columns, not a reconstructed Mongo document."
             ),
-            code_version="irx_export_v1",
+            code_version=IRX_EXPORT_CODE_VERSION,
         ),
     ]
     specs = [
@@ -348,7 +349,7 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                 "and sha256. Written last, so its presence means the drop is "
                 "complete."
             ),
-            code_version="irx_export_v1",
+            code_version=IRX_EXPORT_CODE_VERSION,
         ),
     ]
 
