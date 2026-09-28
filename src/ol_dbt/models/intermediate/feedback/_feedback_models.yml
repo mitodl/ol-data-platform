@@ -174,9 +174,96 @@ models:
       arguments:
         column_list: ["conversation_ref", "turn_index"]
 
+- name: int__feedback__content_feedback
+  description: One row per MIT Learn content feedback submission that has a comment,
+    conformed to the common feedback event contract. Each submission is its own single-turn
+    conversation. Sentiment-only submissions are dropped, because they have no text
+    to summarize.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - ocw/app_postgres
+      - xpro/app_postgres
+  columns:
+  - name: source_slug
+    description: str, the feedback source this row came from. Always 'content_feedback'
+      here.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, the contentfeedback_id - the turn's stable business key.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_ref
+    description: str, same as source_record_ref. Submissions are not threaded, so
+      each one is a one-turn conversation.
+    tests:
+    - not_null
+    - unique
+  - name: turn_index
+    description: int, always 1.
+    tests:
+    - not_null
+  - name: is_conversation_opening
+    description: boolean, always true.
+    tests:
+    - not_null
+  - name: occurred_at
+    description: str, ISO8601 timestamp the feedback was submitted.
+    tests:
+    - not_null
+  - name: created_at
+    description: str, same as occurred_at.
+  - name: updated_at
+    description: str, ISO8601 timestamp the feedback record was last updated.
+  - name: text
+    description: str, the learner's raw comment. The only text this source populates.
+      Masking happens downstream, in the feedback_redacted Dagster asset.
+    tests:
+    - not_null
+  - name: title
+    description: str, always null. Block and unit names are in source_metadata.
+  - name: channel_slug
+    description: str, always 'in_product_widget'.
+  - name: subject_user_ref
+    description: str, the learner's MIT Learn global id, or their email if they have
+      none. Null for an anonymous submission or a user not in users_user.
+  - name: source_url
+    description: str, null. MIT Learn has no admin view of a single submission.
+  - name: subject_type
+    description: str, always 'courseware_block'.
+  - name: subject_ref
+    description: str, the Open edX usage key of the block the feedback is about.
+  - name: subject_url
+    description: str, the courseware URL the learner was on.
+  - name: courserun_readable_id
+    description: str, the course run the block belongs to.
+  - name: block_id
+    description: str, the Open edX usage key of the block the feedback is about. Same
+      as subject_ref.
+  - name: platform
+    description: str, always 'mitlearn', where the learner gave the feedback. The
+      course run's own platform is in source_metadata as courserun_platform.
+  - name: explicit_rating
+    description: str, the learner's sentiment - 'positive', 'negative' or 'idea'.
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['positive', 'negative', 'idea']
+  - name: source_metadata
+    description: str, JSON of the course title, block type, block display name, unit
+      title and courserun_platform - the course run's platform from dim_course_run,
+      which tfact_feedback uses to resolve courserun_fk and content_block_fk.
+
 - name: int__feedback__unioned
   description: >
-    One row per feedback turn, from every source: Zendesk, Learn AI tutor.
+    One row per feedback turn, from every source: Zendesk, Learn AI tutor, MIT Learn
+    content feedback.
 
     PII: this model carries raw, unredacted feedback text under the intermediate
     schema's grants. Presidio masking happens in the feedback_redacted Dagster asset
@@ -186,6 +273,7 @@ models:
       qa_branches:
       - learn_ai/app_postgres
       - micromasters/app_postgres
+      - mitlearn/app_postgres
       - mitx/api
       - mitx/mysql
       - mitx/tracking_logs

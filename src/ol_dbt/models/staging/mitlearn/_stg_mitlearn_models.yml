@@ -298,3 +298,52 @@ models:
     description: timestamp, date and time when this relationship was last updated
     tests:
     - not_null
+
+- name: stg__mitlearn__app__postgres__content_feedback_contentfeedback
+  description: Learner feedback on a single piece of MIT Learn course content (a leaf
+    block). One row per submission - a learner can submit more than once on the same
+    block.
+  columns:
+  - name: contentfeedback_id
+    description: int, unique identifier for the content feedback record
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user. Null if the user was deleted.
+  - name: courserun_readable_id
+    description: str, the course run the block belongs to, e.g. course-v1:org+course+run
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, the course title at submission time
+  - name: contentfeedback_block_usage_key
+    description: str, the Open edX usage key of the block the feedback is about
+    tests:
+    - not_null
+  - name: contentfeedback_block_type
+    description: str, the block type, e.g. html, problem, video
+  - name: contentfeedback_block_display_name
+    description: str, the block's display name
+  - name: contentfeedback_unit_title
+    description: str, the title of the unit that contains the block
+  - name: contentfeedback_url
+    description: str, the courseware URL the learner was on
+  - name: contentfeedback_sentiment
+    description: str, the learner's reaction - positive, negative or idea
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['positive', 'negative', 'idea']
+  - name: contentfeedback_comment
+    description: str, the learner's free-text comment, trimmed. Null if the learner
+      gave only a sentiment.
+  - name: contentfeedback_created_on
+    description: timestamp, when the feedback was submitted
+    tests:
+    - not_null
+  - name: contentfeedback_updated_on
+    description: timestamp, when the feedback record was last updated
+    tests:
+    - not_null

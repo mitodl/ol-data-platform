@@ -128,6 +128,7 @@
     "raw__mitlearn__app__postgres__channels_fields_fieldlist": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__channels_fields_subfield": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__channels_subchannel": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
+    "raw__mitlearn__app__postgres__content_feedback_contentfeedback": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__discussions_channel": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__django_admin_log": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__django_content_type": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},

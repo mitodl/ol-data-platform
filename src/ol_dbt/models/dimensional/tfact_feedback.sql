@@ -27,12 +27,18 @@ with unioned as (
     where is_latest = true
 )
 
-, users as (
+, users_by_email as (
     select
         user_pk
         , lower(email) as email
     from {{ ref('dim_user') }}
     where email is not null
+)
+
+, users_by_global_id as (
+    select user_pk, user_global_id
+    from {{ ref('dim_user') }}
+    where user_global_id is not null
 )
 
 {% set redacted = dev_schema_source('feedback_intermediate', 'feedback_redacted') %}
@@ -63,7 +69,8 @@ select
         as feedback_pk
     , {{ dbt_utils.generate_surrogate_key(['unioned.source_slug']) }} as feedback_source_fk
     , {{ dbt_utils.generate_surrogate_key(['unioned.channel_slug']) }} as feedback_channel_fk
-    , users.user_pk as user_fk
+    -- subject_user_ref is a global id for MIT Learn sources and an email for Zendesk
+    , coalesce(users_by_global_id.user_pk, users_by_email.user_pk) as user_fk
     , dim_course_run.courserun_pk as courserun_fk
     , dim_course_content.content_block_pk as content_block_fk
     -- the case keeps a null platform null; generate_surrogate_key would hash it
@@ -98,8 +105,10 @@ select
     , unioned.updated_at as feedback_updated_at
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as feedback_ingested_at
 from unioned
-left join users
-    on lower(unioned.subject_user_ref) = users.email
+left join users_by_global_id
+    on unioned.subject_user_ref = users_by_global_id.user_global_id
+left join users_by_email
+    on lower(unioned.subject_user_ref) = users_by_email.email
 left join dim_course_run
     on unioned.courserun_readable_id = dim_course_run.courserun_readable_id
     and unioned.courserun_platform = dim_course_run.platform
@@ -146,7 +155,8 @@ left join {{ this }} as existing
     or (
         existing.feedback_pk is not null
         and (
-            existing.user_fk is distinct from users.user_pk
+            existing.user_fk
+                is distinct from coalesce(users_by_global_id.user_pk, users_by_email.user_pk)
             or existing.courserun_fk is distinct from dim_course_run.courserun_pk
             or existing.content_block_fk is distinct from dim_course_content.content_block_pk
         )
