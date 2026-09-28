@@ -8,6 +8,9 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - Open Learning Library courses
 - MIT edX programs
 
+It also pushes the instructor onboarding user list, read from the warehouse, to
+the access-forge GitHub repository.
+
 The extraction halves of these pipelines (sloan_course_metadata, video_api,
 video_metadata) still live here and move on to INGEST later.
 
@@ -38,6 +41,10 @@ from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
+from delivery.assets.instructor_onboarding import (
+    generate_instructor_onboarding_user_list,
+    update_access_forge_repo,
+)
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
 from delivery.assets.mitpe import mitpe_webhook
@@ -128,6 +135,23 @@ extract_api_daily_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
+instructor_onboarding_schedule = ScheduleDefinition(
+    name="instructor_onboarding_daily_schedule",
+    job=define_asset_job(
+        name="instructor_onboarding_daily_job",
+        selection=AssetSelection.assets(
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
+        ),
+    ),
+    cron_schedule="0 5 * * *",
+    execution_timezone="UTC",
+    # RUNNING in the lakehouse location at the time of the move to delivery
+    # (it ticked at 05:00 UTC on 2026-09-28). Instigator state is keyed on
+    # location name, so the new location would otherwise start it STOPPED.
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
 # OVS videos jobs for manual triggering
 ovs_videos_api_job = define_asset_job(
     name="ovs_videos_api_job",
@@ -170,7 +194,7 @@ defs = Definitions(
         "s3": S3Resource(),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
         # opens the unpublish-review issues mit_edx_programs_webhook files when edX
-        # lists no program
+        # lists no program, and commits the access-forge instructor user list
         "github_api": GithubApiClientFactory(vault=vault),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
@@ -195,6 +219,9 @@ defs = Definitions(
             mit_edx_programs_webhook,
             # Media/feed webhook delivery
             podcast_webhook,
+            # Warehouse data pushed to the access-forge repository
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
         ]
     ),
     # Registration, not default_status, is what keeps these out of the
@@ -209,6 +236,7 @@ defs = Definitions(
             oll_schedule,
             mit_edx_programs_schedule,
             podcast_schedule,
+            instructor_onboarding_schedule,
         ]
     ),
     sensors=instigators_for_environment(

@@ -91,18 +91,6 @@ def test_qa_cannot_run_dbt_docs_generate_on_a_timer():
     assert "qa" not in SCHEDULE_ENVIRONMENTS["dbt_docs_artifacts_daily"]
 
 
-def test_instructor_onboarding_is_production_only():
-    """There is one access forge repository, not one per environment.
-
-    So a tick outside production would push a commit to the real one. This
-    schedule passed no default_status at all, relying on ScheduleDefinition's
-    implicit STOPPED -- the weakest form of the gate this replaces.
-    """
-    assert SCHEDULE_ENVIRONMENTS["instructor_onboarding_daily_schedule"] == frozenset(
-        {"production"}
-    )
-
-
 def test_production_registers_every_schedule():
     """Nothing is dropped where the map is meant to be a no-op.
 

@@ -107,6 +107,16 @@ def test_destructive_sensor_is_production_only():
     )
 
 
+def test_instructor_onboarding_is_production_only():
+    """There is one access forge repository, not one per environment.
+
+    A tick anywhere else would commit to the real one's default branch.
+    """
+    assert INSTIGATOR_ENVIRONMENTS["instructor_onboarding_daily_schedule"] == frozenset(
+        {"production"}
+    )
+
+
 def test_every_registered_instigator_is_declared():
     """Guards the pairing between Definitions and this map.
 

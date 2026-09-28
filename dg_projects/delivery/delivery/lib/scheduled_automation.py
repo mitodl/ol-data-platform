@@ -75,6 +75,11 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # STOPPED in production, and not to be started before mit-learn #3557
     # lands the endpoint it POSTs to.
     "podcast_schedule": frozenset({"production"}),
+    # Commits the instructor user list to the access forge GitHub repository's
+    # default branch. There is one of those, not one per environment, so a tick
+    # outside production would write the real repo. Moved from lakehouse, where
+    # it carried the same production-only entry. RUNNING in production.
+    "instructor_onboarding_daily_schedule": frozenset({"production"}),
     # Dispatches ovs_videos_webhook_job per discovered partition. RUNNING in
     # production.
     "ovs_videos_discovery_sensor": frozenset({"production"}),
