@@ -488,7 +488,7 @@ tables:
   namespace: public
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: learning_resources_learningresourceviewevent
   raw_table: raw__mitlearn__app__postgres__learning_resources_learningresourceviewevent
   sync_mode: incremental_deduped_history

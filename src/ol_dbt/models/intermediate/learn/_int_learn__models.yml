@@ -1,0 +1,38 @@
+---
+version: 2
+
+models:
+- name: int__learn__offeror_topic_lookup
+  description: >
+    Resolves an offeror's own topic names (e.g. edX subjects) to MIT Learn topics,
+    per
+    the learn_topics and learn_topic_offeror_mappings seeds. Join on (offeror_code,
+    offeror_topic_name); names with no row are not MIT Learn topics for that offeror
+    and are dropped. A name with explicit mappings resolves to every mapped topic;
+    otherwise it resolves to itself only if it is exactly an MIT Learn topic name.
+    An offeror must have at least one row in learn_topic_offeror_mappings to appear
+    here.
+  columns:
+  - name: offeror_code
+    description: str, MIT Learn offeror code, e.g. mitx
+    tests:
+    - not_null
+  - name: offeror_topic_name
+    description: str, the offeror's own topic name
+    tests:
+    - not_null
+  - name: topic_uuid
+    description: str, the MIT Learn topic the name resolves to
+    tests:
+    - not_null
+  - name: topic_name
+    description: str, name of the MIT Learn topic the name resolves to
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - offeror_code
+        - offeror_topic_name
+        - topic_uuid
