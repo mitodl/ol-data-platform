@@ -4,11 +4,13 @@ import csv
 import hashlib
 import io
 import json
+from collections.abc import Iterator
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
 import polars as pl
+import pyarrow as pa
 import pytest
 from dagster import AssetKey, materialize
 from openedx.assets import irx_export
@@ -18,9 +20,13 @@ from openedx.assets.irx_export import (
     _DigestingWriter,
     build_irx_export_asset,
     legacy_csv_columns,
+    read_data_files,
     write_legacy_csv,
     write_parquet,
 )
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.expressions import AlwaysTrue
+from pyiceberg.table import Table
 from upath import UPath
 
 FORUM_ROWS: list[dict[str, Any]] = [
@@ -80,14 +86,16 @@ def _legacy_bytes() -> bytes:
 
 
 def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
-    frame = pl.LazyFrame(
+    frame = pl.DataFrame(
         [{**row, "s": text} for row, text in zip(ROWS, STRINGS, strict=True)]
     )
+    projected = frame.select(legacy_csv_columns(frame.schema, COLUMNS))
     destination = UPath(tmp_path / "out.csv")
 
+    # An empty leading batch, as read_data_files yields, then the rows split
+    # across batches: one header, and no batch boundary shows in the bytes.
     sha256, size, row_count = write_legacy_csv(
-        frame.select(legacy_csv_columns(frame.collect_schema(), COLUMNS)),
-        destination,
+        [projected.clear(), projected.head(1), projected.tail(3)], destination
     )
 
     written = destination.read_bytes()
@@ -113,10 +121,12 @@ def test_row_count_ignores_crlf_inside_quoted_fields_at_any_chunk_boundary() -> 
 
 
 def test_write_parquet_round_trips_array_columns_and_counts_rows(tmp_path) -> None:
-    frame = pl.LazyFrame(FORUM_ROWS)
+    frame = pl.DataFrame(FORUM_ROWS)
     destination = UPath(tmp_path / "out.parquet")
 
-    sha256, size, row_count = write_parquet(frame, destination)
+    sha256, size, row_count = write_parquet(
+        [frame.clear(), frame.head(1), frame.tail(1)], destination
+    )
 
     written = destination.read_bytes()
     assert sha256 == hashlib.sha256(written).hexdigest()
@@ -180,15 +190,16 @@ class _Table:
         return _Snapshot()
 
 
-def _irx_frame(table: _Table) -> pl.LazyFrame:
+def _irx_frame(table: _Table) -> pl.DataFrame:
     if table.name.endswith("forum_contents"):
-        return pl.LazyFrame(FORUM_ROWS)
+        return pl.DataFrame(FORUM_ROWS)
     export = next(f for f in IRX_EXPORT_FILES if table.name.endswith(f.model))
-    model_names = {new: old for old, new in export.renames.items()}
-    row = {model_names.get(c, c): "x" for c in export.columns} | {
-        "course_id": COURSE_ID
+    # A model column the CSV doesn't carry, which the read has to project away.
+    row = dict.fromkeys(export.source_columns, "x") | {
+        "course_id": COURSE_ID,
+        "unexported": "x",
     }
-    return pl.LazyFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
+    return pl.DataFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
 
 
 @pytest.fixture
@@ -207,12 +218,20 @@ def drop_root(tmp_path, monkeypatch) -> UPath:
 
 
 def _run_export(monkeypatch, fail_on: str | None = None):
-    def scan(table: _Table, _snapshot_id: int) -> pl.LazyFrame:
+    def read(
+        table: _Table, _snapshot_id: int, columns: tuple[str, ...]
+    ) -> Iterator[pl.DataFrame]:
         if fail_on and table.name.endswith(fail_on):
             raise RuntimeError
-        return _irx_frame(table)
+        frame = _irx_frame(table)
+        if columns != ("*",):
+            frame = frame.select(columns)
+        # One batch per row, after the empty schema batch, so the drop is
+        # assembled across batches the way a multi-file table's would be.
+        yield frame.clear()
+        yield from frame.iter_slices(1)
 
-    monkeypatch.setattr(irx_export, "scan_dbt_model_table", scan)
+    monkeypatch.setattr(irx_export, "read_data_files", read)
     openedx = SimpleNamespace(
         client=SimpleNamespace(get_edx_course_ids=lambda: [[{"id": COURSE_ID}]])
     )
@@ -271,3 +290,75 @@ def test_rerun_fails_when_the_old_manifest_cannot_be_deleted(
 
     assert not result.success
     assert (drop_root / "users_query.csv").stat().st_mtime_ns == written
+
+
+ICEBERG_SCHEMA = pa.schema(
+    [("id", pa.int64()), ("course_id", pa.string()), ("unexported", pa.string())]
+)
+
+
+def _iceberg_table(tmp_path, data_files: int) -> Table:
+    """Build a local Iceberg table with one data file per append."""
+    catalog = SqlCatalog(
+        "irx",
+        uri=f"sqlite:///{tmp_path}/catalog.db",
+        warehouse=f"file://{tmp_path}",
+    )
+    catalog.create_namespace("irx")
+    table = catalog.create_table("irx.studentmodule", schema=ICEBERG_SCHEMA)
+    for n in range(data_files):
+        table.append(
+            pa.table(
+                {
+                    "id": [2 * n, 2 * n + 1],
+                    "course_id": [COURSE_ID] * 2,
+                    "unexported": ["x"] * 2,
+                },
+                schema=ICEBERG_SCHEMA,
+            )
+        )
+    return table
+
+
+def test_read_data_files_reads_one_data_file_per_pull(tmp_path, monkeypatch) -> None:
+    table = _iceberg_table(tmp_path, data_files=3)
+    tasks_per_read: list[int] = []
+    to_record_batches = irx_export.ArrowScan.to_record_batches
+
+    def spy(scan: Any, tasks: Any) -> Iterator[pa.RecordBatch]:
+        tasks = list(tasks)
+        tasks_per_read.append(len(tasks))
+        return to_record_batches(scan, tasks)
+
+    monkeypatch.setattr(irx_export.ArrowScan, "to_record_batches", spy)
+
+    batches = read_data_files(
+        table, table.current_snapshot().snapshot_id, ("id", "course_id")
+    )
+    schema_batch = next(batches)
+    assert schema_batch.height == 0
+    assert schema_batch.columns == ["id", "course_id"]
+    assert tasks_per_read == []
+    first = next(batches)
+    # Pulling the first rows reads the first data file and nothing past it.
+    assert tasks_per_read == [1]
+    rest = list(batches)
+
+    assert tasks_per_read == [1, 1, 1]
+    assert pl.concat([first, *rest])["id"].sort().to_list() == list(range(6))
+
+
+def test_read_data_files_yields_the_schema_for_a_snapshot_with_no_data_files(
+    tmp_path,
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    table.delete(delete_filter=AlwaysTrue())
+
+    batches = list(
+        read_data_files(
+            table, table.current_snapshot().snapshot_id, ("id", "course_id")
+        )
+    )
+
+    assert [batch.height for batch in batches] == [0]
+    assert batches[0].columns == ["id", "course_id"]
