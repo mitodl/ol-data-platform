@@ -132,6 +132,9 @@ tables:
       retrieved_at: copy
       authoring_organizations: copy
       data_modified_timestamp: copy
+      marketing_url: copy
+      banner_image_url: copy
+      level_type_override: copy
 - name: raw__edxorg__s3__program_course
   raw_table: raw__edxorg__s3__program_course
   sync_mode: incremental_append
@@ -146,6 +149,10 @@ tables:
       course_title: copy
       program_uuid: copy
       course_short_description: copy
+      course_position: copy
+      excluded_from_search: copy
+      course_runs: copy
+      retrieved_at: copy
 - name: raw__edxorg__program_learner_report
   raw_table: raw__edxorg__program_learner_report
   sync_mode: incremental_append
