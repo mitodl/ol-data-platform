@@ -153,11 +153,13 @@ class _VersionsClient:
         missing: set[str] | None = None,
         raises: set[str] | None = None,
         blocks: set[str] | None = None,
+        malformed: set[str] | None = None,
     ) -> None:
         self.versions = versions
         self.missing = missing or set()
         self.raises = raises or set()
         self.blocks = blocks or set()
+        self.malformed = malformed or set()
         self.released = threading.Event()
         self.batches: list[list[str]] = []
 
@@ -170,6 +172,8 @@ class _VersionsClient:
         if self.raises.intersection(course_ids):
             msg = f"boom for {course_ids}"
             raise ValueError(msg)
+        if self.malformed.intersection(course_ids):
+            return {"versions": {course_id: {} for course_id in course_ids}}
         return {
             "versions": {
                 course_id: _facts(self.versions[course_id])
@@ -266,6 +270,22 @@ def test_observation_sensor_survives_one_failing_batch(
     """One bad request does not cost the deployment its whole sweep."""
     _seed_partitions(instance, ["course-a", "course-bad"])
     client = _VersionsClient({"course-a": "v1"}, raises={"course-bad"})
+
+    result = courseware_observation_sensor(
+        build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
+        _FakeFactory(client),
+    )
+
+    assert set(_observations(result)) == {"course-a"}
+
+
+@pytest.mark.usefixtures("one_course_per_batch")
+def test_a_malformed_response_fails_its_batch_not_the_sweep(
+    instance: DagsterInstance,
+) -> None:
+    """A 200 whose body can't be read counts against its batch like a 500."""
+    _seed_partitions(instance, ["course-a", "course-odd"])
+    client = _VersionsClient({"course-a": "v1"}, malformed={"course-odd"})
 
     result = courseware_observation_sensor(
         build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),

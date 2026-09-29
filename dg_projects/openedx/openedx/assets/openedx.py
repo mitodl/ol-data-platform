@@ -145,8 +145,16 @@ def sweep_course_versions(
         try:
             for future in as_completed(futures, timeout=timeout):
                 batch = futures[future]
+                # Parsed inside the try as well: a 200 with a body we cannot
+                # read is as much a failed batch as a 500, not a reason to lose
+                # every other batch's versions by failing the whole sweep.
                 try:
                     response = future.result()
+                    missing = response["missing"]
+                    batch_versions = {
+                        course_run_id: courseware_data_version(facts)
+                        for course_run_id, facts in response["versions"].items()
+                    }
                 except Exception:
                     log.exception(
                         "Failed to fetch content versions for %s course runs "
@@ -160,14 +168,13 @@ def sweep_course_versions(
                 # mapping, so it emits no observation and its last known
                 # version stands: there is nothing to export, and inventing a
                 # version would look like a change.
-                if response["missing"]:
+                if missing:
                     log.info(
                         "No course found for %s course runs, e.g. %s",
-                        len(response["missing"]),
-                        response["missing"][0],
+                        len(missing),
+                        missing[0],
                     )
-                for course_run_id, facts in response["versions"].items():
-                    versions[course_run_id] = courseware_data_version(facts)
+                versions.update(batch_versions)
         except TimeoutError:
             timed_out = True
         unswept = [
