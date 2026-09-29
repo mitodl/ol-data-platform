@@ -41,7 +41,7 @@ def generate_instructor_onboarding_user_list(
 
     The output CSV has three columns:
     - email: User's email address (from user_email field)
-    - role: Set to 'ol-data-analyst' for all users
+    - role: Set to 'ol-instructor' for all users
     - sent_invite: Set to 1 for all users
 
     Args:
