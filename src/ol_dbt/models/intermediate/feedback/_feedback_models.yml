@@ -299,7 +299,9 @@ models:
     tests:
     - not_null
   - name: occurred_at
-    description: str, ISO8601 timestamp the post was created.
+    description: str, ISO8601 timestamp the post was created. For a post copied in
+      the 2025-09-18/19 Mongo-to-MySQL migration, this is decoded from its Mongo ObjectId,
+      because the migration stamped created_at with its own run time.
     tests:
     - not_null
   - name: created_at
@@ -308,8 +310,9 @@ models:
     description: str, ISO8601 timestamp of the latest update to any post in the thread,
       staff posts included, so a new reply re-enters the whole thread.
   - name: text
-    description: str, the post's raw body. Masking happens downstream, in the feedback_redacted
-      Dagster asset.
+    description: str, the post body as plain text, with HTML tags removed and common
+      entities decoded. The first kept turn starts with the thread title. Masking
+      happens downstream, in the feedback_redacted Dagster asset.
     tests:
     - not_null
   - name: title

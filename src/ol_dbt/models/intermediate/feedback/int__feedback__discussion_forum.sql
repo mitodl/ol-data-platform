@@ -41,9 +41,30 @@ with forum_thread as (
     having count(*) = 1
 )
 
+-- The Mongo-to-MySQL migration (2025-09-18/19) stamped every copied post with its own
+-- run time. The original Mongo ObjectId still encodes the real creation time in its
+-- first 8 hex characters (Unix seconds).
+, mongo_created as (
+    select
+        content_type.contenttype_model as content_model
+        , mongo_content.forumcontent_object_id as object_id
+        , {{ cast_timestamp_to_iso8601(
+            "from_unixtime(from_base(substr(mongo_content.forumcontent_mongo_id, 1, 8), 16))"
+        ) }} as created_on
+    from {{ ref('stg__mitxonline__openedx__mysql__forum_mongocontent') }} as mongo_content
+    inner join {{ ref('stg__mitxonline__openedx__mysql__django_content_type') }} as content_type
+        on mongo_content.forumcontent_type_id = content_type.contenttype_id
+    where
+        content_type.contenttype_app_label = 'forum'
+        and content_type.contenttype_model in ('commentthread', 'comment')
+        and regexp_like(mongo_content.forumcontent_mongo_id, '^[0-9a-f]{24}$')
+)
+
 , posts as (
     select
         'commentthread-' || cast(forumthread_id as varchar) as source_record_ref
+        , 'commentthread' as content_model
+        , forumthread_id as object_id
         , forumthread_id
         , user_id
         , courserun_readable_id
@@ -60,6 +81,8 @@ with forum_thread as (
 
     select
         'comment-' || cast(forumcomment_id as varchar) as source_record_ref
+        , 'comment' as content_model
+        , forumcomment_id as object_id
         , forumthread_id
         , user_id
         , courserun_readable_id
@@ -73,18 +96,44 @@ with forum_thread as (
     from forum_comment
 )
 
-, learner_turns as (
+-- Thread-level windows run here, before the staff filter, so they see every post
+, dated_posts as (
     select
-        posts.*
+        posts.source_record_ref
+        , posts.forumthread_id
+        , posts.user_id
+        , posts.courserun_readable_id
+        , posts.post_type
+        , posts.post_type_order
+        , posts.is_anonymous
+        , posts.is_visible
+        , coalesce(mongo_created.created_on, posts.post_created_on) as post_created_on
+        -- Bodies are HTML; the LLM and Presidio should see plain text
+        , trim({{ regexp_replace_all(
+            html_unescape(
+                "replace(" ~ regexp_replace_all("posts.post_body", "'<[^>]+>'", "' '") ~ ", '&nbsp;', ' ')"
+            ),
+            "'\\s+'",
+            "' '"
+        ) }}) as post_body
         -- Conversation-level, so a new reply re-enters the whole thread under
-        -- tfact_feedback's watermark. Taken over every post, staff included.
+        -- tfact_feedback's watermark
         , max(posts.post_updated_on) over (partition by posts.forumthread_id)
             as thread_updated_on
     from posts
+    left join mongo_created
+        on
+            posts.content_model = mongo_created.content_model
+            and posts.object_id = mongo_created.object_id
+)
+
+, learner_turns as (
+    select dated_posts.*
+    from dated_posts
     left join course_staff
         on
-            posts.user_id = course_staff.openedx_user_id
-            and posts.courserun_readable_id = course_staff.courserun_readable_id
+            dated_posts.user_id = course_staff.openedx_user_id
+            and dated_posts.courserun_readable_id = course_staff.courserun_readable_id
     where course_staff.openedx_user_id is null
 )
 
@@ -98,14 +147,20 @@ with forum_thread as (
     from learner_turns
     where
         is_visible = true
-        and nullif(trim(post_body), '') is not null
+        and nullif(post_body, '') is not null
 )
 
 select
     'discussion_forum' as source_slug
     , numbered_turns.post_created_on as occurred_at
     , numbered_turns.source_record_ref
-    , numbered_turns.post_body as text
+    -- The title often carries the whole question ("images won't load" over a body of
+    -- "eom"), and the summarizer reads only text, so it leads the first kept turn.
+    , case
+        when numbered_turns.turn_index = 1 and forum_thread.forumthread_title is not null
+            then forum_thread.forumthread_title || chr(10) || chr(10) || numbered_turns.post_body
+        else numbered_turns.post_body
+    end as text
     , forum_thread.forumthread_title as title
     , cast(numbered_turns.forumthread_id as varchar) as conversation_ref
     , numbered_turns.turn_index
