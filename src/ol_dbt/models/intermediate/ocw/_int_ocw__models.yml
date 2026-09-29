@@ -305,8 +305,8 @@ models:
     tests:
     - not_null
   - name: resource_uploaded_filename
-    description: str, video filename including extension from the linked Google Drive
-      upload (DriveFile.name); null when unavailable
+    description: str, filename including extension from the linked Google Drive upload
+      (DriveFile.name); null when unavailable
   - name: resource_live_url
     description: str, live URL of the resource on production
   - name: resource_title

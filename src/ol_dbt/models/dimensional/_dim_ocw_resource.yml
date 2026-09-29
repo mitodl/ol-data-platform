@@ -41,8 +41,8 @@ models:
   - name: resource_filename
     description: str, resource page slug used in the resource URL, without an extension
   - name: resource_uploaded_filename
-    description: str, video filename including extension from the linked Google Drive
-      upload (DriveFile.name); null when unavailable
+    description: str, filename including extension from the linked Google Drive upload
+      (DriveFile.name); null when unavailable
   - name: resource_file_type
     description: str, file type of the resource file
   - name: resource_file_size
