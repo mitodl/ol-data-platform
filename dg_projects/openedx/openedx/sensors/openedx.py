@@ -185,10 +185,14 @@ def courseware_observation_sensor(
         len(sweep.unswept),
     )
 
+    # Everything the pass finished, including courses the instance reported
+    # missing. Counting only versions and failures left those out, so the next
+    # tick started short of where this one stopped and swept them again.
+    attempted = len(ordered) - len(sweep.unswept)
+
     # A pass where every lookup failed is a bad token or a 500-ing LMS, not a
     # deployment with nothing to say. Failing the tick surfaces it instead of
     # leaving every downstream quiet, hourly, forever.
-    attempted = len(sweep.versions) + sweep.failures
     if attempted and sweep.failures == attempted:
         msg = (
             f"Course content version sweep failed for all {sweep.failures} attempted "

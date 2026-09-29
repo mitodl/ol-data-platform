@@ -263,6 +263,25 @@ def test_observation_sensor_omits_a_course_missing_from_the_instance(
     assert set(_observations(result)) == {"course-a"}
 
 
+def test_the_cursor_steps_past_courses_reported_missing(
+    instance: DagsterInstance,
+) -> None:
+    """A missing course was finished, so the next tick must not sweep it again."""
+    _seed_partitions(instance, ["course-a", "course-b", "course-gone"])
+    client = _VersionsClient(
+        {"course-a": "v1", "course-b": "v1"}, missing={"course-gone"}
+    )
+
+    result = courseware_observation_sensor(
+        build_sensor_context(
+            instance=instance, sensor_name=OBSERVATION_SENSOR_NAME, cursor="1"
+        ),
+        _FakeFactory(client),
+    )
+
+    assert result.cursor == "1", "a full pass of three returns to where it began"
+
+
 @pytest.mark.usefixtures("one_course_per_batch")
 def test_observation_sensor_survives_one_failing_batch(
     instance: DagsterInstance,
