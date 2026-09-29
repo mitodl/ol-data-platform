@@ -358,6 +358,8 @@ with mitx_users as (
         , user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
+        , null as emeritus_identity_key
+        , null as global_alumni_identity_key
         , lower(email) as email
         , full_name
         , address_country
@@ -407,6 +409,8 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
+        , null as emeritus_identity_key
+        , null as global_alumni_identity_key
         , lower(mitxpro_user_view.user_email) as email
         , mitxpro_user_view.user_full_name as full_name
         , mitxpro_user_view.user_address_country as address_country
@@ -459,6 +463,11 @@ with mitx_users as (
         , null as user_edxorg_username
         , user_id as emeritus_user_id
         , null as global_alumni_user_id
+        -- The Emeritus id, or the email for learners Emeritus sent without one. Raw email, not
+        -- lower(), so it matches the user_hashed_id downstream marts compute. No full_name
+        -- fallback: rows without an email are filtered out below.
+        , coalesce(user_id, user_email) as emeritus_identity_key
+        , null as global_alumni_identity_key
         , lower(user_email) as email
         , user_full_name as full_name
         , user_address_country as address_country
@@ -506,6 +515,9 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , user_id as global_alumni_user_id
+        , null as emeritus_identity_key
+        -- Email-first, unlike Emeritus: a Global Alumni student_id is not unique per person.
+        , coalesce(user_email, user_id) as global_alumni_identity_key
         , lower(user_email) as email
         , user_full_name as full_name
         , user_address_country as address_country
@@ -553,6 +565,8 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
+        , null as emeritus_identity_key
+        , null as global_alumni_identity_key
         , lower(mitxresidential_user_view.user_email) as email
         , mitxresidential_user_view.user_full_name as full_name
         , mitxresidential_user_view.user_address_country as address_country
@@ -600,6 +614,8 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
+        , null as emeritus_identity_key
+        , null as global_alumni_identity_key
         , lower(bootcamps_user_view.user_email) as email
         , bootcamps_user_view.user_full_name as full_name
         , bootcamps_user_view.user_address_country as address_country
@@ -764,6 +780,10 @@ with mitx_users as (
         , max(edxorg_openedx_user_id) as edxorg_openedx_user_id
         , max(emeritus_user_id) as emeritus_user_id
         , max(global_alumni_user_id) as global_alumni_user_id
+        -- Prefer the person's Emeritus id; fall back to the email only when none of their
+        -- Emeritus rows has one.
+        , coalesce(max(emeritus_user_id), max(emeritus_identity_key)) as emeritus_identity_key
+        , max(global_alumni_identity_key) as global_alumni_identity_key
         , max(micromasters_user_id) as micromasters_user_id
         , max(user_edxorg_username) as user_edxorg_username
         , max(user_is_active_on_mitlearn) as user_is_active_on_mitlearn
@@ -813,6 +833,8 @@ select
     , agg.user_edxorg_username
     , agg.emeritus_user_id
     , agg.global_alumni_user_id
+    , agg.emeritus_identity_key
+    , agg.global_alumni_identity_key
     , agg.micromasters_user_id
     , base.email
     , coalesce(base.full_name, agg.agg_full_name) as full_name
