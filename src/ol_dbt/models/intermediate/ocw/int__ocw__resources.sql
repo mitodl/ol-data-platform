@@ -12,7 +12,10 @@ with websites as (
 )
 
 , drivefiles as (
-    select * from {{ ref('stg__ocw__studio__postgres__gdrive_sync_drivefile') }}
+    select
+        *
+        , row_number() over (partition by websitecontent_id order by drivefile_id) as drivefile_rank
+    from {{ ref('stg__ocw__studio__postgres__gdrive_sync_drivefile') }}
 )
 
 , websitestarters as (
@@ -165,6 +168,7 @@ inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
 left join drivefiles
     on websitecontents.websitecontent_id = drivefiles.websitecontent_id
+    and drivefiles.drivefile_rank = 1
 left join sitemetadata
     on websites.website_uuid = sitemetadata.website_uuid
 inner join websitestarters

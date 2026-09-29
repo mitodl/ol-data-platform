@@ -112,5 +112,3 @@ models:
       combination_of_columns:
       - course_uuid
       - resource_uuid
-      config:
-        severity: warn
