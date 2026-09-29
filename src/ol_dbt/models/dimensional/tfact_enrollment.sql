@@ -164,14 +164,21 @@ with mitxonline_enrollments as (
 , mitxpro_external_readable_id_lookup as (
     select courserun_external_readable_id, courserun_readable_id
     from {{ ref('int__mitxpro__course_runs') }}
+    -- xPro runs with no external id carry '' rather than null; without this, a source row
+    -- with an empty run code would fan out across all of them
     where courserun_external_readable_id is not null
+        and courserun_external_readable_id != ''
 )
 
 , emeritus_enrollments as (
     select
-        -- Stable surrogate key: source has no native enrollment_id
-        {{ dbt_utils.generate_surrogate_key(['cast(emeritus_enrollments.user_id as varchar)', 'emeritus_enrollments.courserun_external_readable_id']) }}
-            as enrollment_id
+        -- Source has no native enrollment_id. Keyed on the learner the same way as
+        -- dim_user.emeritus_identity_key (student id, else email) so enrollments sent
+        -- without a student id don't collapse into one row per course run.
+        {{ dbt_utils.generate_surrogate_key([
+            'coalesce(cast(emeritus_enrollments.user_id as varchar), emeritus_enrollments.user_email)',
+            'emeritus_enrollments.courserun_external_readable_id'
+        ]) }} as enrollment_id
         , emeritus_enrollments.user_id
         , null as courserun_id
         , coalesce(
@@ -179,6 +186,7 @@ with mitxonline_enrollments as (
             , emeritus_enrollments.courserun_external_readable_id
         ) as courserun_readable_id
         , null as program_id
+        , 'course' as enrollment_scope
         , emeritus_enrollments.enrollment_created_on
         , emeritus_enrollments.enrollment_updated_on
         , emeritus_enrollments.is_enrolled as enrollment_is_active
@@ -187,6 +195,7 @@ with mitxonline_enrollments as (
         , 'emeritus' as platform
         , 'emeritus' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
+        , cast(null as bigint) as order_id
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }} as emeritus_enrollments
     left join mitxpro_external_readable_id_lookup
         on emeritus_enrollments.courserun_external_readable_id
@@ -195,9 +204,13 @@ with mitxonline_enrollments as (
 
 , global_alumni_enrollments as (
     select
-        -- Stable surrogate key: source has no native enrollment_id
-        {{ dbt_utils.generate_surrogate_key(['cast(global_alumni_enrollments.user_id as varchar)', 'global_alumni_enrollments.courserun_external_readable_id']) }}
-            as enrollment_id
+        -- Source has no native enrollment_id. Keyed on the learner the same way as
+        -- dim_user.global_alumni_identity_key (email first; a Global Alumni student id
+        -- is not unique per person).
+        {{ dbt_utils.generate_surrogate_key([
+            'coalesce(global_alumni_enrollments.user_email, cast(global_alumni_enrollments.user_id as varchar))',
+            'global_alumni_enrollments.courserun_external_readable_id'
+        ]) }} as enrollment_id
         , global_alumni_enrollments.user_id
         , null as courserun_id
         , coalesce(
@@ -205,6 +218,7 @@ with mitxonline_enrollments as (
             , global_alumni_enrollments.courserun_external_readable_id
         ) as courserun_readable_id
         , null as program_id
+        , 'course' as enrollment_scope
         -- source has no enrollment_created_on/enrollment_updated_on. Unlike edxorg/residential
         -- (which have enrollment_created_on and use the 7-day lookback path), the unconditional
         -- `or ewf.enrollment_created_on is null` branch in incremental_watermarks means every
@@ -219,6 +233,7 @@ with mitxonline_enrollments as (
         , 'global_alumni' as platform
         , 'global_alumni' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
+        , cast(null as bigint) as order_id
     from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }} as global_alumni_enrollments
     left join mitxpro_external_readable_id_lookup
         on global_alumni_enrollments.courserun_external_readable_id
