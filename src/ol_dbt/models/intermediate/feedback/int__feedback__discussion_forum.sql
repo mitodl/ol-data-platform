@@ -49,7 +49,7 @@ with forum_thread as (
         content_type.contenttype_model as content_model
         , mongo_content.forumcontent_object_id as object_id
         , {{ cast_timestamp_to_iso8601(
-            "from_unixtime(from_base(substr(mongo_content.forumcontent_mongo_id, 1, 8), 16))"
+            mongo_objectid_timestamp("mongo_content.forumcontent_mongo_id")
         ) }} as created_on
     from {{ ref('stg__mitxonline__openedx__mysql__forum_mongocontent') }} as mongo_content
     inner join {{ ref('stg__mitxonline__openedx__mysql__django_content_type') }} as content_type
@@ -57,7 +57,7 @@ with forum_thread as (
     where
         content_type.contenttype_app_label = 'forum'
         and content_type.contenttype_model in ('commentthread', 'comment')
-        and regexp_like(mongo_content.forumcontent_mongo_id, '^[0-9a-f]{24}$')
+        and {{ regexp_like("mongo_content.forumcontent_mongo_id", "'^[0-9a-f]{24}$'") }}
 )
 
 , posts as (
@@ -198,3 +198,5 @@ left join discussion_block
     on
         forum_thread.courserun_readable_id = discussion_block.courserun_readable_id
         and forum_thread.forumthread_commentable_id = discussion_block.commentable_id
+-- A hidden thread hides its replies too, whatever their own flag says
+where forum_thread.forumthread_is_visible = true

@@ -210,6 +210,27 @@
 {%- endmacro %}
 
 
+{#
+    mongo_objectid_timestamp: the creation time a Mongo ObjectId encodes in its first
+    8 hex characters (Unix seconds), as a timestamp.
+#}
+{% macro mongo_objectid_timestamp(objectid_expr) -%}
+    {{ adapter.dispatch('mongo_objectid_timestamp', 'open_learning')(objectid_expr) }}
+{%- endmacro %}
+
+{% macro default__mongo_objectid_timestamp(objectid_expr) -%}
+    from_unixtime(from_base(substr({{ objectid_expr }}, 1, 8), 16))
+{%- endmacro %}
+
+{% macro duckdb__mongo_objectid_timestamp(objectid_expr) -%}
+    to_timestamp(cast('0x' || substr({{ objectid_expr }}, 1, 8) as bigint))
+{%- endmacro %}
+
+{% macro starrocks__mongo_objectid_timestamp(objectid_expr) -%}
+    cast(from_unixtime(cast(conv(substr({{ objectid_expr }}, 1, 8), 16, 10) as bigint)) as datetime)
+{%- endmacro %}
+
+
 {% macro element_at_array(array_expr, index) -%}
     {{ adapter.dispatch('element_at_array', 'open_learning')(array_expr, index) }}
 {%- endmacro %}
