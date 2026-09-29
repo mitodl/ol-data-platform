@@ -16,6 +16,7 @@ select
     , resource_type
     , resource_ocw_type
     , resource_filename
+    , resource_uploaded_filename
     , resource_file_type
     , resource_file_size
     , resource_draft
@@ -43,6 +44,7 @@ select
     , video_youtube_speakers
     , video_youtube_tags
     , video_archive_url
+    , video_archive_filename
     , video_captions_file
     , video_thumbnail_file
     , video_transcript_file

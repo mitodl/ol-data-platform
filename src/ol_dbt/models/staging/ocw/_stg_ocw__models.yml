@@ -2,6 +2,25 @@
 version: 2
 
 models:
+- name: stg__ocw__studio__postgres__gdrive_sync_drivefile
+  description: Google Drive files synced to OCW Studio.
+  columns:
+  - name: drivefile_id
+    description: str, Google Drive file ID
+    tests:
+    - not_null
+    - unique
+  - name: drivefile_name
+    description: str, filename in Google Drive, including the extension
+  - name: drivefile_mime_type
+    description: str, MIME type of the Google Drive file
+  - name: websitecontent_id
+    description: int, linked OCW Studio resource ID; null for unlinked files
+    tests:
+    - unique:
+        config:
+          where: "lower(drivefile_mime_type) like 'video/%'"
+
 - name: stg__ocw__studio__postgres__websites_website
   description: OCW websites metadata on production environment. A website can refers
     to OCW courses, OCW website configuration, etc.
