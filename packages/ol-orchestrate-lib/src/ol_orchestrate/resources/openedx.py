@@ -134,13 +134,21 @@ class OpenEdxApiClient(OAuthApiClient):
         an S3 export of each of them. A GET is safe on both: the versions view
         only allows POST, so it answers 405, while the old export view answers a
         GET without a course id with a 404 before doing anything.
+
+        Any other error status raises with that status, so a bad token or a
+        struggling Studio is reported as itself rather than as a missing plugin.
+        Only a 405 ever makes this true.
         """
         response = self.http_client.get(
             f"{self.studio_url}/api/courses/v0/export/versions/",
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             timeout=60,
         )
-        return response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+        if response.status_code == HTTPStatus.METHOD_NOT_ALLOWED:
+            return True
+        if response.status_code != HTTPStatus.NOT_FOUND:
+            response.raise_for_status()
+        return False
 
     def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
         """Report what an export of each course would reflect, without exporting.

@@ -129,3 +129,13 @@ def test_the_versions_endpoint_is_unavailable_on_an_older_plugin() -> None:
 
     assert not _studio_client(http_client).course_content_versions_available()
     assert not http_client.posts, "the probe must never POST"
+
+
+def test_a_failing_probe_reports_its_own_status() -> None:
+    """A 500 or 401 is raised as itself, not reported as a missing endpoint."""
+    for status in (401, 500):
+        http_client = _PostingClient(status, {})
+
+        with pytest.raises(httpx.HTTPStatusError):
+            _studio_client(http_client).course_content_versions_available()
+        assert not http_client.posts, "the probe must never POST"
