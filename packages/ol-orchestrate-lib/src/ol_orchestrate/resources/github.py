@@ -1,7 +1,7 @@
 """GitHub API client resource for Dagster pipelines."""
 
 from dagster import ConfigurableResource
-from github import Auth, Github, GithubIntegration
+from github import Auth, Github
 from pydantic import Field
 
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -10,10 +10,10 @@ from ol_orchestrate.resources.secrets.vault import Vault
 class GithubApiClientFactory(ConfigurableResource):
     """Factory for GitHub API clients authenticated as the data platform's GitHub App.
 
-    The App's id and private key come from Vault. Each client is scoped to the
-    App's installation on ``organization``, so what it can touch is bounded by
-    which repositories that installation selects, and optionally narrowed further
-    per client by ``token_permissions``.
+    The App's id, installation id and private key come from Vault. Each client is
+    scoped to that installation, so what it can touch is bounded by which
+    repositories the installation selects, and optionally narrowed further per
+    client by ``token_permissions``.
     """
 
     vault: Vault = Field(description="Vault resource for retrieving the App's key")
@@ -22,10 +22,9 @@ class GithubApiClientFactory(ConfigurableResource):
     )
     vault_secret_path: str = Field(
         default="pipelines/github-app",
-        description="KV v1 path holding the App's `app_id` and `private_key`",
-    )
-    organization: str = Field(
-        default="mitodl", description="Organization the App is installed on"
+        description=(
+            "KV v1 path holding the App's `app_id`, `installation_id` and `private_key`"
+        ),
     )
 
     def get_client(self, token_permissions: dict[str, str] | None = None) -> Github:
@@ -44,10 +43,8 @@ class GithubApiClientFactory(ConfigurableResource):
             mount_point=self.vault_mount_point, path=self.vault_secret_path
         )["data"]
         app_auth = Auth.AppAuth(secret["app_id"], secret["private_key"])
-        with GithubIntegration(auth=app_auth) as integration:
-            installation_id = integration.get_org_installation(self.organization).id
         return Github(
             auth=app_auth.get_installation_auth(
-                installation_id, token_permissions=token_permissions
+                int(secret["installation_id"]), token_permissions=token_permissions
             )
         )
