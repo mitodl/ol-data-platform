@@ -44,10 +44,6 @@ else:
     database_name = "ol_warehouse_production_intermediate"
 
 
-# Summaries only: clusters see just what was summarized, so they keep the shared default
-DEFAULT_SUMMARIES_FEEDBACK_SINCE = DEFAULT_FEEDBACK_SINCE or "2025-01-01"
-
-
 class FeedbackSummariesConfig(Config):
     full_refresh: bool = Field(
         default=False,
@@ -58,13 +54,13 @@ class FeedbackSummariesConfig(Config):
         description="Cap the number of upstream rows read, for fast local testing.",
     )
     feedback_since: str | None = Field(
-        default=DEFAULT_SUMMARIES_FEEDBACK_SINCE,
+        default=DEFAULT_FEEDBACK_SINCE,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description=(
             "Only summarize conversations opened on or after this date (YYYY-MM-DD). "
             "Rows already in feedback_summaries from earlier runs are kept. Defaults "
-            "to the FEEDBACK_SINCE env var, else 2025-01-01. Null reads the full "
-            "history."
+            "to feedback_clusters' feedback_since, so both cover the same range. "
+            "Null reads the full history."
         ),
     )
     platforms: list[str] | None = Field(
