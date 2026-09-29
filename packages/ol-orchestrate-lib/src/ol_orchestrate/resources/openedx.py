@@ -124,6 +124,24 @@ class OpenEdxApiClient(OAuthApiClient):
         request_url = f"{self.studio_url}/api/courses/v0/export/{course_id}/"
         return self.fetch_with_auth(request_url, extra_params={"task_id": task_id})  # type: ignore[return-value]
 
+    def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
+        """Report what an export of each course would reflect, without exporting.
+
+        Served by the ol_openedx_course_export plugin, at most 200 course ids a
+        request. Returns ``{"versions": {course_id: facts}, "missing": [...]}``,
+        where the facts are the published version, the course's uploaded files
+        and its VAL transcripts -- the last two being what an export carries but
+        a publish never moves.
+        """
+        response = self.http_client.post(
+            f"{self.studio_url}/api/courses/v0/export/versions/",
+            json={"courses": course_ids},
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def get_course_structure_document(self, course_id: str):
         """Retrieve the course structure for an active course as JSON.
 

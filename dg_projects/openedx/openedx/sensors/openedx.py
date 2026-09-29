@@ -128,13 +128,24 @@ def courseware_observation_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
 ):
-    """Report the published version of every course run as an observation.
+    """Report the content version of every course run as an observation.
 
     This is the whole trigger for the export graph. Every downstream carries
     ``upstream_or_code_changes()``, whose ``data_version_changed()`` term fires
     against the versions reported here; a course whose version is unchanged
     reports the same value and asks for nothing, which is what keeps a steady
-    state quiet.
+    state quiet. The version covers uploaded files and VAL transcripts as well
+    as the published version (``courseware_data_version``), because an export
+    carries all three and a publish moves only the last.
+
+    Changing how the version is built changes it for every course at once, so
+    the first tick after such a deploy re-exports every partition. That is how
+    the exports left stale before August's cutover get refreshed, and it only
+    works if course_xml's automation condition is left alone in the same
+    deploy: ``data_version_changed()`` returns nothing on a condition's first
+    evaluation, so a changed condition swallows the very edge it would have
+    fired on. That is why exports left stale by course_version_sensor stayed
+    stale when this sensor replaced it.
 
     It is a sensor rather than the source asset's own automation condition
     because an AutomationCondition is evaluated per partition. Hanging an hourly
@@ -180,7 +191,7 @@ def courseware_observation_sensor(
     attempted = len(sweep.versions) + sweep.failures
     if attempted and sweep.failures == attempted:
         msg = (
-            f"Course outline sweep failed for all {sweep.failures} attempted "
+            f"Course content version sweep failed for all {sweep.failures} attempted "
             f"{deployment} courses"
         )
         raise RuntimeError(msg)

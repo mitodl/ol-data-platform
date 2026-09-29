@@ -3,8 +3,8 @@
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from typing import Any
 
-import httpx2 as httpx
 import pytest
 from dagster import (
     AssetKey,
@@ -29,9 +29,9 @@ from dagster._core.storage.dagster_run import DagsterRunStatus
 from dagster._core.storage.tags import PARTITION_NAME_TAG
 from dagster._core.test_utils import create_run_for_test
 from openedx.assets.openedx import (
-    HTTP_NOT_FOUND,
     build_courseware_source_asset,
     course_xml,
+    courseware_data_version,
 )
 from openedx.lib.assets_helper import (
     add_prefix_to_asset_keys,
@@ -57,8 +57,24 @@ def instance() -> Iterator[DagsterInstance]:
         yield ephemeral_instance
 
 
-class _OutlineClient:
-    """Serves canned course outlines, and can be made to fail for some of them."""
+def _version(published: str) -> str:
+    """Return the data version observed for a course with no files or transcripts."""
+    return courseware_data_version(
+        {
+            "published_version": published,
+            "static_assets": {"count": 0, "latest_upload": None, "latest_asset": None},
+            "transcripts": {"count": 0, "latest_modified": None},
+        }
+    )
+
+
+class _VersionsClient:
+    """Serves canned content versions, and can be made to fail for some courses.
+
+    ``versions`` maps a course to its published version and stays mutable, so a
+    test can republish a course between observations. A batch holding any course
+    in ``raises`` fails as a whole, as a real request would.
+    """
 
     def __init__(
         self,
@@ -70,24 +86,32 @@ class _OutlineClient:
         self.missing = missing or set()
         self.raises = raises or set()
 
-    def get_course_outline(self, course_id: str) -> dict[str, str]:
-        if course_id in self.missing:
-            msg = f"no outline for {course_id}"
-            raise httpx.HTTPStatusError(
-                msg,
-                request=httpx.Request("GET", "https://lms.example/outline"),
-                response=httpx.Response(HTTP_NOT_FOUND),
-            )
-        if course_id in self.raises:
-            msg = f"boom for {course_id}"
+    def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
+        if self.raises.intersection(course_ids):
+            msg = f"boom for {course_ids}"
             raise ValueError(msg)
-        return {"published_version": self.versions[course_id]}
+        return {
+            "versions": {
+                course_id: {
+                    "published_version": self.versions[course_id],
+                    "static_assets": {
+                        "count": 0,
+                        "latest_upload": None,
+                        "latest_asset": None,
+                    },
+                    "transcripts": {"count": 0, "latest_modified": None},
+                }
+                for course_id in course_ids
+                if course_id not in self.missing
+            },
+            "missing": [c for c in course_ids if c in self.missing],
+        }
 
 
 class _FakeOpenEdx:
-    """Stand-in for OpenEdxApiClientFactory holding a fixed outline client."""
+    """Stand-in for OpenEdxApiClientFactory holding a fixed versions client."""
 
-    def __init__(self, client: _OutlineClient) -> None:
+    def __init__(self, client: _VersionsClient) -> None:
         self.client = client
         self.deployment = DEPLOYMENT
 
@@ -101,7 +125,7 @@ class _NoopIOManager(IOManager):
 
 
 def _definitions(
-    partitions: DynamicPartitionsDefinition, client: _OutlineClient
+    partitions: DynamicPartitionsDefinition, client: _VersionsClient
 ) -> Definitions:
     """Build courseware plus the course_xml that reacts to it, as production does."""
     return Definitions(
@@ -148,18 +172,21 @@ def test_every_registered_partition_is_observed(
     """
     instance.add_dynamic_partitions(partitions.name, ["course-a", "course-b"])
     defs = _definitions(
-        partitions, _OutlineClient({"course-a": "v1", "course-b": "v2"})
+        partitions, _VersionsClient({"course-a": "v1", "course-b": "v2"})
     )
 
     _observe(defs, instance)
 
-    assert _observed_versions(instance) == {"course-a": "v1", "course-b": "v2"}
+    assert _observed_versions(instance) == {
+        "course-a": _version("v1"),
+        "course-b": _version("v2"),
+    }
 
 
-def test_a_course_missing_from_the_lms_is_not_observed(
+def test_a_course_missing_from_the_instance_is_not_observed(
     instance: DagsterInstance, partitions: DynamicPartitionsDefinition
 ) -> None:
-    """A 404 leaves the partition out entirely so its last version stands.
+    """A missing course is left out entirely so its last version stands.
 
     Emitting anything for it - even a null version - would read as a change and
     ask for an export of a course that is no longer there to export.
@@ -167,27 +194,30 @@ def test_a_course_missing_from_the_lms_is_not_observed(
     instance.add_dynamic_partitions(partitions.name, ["course-a", "course-gone"])
     defs = _definitions(
         partitions,
-        _OutlineClient({"course-a": "v1"}, missing={"course-gone"}),
+        _VersionsClient({"course-a": "v1"}, missing={"course-gone"}),
     )
 
     _observe(defs, instance)
 
-    assert _observed_versions(instance) == {"course-a": "v1"}
+    assert _observed_versions(instance) == {"course-a": _version("v1")}
 
 
 def test_one_failing_lookup_does_not_stop_the_sweep(
-    instance: DagsterInstance, partitions: DynamicPartitionsDefinition
+    instance: DagsterInstance,
+    partitions: DynamicPartitionsDefinition,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A single broken course is skipped; the rest of the deployment reports."""
+    """A failed request is skipped; the rest of the deployment reports."""
+    monkeypatch.setattr("openedx.assets.openedx.VERSIONS_BATCH_SIZE", 1)
     instance.add_dynamic_partitions(partitions.name, ["course-a", "course-bad"])
     defs = _definitions(
         partitions,
-        _OutlineClient({"course-a": "v1", "course-bad": "v9"}, raises={"course-bad"}),
+        _VersionsClient({"course-a": "v1", "course-bad": "v9"}, raises={"course-bad"}),
     )
 
     _observe(defs, instance)
 
-    assert _observed_versions(instance) == {"course-a": "v1"}
+    assert _observed_versions(instance) == {"course-a": _version("v1")}
 
 
 def test_every_lookup_failing_fails_the_observation(
@@ -202,7 +232,7 @@ def test_every_lookup_failing_fails_the_observation(
     instance.add_dynamic_partitions(partitions.name, keys)
     defs = _definitions(
         partitions,
-        _OutlineClient(dict.fromkeys(keys, "v1"), raises=set(keys)),
+        _VersionsClient(dict.fromkeys(keys, "v1"), raises=set(keys)),
     )
     source_asset = defs.get_repository_def().source_assets_by_key[COURSEWARE_KEY]
 
@@ -294,7 +324,7 @@ def test_a_republish_during_an_export_is_not_lost(
     archive silently stays a version behind until the course changes again.
     """
     instance.add_dynamic_partitions(partitions.name, ["course-a"])
-    client = _OutlineClient({"course-a": "v1"})
+    client = _VersionsClient({"course-a": "v1"})
     defs = _definitions(partitions, client)
 
     _observe(defs, instance)
@@ -325,7 +355,7 @@ def test_the_observation_drives_the_full_export_cycle(
     data versions the observation reports, with no reconciliation of our own.
     """
     instance.add_dynamic_partitions(partitions.name, ["course-a", "course-b"])
-    client = _OutlineClient({"course-a": "v1", "course-b": "v1"})
+    client = _VersionsClient({"course-a": "v1", "course-b": "v1"})
     defs = _definitions(partitions, client)
 
     _observe(defs, instance)
@@ -367,7 +397,7 @@ def test_the_automation_daemon_never_requests_an_observation_run(
     )
     defs = _definitions(
         partitions,
-        _OutlineClient({"course-a": "v1", "course-b": "v1", "course-c": "v1"}),
+        _VersionsClient({"course-a": "v1", "course-b": "v1", "course-c": "v1"}),
     )
     selection = AssetSelection.assets(COURSEWARE_KEY)
 
@@ -401,7 +431,7 @@ def test_a_partition_registered_later_is_exported(
     for the export.
     """
     instance.add_dynamic_partitions(partitions.name, ["course-a"])
-    client = _OutlineClient({"course-a": "v1", "course-new": "v1"})
+    client = _VersionsClient({"course-a": "v1", "course-new": "v1"})
     defs = _definitions(partitions, client)
 
     _observe(defs, instance)

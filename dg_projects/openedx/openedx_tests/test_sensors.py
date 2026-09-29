@@ -3,11 +3,11 @@
 import threading
 from collections.abc import Iterator
 from datetime import timedelta
+from typing import Any
 
-import httpx2 as httpx
 import pytest
 from dagster import AssetKey, DagsterInstance, build_sensor_context
-from openedx.assets.openedx import HTTP_NOT_FOUND
+from openedx.assets.openedx import courseware_data_version
 from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from openedx.sensors.openedx import (
     course_run_sensor,
@@ -43,12 +43,12 @@ class _FakeFactory:
     """Stand-in for OpenEdxApiClientFactory.
 
     Carries whichever client the sensor under test calls: discovery reads the
-    catalog, observation reads outlines.
+    catalog, observation reads content versions.
     """
 
     def __init__(
         self,
-        client: "_CatalogClient | _OutlineClient",
+        client: "_CatalogClient | _VersionsClient",
         deployment: str = "mitxonline",
     ) -> None:
         self.client = client
@@ -121,8 +121,31 @@ def test_invalid_partition_strings_are_not_registered(
     assert _added_partitions(result) == {"course-v1:org+num+ok"}
 
 
-class _OutlineClient:
-    """Serves canned outlines, optionally failing or blocking on some of them."""
+def _facts(
+    published: str,
+    files: int = 0,
+    latest_upload: str | None = None,
+    transcripts: int = 0,
+    latest_transcript: str | None = None,
+) -> dict[str, Any]:
+    """Build one course's entry in a content versions response."""
+    return {
+        "published_version": published,
+        "static_assets": {
+            "count": files,
+            "latest_upload": latest_upload,
+            "latest_asset": None,
+        },
+        "transcripts": {"count": transcripts, "latest_modified": latest_transcript},
+    }
+
+
+class _VersionsClient:
+    """Serves canned content versions, optionally failing or blocking a batch.
+
+    A batch that holds any course in ``raises`` or ``blocks`` fails or blocks as
+    a whole, as a real request would.
+    """
 
     def __init__(
         self,
@@ -136,25 +159,31 @@ class _OutlineClient:
         self.raises = raises or set()
         self.blocks = blocks or set()
         self.released = threading.Event()
-        self.requested: list[str] = []
+        self.batches: list[list[str]] = []
 
-    def get_course_outline(self, course_id: str) -> dict[str, str]:
-        self.requested.append(course_id)
-        if course_id in self.blocks:
+    def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
+        self.batches.append(course_ids)
+        if self.blocks.intersection(course_ids):
             # Bounded so a hung test fails on its assertion rather than its
             # timeout, and long enough that the sweep budget always wins.
             self.released.wait(timeout=30)
-        if course_id in self.missing:
-            msg = f"no outline for {course_id}"
-            raise httpx.HTTPStatusError(
-                msg,
-                request=httpx.Request("GET", "https://lms.example/outline"),
-                response=httpx.Response(HTTP_NOT_FOUND),
-            )
-        if course_id in self.raises:
-            msg = f"boom for {course_id}"
+        if self.raises.intersection(course_ids):
+            msg = f"boom for {course_ids}"
             raise ValueError(msg)
-        return {"published_version": self.versions[course_id]}
+        return {
+            "versions": {
+                course_id: _facts(self.versions[course_id])
+                for course_id in course_ids
+                if course_id in self.versions
+            },
+            "missing": [c for c in course_ids if c in self.missing],
+        }
+
+
+@pytest.fixture
+def one_course_per_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put each course in its own request, so batch failures isolate one course."""
+    monkeypatch.setattr("openedx.assets.openedx.VERSIONS_BATCH_SIZE", 1)
 
 
 def _observations(result) -> dict[str, str]:
@@ -175,64 +204,88 @@ def test_observation_sensor_reports_a_version_for_every_partition(
     one observation run per partition, each of which swept every course anyway.
     """
     _seed_partitions(instance, ["course-a", "course-b"])
-    client = _OutlineClient({"course-a": "v1", "course-b": "v2"})
+    client = _VersionsClient({"course-a": "v1", "course-b": "v2"})
 
     result = courseware_observation_sensor(
         build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
         _FakeFactory(client),
     )
 
-    assert _observations(result) == {"course-a": "v1", "course-b": "v2"}
+    assert _observations(result) == {
+        "course-a": courseware_data_version(_facts("v1")),
+        "course-b": courseware_data_version(_facts("v2")),
+    }
     assert not result.run_requests
     assert all(event.asset_key == COURSEWARE_KEY for event in result.asset_events), (
         "observations must land on the courseware source asset"
     )
 
 
-def test_observation_sensor_omits_a_course_missing_from_the_lms(
+def test_observation_sensor_asks_for_courses_in_batches(
+    instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Courses are fetched a batch per request, never one request per course."""
+    monkeypatch.setattr("openedx.assets.openedx.VERSIONS_BATCH_SIZE", 2)
+    keys = ["course-a", "course-b", "course-c", "course-d", "course-e"]
+    _seed_partitions(instance, keys)
+    client = _VersionsClient(dict.fromkeys(keys, "v1"))
+
+    result = courseware_observation_sensor(
+        build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
+        _FakeFactory(client),
+    )
+
+    assert sorted(len(batch) for batch in client.batches) == [1, 2, 2]
+    assert set(_observations(result)) == set(keys)
+
+
+def test_observation_sensor_omits_a_course_missing_from_the_instance(
     instance: DagsterInstance,
 ) -> None:
-    """A 404 reports nothing, so the partition's last known version stands.
+    """A course the instance no longer has reports nothing.
 
-    Inventing a version for a course that no longer exists would read as a
-    change and ask for an export of something that cannot be exported.
+    Its last known version stands. Inventing one for a course that no longer
+    exists would read as a change and ask for an export of something that cannot
+    be exported.
     """
     _seed_partitions(instance, ["course-a", "course-gone"])
-    client = _OutlineClient({"course-a": "v1"}, missing={"course-gone"})
+    client = _VersionsClient({"course-a": "v1"}, missing={"course-gone"})
 
     result = courseware_observation_sensor(
         build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
         _FakeFactory(client),
     )
 
-    assert _observations(result) == {"course-a": "v1"}
+    assert set(_observations(result)) == {"course-a"}
 
 
-def test_observation_sensor_survives_one_failing_lookup(
+@pytest.mark.usefixtures("one_course_per_batch")
+def test_observation_sensor_survives_one_failing_batch(
     instance: DagsterInstance,
 ) -> None:
-    """One bad course does not cost the deployment its whole sweep."""
+    """One bad request does not cost the deployment its whole sweep."""
     _seed_partitions(instance, ["course-a", "course-bad"])
-    client = _OutlineClient({"course-a": "v1"}, raises={"course-bad"})
+    client = _VersionsClient({"course-a": "v1"}, raises={"course-bad"})
 
     result = courseware_observation_sensor(
         build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
         _FakeFactory(client),
     )
 
-    assert _observations(result) == {"course-a": "v1"}
+    assert set(_observations(result)) == {"course-a"}
 
 
 def test_observation_sensor_fails_when_every_lookup_fails(
     instance: DagsterInstance,
 ) -> None:
-    """A total failure is a bad token or a down LMS, not a quiet deployment.
+    """A total failure is a bad token or a down Studio, not a quiet deployment.
 
     Reporting it as a clean tick would leave every downstream silent, hourly,
-    forever -- with nothing in the logs that looks like a problem.
+    forever -- with nothing in the logs that looks like a problem. A Studio
+    without the course export plugin's versions endpoint fails this way too.
     """
     _seed_partitions(instance, ["course-a", "course-b"])
-    client = _OutlineClient({}, raises={"course-a", "course-b"})
+    client = _VersionsClient({}, raises={"course-a", "course-b"})
 
     with pytest.raises(RuntimeError, match="failed for all"):
         courseware_observation_sensor(
@@ -249,10 +302,33 @@ def test_observation_sensor_is_quiet_with_no_partitions(
     """A deployment whose courses have not been discovered yet is not an error."""
     result = courseware_observation_sensor(
         build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
-        _FakeFactory(_OutlineClient({})),
+        _FakeFactory(_VersionsClient({})),
     )
 
     assert not result.asset_events
+
+
+def test_each_kind_of_change_moves_its_own_part_of_the_data_version() -> None:
+    """A publish, an upload and a transcript change each move the version.
+
+    A version built from the published version alone left course_xml serving
+    archives missing every transcript and file uploaded since, because neither
+    kind of change ever moves it.
+    """
+    base = courseware_data_version(_facts("v1")).split("/")
+    published = courseware_data_version(_facts("v2")).split("/")
+    uploaded = courseware_data_version(
+        _facts("v1", files=1, latest_upload="2026-09-01T00:00:00+00:00")
+    ).split("/")
+    transcribed = courseware_data_version(
+        _facts("v1", transcripts=2, latest_transcript="2026-09-05T00:00:00+00:00")
+    ).split("/")
+
+    assert courseware_data_version(_facts("v1")).split("/") == base, "stable"
+    assert base[0] == "v1", "the published version stays readable"
+    assert [published[0] != base[0], published[1:] == base[1:]] == [True, True]
+    assert [uploaded[1] != base[1], uploaded[::2] == base[::2]] == [True, True]
+    assert [transcribed[2] != base[2], transcribed[:2] == base[:2]] == [True, True]
 
 
 def test_a_malformed_cursor_restarts_from_the_top() -> None:
@@ -289,6 +365,7 @@ def test_next_offset_steps_past_a_course_that_never_finishes() -> None:
     assert next_offset(0, 1, 0) == 0, "no partitions, nowhere to go"
 
 
+@pytest.mark.usefixtures("one_course_per_batch")
 def test_a_blocked_course_does_not_stop_the_rest_being_reached(
     instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -306,7 +383,7 @@ def test_a_blocked_course_does_not_stop_the_rest_being_reached(
     keys = ["course-a", "course-b", "course-c", "course-d"]
     _seed_partitions(instance, keys)
     # course-a never answers, on this tick or any other.
-    client = _OutlineClient(dict.fromkeys(keys, "v1"), blocks={"course-a"})
+    client = _VersionsClient(dict.fromkeys(keys, "v1"), blocks={"course-a"})
 
     observed: set[str] = set()
     cursors: list[str | None] = []
