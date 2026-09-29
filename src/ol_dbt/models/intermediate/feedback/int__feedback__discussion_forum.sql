@@ -26,9 +26,24 @@ with forum_thread as (
     where courseaccess_role in ('staff', 'instructor')
 )
 
+-- An inline discussion's commentable_id is its block's discussion_id. A course run can
+-- reuse one discussion_id across units, so those stay unresolved rather than guessed.
+, discussion_block as (
+    select
+        courserun_readable_id
+        , commentable_id
+        , min(discussion_block_pk) as block_id
+    from {{ ref('dim_discussion_topic') }}
+    where
+        platform = 'mitxonline'
+        and discussion_type = 'discussion component'
+    group by courserun_readable_id, commentable_id
+    having count(*) = 1
+)
+
 , posts as (
     select
-        'thread:' || cast(forumthread_id as varchar) as source_record_ref
+        'commentthread-' || cast(forumthread_id as varchar) as source_record_ref
         , forumthread_id
         , user_id
         , courserun_readable_id
@@ -44,7 +59,7 @@ with forum_thread as (
     union all
 
     select
-        'comment:' || cast(forumcomment_id as varchar) as source_record_ref
+        'comment-' || cast(forumcomment_id as varchar) as source_record_ref
         , forumthread_id
         , user_id
         , courserun_readable_id
@@ -103,11 +118,12 @@ select
     , cast(null as varchar) as source_url
     , 'forum_post' as channel_slug
     , numbered_turns.courserun_readable_id
-    , cast(null as varchar) as block_id
+    , discussion_block.block_id
     -- MITx Online's Open edX is MIT Learn's course backend
     , 'mitlearn' as platform
-    , 'course' as subject_type
-    , numbered_turns.courserun_readable_id as subject_ref
+    , case when discussion_block.block_id is not null then 'courseware_block' else 'course' end
+        as subject_type
+    , coalesce(discussion_block.block_id, numbered_turns.courserun_readable_id) as subject_ref
     , cast(null as varchar) as subject_url
     , cast(null as varchar) as explicit_rating
     , numbered_turns.post_created_on as created_at
@@ -123,3 +139,7 @@ inner join forum_thread
     on numbered_turns.forumthread_id = forum_thread.forumthread_id
 left join users
     on numbered_turns.user_id = users.openedx_user_id
+left join discussion_block
+    on
+        forum_thread.courserun_readable_id = discussion_block.courserun_readable_id
+        and forum_thread.forumthread_commentable_id = discussion_block.commentable_id

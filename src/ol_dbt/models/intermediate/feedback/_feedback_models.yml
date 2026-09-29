@@ -278,8 +278,9 @@ models:
     tests:
     - not_null
   - name: source_record_ref
-    description: str, 'thread:<id>' for a thread's opening post or 'comment:<id>'
-      for a response or comment - the turn's stable business key.
+    description: str, 'commentthread-<id>' for a thread's opening post or 'comment-<id>'
+      for a response or comment - the turn's stable business key. The prefix names
+      the source table, because thread and comment ids overlap.
     tests:
     - not_null
     - unique
@@ -321,16 +322,19 @@ models:
   - name: source_url
     description: str, always null.
   - name: subject_type
-    description: str, always 'course'.
+    description: str, 'courseware_block' when the thread is in an inline discussion
+      that resolves to one block, otherwise 'course'.
   - name: subject_ref
-    description: str, the course run the thread belongs to. Same as courserun_readable_id.
+    description: str, block_id when set, otherwise the course run the thread belongs
+      to.
   - name: subject_url
     description: str, always null.
   - name: courserun_readable_id
     description: str, the course run the thread belongs to.
   - name: block_id
-    description: str, always null. commentable_id in source_metadata names the discussion
-      topic, not a usage key.
+    description: str, the usage key of the inline discussion block the thread is in,
+      from dim_discussion_topic. Null for a course-wide topic, a topic not in the
+      latest course structure, or a discussion_id the course run reuses across blocks.
   - name: platform
     description: str, always 'mitlearn', because MITx Online's Open edX is MIT Learn's
       course backend. The course run's own platform is in source_metadata as courserun_platform.
