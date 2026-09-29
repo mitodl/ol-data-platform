@@ -128,8 +128,8 @@ class FeedbackClustersConfig(Config):
         description=(
             "Only cluster conversations opened on or after this date (YYYY-MM-DD). "
             "Recorded on feedback_cluster_run so feedback_cluster_assignment places "
-            "the same range. Defaults to the FEEDBACK_SINCE env var, else 2025-01-01; "
-            "null clusters the full history."
+            "the same range. Defaults to the FEEDBACK_SINCE env var; unset or null "
+            "clusters the full history."
         ),
     )
     platforms: list[str] | None = Field(

@@ -53,9 +53,9 @@ CLUSTER_RUN_SCHEMA = {
 # weekly schedule and growth sensor explicitly opt into True.
 DEFAULT_IS_PROMOTED = False
 
-# The default for FeedbackSummariesConfig and FeedbackClustersConfig.feedback_since, and
-# what the weekly schedule and growth sensor use, since they don't pass it.
-DEFAULT_FEEDBACK_SINCE: str | None = os.environ.get("FEEDBACK_SINCE") or "2025-01-01"
+# The default for FeedbackClustersConfig.feedback_since, and what the weekly schedule
+# and growth sensor use, since they don't pass it. Unset means the full history.
+DEFAULT_FEEDBACK_SINCE = os.environ.get("FEEDBACK_SINCE") or None
 
 
 # The default platforms for FeedbackSummariesConfig and FeedbackClustersConfig, and
