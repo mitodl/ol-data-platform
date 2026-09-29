@@ -7,7 +7,13 @@ from dagster import (
     sensor,
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
-from ml.lib.cluster import should_trigger_early_recluster
+from ml.lib.cluster import (
+    DEFAULT_FEEDBACK_SINCE,
+    DEFAULT_PLATFORMS,
+    filter_conversation_scope,
+    platforms_to_run_value,
+    should_trigger_early_recluster,
+)
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
@@ -35,14 +41,22 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     # arm/model/dim would inflate this past what a completed run's
     # total_conversations actually measures, and could trigger on growth in rows
     # the next run won't even see.
+    embeddings_lf = get_dbt_model_as_dataframe(
+        database_name=cluster_database_name, table_name="feedback_embeddings"
+    ).filter(
+        (pl.col("embedding_input") == "summary")
+        & (pl.col("embedding_model_version") == default_embedding_model_version())
+        & (pl.col("embedding_dim") == EMBEDDING_DIM)
+    )
     embedding_count = (
-        get_dbt_model_as_dataframe(
-            database_name=cluster_database_name, table_name="feedback_embeddings"
-        )
-        .filter(
-            (pl.col("embedding_input") == "summary")
-            & (pl.col("embedding_model_version") == default_embedding_model_version())
-            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+        filter_conversation_scope(
+            embeddings_lf,
+            get_dbt_model_as_dataframe(
+                database_name=cluster_database_name,
+                table_name="int__feedback__conversation",
+            ),
+            DEFAULT_FEEDBACK_SINCE,
+            DEFAULT_PLATFORMS,
         )
         .select(pl.len())
         .collect()
@@ -63,6 +77,23 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
             if "is_promoted" in runs_lazy.collect_schema().names()
             else pl.lit(False)  # noqa: FBT003
         )
+        # A run over a different date range or platform set is not a valid
+        # baseline either; a table pre-dating a scope column only holds runs
+        # without that filter.
+        run_columns = runs_lazy.collect_schema().names()
+
+        def same_scope(column: str, default: str | None) -> pl.Expr:
+            run_value = (
+                pl.col(column)
+                if column in run_columns
+                else pl.lit(None, dtype=pl.String)
+            )
+            return run_value.is_null() if default is None else run_value == default
+
+        same_feedback_since = same_scope("feedback_since", DEFAULT_FEEDBACK_SINCE)
+        same_platforms = same_scope(
+            "platforms", platforms_to_run_value(DEFAULT_PLATFORMS)
+        )
         # Same model/dim/arm as embedding_count above -- a promoted run from a
         # since-retired production config is not a valid baseline for the
         # current one (e.g. after switching embedding models).
@@ -76,6 +107,8 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
                 )
                 & (pl.col("embedding_dim") == EMBEDDING_DIM)
                 & (pl.col("embedding_input_filter") == "summary")
+                & same_feedback_since
+                & same_platforms
             )
             .sort("run_at", descending=True)
             .select("total_conversations")

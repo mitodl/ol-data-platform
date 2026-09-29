@@ -69,7 +69,7 @@ dg_projects/feedback_clustering/
     definitions.py          # Definitions(assets, resources={io_manager, vault, llm}, jobs, schedules)
     assets/feedback_clustering.py   # thin @asset(s)
     resources/llm.py        # NEW Vault-backed LLM/embeddings client factory
-    lib/summarize.py        # conversation summarization + the skip rule (ml §A.1)
+    lib/summarize.py        # conversation summarization (skip rule: ml §A.1)
     lib/embed.py            # embedding + redaction helpers
     lib/cluster.py          # UMAP+HDBSCAN helpers
     lib/label.py            # LLM cluster-labeling + sentiment helpers
@@ -94,7 +94,7 @@ read/write Iceberg via `get_dbt_model_as_dataframe(...)`
    │
    ▼
 feedback_summaries             @asset  → conversation_summary + summary_model_version
-   │                                     SKIPS turn_count = 1 and short conversations (ml §A.1)
+   │                                     SKIPS conversations below a per-source minimum length (ml §A.1)
    ▼
 feedback_embeddings            @asset  → embedding_vector, embedding_dim, embedding_input,
    │                                     embedding_model_version   [computed ONCE per version]

@@ -9,18 +9,32 @@ on:
     branches:
     - main
     paths:
-    - "packages/**/*.py"
+    - "packages/**"
     - "src/**/*.py"
-    - "dg_projects/**/*.py"
+    - "src/ol_dbt_cli/**"
+    - "src/ol_dlt/**"
+    - "src/ol_orchestrate/**"
+    - "src/ol_superset/**"
+    - "src/ol_dbt/macros/_raw_metadata_columns.sql"
+    - "dg_projects/**"
+    - "ingestion/inventory/**"
     - "**/pyproject.toml"
+    - "**/uv.lock"
     - ".github/workflows/pytest.yaml"
     - ".github/scripts/discover_pytest_suites.py"
   pull_request:
     paths:
-    - "packages/**/*.py"
+    - "packages/**"
     - "src/**/*.py"
-    - "dg_projects/**/*.py"
+    - "src/ol_dbt_cli/**"
+    - "src/ol_dlt/**"
+    - "src/ol_orchestrate/**"
+    - "src/ol_superset/**"
+    - "src/ol_dbt/macros/_raw_metadata_columns.sql"
+    - "dg_projects/**"
+    - "ingestion/inventory/**"
     - "**/pyproject.toml"
+    - "**/uv.lock"
     - ".github/workflows/pytest.yaml"
     - ".github/scripts/discover_pytest_suites.py"
   workflow_dispatch:
@@ -62,9 +76,9 @@ jobs:
         persist-credentials: false
 
     - name: Install uv
-      uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
-        version: "0.12.17"
+        version: "0.12.19"
         enable-cache: true
 
     - name: Set up Python

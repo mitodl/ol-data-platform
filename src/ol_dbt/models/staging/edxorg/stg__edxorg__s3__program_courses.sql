@@ -10,6 +10,14 @@ with source as (
         , course_title
         , course_short_description as course_description
         , course_type
+        -- the key as the programs API gives it ({org}+{course}), which is MIT Learn's
+        -- readable_id for the course
+        , course_key
+        , course_position
+        , excluded_from_search as course_is_excluded_from_search
+        -- the program API's runs for this course, as a JSON array
+        , course_runs as course_runs_json
+        , retrieved_at as program_course_retrieved_at
     from most_recent_source
 )
 

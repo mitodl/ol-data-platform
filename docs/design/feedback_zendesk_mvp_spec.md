@@ -494,8 +494,8 @@ Mirror the `tfact_discussion_events` yml style:
   `category_fk`, `sentiment_fk`, `cluster_key`, `cluster_similarity`, `cluster_assignment_method`. Two
   consistency tests worth having once the ML asset lands:
   `embedding_model_version` is not null wherever `embedding_vector` is, and `summary_model_version` is null
-  exactly where the §A.1 skip rule applies (`turn_count = 1` or under the length threshold) — that second one
-  is the guard that a silent summarizer failure doesn't read as "short conversation".
+  only where `conversation_text` is null — that second one is the guard that a silent summarizer failure
+  doesn't read as a skipped conversation (§A.1 skips never get a row).
 - `int__feedback__conversation`: compound-unique on `['source_slug', 'conversation_ref']`; `turn_count`
   matches the turn count in `tfact_feedback` for the same conversation.
 

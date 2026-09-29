@@ -1,0 +1,541 @@
+offeror_code,offeror_topic_name,topic_uuid
+climate,Adaptation,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Adaptation,bbf9880d-8761-4747-8bf7-76b633afc8ac
+climate,Advocacy & Activism,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,Advocacy & Activism,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+climate,Air Travel,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Air Travel,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+climate,Alternative Fuels,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Alternative Fuels,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+climate,Arctic & Antarctic,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Arctic & Antarctic,94eccea1-f581-4305-a4ca-9270ba0bed87
+climate,Atmosphere,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Atmosphere,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+climate,"Batteries, Storage & Transmission",26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,"Batteries, Storage & Transmission",952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Biodiversity,69995333-6068-4190-913c-a394b48ad233
+climate,Biodiversity,94eccea1-f581-4305-a4ca-9270ba0bed87
+climate,Buildings,de563de2-a548-4a41-9fe5-9b6be9511c01
+climate,Buildings,f8260659-5b06-411c-92e0-4303e7a26108
+climate,Carbon Capture,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Carbon Capture,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Carbon Pricing,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,Carbon Pricing,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+climate,Carbon Removal,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+climate,Carbon Removal,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+climate,Cars,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Cars,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Cities & Planning,55e47e91-75ef-4369-80be-a726d084ce0d
+climate,Cities & Planning,f8260659-5b06-411c-92e0-4303e7a26108
+climate,Climate Justice,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Climate Justice,bbf9880d-8761-4747-8bf7-76b633afc8ac
+climate,Climate Modeling,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Climate Modeling,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+climate,Communication & Arts,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Communication & Arts,aedb383a-4825-4f88-803a-990f9eb8aa45
+climate,Drought,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Drought,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Education,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Education,97de7fb3-a934-496d-90cc-1ab3ea6f7660
+climate,Electrification,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Electrification,e6dd36cd-a778-451a-933e-9aa7995e6892
+climate,Energy,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Energy,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Energy Efficiency,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Energy Efficiency,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Finance & Economics,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,Finance & Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+climate,Flooding,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Flooding,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,"Food, Water & Agriculture",3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,"Food, Water & Agriculture",6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Forests,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Forests,94eccea1-f581-4305-a4ca-9270ba0bed87
+climate,Fossil Fuels,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Fossil Fuels,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Freight,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Freight,ae8fa718-3efc-45ce-9928-ab66adbb31e0
+climate,Geoengineering,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Geoengineering,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Government & Politics,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,Government & Politics,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+climate,Health & Medicine,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Health & Medicine,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+climate,Heatwaves,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Heatwaves,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Humanities & Social Science,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Humanities & Social Science,bbf9880d-8761-4747-8bf7-76b633afc8ac
+climate,Hurricanes,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Hurricanes,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Industry & Manufacturing,4176e385-92c5-4e02-b3cc-4f34d9a4bf40
+climate,Industry & Manufacturing,d18ae735-9eb0-42ec-982d-798590f78b68
+climate,International Agreements,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,International Agreements,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+climate,National Security,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,National Security,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+climate,Nuclear & Fusion Energy,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Nuclear & Fusion Energy,4ce508b8-fbda-408c-b33f-9860d799c62c
+climate,Oceans,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Oceans,94eccea1-f581-4305-a4ca-9270ba0bed87
+climate,Public Transportation,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Public Transportation,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+climate,Renewable Energy,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Renewable Energy,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Sea Level Rise,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Sea Level Rise,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Transportation,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+climate,Transportation,952604ab-ae23-45b3-a040-0e5f26fe42df
+climate,Waste,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+climate,Waste,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+climate,Weather & Natural Disasters,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Weather & Natural Disasters,6de6133e-1484-4c44-a0da-bebfba14ebe7
+climate,Wildfires,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+climate,Wildfires,6de6133e-1484-4c44-a0da-bebfba14ebe7
+mitpe,AI/Machine Learning,3e48abd0-b55b-47e8-8691-606c6efd61bf
+mitpe,AI/Machine Learning,d5936b40-07ce-4dcc-bc67-8f893fbedb50
+mitpe,BioTech,f5111658-124e-4d2a-b0fc-ba30b8910239
+mitpe,Blockchain,7ae3435f-b162-4460-9b15-aceb4e242d11
+mitpe,Business Analytics,af54f0cf-1e8c-414b-ac98-8d93494239a1
+mitpe,Business Innovation,edbd13c5-3e99-4c5e-bf26-187c9b123df9
+mitpe,Data Science,8d664b63-5d0b-4181-9a10-c41180a0c0c7
+mitpe,Digital Business/IT,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+mitpe,Educators,69ce72a6-049d-4380-b4d9-978e5c8b3fff
+mitpe,Entrepreneurship,10355812-996d-4c5d-aa7f-8f4f84e89286
+mitpe,Finance,b84810f6-b232-4443-9471-eff7823a5f93
+mitpe,Leadership & Organizations,7c305170-3216-42b2-8518-35ce88a7f780
+mitpe,Management,d18752a9-9163-4536-9eba-ec77e654ffc5
+mitpe,Manufacturing,339ae048-105a-4cf6-b823-37b7c0f0c089
+mitpe,Marketing & Communications,13f8a623-e373-4fa2-9c23-89a20890291e
+mitpe,Marketing & Communications,6c3cf991-cfd6-4293-86dd-8e1cea682065
+mitpe,Operations,339ae048-105a-4cf6-b823-37b7c0f0c089
+mitpe,Other Business,d18752a9-9163-4536-9eba-ec77e654ffc5
+mitpe,Other Technology,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+mitpe,Prototype/Lab,f497f6d2-48cd-4aa1-95aa-7597d800833d
+mitpe,Quantum Computing,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+mitpe,Real Estate,a303a156-41de-4845-8e40-4e25cc215c87
+mitpe,Strategy,c927602f-4ced-4bdd-ae11-62c5c0d75454
+mitpe,Sustainability,d18ae735-9eb0-42ec-982d-798590f78b68
+mitpe,Systems Engineering,ba15c07b-96de-48b9-97c6-97d985cb1716
+mitpe,Systems Thinking,1870ce0f-029f-458b-bd90-a650f46877eb
+mitpe,Tech Management & Business,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+mitpe,Technology Innovation,f497f6d2-48cd-4aa1-95aa-7597d800833d
+mitx,Biology & Life Sciences,69995333-6068-4190-913c-a394b48ad233
+mitx,Business & Management,99ec5b40-e929-4ad9-bccf-7305ef6938b1
+mitx,Chemistry,63c236c0-17cb-4a5b-ab6d-23c9176738ff
+mitx,Communication,6c3cf991-cfd6-4293-86dd-8e1cea682065
+mitx,Computer Science,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+mitx,Computer Science,4cd6156e-51a0-4da4-add4-6f81e106cd43
+mitx,Data Analysis & Statistics,8d664b63-5d0b-4181-9a10-c41180a0c0c7
+mitx,Design,9235984d-c8b0-47be-98bb-dc01f24cab8f
+mitx,Design,99bd46f0-d4da-43d3-96e5-1d63771d1c4a
+mitx,Economics & Finance,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+mitx,Economics & Finance,b84810f6-b232-4443-9471-eff7823a5f93
+mitx,Education & Teacher Training,69ce72a6-049d-4380-b4d9-978e5c8b3fff
+mitx,Electronics,c06109bf-cff8-4873-b04b-f5e66e3e1764
+mitx,Electronics,e6dd36cd-a778-451a-933e-9aa7995e6892
+mitx,Energy & Earth Sciences,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+mitx,Energy & Earth Sciences,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+mitx,Engineering,952604ab-ae23-45b3-a040-0e5f26fe42df
+mitx,Environmental Studies,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+mitx,Environmental Studies,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+mitx,Ethics,90e4deaf-1780-47e7-b784-0843c45c64b5
+mitx,Food & Nutrition,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+mitx,Health & Safety,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+mitx,History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+mitx,Humanities,aedb383a-4825-4f88-803a-990f9eb8aa45
+mitx,Language,b12016dc-4645-47ef-991c-31063eb67338
+mitx,Law,7396a987-d7ed-4947-819b-a0f6e1df4682
+mitx,Literature,d9fc08d3-bd3a-4e08-b195-add3c436f726
+mitx,Math,b8553297-f6a0-4964-b1ad-2c555ea66302
+mitx,Medicine,a725a04c-254c-4378-a1c8-2f55b10ae84a
+mitx,Music,2276370a-040b-4af9-a4be-2462a833cc07
+mitx,Philanthropy,90e4deaf-1780-47e7-b784-0843c45c64b5
+mitx,Philosophy & Ethics,90e4deaf-1780-47e7-b784-0843c45c64b5
+mitx,Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+mitx,Science,1fab5205-d2f2-4719-bfce-04b4fd2d8f04
+ocw,Academic Writing,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Accounting,b84810f6-b232-4443-9471-eff7823a5f93
+ocw,Aerodynamics,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Aerospace Engineering,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,African History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,African-American Studies,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Algebra and Number Theory,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Algorithms and Data Structures,d2d550b7-ade2-4dd5-b1df-929d511f4772
+ocw,American History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,American Literature,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,American Politics,5d51196b-88c7-41a2-a951-c04f9af7ae62
+ocw,Analytical Chemistry,63c236c0-17cb-4a5b-ab6d-23c9176738ff
+ocw,Anatomy and Physiology,13d99dba-f9d6-456a-a3aa-5b7e8604c187
+ocw,Ancient History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Anthropology,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,Applied Mathematics,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Aquatic Sciences and Water Quality Control,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+ocw,Archaeology,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,Architectural Design,de563de2-a548-4a41-9fe5-9b6be9511c01
+ocw,Architectural Engineering,de563de2-a548-4a41-9fe5-9b6be9511c01
+ocw,Architectural History and Criticism,de563de2-a548-4a41-9fe5-9b6be9511c01
+ocw,Architecture,de563de2-a548-4a41-9fe5-9b6be9511c01
+ocw,Art History,84b6a959-5699-4fc4-814b-e48cfcca01ce
+ocw,Artificial Intelligence,3e48abd0-b55b-47e8-8691-606c6efd61bf
+ocw,Artificial Intelligence,d5936b40-07ce-4dcc-bc67-8f893fbedb50
+ocw,Asian History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Asian Studies,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Astrodynamics,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Astrophysics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Atmospheric Science,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,"Atomic, Molecular, Optical Physics",46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Avionics,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Bioastronautics,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Biochemistry,69995333-6068-4190-913c-a394b48ad233
+ocw,Biography,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Biological Anthropology,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,Biological Engineering,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Biology,69995333-6068-4190-913c-a394b48ad233
+ocw,Biomechanics,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Biomedical Enterprise,f5111658-124e-4d2a-b0fc-ba30b8910239
+ocw,Biomedical Instrumentation,f5111658-124e-4d2a-b0fc-ba30b8910239
+ocw,Biomedical Signal and Image Processing,3f5b5755-5c75-4e06-9990-6d790f784538
+ocw,Biomedicine,f5111658-124e-4d2a-b0fc-ba30b8910239
+ocw,Biophysics,69995333-6068-4190-913c-a394b48ad233
+ocw,Biostatistics,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Biotechnology,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Buildings,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,Buildings,f8260659-5b06-411c-92e0-4303e7a26108
+ocw,Business Ethics,7c305170-3216-42b2-8518-35ce88a7f780
+ocw,Calculus,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Cancer,13d99dba-f9d6-456a-a3aa-5b7e8604c187
+ocw,Cancer,7e1a310f-9bea-4f03-a103-729fba207d16
+ocw,Cell Biology,69995333-6068-4190-913c-a394b48ad233
+ocw,Cell and Tissue Engineering,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Cellular and Molecular Medicine,f5111658-124e-4d2a-b0fc-ba30b8910239
+ocw,Chemical Engineering,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+ocw,Chemistry,63c236c0-17cb-4a5b-ab6d-23c9176738ff
+ocw,Chinese,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Civil Engineering,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,Classical Mechanics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Classics,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Climate,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Climate,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+ocw,Climate Studies,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Climate Studies,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+ocw,Cognitive Science,1a3be8fd-5d59-4a8a-85e5-153f794bfb24
+ocw,Combustion,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,Comedy,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Communication,6c3cf991-cfd6-4293-86dd-8e1cea682065
+ocw,Community Development,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Comparative History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Comparative Literature,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Comparative Politics,5d51196b-88c7-41a2-a951-c04f9af7ae62
+ocw,Composite Materials,f9b619a4-7507-4e73-98e6-c367879b0961
+ocw,Computation,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Computation and Systems Biology,69995333-6068-4190-913c-a394b48ad233
+ocw,Computational Biology,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Computational Modeling and Simulation,ba15c07b-96de-48b9-97c6-97d985cb1716
+ocw,Computational Science and Engineering,ba15c07b-96de-48b9-97c6-97d985cb1716
+ocw,Computer Design and Engineering,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+ocw,Computer Design and Engineering,59db0d7b-b056-47c4-a7f4-3ebd2a31aecf
+ocw,Computer Networks,ae7aa09c-68f7-4622-b9d4-d3bb378dd323
+ocw,Computer Science,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+ocw,Condensed Matter Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Construction Management,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,Creative Writing,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Criticism,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Cryptography,ae7aa09c-68f7-4622-b9d4-d3bb378dd323
+ocw,Cultural Anthropology,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,Curriculum and Teaching,69ce72a6-049d-4380-b4d9-978e5c8b3fff
+ocw,Dance,598fd5dc-9e5b-4e87-8cb5-40dd51a579af
+ocw,Data Mining,8d664b63-5d0b-4181-9a10-c41180a0c0c7
+ocw,Developmental Biology,69995333-6068-4190-913c-a394b48ad233
+ocw,Developmental Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Differential Equations,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Digital Media,1f08bfa5-4c61-48ad-8d30-f65edd3b6873
+ocw,Digital Systems,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,Drama,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Dynamics and Control,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Earth Science,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Ecology,69995333-6068-4190-913c-a394b48ad233
+ocw,Econometrics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Education Policy,24807a26-7f06-4017-b663-98dc2448e815
+ocw,Educational Technology,a3b492a0-f2a9-4225-8721-1f9e53468b65
+ocw,Electric Power,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,Electrical Engineering,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,Electricity,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,Electromagnetism,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Electronic Materials,f9b619a4-7507-4e73-98e6-c367879b0961
+ocw,Electronics,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,English as a Second Language,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Entrepreneurship,10355812-996d-4c5d-aa7f-8f4f84e89286
+ocw,Entrepreneurship,49358bd7-4e8c-4b37-bcc0-cf3b20d3b9a2
+ocw,Environmental Engineering,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+ocw,Environmental Management,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+ocw,Environmental Policy,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+ocw,Environmental Policy,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Environmental Science,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Epidemiology,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+ocw,Epistemology,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Ethics,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Ethnography,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,European History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,European and Russian Studies,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Fiction,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Film and Video,9235984d-c8b0-47be-98bb-dc01f24cab8f
+ocw,Finance,b84810f6-b232-4443-9471-eff7823a5f93
+ocw,Financial Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Fine Arts,2d7e3f48-c34f-45c6-96dd-f46570f40778
+ocw,Fluid Mechanics,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Fossil Fuels,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,French,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Fuel Cells,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,Functional Genomics,f5111658-124e-4d2a-b0fc-ba30b8910239
+ocw,Game Design,e1f5da26-b4f2-46d1-9aa3-4b6fc010d568
+ocw,Game Theory,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Gender Studies,246f8a67-7e5a-4231-8e70-27900354eec7
+ocw,Gender Studies,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Genetics,69995333-6068-4190-913c-a394b48ad233
+ocw,Geobiology,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Geochemistry,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Geography,170e9d0e-2195-470b-b743-0b13d3ee034e
+ocw,Geology,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Geophysics,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Geotechnical Engineering,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,German,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Global Poverty,05426c52-eeb7-4abd-9215-884c11441da3
+ocw,Graphic Design,9235984d-c8b0-47be-98bb-dc01f24cab8f
+ocw,Graphics and Visualization,99bd46f0-d4da-43d3-96e5-1d63771d1c4a
+ocw,Guidance and Control Systems,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Health Care Management,a725a04c-254c-4378-a1c8-2f55b10ae84a
+ocw,Health and Exercise Science,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+ocw,High Energy Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Higher Education,0a4ae84b-9552-4c85-8e3c-1ad21233d7d5
+ocw,Higher Education,69ce72a6-049d-4380-b4d9-978e5c8b3fff
+ocw,Historical Methods,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Historiography,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,History of Science and Technology,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Housing Development,55e47e91-75ef-4369-80be-a726d084ce0d
+ocw,Human-Computer Interfaces,bda97261-3d5f-410f-ab8b-9f0c316da6a8
+ocw,Hydrodynamics,ae8c329b-e9ce-4a93-a1c8-370ba39cf0c7
+ocw,Hydrodynamics and Coastal Engineering,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+ocw,Hydrogen and Alternatives,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,Hydrology and Water Resource Systems,de7bb282-6cde-4af4-8ae6-fdc9de8323ef
+ocw,Immunology,7e1a310f-9bea-4f03-a103-729fba207d16
+ocw,Indigenous Studies,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,Industrial Organization,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Industrial Relations and Human Resource Management,7c305170-3216-42b2-8518-35ce88a7f780
+ocw,Industrial Relations and Human Resource Management,d18752a9-9163-4536-9eba-ec77e654ffc5
+ocw,Information Technology,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+ocw,Innovation,c927602f-4ced-4bdd-ae11-62c5c0d75454
+ocw,Inorganic Chemistry,63c236c0-17cb-4a5b-ab6d-23c9176738ff
+ocw,Intellectual History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,International Development,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,International Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,International Literature,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,International Relations,5d51196b-88c7-41a2-a951-c04f9af7ae62
+ocw,Japanese,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Jewish History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Labor Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Language,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Latin American History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Latin and Caribbean Studies,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Leadership,7c305170-3216-42b2-8518-35ce88a7f780
+ocw,Legal Studies,7396a987-d7ed-4947-819b-a0f6e1df4682
+ocw,Linear Algebra,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Linguistics,afa33b3e-df92-4412-ad26-e35b0a9b8b3d
+ocw,Literature,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Logic,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Macroeconomics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Management,d18752a9-9163-4536-9eba-ec77e654ffc5
+ocw,Marketing,13f8a623-e373-4fa2-9c23-89a20890291e
+ocw,Materials Science and Engineering,f9b619a4-7507-4e73-98e6-c367879b0961
+ocw,Materials Selection,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Mathematical Analysis,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Mathematical Logic,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Mechanical Design,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Mechanical Engineering,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Media Studies,1f08bfa5-4c61-48ad-8d30-f65edd3b6873
+ocw,Medical Imaging,3f5b5755-5c75-4e06-9990-6d790f784538
+ocw,Medieval History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Mental Health,702c31e5-acae-4b16-aa85-9d83965587a0
+ocw,Metallurgical Engineering,f9b619a4-7507-4e73-98e6-c367879b0961
+ocw,Metaphysics,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Microbiology,69995333-6068-4190-913c-a394b48ad233
+ocw,Microeconomics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Microtechnology,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Middle Eastern History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Middle Eastern Studies,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Military History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Military Studies,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Modern History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+ocw,Molecular Biology,69995333-6068-4190-913c-a394b48ad233
+ocw,Molecular Engineering,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+ocw,Music,2276370a-040b-4af9-a4be-2462a833cc07
+ocw,Music History,2276370a-040b-4af9-a4be-2462a833cc07
+ocw,Music Performance,2276370a-040b-4af9-a4be-2462a833cc07
+ocw,Music Theory,2276370a-040b-4af9-a4be-2462a833cc07
+ocw,Nanotechnology,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Neurobiology,69995333-6068-4190-913c-a394b48ad233
+ocw,Neuroscience,69995333-6068-4190-913c-a394b48ad233
+ocw,Nonfiction Prose *Periodic Literature,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Nuclear,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,Nuclear Engineering,4ce508b8-fbda-408c-b33f-9860d799c62c
+ocw,Nuclear Materials,4ce508b8-fbda-408c-b33f-9860d799c62c
+ocw,Nuclear Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,"Nuclear Systems, Policy, and Economics",4ce508b8-fbda-408c-b33f-9860d799c62c
+ocw,Numerical Simulation,ba15c07b-96de-48b9-97c6-97d985cb1716
+ocw,Ocean Engineering,ae8c329b-e9ce-4a93-a1c8-370ba39cf0c7
+ocw,Ocean Exploration,ae8c329b-e9ce-4a93-a1c8-370ba39cf0c7
+ocw,Ocean Structures,ae8c329b-e9ce-4a93-a1c8-370ba39cf0c7
+ocw,Oceanic Pollution Control,ae8c329b-e9ce-4a93-a1c8-370ba39cf0c7
+ocw,Oceanography,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Operating Systems,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+ocw,Operations Management,339ae048-105a-4cf6-b823-37b7c0f0c089
+ocw,Organic Chemistry,63c236c0-17cb-4a5b-ab6d-23c9176738ff
+ocw,Organizational Behavior,7c305170-3216-42b2-8518-35ce88a7f780
+ocw,Particle Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Pathology and Pathophysiology,13d99dba-f9d6-456a-a3aa-5b7e8604c187
+ocw,Performance Arts,598fd5dc-9e5b-4e87-8cb5-40dd51a579af
+ocw,Philosophy,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Philosophy of Language,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Phonology,afa33b3e-df92-4412-ad26-e35b0a9b8b3d
+ocw,Photography,9235984d-c8b0-47be-98bb-dc01f24cab8f
+ocw,Physical Chemistry,63c236c0-17cb-4a5b-ab6d-23c9176738ff
+ocw,Physical Education and Recreation,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+ocw,Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Planetary Science,3ed6c5ae-2dbf-4119-abf1-1e985e5d6fea
+ocw,Poetry,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Political Economy,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Political Philosophy,90e4deaf-1780-47e7-b784-0843c45c64b5
+ocw,Political Science,5d51196b-88c7-41a2-a951-c04f9af7ae62
+ocw,Polymeric Materials,f9b619a4-7507-4e73-98e6-c367879b0961
+ocw,Polymers,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+ocw,Portuguese,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Probability and Statistics,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Process Control Systems,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+ocw,Programming Languages,4cd6156e-51a0-4da4-add4-6f81e106cd43
+ocw,Propulsion Systems,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Proteomics,69995333-6068-4190-913c-a394b48ad233
+ocw,Psychology,d4f16d57-b312-4088-8da7-7db9d1920991
+ocw,Public Administration,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Public Economics,8d0a8bc3-fb72-4e18-8879-ece7a779dcb9
+ocw,Public Health,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+ocw,Public Policy,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Quantum Mechanics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Quechua,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Radiological Engineering,4ce508b8-fbda-408c-b33f-9860d799c62c
+ocw,Real Estate,a303a156-41de-4845-8e40-4e25cc215c87
+ocw,Regional Planning,55e47e91-75ef-4369-80be-a726d084ce0d
+ocw,Regional Politics,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Relativity,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Religion,6d8c46d8-d774-4e8a-90bf-c09c895d853a
+ocw,Religious Architecture,de563de2-a548-4a41-9fe5-9b6be9511c01
+ocw,Renewables,26fb26b7-326e-4d8e-87c9-3eaf775e9ef4
+ocw,Rhetoric,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Robotics and Control Systems,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,Russian,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Science and Technology Policy,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Security Studies,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Semantics,afa33b3e-df92-4412-ad26-e35b0a9b8b3d
+ocw,Sensory-Neural Systems,f5111658-124e-4d2a-b0fc-ba30b8910239
+ocw,Separation Processes,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+ocw,Signal Processing,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,Social Anthropology,2d5d6d26-3f61-4e66-85bf-03168e982d41
+ocw,Social Justice,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Social Medicine,8f7cfd8b-1764-4d6f-aa57-b815be7140dd
+ocw,Social Welfare,ee6d80cf-c1fd-44c7-9551-475b04e2d6ee
+ocw,Sociology,77bb6f11-0036-45e9-913a-00789b27ba17
+ocw,Software Design and Engineering,4cd6156e-51a0-4da4-add4-6f81e106cd43
+ocw,Software Design and Engineering,59db0d7b-b056-47c4-a7f4-3ebd2a31aecf
+ocw,Solid Mechanics,7f69df17-1c01-4c1e-a27c-1b18da921508
+ocw,Spanish,b12016dc-4645-47ef-991c-31063eb67338
+ocw,Speech Pathology,a725a04c-254c-4378-a1c8-2f55b10ae84a
+ocw,Stem Cells,69995333-6068-4190-913c-a394b48ad233
+ocw,Structural Biology,69995333-6068-4190-913c-a394b48ad233
+ocw,Structural Engineering,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,Structural Mechanics,6ce56c4e-d3c3-49ff-84b4-52f6e583e6e5
+ocw,Supply Chain Management,ae8fa718-3efc-45ce-9928-ab66adbb31e0
+ocw,Surveying,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,Sustainability,6de6133e-1484-4c44-a0da-bebfba14ebe7
+ocw,Sustainability,ca9e5834-f3ac-4bdd-b42c-4495f321a1b5
+ocw,Syntax,afa33b3e-df92-4412-ad26-e35b0a9b8b3d
+ocw,Synthetic Biology,236bb608-be91-4dee-8b66-c9dfb7f9840a
+ocw,Systems Design,1870ce0f-029f-458b-bd90-a650f46877eb
+ocw,Systems Design,ba15c07b-96de-48b9-97c6-97d985cb1716
+ocw,Systems Engineering,ba15c07b-96de-48b9-97c6-97d985cb1716
+ocw,Systems Optimization,1870ce0f-029f-458b-bd90-a650f46877eb
+ocw,Systems Optimization,ba15c07b-96de-48b9-97c6-97d985cb1716
+ocw,Technical Writing,d9fc08d3-bd3a-4e08-b195-add3c436f726
+ocw,Technology,c06109bf-cff8-4873-b04b-f5e66e3e1764
+ocw,Telecommunications,e6dd36cd-a778-451a-933e-9aa7995e6892
+ocw,The Developing World,05426c52-eeb7-4abd-9215-884c11441da3
+ocw,Theater,598fd5dc-9e5b-4e87-8cb5-40dd51a579af
+ocw,Theatrical Design,598fd5dc-9e5b-4e87-8cb5-40dd51a579af
+ocw,Theoretical Physics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Theory of Computation,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+ocw,Thermodynamics,46b96e82-66ce-443a-af36-5757c1dbdb1b
+ocw,Topology and Geometry,b8553297-f6a0-4964-b1ad-2c555ea66302
+ocw,Transport Processes,b58df8d8-bd87-48fc-9acc-f0fce158dda9
+ocw,Transportation,03e70cb3-6c6d-4fd0-842c-69cc307e8ef2
+ocw,Transportation,f8260659-5b06-411c-92e0-4303e7a26108
+ocw,Transportation Engineering,287c2f78-4f6c-4a8a-a6a6-c497eb553bc5
+ocw,Transportation Planning,55e47e91-75ef-4369-80be-a726d084ce0d
+ocw,Urban Planning,55e47e91-75ef-4369-80be-a726d084ce0d
+ocw,Urban Studies,55e47e91-75ef-4369-80be-a726d084ce0d
+ocw,Virology,69995333-6068-4190-913c-a394b48ad233
+ocw,Visual Arts,9235984d-c8b0-47be-98bb-dc01f24cab8f
+ocw,World History,f161ef04-8ee0-437d-b50e-a3d1f68c8874
+see,AI/Machine Learning,3e48abd0-b55b-47e8-8691-606c6efd61bf
+see,AI/Machine Learning,d5936b40-07ce-4dcc-bc67-8f893fbedb50
+see,BioTech,f5111658-124e-4d2a-b0fc-ba30b8910239
+see,Blockchain,7ae3435f-b162-4460-9b15-aceb4e242d11
+see,Business Analytics,af54f0cf-1e8c-414b-ac98-8d93494239a1
+see,Business Innovation,edbd13c5-3e99-4c5e-bf26-187c9b123df9
+see,Data Science,8d664b63-5d0b-4181-9a10-c41180a0c0c7
+see,Digital Business/IT,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+see,Educators,69ce72a6-049d-4380-b4d9-978e5c8b3fff
+see,Entrepreneurship,10355812-996d-4c5d-aa7f-8f4f84e89286
+see,Finance,b84810f6-b232-4443-9471-eff7823a5f93
+see,Leadership & Organizations,7c305170-3216-42b2-8518-35ce88a7f780
+see,Management,d18752a9-9163-4536-9eba-ec77e654ffc5
+see,Manufacturing,339ae048-105a-4cf6-b823-37b7c0f0c089
+see,Marketing & Communications,13f8a623-e373-4fa2-9c23-89a20890291e
+see,Marketing & Communications,6c3cf991-cfd6-4293-86dd-8e1cea682065
+see,Operations,339ae048-105a-4cf6-b823-37b7c0f0c089
+see,Other Business,d18752a9-9163-4536-9eba-ec77e654ffc5
+see,Other Technology,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+see,Prototype/Lab,f497f6d2-48cd-4aa1-95aa-7597d800833d
+see,Quantum Computing,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+see,Real Estate,a303a156-41de-4845-8e40-4e25cc215c87
+see,Strategy,c927602f-4ced-4bdd-ae11-62c5c0d75454
+see,Sustainability,d18ae735-9eb0-42ec-982d-798590f78b68
+see,Systems Engineering,ba15c07b-96de-48b9-97c6-97d985cb1716
+see,Systems Thinking,1870ce0f-029f-458b-bd90-a650f46877eb
+see,Tech Management & Business,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+see,Technology Innovation,f497f6d2-48cd-4aa1-95aa-7597d800833d
+xpro,AI/Machine Learning,3e48abd0-b55b-47e8-8691-606c6efd61bf
+xpro,AI/Machine Learning,d5936b40-07ce-4dcc-bc67-8f893fbedb50
+xpro,BioTech,f5111658-124e-4d2a-b0fc-ba30b8910239
+xpro,Blockchain,7ae3435f-b162-4460-9b15-aceb4e242d11
+xpro,Business Analytics,af54f0cf-1e8c-414b-ac98-8d93494239a1
+xpro,Business Innovation,edbd13c5-3e99-4c5e-bf26-187c9b123df9
+xpro,Data Science,8d664b63-5d0b-4181-9a10-c41180a0c0c7
+xpro,Digital Business/IT,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+xpro,Educators,69ce72a6-049d-4380-b4d9-978e5c8b3fff
+xpro,Entrepreneurship,10355812-996d-4c5d-aa7f-8f4f84e89286
+xpro,Finance,b84810f6-b232-4443-9471-eff7823a5f93
+xpro,Leadership & Organizations,7c305170-3216-42b2-8518-35ce88a7f780
+xpro,Management,d18752a9-9163-4536-9eba-ec77e654ffc5
+xpro,Manufacturing,339ae048-105a-4cf6-b823-37b7c0f0c089
+xpro,Marketing & Communications,13f8a623-e373-4fa2-9c23-89a20890291e
+xpro,Marketing & Communications,6c3cf991-cfd6-4293-86dd-8e1cea682065
+xpro,Operations,339ae048-105a-4cf6-b823-37b7c0f0c089
+xpro,Other Business,d18752a9-9163-4536-9eba-ec77e654ffc5
+xpro,Other Technology,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+xpro,Prototype/Lab,f497f6d2-48cd-4aa1-95aa-7597d800833d
+xpro,Quantum Computing,29ba1dbc-5bf4-4bc5-be89-824eb604e281
+xpro,Real Estate,a303a156-41de-4845-8e40-4e25cc215c87
+xpro,Strategy,c927602f-4ced-4bdd-ae11-62c5c0d75454
+xpro,Systems Engineering,ba15c07b-96de-48b9-97c6-97d985cb1716
+xpro,Systems Thinking,1870ce0f-029f-458b-bd90-a650f46877eb
+xpro,Tech Management & Business,85d20f8f-0fff-41b0-9b59-8a999e6e6d46
+xpro,Technology Innovation,f497f6d2-48cd-4aa1-95aa-7597d800833d

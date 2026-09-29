@@ -97,7 +97,7 @@ edxorg_s3_ingest_job = dg.define_asset_job(
 )
 
 # Runs in these statuses haven't finished yet -- wait rather than deciding.
-_IN_FLIGHT_RUN_STATUSES = frozenset(
+IN_FLIGHT_RUN_STATUSES = frozenset(
     {
         dg.DagsterRunStatus.QUEUED,
         dg.DagsterRunStatus.NOT_STARTED,
@@ -188,7 +188,7 @@ def edxorg_upstream_changes_sensor(
     if attempts:
         latest_attempt = attempts[-1]
         status = latest_attempt.dagster_run.status
-        if status in _IN_FLIGHT_RUN_STATUSES:
+        if status in IN_FLIGHT_RUN_STATUSES:
             return dg.SkipReason(
                 f"edxorg_s3 ingest for this batch (run_id="
                 f"{latest_attempt.dagster_run.run_id}) is still {status.value}; "

@@ -74,7 +74,7 @@ def _urls_read(pipeline: dlt.Pipeline, items: list[dict[str, Any]]) -> list[str]
 
     files = edxorg_s3.edxorg_files(
         bucket_url="s3://bucket",
-        file_glob="*.tsv",
+        file_globs=["*.tsv"],
         credentials=_FakeFs([item["size_in_bytes"] for item in items]),
         budget_bytes=25,
     )

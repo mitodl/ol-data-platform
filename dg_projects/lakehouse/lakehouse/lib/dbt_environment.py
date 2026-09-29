@@ -12,10 +12,9 @@ exists to undo:
 * **data lake env** -- which ``ol_data_lake_<env>`` catalog to READ.
 * **automation** -- whether the dbt asset graph materializes itself here.
 
-They diverge for ``dev``: a developer's StarRocks target port-forwards to the
-QA cluster but should read production data. The b2b sources used to infer the
-lake from ``'qa' in target.name``, which got that case wrong and made those
-models undevelopable locally.
+They diverge for ``ci``: its StarRocks target is ``starrocks_production``, but
+it reads the QA lake. The b2b sources used to infer the lake from
+``'qa' in target.name``, which conflated the two.
 
 Every environment appears in every map. There is deliberately no fallback --
 ``qa`` used to be absent from the Trino map and fell through to ``production``,
@@ -25,16 +24,16 @@ had to say what it meant.
 
 Adding an environment
 ---------------------
-A fifth environment, ``local`` (k3d + Tilt, its own object store and Iceberg
-catalog), is planned -- see RFC 12711's Local-2/3/4 tasks, which specify that
-``local`` extends *this* convention rather than introducing a third resolution
-style. It is NOT a rename of ``dev``: ``dev`` connects to the remote QA cluster
-and reads the production lake, while ``local`` reaches neither and is fed by
-local ingest and fixtures. Both will need to exist.
+``dev`` is meant to target a local environment (k3d + Tilt, its own object
+store and Iceberg catalog), planned in RFC 12711's Local-2/3/4 tasks, which
+specify that it extends *this* convention rather than introducing a third
+resolution style. That environment does not exist yet, so until it does the
+StarRocks entries for ``dev`` resolve exactly like ``qa``. When it lands,
+repoint ``dev`` in every map below and in ``_ENVS`` in
+``ol_dbt_cli/commands/starrocks.py``, which mirrors these.
 
-When it lands, ``DAGSTER_ENV`` gains the value and every map below needs an
-entry -- plus ``_ENVS`` in ``ol_dbt_cli/commands/starrocks.py``, which mirrors
-these. Until then ``resolve_for_environment`` raises on it, which is the point:
+A genuinely new ``DAGSTER_ENV`` value needs an entry in every map below, and
+until it has one ``resolve_for_environment`` raises on it, which is the point:
 the failure is a missing declaration, not a silently inherited warehouse.
 Automation is the exception to that rule and deliberately so: a new environment
 is simply absent from ``DBT_AUTOMATION_ENVIRONMENTS`` and therefore does not
@@ -64,6 +63,9 @@ DBT_TARGET_MAP: Mapping[str, str] = {
 # StarRocks. These name a CLUSTER and its auth, not a data lake: dev and qa
 # share starrocks_qa_vault because a developer port-forwards to the QA cluster.
 # Which catalog each then reads is DATA_LAKE_ENV_MAP's job, not this map's.
+# `dev` is a placeholder for the planned local environment (RFC 12711
+# Local-2/3/4); until that exists it resolves exactly like `qa` here and in
+# DATA_LAKE_ENV_MAP.
 # Matches the dbt_target choices in ol_dbt_cli/commands/starrocks.py's _ENVS.
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "starrocks_qa_vault",
@@ -146,11 +148,17 @@ if not set(VALID_DAGSTER_ENVS) >= DBT_AUTOMATION_ENVIRONMENTS:
 
 DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 
-# Which lake each environment READS. Mirrors trino_catalog_map in
-# definitions.py (which cannot be imported here -- it imports the modules that
-# import this one); keep the two in step when adding an environment.
+# Which lake each StarRocks environment READS. Mirrors the `data_lake_env`
+# entries in _ENVS in ol_dbt_cli/commands/starrocks.py; keep the two in step.
+#
+# Matches trino_catalog_map in definitions.py for every environment except
+# `dev`, deliberately. Trino `dev` still reads production through the
+# production Galaxy cluster, but StarRocks `dev` connects to the QA cluster,
+# which has no production lake access (ol-infrastructure#5472/#5670, #6023).
+# Syncing this entry back to trino_catalog_map["dev"] breaks every dev b2b
+# build.
 DATA_LAKE_ENV_MAP: Mapping[str, str] = {
-    "dev": "production",
+    "dev": "qa",
     "ci": "qa",
     "qa": "qa",
     "production": "production",

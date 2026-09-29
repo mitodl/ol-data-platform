@@ -19,10 +19,10 @@ tables:
   sync_mode: full_refresh_overwrite_deduped
   primary_key:
   - - readable_id
-  modeled: false
+  modeled: true
 - name: raw__podcast__rss__episodes
   raw_table: raw__podcast__rss__episodes
   sync_mode: full_refresh_overwrite_deduped
   primary_key:
   - - readable_id
-  modeled: false
+  modeled: true

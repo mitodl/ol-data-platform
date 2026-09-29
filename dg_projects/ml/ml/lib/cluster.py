@@ -37,6 +37,13 @@ CLUSTER_RUN_SCHEMA = {
     "run_status": pl.String,
     "is_promoted": pl.Boolean,
     "run_at": pl.Datetime(time_zone="UTC"),
+    "feedback_since": pl.String,
+    # Comma-joined and sorted, so two runs over the same platforms compare equal
+    # as plain strings; null means every platform.
+    "platforms": pl.String,
+    "hdbscan_min_samples": pl.Int64,
+    "hdbscan_cluster_selection_method": pl.String,
+    "max_clusters": pl.Int64,
 }
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
@@ -45,6 +52,85 @@ CLUSTER_RUN_SCHEMA = {
 # a manual/ad hoc launch that omits this is an evaluation run by default; only the
 # weekly schedule and growth sensor explicitly opt into True.
 DEFAULT_IS_PROMOTED = False
+
+# The default for FeedbackClustersConfig.feedback_since, and what the weekly schedule
+# and growth sensor use, since they don't pass it. Unset means the full history.
+DEFAULT_FEEDBACK_SINCE = os.environ.get("FEEDBACK_SINCE") or None
+
+
+# The default platforms for FeedbackSummariesConfig and FeedbackClustersConfig, and
+# what the weekly schedule and growth sensor use, since they don't pass it.
+DEFAULT_PLATFORMS: list[str] | None = ["mitlearn"]
+
+
+# The default minimum length per source for FeedbackSummariesConfig, and what every
+# cluster step applies, so an older summary can't carry a shorter chat into a cluster.
+DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE: dict[str, int] = {
+    "learn_ai_tutor": 50,
+    # one-word praise ("good", "yes"); the rating already carries it
+    "content_feedback": 20,
+}
+
+
+def platforms_to_run_value(platforms: list[str] | None) -> str | None:
+    """Encode platforms for feedback_cluster_run.platforms."""
+    return ",".join(sorted(platforms)) if platforms is not None else None
+
+
+def platforms_from_run_value(value: str | None) -> list[str] | None:
+    """Decode feedback_cluster_run.platforms back to a list."""
+    return value.split(",") if value is not None else None
+
+
+def drop_short_conversations(
+    conversations_lf: pl.LazyFrame, min_chars_by_source: dict[str, int] | None
+) -> pl.LazyFrame:
+    """Drop conversations below their source's minimum length; others stay."""
+    for source_slug, min_chars in (min_chars_by_source or {}).items():
+        conversations_lf = conversations_lf.filter(
+            ~(
+                (pl.col("source_slug") == source_slug)
+                & (pl.col("conversation_text_chars").fill_null(0) < min_chars)
+            )
+        )
+    return conversations_lf
+
+
+def filter_conversation_scope(
+    rows_lf: pl.LazyFrame,
+    conversations_lf: pl.LazyFrame,
+    feedback_since: str | None,
+    platforms: list[str] | None = None,
+    min_chars_by_source: dict[str, int]
+    | None = DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
+) -> pl.LazyFrame:
+    """Keep rows whose conversation opened on or after feedback_since, whose
+    platform is in platforms, and that meets its source's minimum length.
+
+    rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
+    cluster membership. feedback_since is a YYYY-MM-DD date, platforms a list of
+    platform readable ids, and min_chars_by_source a {source_slug: characters} map;
+    None for any skips that filter. Other rows stay in their tables; this only hides
+    them from the caller.
+    """
+    if feedback_since is None and platforms is None and not min_chars_by_source:
+        return rows_lf
+    in_scope_lf = conversations_lf
+    if feedback_since is not None:
+        # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
+        # compares correctly as text
+        in_scope_lf = in_scope_lf.filter(
+            pl.col("conversation_opened_at") >= feedback_since
+        )
+    if platforms is not None:
+        in_scope_lf = in_scope_lf.filter(pl.col("platform").is_in(platforms))
+    in_scope_lf = drop_short_conversations(in_scope_lf, min_chars_by_source)
+    return rows_lf.join(
+        in_scope_lf.select("feedback_conversation_pk"),
+        on="feedback_conversation_pk",
+        how="semi",
+    )
+
 
 # Column order matches how cluster_embeddings actually writes it: JOIN_COLS then
 # DEBUG_COLS then the added columns, not cluster_run_id first.
@@ -65,6 +151,19 @@ UMAP_N_NEIGHBORS = int(os.environ.get("UMAP_N_NEIGHBORS", "15"))
 # we call it systemic" (§C) -- a starting point for tuning, not an authoritative
 # number from the spec.
 HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "15"))
+
+# Unset, HDBSCAN reuses min_cluster_size here, so a larger min_cluster_size also
+# turns half the corpus into noise and then collapses it into 1-2 clusters.
+HDBSCAN_MIN_SAMPLES = int(os.environ.get("HDBSCAN_MIN_SAMPLES", "3"))
+
+# 'leaf', not the default 'eom', which tends to pick one huge parent cluster.
+HDBSCAN_CLUSTER_SELECTION_METHOD = os.environ.get(
+    "HDBSCAN_CLUSTER_SELECTION_METHOD", "leaf"
+)
+
+# More clusters than this means more categories than a person can act on, so
+# reduce_and_cluster raises min_cluster_size until the run fits.
+MAX_CLUSTERS = int(os.environ.get("CLUSTER_MAX_CLUSTERS", "50"))
 
 # Fixed rather than left to UMAP/HDBSCAN's own default (None -- a fresh random
 # state per call): a clustering run must be reproducible for the run-vs-run
@@ -146,17 +245,26 @@ def failed_run_metadata(  # noqa: PLR0913 -- same shape as cluster_embeddings's 
     }
 
 
-def reduce_and_cluster(
+def reduce_and_cluster(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     vectors: np.ndarray,
     umap_n_components: int = UMAP_N_COMPONENTS,
     umap_n_neighbors: int = UMAP_N_NEIGHBORS,
     min_cluster_size: int = HDBSCAN_MIN_CLUSTER_SIZE,
     random_state: int = RANDOM_STATE,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    *,
+    min_samples: int | None = HDBSCAN_MIN_SAMPLES,
+    cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    max_clusters: int | None = MAX_CLUSTERS,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """Reduce vectors' dimensionality via UMAP, then cluster via HDBSCAN.
 
-    Returns (labels, probabilities, reduced): reduced is the UMAP output HDBSCAN
-    clustered on, returned so silhouette can be scored in that same space.
+    If the run finds more than max_clusters clusters, min_cluster_size grows by
+    25% and HDBSCAN reruns on the same UMAP output until it fits. None disables
+    the cap.
+
+    Returns (labels, probabilities, reduced, min_cluster_size): reduced is the
+    UMAP output HDBSCAN clustered on, returned so silhouette can be scored in
+    that same space; min_cluster_size is the value the final run used.
     """
     # cosine, not UMAP's euclidean default: embeddings encode meaning in direction.
     reduced = UMAP(
@@ -165,9 +273,21 @@ def reduce_and_cluster(
         random_state=random_state,
         metric="cosine",
     ).fit_transform(vectors)
-    clusterer = HDBSCAN(min_cluster_size=min_cluster_size)
-    labels = clusterer.fit_predict(reduced)
-    return labels, clusterer.probabilities_, reduced
+    while True:
+        clusterer = HDBSCAN(
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            cluster_selection_method=cluster_selection_method,
+        )
+        labels = clusterer.fit_predict(reduced)
+        cluster_count = len(np.unique(labels[labels != NOISE_CLUSTER_ID]))
+        if (
+            max_clusters is None
+            or cluster_count <= max_clusters
+            or min_cluster_size >= len(reduced)
+        ):
+            return labels, clusterer.probabilities_, reduced, min_cluster_size
+        min_cluster_size = max(min_cluster_size + 1, round(min_cluster_size * 1.25))
 
 
 def _stratified_sample_indices(
@@ -262,6 +382,9 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     cluster_run_id: str | None = None,
     *,
     is_promoted: bool = DEFAULT_IS_PROMOTED,
+    min_samples: int | None = HDBSCAN_MIN_SAMPLES,
+    cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    max_clusters: int | None = MAX_CLUSTERS,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
     """Cluster every row's embedding_vector; produce this run's candidates + summary.
 
@@ -301,12 +424,15 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
     # memory at the ~198K-conversation, 1024-dim scale this is meant to run at.
     vectors = embeddings_df["embedding_vector"].list.to_array(embedding_dim).to_numpy()
 
-    labels, probabilities, reduced = reduce_and_cluster(
+    labels, probabilities, reduced, min_cluster_size = reduce_and_cluster(
         vectors,
         umap_n_components=umap_n_components,
         umap_n_neighbors=umap_n_neighbors,
         min_cluster_size=min_cluster_size,
         random_state=random_state,
+        min_samples=min_samples,
+        cluster_selection_method=cluster_selection_method,
+        max_clusters=max_clusters,
     )
     # `reduced`, not `vectors`: score in the same space HDBSCAN clustered on.
     silhouette = compute_silhouette(reduced, labels, random_state=random_state)
@@ -335,5 +461,8 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         "silhouette_score": silhouette,
         "run_status": "completed",
         "is_promoted": is_promoted,
+        "hdbscan_min_samples": min_samples,
+        "hdbscan_cluster_selection_method": cluster_selection_method,
+        "max_clusters": max_clusters,
     }
     return candidates_df, run_metadata

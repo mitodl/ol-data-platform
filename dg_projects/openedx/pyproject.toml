@@ -12,7 +12,6 @@ dependencies = [
     "httpx2 >= 2.2.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
-    "pymongo>=4.15",
     "universal-pathlib ~= 0.3.1",
 ]
 
@@ -56,4 +55,12 @@ ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = tr
 [tool.uv]
 override-dependencies = [
     "grpcio-health-checking<1.82.0",
+]
+
+# Keep sqlalchemy below 2.1: 2.1 makes a bare postgresql:// URL default to
+# psycopg 3, and dagster-postgres 1.13.24 breaks on it (bound NOTIFY payload,
+# psycopg2-only pgcode, and set_pg_statement_timeout closing the connection).
+# Tracked upstream in dagster-io/dagster#34232, #34235 and #33959.
+constraint-dependencies = [
+    "sqlalchemy<2.1",
 ]

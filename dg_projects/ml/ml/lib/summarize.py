@@ -59,10 +59,6 @@ MAX_CONSECUTIVE_FAILED_CHUNKS = int(
     os.environ.get("SUMMARIZE_MAX_CONSECUTIVE_FAILED_CHUNKS", "1")
 )
 
-# §A.1 of feedback_ml_approach.md: sits below the measured p25 (601 chars), so it skips
-# only the shortest multi-turn conversations rather than trading away summary quality
-# for a bigger cost cut.
-SKIP_CHAR_THRESHOLD = 500
 
 # Defaults to an Anthropic model id, matching LLMClientFactory's own
 # client_class="anthropic" default. A model id is only valid for one vendor's API,
@@ -88,10 +84,29 @@ BEDROCK_SUMMARY_MODEL_VERSION = os.environ.get(
 # thinking plus the actual summary across whichever model is configured.
 SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
 
+# Fallback only: production renders the Opik Prompt Library entry, so editing this
+# doesn't change production output or need a code_version bump.
 SUMMARY_PROMPT = (
-    "Summarize the following support conversation from the requester's point of "
-    "view. Focus on the problem reported and its resolution if one is present. "
-    "Do not include names or contact details.\n\n{{conversation_text}}"
+    "You are analyzing feedback about MIT Learn, MIT Open Learning's platform for "
+    "courses and AI learning assistants. The text below is feedback from a "
+    "learner. It may be a support ticket, messages to an AI assistant (a tutor, "
+    "syllabus, or course recommendation bot), a forum post, or a comment on a "
+    "piece of course content. Only the learner's own words are included, but they "
+    "may quote a reply.\n\n"
+    "In 1-3 sentences, describe from the learner's point of view:\n"
+    "- what they were trying to do,\n"
+    "- any problem, confusion, or blocker they had with the platform, a course or "
+    "its materials, or the assistant,\n"
+    "- any feature or content they asked for or said was missing.\n\n"
+    "Describe the need in general terms. Refer to courses by subject (for "
+    'example, "a finance course"), not by title. Do not describe how support '
+    "resolved it.\n\n"
+    "The text may be very short. Never ask for more text and never say there is "
+    "nothing to summarize. If the text is too short to tell what the learner "
+    "wanted, restate what it says in a few words.\n\n"
+    "Write plain text only, with no headings, lists, or Markdown. Do not include "
+    "names, email addresses, or other personal details.\n\n"
+    "<learner_text>\n{{conversation_text}}\n</learner_text>"
 )
 
 logger = logging.getLogger(__name__)
@@ -221,6 +236,9 @@ def filter_unsummarized(
     null there) isn't touched by either change, since the skip decision was never
     model/prompt-dependent. current_model_version/current_prompt_version=None
     disables the respective check.
+
+    Also re-submits every row skipped last time that now has text, including rows
+    the old turn/length skip rule passed over.
     """
     already_summarized_cols = [*JOIN_COLS, "turn_count"]
     checks = [
@@ -256,23 +274,31 @@ def filter_unsummarized(
             pl.col(f"{col}_summarized").is_not_null()
             & (pl.col(f"{col}_summarized") != current)
         )
+    if "summary_model_version" in already_summarized_df.columns:
+        # A skipped row is stored with a null summary_model_version; a failed one
+        # is not stored at all, so it is already new above.
+        skipped_df = (
+            already_summarized_df.filter(pl.col("summary_model_version").is_null())
+            .select(JOIN_COLS)
+            .with_columns(pl.lit(True).alias("was_skipped"))  # noqa: FBT003
+        )
+        joined = joined.join(skipped_df, on=JOIN_COLS, how="left")
+        is_new_or_changed = is_new_or_changed | (
+            pl.col("was_skipped").fill_null(False)  # noqa: FBT003
+            & pl.col("conversation_text").is_not_null()
+        )
     return joined.filter(is_new_or_changed).select(source_df.columns)
 
 
 def needs_summary(row: dict[str, Any]) -> bool:
-    """Apply the skip rule: single-turn or short conversations are not summarized.
+    """Whether a conversation gets an LLM call: every conversation with text does.
 
-    The raw text already is the summary in those cases, so embedding_input falls back
-    to concatenated_turns rather than an LLM call. A null conversation_text (the
-    redaction join upstream isn't wired in yet) is also rejected here, rather than
-    sending the literal string "None" to the LLM.
+    A null conversation_text (redaction hasn't reached it yet) is rejected rather
+    than sending the literal string "None" to the LLM; its embedding_input falls
+    back to concatenated_turns. Which conversations reach this at all is decided
+    upstream, by feedback_summaries' config filters.
     """
-    if row["turn_count"] == 1:
-        return False
-    if row["conversation_text"] is None:
-        return False
-    text_chars = row["conversation_text_chars"]
-    return text_chars is not None and text_chars >= SKIP_CHAR_THRESHOLD
+    return row["conversation_text"] is not None
 
 
 class _SummarizeOutcome(NamedTuple):
@@ -319,7 +345,7 @@ def summarize_conversations(
     errors: list[str] | None = None,
     max_concurrency: int = SUMMARIZE_MAX_CONCURRENCY,
 ) -> pl.DataFrame:
-    """Summarize each conversation that clears the skip rule.
+    """Summarize each conversation that has text.
 
     Args:
         df: a frame with (at least) feedback_conversation_pk, source_slug,
@@ -341,7 +367,7 @@ def summarize_conversations(
             embedding_input, summarized_at, turn_count - keyed by
             feedback_conversation_pk, for afact_feedback_conversation to
             left-join. conversation_summary/summarized_at/prompt_version all
-            stay null for skipped rows; summary_model_version is the "was this
+            stay null for rows with no text; summary_model_version is the "was this
             LLM-generated" signal. A conversation whose LLM call raises is
             dropped from the output entirely (#2542 checkpointing) rather than
             failing the batch -- absent from feedback_summaries, it's picked up
@@ -505,7 +531,10 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
         chunk = unsummarized_df.slice(chunk_start, batch_size)
         chunk_summaries = summarize_conversations(
-            chunk, client, errors=errors, max_concurrency=max_concurrency
+            chunk,
+            client,
+            errors=errors,
+            max_concurrency=max_concurrency,
         )
         summary_chunks.append(chunk_summaries)
         checkpoint_chunk(catalog, table_identifier, chunk_summaries)

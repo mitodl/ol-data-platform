@@ -18,7 +18,7 @@ Run standalone:
 import logging
 import shutil
 import tempfile
-from collections.abc import Generator, Iterable, Iterator
+from collections.abc import Generator, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -42,6 +42,9 @@ _EDXORG_LANDING_BUCKET = (
 )
 
 _EDXORG_PRIMARY_KEY = ["row_hash", "extracted_course_key"]
+
+_MAX_LINE_BYTES = 16 * 1024**2
+_CSV_BUFFER_BYTES = 32 * 1024**2
 
 # Options handed to DuckDB's CSV reader for every edxorg TSV.
 _CSV_READER_OPTIONS: dict[str, Any] = {
@@ -81,6 +84,20 @@ _CSV_READER_OPTIONS: dict[str, Any] = {
     # files (e.g. TIMESTAMP vs VARCHAR for a column that is empty in some
     # files). dbt casts downstream.
     "all_varchar": True,
+    # DuckDB's default limit is 2,000,000 bytes per record, and a
+    # courseware_studentmodule `state` value can hold a learner's whole problem
+    # history: MITx-7.00x-3T2023/ac1cb2f24d85....tsv has three records over
+    # 2 MB, the largest about 5.9 MB. Near the start of a file an over-limit
+    # record fails the read (the unquoted fallback hits the same limit); deeper
+    # in, ignore_errors drops it without a word.
+    #
+    # buffer_size is pinned because DuckDB otherwise grows its read buffer with
+    # max_line_size and holds one per thread in flight: reading a 1.7 GB file
+    # with only short records peaked at 692 MB with the defaults, 1,883 MB with
+    # a 64 MiB limit and the default buffer, and 787 MB with these two values.
+    # buffer_size has to exceed max_line_size.
+    "max_line_size": _MAX_LINE_BYTES,
+    "buffer_size": _CSV_BUFFER_BYTES,
 }
 
 # Quoting off, for the legacy unquoted dumps. Their quotes are literal text
@@ -350,14 +367,20 @@ def read_edxorg_tsv(
 @dlt.resource(name="filesystem", primary_key="file_url", standalone=True)
 def edxorg_files(
     bucket_url: str,
-    file_glob: str,
+    file_globs: Sequence[str],
     credentials: Any,
     budget_bytes: int = _DEFAULT_BUDGET_BYTES,
     modification_date: incremental[Any] = dlt.sources.incremental(  # noqa: B008
         "modification_date"
     ),
 ) -> Iterator[list[FileItemDict]]:
-    """List one batch of unread TSVs, oldest first.
+    """List one batch of unread files, oldest first.
+
+    ``file_globs`` are relative to ``bucket_url`` and listed together, so one
+    cursor orders files across all of them. fsspec lists only the literal
+    prefix ahead of each glob's first wildcard, which is why a table spread
+    over several prefixes passes one glob per prefix rather than a single glob
+    rooted at the bucket.
 
     ``budget_bytes`` caps the files this batch yields past the cursor's
     second. The cursor's own second is deliberately exempt and is NOT capped
@@ -385,7 +408,11 @@ def edxorg_files(
     from dlt.common.storages.fsspec_filesystem import glob_files  # noqa: PLC0415
 
     listed = sorted(
-        glob_files(credentials, bucket_url, file_glob),
+        (
+            file_item
+            for file_glob in file_globs
+            for file_item in glob_files(credentials, bucket_url, file_glob)
+        ),
         key=lambda file_item: file_item["modification_date"],
     )
     cursor_value = modification_date.last_value
@@ -426,10 +453,10 @@ def edxorg_files(
         # batch of its own.
         if yielded_definitely_unread and batch_bytes + size > budget_bytes:
             logger.info(
-                "Listed %s bytes of edxorg TSV for %s against a %s byte "
-                "budget (%s more on the cursor boundary); ending this batch.",
+                "Listed %s bytes for %s against a %s byte budget (%s more on "
+                "the cursor boundary); ending this batch.",
                 batch_bytes,
-                file_glob,
+                ", ".join(file_globs),
                 budget_bytes,
                 boundary_bytes,
             )
@@ -498,7 +525,7 @@ def edxorg_s3_source(
         # and only until the budget is reached.
         files = edxorg_files(
             bucket_url=bucket_url,
-            file_glob=file_glob,
+            file_globs=[file_glob],
             credentials=fs,
             budget_bytes=budget_bytes,
         )

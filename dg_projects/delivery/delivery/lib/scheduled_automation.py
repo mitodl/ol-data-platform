@@ -71,6 +71,10 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "mitpe_schedule": frozenset({"production"}),
     "oll_schedule": frozenset({"production"}),
     "mit_edx_programs_schedule": frozenset({"production"}),
+    # Cohort 3 delivery (podcasts), on the same terms as Cohort 2: registered
+    # STOPPED in production, and not to be started before mit-learn #3557
+    # lands the endpoint it POSTs to.
+    "podcast_schedule": frozenset({"production"}),
     # Dispatches ovs_videos_webhook_job per discovered partition. RUNNING in
     # production.
     "ovs_videos_discovery_sensor": frozenset({"production"}),
@@ -81,6 +85,14 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Drops the local partition definition after a delete has been delivered.
     # RUNNING in production.
     "ovs_videos_delete_partition_cleanup_sensor": frozenset({"production"}),
+    # Deployment-wide failure alerting, from ol_orchestrate.sensors.
+    # failure_notification, registered here and nowhere else (issue #2260).
+    # Both were RUNNING in production and STOPPED in QA under data_platform on
+    # 2026-09-22, read off each daemon's ticks; CI runs no Dagster. Production
+    # only keeps that: a QA registration would start them, since they now
+    # declare default_status=RUNNING.
+    "run_failure_notification_sensor": frozenset({"production"}),
+    "asset_check_failure_sensor": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {

@@ -3,8 +3,9 @@ with source as (
 )
 
 {{ deduplicate_raw_table(
-    order_by="_airbyte_extracted_at desc, cast(date_parse(\"purchase date\", '%m/%d/%Y') as date)",
-    partition_columns='"program title", email'
+    raw_table='raw__edxorg__program_entitlement',
+    partition_columns='"program title", email',
+    then_by="cast(" ~ date_parse('"purchase date"', "'%m/%d/%Y'") ~ " as date)"
 ) }}
 
 , cleaned as (
@@ -26,8 +27,8 @@ with source as (
         ) as user_full_name
         , cast(entitlements as integer) as number_of_entitlements
         , cast("redeemed entitlements" as integer) as number_of_redeemed_entitlements
-        , cast(date_parse("purchase date", '%m/%d/%Y') as date) as purchase_date
-        , cast(date_parse("expiration date", '%m/%d/%Y') as date) as expiration_date
+        , cast({{ date_parse('"purchase date"', "'%m/%d/%Y'") }} as date) as purchase_date
+        , cast({{ date_parse('"expiration date"', "'%m/%d/%Y'") }} as date) as expiration_date
     from most_recent_source
 )
 select * from cleaned

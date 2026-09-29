@@ -176,3 +176,38 @@ def test_no_kubernetes_token_and_no_vault_token_fails_loudly(
     monkeypatch.delenv("VAULT_TOKEN", raising=False)
     with pytest.raises(RuntimeError, match="No Vault Kubernetes service-account token"):
         vault._authenticated_client()  # noqa: SLF001
+
+
+class FakeKvV1Client:
+    """Stands in for ``hvac.Client`` with only ``secrets.kv.v1.read_secret``."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.reads: list[tuple[str, str]] = []
+        self.secrets = self
+        self.kv = self
+        self.v1 = self
+
+    def read_secret(self, path: str, mount_point: str) -> dict[str, Any]:
+        self.reads.append((mount_point, path))
+        if self.error:
+            raise self.error
+        return {"data": {"id": "cid"}, "lease_duration": 2764800}
+
+
+def test_read_kv_secret_returns_the_secret_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeKvV1Client()
+    monkeypatch.setattr(vault, "_authenticated_client", lambda: client)
+    assert vault.read_kv_secret("secret-data", "pipelines/x") == {"id": "cid"}
+    assert client.reads == [("secret-data", "pipelines/x")]
+
+
+def test_read_kv_secret_policy_denial_points_at_the_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeKvV1Client(error=hvac.exceptions.Forbidden("denied"))
+    monkeypatch.setattr(vault, "_authenticated_client", lambda: client)
+    with pytest.raises(RuntimeError, match="dagster_server_policy.hcl"):
+        vault.read_kv_secret("secret-data", "pipelines/x")

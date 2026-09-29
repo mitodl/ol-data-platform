@@ -58,8 +58,7 @@ def test_unknown_environment_raises(name, value_map, monkeypatch):
 # StarRocks FE (an in-cluster service), so the dev StarRocks target
 # port-forwards to the QA cluster while the dev Trino target is production.
 # That divergence is real, and it is exactly why "which cluster" and "which
-# lake" have to be separate axes -- dev's lake is pinned to production by
-# DATA_LAKE_ENV_MAP regardless of the cluster it connects to.
+# lake" have to be separate axes.
 DEPLOYED_ENVIRONMENTS = ("ci", "qa", "production")
 
 
@@ -84,15 +83,15 @@ def test_both_dbt_projects_agree_on_environment(environment, monkeypatch):
     )
 
 
-def test_dev_reads_production_lake():
-    """`dev` connects to the QA StarRocks cluster but must READ production.
+def test_dev_reads_the_lake_its_cluster_can_see():
+    """`dev` connects to the QA StarRocks cluster, so it must read the QA lake.
 
-    This is the case `'qa' in target.name` got wrong: the dev target is
-    `starrocks_qa_vault`, so the substring test sent local b2b builds at the
-    empty QA lake and the models could not be developed locally at all.
+    It used to read production through the QA cluster, which has no
+    production lake access (ol-infrastructure#5472/#5670, #6023), so any other
+    value here fails every dev b2b build.
     """
-    assert STARROCKS_DBT_TARGET_MAP["dev"] == "starrocks_qa_vault"
-    assert DATA_LAKE_ENV_MAP["dev"] == "production"
+    assert STARROCKS_DBT_TARGET_MAP["dev"] == STARROCKS_DBT_TARGET_MAP["qa"]
+    assert DATA_LAKE_ENV_MAP["dev"] == DATA_LAKE_ENV_MAP["qa"] == "qa"
 
 
 def test_data_lake_env_values_are_real_catalogs():

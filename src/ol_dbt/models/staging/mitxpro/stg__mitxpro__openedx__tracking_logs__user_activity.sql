@@ -21,7 +21,7 @@ with source as (
 )
 
 {{ deduplicate_raw_table(
-    order_by='_airbyte_extracted_at desc, _ab_source_file_last_modified desc, "time"'
+    raw_table='raw__xpro__openedx__tracking_logs'
     , partition_columns = 'username, context, event_source, event_type, event, "time"'
 ) }}
 , cleaned as (

@@ -18,6 +18,7 @@ from typing import Annotated
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import (
     get_changed_macro_files,
     get_changed_sql_models,
@@ -865,7 +866,7 @@ def impact(
     # Uses dev_local (DuckDB) by default — no network or credentials required.
     if auto_compile and target_names:
         selector = " ".join(f"{n}+" for n in target_names)
-        cmd = ["dbt", "compile", "--target", compile_target, "--select", selector]
+        cmd = [dbt_executable(), "compile", "--target", compile_target, "--select", selector]
         if output_format == "text":
             console.print(f"[dim]Running: {' '.join(cmd)} ...[/]")
         try:
@@ -890,8 +891,8 @@ def impact(
             err_console.print(f"[yellow]Warning:[/] dbt compile failed: {exc.stderr[-200:] if exc.stderr else exc}")
             err_console.print("  Analysis will continue with raw SQL.")
         except FileNotFoundError:
-            err_console.print("[yellow]Warning:[/] 'dbt' command not found; skipping auto-compile.")
-            err_console.print("  Install dbt and ensure it is on PATH, or run dbt compile manually.")
+            err_console.print(f"[yellow]Warning:[/] {dbt_executable()} not found; skipping auto-compile.")
+            err_console.print("  Run `uv sync` from the repo root to install dbt, or run dbt compile manually.")
 
     alerts: list[ImpactAlert] = []
     models_without_compiled: list[str] = []

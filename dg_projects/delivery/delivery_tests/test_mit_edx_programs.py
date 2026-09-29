@@ -1,0 +1,217 @@
+"""Tests for the MIT edX programs payload and the no-program review issues."""
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock
+
+import pytest
+from delivery.assets.mit_edx_programs import (
+    ProgramWithoutCoursesError,
+    StaleExtractionError,
+    build_resources,
+    check_extraction_age,
+    open_unpublish_reviews,
+    unpublish_review_issue,
+)
+
+PROGRAM_ID = "927093e3-46ba-4f44-a861-0f8c7aec4f74"
+
+
+def program_row(**overrides: Any) -> dict[str, Any]:
+    """Build an integrations__learn__mit_edx_programs row."""
+    return {
+        "readable_id": PROGRAM_ID,
+        "title": "Circuits and Electronics",
+        "description": "<p>Circuits</p><script>x()</script>",
+        "url": "https://www.edx.org/xseries/mitx-circuits",
+        "image_url": "https://cdn.example.com/banner.png",
+        "last_modified": "2024-08-28T07:14:23.507563Z",
+        "level": "intermediate",
+        "start_date": "2019-06-20T15:00:00Z",
+        "end_date": "2099-05-01T15:00:00Z",
+        "enrollment_start": None,
+        "enrollment_end": "2099-01-20T15:00:00Z",
+        "price": Decimal("339.00"),
+        "currency": "USD",
+        "pace": ["instructor_paced", "self_paced"],
+        "availability": "dated",
+        "topics": ["Engineering"],
+        "duration": "22 weeks",
+        "min_weeks": 22,
+        "max_weeks": 22,
+        "time_commitment": "4-5 hours/week",
+        "min_weekly_hours": 4,
+        "max_weekly_hours": 5,
+        "course_readable_ids": ["MITx+6.002.1x", "MITx+6.002.2x"],
+        "etl_source": "mit_edx",
+        "platform": "edx",
+        "resource_type": "program",
+        "retrieved_at": "2026-09-21T05:00:15.869203+00:00",
+        **overrides,
+    }
+
+
+def instructor_row(position: int, first: str, last: str) -> dict[str, Any]:
+    """Build an integrations__learn__mit_edx_program_instructors row."""
+    return {
+        "readable_id": PROGRAM_ID,
+        "first_name": first,
+        "last_name": last,
+        "full_name": f"{first} {last}",
+        "instructor_position": position,
+    }
+
+
+def test_program_is_one_resource_with_one_run() -> None:
+    """A program carries its dates, price and effort on a single run."""
+    (resource,) = build_resources(
+        [program_row()],
+        [instructor_row(2, "Grace", "Hopper"), instructor_row(1, "Anant", "Agarwal")],
+    )
+    (run,) = resource["runs"]
+    assert run["run_id"] == PROGRAM_ID
+    assert run["prices"] == [{"amount": "339.00", "currency": "USD"}]
+    assert run["level"] == ["intermediate"]
+    assert [i["full_name"] for i in run["instructors"]] == [
+        "Anant Agarwal",
+        "Grace Hopper",
+    ]
+    assert run["time_commitment"] == "4-5 hours/week"
+    assert resource["description"] == "<p>Circuits</p>"
+    assert run["description"] == "<p>Circuits</p>"
+    assert resource["image"] == {
+        "url": "https://cdn.example.com/banner.png",
+        "description": "Circuits and Electronics",
+    }
+    assert resource["courses"] == [
+        {"readable_id": "MITx+6.002.1x", "platform": "edx"},
+        {"readable_id": "MITx+6.002.2x", "platform": "edx"},
+    ]
+    assert resource["topics"] == [{"name": "Engineering"}]
+
+
+def test_missing_values_become_empty_lists() -> None:
+    """MIT Learn keeps existing topics on None, so absent values are sent as []."""
+    (resource,) = build_resources(
+        [
+            program_row(
+                topics=None,
+                level=None,
+                pace=None,
+                image_url=None,
+            )
+        ],
+        [],
+    )
+    assert resource["topics"] == []
+    assert resource["pace"] == []
+    assert resource["image"] is None
+    assert resource["runs"][0]["level"] == []
+    assert resource["runs"][0]["instructors"] == []
+
+
+@pytest.mark.parametrize("course_readable_ids", [None, []])
+def test_program_without_courses_fails_the_batch(
+    course_readable_ids: list[str] | None,
+) -> None:
+    """MIT Learn would unlink every course, so nothing in the batch is sent."""
+    with pytest.raises(ProgramWithoutCoursesError, match="empty-program"):
+        build_resources(
+            [
+                program_row(),
+                program_row(
+                    readable_id="empty-program",
+                    course_readable_ids=course_readable_ids,
+                ),
+            ],
+            [],
+        )
+
+
+def test_recent_extraction_is_delivered() -> None:
+    """Up to three days old is fine; the extraction runs daily."""
+    check_extraction_age([program_row()], now=datetime(2026, 9, 24, 5, 0, tzinfo=UTC))
+
+
+def test_stale_extraction_is_refused() -> None:
+    """Past three days the models are still serving the last extraction."""
+    with pytest.raises(StaleExtractionError, match="2026-09-21T05:00:15"):
+        check_extraction_age(
+            [program_row()], now=datetime(2026, 9, 24, 5, 1, tzinfo=UTC)
+        )
+
+
+def published_program() -> dict[str, Any]:
+    """Build a program as MIT Learn's programs API returns it."""
+    return {
+        "id": 42,
+        "readable_id": PROGRAM_ID,
+        "title": "Circuits and Electronics",
+        "url": "https://www.edx.org/xseries/mitx-circuits",
+    }
+
+
+def github_stub(*, found: int = 0, recent_titles: tuple[str, ...] = ()) -> MagicMock:
+    """Build a PyGithub stand-in.
+
+    ``found`` issues match the title search; ``recent_titles`` are issues updated
+    recently, which search may not have indexed yet.
+    """
+    github = MagicMock()
+    search = MagicMock(totalCount=found)
+    search.__getitem__.return_value = SimpleNamespace(
+        html_url="https://github.com/o/r/issues/1"
+    )
+    github.search_issues.return_value = search
+    repo = github.get_repo.return_value
+    repo.get_issues.return_value = [
+        SimpleNamespace(title=title, html_url="https://github.com/o/r/issues/3")
+        for title in recent_titles
+    ]
+    repo.create_issue.return_value = SimpleNamespace(
+        html_url="https://github.com/o/r/issues/2"
+    )
+    return github
+
+
+def test_review_issue_opened_for_a_program_without_one() -> None:
+    """A still-published program with no review issue gets one."""
+    github = github_stub()
+    urls = open_unpublish_reviews(
+        github, "o/r", [published_program()], checked_on="2026-09-19"
+    )
+    assert urls == ["https://github.com/o/r/issues/2"]
+    title = github.get_repo.return_value.create_issue.call_args.kwargs["title"]
+    assert PROGRAM_ID in title
+
+
+def test_existing_review_issue_open_or_closed_is_reused() -> None:
+    """The title search spans closed issues: closing one records the decision."""
+    github = github_stub(found=1)
+    urls = open_unpublish_reviews(
+        github, "o/r", [published_program()], checked_on="2026-09-19"
+    )
+    assert urls == ["https://github.com/o/r/issues/1"]
+    assert "is:open" not in github.search_issues.call_args.args[0]
+    github.get_repo.return_value.create_issue.assert_not_called()
+
+
+def test_recent_issue_not_yet_searchable_is_reused() -> None:
+    """An issue a failed attempt just filed counts before search indexes it."""
+    github = github_stub(recent_titles=(f"Review ... {PROGRAM_ID}",))
+    urls = open_unpublish_reviews(
+        github, "o/r", [published_program()], checked_on="2026-09-19"
+    )
+    assert urls == ["https://github.com/o/r/issues/3"]
+    github.get_repo.return_value.create_issue.assert_not_called()
+
+
+def test_review_issue_names_the_program_and_the_decision() -> None:
+    """The issue says which program, where it lives in MIT Learn, and what to decide."""
+    title, body = unpublish_review_issue(published_program(), checked_on="2026-09-19")
+    assert PROGRAM_ID in title
+    assert "MIT Learn id 42" in body
+    assert "2026-09-19" in body
+    assert "unpublish" in body

@@ -60,7 +60,7 @@ def test_always_includes_profiles_dir() -> None:
 def test_profiles_dir_position() -> None:
     """--profiles-dir should appear right after the subcommand."""
     cmd = build(subcommand="build")
-    assert cmd[0] == "dbt"
+    assert Path(cmd[0]).name == "dbt"
     assert cmd[1] == "build"
     assert cmd[2] == "--profiles-dir"
     assert cmd[3] == str(PROFILES)

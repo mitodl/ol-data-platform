@@ -10,6 +10,12 @@ from dagster import (
     MetadataValue,
     asset,
 )
+from ml.lib.cluster import (
+    DEFAULT_FEEDBACK_SINCE,
+    DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
+    DEFAULT_PLATFORMS,
+    drop_short_conversations,
+)
 from ml.lib.summarize import (
     JOIN_COLS,
     SUMMARIZE_CHECKPOINT_BATCH_SIZE,
@@ -46,6 +52,43 @@ class FeedbackSummariesConfig(Config):
     sample_limit: int | None = Field(
         default=None,
         description="Cap the number of upstream rows read, for fast local testing.",
+    )
+    feedback_since: str | None = Field(
+        default=DEFAULT_FEEDBACK_SINCE,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description=(
+            "Only summarize conversations opened on or after this date (YYYY-MM-DD). "
+            "Rows already in feedback_summaries from earlier runs are kept. Defaults "
+            "to feedback_clusters' feedback_since, so both cover the same range. "
+            "Unset or null reads the full history."
+        ),
+    )
+    platforms: list[str] | None = Field(
+        default=DEFAULT_PLATFORMS,
+        description=(
+            "Only summarize conversations whose platform is in this list, e.g. "
+            "['mitlearn']. Embeddings and clusters follow, because they read only "
+            "what feedback_summaries holds. Set to null to include every platform, "
+            "and conversations with no platform."
+        ),
+    )
+    source_slugs: list[str] | None = Field(
+        default=None,
+        description=(
+            "Only summarize conversations from these sources, e.g. ['zendesk']. "
+            "Unset or null includes every source."
+        ),
+    )
+    min_conversation_chars_by_source: dict[str, int] | None = Field(
+        default=DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
+        description=(
+            "Skip conversations shorter than this many characters, per source. The "
+            "default drops tutor chats that are only a suggested-question button, "
+            "such as 'What is this course about?'. Sources not listed have no "
+            "minimum. Null skips none. Cluster steps always apply the default "
+            "(DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE), so change it there to change "
+            "both."
+        ),
     )
     model_version: str | None = Field(
         default=None,
@@ -88,7 +131,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v1",
+    code_version="feedback_summaries_v3",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],
@@ -108,14 +151,29 @@ def feedback_summaries(
     llm: LLMClientFactory,
 ) -> pl.DataFrame:
     """
-    Summarize multi-turn conversations via LLM; skip single-turn/short ones (§A.1).
+    Summarize every in-scope conversation that has text via LLM.
 
-    The one per-record LLM call in the design - see feedback_ml_approach.md §A.1 for
-    the skip threshold and measured cost.
+    The one per-record LLM call in the design. Scope comes from the config filters,
+    including min_conversation_chars_by_source for sources with low-signal rows.
     """
     source_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
         table_name="int__feedback__conversation",
+    )
+    if config.feedback_since is not None:
+        # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
+        # compares correctly as text
+        source_lazy = source_lazy.filter(
+            pl.col("conversation_opened_at") >= config.feedback_since
+        )
+    if config.platforms is not None:
+        source_lazy = source_lazy.filter(pl.col("platform").is_in(config.platforms))
+    if config.source_slugs is not None:
+        source_lazy = source_lazy.filter(
+            pl.col("source_slug").is_in(config.source_slugs)
+        )
+    source_lazy = drop_short_conversations(
+        source_lazy, config.min_conversation_chars_by_source
     )
     if config.sample_limit is not None:
         source_lazy = source_lazy.limit(config.sample_limit)
@@ -175,7 +233,7 @@ def feedback_summaries(
         pl.col("summary_model_version").is_not_null()
     ).height
     # A failed conversation is dropped from summaries_df entirely (unlike a
-    # skipped-by-length-rule row, which is kept with a null summary), so this
+    # row with no text, which is kept with a null summary), so this
     # difference is exactly the failure count -- including rows never attempted
     # because of an early abort.
     failed_count = unsummarized_df.height - summaries_df.height
@@ -184,7 +242,7 @@ def feedback_summaries(
     attempted_count = llm_call_count + len(errors)
 
     context.log.info(
-        "Processed %d conversations (%d LLM calls, %d skipped by the length rule, "
+        "Processed %d conversations (%d LLM calls, %d skipped for no text, "
         "%d failed, %d already summarized, %d total upstream)",
         summaries_df.height,
         llm_call_count,

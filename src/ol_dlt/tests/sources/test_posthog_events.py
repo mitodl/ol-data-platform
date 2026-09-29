@@ -64,11 +64,14 @@ class FakeS3FileSystem:
     def __init__(self, root: Path) -> None:
         self.root = root
 
-    def ls(self, path: str, detail: bool = False) -> list[str]:  # noqa: ARG002, FBT001, FBT002
+    def ls(self, path: str, detail: bool = False) -> list[dict[str, object]]:  # noqa: ARG002, FBT001, FBT002
         directory = self.root / path
         if not directory.is_dir():
             raise FileNotFoundError(path)
-        return sorted(f"{path}/{entry.name}" for entry in directory.iterdir())
+        return [
+            {"name": f"{path}/{entry.name}", "size": entry.stat().st_size}
+            for entry in sorted(directory.iterdir())
+        ]
 
     def open(self, path: str, mode: str = "rb"):  # noqa: ANN201
         return (self.root / path).open(mode)
@@ -140,7 +143,8 @@ def test_list_export_objects_filters_by_window(
         bucket=_BUCKET,
         prefix=_PREFIX,
     )
-    assert [end for end, _ in found] == [datetime(2026, 3, 1, 12, tzinfo=UTC)]
+    assert [end for end, _, _ in found] == [datetime(2026, 3, 1, 12, tzinfo=UTC)]
+    assert all(size > 0 for _, _, size in found)
 
 
 def test_list_export_objects_skips_unparseable_objects(
@@ -154,7 +158,7 @@ def test_list_export_objects_skips_unparseable_objects(
         prefix=_PREFIX,
     )
     assert len(found) == 2  # noqa: PLR2004
-    assert all("_SUCCESS" not in key for _, key in found)
+    assert all("_SUCCESS" not in key for _, key, _ in found)
 
 
 def _source(**kwargs: object) -> object:
@@ -185,15 +189,15 @@ def test_loads_the_requested_window(
 
 
 @pytest.mark.integration
-def test_second_run_rereads_only_the_lookback_window(
+def test_second_run_skips_objects_already_read_in_the_lookback(
     test_profile: Path,
     fake_filesystem: FakeS3FileSystem,  # noqa: ARG001
 ) -> None:
-    """A re-run repeats the lookback hours and discovers no new events.
+    """A re-run lists the lookback hours again but loads none of them.
 
-    The re-read is the price of CURSOR_LOOKBACK and is why the staging model
-    deduplicates on the event uuid. What must not change is the set of events:
-    a resumed run finds nothing it has not already seen.
+    Re-loading them would append every lookback hour on every load, and a
+    backlog walked one budget at a time would then make one hour of progress
+    per load and never read nothing, which is the batch loop's stop signal.
     """
     pipeline = config.pipeline_for("posthog", pipeline_name="posthog_events_test")
     pipeline.run(
@@ -205,11 +209,8 @@ def test_second_run_rereads_only_the_lookback_window(
     pipeline.run(_source(end_date=date(2026, 3, 1)), loader_file_format="parquet")
     second = pipeline.dataset()[posthog_events.RESOURCE_NAME].arrow()
 
-    # Both fixture hours sit inside the 3h lookback, so both are read again.
-    assert second.num_rows == first.num_rows * 2
-    assert set(second.column("uuid").to_pylist()) == set(
-        first.column("uuid").to_pylist()
-    )
+    # Both fixture hours sit inside the 3h lookback, and neither is read again.
+    assert second.num_rows == first.num_rows
 
 
 @pytest.mark.integration
@@ -283,3 +284,88 @@ def test_max_objects_bounds_a_backfill_chunk(
     )
     table = pipeline.dataset()[posthog_events.RESOURCE_NAME].arrow()
     assert table.num_rows == 4  # noqa: PLR2004
+
+
+def _listed(*sizes: int) -> list[tuple[datetime, str, int]]:
+    return [
+        (
+            datetime(2026, 3, 1, hour + 1, tzinfo=UTC),
+            _object_key(
+                datetime(2026, 3, 1, hour, tzinfo=UTC),
+                datetime(2026, 3, 1, hour + 1, tzinfo=UTC),
+            ),
+            size,
+        )
+        for hour, size in enumerate(sizes)
+    ]
+
+
+def test_select_objects_stops_at_the_budget() -> None:
+    selected = posthog_events.select_objects(
+        _listed(40, 40, 40), read_keys=set(), max_objects=None, budget_bytes=100
+    )
+    assert [size for _, _, size in selected] == [40, 40]
+
+
+def test_select_objects_takes_an_oversized_first_object_alone() -> None:
+    """One hour larger than the budget must still load, or the cursor stalls."""
+    selected = posthog_events.select_objects(
+        _listed(500, 10), read_keys=set(), max_objects=None, budget_bytes=100
+    )
+    assert [size for _, _, size in selected] == [500]
+
+
+def test_select_objects_skips_what_was_already_read() -> None:
+    listed = _listed(10, 10, 10)
+    selected = posthog_events.select_objects(
+        listed, read_keys={listed[0][1]}, max_objects=None, budget_bytes=100
+    )
+    assert [key for _, key, _ in selected] == [listed[1][1], listed[2][1]]
+
+
+def test_select_objects_respects_max_objects() -> None:
+    selected = posthog_events.select_objects(
+        _listed(1, 1, 1), read_keys=set(), max_objects=2, budget_bytes=100
+    )
+    assert len(selected) == 2  # noqa: PLR2004
+
+
+@pytest.mark.integration
+def test_budgeted_loads_walk_the_backlog_until_one_reads_nothing(
+    test_profile: Path,
+    fake_filesystem: FakeS3FileSystem,  # noqa: ARG001
+) -> None:
+    """What the Dagster batch loop relies on: progress per load, then zero."""
+    pipeline = config.pipeline_for("posthog", pipeline_name="posthog_events_walk")
+    counts: list[int] = []
+    for _ in range(4):
+        pipeline.run(
+            _source(
+                start_date=date(2026, 3, 1), end_date=date(2026, 3, 1), budget_bytes=1
+            )
+            if not counts
+            else _source(end_date=date(2026, 3, 1), budget_bytes=1),
+            loader_file_format="parquet",
+        )
+        counts.append(
+            pipeline.last_trace.last_normalize_info.row_counts.get(
+                posthog_events.RESOURCE_NAME, 0
+            )
+        )
+    assert counts == [2, 2, 0, 0]
+
+
+@pytest.mark.integration
+def test_repeating_an_explicit_start_date_reloads_the_range(
+    test_profile: Path,
+    fake_filesystem: FakeS3FileSystem,  # noqa: ARG001
+) -> None:
+    """A backfill command run twice repairs its range instead of skipping it."""
+    pipeline = config.pipeline_for("posthog", pipeline_name="posthog_events_repeat")
+    for _ in range(2):
+        pipeline.run(
+            _source(start_date=date(2026, 3, 1), end_date=date(2026, 3, 1)),
+            loader_file_format="parquet",
+        )
+    table = pipeline.dataset()[posthog_events.RESOURCE_NAME].arrow()
+    assert table.num_rows == 8  # noqa: PLR2004

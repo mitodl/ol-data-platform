@@ -669,9 +669,10 @@ models:
     description: timestamp, when this step's assessment was completed
 
 - name: irx__xpro__openedx__mysql__forum_contents
-  description: One row per forum thread, response or comment in xPRO OpenedX, in the
-    shape of the legacy Mongo forum `contents` collection. Backs forum/contents.bson
-    in the IRx delivery, which replaces the mongodump of the retired Mongo forum database.
+  description: One row per forum thread, response or comment in xPRO OpenedX. Unions
+    forum_commentthread and forum_comment; delivered as forum_contents.parquet in
+    the IRx drop, not reconstructed into the legacy Mongo `contents` collection's
+    BSON dump shape.
   config:
     grants:
       select: ['mit_irx']

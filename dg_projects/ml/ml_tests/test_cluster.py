@@ -125,8 +125,57 @@ def test_cluster_embeddings_produces_one_candidate_row_per_input_conversation() 
     assert run_metadata["is_promoted"] is False
     assert run_metadata["embedding_input_filter"] == "summary"
     assert run_metadata["random_state"] == 42
+    assert run_metadata["hdbscan_min_samples"] == cluster.HDBSCAN_MIN_SAMPLES
+    assert run_metadata["hdbscan_cluster_selection_method"] == "leaf"
     # Two well-separated blobs must not collapse into a single cluster.
     assert run_metadata["cluster_count"] >= 2
+
+
+def test_reduce_and_cluster_raises_min_cluster_size_to_fit_max_clusters() -> None:
+    rng = np.random.default_rng(0)
+    vectors = np.vstack(
+        [rng.normal(loc=offset, scale=0.1, size=(20, 5)) for offset in (0, 20, 40, 60)]
+    )
+
+    def count(labels: np.ndarray) -> int:
+        return len(set(labels.tolist()) - {cluster.NOISE_CLUSTER_ID})
+
+    uncapped_labels, _, _, uncapped_size = cluster.reduce_and_cluster(
+        vectors,
+        umap_n_components=2,
+        umap_n_neighbors=5,
+        min_cluster_size=5,
+        max_clusters=None,
+    )
+    capped_labels, _, _, capped_size = cluster.reduce_and_cluster(
+        vectors,
+        umap_n_components=2,
+        umap_n_neighbors=5,
+        min_cluster_size=5,
+        max_clusters=2,
+    )
+
+    assert uncapped_size == 5
+    assert count(uncapped_labels) > 2
+    assert capped_size > 5
+    assert count(capped_labels) <= 2
+
+
+def test_filter_conversation_scope_drops_conversations_below_source_minimum() -> None:
+    embeddings_lf = pl.LazyFrame(
+        {"feedback_conversation_pk": ["short", "long", "ticket"]}
+    )
+    conversations_lf = pl.LazyFrame(
+        {
+            "feedback_conversation_pk": ["short", "long", "ticket"],
+            "source_slug": ["learn_ai_tutor", "learn_ai_tutor", "zendesk"],
+            "conversation_text_chars": [26, 80, 10],
+        }
+    )
+
+    result = cluster.filter_conversation_scope(embeddings_lf, conversations_lf, None)
+
+    assert result.collect()["feedback_conversation_pk"].to_list() == ["long", "ticket"]
 
 
 def test_should_trigger_early_recluster_with_no_prior_completed_run() -> None:
@@ -147,3 +196,27 @@ def test_should_trigger_early_recluster_at_or_above_growth_threshold() -> None:
     assert (
         cluster.should_trigger_early_recluster(1_200, 900, growth_trigger=200) is True
     )
+
+
+def test_filter_conversation_scope_keeps_feedback_since_date() -> None:
+    embeddings_lf = pl.LazyFrame({"feedback_conversation_pk": ["old", "same", "new"]})
+    conversations_lf = pl.LazyFrame(
+        {
+            "feedback_conversation_pk": ["old", "same", "new"],
+            "conversation_opened_at": [
+                "2023-12-31T23:59:59.000",
+                "2024-01-01T00:00:00.000",
+                "2025-06-01T12:00:00.000",
+            ],
+        }
+    )
+
+    result = cluster.filter_conversation_scope(
+        embeddings_lf, conversations_lf, "2024-01-01", min_chars_by_source=None
+    )
+
+    assert result.collect()["feedback_conversation_pk"].to_list() == ["same", "new"]
+    unfiltered = cluster.filter_conversation_scope(
+        embeddings_lf, conversations_lf, None, min_chars_by_source=None
+    )
+    assert unfiltered.collect().height == 3

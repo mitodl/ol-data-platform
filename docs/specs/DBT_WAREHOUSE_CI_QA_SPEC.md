@@ -380,9 +380,9 @@ PR-time CI.
    extend and run `dbt source freshness` on a schedule.
 3. **OpenMetadata trust dashboard** — push `dbt run_results.json` (already in S3) into OM as
    DBT test cases (OM natively understands the DBT platform) so the ~3,100 tests become an
-   org-visible green/red dashboard. NB: OM push is currently inert (SDK stub
-   `data_platform/.../metadata/databases.py` unwired); the real link is dbt artifacts → S3 →
-   external OM ingestion + Trino harvest.
+   org-visible green/red dashboard. NB: there is no OM push from Dagster (the unwired SDK
+   stub in `data_platform` was deleted with that location, #2260); the real link is dbt
+   artifacts → S3 → external OM ingestion + Trino harvest.
 4. **Enrich `ol-dbt impact` with OM downstream lineage** (`get_entity_lineage`) to catch
    Superset dashboards + HMAC reverse-ETL + IR ad-hoc consumers the repo manifest is blind to.
 

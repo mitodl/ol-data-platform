@@ -30,6 +30,8 @@ with conversation as (
         -- the opening turn's author, not min() over the group: an arbitrary pick
         -- disagrees wherever one turn resolves an identity and another does not
         , max(case when is_conversation_opening then user_fk end) as opened_by_user_fk
+        -- a conversation is about one course run, so every turn carries the same key
+        , max(courserun_fk) as courserun_fk
         , max(nullif(explicit_rating, '')) as explicit_rating
     from feedback
     group by conversation_id, feedback_source_fk
@@ -128,11 +130,21 @@ with conversation as (
     select * from {{ ref('int__feedback__embedding') }}
 )
 
+-- Both ways feedback_cluster_assignment writes a row stamp the latest run's id, so
+-- the most recently assigned row names the run that is current.
+, current_cluster_run as (
+    select cluster_run_id
+    from cluster_assignment
+    order by assigned_at desc
+    limit 1
+)
+
 select
     conversation.feedback_conversation_pk
     , conversation.conversation_ref as conversation_id
     , turn_aggregates.feedback_source_fk
     , turn_aggregates.opened_by_user_fk
+    , turn_aggregates.courserun_fk
     , turn_aggregates.opened_date_fk
     , turn_aggregates.last_turn_date_fk
     , conversation.turn_count
@@ -141,18 +153,22 @@ select
     , ticket.ticket_status as final_status
     , ticket.ticket_priority as final_priority
     , turn_aggregates.explicit_rating
-    -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad' and tutor 'like'/'dislike'
-    -- are verdicts; Zendesk's 'unoffered' (no survey sent) and 'offered' (sent,
-    -- unanswered) are kinds of absence rather than neutral ratings, so both stay
+    -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad', tutor 'like'/'dislike'
+    -- and content feedback 'positive'/'negative' are verdicts; Zendesk's 'unoffered'
+    -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence, and
+    -- content feedback's 'idea' is a suggestion, not a verdict, so all three stay
     -- null for the model tier to fill.
     , case turn_aggregates.explicit_rating
         when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
+        when 'positive' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
         when 'dislike' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+        when 'negative' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
     end as sentiment_fk
     , case
-        when turn_aggregates.explicit_rating in ('good', 'bad', 'like', 'dislike')
+        when turn_aggregates.explicit_rating
+            in ('good', 'bad', 'like', 'dislike', 'positive', 'negative')
             then 'explicit_rating'
     end as sentiment_source
     , summary.conversation_summary
@@ -172,6 +188,11 @@ select
     , cluster_assignment.cluster_similarity
     , cluster_assignment.cluster_assignment_method
     , cluster_assignment.cluster_run_id
+    -- Filter on this to report only conversations the current clustering run covers.
+    , exists (
+        select 1 from current_cluster_run
+        where current_cluster_run.cluster_run_id = cluster_assignment.cluster_run_id
+    ) as is_in_cluster_scope
     , {{ cast_timestamp_to_iso8601('current_timestamp') }} as conversation_ingested_at
 from conversation
 inner join turn_aggregates

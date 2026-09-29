@@ -18,9 +18,6 @@ Workflow::
     # Explicit env / role
     ol-dbt starrocks run --env production --vault-role readonly
 
-    # Develop the b2b models: QA cluster to write to, production lake to read
-    ol-dbt starrocks run --env dev
-
     # Pass dbt flags through
     ol-dbt starrocks run --full-refresh --select my_model+
 
@@ -75,23 +72,18 @@ _VAULT_MOUNT = "database-starrocks"
 # so adding an environment forces both answers.
 #
 # Mirrors STARROCKS_DBT_TARGET_MAP / DATA_LAKE_ENV_MAP in
-# lakehouse.lib.dbt_environment; keep the two in step. A fifth environment,
-# `local` (k3d, its own object store and catalog), is planned in RFC 12711's
-# Local-2/3/4 and will need an entry in both places. It is NOT a rename of
-# `dev` below -- `dev` reaches the remote QA cluster and the production lake,
-# `local` reaches neither.
+# lakehouse.lib.dbt_environment; keep the two in step.
 _ENVS: dict[str, dict[str, Any]] = {
-    # QA cluster connectivity, production data. The combination b2b development
-    # against real data wants: the QA cluster is safe to write to, and the QA
-    # lake has no dimensional/reporting tables to read (RFC 12711 step 8).
+    # `dev` belongs to the local environment planned in RFC 12711's Local-2/3/4
+    # (k3d, its own object store and catalog), which does not exist yet. Until
+    # it does, `dev` is the QA cluster reading the QA lake, same as `qa`. It
+    # used to read the production lake through the QA cluster, which stopped
+    # working once the QA cluster lost production lake access (Glue deny from
+    # ol-infrastructure#5472/#5670, then #6023 dropped its production policy
+    # and catalog). Repointing at the production cluster instead would have
+    # developer builds writing into it.
     # Matches DATA_LAKE_ENV_MAP["dev"] so `ol-dbt starrocks --env dev` and a
     # bare `dagster dev` resolve identically.
-    #
-    # Worth being honest about what this is: "local" development against a
-    # remote cluster and production data. It is the right mode for model-shape
-    # iteration and `ol-dbt diff`, where identity does not matter, and the
-    # wrong one for anything keyed on environment-scoped identity -- which is
-    # why `local` is coming rather than this being the end state.
     "dev": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
         "eks_context": "data-qa",
@@ -100,7 +92,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_qa_vault",
-        "data_lake_env": "production",
+        "data_lake_env": "qa",
     },
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
@@ -216,9 +208,8 @@ def run(  # noqa: PLR0913
         str,
         Parameter(
             name=["--env", "-e"],
-            help="Target StarRocks environment (dev, qa, production, ci). `dev` is the "
-            "QA cluster reading the production data lake -- what local b2b development "
-            "wants, since the QA lake has no dimensional/reporting tables yet.",
+            help="Target StarRocks environment (dev, qa, production, ci). `dev` is reserved "
+            "for the planned local environment and is the same as `qa` until it exists.",
         ),
     ] = "qa",
     vault_role: Annotated[
@@ -289,7 +280,7 @@ def run(  # noqa: PLR0913
     if port_forward is None:
         port_forward = env_cfg.get("port_forward", True)
     # Print the lake alongside the cluster. Which data you are reading is not
-    # inferable from the env name (`dev` is the QA cluster on production data),
+    # inferable from the env name (`ci` is the CI cluster on the QA lake),
     # and "you cannot tell which mode you are in" is the specific failure this
     # separation exists to fix -- so say it, every run.
     console.print(

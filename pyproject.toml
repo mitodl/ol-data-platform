@@ -12,7 +12,7 @@ classifiers = [
 dependencies = [
     "PyPika ~=0.51.0",
     "boto3>=1.42.42",
-    "cyclopts~=4.25.2",
+    "cyclopts~=5.0.0",
     "dbt-duckdb>=1.10.0",
     "hvac[parser]>=2.0.0,<3",
     "dbt-starrocks>=1.9.0",
@@ -40,6 +40,14 @@ package = false  # This is a workspace root, not a package
 # metadata/gencode mismatch in the 1.82.0 release).
 override-dependencies = [
     "grpcio-health-checking<1.82.0",
+]
+
+# Keep sqlalchemy below 2.1: 2.1 makes a bare postgresql:// URL default to
+# psycopg 3, and dagster-postgres 1.13.24 breaks on it (bound NOTIFY payload,
+# psycopg2-only pgcode, and set_pg_statement_timeout closing the connection).
+# Tracked upstream in dagster-io/dagster#34232, #34235 and #33959.
+constraint-dependencies = [
+    "sqlalchemy<2.1",
 ]
 
 [dependency-groups]
@@ -258,9 +266,6 @@ path = "dg_projects/legacy_openedx"
 
 [[tool.dg.workspace.projects]]
 path = "dg_projects/canvas"
-
-[[tool.dg.workspace.projects]]
-path = "dg_projects/data_platform"
 
 [[tool.dg.workspace.projects]]
 path = "dg_projects/delivery"

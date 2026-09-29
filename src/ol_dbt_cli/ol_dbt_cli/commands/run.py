@@ -37,6 +37,7 @@ import cyclopts
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.git_utils import get_repo_root
 
 console = Console()
@@ -101,7 +102,7 @@ def _build_dbt_command(
     """Construct the dbt CLI command list."""
     # Always pass --profiles-dir so the command works from any cwd, not just
     # from within the dbt project directory.
-    cmd: list[str] = ["dbt", subcommand, "--profiles-dir", str(profiles_dir)]
+    cmd: list[str] = [dbt_executable(), subcommand, "--profiles-dir", str(profiles_dir)]
 
     has_manifest = available.get("manifest.json", False)
     has_results = available.get("run_results.json", False)

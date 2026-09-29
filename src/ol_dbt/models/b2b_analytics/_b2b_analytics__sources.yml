@@ -9,11 +9,10 @@ sources:
 
     Which catalog is read comes from DBT_DATA_LAKE_ENV, NOT from the target
     name. The target names a CLUSTER and its auth; this names the lake the
-    cluster reads through its external catalog, and the two axes diverge: a
-    developer's StarRocks target port-forwards to the QA cluster but should
-    read production data. Inferring the lake from `'qa' in target.name` got
-    that case wrong and made these models undevelopable locally (RFC 12711
-    step 1). Set from a per-environment map that raises on an unknown
+    cluster reads through its external catalog, and the two axes diverge: the
+    `ci` environment's target is starrocks_production but it reads the QA
+    lake. Inferring the lake from `'qa' in target.name` conflated them
+    (RFC 12711 step 1). Set from a per-environment map that raises on an unknown
     environment by lakehouse/assets/lakehouse/dbt.py (Dagster) and
     ol_dbt_cli/commands/starrocks.py (local, CI); the default below is reached
     only by a bare `dbt` invocation outside both, where reading production is

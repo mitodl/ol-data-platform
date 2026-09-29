@@ -1,13 +1,15 @@
--- One row per forum post, in the shape of the legacy Mongo `contents` collection that the
--- IRx export writes back out as forum/contents.bson.
+-- One row per forum post. Threads and comments were unified under this shape while the
+-- forum still ran on Mongo; the IRx export now delivers it as-is (forum_contents.parquet),
+-- not reconstructed into a Mongo document, since Mongo has not backed the forum since the
+-- forum-v2 cutover.
 --
 -- The generic foreign keys (content_type_id, content_object_id) are resolved by content
 -- type name, never by id: the ids differ per deployment, and thread and comment ids both
 -- start at 1, so an unfiltered join silently matches both tables.
 --
 -- mongoid and the *_mongoid references come from forum_mongocontent, which only has rows
--- for content migrated out of Mongo. They are null for content created after the cutover;
--- the export mints a surrogate for those so the references still close.
+-- for content migrated out of Mongo; they are null for content created after the cutover.
+-- Kept for historical continuity with the legacy ObjectIds, not manufactured.
 
 with content_types as (
     select

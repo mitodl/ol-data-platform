@@ -3,18 +3,50 @@
 import csv
 import hashlib
 import io
+import json
+from collections.abc import Iterator
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
 import polars as pl
-from dagster import AssetKey
+import pyarrow as pa
+import pytest
+from dagster import AssetKey, materialize
+from openedx.assets import irx_export
 from openedx.assets.irx_export import (
     IRX_EXPORT_FILES,
+    MANIFEST_NAME,
+    _DigestingWriter,
     build_irx_export_asset,
     legacy_csv_columns,
+    read_data_files,
     write_legacy_csv,
+    write_parquet,
 )
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.expressions import AlwaysTrue
+from pyiceberg.table import Table
 from upath import UPath
+
+FORUM_ROWS: list[dict[str, Any]] = [
+    {
+        "_type": "CommentThread",
+        "id": 1,
+        "votes_up": ["11"],
+        "votes_down": [],
+        "abuse_flaggers": [],
+        "historical_abuse_flaggers": [],
+    },
+    {
+        "_type": "Comment",
+        "id": 2,
+        "votes_up": [],
+        "votes_down": ["22"],
+        "abuse_flaggers": ["33"],
+        "historical_abuse_flaggers": [],
+    },
+]
 
 # Naive, as MySQL DATETIME and Iceberg timestamp both are.
 ROWS: list[dict[str, Any]] = [
@@ -54,14 +86,16 @@ def _legacy_bytes() -> bytes:
 
 
 def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
-    frame = pl.LazyFrame(
+    frame = pl.DataFrame(
         [{**row, "s": text} for row, text in zip(ROWS, STRINGS, strict=True)]
     )
+    projected = frame.select(legacy_csv_columns(frame.schema, COLUMNS))
     destination = UPath(tmp_path / "out.csv")
 
+    # An empty leading batch, as read_data_files yields, then the rows split
+    # across batches: one header, and no batch boundary shows in the bytes.
     sha256, size, row_count = write_legacy_csv(
-        frame.select(legacy_csv_columns(frame.collect_schema(), COLUMNS)),
-        destination,
+        [projected.clear(), projected.head(1), projected.tail(3)], destination
     )
 
     written = destination.read_bytes()
@@ -69,6 +103,40 @@ def test_export_bytes_match_legacy_csv_module_output(tmp_path) -> None:
     assert sha256 == hashlib.sha256(written).hexdigest()
     assert size == len(written)
     assert row_count == len(ROWS)
+
+
+def test_row_count_ignores_crlf_inside_quoted_fields_at_any_chunk_boundary() -> None:
+    frame = pl.LazyFrame(
+        {"id": [1, 2, 3], "s": ['crlf\r\n"inside" quotes', "\r", 'x""\r\n']}
+    )
+    csv_bytes = io.BytesIO()
+    frame.sink_csv(csv_bytes, line_terminator="\r\n")
+    data = csv_bytes.getvalue()
+
+    for split in range(len(data) + 1):
+        writer = _DigestingWriter(io.BytesIO())
+        writer.write(data[:split])
+        writer.write(data[split:])
+        assert writer.records - 1 == 3, split
+
+
+def test_write_parquet_round_trips_array_columns_and_counts_rows(tmp_path) -> None:
+    frame = pl.DataFrame(FORUM_ROWS)
+    destination = UPath(tmp_path / "out.parquet")
+
+    sha256, size, row_count = write_parquet(
+        [frame.clear(), frame.head(1), frame.tail(1)], destination
+    )
+
+    written = destination.read_bytes()
+    assert sha256 == hashlib.sha256(written).hexdigest()
+    assert size == len(written)
+    assert row_count == len(FORUM_ROWS)
+    read_back = pl.read_parquet(written)
+    assert read_back["votes_up"].to_list() == [row["votes_up"] for row in FORUM_ROWS]
+    assert read_back["abuse_flaggers"].to_list() == [
+        row["abuse_flaggers"] for row in FORUM_ROWS
+    ]
 
 
 def test_role_users_projects_name_to_the_role_header() -> None:
@@ -90,9 +158,207 @@ def test_every_file_depends_on_its_irx_model() -> None:
     assert deps.pop("forum_contents") == {
         AssetKey(["external", "irx__mitxonline__openedx__mysql__forum_contents"])
     }
+    assert deps.pop("manifest") == {
+        AssetKey(["mitxonline", "irx_export", name])
+        for name in (
+            "course_ids",
+            *(export.name for export in IRX_EXPORT_FILES),
+            "forum_contents",
+        )
+    }
     assert deps == {
         export.name: {
             AssetKey(["external", f"irx__mitxonline__openedx__mysql__{export.model}"])
         }
         for export in IRX_EXPORT_FILES
     }
+
+
+DROP_DATE = "2026-09-20"
+COURSE_ID = "course-v1:MITx+1.00x+3T2026"
+
+
+class _Snapshot(SimpleNamespace):
+    snapshot_id = 42
+
+
+class _Table:
+    def __init__(self, name: str):
+        self.name = name
+
+    def current_snapshot(self) -> _Snapshot:
+        return _Snapshot()
+
+
+def _irx_frame(table: _Table) -> pl.DataFrame:
+    if table.name.endswith("forum_contents"):
+        return pl.DataFrame(FORUM_ROWS)
+    export = next(f for f in IRX_EXPORT_FILES if table.name.endswith(f.model))
+    # A model column the CSV doesn't carry, which the read has to project away.
+    row = dict.fromkeys(export.source_columns, "x") | {
+        "course_id": COURSE_ID,
+        "unexported": "x",
+    }
+    return pl.DataFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
+
+
+@pytest.fixture
+def drop_root(tmp_path, monkeypatch) -> UPath:
+    # Both roots, so a DAGSTER_ENVIRONMENT exported in the shell can't send the
+    # test's files to a real bucket.
+    monkeypatch.setattr(irx_export, "IRX_EXPORT_ROOTS", {})
+    monkeypatch.setattr(irx_export, "IRX_EXPORT_SANDBOX_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        irx_export, "load_dbt_model_table", lambda _db, name: _Table(name)
+    )
+    drop = UPath(tmp_path) / "mitx" / DROP_DATE.replace("-", "")
+    # S3 has no directories to create; a local path does.
+    drop.mkdir(parents=True)
+    return drop
+
+
+def _run_export(monkeypatch, fail_on: str | None = None):
+    def read(
+        table: _Table, _snapshot_id: int, columns: tuple[str, ...]
+    ) -> Iterator[pl.DataFrame]:
+        if fail_on and table.name.endswith(fail_on):
+            raise RuntimeError
+        frame = _irx_frame(table)
+        if columns != ("*",):
+            frame = frame.select(columns)
+        # One batch per row, after the empty schema batch, so the drop is
+        # assembled across batches the way a multi-file table's would be.
+        yield frame.clear()
+        yield from frame.iter_slices(1)
+
+    monkeypatch.setattr(irx_export, "read_data_files", read)
+    openedx = SimpleNamespace(
+        client=SimpleNamespace(get_edx_course_ids=lambda: [[{"id": COURSE_ID}]])
+    )
+    return materialize(
+        [build_irx_export_asset("mitx")],
+        partition_key=DROP_DATE,
+        resources={"openedx": openedx},
+        raise_on_error=False,
+    )
+
+
+def test_manifest_lists_every_delivered_file(drop_root, monkeypatch) -> None:
+    result = _run_export(monkeypatch)
+
+    assert result.success
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    assert manifest["deployment"] == "mitx"
+    assert manifest["drop_date"] == "20260920"
+    expected = [
+        "course_ids.csv",
+        *(f"{f.name}.csv" for f in IRX_EXPORT_FILES),
+        "forum_contents.parquet",
+    ]
+    assert [entry["name"] for entry in manifest["files"]] == expected
+    for entry in manifest["files"]:
+        data = (drop_root / entry["name"]).read_bytes()
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest()
+        assert entry["size_bytes"] == len(data)
+    row_counts = {entry["name"]: entry["row_count"] for entry in manifest["files"]}
+    # The course list filters out the unlisted run in the five course-scoped files.
+    assert {row_counts[f"{f.name}.csv"] for f in IRX_EXPORT_FILES} == {1}
+    assert row_counts["course_ids.csv"] == 1
+    # Forum isn't cut to the course list, so both fixture rows are delivered.
+    assert row_counts["forum_contents.parquet"] == len(FORUM_ROWS)
+
+
+def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> None:
+    assert _run_export(monkeypatch).success
+    assert (drop_root / MANIFEST_NAME).exists()
+
+    result = _run_export(monkeypatch, fail_on="courseware_studentmodule")
+
+    assert not result.success
+    assert not (drop_root / MANIFEST_NAME).exists()
+
+
+def test_rerun_fails_when_the_old_manifest_cannot_be_deleted(
+    drop_root, monkeypatch
+) -> None:
+    assert _run_export(monkeypatch).success
+    written = (drop_root / "users_query.csv").stat().st_mtime_ns
+    # s3fs reports a denied delete as a success.
+    monkeypatch.setattr(type(drop_root), "unlink", lambda *_args, **_kwargs: None)
+
+    result = _run_export(monkeypatch)
+
+    assert not result.success
+    assert (drop_root / "users_query.csv").stat().st_mtime_ns == written
+
+
+ICEBERG_SCHEMA = pa.schema(
+    [("id", pa.int64()), ("course_id", pa.string()), ("unexported", pa.string())]
+)
+
+
+def _iceberg_table(tmp_path, data_files: int) -> Table:
+    """Build a local Iceberg table with one data file per append."""
+    catalog = SqlCatalog(
+        "irx",
+        uri=f"sqlite:///{tmp_path}/catalog.db",
+        warehouse=f"file://{tmp_path}",
+    )
+    catalog.create_namespace("irx")
+    table = catalog.create_table("irx.studentmodule", schema=ICEBERG_SCHEMA)
+    for n in range(data_files):
+        table.append(
+            pa.table(
+                {
+                    "id": [2 * n, 2 * n + 1],
+                    "course_id": [COURSE_ID] * 2,
+                    "unexported": ["x"] * 2,
+                },
+                schema=ICEBERG_SCHEMA,
+            )
+        )
+    return table
+
+
+def test_read_data_files_reads_one_data_file_per_pull(tmp_path, monkeypatch) -> None:
+    table = _iceberg_table(tmp_path, data_files=3)
+    tasks_per_read: list[int] = []
+    to_record_batches = irx_export.ArrowScan.to_record_batches
+
+    def spy(scan: Any, tasks: Any) -> Iterator[pa.RecordBatch]:
+        tasks = list(tasks)
+        tasks_per_read.append(len(tasks))
+        return to_record_batches(scan, tasks)
+
+    monkeypatch.setattr(irx_export.ArrowScan, "to_record_batches", spy)
+
+    batches = read_data_files(
+        table, table.current_snapshot().snapshot_id, ("id", "course_id")
+    )
+    schema_batch = next(batches)
+    assert schema_batch.height == 0
+    assert schema_batch.columns == ["id", "course_id"]
+    assert tasks_per_read == []
+    first = next(batches)
+    # Pulling the first rows reads the first data file and nothing past it.
+    assert tasks_per_read == [1]
+    rest = list(batches)
+
+    assert tasks_per_read == [1, 1, 1]
+    assert pl.concat([first, *rest])["id"].sort().to_list() == list(range(6))
+
+
+def test_read_data_files_yields_the_schema_for_a_snapshot_with_no_data_files(
+    tmp_path,
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    table.delete(delete_filter=AlwaysTrue())
+
+    batches = list(
+        read_data_files(
+            table, table.current_snapshot().snapshot_id, ("id", "course_id")
+        )
+    )
+
+    assert [batch.height for batch in batches] == [0]
+    assert batches[0].columns == ["id", "course_id"]

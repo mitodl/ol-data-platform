@@ -29,7 +29,7 @@ from dagster_dbt import (
     build_dbt_asset_selection,
 )
 from dagster_dbt.asset_utils import get_asset_key_for_model
-from ol_dbt_cli.lib.inventory import load_units
+from ol_dbt_cli.lib.inventory import load_units, render_dagster_intervals
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
@@ -243,43 +243,33 @@ group_names: set[str] = set()
 for assets_def in airbyte_assets:
     group_names.update(g for g in assets_def.group_names_by_key.values())
 
-# Define a mapping of group_name to interval (6, 12 or 24 hours) on production
+# Sync cadence per Airbyte group, rendered from each connection's
+# `sync_interval_hours` in ingestion/inventory (INGESTION_INVENTORY_SPEC §5). A
+# group missing here falls through to the 24-hour default below with no error,
+# which is why this is generated rather than typed: the hand-kept literal it
+# replaces had to match connection-derived names character for character.
 group_name_to_interval: dict[str, int] = {}
 if DAGSTER_ENV == "production":
-    group_name_to_interval = {
-        "bootcamps_production_app_db__s3_data_lake": 24,
-        "edxorg_production_course_structure_s3_data_lake": 24,
-        "edxorg_production_course_tables__s3_data_lake": 24,
-        "edxorg_tracking_logs__s3_data_lake": 24,
-        "emeritus_bigquery__s3_data_lake": 24,
-        "irx_bigquery__s3_data_lake": 24,
-        "irx_bigquery_email_opt_in__s3_data_lake": 24,
-        "mailgun__s3_data_lake": 24,
-        "micromasters_production_app_db__s3_data_lake": 24,
-        "mit_learn_production__s3_data_lake": 24,
-        "ol_salesforce__s3_data_lake": 24,
-        "s3_edxorg_course_and_program__s3_data_lake": 24,
-        "s3_edxorg_program_credentials__s3_data_lake": 24,
-        "mitx_forum_production__s3_data_lake": 12,
-        "mitx_online_open_edx_db__s3_data_lake": 12,
-        "mitx_online_production_open_edx_student_module_history__s3_data_lake": 12,
-        "mitx_online_tracking_logs__s3_data_lake": 12,
-        "mitxonline_forum_production__s3_data_lake": 12,
-        "mitx_residential_open_edx_db__s3_data_lake": 12,
-        "mitx_residential_open_edx_db_studentmodule_history__s3_data_lake": 12,
-        "mitx_tracking_logs__s3_data_lake": 12,
-        "s3_mitx_online_open_edx_extracts__s3_data_lake": 12,
-        "s3_mitx_open_edx_extracts__s3_data_lake": 12,
-        "s3_xpro_open_edx_extracts__s3_data_lake": 12,
-        "xpro_forum_production__s3_data_lake": 12,
-        "xpro_open_edx_db__s3_data_lake": 12,
-        "xpro_tracking_logs__s3_data_lake": 12,
-        "xpro_production_app_db__s3_data_lake": 6,
-        "mitx_online_production_app_db__s3_data_lake": 6,
-        "ocw_studio_app_db__s3_data_lake": 6,
-        "odl_video_service__s3_data_lake": 6,
-        "learn_ai_production__s3_data_lake": 6,
-    }
+    group_name_to_interval = render_dagster_intervals(load_units(INVENTORY_DIR))
+    if not group_name_to_interval:
+        # An empty render means the inventory was not found or holds no
+        # production connection. Carrying on would drop every 6- and 12-hour
+        # sync to daily without a word, so refuse to load instead.
+        msg = f"No sync intervals rendered from the inventory at {INVENTORY_DIR}."
+        raise RuntimeError(msg)
+    # A single live group the inventory does not cover (a connection created or
+    # renamed in the UI) warns rather than raises. There is one today, the
+    # edx.org course-metadata connection pending deletion, and failing here
+    # would take the whole code location down for it. airbyte_inventory_drift
+    # reports the connection behind it as undeclared.
+    if uncovered := sorted(group_names - group_name_to_interval.keys()):
+        import warnings
+
+        warnings.warn(
+            f"No inventory sync interval for Airbyte group(s) {uncovered}; "
+            "they fall back to 24 hours.",
+            stacklevel=2,
+        )
 
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
@@ -434,6 +424,12 @@ airbyte_drift_schedules = (
                 ),
                 cron_schedule="0 3 * * *",
                 execution_timezone="UTC",
+                # RUNNING, unlike the maintenance schedules above that someone
+                # starts by hand: left at Dagster's STOPPED default this never
+                # ticked in production (no SchedulerDaemon evaluation of it in
+                # the 30 days to 2026-09-26). It only reads, and
+                # SCHEDULE_ENVIRONMENTS registers it in production alone.
+                default_status=DefaultScheduleStatus.RUNNING,
             ),
         )
     ]
@@ -476,12 +472,19 @@ posthog_staging_schedule = ScheduleDefinition(
 # hand dbt an empty selector, which selects the whole project. The image copies
 # the inventory in, and airbyte_inventory_drift already fails naming the path
 # when it is missing.
+#
+# Left out until its raw table exists: raw__edxorg__discovery__api__programs has
+# never been created, because edX.org lists no active non-MicroMasters MIT
+# program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
+# table from an empty load. Building it would fail the whole job every day.
+AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
 non_airbyte_staging_models = sorted(
     staging_models_reading(
         json.loads(dbt_project.manifest_path.read_text()),
         non_airbyte_raw_tables(load_units(INVENTORY_DIR)),
     )
     - {POSTHOG_STAGING_MODEL}
+    - AWAITING_RAW_TABLE
 )
 non_airbyte_staging_schedules = (
     [

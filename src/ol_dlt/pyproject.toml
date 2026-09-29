@@ -18,7 +18,7 @@ dependencies = [
     "youtube-transcript-api>=1.0,<2",
     # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real
     # arguments -- a date window and a chunk size -- rather than env vars.
-    "cyclopts~=4.25.3",
+    "cyclopts~=5.0.0",
 ]
 
 [dependency-groups]

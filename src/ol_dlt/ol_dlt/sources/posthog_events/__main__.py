@@ -13,6 +13,11 @@ forward from where the previous chunk stopped::
         --start-date 2025-01-01 --max-objects 240
     DLT_PROFILE=production python -m ol_dlt.sources.posthog_events \
         --max-objects 240   # resumes at the backfill cursor
+
+Each run is also capped at ``--budget-bytes`` of compressed export (256 MB by
+default, a few hours at recent volumes), because one dlt load holds all of its
+data in memory. Raising it only helps on a machine with the memory for it; a
+long backfill is a loop over this command.
 """
 
 import logging
@@ -22,6 +27,7 @@ from cyclopts import App
 
 from ol_dlt import config
 from ol_dlt.sources.posthog_events import (
+    BUDGET_BYTES,
     posthog_events_backfill_pipeline,
     posthog_events_source,
 )
@@ -35,6 +41,7 @@ def run(
     start_date: date | None = None,
     end_date: date | None = None,
     max_objects: int = 1,
+    budget_bytes: int = BUDGET_BYTES,
 ) -> None:
     """Run the PostHog event ingestion.
 
@@ -45,6 +52,8 @@ def run(
         end_date: Stop at the end of this UTC date.
         max_objects: Hour objects to read in this run. Defaults to 1 so a bare
             invocation is a smoke test rather than a backfill.
+        budget_bytes: Compressed export bytes this run may read. See
+            ``BUDGET_BYTES`` for how that maps to memory.
     """
     logging.basicConfig(level=logging.INFO)
     load_info = posthog_events_backfill_pipeline.run(
@@ -53,6 +62,7 @@ def run(
                 start_date=start_date,
                 end_date=end_date,
                 max_objects=max_objects,
+                budget_bytes=budget_bytes,
             )
         ),
         loader_file_format="parquet",

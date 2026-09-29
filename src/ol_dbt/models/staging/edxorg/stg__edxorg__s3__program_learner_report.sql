@@ -1,8 +1,4 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__program_learner_report') }}
-)
-
-, source_sorted as (
     select
         *
         , case
@@ -15,12 +11,13 @@ with source as (
                 )
 
         end as program_certificate_awarded_at
-        , row_number() over (
-            partition by "user id", "course run key", "program uuid"
-            order by _airbyte_extracted_at desc, _ab_source_file_last_modified desc
-        ) as row_num
-    from source
+    from {{ source('ol_warehouse_raw_data','raw__edxorg__program_learner_report') }}
 )
+
+{{ deduplicate_raw_table(
+    raw_table='raw__edxorg__program_learner_report'
+    , partition_columns='"user id", "course run key", "program uuid"'
+) }}
 
 , aggregated_program_certificate as (
     select
@@ -29,13 +26,8 @@ with source as (
         , "course run key" as courserun_readable_id
         , min(program_certificate_awarded_at) as earliest_program_cert_award_on
         , max("completed program") as ever_completed_program
-    from source_sorted
+    from source
     group by 1, 2, 3
-)
-
-, dedup_source as (
-    select * from source_sorted
-    where row_num = 1
 )
 
 , cleaned as (
@@ -83,7 +75,7 @@ with source as (
             else {{ cast_timestamp_to_iso8601(date_parse("\"date first upgraded to verified\"", "'%Y-%m-%d %H:%i:%s Z'")) }}
         end as courserunenrollment_upgraded_on
         , program_certificate_awarded_at as program_certificate_awarded_on
-    from dedup_source
+    from most_recent_source
 
 )
 

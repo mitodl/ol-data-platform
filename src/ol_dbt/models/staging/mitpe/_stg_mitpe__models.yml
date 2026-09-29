@@ -1,0 +1,53 @@
+---
+version: 2
+
+models:
+- name: stg__mitpe__api__courses
+  description: MIT Professional Education feed items (courses and programs) from the
+    /feeds/courses/ API. Multi-valued fields stay pipe-separated as the feed gives
+    them; int__mitpe__* models split and normalize them.
+  columns:
+  - name: course_uuid
+    description: str, the feed item's uuid
+    tests:
+    - not_null
+    - unique
+  - name: course_title
+    description: str, title as the feed gives it (may contain HTML entities)
+  - name: course_url
+    description: str, root-relative URL path of the item's page
+  - name: course_description
+    description: str, HTML description
+  - name: course_image_src
+    description: str, root-relative URL path of the cover image
+  - name: course_image_alt
+    description: str, alt text for the cover image
+  - name: course_topics_raw
+    description: str, pipe-separated topic names
+  - name: course_learning_format
+    description: str, learning format, e.g. Online, On Campus, Blended
+  - name: course_resource_type
+    description: str, the feed's own Course/Program label, may be empty
+  - name: course_certificates_raw
+    description: str, pipe-separated certificate and category labels
+  - name: program_course_titles_raw
+    description: str, programs only, pipe-separated titles of the program's courses
+  - name: course_run_ids_raw
+    description: str, pipe-separated run ids, aligned by position with the run date
+      lists
+  - name: course_run_start_dates_raw
+    description: str, pipe-separated YYYY-MM-DD run start dates
+  - name: course_run_end_dates_raw
+    description: str, pipe-separated YYYY-MM-DD run end dates
+  - name: course_run_enrollment_end_dates_raw
+    description: str, pipe-separated YYYY-MM-DD enrollment end dates
+  - name: course_price_raw
+    description: str, price text, e.g. $3600
+  - name: course_lead_instructors_raw
+    description: str, pipe-separated lead instructor names
+  - name: course_instructors_raw
+    description: str, pipe-separated other instructor names
+  - name: course_location
+    description: str, location text
+  - name: course_duration
+    description: str, free-text duration, e.g. 5 Days, 9-12 meses

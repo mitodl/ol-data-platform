@@ -10,6 +10,9 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 
 The extraction halves of these pipelines (sloan_course_metadata, video_api,
 video_metadata) still live here and move on to INGEST later.
+
+It also registers the deployment-wide failure notification sensors, which
+watch every code location and must be registered from exactly one.
 """
 
 from dagster import (
@@ -31,7 +34,9 @@ from ol_orchestrate.lib.utils import (
     unauthenticated_vault,
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
+from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
@@ -43,6 +48,7 @@ from delivery.assets.ovs_videos import (
     video_metadata,
     video_webhook,
 )
+from delivery.assets.podcasts import podcast_webhook
 from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
     instigators_for_environment,
@@ -101,6 +107,15 @@ mit_edx_programs_schedule = ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# Cohort 3 media/feed delivery. Podcasts deliver a nested channel+episode
+# payload, so this runs after the Cohort 2 slots rather than sharing one.
+podcast_schedule = ScheduleDefinition(
+    name="podcast_schedule",
+    target=AssetSelection.assets(podcast_webhook),
+    cron_schedule="0 7 * * *",
+    execution_timezone="Etc/UTC",
+)
+
 # Daily schedule for learning resource API extraction
 extract_api_daily_schedule = ScheduleDefinition(
     name="learning_resource_api_schedule",
@@ -154,6 +169,9 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
+        # opens the unpublish-review issues mit_edx_programs_webhook files when edX
+        # lists no program
+        "github_api": GithubApiClientFactory(vault=vault),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
             client_class="MITLearnApiClient",
@@ -175,6 +193,8 @@ defs = Definitions(
             mitpe_webhook,
             oll_webhook,
             mit_edx_programs_webhook,
+            # Media/feed webhook delivery
+            podcast_webhook,
         ]
     ),
     # Registration, not default_status, is what keeps these out of the
@@ -188,6 +208,7 @@ defs = Definitions(
             mitpe_schedule,
             oll_schedule,
             mit_edx_programs_schedule,
+            podcast_schedule,
         ]
     ),
     sensors=instigators_for_environment(
@@ -195,6 +216,7 @@ defs = Definitions(
             ovs_videos_discovery_sensor,
             ovs_videos_stale_cleanup_sensor,
             ovs_videos_delete_partition_cleanup_sensor,
+            *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),
     jobs=[

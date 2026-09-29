@@ -9,13 +9,16 @@ columns every row carries -- which is where the subtle correctness bugs lived.
 import contextlib
 import io
 import json
+import os
 import tempfile
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import dlt
 import duckdb
+import fsspec
 import pyarrow as pa
 import pytest
 
@@ -140,6 +143,34 @@ def test_reader_options_do_not_pad_ragged_rows() -> None:
     ragged = b"id\tbio\n1\tbio\n2\tbio\twith\textra\ttabs\n"
     relation = duckdb.from_csv_auto(io.BytesIO(ragged), **edxorg_s3._CSV_READER_OPTIONS)
     assert relation.columns == ["id", "bio"]
+
+
+def test_reader_reads_records_longer_than_duckdbs_default_line_limit() -> None:
+    """DuckDB's 2,000,000-byte default made a whole studentmodule export
+    unreadable over one learner's 5.9 MB `state` value."""
+    # RFC-4180 doubling, as the archive writes it: {"history": ["x", ...]}
+    state = '"{""history"": [' + ",".join(['""x""'] * 350_000) + ']}"'
+    assert len(state) > 2_000_000
+    tsv = f"id\tstate\tgrade\n1\t{state}\t1.0\n2\tshort\t0.5\n".encode()
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/long.tsv", tsv)]))
+
+    assert [r["id"] for r in rows] == ["1", "2"]
+    assert rows[0]["state"].startswith('{"history": ["x"')
+    assert rows[0]["grade"] == "1.0"
+
+
+def test_reader_keeps_a_long_record_deep_in_the_file() -> None:
+    """Past DuckDB's first buffer, an over-limit record is not an error:
+    ignore_errors drops it and the read carries on one row short."""
+    state = '"{""history"": [' + ",".join(['""x""'] * 350_000) + ']}"'
+    short = "".join(f"{i}\tshort\t0.5\n" for i in range(100_000))
+    tsv = f"id\tstate\tgrade\n{short}long\t{state}\t1.0\nlast\tshort\t0.5\n".encode()
+
+    rows = _rows(_read([_FakeFileItem("s3://bucket/deep.tsv", tsv)]))
+
+    assert len(rows) == 100_002
+    assert rows[-2]["id"] == "long"
 
 
 def test_source_yields_one_resource_per_table() -> None:
@@ -454,6 +485,52 @@ def test_reader_recovers_a_legacy_file_with_a_stray_quote() -> None:
 
     assert [r["id"] for r in rows] == [str(i) for i in range(1, 80)]
     assert rows[39]["bio"] == '"I love MIT'
+
+
+def test_pipeline_loads_every_row_of_interleaved_multi_batch_files(
+    tmp_path: Path,
+) -> None:
+    """dlt interleaves the per-file reader generators; none may cut another short.
+
+    Between #2695 and #2725 every read shared DuckDB's default connection, so
+    starting the next file's read ended the suspended one after its first batch
+    without an error. Every multi-batch file but the last loaded exactly
+    ``chunk_size`` rows: 3,507 of courseware_studentmodule's 4,503 files landed
+    in production with 5,000.
+    """
+    row_counts = [12000, 7000, 3000, 16000]
+    prefix = tmp_path / "land" / "db_table" / "t" / "prod"
+    for i, rows in enumerate(row_counts):
+        path = prefix / f"course{i}" / f"export{i}.tsv"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "id\tmodule_type\n" + "".join(f"{i}-{j}\tproblem\n" for j in range(rows))
+        )
+        modified = _MODIFIED_AT.timestamp() + i
+        os.utime(path, (modified, modified))
+
+    files = edxorg_s3.edxorg_files(
+        bucket_url=(tmp_path / "land").as_uri(),
+        file_globs=["db_table/t/prod/**/*.tsv"],
+        credentials=fsspec.filesystem("file"),
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="edxorg_interleave",
+        destination=dlt.destinations.duckdb(str(tmp_path / "out.duckdb")),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    pipeline.run(
+        (files | edxorg_s3.read_edxorg_tsv(**edxorg_s3._CSV_READER_OPTIONS)).with_name(  # noqa: SLF001
+            "t"
+        )
+    )
+
+    with pipeline.sql_client() as client:
+        loaded = dict(
+            client.execute_sql("select _source_file, count(*) from t group by 1")
+        )
+    assert sorted(loaded.values()) == sorted(row_counts)
 
 
 def test_reader_recovers_a_legacy_file_while_another_read_is_in_flight(

@@ -23,6 +23,7 @@ with ticket as (
         , cast(null as varchar) as category_description
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
+        , cast(null as varchar) as cluster_status
     from ticket
     cross join unnest(ticket.ticket_tags) as tag (tag_label)
     inner join feedback_tag
@@ -41,6 +42,7 @@ with ticket as (
         , cast(null as varchar) as category_description
         , min(ticket.ticket_created_at) as first_seen_at
         , max(ticket.ticket_updated_at) as updated_at
+        , cast(null as varchar) as cluster_status
     from ticket
     where ticket.group_name is not null
     group by 1
@@ -60,6 +62,7 @@ with ticket as (
         -- (ISO8601 strings throughout this layer, never a native timestamp).
         , {{ cast_timestamp_to_iso8601('proposed_at') }} as first_seen_at
         , {{ cast_timestamp_to_iso8601('proposed_at') }} as updated_at
+        , cluster_status
     from {{ ref('int__feedback__category_proposal') }}
 )
 
@@ -90,11 +93,19 @@ with ticket as (
         and category_slug != ''
 )
 
-, slug_dates as (
+, slug_rollup as (
     select
         category_slug
         , min(first_seen_at) as first_seen_at
         , max(updated_at) as updated_at
+        -- Per slug, not from the ranked row: several clusters can share a slug, and
+        -- the category stays active while any one of them is.
+        , case
+            when bool_or(category_source = 'llm_discovered' and cluster_status = 'active')
+                then 'active'
+            when bool_or(category_source = 'llm_discovered' and cluster_status = 'retired')
+                then 'retired'
+        end as cluster_status
     from combined
     where category_slug is not null
         and category_slug != ''
@@ -110,10 +121,11 @@ select
     , 'proposed' as category_status
     , ranked_combined.category_source
     , ranked_combined.cluster_key
+    , slug_rollup.cluster_status
     , ranked_combined.category_description
-    , slug_dates.first_seen_at
-    , slug_dates.updated_at
+    , slug_rollup.first_seen_at
+    , slug_rollup.updated_at
 from ranked_combined
-inner join slug_dates
-    on ranked_combined.category_slug = slug_dates.category_slug
+inner join slug_rollup
+    on ranked_combined.category_slug = slug_rollup.category_slug
 where ranked_combined.category_rank = 1

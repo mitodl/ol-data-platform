@@ -5,7 +5,11 @@ from typing import Any
 import numpy as np
 import polars as pl
 from dagster import AssetExecutionContext, AssetKey, MetadataValue, asset
-from ml.lib.cluster import NOISE_CLUSTER_ID
+from ml.lib.cluster import (
+    NOISE_CLUSTER_ID,
+    filter_conversation_scope,
+    platforms_from_run_value,
+)
 from ml.lib.cluster_identity import MEMBERSHIP_SCHEMA, nearest_active_cluster
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.iceberg_helpers import table_exists
@@ -81,6 +85,33 @@ def _run_embedding_config(cluster_run_id: str) -> tuple[str, int, str | None]:
         run_row["embedding_model_version"],
         run_row["embedding_dim"],
         run_row["embedding_input_filter"],
+    )
+
+
+def _run_scope(cluster_run_id: str | None) -> tuple[str | None, list[str] | None]:
+    """Return the (feedback_since, platforms) that feedback_cluster_run recorded."""
+    if cluster_run_id is None:
+        return None, None
+    runs_lf = get_dbt_model_as_dataframe(
+        database_name=database_name, table_name="feedback_cluster_run"
+    )
+    # A run table written before a scope column existed has no such column: those
+    # runs clustered without that filter.
+    run_columns = runs_lf.collect_schema().names()
+    scope_columns = [
+        column for column in ("feedback_since", "platforms") if column in run_columns
+    ]
+    if not scope_columns:
+        return None, None
+    run_row = (
+        runs_lf.filter(pl.col("cluster_run_id") == cluster_run_id)
+        .select(scope_columns)
+        .collect()
+        .to_dicts()[0]
+    )
+    return (
+        run_row.get("feedback_since"),
+        platforms_from_run_value(run_row.get("platforms")),
     )
 
 
@@ -227,16 +258,20 @@ def _rewrite_from_run(
     return pl.DataFrame(rows, schema=MEMBERSHIP_SCHEMA)
 
 
-def _incrementally_place_new_embeddings(
+def _incrementally_place_new_embeddings(  # noqa: PLR0913 -- one filter per scope dimension
     catalog,
     exclude_pks: set[str],
     cluster_run_id: str | None,
     now: datetime,
     embedding_config: tuple[str, int, str | None],
+    feedback_since: str | None = None,
+    platforms: list[str] | None = None,
 ) -> pl.DataFrame:
     """Place every conversation that needs (re-)placement against the current
     active clusters, scoped to one embedding_config (embedding_model_version,
-    embedding_dim, embedding_input_filter).
+    embedding_dim, embedding_input_filter), to conversations opened on or after
+    feedback_since, and to platforms. A conversation out of that scope keeps its
+    last membership row.
 
     "Needs (re-)placement" is: no membership row yet, an embedding newer than
     its current membership row, or a membership row still pointing at a
@@ -270,6 +305,14 @@ def _incrementally_place_new_embeddings(
         embeddings_lf = embeddings_lf.filter(
             pl.col("embedding_input") == embedding_input_filter
         )
+    embeddings_lf = filter_conversation_scope(
+        embeddings_lf,
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="int__feedback__conversation"
+        ),
+        feedback_since,
+        platforms,
+    )
 
     membership_lf = (
         get_dbt_model_as_dataframe(
@@ -328,7 +371,7 @@ def _incrementally_place_new_embeddings(
 
 
 @asset(
-    code_version="feedback_cluster_assignment_v1",
+    code_version="feedback_cluster_assignment_v2",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_cluster_membership"]),
     deps=[
@@ -390,6 +433,7 @@ def feedback_cluster_assignment(context: AssetExecutionContext) -> pl.DataFrame:
             cluster_run_id,
             now,
             embedding_config,
+            *_run_scope(cluster_run_id),
         )
         if embedding_config is not None
         else pl.DataFrame(schema=MEMBERSHIP_SCHEMA)

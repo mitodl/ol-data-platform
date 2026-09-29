@@ -25,6 +25,7 @@ from typing import Annotated, cast
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.dimensional_layering import (
     LayeringViolation,
     classify_layer,
@@ -1205,7 +1206,7 @@ def validate(
     # Auto-compile: run dbt parse to regenerate manifest.json before validation.
     # Uses dev_local (DuckDB) by default — no network or credentials required.
     if auto_compile:
-        cmd = ["dbt", "parse", "--target", compile_target]
+        cmd = [dbt_executable(), "parse", "--target", compile_target]
         if output_format == "text":
             console.print(f"[dim]Running: {' '.join(cmd)} ...[/]")
         try:
@@ -1222,8 +1223,8 @@ def validate(
             err_console.print(f"[yellow]Warning:[/] dbt parse failed: {exc.stderr[-200:] if exc.stderr else exc}")
             err_console.print("  Validation will continue with existing or no manifest.")
         except FileNotFoundError:
-            err_console.print("[yellow]Warning:[/] 'dbt' command not found; skipping auto-compile.")
-            err_console.print("  Install dbt and ensure it is on PATH, or run dbt parse manually.")
+            err_console.print(f"[yellow]Warning:[/] {dbt_executable()} not found; skipping auto-compile.")
+            err_console.print("  Run `uv sync` from the repo root to install dbt, or run dbt parse manually.")
 
     # Resolve compiled SQL directory (Jinja-free, most accurate)
     compiled_dir: Path | None = None
