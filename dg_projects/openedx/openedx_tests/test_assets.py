@@ -86,6 +86,9 @@ class _VersionsClient:
         self.missing = missing or set()
         self.raises = raises or set()
 
+    def course_content_versions_available(self) -> bool:
+        return True
+
     def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
         if self.raises.intersection(course_ids):
             msg = f"boom for {course_ids}"

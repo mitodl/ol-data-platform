@@ -123,6 +123,15 @@ def sweep_course_versions(
     are reported, rather than any of them being given a partial version, which
     would read as a change and ask for an export.
     """
+    # Checked before any request that could have an effect. On a Studio still
+    # running a course export plugin without the versions endpoint, the batch
+    # POST below would queue an export of every course in the batch.
+    if course_run_ids and not client.course_content_versions_available():
+        msg = (
+            "Studio does not serve /api/courses/v0/export/versions/; deploy "
+            "ol-openedx-course-export 0.4.0 or later before sweeping."
+        )
+        raise RuntimeError(msg)
     versions: dict[str, str] = {}
     failures = 0
     unswept: list[str] = []

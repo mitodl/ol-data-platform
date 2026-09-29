@@ -59,6 +59,11 @@ class _PostingClient:
         self.status_code = status_code
         self.body = body
         self.posts: list[tuple[str, dict[str, Any]]] = []
+        self.gets: list[tuple[str, dict[str, Any]]] = []
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        self.gets.append((url, kwargs))
+        return httpx.Response(self.status_code, request=httpx.Request("GET", url))
 
     def post(self, url: str, **kwargs) -> httpx.Response:
         self.posts.append((url, kwargs))
@@ -104,3 +109,23 @@ def test_a_studio_without_the_versions_endpoint_raises() -> None:
 
     with pytest.raises(httpx.HTTPStatusError):
         _studio_client(http_client).get_course_content_versions(["course-v1:a+b+c"])
+
+
+def test_the_versions_endpoint_is_available_when_it_refuses_a_get() -> None:
+    """0.4.0's versions view only allows POST, so a GET is answered with 405."""
+    http_client = _PostingClient(405, {})
+
+    assert _studio_client(http_client).course_content_versions_available()
+    assert not http_client.posts, "the probe must never POST"
+
+
+def test_the_versions_endpoint_is_unavailable_on_an_older_plugin() -> None:
+    """0.3.0 routes the path to the export view, which 404s a GET with no course.
+
+    A POST there would queue an export of every course in the body, which is
+    why the probe is a GET.
+    """
+    http_client = _PostingClient(404, {})
+
+    assert not _studio_client(http_client).course_content_versions_available()
+    assert not http_client.posts, "the probe must never POST"

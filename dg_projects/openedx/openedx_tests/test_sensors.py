@@ -154,7 +154,10 @@ class _VersionsClient:
         raises: set[str] | None = None,
         blocks: set[str] | None = None,
         malformed: set[str] | None = None,
+        *,
+        available: bool = True,
     ) -> None:
+        self.available = available
         self.versions = versions
         self.missing = missing or set()
         self.raises = raises or set()
@@ -162,6 +165,9 @@ class _VersionsClient:
         self.malformed = malformed or set()
         self.released = threading.Event()
         self.batches: list[list[str]] = []
+
+    def course_content_versions_available(self) -> bool:
+        return self.available
 
     def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
         self.batches.append(course_ids)
@@ -312,6 +318,27 @@ def test_a_malformed_response_fails_its_batch_not_the_sweep(
     )
 
     assert set(_observations(result)) == {"course-a"}
+
+
+def test_nothing_is_posted_to_a_studio_without_the_versions_endpoint(
+    instance: DagsterInstance,
+) -> None:
+    """An older plugin would turn the batch POST into an export of every course.
+
+    So the sweep fails the tick before sending a single batch, rather than
+    queuing thousands of exports an hour.
+    """
+    _seed_partitions(instance, ["course-a", "course-b"])
+    client = _VersionsClient({"course-a": "v1", "course-b": "v1"}, available=False)
+
+    with pytest.raises(RuntimeError, match="does not serve"):
+        courseware_observation_sensor(
+            build_sensor_context(
+                instance=instance, sensor_name=OBSERVATION_SENSOR_NAME
+            ),
+            _FakeFactory(client),
+        )
+    assert client.batches == []
 
 
 def test_observation_sensor_fails_when_every_lookup_fails(
