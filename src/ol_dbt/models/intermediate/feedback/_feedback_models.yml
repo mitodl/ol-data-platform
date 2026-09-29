@@ -260,6 +260,90 @@ models:
       title and courserun_platform - the course run's platform from dim_course_run,
       which tfact_feedback uses to resolve courserun_fk and content_block_fk.
 
+- name: int__feedback__discussion_forum
+  description: One row per learner-authored MITx Online discussion forum post - a
+    thread's opening post, a response or a comment - conformed to the common feedback
+    event contract. Each thread is one conversation. Posts by course staff and instructors
+    are dropped, because they answer feedback rather than give it.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+  columns:
+  - name: source_slug
+    description: str, the feedback source this row came from. Always 'discussion_forum'
+      here.
+    tests:
+    - not_null
+  - name: source_record_ref
+    description: str, 'thread:<id>' for a thread's opening post or 'comment:<id>'
+      for a response or comment - the turn's stable business key.
+    tests:
+    - not_null
+    - unique
+  - name: conversation_ref
+    description: str, the forum thread id.
+    tests:
+    - not_null
+  - name: turn_index
+    description: int, 1-based position of the turn among the thread's kept posts,
+      in creation order. The opening post comes first when two posts share a timestamp.
+    tests:
+    - not_null
+  - name: is_conversation_opening
+    description: boolean, true for the thread's first kept post. That is a response
+      when a staff member opened the thread.
+    tests:
+    - not_null
+  - name: occurred_at
+    description: str, ISO8601 timestamp the post was created.
+    tests:
+    - not_null
+  - name: created_at
+    description: str, same as occurred_at.
+  - name: updated_at
+    description: str, ISO8601 timestamp of the latest update to any post in the thread,
+      staff posts included, so a new reply re-enters the whole thread.
+  - name: text
+    description: str, the post's raw body. Masking happens downstream, in the feedback_redacted
+      Dagster asset.
+    tests:
+    - not_null
+  - name: title
+    description: str, the thread title, repeated on every turn of the thread.
+  - name: channel_slug
+    description: str, always 'forum_post'.
+  - name: subject_user_ref
+    description: str, the author's global id, or their email if they have none. Null
+      for an anonymous post or an author not in int__mitxonline__users.
+  - name: source_url
+    description: str, always null.
+  - name: subject_type
+    description: str, always 'course'.
+  - name: subject_ref
+    description: str, the course run the thread belongs to. Same as courserun_readable_id.
+  - name: subject_url
+    description: str, always null.
+  - name: courserun_readable_id
+    description: str, the course run the thread belongs to.
+  - name: block_id
+    description: str, always null. commentable_id in source_metadata names the discussion
+      topic, not a usage key.
+  - name: platform
+    description: str, always 'mitlearn', because MITx Online's Open edX is MIT Learn's
+      course backend. The course run's own platform is in source_metadata as courserun_platform.
+  - name: explicit_rating
+    description: str, always null. Forum posts carry no rating.
+  - name: source_metadata
+    description: str, JSON of post_type ('thread', 'response' or 'comment'), thread_type,
+      commentable_id and courserun_platform - always 'mitxonline', which tfact_feedback
+      uses to resolve courserun_fk.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["conversation_ref", "turn_index"]
 - name: int__feedback__unioned
   description: >
     One row per feedback turn, from every source: Zendesk, Learn AI tutor, MIT Learn
