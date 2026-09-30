@@ -176,3 +176,7 @@ def plan_sources(units: list[Unit], sources_files: list[Path]) -> SourcesPlan:
         yaml.dump(documents[path], buffer)
         plan.contents[path] = buffer.getvalue()
     return plan
+
+
+def _prek_fixture() -> int:
+    return "not an int"
