@@ -27,6 +27,7 @@ with enrollment as (
 , f_certificate as (
     select * from {{ ref('tfact_certificate') }}
     where certificate_scope = 'course'
+        and certificate_is_revoked = false
 )
 
 , grade as (
