@@ -93,6 +93,25 @@ def test_column_missing_from_sql_errors(tmp_path: Path) -> None:
     assert [i.message for i in report.errors] == ["Contracted column 'user_pk' is not selected by the model SQL"]
 
 
+def test_column_missing_from_sql_reports_only_that(tmp_path: Path) -> None:
+    registry = _registry(_node("dim_user", {"user_pk": "bigint"}))
+    report = _run(tmp_path, _contract(DIM_USER), registry, {"email"})
+    assert [i.message for i in report.errors] == ["Contracted column 'user_pk' is not selected by the model SQL"]
+
+
+@pytest.mark.parametrize("entity_type", ["topic", "apiEndpoint", "container"])
+def test_schema_on_entity_om_cannot_type_check_raises(tmp_path: Path, entity_type: str) -> None:
+    _write(tmp_path, "c", _contract({"type": entity_type, "fqn": "svc.thing"}))
+    with pytest.raises(ValueError, match="can't carry a `schema`"):
+        load_contracts(tmp_path)
+
+
+def test_semantics_only_contract_on_container_loads(tmp_path: Path) -> None:
+    data = {"entity": {"type": "container", "fqn": "s3.exports"}, "contract": {"name": "c", "semantics": []}}
+    _write(tmp_path, "c", data)
+    assert [c.entity.entity_type for c in load_contracts(tmp_path)] == ["container"]
+
+
 def test_retyped_column_errors(tmp_path: Path) -> None:
     report = _run(tmp_path, _contract(DIM_USER), _registry(_node("dim_user", {"user_pk": "bigint"})))
     assert [i.message for i in report.errors] == ["Contracted column 'user_pk' is bigint, contract says VARCHAR"]

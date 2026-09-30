@@ -82,6 +82,11 @@ _WAREHOUSE_TYPE_ALIASES = {
     "HUGEINT": "BIGINT",
 }
 
+# Entity types whose contract `schema` OpenMetadata 2.0.2 checks for column
+# types as well as names. Topics and API endpoints are checked by name only, so
+# a retyped field would pass; containers reject a schema outright.
+SCHEMA_TYPED_ENTITIES = frozenset({"table", "dashboardDataModel"})
+
 _TYPE_HEAD = re.compile(r"^\s*([A-Za-z]+)")
 
 
@@ -157,6 +162,12 @@ def load_contracts(contracts_dir: Path) -> list[DataContract]:
             raise ValueError(msg)
         if "entity" in body:
             msg = f"{path}: `contract.entity` is resolved by `ol-dbt contracts sync`; remove it"
+            raise ValueError(msg)
+        if body.get("schema") and binding.entity_type not in SCHEMA_TYPED_ENTITIES:
+            msg = (
+                f"{path}: a {binding.entity_type} contract can't carry a `schema`: OpenMetadata only checks "
+                f"column types for {', '.join(sorted(SCHEMA_TYPED_ENTITIES))}. Use semantics rules instead."
+            )
             raise ValueError(msg)
         contracts.append(DataContract(path=path, entity=binding, body=body))
     return contracts
@@ -279,6 +290,7 @@ def _check_column(
             f"Contracted column '{column.name}' is not selected by the model SQL",
             f"{contract.path.name} promises this column to consumers.",
         )
+        return
     if not declared.data_type:
         report.add(
             DATA_CONTRACT_CHECK,

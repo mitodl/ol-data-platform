@@ -88,7 +88,7 @@ class OpenMetadataClient:
         req = urllib.request.Request(url, data=data, method=method, headers=self._headers)  # noqa: S310
         try:
             with _OPENER.open(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
-                return json.loads(resp.read() or b"null")
+                return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
             msg = f"{method} {path} -> {exc.code}: {exc.read().decode(errors='replace')[:500]}"
             raise RuntimeError(msg) from exc

@@ -33,7 +33,11 @@ The `entity` binding says which asset the contract is for:
   names no environment. These are the only contracts CI can check.
 - `fqn`: anything else OpenMetadata catalogs, e.g. a Superset dataset
   (`type: dashboardDataModel`, `fqn: Superset.model.41`) or a raw table dbt
-  doesn't declare.
+  doesn't declare. Supported types are table, dashboardDataModel, topic,
+  apiEndpoint and container, but only table and dashboardDataModel contracts
+  may list a `schema`: OpenMetadata 2.0.2 checks column types for those two
+  only (topics and API endpoints by name, containers not at all). Contracts
+  on the other types carry semantics rules only.
 
 ## What is enforced where
 
