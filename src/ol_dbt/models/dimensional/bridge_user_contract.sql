@@ -8,10 +8,10 @@
 -- two of an organization's contracts can share under one and not the other.
 -- MITx Online hard-deletes a membership when the learner leaves the organization, and
 -- a re-added learner starts with no decision, while their enrollments (and so their
--- outcomes) stay in the learner-records views. A decline is therefore kept from
--- the snapshot: when the current membership has no decision, or is gone, and the
--- latest decision ever recorded for the (user, contract) is a decline, the row reads
--- false. A consent is not carried over the same way; a re-added learner is asked again.
+-- outcomes) stay in the learner-records views. The decision is therefore kept from
+-- the snapshot: when the current membership has no decision, or is gone, the row
+-- carries the latest decision ever recorded for the (user, contract), consent or
+-- decline.
 with current_memberships as (
     select
         user_id
@@ -55,20 +55,18 @@ with current_memberships as (
         , case
             when cm.userb2bcontract_consented_to_data_sharing is not null
                 then cm.userb2bcontract_consented_to_data_sharing
-            when ld.userb2bcontract_consented_to_data_sharing = false then false
+            else ld.userb2bcontract_consented_to_data_sharing
         end as consented_to_data_sharing
         , case
             when cm.userb2bcontract_consented_to_data_sharing is not null
                 then cm.userb2bcontract_consent_modified_at
-            when ld.userb2bcontract_consented_to_data_sharing = false
-                then ld.userb2bcontract_consent_modified_at
+            else ld.userb2bcontract_consent_modified_at
         end as consent_modified_at
         , cm.userb2bcontract_created_on as membership_created_on
         , cm.userb2bcontract_updated_on as membership_updated_on
     from current_memberships as cm
     full outer join last_decisions as ld
         on cm.user_id = ld.user_id and cm.contract_id = ld.contract_id
-    where cm.user_id is not null or ld.userb2bcontract_consented_to_data_sharing = false
 )
 
 , dim_user as (

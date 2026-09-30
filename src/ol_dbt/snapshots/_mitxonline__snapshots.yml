@@ -55,8 +55,8 @@ snapshots:
     decision on each, one row per version. MITx Online hard-deletes a
     membership when the learner is removed from the organization
     (OrganizationPage.remove_user_contracts), and a re-added learner gets a new
-    row with no decision, so the raw table alone loses a recorded decline.
-    bridge_user_contract reads this to keep one. Resolution is one run: a
+    row with no decision, so the raw table alone loses a recorded decision.
+    bridge_user_contract reads this to keep it. Resolution is one run: a
     decision made and its membership deleted between two runs is never
     recorded, and history starts at the first run. A deleted membership has its
     current version closed (dbt_valid_to set), not a tombstone row.
