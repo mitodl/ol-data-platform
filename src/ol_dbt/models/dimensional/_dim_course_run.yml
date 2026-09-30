@@ -93,19 +93,18 @@ models:
       bootcamp platforms.
   - name: semester
     description: >
-      Academic term identifier for a MicroMasters proctored exam run (e.g. "2T2022").
-      Populated only for MITxOnline course runs that correspond to a MicroMasters
-      exam
-      run. Null for all other platforms and non-exam MITxOnline course runs.
+      str, academic term of the proctored exam for this course run, e.g., 2T2022.
+      Populated only for MITx Online course runs with a proctored exam, taken from
+      the MicroMasters exam run record where one exists and from the course run tag
+      otherwise. Null for all other platforms and non-proctored runs. Tag-derived
+      values can carry a suffix, e.g., 1T2022a.
   - name: passing_grade
     description: >
-      Passing score threshold (0.0–1.0) set per MicroMasters proctored exam run.
-      Populated only for MITxOnline course runs that correspond to a MicroMasters
-      exam
-      run. Null for all other platforms and non-exam MITxOnline course runs. Note:
-      a
-      stored value of null and an actual passing grade of 0.0 are distinct; -1.0 is
-      used as the SCD2 change-detection sentinel to distinguish them.
+      float, passing score threshold for the proctored exam, from 0.0 to 1.0.
+      Populated only for MITx Online course runs with a matching MicroMasters exam
+      run record. Null for all other platforms and non-proctored runs. Unlike
+      semester, this has no course run tag fallback, so runs with an embedded
+      proctored exam unit are null.
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Always set for
