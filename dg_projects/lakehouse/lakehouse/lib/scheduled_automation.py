@@ -20,8 +20,8 @@ Dagster UI can start it. Dagster synthesizes sensors it was not given
 final in a way that stopping is not.
 
 That difference is also why this is not one boolean shared with the dbt map.
-Only three of these six schedules run dbt at all; the iceberg maintenance pair
-rewrites Iceberg metadata, and the Airbyte drift check only reads. "May dbt
+Not all of these schedules run dbt; the iceberg maintenance pair rewrites
+Iceberg metadata, and the Airbyte drift check only reads. "May dbt
 materialize itself here" is the wrong question to ask of those, and answering it
 for them would have hidden the more interesting one.
 
@@ -52,11 +52,11 @@ single per-environment switch would have to be wrong about one of them.
 
 What omission also takes with it
 --------------------------------
-Four of these six build their job inline with ``define_asset_job`` inside the
+Most of these build their job inline with ``define_asset_job`` inside the
 ``ScheduleDefinition``, so dropping the schedule drops that job from the code
-location too -- ``iceberg_dbt_maintenance_job``, ``iceberg_raw_maintenance_job``,
-``b2b_analytics_starrocks_job`` and ``airbyte_inventory_drift_daily_job`` are
-not manually launchable outside production. Their ASSETS stay registered
+location too -- e.g. ``iceberg_dbt_maintenance_job`` and
+``b2b_analytics_starrocks_job`` are not manually launchable outside production,
+and ``learn_integrations_qa_job`` exists only in QA. Their ASSETS stay registered
 everywhere and can still be materialized by hand from the asset graph, so nothing
 becomes unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
 the exception -- its job is registered separately in ``jobs`` and is unaffected.
@@ -77,8 +77,8 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # family is generated one-per-Airbyte-connection-group from the LIVE workspace,
 # so its members' names are not knowable from the repo. Its id names the family.
 #
-# Every entry today is the environment set that matches observed intent, so
-# registering this map is not meant to change behaviour anywhere. Its value is
+# The entries this map was introduced with matched observed intent, so
+# registering it was not meant to change behaviour anywhere. Its value is
 # that the answer now lives in the repo: before this, whether any of these ran
 # in QA was instance state nothing here could see, and one of them had been
 # running against the wrong warehouse for months without leaving a trace in the
