@@ -130,3 +130,68 @@ models:
     description: timestamp, the end of the enrollment window for this course run
   - name: source_id
     description: string, source system identifier for this course run record
+
+unit_tests:
+- name: test_dim_course_run_merge_is_idempotent_under_duplicate_copies
+  description: >
+    Regression test for 2026-09-01, when staging briefly passed duplicate Airbyte
+    copies
+    of mitxonline course runs through. Each copy became its own current row, and the
+    expire join multiplied existing x incoming rows on every later change. With two
+    identical current rows already in the target and two identical copies of a changed
+    upstream row, the batch must hold exactly one new current row and one expired
+    row.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - &changed_run
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+    - *changed_run
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - &current_version
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-08-11 00:46:01"
+      is_current: true
+    - *current_version
+  expect:
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      is_current: false
