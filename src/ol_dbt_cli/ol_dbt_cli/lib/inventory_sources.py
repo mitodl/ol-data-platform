@@ -57,7 +57,7 @@ class SourcesPlan:
 
 def _yaml() -> YAML:
     # The settings the yamlfmt pre-commit hook formats these files with.
-    yaml  =  YAML()
+    yaml = YAML()
     yaml.preserve_quotes = True
     yaml.explicit_start = True
     yaml.width = 80
