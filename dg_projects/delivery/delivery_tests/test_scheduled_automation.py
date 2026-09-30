@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from dagster import DefaultSensorStatus
+from dagster import DefaultScheduleStatus, DefaultSensorStatus
 from delivery.lib.scheduled_automation import (
     INSTIGATOR_ENVIRONMENTS,
     instigators_for_environment,
@@ -187,3 +187,25 @@ def test_failure_notification_sensors_register_in_production_only(environment):
             )
         else:
             assert registered == set()
+
+
+@pytest.mark.parametrize("environment", VALID_DAGSTER_ENVS)
+def test_instructor_onboarding_schedule_registers_running_in_production_only(
+    environment,
+):
+    """Read off the built repository, so the wiring and status are both pinned.
+
+    It was RUNNING in lakehouse, and instigator state is keyed on location name,
+    so dropping default_status would stop it on the move. Registering it
+    anywhere else would commit to the real access-forge repository.
+    """
+    with _repository_for(environment) as repo:
+        schedules = {schedule.name: schedule for schedule in repo.schedule_defs}
+
+        if environment == "production":
+            assert (
+                schedules["instructor_onboarding_daily_schedule"].default_status
+                == DefaultScheduleStatus.RUNNING
+            )
+        else:
+            assert "instructor_onboarding_daily_schedule" not in schedules

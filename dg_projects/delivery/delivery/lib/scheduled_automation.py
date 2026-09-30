@@ -14,7 +14,10 @@ renamed location starts with no state anywhere, and the five instigators that
 were RUNNING in production needed ``default_status=RUNNING`` to survive the
 move. That flag is unconditional: it would have seeded them RUNNING in a fresh
 QA or local instance too, where the old location had them STOPPED -- including
-``ovs_videos_stale_cleanup_sensor``, which dispatches delete webhooks.
+``ovs_videos_stale_cleanup_sensor``, which dispatches delete webhooks. The same
+holds for everything moved in since, each RUNNING in production when it moved:
+the two failure notification sensors from ``data_platform`` and
+``instructor_onboarding_daily_schedule`` from ``lakehouse``.
 
 Registration is the enforcing move. An instigator left out of ``Definitions`` is
 not stopped, it is absent, and nothing in the Dagster UI can start it. The two
@@ -23,9 +26,9 @@ mechanisms compose rather than compete: this map decides where each one exists,
 
 Why every entry is production-only
 ----------------------------------
-Because that is the only place any of them has been observed to run. The five
-RUNNING instigators were read off production's instigator state during the
-rename. The four Cohort 2 delivery schedules have never executed anywhere --
+Because that is the only place any of them has been observed to run. The
+RUNNING ones were read off production's instigator state, or its ticks, when
+each moved in. The four Cohort 2 delivery schedules have never executed anywhere --
 production Loki over 30 days and 1.86B lines has zero mentions of them, against
 12,585 for ``ovs_videos_api_schedule`` in the same location. They stay
 registered in production, still STOPPED, so the Cohort 2 enable remains a UI
