@@ -194,3 +194,54 @@ def test_no_contracts_dir_is_silent(tmp_path: Path) -> None:
     report = ValidationReport()
     _check_data_contract(None, {}, tmp_path / "missing", report)
     assert report.issues == []
+
+
+class _FakeClient:
+    def __init__(self, validation: dict[str, Any]) -> None:
+        self.validation = validation
+        self.calls: list[tuple[str, str]] = []
+
+    def entity_id(self, entity_type: str, fqn: str) -> str:
+        return "entity-id"
+
+    def owner_refs(self, owners: list[dict[str, str]]) -> list[dict[str, str]]:
+        return [{"id": "owner-id", "type": o["type"]} for o in owners]
+
+    def request(self, method: str, path: str, body: Any = None, query: dict[str, str] | None = None) -> Any:
+        self.calls.append((method, path))
+        if path == "/v1/dataContracts/validate":
+            return self.validation
+        if path == "/v1/dataContracts/entity/validate":
+            return {"contractExecutionStatus": "Success", "schemaValidation": self.validation["schemaValidation"]}
+        return {"fullyQualifiedName": "x.dataContract_c", "version": 0.1}
+
+
+@pytest.mark.parametrize(
+    ("validation", "exits"),
+    [
+        ({"valid": True, "schemaValidation": {"failed": 0}}, False),
+        ({"valid": True, "schemaValidation": {"failed": 0, "typeMismatchFields": ["user_pk: ..."]}}, True),
+        ({"valid": False, "schemaValidation": {"failed": 1}}, True),
+    ],
+)
+def test_sync_dry_run_fails_on_type_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, validation: dict[str, Any], exits: bool
+) -> None:
+    from ol_dbt_cli.commands import contracts as contracts_command
+
+    _write(tmp_path, "c", _contract({"type": "dashboardDataModel", "fqn": "Superset.model.41"}))
+    client = _FakeClient(validation)
+    monkeypatch.setattr(contracts_command.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
+    monkeypatch.setattr(contracts_command, "get_repo_root", lambda: tmp_path)
+
+    def exits_nonzero(command: Any, **kwargs: Any) -> bool:
+        try:
+            command(service="svc", contracts_dir_path=str(tmp_path), **kwargs)
+        except SystemExit:
+            return True
+        return False
+
+    assert exits_nonzero(contracts_command.sync, dry_run=True) is exits
+    assert ("PUT", "/v1/dataContracts") not in client.calls
+    # A retyped column fails validate too, although OpenMetadata reports Success.
+    assert exits_nonzero(contracts_command.validate) is bool(validation["schemaValidation"].get("typeMismatchFields"))

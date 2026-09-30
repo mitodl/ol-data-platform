@@ -57,6 +57,16 @@ _OWNER_COLLECTIONS = {"team": "teams", "user": "users"}
 _FAILED_STATUSES = {"Failed", "Aborted"}
 
 
+def _type_mismatches(schema_validation: dict[str, Any] | None) -> list[str]:
+    """Retyped columns OpenMetadata found but does not count as failures.
+
+    DataContractRepository.validateSchemaFieldsAgainstEntity (2.0.2) records a
+    type mismatch "for informational purposes" only, so a contract whose column
+    changed type still validates as Success. These commands fail on it instead.
+    """
+    return (schema_validation or {}).get("typeMismatchFields") or []
+
+
 class OpenMetadataClient:
     def __init__(self, server_url: str, token: str) -> None:
         """Talk to the OpenMetadata API at *server_url* (the ``/api`` root) with a bot JWT."""
@@ -177,7 +187,7 @@ def sync(
         name = escape(contract.body["name"])
         if dry_run:
             result = client.request("POST", "/v1/dataContracts/validate", body)
-            if result["valid"]:
+            if result["valid"] and not _type_mismatches(result.get("schemaValidation")):
                 console.print(f"[green]valid[/]   {name} -> {escape(fqn)}")
             else:
                 failures += 1
@@ -203,7 +213,8 @@ def validate(
 
     Calls POST /v1/dataContracts/entity/validate, which records a
     DataContractResult (and raises an incident on failure) exactly as the daily
-    run would. Exits non-zero when any contract is Failed or Aborted.
+    run would. Exits non-zero when any contract is Failed or Aborted, or has a
+    retyped column, which OpenMetadata reports without failing the contract.
     """
     contracts, manifest = _load(dbt_dir_path, contracts_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()
@@ -219,14 +230,18 @@ def validate(
             },
         )
         status = result["contractExecutionStatus"]
-        style = "bold red" if status in _FAILED_STATUSES else "green"
+        mismatches = _type_mismatches(result.get("schemaValidation"))
+        failed = status in _FAILED_STATUSES or bool(mismatches)
+        style = "bold red" if failed else "green"
         console.print(f"[{style}]{status}[/] {escape(contract.body['name'])} -> {escape(fqn)}")
+        for mismatch in mismatches:
+            console.print(f"  [bold red]type mismatch[/] {escape(mismatch)}")
         for section in ("schemaValidation", "semanticsValidation"):
             detail = result.get(section)
             if detail and detail.get("failed"):
                 console.print(f"  {section}:")
                 console.print_json(data=detail)
-        if status in _FAILED_STATUSES:
+        if failed:
             failures += 1
     if failures:
         sys.exit(1)

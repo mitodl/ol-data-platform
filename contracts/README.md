@@ -40,9 +40,15 @@ The `entity` binding says which asset the contract is for:
 | Part | Checked by | When |
 | --- | --- | --- |
 | `schema`, dbt bindings | `ol-dbt validate --only data_contract` (dbt PR CI) | every PR, before merge |
-| `schema`, all bindings | OpenMetadata, against its catalog | after ingestion, on `ol-dbt contracts validate` or OpenMetadata's daily run |
+| `schema` columns, all bindings | OpenMetadata, against its catalog | after ingestion, on `ol-dbt contracts validate` or OpenMetadata's daily run |
+| `schema` types, all bindings | `ol-dbt contracts validate` / `sync --dry-run` only | same as above |
 | `semantics` | OpenMetadata | same as above |
 | `sla` | nothing in OpenMetadata 2.0.2 (stored, never evaluated) | Dagster freshness checks enforce freshness |
+
+OpenMetadata 2.0.2 reports a retyped column in `typeMismatchFields` but doesn't
+count it as a failure, so the contract still shows Success in OpenMetadata
+(`DataContractRepository.validateSchemaFieldsAgainstEntity`). The `ol-dbt
+contracts` commands fail on it; OpenMetadata's own status and alerts won't.
 
 The CI check fails when a contracted column is missing from the model or source
 YAML, is no longer selected by the model SQL, has no `data_type`, or has a type
