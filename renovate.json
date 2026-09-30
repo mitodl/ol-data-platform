@@ -9,6 +9,9 @@
     "every weekend"
   ],
   "timezone": "US/Eastern",
+  "pre-commit": {
+    "enabled": true
+  },
   "lockFileMaintenance": {
     "enabled": true
   },
