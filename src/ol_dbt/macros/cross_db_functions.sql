@@ -722,6 +722,10 @@
     len({{ array_expr }})
 {%- endmacro %}
 
+{% macro starrocks__array_length(array_expr) -%}
+    array_length({{ array_expr }})
+{%- endmacro %}
+
 
 {#
     array_filter_nonempty: drop NULL and empty-string elements from a varchar array,

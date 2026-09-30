@@ -25,7 +25,7 @@ with mitxonline_courses as (
         , course_title
         -- Extract course_number from readable_id (format: course-v1:{org}+{course_number})
         , case
-            when cardinality(split(course_readable_id, '+')) >= 2
+            when {{ array_length("split(course_readable_id, '+')") }} >= 2
                 then split(course_readable_id, '+')[2]
         end as course_number
         , cast(null as varchar) as course_description  -- mitxpro doesn't have course_description
@@ -90,7 +90,7 @@ with mitxonline_courses as (
     select distinct
         course_id
         , case
-            when cardinality(split(courserun_readable_id, '+')) >= 2
+            when {{ array_length("split(courserun_readable_id, '+')") }} >= 2
                 then split(courserun_readable_id, '+')[2]
         end as course_number
         -- Use course_readable_id from int__bootcamps__course_runs which already has course_id
