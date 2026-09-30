@@ -34,17 +34,12 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
-from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
-)
-from lakehouse.assets.instructor_onboarding import (
-    generate_instructor_onboarding_user_list,
-    update_access_forge_repo,
 )
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
@@ -513,20 +508,6 @@ non_airbyte_staging_schedules = (
     else []
 )
 
-# Instructor onboarding schedule
-instructor_onboarding_schedule = ScheduleDefinition(
-    name="instructor_onboarding_daily_schedule",
-    job=define_asset_job(
-        name="instructor_onboarding_daily_job",
-        selection=AssetSelection.assets(
-            generate_instructor_onboarding_user_list,
-            update_access_forge_repo,
-        ),
-    ),
-    cron_schedule="0 5 * * *",
-    execution_timezone="UTC",
-)
-
 # Build resources dict, conditionally including airbyte
 resources_dict = {
     "dbt": dbt_cli,
@@ -547,7 +528,6 @@ resources_dict = {
     ),
     "vault": vault,
     "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
-    "github_api": GithubApiClientFactory(vault=vault),
     "starrocks": StarRocksResource(
         vault=vault,
         vault_mount_point=STARROCKS_VAULT_MOUNT,
@@ -592,8 +572,6 @@ defs = Definitions(
             *airbyte_assets,
             *superset_assets,
             *superset_starrocks_assets,
-            generate_instructor_onboarding_user_list,
-            update_access_forge_repo,
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             refresh_starrocks_analytics_mvs,
@@ -658,7 +636,6 @@ defs = Definitions(
     schedules=schedules_for_environment(
         [
             *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),
-            ("instructor_onboarding_daily_schedule", instructor_onboarding_schedule),
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),

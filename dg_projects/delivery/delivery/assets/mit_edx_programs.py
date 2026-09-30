@@ -329,7 +329,7 @@ def mit_edx_programs_webhook(
             len(still_published),
         )
         issue_urls = open_unpublish_reviews(
-            github_api.get_client(),
+            github_api.get_client(token_permissions={"issues": "write"}),
             config.review_repository,
             still_published,
             checked_on=datetime.now(tz=UTC).date().isoformat(),
