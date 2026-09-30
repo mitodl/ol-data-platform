@@ -1,5 +1,8 @@
 """Tests for ml.resources.llm.LLMClientFactory."""
 
+from collections.abc import Callable
+
+import httpx2
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.resources.llm import LLMClientFactory
@@ -107,33 +110,82 @@ def test_get_client_azure_openai_requires_endpoint() -> None:
         factory.get_client()
 
 
-def test_get_client_azure_openai_requires_api_key_env_var(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
-    factory = LLMClientFactory(
-        client_class="azure_openai",
-        azure_endpoint="https://example-resource.openai.azure.com",
+@pytest.fixture
+def entra_token_provider(monkeypatch: pytest.MonkeyPatch) -> list[tuple[object, ...]]:
+    """Replace the Entra token provider so no Azure credential is resolved.
+
+    :returns: the (credential, scopes) each get_bearer_token_provider call got.
+    """
+    calls: list[tuple[object, ...]] = []
+
+    def fake_get_bearer_token_provider(
+        credential: object, *scopes: str
+    ) -> Callable[[], str]:
+        calls.append((credential, *scopes))
+        return lambda: "entra-test-token"  # pragma: allowlist secret
+
+    monkeypatch.setattr(
+        "ml.resources.llm.get_bearer_token_provider", fake_get_bearer_token_provider
     )
+    monkeypatch.setattr("ml.resources.llm.DefaultAzureCredential", lambda: "fake-cred")
+    return calls
 
-    with pytest.raises(ValueError, match="AZURE_OPENAI_API_KEY"):
-        factory.get_client()
 
-
-def test_get_client_azure_openai_reads_env_var_and_caches(
+def test_get_client_azure_openai_uses_entra_token_and_caches(
     monkeypatch: pytest.MonkeyPatch,
+    entra_token_provider: list[tuple[object, ...]],
 ) -> None:
-    fake_api_key = "azure-env-test-key"  # pragma: allowlist secret
-    monkeypatch.setenv("AZURE_OPENAI_API_KEY", fake_api_key)
+    """The accounts disable key auth, so an API key in the env is never read."""
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "ignored")  # pragma: allowlist secret
     factory = LLMClientFactory(
         client_class="azure_openai",
-        azure_endpoint="https://example-resource.openai.azure.com",
+        azure_endpoint="https://example-resource.openai.azure.com/",
     )
 
     first = factory.get_client()
     second = factory.get_client()
 
     assert isinstance(first, OpenAI)
-    assert first.api_key == fake_api_key
     assert str(first.base_url) == "https://example-resource.openai.azure.com/openai/v1/"
     assert first is second
+    assert entra_token_provider == [
+        ("fake-cred", "https://cognitiveservices.azure.com/.default")
+    ]
+
+
+@pytest.mark.usefixtures("entra_token_provider")
+def test_get_client_azure_openai_sends_entra_token_as_bearer() -> None:
+    seen_auth: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen_auth.append(request.headers["Authorization"])
+        return httpx2.Response(
+            200,
+            json={
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "gpt-5-mini",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "ok"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    client = LLMClientFactory(
+        client_class="azure_openai",
+        azure_endpoint="https://example-resource.openai.azure.com",
+    ).get_client()
+    assert isinstance(client, OpenAI)
+
+    client.with_options(
+        http_client=httpx2.Client(transport=httpx2.MockTransport(handler))
+    ).chat.completions.create(
+        model="gpt-5-mini", messages=[{"role": "user", "content": "hi"}]
+    )
+
+    assert seen_auth == ["Bearer entra-test-token"]
