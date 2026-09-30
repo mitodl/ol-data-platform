@@ -23,6 +23,7 @@ airbyte:
     - b2b_discountcontractattachmentredemption
     - b2b_organizationindexpage
     - b2b_organizationpage
+    - b2b_userb2bcontract
     - b2b_userorganization
     - cms_certificatepage
     - cms_courseindexpage
@@ -111,6 +112,13 @@ tables:
   namespace: public
   primary_key:
   - - page_ptr_id
+  modeled: true
+- name: b2b_userb2bcontract
+  raw_table: raw__mitxonline__app__postgres__b2b_userb2bcontract
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
   modeled: true
 - name: b2b_userorganization
   raw_table: raw__mitxonline__app__postgres__b2b_userorganization

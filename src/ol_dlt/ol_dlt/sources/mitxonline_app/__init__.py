@@ -1,7 +1,7 @@
 """MITx Online application-database ingestion via dlt.
 
 Replaces the Airbyte connection ``MITx Online Production App DB → S3 Data Lake``
-(RFC 12319 §6.5, RFC 12711 step 8). Scope is the 64 tables that connection
+(RFC 12319 §6.5, RFC 12711 step 8). Scope is the 65 tables that connection
 declares, which is also what the inventory unit ``mitxonline/app_postgres``
 records.
 
@@ -81,6 +81,10 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="b2b_organizationindexpage", primary_key="page_ptr_id"),
         DatabaseTable(name="b2b_organizationpage", primary_key="page_ptr_id"),
         DatabaseTable(name="b2b_userorganization", primary_key="id"),
+        # Per-learner contract membership, carrying the learner's data-sharing
+        # consent. Replaced users_user_b2b_contracts as User.b2b_contracts' through
+        # table in MITx Online 1.168.2; the old table is no longer written.
+        DatabaseTable(name="b2b_userb2bcontract", primary_key="id"),
         # --- CMS: Wagtail page subclasses -----------------------------------
         DatabaseTable(name="cms_certificatepage", primary_key="page_ptr_id"),
         DatabaseTable(name="cms_courseindexpage", primary_key="page_ptr_id"),

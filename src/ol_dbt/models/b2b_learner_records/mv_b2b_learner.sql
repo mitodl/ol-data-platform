@@ -115,6 +115,31 @@ program_certificates as (
     group by ce.organization_fk, ce.user_fk
 ),
 
+-- Consent is recorded per (learner, contract) and this view's grain is (learner, org),
+-- so it is resolved across every contract membership the learner holds under the
+-- organization: any recorded false withholds, then any membership with no recorded
+-- decision leaves it null (the API resolves null against its fail-open setting), and
+-- only a true on every membership shares. The rollup counts outcomes from all of the
+-- organization's contracts, so a decline under any one of them has to win.
+-- consent_updated_on moves record_updated_on so a withdrawal reaches updated_since.
+consent as (
+    select
+        organization_fk,
+        user_fk,
+        case
+            when sum(case when consented_to_data_sharing = false then 1 else 0 end) > 0
+                then false
+            when sum(case when consented_to_data_sharing is null then 1 else 0 end) > 0
+                then cast(null as boolean)
+            else true
+        end                                                                             as outcomes_shared,
+        max(case when consented_to_data_sharing then consent_modified_at end)          as latest_consent_on,
+        max(coalesce(consent_modified_at, ''))                                          as consent_updated_on
+    from {{ source('dimensional', 'bridge_user_contract') }}
+    where organization_fk is not null
+    group by organization_fk, user_fk
+),
+
 -- Roster and enrollment legitimately disagree. A roster row with no active enrollment
 -- is an assigned, unstarted seat. An enrollment with no roster row is a learner removed
 -- from the organization who kept the enrollment, or an enrollment from before
@@ -172,9 +197,12 @@ select
     coalesce(pc.program_certificates_earned, 0)                                         as program_certificates_earned,
     cast(d.date as date)                                                                as last_active_on,
     coalesce(er.courses_in_progress, 0)                                                 as courses_in_progress,
+    c.outcomes_shared,
+    case when c.outcomes_shared then c.latest_consent_on end                            as outcomes_consent_on,
     nullif(greatest(
         coalesce(er.record_updated_on, ''),
-        coalesce(pc.program_certificate_updated_on, '')
+        coalesce(pc.program_certificate_updated_on, ''),
+        coalesce(c.consent_updated_on, '')
     ), '')                                                                              as record_updated_on
 from memberships m
 join {{ source('dimensional', 'dim_organization') }} org
@@ -185,6 +213,8 @@ left join enrollment_rollup er
     on m.organization_fk = er.organization_fk and m.user_fk = er.user_fk
 left join program_certificates pc
     on m.organization_fk = pc.organization_fk and m.user_fk = pc.user_fk
+left join consent c
+    on m.organization_fk = c.organization_fk and m.user_fk = c.user_fk
 left join {{ source('dimensional', 'dim_date') }} d
     on er.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'

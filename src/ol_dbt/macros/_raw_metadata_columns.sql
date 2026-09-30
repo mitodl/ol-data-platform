@@ -342,6 +342,7 @@
         'raw__mitxonline__app__postgres__b2b_discountcontractattachmentredemption': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__b2b_organizationindexpage': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__b2b_organizationpage': '_airbyte_extracted_at',
+        'raw__mitxonline__app__postgres__b2b_userb2bcontract': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__b2b_userorganization': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__cms_certificatepage': '_airbyte_extracted_at',
         'raw__mitxonline__app__postgres__cms_courseindexpage': '_airbyte_extracted_at',

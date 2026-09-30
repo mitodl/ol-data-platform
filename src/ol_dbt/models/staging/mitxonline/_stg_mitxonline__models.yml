@@ -2160,6 +2160,48 @@ models:
     description: Membership management method for the contract. Values are 'managed'
       or 'code'.
 
+- name: stg__mitxonline__app__postgres__b2b_userb2bcontract
+  description: MITx Online B2B learner-to-contract memberships, with the learner's
+    data-sharing consent for each contract.
+  columns:
+  - name: userb2bcontract_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique
+  - name: user_id
+    data_type: bigint
+    description: foreign key to users_user
+    data_tests:
+    - not_null
+  - name: contract_id
+    data_type: bigint
+    description: foreign key to b2b_contractpage (page_ptr_id)
+    data_tests:
+    - not_null
+  - name: userb2bcontract_consented_to_data_sharing
+    data_type: boolean
+    description: the learner's decision to share their course data with the contract's
+      organization. Null when the learner has not been asked or has not answered,
+      true when they consented, false when they declined or withdrew. MITx Online
+      stores one value, so declined and withdrawn are not distinguishable here.
+  - name: userb2bcontract_consent_modified_at
+    data_type: varchar
+    description: ISO-8601 timestamp when the consent value was last set. Null when
+      it never has been.
+  - name: userb2bcontract_created_on
+    data_type: varchar
+    description: ISO-8601 timestamp when the membership was created
+  - name: userb2bcontract_updated_on
+    data_type: varchar
+    description: ISO-8601 timestamp when the membership was last saved
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - user_id
+      - contract_id
+
 - name: stg__mitxonline__app__postgres__b2b_userorganization
   description: MITx Online B2B user-to-organization membership records
   columns:
