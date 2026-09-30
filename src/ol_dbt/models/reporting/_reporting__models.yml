@@ -727,8 +727,8 @@ models:
       created on that particular activity date for a user and courserun
   - name: unenrolled_count
     description: int, count of enrollments created on that particular activity date
-      for a user and courserun that are no longer active (unenrolled, refunded, or
-      transferred)
+      for a user and courserun that are no longer active (courserunenrollment_is_active
+      is false)
   - name: audit_count
     description: int, count of enrollments that have a enrollment mode status of audit
       on that particular activity date for a user and courserun
