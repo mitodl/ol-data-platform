@@ -10,6 +10,8 @@ with mitxonline_enrollments as (
     select
         cast(courserunenrollment_id as varchar) as enrollment_id
         , user_id
+        , cast(null as varchar) as external_user_id
+        , cast(null as varchar) as user_email
         , courserun_id
         , courserun_readable_id
         , null as program_id
@@ -47,6 +49,8 @@ with mitxonline_enrollments as (
     select
         cast(enrollments.courserunenrollment_id as varchar) as enrollment_id
         , enrollments.user_id
+        , cast(null as varchar) as external_user_id
+        , cast(null as varchar) as user_email
         , enrollments.courserun_id
         , enrollments.courserun_readable_id
         , mitxpro_program_enrollments_by_order.program_id
@@ -76,6 +80,8 @@ with mitxonline_enrollments as (
         -- Stable surrogate key: edxorg has no enrollment_id; use natural key (user + course run)
         {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }} as enrollment_id
         , user_id
+        , cast(null as varchar) as external_user_id
+        , cast(null as varchar) as user_email
         , null as courserun_id  -- edxorg has no integer source_id
         , courserun_readable_id
         , null as program_id
@@ -101,6 +107,8 @@ with mitxonline_enrollments as (
     select
         cast(programenrollment_id as varchar) as enrollment_id
         , user_id
+        , cast(null as varchar) as external_user_id
+        , cast(null as varchar) as user_email
         , null as courserun_id
         , cast(null as varchar) as courserun_readable_id
         , program_id
@@ -121,6 +129,8 @@ with mitxonline_enrollments as (
     select
         cast(courserunenrollment_id as varchar) as enrollment_id
         , user_id
+        , cast(null as varchar) as external_user_id
+        , cast(null as varchar) as user_email
         , null as courserun_id
         , courserun_readable_id
         , null as program_id
@@ -141,6 +151,8 @@ with mitxonline_enrollments as (
     select
         cast(courserunenrollment_id as varchar) as enrollment_id
         , user_id
+        , cast(null as varchar) as external_user_id
+        , cast(null as varchar) as user_email
         , courserun_id
         , courserun_readable_id
         , null as program_id
@@ -179,7 +191,9 @@ with mitxonline_enrollments as (
             'coalesce(cast(emeritus_enrollments.user_id as varchar), emeritus_enrollments.user_email)',
             'emeritus_enrollments.courserun_external_readable_id'
         ]) }} as enrollment_id
-        , emeritus_enrollments.user_id
+        , cast(null as bigint) as user_id
+        , emeritus_enrollments.user_id as external_user_id
+        , emeritus_enrollments.user_email
         , null as courserun_id
         , coalesce(
             mitxpro_external_readable_id_lookup.courserun_readable_id
@@ -211,7 +225,9 @@ with mitxonline_enrollments as (
             'coalesce(global_alumni_enrollments.user_email, cast(global_alumni_enrollments.user_id as varchar))',
             'global_alumni_enrollments.courserun_external_readable_id'
         ]) }} as enrollment_id
-        , global_alumni_enrollments.user_id
+        , cast(null as bigint) as user_id
+        , global_alumni_enrollments.user_id as external_user_id
+        , global_alumni_enrollments.user_email
         , null as courserun_id
         , coalesce(
             mitxpro_external_readable_id_lookup.courserun_readable_id
@@ -272,6 +288,7 @@ with mitxonline_enrollments as (
         , bootcamps_application_user_id
         , emeritus_user_id
         , global_alumni_user_id
+        , email
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -354,10 +371,10 @@ with mitxonline_enrollments as (
                 then ul_bootcamps.user_pk
             end,
             case when combined_enrollments.platform = 'emeritus'
-                then ul_emeritus.user_pk
+                then coalesce(ul_emeritus.user_pk, ul_emeritus_email.user_pk)
             end,
             case when combined_enrollments.platform = 'global_alumni'
-                then ul_global_alumni.user_pk
+                then coalesce(ul_global_alumni.user_pk, ul_global_alumni_id.user_pk)
             end
         ) as user_fk
         , coalesce(dim_course_run.courserun_pk, dim_course_run_mitxpro.courserun_pk) as courserun_fk
@@ -380,12 +397,23 @@ with mitxonline_enrollments as (
     left join user_lookup as ul_bootcamps
         on combined_enrollments.platform = 'bootcamps'
         and combined_enrollments.user_id = ul_bootcamps.bootcamps_application_user_id
+    -- Emeritus and Global Alumni learners are matched using the same dedup logic as in
+    -- dim_user: Emeritus learners by student id, Global Alumni learners by email. Each falls
+    -- back to the other method if the primary lookup finds no one. The email fallback can't
+    -- use dim_user's identity key: if a learner has a mix of enrollments, some with ids and
+    -- some without, their key is the student id, so the rows without an id would miss it.
     left join user_lookup as ul_emeritus
         on combined_enrollments.platform = 'emeritus'
-        and combined_enrollments.user_id = ul_emeritus.emeritus_user_id
+        and combined_enrollments.external_user_id = ul_emeritus.emeritus_user_id
+    left join user_lookup as ul_emeritus_email
+        on combined_enrollments.platform = 'emeritus'
+        and lower(combined_enrollments.user_email) = ul_emeritus_email.email
     left join user_lookup as ul_global_alumni
         on combined_enrollments.platform = 'global_alumni'
-        and combined_enrollments.user_id = ul_global_alumni.global_alumni_user_id
+        and lower(combined_enrollments.user_email) = ul_global_alumni.email
+    left join user_lookup as ul_global_alumni_id
+        on combined_enrollments.platform = 'global_alumni'
+        and combined_enrollments.external_user_id = ul_global_alumni_id.global_alumni_user_id
     left join dim_course_run
         on combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id
         and combined_enrollments.platform = dim_course_run.platform
