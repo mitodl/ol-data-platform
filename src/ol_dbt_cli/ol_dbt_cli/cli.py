@@ -4,6 +4,7 @@ import sys
 
 import cyclopts
 
+from ol_dbt_cli.commands.contracts import contracts_app
 from ol_dbt_cli.commands.diff import diff
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
@@ -46,6 +47,9 @@ app = cyclopts.App(
       7b. Diff an old model against its migrated replacement (same-engine):
          $ ol-dbt diff --old dim_user_old --new dim_user --primary-key user_pk
 
+      7c. Publish OpenMetadata data contracts from contracts/:
+         $ ol-dbt contracts sync --service "Starburst Galaxy" --manifest prod-manifest.json
+
       8. JSON output for CI pipelines:
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
@@ -60,6 +64,7 @@ app.command(generate_app)
 app.command(run_app)
 app.command(starrocks_app)
 app.command(inventory_app)
+app.command(contracts_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 app.command(diff, name="diff")
