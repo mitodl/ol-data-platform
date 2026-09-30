@@ -38,8 +38,8 @@ cp .env.example .env
 # 2. Sync dependencies (10-30 seconds)
 uv sync
 
-# 3. Install pre-commit hooks
-pre-commit install
+# 3. Install the prek git hook (-f replaces an existing pre-commit hook)
+uv run prek install -f
 ```
 
 ### Making Code Changes - Critical Sequence
@@ -55,8 +55,8 @@ ruff check --fix .
 # 3. Type check (10-15 sec)
 mypy packages/ dg_projects/ --config-file=pyproject.toml
 
-# 4. Run pre-commit (IMPORTANT: sqlfluff can take 60+ seconds)
-pre-commit run --all-files
+# 4. Run prek (IMPORTANT: sqlfluff can take 60+ seconds)
+uv run prek run --all-files
 ```
 
 **For dbt SQL changes**:
@@ -81,12 +81,16 @@ ol-dbt run --select my_model_name
 
 ### Pre-Commit Validation
 
+Hooks are defined in `.pre-commit-config.yaml` and run with [prek](https://prek.j178.dev/).
+CI runs them all in the `prek` check (`.github/workflows/autofix.yml`), and autofix.ci
+pushes a commit with any fixes to the PR.
+
 **Before every commit, run**:
 ```bash
-pre-commit run --all-files
+uv run prek run --all-files
 ```
 
-**Pre-commit hooks in order** (all must pass for CI):
+**Hooks in order** (all must pass for CI):
 1. trailing-whitespace, end-of-file-fixer, check-yaml, check-toml
 2. yamlfmt, yamllint
 3. detect-secrets (scans for leaked credentials)
@@ -96,7 +100,7 @@ pre-commit run --all-files
 
 **Skip slow hooks during iteration**:
 ```bash
-SKIP=sqlfluff-lint pre-commit run --all-files
+SKIP=sqlfluff-lint uv run prek run --all-files
 ```
 
 ### Common Errors & Solutions
@@ -107,8 +111,8 @@ SKIP=sqlfluff-lint pre-commit run --all-files
 **Error: "dbt deps fails" / "dbt not found"**
 → Solution: Ensure in `src/ol_dbt/` directory; run `uv sync` first
 
-**Error: "pre-commit sqlfluff timeout"**
-→ Solution: sqlfluff-lint is slow (60+ sec). Run on specific files or skip: `SKIP=sqlfluff-lint pre-commit run`
+**Error: "prek sqlfluff timeout"**
+→ Solution: sqlfluff-lint is slow (60+ sec). Run on specific files or skip: `SKIP=sqlfluff-lint uv run prek run`
 
 **Error: "mypy import errors"**
 → Solution: Ensure `uv sync` completed; check `[tool.mypy]` has `ignore_missing_imports = true`
@@ -170,7 +174,7 @@ python bin/uv-operations.py lock --upgrade
 
 **Configuration Files** (IMPORTANT):
 - Root `pyproject.toml`: Workspace configuration, uv settings, tool config (ruff, mypy, sqlfluff)
-- `.pre-commit-config.yaml`: All pre-commit hooks (must pass for CI)
+- `.pre-commit-config.yaml`: All hooks, run by prek (must pass for CI)
 - `docker-compose.yaml`: Local dev environment (7 code location services + webserver + daemon)
 - `.env.example`: Template for required environment variables
 - `src/ol_dbt/dbt_project.yml`: dbt project configuration

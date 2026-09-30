@@ -2,6 +2,10 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 ci:
+  # autofix.ci owns fix commits; remove this block after pre-commit.ci is
+  # deselected. The skip list is unchanged from before the migration; CI runs
+  # every hook in .github/workflows/autofix.yml, this one included.
+  autofix_prs: false
   skip:
   - sqlfluff-fix
 repos:

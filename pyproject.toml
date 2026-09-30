@@ -51,13 +51,14 @@ constraint-dependencies = [
 ]
 
 [dependency-groups]
+prek = ["prek==0.5.4"]
 dev = [
+    {include-group = "prek"},
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver>=1.12.10",
     "mypy",
     "ol-dbt-cli",
     "ol-orchestrate-lib",
-    "pre-commit>=4.0.0,<5",
     "pytest>=9.0.1,<10",
     "pytest-cov>=7.1,<8",
     "ruff",

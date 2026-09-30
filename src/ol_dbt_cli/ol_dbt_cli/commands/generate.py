@@ -332,7 +332,7 @@ def _sources_from_inventory(inventory_dir: Path, dbt_project_dir: Path) -> None:
     if not plan.contents:
         print("dbt sources already agree with the inventory.")
     else:
-        print("Run `pre-commit run yamlfmt --files <the files above>` to restore the repo's line wrapping.")
+        print("Run `uv run prek run yamlfmt --files <the files above>` to restore the repo's line wrapping.")
 
     if plan.unplaced:
         # Exits non-zero after writing the rest: the other changes are still
