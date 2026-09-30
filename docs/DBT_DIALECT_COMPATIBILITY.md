@@ -48,12 +48,12 @@ These functions have cross-database macros and work across all targets:
 6. **`array_length(array)`** - Number of elements in an array
    - Trino: `cardinality(arr)` (native)
    - DuckDB: `len(arr)` (DuckDB's `cardinality()` only accepts maps)
-   - StarRocks: `array_length(arr)` (no `cardinality()`)
+   - StarRocks: `array_length(arr)` (`cardinality()` only exists from v3)
    - **Status**: Applied to every model; no bare `cardinality()` remains
 
 ### ⚠️ Partially Compatible (Known Issues)
 
-6. **JSON with nested quotes** - Some JSON paths contain literal double quotes
+7. **JSON with nested quotes** - Some JSON paths contain literal double quotes
    - Example: `$.image_metadata."image-alt"`
    - **Workaround**: Escape inner quotes: `$.image_metadata.\"image-alt\"`
    - **Status**: Fixed in 1 file, others may exist
