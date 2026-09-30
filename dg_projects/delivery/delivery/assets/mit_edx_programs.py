@@ -9,8 +9,9 @@ takes from its courses); this asset only shapes rows into the payload MIT Learn'
 loaders read.
 
 Data flow:
-    raw__edxorg__s3__program{,_course}, raw__edxorg__s3__mitx_course{,_run}
-    (edxorg code location, edX discovery API)
+    raw__edxorg__discovery__api__program{,_course},
+    raw__edxorg__discovery__api__mitx_course{,_run}
+    (ol_dlt.sources.mit_edx_programs, edX discovery API)
         → int__edxorg__mitx_learn_* (dbt)
             → integrations__learn__mit_edx_program{s,_instructors} (dbt)
                 → MIT Learn webhook (this asset)
@@ -68,8 +69,9 @@ _PROGRAMS_TABLE = "integrations__learn__mit_edx_programs"
 _INSTRUCTORS_TABLE = "integrations__learn__mit_edx_program_instructors"
 
 _PLATFORM = "edx"
-# Matches the error_after freshness on raw__edxorg__s3__program. The extraction runs
-# daily, so this allows two missed days before refusing to re-send the last one.
+# Matches the error_after freshness on raw__edxorg__discovery__api__program. The
+# extraction runs daily, so this allows two missed days before refusing to re-send
+# the last one.
 _MAX_EXTRACTION_AGE = timedelta(days=3)
 _REVIEW_TITLE_PREFIX = "Review whether MIT Learn should unpublish edX program"
 
@@ -189,7 +191,8 @@ def check_extraction_age(
         msg = (
             f"The latest edX programs extraction ran at {retrieved_at.isoformat()}, "
             f"more than {_MAX_EXTRACTION_AGE.days} days ago; not re-sending it. Check "
-            "the edxorg_program_metadata asset and the raw__edxorg__s3__program sync."
+            "the mit_edx_programs_ingest dlt load of "
+            "raw__edxorg__discovery__api__program."
         )
         raise StaleExtractionError(msg)
 

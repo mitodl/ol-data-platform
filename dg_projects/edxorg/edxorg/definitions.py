@@ -14,7 +14,6 @@ from dagster import (
     AssetSelection,
     DefaultSensorStatus,
     Definitions,
-    ScheduleDefinition,
     SensorDefinition,
     define_asset_job,
     job,
@@ -35,17 +34,12 @@ from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
-from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
 from ol_orchestrate.sensors.object_storage import (
     gcs_multi_file_sensor,
     s3_multi_file_sensor,
 )
 
-from edxorg.assets.edxorg_api import (
-    edxorg_mitx_course_metadata,
-    edxorg_program_metadata,
-)
 from edxorg.assets.edxorg_archive import (
     dummy_edxorg_course_structure,
     edxorg_archive_partitions,
@@ -227,20 +221,6 @@ edxorg_course_bundle_sensor = SensorDefinition(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
-# Schedule
-edxorg_api_daily_schedule = ScheduleDefinition(
-    name="edxorg_api_daily_schedule",
-    job=define_asset_job(
-        name="edxorg_api_daily_job",
-        selection=AssetSelection.assets(
-            edxorg_program_metadata,
-            edxorg_mitx_course_metadata,
-        ),
-    ),
-    cron_schedule="0 5 * * *",
-    execution_timezone="UTC",
-)
-
 # Build sensor list (filter None values from resilient loading)
 sensor_list = [
     edxorg_program_reports_sensor,
@@ -275,7 +255,6 @@ defs = Definitions(
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
         "gcp_gcs": gcs_connection,
         "vault": vault,
-        "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
             client_class="MITLearnApiClient",
@@ -306,14 +285,11 @@ defs = Definitions(
             extract_edxorg_courserun_metadata,
             dummy_edxorg_course_xml,
             edxorg_course_content_webhook,
-            edxorg_program_metadata,
-            edxorg_mitx_course_metadata,
             *edxorg_db_table_specs,
         ]
     ),
     asset_checks=failed_partition_checks,
     schedules=[
-        edxorg_api_daily_schedule,
         failed_partition_check_schedule(failed_partition_checks),
     ],
 )

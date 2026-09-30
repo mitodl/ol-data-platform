@@ -39,7 +39,11 @@ mit_climate_ingest_schedule = dg.ScheduleDefinition(
 mit_edx_programs_ingest_schedule = dg.ScheduleDefinition(
     name="mit_edx_programs_ingest_daily_schedule",
     target=dg.AssetSelection.keys(
-        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__programs"]
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__programs"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__program"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__program_course"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__mitx_course"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__mitx_course_run"],
     ),
     cron_schedule="45 3 * * *",
     execution_timezone="Etc/UTC",
