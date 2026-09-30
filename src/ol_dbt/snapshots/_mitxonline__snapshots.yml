@@ -48,3 +48,50 @@ snapshots:
   - name: dbt_valid_to
     description: When this version stopped being current (changed or deleted upstream).
       Null for the current version.
+- name: snapshot_mitxonline_b2b_userb2bcontract
+  relation: ref('stg__mitxonline__app__postgres__b2b_userb2bcontract')
+  description: >
+    History of MITx Online contract memberships and the learner's data-sharing
+    decision on each, one row per version. MITx Online hard-deletes a
+    membership when the learner is removed from the organization
+    (OrganizationPage.remove_user_contracts), and a re-added learner gets a new
+    row with no decision, so the raw table alone loses a recorded decline.
+    bridge_user_contract reads this to keep one. Resolution is one run: a
+    decision made and its membership deleted between two runs is never
+    recorded, and history starts at the first run. A deleted membership has its
+    current version closed (dbt_valid_to set), not a tombstone row.
+  config:
+    schema: dimensional
+    unique_key: userb2bcontract_id
+    strategy: check
+    check_cols:
+    - user_id
+    - contract_id
+    - userb2bcontract_consented_to_data_sharing
+    - userb2bcontract_consent_modified_at
+    hard_deletes: invalidate
+  columns:
+  - name: userb2bcontract_id
+    description: mitxonline b2b_userb2bcontract.id.
+  - name: user_id
+    description: mitxonline users_user.id (dim_user.mitxonline_application_user_id).
+  - name: contract_id
+    description: mitxonline b2b_contractpage id (dim_contract.contract_id).
+  - name: userb2bcontract_consented_to_data_sharing
+    description: The learner's data-sharing decision in this version. Null when none
+      is recorded.
+  - name: userb2bcontract_consent_modified_at
+    description: ISO-8601 timestamp when the decision was last set.
+  - name: userb2bcontract_created_on
+    description: ISO-8601 timestamp when the membership was created.
+  - name: userb2bcontract_updated_on
+    description: ISO-8601 timestamp when the membership was last saved.
+  - name: dbt_scd_id
+    description: Unique id of this version of the membership.
+  - name: dbt_updated_at
+    description: When dbt recorded this version.
+  - name: dbt_valid_from
+    description: When this version was first observed.
+  - name: dbt_valid_to
+    description: When this version stopped being current (changed or deleted upstream).
+      Null for the current version.

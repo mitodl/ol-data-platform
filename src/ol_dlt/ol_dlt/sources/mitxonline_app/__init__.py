@@ -22,8 +22,8 @@ which dlt has no practical equivalent for (INGESTION_INVENTORY_SPEC.md §3.4),
 so each of them needed either a replacement cursor or a decision to re-read it
 whole. They are all re-read whole, for three measured reasons:
 
-    Affordable.  The whole unit is 16.5M rows / 1.01 GB across 64 tables at the
-        current Iceberg snapshot (production Glue, 2026-08-31). The largest
+    Affordable.  The whole unit was 16.5M rows / 1.01 GB across 64 tables at
+        the Iceberg snapshot measured (production Glue, 2026-08-31). The largest
         table, ``openedx_openedxuser``, is 2.7M rows / 126 MB.
     Not safely keyable.  39 tables carry ``updated_on``, but that is Django's
         ``auto_now=True``, which fires on ``Model.save()`` and NOT on

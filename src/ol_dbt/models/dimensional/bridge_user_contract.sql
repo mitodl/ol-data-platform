@@ -3,10 +3,16 @@
 ) }}
 
 -- User to B2B contract membership bridge, carrying the learner's data-sharing consent.
--- Grain: one row per (user, contract) membership.
+-- Grain: one row per (user, contract).
 -- Consent is recorded per contract, not per organization, so a learner seated under
 -- two of an organization's contracts can share under one and not the other.
-with user_contracts as (
+-- MITx Online hard-deletes a membership when the learner leaves the organization, and
+-- a re-added learner starts with no decision, while their enrollments (and so their
+-- outcomes) stay in the learner-records views. A decline is therefore kept from
+-- the snapshot: when the current membership has no decision, or is gone, and the
+-- latest decision ever recorded for the (user, contract) is a decline, the row reads
+-- false. A consent is not carried over the same way; a re-added learner is asked again.
+with current_memberships as (
     select
         user_id
         , contract_id
@@ -15,6 +21,54 @@ with user_contracts as (
         , userb2bcontract_created_on
         , userb2bcontract_updated_on
     from {{ ref('stg__mitxonline__app__postgres__b2b_userb2bcontract') }}
+)
+
+, decision_history as (
+    select
+        user_id
+        , contract_id
+        , userb2bcontract_consented_to_data_sharing
+        , userb2bcontract_consent_modified_at
+        , row_number() over (
+            partition by user_id, contract_id
+            order by userb2bcontract_consent_modified_at desc, dbt_valid_from desc
+        ) as decision_rank
+    from {{ ref('snapshot_mitxonline_b2b_userb2bcontract') }}
+    where userb2bcontract_consented_to_data_sharing is not null
+)
+
+, last_decisions as (
+    select
+        user_id
+        , contract_id
+        , userb2bcontract_consented_to_data_sharing
+        , userb2bcontract_consent_modified_at
+    from decision_history
+    where decision_rank = 1
+)
+
+, resolved as (
+    select
+        coalesce(cm.user_id, ld.user_id) as user_id
+        , coalesce(cm.contract_id, ld.contract_id) as contract_id
+        , cm.user_id is not null as membership_is_current
+        , case
+            when cm.userb2bcontract_consented_to_data_sharing is not null
+                then cm.userb2bcontract_consented_to_data_sharing
+            when ld.userb2bcontract_consented_to_data_sharing = false then false
+        end as consented_to_data_sharing
+        , case
+            when cm.userb2bcontract_consented_to_data_sharing is not null
+                then cm.userb2bcontract_consent_modified_at
+            when ld.userb2bcontract_consented_to_data_sharing = false
+                then ld.userb2bcontract_consent_modified_at
+        end as consent_modified_at
+        , cm.userb2bcontract_created_on as membership_created_on
+        , cm.userb2bcontract_updated_on as membership_updated_on
+    from current_memberships as cm
+    full outer join last_decisions as ld
+        on cm.user_id = ld.user_id and cm.contract_id = ld.contract_id
+    where cm.user_id is not null or ld.userb2bcontract_consented_to_data_sharing = false
 )
 
 , dim_user as (
@@ -32,10 +86,11 @@ select
     du.user_pk as user_fk
     , dc.contract_pk as contract_fk
     , dc.organization_fk
-    , uc.userb2bcontract_consented_to_data_sharing as consented_to_data_sharing
-    , uc.userb2bcontract_consent_modified_at as consent_modified_at
-    , uc.userb2bcontract_created_on as membership_created_on
-    , uc.userb2bcontract_updated_on as membership_updated_on
-from user_contracts as uc
-inner join dim_user as du on uc.user_id = du.mitxonline_application_user_id
-inner join dim_contract as dc on uc.contract_id = dc.contract_id
+    , r.membership_is_current
+    , r.consented_to_data_sharing
+    , r.consent_modified_at
+    , r.membership_created_on
+    , r.membership_updated_on
+from resolved as r
+inner join dim_user as du on r.user_id = du.mitxonline_application_user_id
+inner join dim_contract as dc on r.contract_id = dc.contract_id

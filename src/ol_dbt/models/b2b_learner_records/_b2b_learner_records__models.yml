@@ -26,10 +26,10 @@ models:
     attribution cannot fan out. The view is not filtered to the organization's
     current roster, because a learner removed from the organization keeps their
     enrollment in its contract runs; snapshot_mitxonline_b2b_userorganization
-    records membership history. There is no consent column yet. Until the
-    learner data-sharing consent field lands, the API treats every row as
-    outcomes_shared = false and nulls the grade and certificate columns. The
-    activity columns come from afact_learner_courserun_daily_activity,
+    records membership history. outcomes_shared carries the learner's
+    data-sharing decision for the enrollment's contract from
+    bridge_user_contract; the API nulls the grade and certificate columns when
+    it resolves to false. The activity columns come from afact_learner_courserun_daily_activity,
     pre-aggregated to (user, course run). This is a manual-refresh materialized
     view.
   tests:
@@ -197,8 +197,9 @@ models:
     memberships it creates itself (enrollment-code redemption, contract-run
     enrollment) so SSO reconciliation does not remove them before Keycloak
     reflects them. snapshot_mitxonline_b2b_userorganization records membership
-    history. There is no consent column, for the same reason as
-    mv_b2b_learner_enrollment. last_active_on and courses_in_progress count
+    history. outcomes_shared resolves the learner's data-sharing decision
+    across every contract of the organization they hold a membership or an
+    enrollment under. last_active_on and courses_in_progress count
     active enrollments only. This is a manual-refresh materialized view.
   tests:
   - dbt_utils.unique_combination_of_columns:
@@ -293,10 +294,12 @@ models:
   - name: outcomes_shared
     description: >
       The learner's data-sharing decision for the organization, resolved across
-      every contract membership they hold under it (bridge_user_contract): false
-      if any membership records a decline or withdrawal, else null if any has no
-      recorded decision, else true. Null also when the learner has no contract
-      membership row (enrollment-only learners). Null is not false: the API
+      every contract of the organization they hold a membership or an
+      enrollment under (bridge_user_contract): false if any records a decline or
+      withdrawal, else null if any has no recorded decision (including a
+      contract they are enrolled under with no membership row), else true. The
+      outcome counts cover every one of those contracts, so a decline under any
+      of them has to win. Null is not false: the API
       resolves it against its consent_fail_open setting, while false is withheld
       either way.
   - name: outcomes_consent_on

@@ -32,6 +32,7 @@ with activity as (
 contract_enrollments as (
     select
         c.organization_fk,
+        boc.contract_fk,
         e.user_fk,
         e.courserun_fk,
         cr.course_fk,
@@ -116,28 +117,39 @@ program_certificates as (
 ),
 
 -- Consent is recorded per (learner, contract) and this view's grain is (learner, org),
--- so it is resolved across every contract membership the learner holds under the
--- organization: any recorded false withholds, then any membership with no recorded
--- decision leaves it null (the API resolves null against its fail-open setting), and
--- only a true on every membership shares. The rollup counts outcomes from all of the
--- organization's contracts, so a decline under any one of them has to win.
+-- so it is resolved across every contract of the organization the learner holds a
+-- membership or an enrollment under: any recorded false withholds, then any contract
+-- with no recorded decision leaves it null (the API resolves null against its
+-- fail-open setting), and only a true on every one shares. The rollup counts outcomes
+-- from every contract the learner enrolled under, including ones whose membership row
+-- is gone, so those contracts are in scope with no decision rather than skipped.
 -- consent_updated_on moves record_updated_on so a withdrawal reaches updated_since.
+consent_scope as (
+    select distinct organization_fk, user_fk, contract_fk
+    from contract_enrollments
+    union
+    select organization_fk, user_fk, contract_fk
+    from {{ source('dimensional', 'bridge_user_contract') }}
+    where organization_fk is not null
+),
+
 consent as (
     select
-        organization_fk,
-        user_fk,
+        s.organization_fk,
+        s.user_fk,
         case
-            when sum(case when consented_to_data_sharing = false then 1 else 0 end) > 0
+            when sum(case when uc.consented_to_data_sharing = false then 1 else 0 end) > 0
                 then false
-            when sum(case when consented_to_data_sharing is null then 1 else 0 end) > 0
+            when sum(case when uc.consented_to_data_sharing is null then 1 else 0 end) > 0
                 then cast(null as boolean)
             else true
         end                                                                             as outcomes_shared,
-        max(case when consented_to_data_sharing then consent_modified_at end)          as latest_consent_on,
-        max(coalesce(consent_modified_at, ''))                                          as consent_updated_on
-    from {{ source('dimensional', 'bridge_user_contract') }}
-    where organization_fk is not null
-    group by organization_fk, user_fk
+        max(case when uc.consented_to_data_sharing then uc.consent_modified_at end)          as latest_consent_on,
+        max(coalesce(uc.consent_modified_at, ''))                                          as consent_updated_on
+    from consent_scope s
+    left join {{ source('dimensional', 'bridge_user_contract') }} uc
+        on s.user_fk = uc.user_fk and s.contract_fk = uc.contract_fk
+    group by s.organization_fk, s.user_fk
 ),
 
 -- Roster and enrollment legitimately disagree. A roster row with no active enrollment
