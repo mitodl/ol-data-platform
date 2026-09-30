@@ -5,11 +5,14 @@ from typing import ClassVar
 
 import boto3
 from anthropic import Anthropic, AnthropicBedrock
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from botocore.client import BaseClient
 from dagster import ConfigurableResource
 from google import genai
 from openai import OpenAI
 from pydantic import Field, PrivateAttr
+
+COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 
 class LLMClientFactory(ConfigurableResource):
@@ -43,7 +46,9 @@ class LLMClientFactory(ConfigurableResource):
         default=None,
         description=(
             "Resource endpoint, e.g. 'https://<resource>.openai.azure.com'; "
-            "required when client_class='azure_openai'"
+            "required when client_class='azure_openai'. Authenticates with an "
+            "Entra token from DefaultAzureCredential (workload identity in the "
+            "cluster, `az login` locally); the accounts reject API keys."
         ),
     )
 
@@ -95,9 +100,14 @@ class LLMClientFactory(ConfigurableResource):
 
         if self.client_class == "azure_openai":
             endpoint = self._require(self.azure_endpoint, "azure_endpoint")
+            # The OpenAI SDK calls a callable api_key before each request and
+            # sends the result as the bearer token; the provider caches the
+            # Entra token and refreshes it before it expires.
             self._client = sdk_client_class(
                 base_url=f"{endpoint.rstrip('/')}/openai/v1/",
-                api_key=self._require_env("AZURE_OPENAI_API_KEY"),
+                api_key=get_bearer_token_provider(
+                    DefaultAzureCredential(), COGNITIVE_SERVICES_SCOPE
+                ),
             )
             return self._client
 
