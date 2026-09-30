@@ -93,7 +93,10 @@ models:
     tests:
     - not_null
   - name: enrollment_is_active
-    description: Boolean indicating if enrollment is currently active
+    description: Boolean indicating if enrollment is currently active. This is the
+      canonical "currently enrolled" flag; enrollment_status records why an enrollment
+      changed, is null on edX.org and Residential, and is 'deferred' on MITx Online
+      enrollments that remain active in audit mode
   - name: enrollment_mode
     description: Enrollment mode (audit, verified, etc.)
   - name: enrollment_status

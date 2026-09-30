@@ -54,7 +54,7 @@ with chatbot_events as (
         user_email
         , courserun_readable_id
     from enrollment_detail
-    where courserunenrollment_enrollment_status is null
+    where courserunenrollment_is_active
     group by
         user_email
         , courserun_readable_id
