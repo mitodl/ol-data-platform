@@ -69,6 +69,8 @@ DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE: dict[str, int] = {
     "learn_ai_tutor": 50,
     # one-word praise ("good", "yes"); the rating already carries it
     "content_feedback": 20,
+    # "test", "Hi", "." posts; the title counts, so a real one-line report clears it
+    "discussion_forum": 20,
 }
 
 
