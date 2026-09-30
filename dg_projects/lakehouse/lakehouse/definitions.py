@@ -508,6 +508,42 @@ non_airbyte_staging_schedules = (
     else []
 )
 
+# MIT Learn's warehouse-pull tasks read these views, and pointing them at QA
+# (WAREHOUSE_CATALOG/WAREHOUSE_SCHEMA) is how a Cohort 1 source gets rehearsed
+# before its cutover. Production builds them through dbt_automation_sensor; QA
+# has no automation, so without this ol_warehouse_qa_integrations stays empty.
+#
+# Only the views whose every QA raw input exists (Glue, 2026-09-30), with their
+# upstream staging and intermediate models. None of those are cross-source
+# unions, so a QA build is complete relative to QA's apps rather than silently
+# partial. The rest wait on raw tables QA does not have: program_certificates
+# on the edX program_learner_report and email_opt_in mirrors, mit_edx_programs
+# on the edX program tables, and the dlt/API sources (mitpe, mit_climate, oll,
+# podcasts) whose loaders run in production only.
+LEARN_INTEGRATIONS_QA_MODELS = (
+    "integrations__learn__mit_edx_courses",
+    "integrations__learn__mitxonline_courses",
+    "integrations__learn__mitxonline_programs",
+    "integrations__learn__ocw_courses",
+    "integrations__learn__xpro_courses",
+    "integrations__learn__xpro_programs",
+)
+learn_integrations_qa_schedule = ScheduleDefinition(
+    name="learn_integrations_qa_daily",
+    job=define_asset_job(
+        name="learn_integrations_qa_job",
+        selection=build_dbt_asset_selection(
+            [full_dbt_project],
+            dbt_select=" ".join(f"+{model}" for model in LEARN_INTEGRATIONS_QA_MODELS),
+        ),
+    ),
+    # The QA sync_and_stage schedules run at 00:00 (QA renders no inventory
+    # intervals, so every group takes the 24-hour default).
+    cron_schedule="0 3 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
 # Build resources dict, conditionally including airbyte
 resources_dict = {
     "dbt": dbt_cli,
@@ -643,6 +679,7 @@ defs = Definitions(
             *airbyte_drift_schedules,
             ("posthog_staging_hourly", posthog_staging_schedule),
             *non_airbyte_staging_schedules,
+            ("learn_integrations_qa_daily", learn_integrations_qa_schedule),
         ]
     ),
 )
