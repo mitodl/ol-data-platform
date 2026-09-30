@@ -123,6 +123,9 @@ program_certificates as (
 -- fail-open setting), and only a true on every one shares. The rollup counts outcomes
 -- from every contract the learner enrolled under, including ones whose membership row
 -- is gone, so those contracts are in scope with no decision rather than skipped.
+-- A removed membership with no enrollment contributes no outcomes, so only current
+-- memberships join the scope from the bridge; a removed one with enrollments is
+-- already in scope from contract_enrollments and still carries its retained decision.
 -- consent_updated_on moves record_updated_on so a withdrawal reaches updated_since.
 consent_scope as (
     select distinct organization_fk, user_fk, contract_fk
@@ -131,6 +134,7 @@ consent_scope as (
     select organization_fk, user_fk, contract_fk
     from {{ source('dimensional', 'bridge_user_contract') }}
     where organization_fk is not null
+      and membership_is_current
 ),
 
 consent as (
