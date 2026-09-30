@@ -11,6 +11,7 @@ Checks:
   8. SELECT *: models using SELECT * that hides column-level lineage
   9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
  10. QA branch contract: union models must declare their expected QA branches (RFC 12711)
+ 11. Data contract: models and sources must keep the columns and types their OpenMetadata contract lists
 """
 
 from __future__ import annotations
@@ -25,6 +26,12 @@ from typing import Annotated, cast
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.data_contracts import (
+    DATA_CONTRACT_CHECK,
+    DEFAULT_CONTRACTS_DIR,
+    check_data_contracts,
+    load_contracts,
+)
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.dimensional_layering import (
     LayeringViolation,
@@ -646,6 +653,32 @@ def _check_qa_branch_contract(
     check_qa_gaps(manifest, units, observation, baseline, now or datetime.now(tz=UTC), report)
 
 
+# ---------------------------------------------------------------------------
+# Check 11: OpenMetadata data contracts
+# ---------------------------------------------------------------------------
+
+
+def _check_data_contract(
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+    contracts_dir: Path,
+    report: ValidationReport,
+) -> None:
+    contracts = load_contracts(contracts_dir)
+    if not contracts:
+        return
+    if manifest is None:
+        report.add(
+            DATA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            f"Skipped: {len(contracts)} data contract(s) need manifest column types",
+            "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
+        )
+        return
+    check_data_contracts(contracts, manifest, sql_models_by_name, report)
+
+
 def _update_qa_baseline(manifest: ManifestRegistry | None, inventory_dir: Path) -> None:
     units = load_units(inventory_dir)
     observation = load_observation(inventory_dir / OBSERVATION_FILENAME)
@@ -974,7 +1007,7 @@ def validate(
             help=(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
-                "dimensional_layering."
+                "dimensional_layering, qa_branch_contract, data_contract."
             ),
         ),
     ] = None,
@@ -985,7 +1018,8 @@ def validate(
             help=(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
-                "pk_test_coverage, yaml_integrity, select_star, dimensional_layering. "
+                "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
+                "data_contract. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1052,6 +1086,16 @@ def validate(
             ),
         ),
     ] = None,
+    contracts_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--contracts-dir"],
+            help=(
+                "OpenMetadata data contracts directory for the data_contract check. "
+                "Defaults to <repo>/contracts, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     update_baseline: Annotated[
         bool,
         Parameter(
@@ -1077,7 +1121,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs ten checks:
+    Runs eleven checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -1093,6 +1137,9 @@ def validate(
                                qa_branches or qa_buildable: false, and each declared branch is
                                one QA ingests or mirrors (RFC 12711); declared tables the QA
                                observation shows empty or stale error unless baselined
+    11. data_contract        — every column an OpenMetadata contract in <repo>/contracts/ lists
+                               for a dbt model or source is still declared, selected, and of a
+                               compatible data_type
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1159,6 +1206,7 @@ def validate(
         "select_star",
         "dimensional_layering",
         QA_CONTRACT_CHECK,
+        DATA_CONTRACT_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1461,6 +1509,14 @@ def validate(
     # one of its ancestors, which --changed-only would never select.
     if QA_CONTRACT_CHECK not in skipped:
         _check_qa_branch_contract(manifest, inventory_dir, report)
+
+    # Global like qa_branch_contract: a contract edit alone changes no model, so
+    # --changed-only would never select the model it newly constrains.
+    if DATA_CONTRACT_CHECK not in skipped:
+        contracts_dir = (
+            Path(contracts_dir_path).resolve() if contracts_dir_path else dbt_dir.parents[1] / DEFAULT_CONTRACTS_DIR
+        )
+        _check_data_contract(manifest, sql_models_by_name, contracts_dir, report)
 
     # Output
     if output_format == "json":

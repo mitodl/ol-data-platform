@@ -343,6 +343,7 @@ models:
       - xpro/mysql
   columns:
   - name: user_pk
+    data_type: varchar
     description: string, primary key for this user dim table. The grain is still one
       row per shared email, but the key's value is derived from durable identifiers
       - the user_global_id when the group has one, otherwise the highest-ranked platform
@@ -364,17 +365,21 @@ models:
         values: ['global', 'mitlearn', 'mitxonline', 'edxorg', 'micromasters', 'mitxpro',
           'residential', 'bootcamps', 'emeritus', 'global_alumni', 'email']
   - name: user_global_id
+    data_type: varchar
     description: string, a unique identifier for the user across all platforms
     tests:
     - unique
   - name: mitlearn_user_id
+    data_type: bigint
     description: int, a unique identifier for the user on the MIT Learn
   - name: mitlearn_openedx_user_id
     description: string, user id on the MIT Learn open edX platform
   - name: mitxonline_openedx_user_id
+    data_type: bigint
     description: string, openedx user id. This is deprecated in favor of mitlearn_openedx_user_id.
   - name: mitxonline_application_user_id
-    description: string, user id on MITxOnline application
+    data_type: bigint
+    description: int, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on the MITx Online open edx platform. If user doesn't
       have an open edX account, it defaults to username on the MITx Online application,
@@ -384,7 +389,8 @@ models:
   - name: bootcamps_application_user_id
     description: int, user id on Bootcamps application
   - name: mitxpro_application_user_id
-    description: string, user id on MITx Pro application
+    data_type: bigint
+    description: int, user id on MITx Pro application
   - name: user_mitxpro_username
     description: string, username on MITx Pro
   - name: residential_openedx_user_id
@@ -392,6 +398,7 @@ models:
   - name: user_residential_username
     description: string, username on MITx Residential
   - name: edxorg_openedx_user_id
+    data_type: bigint
     description: int, openedx user id for edX.org
   - name: user_edxorg_username
     description: string, username on edX.org
@@ -421,6 +428,7 @@ models:
         config:
           error_if: ">0"
   - name: email
+    data_type: varchar
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
     tests:

@@ -16,6 +16,7 @@ on:
     - "src/ol_dbt/**"
     - "src/ol_dbt_cli/**"
     - "ingestion/inventory/**"
+    - "contracts/**"
     - ".github/workflows/dbt_pr_ci.yaml"
   workflow_dispatch:
 
@@ -75,11 +76,13 @@ jobs:
     # declares one whose unit is strategies.qa: omit; an inventory edit can cause
     # the last two. It also fails on a declared-branch table that the committed
     # ingestion/inventory/qa_observation.json shows empty (or a stale mirror)
-    # unless ingestion/inventory/qa_branch_baseline.txt lists it.
-    - name: Dimensional-layering and QA branch contract lint
+    # unless ingestion/inventory/qa_branch_baseline.txt lists it. The data
+    # contract check fails when a dbt model or source drops or retypes a column
+    # its OpenMetadata contract in contracts/ lists.
+    - name: Dimensional-layering, QA branch contract and data contract lint
       run: |
         uv run ol-dbt validate \
-          --only dimensional_layering,qa_branch_contract \
+          --only dimensional_layering,qa_branch_contract,data_contract \
           --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
@@ -91,7 +94,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering,qa_branch_contract \
+          --skip dimensional_layering,qa_branch_contract,data_contract \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.

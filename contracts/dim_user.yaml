@@ -1,0 +1,53 @@
+---
+# OpenMetadata data contract for dim_user. See README.md in this directory.
+entity:
+  type: table
+  dbt_model: dim_user
+contract:
+  name: dim_user
+  displayName: dim_user
+  description: >-
+    One row per person across MIT Open Learning platforms. Downstream marts and
+    Superset datasets join on user_pk and the per-platform user ids below, so
+    those columns must not be dropped or retyped without a coordinated change.
+  entityStatus: Approved
+  schema:
+  - name: user_pk
+    dataType: VARCHAR
+    constraint: PRIMARY_KEY
+    description: Primary key, derived from durable identifiers.
+  - name: user_global_id
+    dataType: VARCHAR
+    description: Identifier for the user across all platforms.
+  - name: email
+    dataType: VARCHAR
+    constraint: NOT_NULL
+    description: User email, the grain of the dedup.
+  - name: mitlearn_user_id
+    dataType: BIGINT
+    description: User id on MIT Learn.
+  - name: mitxonline_application_user_id
+    dataType: BIGINT
+    description: User id on the MITx Online application.
+  - name: mitxonline_openedx_user_id
+    dataType: BIGINT
+    description: User id on the MITx Online open edX platform.
+  - name: mitxpro_application_user_id
+    dataType: BIGINT
+    description: User id on the MITx Pro application.
+  - name: edxorg_openedx_user_id
+    dataType: BIGINT
+    description: User id on edX.org.
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
+  sla:
+    refreshFrequency:
+      interval: 1
+      unit: day
