@@ -8,6 +8,8 @@ version: 2
 
 models:
 - name: integrations__learn__ocw_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     OCW courses exposed for MIT Learn's Trino-pull ETL. One row per live OCW course.
     Sourced from int__ocw__courses, int__ocw__course_topics,
@@ -57,6 +59,8 @@ models:
     description: Comma-separated department names offering the course.
 
 - name: integrations__learn__mitxonline_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     MITx Online courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
     Sourced from int__mitxonline__courses and int__mitxonline__course_runs.
@@ -111,6 +115,8 @@ models:
       Format per run: readable_id|start_on|end_on|is_live
 
 - name: integrations__learn__mitxonline_programs
+  config:
+    tags: [qa_scheduled]
   description: >
     MITx Online programs exposed for MIT Learn's Trino-pull ETL. One row per live
     program.
@@ -164,6 +170,8 @@ models:
     description: Comma-separated list of course readable_ids belonging to this program.
 
 - name: integrations__learn__xpro_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     xPRO courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
     Sourced from int__mitxpro__courses and int__mitxpro__course_runs.
@@ -214,6 +222,8 @@ models:
       Format per run: readable_id|start_on|end_on|is_live
 
 - name: integrations__learn__xpro_programs
+  config:
+    tags: [qa_scheduled]
   description: >
     xPRO programs exposed for MIT Learn's Trino-pull ETL. One row per live program.
     Sourced from int__mitxpro__programs and int__mitxpro__courses.
@@ -262,6 +272,8 @@ models:
     description: Comma-separated list of course readable_ids belonging to this program.
 
 - name: integrations__learn__mit_edx_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT edX (MITx on edX.org) courses exposed for MIT Learn's Trino-pull ETL.
     One row per course with at least one published run.

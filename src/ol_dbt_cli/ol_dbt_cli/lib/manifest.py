@@ -45,6 +45,8 @@ class ManifestModel:
     """For a source, the physical table name it reads, which can differ from ``name``."""
     meta: dict[str, Any] = field(default_factory=dict)
     """``config.meta``: dbt merges project-level and YAML ``meta`` into it."""
+    tags: list[str] = field(default_factory=list)
+    """``tags``: dbt merges project-level, YAML and SQL ``tags`` into it."""
 
     @property
     def column_names(self) -> set[str]:
@@ -233,6 +235,7 @@ def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
         depends_on_macros=depends_on.get("macros", []),
         identifier=node_data.get("identifier") or "",
         meta=(node_data.get("config") or {}).get("meta") or {},
+        tags=node_data.get("tags") or [],
     )
 
 

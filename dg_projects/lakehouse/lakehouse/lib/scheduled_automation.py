@@ -152,12 +152,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # well as production. That one is ingestion, which RFC 12711 wants running
     # in QA; this is a report, and it can only describe one workspace.
     "airbyte_inventory_drift_daily": frozenset({"production"}),
-    # The six MIT Learn integrations views QA has every raw input for, plus
-    # their upstream. QA only: production builds them through the automation
-    # sensor. The one dbt schedule QA runs, and an exception to "QA does not
-    # build" that holds only because none of its models is a cross-source
-    # union -- see LEARN_INTEGRATIONS_QA_MODELS in definitions.py. A model added
-    # there has to meet the same bar.
+    # The dbt models tagged qa_scheduled (MIT Learn integrations views QA has
+    # every raw input for), plus their upstream. QA only: production builds
+    # them through the automation sensor. The one dbt schedule QA runs, and an
+    # exception to "QA does not build" that holds only because none of its
+    # models is a cross-source union, which ol-dbt validate enforces on the tag.
     "learn_integrations_qa_daily": frozenset({"qa"}),
 }
 
