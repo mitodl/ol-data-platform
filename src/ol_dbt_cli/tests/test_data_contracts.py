@@ -135,12 +135,18 @@ def test_fqn_binding_is_not_checked_locally(tmp_path: Path) -> None:
         ({"type": "table", "dbt_model": "a", "fqn": "b"}, "exactly one of"),
         ({"type": "topic", "dbt_model": "a"}, "always a table"),
         ({"type": "table", "dbt_source": "no_dot"}, "<source_name>.<table_name>"),
+        ({"type": "dashboard", "fqn": "Superset.dash"}, "is not one of"),
     ],
 )
 def test_malformed_binding_raises(tmp_path: Path, entity: dict[str, str], message: str) -> None:
     _write(tmp_path, "c", _contract(entity))
     with pytest.raises(ValueError, match=message):
         load_contracts(tmp_path)
+
+
+def test_yml_extension_loads(tmp_path: Path) -> None:
+    (tmp_path / "c.yml").write_text(yaml.safe_dump(_contract(DIM_USER)))
+    assert [c.path.name for c in load_contracts(tmp_path)] == ["c.yml"]
 
 
 def test_contract_entity_is_rejected(tmp_path: Path) -> None:
@@ -224,7 +230,7 @@ class _FakeClient:
         ({"valid": False, "schemaValidation": {"failed": 1}}, True),
     ],
 )
-def test_sync_dry_run_fails_on_type_mismatch(
+def test_sync_publishes_only_clean_contracts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, validation: dict[str, Any], exits: bool
 ) -> None:
     from ol_dbt_cli.commands import contracts as contracts_command
@@ -243,5 +249,8 @@ def test_sync_dry_run_fails_on_type_mismatch(
 
     assert exits_nonzero(contracts_command.sync, dry_run=True) is exits
     assert ("PUT", "/v1/dataContracts") not in client.calls
+    # A real sync publishes only a contract that validated cleanly.
+    assert exits_nonzero(contracts_command.sync) is exits
+    assert (("PUT", "/v1/dataContracts") in client.calls) is not exits
     # A retyped column fails validate too, although OpenMetadata reports Success.
     assert exits_nonzero(contracts_command.validate) is bool(validation["schemaValidation"].get("typeMismatchFields"))

@@ -48,6 +48,17 @@ DEFAULT_CONTRACTS_DIR = Path("contracts")
 
 _BINDING_KEYS = ("dbt_model", "dbt_source", "fqn")
 
+# OpenMetadata's collection path for each entity type a contract may name. The
+# four with schema validation in 2.0.2, plus containers for semantics-only
+# contracts on files Dagster produces; extend as contracts need more.
+ENTITY_COLLECTIONS = {
+    "table": "tables",
+    "topic": "topics",
+    "apiEndpoint": "apiEndpoints",
+    "dashboardDataModel": "dashboard/datamodels",
+    "container": "containers",
+}
+
 # OpenMetadata's DataContractRepository.areTypesCompatible treats types within
 # one family as interchangeable, so a VARCHAR -> STRING change is not a
 # violation there and must not be one here either.
@@ -110,6 +121,9 @@ def _parse_binding(path: Path, raw: Any) -> EntityBinding:
         msg = f"{path}: `entity` needs exactly one of {', '.join(_BINDING_KEYS)}, got {keys or 'none'}"
         raise ValueError(msg)
     kind = keys[0]
+    if raw["type"] not in ENTITY_COLLECTIONS:
+        msg = f"{path}: entity type {raw['type']!r} is not one of {', '.join(ENTITY_COLLECTIONS)}"
+        raise ValueError(msg)
     if kind != "fqn" and raw["type"] != "table":
         msg = f"{path}: a {kind} binding is always a table, got entity type {raw['type']!r}"
         raise ValueError(msg)
@@ -120,7 +134,7 @@ def _parse_binding(path: Path, raw: Any) -> EntityBinding:
 
 
 def load_contracts(contracts_dir: Path) -> list[DataContract]:
-    """Load every ``*.yaml`` contract in *contracts_dir*, sorted by path.
+    """Load every ``*.yaml`` / ``*.yml`` contract in *contracts_dir*, sorted by path.
 
     :param contracts_dir: directory holding one contract file per entity.
     :returns: the parsed contracts; empty when the directory does not exist.
@@ -131,7 +145,7 @@ def load_contracts(contracts_dir: Path) -> list[DataContract]:
     if not contracts_dir.is_dir():
         return []
     contracts = []
-    for path in sorted(contracts_dir.glob("*.yaml")):
+    for path in sorted(p for p in contracts_dir.iterdir() if p.suffix in {".yaml", ".yml"}):
         raw = yaml.safe_load(path.read_text())
         if not isinstance(raw, dict) or not isinstance(raw.get("contract"), dict):
             msg = f"{path}: a contract file needs top-level `entity` and `contract` mappings"

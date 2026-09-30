@@ -27,6 +27,7 @@ from rich.markup import escape
 
 from ol_dbt_cli.lib.data_contracts import (
     DEFAULT_CONTRACTS_DIR,
+    ENTITY_COLLECTIONS,
     DataContract,
     create_request,
     load_contracts,
@@ -45,14 +46,6 @@ contracts_app = App(
 
 HTTP_TIMEOUT_SECONDS = 60
 
-# OpenMetadata's collection path for each entity type a contract may name.
-_ENTITY_COLLECTIONS = {
-    "table": "tables",
-    "topic": "topics",
-    "apiEndpoint": "apiEndpoints",
-    "dashboardDataModel": "dashboard/datamodels",
-    "container": "containers",
-}
 _OWNER_COLLECTIONS = {"team": "teams", "user": "users"}
 _FAILED_STATUSES = {"Failed", "Aborted"}
 
@@ -65,6 +58,16 @@ def _type_mismatches(schema_validation: dict[str, Any] | None) -> list[str]:
     changed type still validates as Success. These commands fail on it instead.
     """
     return (schema_validation or {}).get("typeMismatchFields") or []
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects: urllib would forward the bearer token to the new host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
 
 
 class OpenMetadataClient:
@@ -84,14 +87,14 @@ class OpenMetadataClient:
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(url, data=data, method=method, headers=self._headers)  # noqa: S310
         try:
-            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:  # noqa: S310
+            with _OPENER.open(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
                 return json.loads(resp.read() or b"null")
         except urllib.error.HTTPError as exc:
             msg = f"{method} {path} -> {exc.code}: {exc.read().decode(errors='replace')[:500]}"
             raise RuntimeError(msg) from exc
 
     def entity_id(self, entity_type: str, fqn: str) -> str:
-        collection = _ENTITY_COLLECTIONS[entity_type]
+        collection = ENTITY_COLLECTIONS[entity_type]
         return self.request("GET", f"/v1/{collection}/name/{urllib.parse.quote(fqn, safe='')}")["id"]
 
     def owner_refs(self, owners: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -158,7 +161,7 @@ def sync(
         bool,
         Parameter(
             name=["--dry-run"],
-            help="Validate each contract against the live entity without saving it (POST /v1/dataContracts/validate).",
+            help="Only validate each contract against the live entity (POST /v1/dataContracts/validate); save nothing.",
         ),
     ] = False,
     names: Annotated[tuple[str, ...], _NAMES] = (),
@@ -170,8 +173,8 @@ def sync(
 
     PUT /v1/dataContracts is an upsert keyed on the contract name and entity, so
     re-running with unchanged files is a no-op apart from OpenMetadata's
-    updatedAt. OpenMetadata rejects a contract whose schema names a column the
-    entity lacks; --dry-run reports that without writing.
+    updatedAt. Each contract is validated against the live entity first and not
+    written if a column is missing or retyped; --dry-run stops after that step.
     """
     contracts, manifest = _load(dbt_dir_path, contracts_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()
@@ -185,14 +188,16 @@ def sync(
             client.owner_refs(owners) if owners else None,
         )
         name = escape(contract.body["name"])
+        # PUT accepts a retyped column (OpenMetadata counts it as informational),
+        # so every sync validates first and publishes only a clean contract.
+        result = client.request("POST", "/v1/dataContracts/validate", body)
+        if not result["valid"] or _type_mismatches(result.get("schemaValidation")):
+            failures += 1
+            console.print(f"[bold red]invalid[/] {name} -> {escape(fqn)}")
+            console.print_json(data=result)
+            continue
         if dry_run:
-            result = client.request("POST", "/v1/dataContracts/validate", body)
-            if result["valid"] and not _type_mismatches(result.get("schemaValidation")):
-                console.print(f"[green]valid[/]   {name} -> {escape(fqn)}")
-            else:
-                failures += 1
-                console.print(f"[bold red]invalid[/] {name} -> {escape(fqn)}")
-                console.print_json(data=result)
+            console.print(f"[green]valid[/]   {name} -> {escape(fqn)}")
             continue
         saved = client.request("PUT", "/v1/dataContracts", body)
         console.print(f"[green]synced[/]  {name} -> {escape(saved['fullyQualifiedName'])} (v{saved['version']})")

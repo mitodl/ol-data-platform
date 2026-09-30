@@ -41,7 +41,7 @@ The `entity` binding says which asset the contract is for:
 | --- | --- | --- |
 | `schema`, dbt bindings | `ol-dbt validate --only data_contract` (dbt PR CI) | every PR, before merge |
 | `schema` columns, all bindings | OpenMetadata, against its catalog | after ingestion, on `ol-dbt contracts validate` or OpenMetadata's daily run |
-| `schema` types, all bindings | `ol-dbt contracts validate` / `sync --dry-run` only | same as above |
+| `schema` types, all bindings | `ol-dbt contracts sync` / `validate` only | same as above |
 | `semantics` | OpenMetadata | same as above |
 | `sla` | nothing in OpenMetadata 2.0.2 (stored, never evaluated) | Dagster freshness checks enforce freshness |
 
