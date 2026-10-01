@@ -265,6 +265,36 @@ with combined_enrollments as (
     where edxorg_future_enrollment.user_email not like 'retired__user%'
 )
 
+, program_learner_report_certificates as (
+    -- Course certificates in the program learner report that combined_enrollments is missing,
+    -- limited to runs that already exist in MITx Online
+    select distinct
+        program_learner_report.courserunenrollment_created_on
+        , program_learner_report.courserunenrollment_enrollment_mode
+        , cast(program_learner_report.user_id as varchar) as user_id
+        , program_learner_report.courserun_readable_id
+        , mitx__users.user_edxorg_email as user_email
+        , program_learner_report.completed_course_on as courseruncertificate_created_on
+        , cast(program_learner_report.courserungrade_grade as double) as courserungrade_grade
+    from {{ ref('stg__edxorg__s3__program_learner_report') }} as program_learner_report
+    inner join mitxonline__course_runs
+        on program_learner_report.courserun_readable_id = mitxonline__course_runs.courserun_readable_id
+    inner join mitx__users
+        on program_learner_report.user_id = mitx__users.user_edxorg_id
+    where
+        program_learner_report.user_has_completed_course = true
+        and program_learner_report.completed_course_on is not null
+        and not exists (
+            select 1 from combined_enrollments
+            where
+                combined_enrollments.platform = '{{ var("edxorg") }}'
+                and combined_enrollments.courseruncertificate_created_on is not null
+                and combined_enrollments.user_id = cast(program_learner_report.user_id as varchar)
+                and {{ format_course_id('combined_enrollments.courserun_readable_id', false) }}
+                    = program_learner_report.courserun_readable_id
+        )
+)
+
 , edxorg_enrollment as (
     -- Certificate-bearing enrollments: the course already ran, so future-run overrides never
     -- apply here (courseruncertificate_created_on is not null below).
@@ -323,6 +353,20 @@ with combined_enrollments as (
         , null as courserungrade_grade
         , null as courserungrade_is_passing
     from future_run_user_info_combo_enrollments
+
+    union all
+
+    select
+        courserunenrollment_created_on
+        , courserunenrollment_enrollment_mode
+        , user_id
+        , courserun_readable_id
+        , null as course_readable_id
+        , user_email
+        , courseruncertificate_created_on
+        , courserungrade_grade
+        , true as courserungrade_is_passing
+    from program_learner_report_certificates
 )
 
 select
