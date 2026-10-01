@@ -68,6 +68,25 @@ youtube_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# Sloan Executive Education, ahead of the lakehouse's non_airbyte_staging_daily
+# at 06:00. RUNNING by default in production, where the delivery location's
+# sloan_course_metadata extract has run daily against the same API since before
+# this load existed. The API has no QA instance.
+see_ingest_schedule = dg.ScheduleDefinition(
+    name="see_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__see__api__courses"],
+        ["ol_warehouse_raw_data", "raw__see__api__course_offerings"],
+    ),
+    cron_schedule="25 4 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 keycloak_ingest_schedule = dg.ScheduleDefinition(
     name="keycloak_ingest_daily_schedule",
     # Selected by group rather than by key so adding a table to KEYCLOAK_SPEC
@@ -190,6 +209,7 @@ defs = dg.Definitions(
         mit_edx_programs_ingest_schedule,
         podcast_rss_ingest_schedule,
         youtube_ingest_schedule,
+        see_ingest_schedule,
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         posthog_events_ingest_schedule,

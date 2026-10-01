@@ -29,6 +29,9 @@ deployments:
 - xpro
 - mit_climate
 - mitpe
+  # Sloan Executive Education, read from the Sloan unified-portal API. Named
+  # for MIT Learn's etl_source and offeror code.
+- see
   # Infrastructure we run rather than a learning platform, but the definition
   # above is "a thing we run", and its user/group/role tables are identity
   # facts the warehouse models against. Loaded by ol_dlt.sources.keycloak.

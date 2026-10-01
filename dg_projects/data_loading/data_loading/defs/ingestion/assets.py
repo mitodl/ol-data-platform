@@ -29,6 +29,7 @@ from ol_dlt.sources import (
     oll,
     podcast_rss,
     posthog_events,
+    see,
     youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
@@ -119,6 +120,9 @@ mitxonline_app_assets = (
     )
     if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
     else None
+)
+see_assets = build_ingest_assets(
+    name="see_ingest", source=see.build_source(), pipeline=see.see_pipeline
 )
 youtube_assets = build_ingest_assets(
     name="youtube_ingest",
@@ -338,6 +342,7 @@ defs = Definitions(
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
             youtube_assets,
+            see_assets,
             posthog_events_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,

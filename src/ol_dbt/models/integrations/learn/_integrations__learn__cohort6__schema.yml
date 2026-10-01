@@ -1,0 +1,140 @@
+---
+# MIT Learn integration layer — Cohort 6, ETL surface no other cohort covered.
+# Naming: integrations__learn__<source>_<entity>
+# See: docs/learn_marts_contract.md for the full schema contract.
+
+version: 2
+
+models:
+- name: integrations__learn__see_courses
+  description: >
+    Sloan Executive Education courses for MIT Learn, one row per course MIT Learn's
+    legacy Sloan ETL (learning_resources/etl/sloan.py) would load: a course with a
+    URL and at least one offering. Runs are in integrations__learn__see_runs.
+    Sourced from the Sloan unified-portal API via the see dlt pipeline.
+  config:
+    meta:
+      qa_branches:
+      - mitlearn/app_postgres
+  columns:
+  - name: readable_id
+    description: str, Sloan's Salesforce course id. Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: str, course title.
+    tests: [not_null]
+  - name: last_modified
+    description: str, ISO 8601 time Sloan last modified the course.
+    tests: [not_null]
+  - name: description
+    description: str, course description (sanitized at delivery).
+  - name: url
+    description: str, absolute URL of the course page on executive.mit.edu.
+    tests: [not_null]
+  - name: image_url
+    description: str, absolute URL of the course image, null if none.
+  - name: image_alt
+    description: str, image alt text and description; the course title, as MIT Learn
+      set it.
+  - name: topics
+    description: array(str), MIT Learn topic names the course's Sloan topic resolves
+      to through int__learn__offeror_topic_lookup; null when none resolve.
+  - name: delivery
+    description: array(str), distinct MIT Learn delivery codes of the course's runs.
+  - name: pace
+    description: array(str), distinct pace codes of the course's runs.
+  - name: format
+    description: array(str), distinct format codes of the course's runs.
+  - name: continuing_ed_credits
+    description: str, decimal continuing-education credits of the course's first offering
+      in API order, as MIT Learn took them.
+  - name: certification
+    description: bool, always true.
+  - name: certification_type
+    description: str, always professional.
+  - name: professional
+    description: bool, always true.
+  - name: published
+    description: bool, always true; an unpublished course is absent.
+  - name: etl_source
+    description: str, always see.
+    tests: [not_null]
+  - name: platform
+    description: str, always see.
+  - name: offered_by
+    description: str, MIT Learn offeror code, always see.
+  - name: resource_type
+    description: str, always course.
+
+- name: integrations__learn__see_runs
+  description: >
+    Runs of the courses in integrations__learn__see_courses, one row per Sloan course
+    offering, with the fields MIT Learn's legacy Sloan ETL set on a run
+    (transform_run). Dates are ISO 8601 UTC instants of midnight US Eastern.
+  config:
+    meta:
+      qa_branches:
+      - mitlearn/app_postgres
+  columns:
+  - name: readable_id
+    description: str, the run's course.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('integrations__learn__see_courses')
+          field: readable_id
+  - name: run_id
+    description: str, the offering's title, MIT Learn's run id.
+    tests: [not_null]
+  - name: title
+    description: str, the course title.
+  - name: url
+    description: str, the course URL.
+  - name: start_date
+    description: str, ISO 8601 start, null if none.
+  - name: end_date
+    description: str, ISO 8601 end, null if none.
+  - name: delivery
+    description: array(str), the run's MIT Learn delivery code, as transform_run lists
+      it.
+  - name: availability
+    description: str, anytime for an online on-demand offering, else dated.
+  - name: pace
+    description: array(str), self_paced for an online on-demand offering, else instructor_paced,
+      as transform_run lists it.
+  - name: format
+    description: array(str), synchronous and/or asynchronous, synchronous first as
+      MIT Learn's parse_format lists them.
+  - name: location
+    description: str, the offering's location, empty for online offerings.
+  - name: price
+    description: decimal(12,2), the offering's price.
+  - name: currency
+    description: str, ISO 4217 code of the price, USD when Sloan gives none or a code
+      pycountry doesn't know (iso_4217_currencies).
+  - name: instructors
+    description: array(str), faculty full names.
+  - name: duration
+    description: str, free-text duration as Sloan gives it.
+  - name: min_weeks
+    description: int, lower bound of the duration in weeks, null if unparseable.
+  - name: max_weeks
+    description: int, upper bound of the duration in weeks, null if unparseable.
+  - name: time_commitment
+    description: str, free-text time commitment as Sloan gives it.
+  - name: min_weekly_hours
+    description: int, first number of the time commitment, null if unparseable.
+  - name: max_weekly_hours
+    description: int, second number of the time commitment, else the first.
+  - name: status
+    description: str, always Current, as transform_run set it. MIT Learn's load_run
+      reads it only to resolve prices and does not store it.
+  - name: published
+    description: bool, always true.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - readable_id
+        - run_id

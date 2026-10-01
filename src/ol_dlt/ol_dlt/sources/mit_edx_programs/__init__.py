@@ -46,14 +46,13 @@ from typing import Any
 import dlt
 from dlt.sources.helpers import requests
 
-from ol_dlt import config, vault
+from ol_dlt import config, oauth
 
 logger = logging.getLogger(__name__)
 
 # The Dagster deployment carries no EDX_API_* environment, so until this was
 # read from Vault every deployed run failed on missing credentials and
 # raw__edxorg__discovery__api__programs was never created.
-EDX_OAUTH_VAULT_MOUNT = "secret-data"
 EDX_OAUTH_VAULT_PATH = "pipelines/edx/edxorg/edx-oauth-client"
 EDX_PROGRAMS_API_URL = "https://discovery.edx.org/api/v1/programs/"
 # Catalog 10 is edX's MITx catalog.
@@ -315,49 +314,6 @@ def mitx_course_run_records(
     ]
 
 
-def _resolve_credentials(
-    client_id: str | None,
-    client_secret: str | None,
-    access_token_url: str | None,
-) -> dict[str, str]:
-    """Return the OAuth client for the active profile.
-
-    Deployed profiles take the client from Vault, as ``ol_dlt.database`` does for
-    its database credentials. Explicit arguments and the environment apply only
-    to the other profiles.
-    """
-    if config.active_profile() in config.ICEBERG_PROFILES:
-        oauth_client = vault.read_kv_secret(EDX_OAUTH_VAULT_MOUNT, EDX_OAUTH_VAULT_PATH)
-        return {
-            "client_id": oauth_client["id"],
-            "client_secret": oauth_client["secret"],
-            "access_token_url": oauth_client["token_url"],
-        }
-    return config.require_secrets(
-        client_id=config.resolve_secret(client_id, "EDX_API_CLIENT_ID"),
-        client_secret=config.resolve_secret(client_secret, "EDX_API_CLIENT_SECRET"),
-        access_token_url=config.resolve_secret(
-            access_token_url, "EDX_API_ACCESS_TOKEN_URL"
-        ),
-    )
-
-
-def _jwt_headers(creds: dict[str, str]) -> dict[str, str]:
-    """Fetch a client-credentials token and return the edX JWT auth header."""
-    token_resp = requests.post(
-        creds["access_token_url"],
-        data={
-            "grant_type": "client_credentials",
-            "client_id": creds["client_id"],
-            "client_secret": creds["client_secret"],
-            "token_type": "jwt",
-        },
-        timeout=30,
-    )
-    token_resp.raise_for_status()
-    return {"Authorization": f"JWT {token_resp.json()['access_token']}"}
-
-
 def _paginate(url: str, headers: dict[str, str]) -> Iterator[dict[str, Any]]:
     """Yield every result of a paginated discovery API listing."""
     next_url: str | None = url
@@ -396,8 +352,14 @@ def mit_edx_programs_source(
     """
 
     def _extraction(url: str) -> Iterator[dict[str, Any]]:
-        headers = _jwt_headers(
-            _resolve_credentials(client_id, client_secret, access_token_url)
+        headers = oauth.jwt_auth_headers(
+            oauth.resolve_client_credentials(
+                vault_path=EDX_OAUTH_VAULT_PATH,
+                env_prefix="EDX_API",
+                client_id=client_id,
+                client_secret=client_secret,
+                access_token_url=access_token_url,
+            )
         )
         # One timestamp per extraction: staging finds what the API currently
         # lists by the latest retrieved_at.

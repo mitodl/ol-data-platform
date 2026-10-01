@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from dlt.extract.exceptions import ResourceExtractionError
 
-from ol_dlt import config
+from ol_dlt import config, vault
 from ol_dlt.sources import mit_edx_programs
 from tests.conftest import FakeResponse
 
@@ -330,7 +330,7 @@ def test_deployed_profiles_read_the_oauth_client_from_vault(
             "url": "https://api.edx.org",
         }
 
-    monkeypatch.setattr(mit_edx_programs.vault, "read_kv_secret", _read_kv_secret)
+    monkeypatch.setattr(vault, "read_kv_secret", _read_kv_secret)
     posted: dict[str, Any] = {}
     fetched: list[str] = []
 

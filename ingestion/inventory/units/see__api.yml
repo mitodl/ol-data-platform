@@ -1,0 +1,24 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+schema_version: 1
+deployment: see
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__see__api__
+dlt:
+  source_module: ol_dlt.sources.see
+  write_disposition: replace
+tables:
+- name: raw__see__api__courses
+  raw_table: raw__see__api__courses
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__see__api__course_offerings
+  raw_table: raw__see__api__course_offerings
+  sync_mode: full_refresh_overwrite
+  modeled: true

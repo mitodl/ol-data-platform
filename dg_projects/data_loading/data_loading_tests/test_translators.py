@@ -40,6 +40,7 @@ def test_all_simple_sources_have_no_deps() -> None:
         assets.mit_climate_assets,
         assets.mit_edx_programs_assets,
         assets.podcast_rss_assets,
+        assets.see_assets,
     ):
         for spec in assets_def.specs:
             assert list(spec.deps) == [], spec.key

@@ -626,6 +626,8 @@
         'raw__podcast__rss__channels': '_dlt_load_id',
         'raw__podcast__rss__episodes': '_dlt_load_id',
         'raw__posthog__learn__s3__events': '_dlt_load_id',
+        'raw__see__api__course_offerings': '_dlt_load_id',
+        'raw__see__api__courses': '_dlt_load_id',
         'raw__thirdparty__mailgun__destination_v2__domains': '_airbyte_extracted_at',
         'raw__thirdparty__mailgun__destination_v2__events': '_airbyte_extracted_at',
         'raw__thirdparty__salesforce___destination_v2__Account': '_airbyte_extracted_at',
