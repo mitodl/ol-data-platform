@@ -1,6 +1,7 @@
 # mypy: disable-error-code="call-overload,union-attr,misc"
 from collections.abc import Generator
 from contextlib import contextmanager
+from http import HTTPStatus
 from typing import Any, Self
 from urllib.parse import parse_qs, urlparse
 
@@ -123,6 +124,56 @@ class OpenEdxApiClient(OAuthApiClient):
     ) -> dict[str, str]:
         request_url = f"{self.studio_url}/api/courses/v0/export/{course_id}/"
         return self.fetch_with_auth(request_url, extra_params={"task_id": task_id})  # type: ignore[return-value]
+
+    def course_content_versions_available(self) -> bool:
+        """Whether this Studio serves the versions endpoint, asked without side effects.
+
+        Must be answered before any POST to it. ol-openedx-course-export before
+        0.4.0 routes every unmatched path under /api/courses/v0/export/ to the
+        export view, so a POST of course ids to the versions path there queues
+        an S3 export of each of them. A GET is safe on both: the versions view
+        only allows POST, so it answers 405, while the old export view answers a
+        GET without a course id with a 404 before doing anything.
+
+        Any other status raises, so a bad token or a struggling Studio is
+        reported as itself rather than as a missing plugin. That includes a
+        success: neither view answers a GET with one, so something else is
+        serving the path and either answer would be a guess. Only a 405 ever
+        makes this true.
+        """
+        response = self.http_client.get(
+            f"{self.studio_url}/api/courses/v0/export/versions/",
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+            timeout=60,
+        )
+        if response.status_code == HTTPStatus.METHOD_NOT_ALLOWED:
+            return True
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return False
+        response.raise_for_status()
+        msg = (
+            f"GET {response.request.url} answered {response.status_code}; the "
+            "versions endpoint answers 405 and the pre-0.4.0 export view 404"
+        )
+        raise RuntimeError(msg)
+
+    def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
+        """Report what an export of each course would reflect, without exporting.
+
+        Served by the ol_openedx_course_export plugin, at most 200 course ids a
+        request. Returns ``{"versions": {course_id: facts}, "missing": [...]}``,
+        where the facts are the published version, the course's uploaded files
+        and its VAL transcripts -- the last two being what an export carries but
+        a publish never moves.
+        """
+        response = self.http_client.post(
+            f"{self.studio_url}/api/courses/v0/export/versions/",
+            json={"courses": course_ids},
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
 
     def get_course_structure_document(self, course_id: str):
         """Retrieve the course structure for an active course as JSON.
