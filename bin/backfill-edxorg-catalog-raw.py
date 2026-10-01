@@ -57,17 +57,20 @@ def _deduplicated_history(
     catalog: GlueCatalog, database: str, table: str, target_columns: list[str]
 ) -> pa.Table:
     source = catalog.load_table(f"{database}.raw__edxorg__s3__{table}")
-    source_columns = [field.name for field in source.schema().fields]
+    source_columns = {field.name for field in source.schema().fields}
+    data_columns = [c for c in target_columns if not c.startswith("_dlt_")]
+    carried = [c for c in data_columns if c in source_columns]
     # Columns the dlt table has that Airbyte never landed (e.g. the #2721
-    # program fields) come through as nulls.
-    carried = [c for c in target_columns if c in source_columns]
+    # program fields, or retrieved_at on an Airbyte table that predates it) come
+    # through as nulls; _not_yet_loaded reads retrieved_at either way.
+    missing = [c for c in data_columns if c not in source_columns]
     history = source.scan(selected_fields=(*carried, *_AIRBYTE_COLUMNS)).to_arrow()
     con = duckdb.connect()
     con.register("history", history)
     return con.sql(
         f"""
         select
-            {", ".join(carried)},
+            {", ".join([*carried, *(f"null::varchar as {c}" for c in missing)])},
             cast(round(_airbyte_extracted_at / 1000.0, 3) as varchar) as _dlt_load_id
         from history
         qualify row_number() over (
