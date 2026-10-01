@@ -2,10 +2,16 @@
 
 This module provides the building blocks for the two nightly maintenance assets:
 
-- ``iceberg_dbt_layer_maintenance``: OPTIMIZE + ANALYZE (Trino) + EXPIRE + ORPHAN
-  removal (pyiceberg) for all dbt-managed tables and non-dbt singletons.
-- ``iceberg_raw_layer_maintenance``: EXPIRE + ORPHAN removal (pyiceberg) for the
-  1,300+ Airbyte-ingested tables in ``ol_warehouse_production_raw``.
+- ``iceberg_dbt_layer_maintenance``: OPTIMIZE + ANALYZE (Trino) + EXPIRE
+  (pyiceberg) for all dbt-managed tables and non-dbt singletons.
+- ``iceberg_raw_layer_maintenance``: EXPIRE (pyiceberg) for the 1,300+
+  Airbyte-ingested tables in ``ol_warehouse_production_raw``.
+
+Orphan-file cleanup is not done here. pyiceberg has no per-table orphan removal,
+and orphans are instead handled by ``bin/lake-orphan-sweep.py``, which deletes
+S3 prefixes that no Glue table references (e.g. data left behind by dropped
+tables).
+It is a manual CLI today; scheduling it is planned.
 
 Three sources of truth are used deliberately — each layer of the lakehouse has
 a natural authoritative registry, and we use each one directly:
@@ -58,7 +64,6 @@ class TableMaintenanceConfig:
     asset_key: list[str]  # Dagster AssetKey path components
     enabled: bool = True
     snapshot_retention_days: int = 7
-    orphan_retention_days: int = 7
     # Run OPTIMIZE after this many materializations since last maintenance
     optimize_after_every_n_runs: int = 1
     # Run ANALYZE after this many materializations since last maintenance
@@ -74,7 +79,6 @@ class RawLayerGroupConfig:
     """
 
     snapshot_retention_days: int = 7
-    orphan_retention_days: int = 7
 
 
 @dataclass
@@ -211,7 +215,6 @@ def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]
             # code location.
             asset_key=["reporting", "student_risk_probability"],
             snapshot_retention_days=7,
-            orphan_retention_days=7,
             optimize_after_every_n_runs=1,
             analyze_after_every_n_runs=7,
         ),
@@ -225,7 +228,6 @@ def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]
             # expiration, unlike a table written once per run.
             asset_key=["intermediate", "feedback_summaries"],
             snapshot_retention_days=7,
-            orphan_retention_days=7,
             optimize_after_every_n_runs=1,
             analyze_after_every_n_runs=7,
         ),
@@ -238,7 +240,6 @@ def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]
             # feedback_summaries -- one snapshot per chunk per run.
             asset_key=["intermediate", "feedback_embeddings"],
             snapshot_retention_days=7,
-            orphan_retention_days=7,
             optimize_after_every_n_runs=1,
             analyze_after_every_n_runs=7,
         ),
@@ -350,60 +351,6 @@ def expire_snapshots(
     }
 
 
-def remove_orphan_files(
-    catalog: GlueCatalog,
-    database: str,
-    table_name: str,
-    retention_days: int,  # noqa: ARG001 (reserved for future implementation)
-    *,
-    dry_run: bool = False,  # noqa: ARG001 (reserved for future implementation)
-) -> dict[str, Any]:
-    """Remove orphan S3 files for a table — files not referenced by any snapshot.
-
-    pyiceberg 0.11.x does not yet expose a built-in ``remove_orphan_files()``
-    API on ``Table``.  This function is implemented as a graceful no-op stub that
-    logs a notice and returns ``{"skipped": True, "reason": "not_implemented"}``.
-
-    When pyiceberg adds orphan-file removal (tracked upstream), replace this
-    stub body with:
-        table.remove_orphan_files().older_than(cutoff_dt).execute()
-
-    Callers should handle ``skipped=True`` without treating it as an error.
-    """
-    try:
-        # Validate the table exists and is loadable before returning.
-        catalog.load_table(f"{database}.{table_name}")
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "Could not load %s.%s for orphan removal: %s", database, table_name, exc
-        )
-        return {"skipped": True, "error": str(exc)}
-
-    log.debug(
-        "remove_orphan_files: skipped for %s.%s — not yet implemented in pyiceberg %s",
-        database,
-        table_name,
-        _pyiceberg_version(),
-    )
-    return {
-        "skipped": True,
-        "reason": "not_implemented",
-        "note": (
-            "pyiceberg does not yet expose a remove_orphan_files() API on Table. "
-            "See https://github.com/apache/iceberg-python for upstream status."
-        ),
-    }
-
-
-def _pyiceberg_version() -> str:
-    try:
-        import pyiceberg  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
-        return "unknown"
-    else:
-        return pyiceberg.__version__
-
-
 # ── Manifest Parsing ──────────────────────────────────────────────────────────
 
 
@@ -489,10 +436,6 @@ def load_maintenance_configs_from_manifest(
                 snapshot_retention_days=iceberg_cfg.get(
                     "snapshot_retention_days",
                     _d["snapshot_retention_days"].default,
-                ),
-                orphan_retention_days=iceberg_cfg.get(
-                    "orphan_retention_days",
-                    _d["orphan_retention_days"].default,
                 ),
                 optimize_after_every_n_runs=iceberg_cfg.get(
                     "optimize_after_every_n_runs",

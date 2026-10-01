@@ -15,7 +15,6 @@ Two assets run on staggered nightly schedules:
     - ANALYZE   (Trino)   — refresh query statistics; same threshold logic with
                             analyze_after_every_n_runs
     - EXPIRE SNAPSHOTS (pyiceberg) — always runs; uses snapshot_retention_days
-    - REMOVE ORPHAN FILES (pyiceberg) — always runs; uses orphan_retention_days
 
     Config comes from ``dbt_project.yml`` ``+meta.iceberg_maintenance`` blocks,
     compiled into each node's ``config.meta.iceberg_maintenance`` in the manifest.
@@ -27,9 +26,9 @@ Two assets run on staggered nightly schedules:
     Dagster event log because the OLAirbyteTranslator slugifies connection names
     in a way that doesn't map cleanly back to Glue table names.
 
-    Runs EXPIRE SNAPSHOTS and REMOVE ORPHAN FILES only — OPTIMIZE and ANALYZE
-    are not needed for raw tables since they are not Trino analytics targets and
-    Airbyte writes complete files per sync (no small-file accumulation).
+    Runs EXPIRE SNAPSHOTS only — OPTIMIZE and ANALYZE are not needed for raw
+    tables since they are not Trino analytics targets and Airbyte writes
+    complete files per sync (no small-file accumulation).
 
     Tables are processed in a ThreadPoolExecutor(max_workers=8) to handle the
     volume without overwhelming the Glue API rate limits.
@@ -60,7 +59,6 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     non_dbt_singleton_tables,
     partition_by_catalog_presence,
     raw_config_for_table,
-    remove_orphan_files,
     warehouse_env_for,
 )
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
@@ -157,7 +155,6 @@ def _run_table_maintenance(
         "optimized": False,
         "analyzed": False,
         "snapshots_expired": 0,
-        "orphans_removed": 0,
         "errors": [],
     }
 
@@ -187,19 +184,6 @@ def _run_table_maintenance(
             summary["snapshots_expired"] = exp.get("eligible_count", 0)
     except Exception as exc:  # noqa: BLE001
         summary["errors"].append(f"expire_snapshots: {exc}")
-
-    # REMOVE ORPHAN FILES — always, uses its own time-based filter
-    try:
-        orp = remove_orphan_files(
-            catalog=catalog,
-            database=cfg.schema_name,
-            table_name=cfg.model_name,
-            retention_days=cfg.orphan_retention_days,
-        )
-        if not orp.get("skipped"):
-            summary["orphans_removed"] = orp.get("deleted-files", 0)
-    except Exception as exc:  # noqa: BLE001
-        summary["errors"].append(f"remove_orphan_files: {exc}")
 
     # OPTIMIZE — only if enough materializations have accumulated
     if effective_count >= cfg.optimize_after_every_n_runs:
@@ -316,7 +300,6 @@ def iceberg_dbt_layer_maintenance(
     tables_optimized = 0
     tables_analyzed = 0
     snapshots_expired = 0
-    orphans_removed = 0
     failures: list[str] = []
     # Counted separately from `failures`, which holds one entry per failed
     # *operation* -- OPTIMIZE and ANALYZE and EXPIRE can each fail for the same
@@ -340,7 +323,6 @@ def iceberg_dbt_layer_maintenance(
             if result["analyzed"]:
                 tables_analyzed += 1
             snapshots_expired += result["snapshots_expired"]
-            orphans_removed += result["orphans_removed"]
             if result["errors"]:
                 failed_tables.add(table)
             failures.extend(f"{table}: {err}" for err in result["errors"])
@@ -397,7 +379,6 @@ def iceberg_dbt_layer_maintenance(
             "tables_optimized": MetadataValue.int(tables_optimized),
             "tables_analyzed": MetadataValue.int(tables_analyzed),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
-            "orphans_removed": MetadataValue.int(orphans_removed),
             "tables_unbacked": MetadataValue.int(len(unbacked)),
             "unbacked_details": MetadataValue.json(unbacked[:20]),
             "failed_tables": MetadataValue.int(len(failed_tables)),
@@ -412,14 +393,14 @@ def iceberg_dbt_layer_maintenance(
     group_name="lakehouse_maintenance",
     description=(
         "Nightly Iceberg maintenance for all raw/Airbyte-ingested tables in "
-        "ol_warehouse_production_raw (~1,300 tables).  Runs EXPIRE SNAPSHOTS and "
-        "REMOVE ORPHAN FILES only — OPTIMIZE and ANALYZE are not needed for raw "
-        "tables since they are not Trino analytics targets.  Tables are processed "
+        "ol_warehouse_production_raw (~1,300 tables).  Runs EXPIRE SNAPSHOTS only "
+        "— OPTIMIZE and ANALYZE are not needed for raw tables since they are not "
+        "Trino analytics targets.  Tables are processed "
         "in parallel (max_workers=8) and sorted worst-offender-first."
     ),
 )
 def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None]:
-    """Run EXPIRE SNAPSHOTS and REMOVE ORPHAN FILES for all raw layer Iceberg tables."""
+    """Run EXPIRE SNAPSHOTS for all raw layer Iceberg tables."""
     context.log.info("Scanning Glue catalog for raw layer Iceberg tables...")
     tables = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
     context.log.info(
@@ -430,7 +411,6 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
 
     tables_cleaned = 0
     snapshots_expired = 0
-    orphans_removed = 0
     failures: list[str] = []
 
     # A GlueCatalog (and its underlying S3 FileIO / boto3 client) must not be
@@ -461,14 +441,6 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
                 retention_days=cfg.snapshot_retention_days,
             )
             result["expire"] = exp
-
-            orp = remove_orphan_files(
-                catalog=catalog,
-                database=table_info.database,
-                table_name=table_info.table_name,
-                retention_days=cfg.orphan_retention_days,
-            )
-            result["orphan"] = orp
         except Exception as exc:  # noqa: BLE001
             result["ok"] = False
             result["errors"].append(str(exc))
@@ -483,9 +455,7 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
                 if res["ok"]:
                     tables_cleaned += 1
                     exp = res.get("expire", {})
-                    orp = res.get("orphan", {})
                     snapshots_expired += exp.get("eligible_count", 0)
-                    orphans_removed += orp.get("deleted-files", 0)
                 else:
                     failures.extend(
                         f"{table_info.table_name}: {err}" for err in res["errors"]
@@ -527,7 +497,6 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
             "tables_scanned": MetadataValue.int(len(tables)),
             "tables_cleaned": MetadataValue.int(tables_cleaned),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
-            "orphans_removed": MetadataValue.int(orphans_removed),
             "failure_count": MetadataValue.int(len(failures)),
             "failure_details": MetadataValue.json(failures[:20]),
         },
