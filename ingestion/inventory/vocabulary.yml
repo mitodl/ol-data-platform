@@ -32,6 +32,9 @@ deployments:
   # Sloan Executive Education, read from the Sloan unified-portal API. Named
   # for MIT Learn's etl_source and offeror code.
 - see
+  # The MIT Open Learning website (openlearning.mit.edu), a Drupal site whose
+  # JSON:API serves the events MIT Learn lists.
+- openlearning
   # Infrastructure we run rather than a learning platform, but the definition
   # above is "a thing we run", and its user/group/role tables are identity
   # facts the warehouse models against. Loaded by ol_dlt.sources.keycloak.
@@ -61,6 +64,8 @@ deployments:
 - mailgun
 - salesforce
 - zendesk
+  # MIT Open Learning's Medium publication, read from its RSS feed.
+- medium
   # Vendor SaaS that reaches us as a file drop rather than an API: PostHog
   # batch-exports every raw MIT Learn client event to the landing zone hourly,
   # so its unit is (posthog, s3) and there is nothing to call.

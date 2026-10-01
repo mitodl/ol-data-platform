@@ -96,6 +96,10 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__posthog__learn__s3__events",
         "ol_warehouse_raw_data/raw__see__api__courses",
         "ol_warehouse_raw_data/raw__see__api__course_offerings",
+        "ol_warehouse_raw_data/raw__mitpe__api__news",
+        "ol_warehouse_raw_data/raw__mitpe__api__events",
+        "ol_warehouse_raw_data/raw__openlearning__api__events",
+        "ol_warehouse_raw_data/raw__medium__rss__posts",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
     ):
@@ -110,6 +114,7 @@ def test_schedules_and_sensors_load() -> None:
         "mit_edx_programs_ingest_daily_schedule",
         "podcast_rss_ingest_daily_schedule",
         "see_ingest_daily_schedule",
+        "news_events_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
     }
