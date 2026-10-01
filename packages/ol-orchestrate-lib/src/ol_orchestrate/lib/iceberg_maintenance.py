@@ -9,7 +9,8 @@ This module provides the building blocks for the two nightly maintenance assets:
 
 Orphan-file cleanup is not done here. pyiceberg has no per-table orphan removal,
 and orphans are instead handled by ``bin/lake-orphan-sweep.py``, which deletes
-S3 prefixes no Glue table references (e.g. data left behind by dropped tables).
+S3 prefixes that no Glue table references (e.g. data left behind by dropped
+tables).
 It is a manual CLI today; scheduling it is planned.
 
 Three sources of truth are used deliberately — each layer of the lakehouse has
