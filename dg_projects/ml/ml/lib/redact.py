@@ -25,10 +25,11 @@ REDACTED_ENTITIES = {
     "STREET_ADDRESS",
 }
 
-# US_BANK_NUMBER is any 8-17 digit run (score 0.05), which in feedback matched ticket
-# IDs, meeting IDs and decimals. Presidio raises it to 0.4 only next to a context word
-# like "account" or "bank", so mask it only then.
-MIN_SCORE_BY_ENTITY = {"US_BANK_NUMBER": 0.4}
+# US_BANK_NUMBER (any 8-17 digit run) and US_SSN's weak patterns (any 9 digits) score
+# 0.05; in feedback they matched ticket IDs, tracking params, ZIP+4 codes and decimals.
+# Presidio raises them to 0.4 only next to a context word ("account", "ssn"), and a
+# formatted SSN like 234-56-7890 scores 0.5, so mask only at 0.4 and up.
+MIN_SCORE_BY_ENTITY = {"US_BANK_NUMBER": 0.4, "US_SSN": 0.4}
 
 _US_STATES = (
     "AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|"
@@ -72,15 +73,16 @@ _STREET_ADDRESS_RECOGNIZER = PatternRecognizer(
 # The only types that must be redacted even when fully contained in a URL/date span
 # (e.g. a reset link's ?email=... query param) -- real PII someone could paste into
 # feedback text. Everything else stays exempted: a NER or pattern match inside a URL
-# is usually a false positive on a path segment, UUID, or course ID. Financial types
-# are listed because spaCy tags a bare account number as DATE_TIME, and they already
-# need a checksum or a context word to match.
+# is usually a false positive on a path segment, UUID, or course ID. Financial and
+# SSN types are listed because spaCy tags a bare account number as DATE_TIME, and
+# they already need a checksum, a format or a context word to match.
 ALWAYS_REDACT_EVEN_IN_URL = {
     "EMAIL_ADDRESS",
     "PHONE_NUMBER",
     "CREDIT_CARD",
     "IBAN_CODE",
     "US_BANK_NUMBER",
+    "US_SSN",
 }
 
 # Presidio's built-in EmailRecognizer's local-part character class includes URL

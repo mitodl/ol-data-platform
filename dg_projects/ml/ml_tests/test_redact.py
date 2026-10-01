@@ -288,6 +288,37 @@ def test_redact_text_masks_a_bank_number_only_next_to_a_context_word(
     )
 
 
+def test_redact_text_masks_a_formatted_ssn_even_inside_a_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A formatted SSN (score 0.5) is masked inside a URL; a bare 9-digit order ID
+    (weak SSN pattern, score 0.05) in the same kind of span is not.
+    """
+    text = (
+        "See https://example.test/?ssn=234-56-7890 and https://example.test/r/512345678"
+    )
+
+    def span(word: str) -> tuple[int, int]:
+        start = text.index(word)
+        return start, start + len(word)
+
+    class _SsnInUrlAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("URL", *span("https://example.test/?ssn=234-56-7890")),
+                _AnalyzerResult("US_SSN", *span("234-56-7890"), score=0.5),
+                _AnalyzerResult("URL", *span("https://example.test/r/512345678")),
+                _AnalyzerResult("US_SSN", *span("512345678"), score=0.05),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _SsnInUrlAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert redact._redact_text(text) == (
+        "See https://example.test/?ssn=<US_SSN> and https://example.test/r/512345678"
+    )
+
+
 def test_filter_unredacted_drops_already_redacted_rows() -> None:
     """Only rows missing from the feedback_redacted output should get re-run."""
     source_df = pl.DataFrame(
