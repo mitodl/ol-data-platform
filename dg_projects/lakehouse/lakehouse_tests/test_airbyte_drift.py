@@ -170,11 +170,11 @@ class TestOverlappingPages:
         # production returned on 2026-10-01, at 39 rows and 29 distinct ids.
         return [connection(), connection()]
 
-    def test_an_overlapping_listing_is_read_again(self) -> None:
-        clean = [connection(), connection(connectionId="conn-2", name="Other")]
-        client = FakeClient(
-            clean, [SOURCE], earlier_connection_listings=[self.overlapped()]
-        )
+    def clean(self) -> list[dict[str, Any]]:
+        return [connection(), connection(connectionId="conn-2", name="Other")]
+
+    def test_a_stable_listing_is_read_twice(self) -> None:
+        client = FakeClient(self.clean(), [SOURCE])
         fetched = _fetch_workspace(FakeWorkspace(client))
 
         assert client.connection_listings == 2
@@ -182,6 +182,23 @@ class TestOverlappingPages:
             "conn-1",
             "conn-2",
         ]
+
+    def test_an_overlapping_listing_is_read_again(self) -> None:
+        client = FakeClient(
+            self.clean(), [SOURCE], earlier_connection_listings=[self.overlapped()]
+        )
+        _fetch_workspace(FakeWorkspace(client))
+        assert client.connection_listings == 3
+
+    def test_a_skip_without_a_duplicate_is_caught_by_the_next_read(self) -> None:
+        # A deletion between page fetches shifts the rest back a row, so one
+        # record is skipped and nothing repeats. Only a second read shows it.
+        skipped = [connection()]
+        client = FakeClient(
+            self.clean(), [SOURCE], earlier_connection_listings=[skipped]
+        )
+        fetched = _fetch_workspace(FakeWorkspace(client))
+        assert len(fetched["connections"]) == 2
 
     def test_a_listing_that_keeps_overlapping_is_refused(self) -> None:
         # Reporting it would name every skipped connection as deleted, which is
@@ -191,9 +208,16 @@ class TestOverlappingPages:
             [SOURCE],
             earlier_connection_listings=[self.overlapped()] * LISTING_ATTEMPTS,
         )
-        with pytest.raises(Failure, match="overlapping pages"):
+        with pytest.raises(Failure, match="same complete set twice"):
             _fetch_workspace(FakeWorkspace(client))
         assert client.connection_listings == LISTING_ATTEMPTS
+
+    def test_an_overlapping_sources_listing_is_refused_too(self) -> None:
+        # A skipped source does not read as a deletion, but it silently drops
+        # that connector from the comparison, so it is refused the same way.
+        client = FakeClient(self.clean(), [SOURCE, {**SOURCE}])
+        with pytest.raises(Failure, match="/sources listing"):
+            _fetch_workspace(FakeWorkspace(client))
 
 
 class TestRefusals:
