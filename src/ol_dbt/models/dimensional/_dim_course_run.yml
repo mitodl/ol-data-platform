@@ -262,6 +262,81 @@ unit_tests:
     - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
       courserun_end_on: "2026-12-25T15:00:00.000"
       is_current: false
+- name: test_dim_course_run_merge_expires_stale_row_behind_untracked_duplicates
+  description: >
+    Upstream carries two copies of a run that differ only on an untracked
+    column (source_id) while the target holds the matching current row plus a
+    stale one. Both incoming copies match the same current row, so matching row
+    for row would call the key unchanged. The stale row must still expire.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - &untracked_copy
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+    - <<: *untracked_copy
+      courserun_id: 2683
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      source_id: 2682
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      source_id: 2682
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+  expect:
+    rows:
+    - source_id: 2682
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - source_id: 2683
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - source_id: 2682
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: false
+    - source_id: 2682
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      is_current: false
 - name: test_dim_course_run_merge_skips_unchanged_run
   description: >
     A run whose single current row matches its single upstream row produces no new
