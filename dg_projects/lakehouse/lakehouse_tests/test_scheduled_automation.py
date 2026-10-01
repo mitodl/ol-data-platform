@@ -65,16 +65,19 @@ def test_dev_and_ci_register_no_schedules():
         assert schedules_for_environment(ALL_CANDIDATES, environment=environment) == []
 
 
-def test_only_ingestion_is_allowed_in_qa():
-    """QA gets fed, but does not build or publish on its own.
+def test_qa_runs_ingestion_and_the_learn_integrations_build():
+    """QA gets fed, and builds only what cannot come out silently partial.
 
     The distinction RFC 12711 turns on: a QA build of a union model whose
     branches are missing emits a partial result that looks like working data.
-    Ingestion has no such failure mode -- more of it is strictly better -- so
-    the sync_and_stage family runs in QA while the dbt schedules do not.
+    Ingestion has no such failure mode, so the sync_and_stage family runs in QA.
+    The Learn integrations build is the one dbt exception, because none of its
+    models unions across sources and MIT Learn needs QA views to rehearse a
+    warehouse-pull cutover against.
     """
     assert schedules_for_environment(ALL_CANDIDATES, environment="qa") == [
-        "daily_sync_and_stage"
+        "daily_sync_and_stage",
+        "learn_integrations_qa_daily",
     ]
 
 
@@ -91,15 +94,19 @@ def test_qa_cannot_run_dbt_docs_generate_on_a_timer():
     assert "qa" not in SCHEDULE_ENVIRONMENTS["dbt_docs_artifacts_daily"]
 
 
-def test_production_registers_every_schedule():
-    """Nothing is dropped where the map is meant to be a no-op.
+def test_production_registers_every_schedule_but_the_qa_learn_build():
+    """Production's set is what it registered before the map existed.
 
-    This change is a declaration, not a behaviour change: production's set is
-    what it registered before, so a green deploy there proves the mechanism
-    without proving anything about the environments it now excludes.
+    The QA Learn integrations build is the one QA-only entry: production builds
+    those models through dbt_automation_sensor, so a schedule there would run
+    them twice.
     """
     kept = schedules_for_environment(ALL_CANDIDATES, environment="production")
-    assert kept == list(SCHEDULE_ENVIRONMENTS)
+    assert kept == [
+        schedule_id
+        for schedule_id in SCHEDULE_ENVIRONMENTS
+        if schedule_id != "learn_integrations_qa_daily"
+    ]
 
 
 def test_family_id_covers_every_generated_member():

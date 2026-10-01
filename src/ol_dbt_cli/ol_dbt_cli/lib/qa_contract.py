@@ -51,6 +51,16 @@ UNCONTRACTED_LAYERS = frozenset({"staging"})
 
 _BRANCH = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$")
 
+QA_SCHEDULED_TAG = "qa_scheduled"
+"""Tag on the models the lakehouse code location builds, with their upstream, on a QA schedule.
+
+QA runs no dbt automation, so this schedule is the one dbt build there. It is
+safe only for models reading a single ingestion unit: a union built from a
+lapsed QA branch comes out partial rather than failing. Checking the tagged
+models covers their upstream too, since a parent's units are a subset of its
+child's.
+"""
+
 
 @dataclass(frozen=True)
 class Contract:
@@ -184,6 +194,17 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                     "the branch here so this model's QA form is partial by declaration. Not "
                     "baselineable: see docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
                 )
+
+        if QA_SCHEDULED_TAG in node.tags and len(reads) > 1:
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"is tagged {QA_SCHEDULED_TAG} but unions {len(reads)} ingestion units",
+                f"Reads {', '.join(sorted(reads))}. The QA schedule builds this model and its "
+                "upstream unattended, where a union with a lapsed branch comes out partial. "
+                f"Drop the {QA_SCHEDULED_TAG} tag, or remove the extra unit from its lineage.",
+            )
 
         is_union = len(reads) > 1 and classify_layer(node.original_file_path) not in UNCONTRACTED_LAYERS
         # Presence again: a malformed value is already reported above, and _read_contract
