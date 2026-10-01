@@ -135,9 +135,11 @@ class OpenEdxApiClient(OAuthApiClient):
         only allows POST, so it answers 405, while the old export view answers a
         GET without a course id with a 404 before doing anything.
 
-        Any other error status raises with that status, so a bad token or a
-        struggling Studio is reported as itself rather than as a missing plugin.
-        Only a 405 ever makes this true.
+        Any other status raises, so a bad token or a struggling Studio is
+        reported as itself rather than as a missing plugin. That includes a
+        success: neither view answers a GET with one, so something else is
+        serving the path and either answer would be a guess. Only a 405 ever
+        makes this true.
         """
         response = self.http_client.get(
             f"{self.studio_url}/api/courses/v0/export/versions/",
@@ -146,9 +148,14 @@ class OpenEdxApiClient(OAuthApiClient):
         )
         if response.status_code == HTTPStatus.METHOD_NOT_ALLOWED:
             return True
-        if response.status_code != HTTPStatus.NOT_FOUND:
-            response.raise_for_status()
-        return False
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return False
+        response.raise_for_status()
+        msg = (
+            f"GET {response.request.url} answered {response.status_code}; the "
+            "versions endpoint answers 405 and the pre-0.4.0 export view 404"
+        )
+        raise RuntimeError(msg)
 
     def get_course_content_versions(self, course_ids: list[str]) -> dict[str, Any]:
         """Report what an export of each course would reflect, without exporting.

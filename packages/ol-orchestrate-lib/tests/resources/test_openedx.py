@@ -139,3 +139,16 @@ def test_a_failing_probe_reports_its_own_status() -> None:
         with pytest.raises(httpx.HTTPStatusError):
             _studio_client(http_client).course_content_versions_available()
         assert not http_client.posts, "the probe must never POST"
+
+
+def test_a_successful_probe_is_neither_answer() -> None:
+    """Neither view answers the GET with a success, so a 200 raises.
+
+    Read as available, it would POST course ids to whatever answered; read as
+    unavailable, it would be reported as a missing plugin.
+    """
+    http_client = _PostingClient(200, {})
+
+    with pytest.raises(RuntimeError, match="answered 200"):
+        _studio_client(http_client).course_content_versions_available()
+    assert not http_client.posts, "the probe must never POST"
