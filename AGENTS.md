@@ -255,6 +255,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt generate all` | Scaffold sources + staging models for a new data source |
 | `ol-dbt impact` | Column-level lineage impact analysis for in-progress changes |
 | `ol-dbt validate` | SQL/YAML consistency checks across model definitions |
+| `ol-dbt unit-test` | Run dbt unit tests on DuckDB with no warehouse credentials (also runs in dbt PR CI) |
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
 

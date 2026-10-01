@@ -12,6 +12,7 @@ from ol_dbt_cli.commands.inventory import inventory_app
 from ol_dbt_cli.commands.local_dev import local_app
 from ol_dbt_cli.commands.run import run_app
 from ol_dbt_cli.commands.starrocks import starrocks_app
+from ol_dbt_cli.commands.unit_test import unit_test
 from ol_dbt_cli.commands.validate import validate
 
 app = cyclopts.App(
@@ -50,6 +51,9 @@ app = cyclopts.App(
       7c. Publish OpenMetadata data contracts from contracts/:
          $ ol-dbt contracts sync --service "Starburst Galaxy" --manifest prod-manifest.json
 
+      7d. Run dbt unit tests without warehouse credentials:
+         $ ol-dbt unit-test
+
       8. JSON output for CI pipelines:
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
@@ -68,6 +72,7 @@ app.command(contracts_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 app.command(diff, name="diff")
+app.command(unit_test, name="unit-test")
 
 
 def main() -> None:

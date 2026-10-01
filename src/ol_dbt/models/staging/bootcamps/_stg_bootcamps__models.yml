@@ -642,3 +642,53 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_id", "installment_deadline"]
+
+unit_tests:
+- name: test_stg__bootcamps__app__postgres__profiles_profile_maps_bucket_codes
+  description: >
+    company_size and years_experience hold bucket codes, not measurements (9 means
+    "1-9 employees", 5 means "2-5 years"), so reading them as counts gives plausible
+    nonsense rather than an error. Unmapped codes pass through as text.
+  model: stg__bootcamps__app__postgres__profiles_profile
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__profiles_profile')
+    rows:
+    - {id: 1, company_size: 9, years_experience: 5, gender: f}
+    - {id: 2, company_size: 10000, years_experience: 21, gender: nb}
+    - {id: 3, company_size: 0, years_experience: 0, gender: o}
+    - {id: 4, company_size: 7, years_experience: 3, gender: zz}
+  expect:
+    rows:
+    - user_profile_id: 1
+      user_company_size: Small/Home office (1-9 employees)
+      user_years_experience: 2-5 years
+      user_gender: Female
+    - user_profile_id: 2
+      user_company_size: Large Enterprise (10,000+ employees)
+      user_years_experience: More than 20 years
+      user_gender: Non-binary/non-conforming
+    - user_profile_id: 3
+      user_company_size: Other (N/A or Don't know)
+      user_years_experience: Prefer not to say
+      user_gender: Other/Prefer Not to Say
+    - user_profile_id: 4
+      user_company_size: '7'
+      user_years_experience: '3'
+      user_gender:
+- name: test_stg__bootcamps__app__postgres__profiles_profile_collapses_repeated_spaces
+  description: >
+    user_full_name collapses runs of spaces with a chain of three replace()
+    calls (' ' to '<>', drop '><', '<>' back to ' '), which is not obviously
+    correct on sight.
+  model: stg__bootcamps__app__postgres__profiles_profile
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__profiles_profile')
+    rows:
+    - {id: 1, name: Ada  Lovelace}
+    - {id: 2, name: Grace   Brewster   Hopper}
+    - {id: 3, name: Alan Turing}
+  expect:
+    rows:
+    - {user_profile_id: 1, user_full_name: Ada Lovelace}
+    - {user_profile_id: 2, user_full_name: Grace Brewster Hopper}
+    - {user_profile_id: 3, user_full_name: Alan Turing}

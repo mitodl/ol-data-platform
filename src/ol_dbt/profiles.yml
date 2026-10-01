@@ -45,6 +45,10 @@ open_learning:
     dev:
       type: duckdb
       path: dev_dbs/dev.duckdb
+    # Used only by `ol-dbt unit-test`, which deletes and refills this file on every run.
+    unit_test:
+      type: duckdb
+      path: dev_dbs/unit_test.duckdb
     dev_local:
       type: duckdb
       path: '{{ env_var("HOME") }}/.ol-dbt/local.duckdb'

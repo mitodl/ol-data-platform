@@ -1518,3 +1518,102 @@ models:
     description: int, distinct (session, block) pairs with an ol_openedx_chat.drawer.submit
       event that day, Open edX chatbot only. Unlike the report, submits with no block_id
       count.
+
+unit_tests:
+- name: test_dim_user_pk_is_minted_from_the_group_identity
+  description: >
+    Pins the user_pk mint. user_pk is md5('<identity source>-<identity id>')
+    of the highest-ranked account sharing an email: the Keycloak global id
+    when there is one, else the best-ranked platform id. Every fact table's
+    user_fk holds these values, so a change to the hashed inputs, the
+    separator, or the ranking re-keys every learner and orphans the
+    incremental facts; this test fails instead. The expected keys are md5
+    literals on purpose.
+  model: dim_user
+  given:
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows:
+    - user_id: 101
+      user_global_id: gid-ada
+      user_email: ada@example.com
+      user_first_name: Ada
+      user_last_name: Lovelace
+      user_is_active: true
+      user_joined_on: '2024-01-01T00:00:00'
+      user_created_on: '2024-01-01T00:00:00'
+      user_last_login: '2024-02-01T00:00:00'
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows:
+    - user_id: 42
+      user_username: grace
+      user_email: grace@example.com
+      user_is_active: true
+      user_joined_on: '2023-01-01T00:00:00'
+    # Upper-case email: grouping is on lower(email), so this still merges with the
+    # bootcamps account below.
+    - user_id: 7
+      user_username: alan
+      user_email: Alan@Example.com
+      user_is_active: true
+      user_joined_on: '2022-01-01T00:00:00'
+  # Joined later than the MITx Pro account it shares an email with, so it is the base row
+  # for profile fields, but MITx Pro outranks Bootcamps for naming the key.
+  - input: ref('int__bootcamps__users')
+    rows:
+    - user_id: 3
+      user_email: alan@example.com
+      user_is_active: true
+      user_joined_on: '2025-01-01T00:00:00'
+  # Inputs the cases above don't use.
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  # Its YAML documents no columns, so `ol-dbt unit-test` has nothing to build a stand-in from.
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    format: sql
+    rows: |
+      select cast(null as bigint) as user_id, cast(null as varchar) as openedxuser_username
+      where false
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - user_pk: 14ad7bc9bcef70fc636e037934751877  # pragma: allowlist secret
+      user_pk_source: global
+      email: ada@example.com
+      mitlearn_user_id: 101
+      mitxpro_application_user_id:
+      bootcamps_application_user_id:
+    - user_pk: e82719d98dd31b1e1e2ade0acf8d82d2  # pragma: allowlist secret
+      user_pk_source: mitxpro
+      email: grace@example.com
+      mitlearn_user_id:
+      mitxpro_application_user_id: 42
+      bootcamps_application_user_id:
+    - user_pk: 14a209595bd18b974e02d3760051e818  # pragma: allowlist secret
+      user_pk_source: mitxpro
+      email: alan@example.com
+      mitlearn_user_id:
+      mitxpro_application_user_id: 7
+      bootcamps_application_user_id: 3
