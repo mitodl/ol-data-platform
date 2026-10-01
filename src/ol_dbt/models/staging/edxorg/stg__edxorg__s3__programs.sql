@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__program') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__discovery__api__program') }}
 )
 
 {{ deduplicate_raw_table(order_by='retrieved_at' , partition_columns = 'uuid') }}

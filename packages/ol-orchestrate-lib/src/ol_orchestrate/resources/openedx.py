@@ -141,48 +141,6 @@ class OpenEdxApiClient(OAuthApiClient):
         )
         return self.fetch_with_auth(request_url)
 
-    def get_edxorg_programs(self):
-        """
-        Retrieve the program metadata from the edX.org REST API by walking through
-         the paginated results
-
-        Yield: A generator for walking the paginated list of programs returned
-        from the API
-
-        """
-        request_url = "https://discovery.edx.org/api/v1/programs/"
-        response_data = self.fetch_with_auth(request_url)
-        results = response_data["results"]
-        next_page = response_data["next"]
-        count = response_data["count"]
-        yield count, results
-        while next_page:
-            response_data = self.fetch_with_auth(
-                request_url, extra_params=next_page_params(next_page)
-            )
-            next_page = response_data["next"]
-            yield response_data["results"]
-
-    def get_edxorg_mitx_courses(self):
-        """
-        Retrieve a list of all the active courses in MITx catalog by walking through the
-        paginated results
-
-        Yield: A generator for walking the paginated list of courses
-        """
-        course_catalog_url = "https://discovery.edx.org/api/v1/catalogs/10/courses/"
-        response_data = self.fetch_with_auth(course_catalog_url)
-        results = response_data["results"]
-        next_page = response_data["next"]
-        count = response_data["count"]
-        yield count, results
-        while next_page:
-            response_data = self.fetch_with_auth(
-                course_catalog_url, extra_params=next_page_params(next_page)
-            )
-            next_page = response_data["next"]
-            yield response_data["results"]
-
 
 class OpenEdxApiClientFactory(ConfigurableResource):
     deployment: str = Field(
