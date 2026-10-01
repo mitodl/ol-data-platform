@@ -710,3 +710,75 @@ retired:
     added, and it re-appended files the assets overwrote.
     bin/backfill-edxorg-catalog-raw.py copies their history into the dlt tables,
     deduplicated. The tables and landing files stay in place, read-only.
+- deployment: mitlearn
+  layer: app_postgres
+  raw_tables:
+  - raw__mitlearn__app__postgres__learning_resources_learningresource_content_tags
+  retired_on: '2026-02-20'
+  reason: >-
+    mit-learn migration learning_resources/0102 renamed
+    LearningResource.content_tags to resource_tags, which renames the M2M join
+    table, so the source table no longer exists. The last data landed here on
+    2026-02-20. Airbyte's schema refresh later dropped the stream from
+    "MIT Learn Production → S3 Data Lake", and the drift check has reported it
+    since 2026-09-29. The renamed learningresource_resource_tags table was never
+    selected into the connection. dbt never modeled this table.
+- deployment: mitlearn
+  layer: app_postgres
+  raw_tables:
+  - raw__mitlearn__app__postgres__profiles_userwebsite
+  retired_on: '2026-10-01'
+  reason: >-
+    mit-learn#3941 (merged 2026-09-15, first tagged in v0.80.6) dropped the
+    unused UserWebsite model, so the source table no longer exists. Airbyte's
+    schema refresh dropped the stream from "MIT Learn Production → S3 Data
+    Lake", and the drift check has reported it since 2026-09-29. The table's
+    only snapshot is the initial load of 2025-02-13, because no row changed
+    after that, so no data shows when loading stopped. This date is when the
+    retirement was recorded. dbt never modeled this table.
+- deployment: bootcamps
+  layer: hubspot
+  raw_tables:
+  - raw__bootcamps__hubspot__campaigns
+  - raw__bootcamps__hubspot__companies
+  - raw__bootcamps__hubspot__companies_property_history
+  - raw__bootcamps__hubspot__contact_lists
+  - raw__bootcamps__hubspot__contacts
+  - raw__bootcamps__hubspot__contacts_form_submissions
+  - raw__bootcamps__hubspot__contacts_list_memberships
+  - raw__bootcamps__hubspot__contacts_merged_audit
+  - raw__bootcamps__hubspot__contacts_property_history
+  - raw__bootcamps__hubspot__deal_pipelines
+  - raw__bootcamps__hubspot__deal_splits
+  - raw__bootcamps__hubspot__deals
+  - raw__bootcamps__hubspot__deals_archived
+  - raw__bootcamps__hubspot__deals_property_history
+  - raw__bootcamps__hubspot__email_events
+  - raw__bootcamps__hubspot__email_subscriptions
+  - raw__bootcamps__hubspot__engagements
+  - raw__bootcamps__hubspot__engagements_calls
+  - raw__bootcamps__hubspot__engagements_emails
+  - raw__bootcamps__hubspot__engagements_meetings
+  - raw__bootcamps__hubspot__engagements_notes
+  - raw__bootcamps__hubspot__engagements_tasks
+  - raw__bootcamps__hubspot__form_submissions
+  - raw__bootcamps__hubspot__forms
+  - raw__bootcamps__hubspot__goals
+  - raw__bootcamps__hubspot__line_items
+  - raw__bootcamps__hubspot__marketing_emails
+  - raw__bootcamps__hubspot__owners
+  - raw__bootcamps__hubspot__owners_archived
+  - raw__bootcamps__hubspot__products
+  - raw__bootcamps__hubspot__subscription_changes
+  - raw__bootcamps__hubspot__ticket_pipelines
+  - raw__bootcamps__hubspot__tickets
+  - raw__bootcamps__hubspot__workflows
+  retired_on: '2026-10-01'
+  reason: >-
+    The bootcamps application is no longer deployed (see the bootcamps
+    app_postgres entry). The "HubSpot Bootcamps → S3" connection was inactive
+    when the inventory was snapshotted on 2026-08-14 and was deleted from
+    Airbyte before 2026-09-29, when the drift check started reporting it. No
+    data for these tables exists in the current lake: the 7 that are
+    registered in Glue (under raw/, created 2026-09-11) hold metadata only.
+    This date is when the retirement was recorded. dbt modeled none of them.

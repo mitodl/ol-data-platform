@@ -56,7 +56,6 @@ airbyte:
     - learning_resources_course
     - learning_resources_learningpath
     - learning_resources_learningresource
-    - learning_resources_learningresource_content_tags
     - learning_resources_learningresource_departments
     - learning_resources_learningresource_resource_prices
     - learning_resources_learningresource_topics
@@ -99,7 +98,6 @@ airbyte:
     - profiles_profile
     - profiles_profile_topic_interests
     - profiles_programletter
-    - profiles_userwebsite
     - silk_profile
     - silk_profile_queries
     - silk_request
@@ -373,13 +371,6 @@ tables:
   modeled: false
 - name: learning_resources_learningresource
   raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: learning_resources_learningresource_content_tags
-  raw_table: raw__mitlearn__app__postgres__learning_resources_learningresource_content_tags
   sync_mode: incremental_deduped_history
   namespace: public
   primary_key:
@@ -674,13 +665,6 @@ tables:
   modeled: true
 - name: profiles_programletter
   raw_table: raw__mitlearn__app__postgres__profiles_programletter
-  sync_mode: incremental_deduped_history
-  namespace: public
-  primary_key:
-  - - id
-  modeled: false
-- name: profiles_userwebsite
-  raw_table: raw__mitlearn__app__postgres__profiles_userwebsite
   sync_mode: incremental_deduped_history
   namespace: public
   primary_key:
