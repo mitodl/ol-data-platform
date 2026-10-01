@@ -19,6 +19,10 @@
 -- through dim_date. The counters sum the fact's per-day distinct counts, so a video
 -- played on two days counts twice, as in b2b_analytics' total_videos_watched.
 -- Activity does not move record_updated_on; see the column's description.
+-- Consent is recorded per (learner, contract), which is this view's grain, so it is
+-- joined directly. outcomes_shared is null when the learner has no recorded decision;
+-- the API resolves that against its fail-open setting, while a recorded false is
+-- withheld either way.
 with activity as (
     select
         user_fk,
@@ -63,6 +67,8 @@ select
     coalesce(a.videos_played, 0)                                                        as videos_played,
     coalesce(a.problems_attempted, 0)                                                   as problems_attempted,
     coalesce(a.chatbot_interactions, 0)                                                 as chatbot_interactions,
+    uc.consented_to_data_sharing                                                        as outcomes_shared,
+    case when uc.consented_to_data_sharing then uc.consent_modified_at end              as outcomes_consent_on,
     -- Every mitxonline timestamp here is an ISO-8601 string from the same macro, so
     -- greatest() compares them correctly. StarRocks' greatest() returns null if any
     -- argument is null, so each is coalesced to '', which sorts below any real date.
@@ -70,7 +76,8 @@ select
         coalesce(e.enrollment_updated_on, ''),
         coalesce(e.enrollment_created_on, ''),
         coalesce(g.grade_updated_on, ''),
-        coalesce(cert.certificate_updated_on, '')
+        coalesce(cert.certificate_updated_on, ''),
+        coalesce(uc.consent_modified_at, '')
     ), '')                                                                              as record_updated_on
 from {{ source('dimensional', 'bridge_organization_courserun') }} boc
 join {{ source('dimensional', 'dim_contract') }} c
@@ -89,6 +96,8 @@ left join {{ source('dimensional', 'tfact_certificate') }} cert
     on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
 left join activity a
     on e.user_fk = a.user_fk and e.courserun_fk = a.courserun_fk
+left join {{ source('dimensional', 'bridge_user_contract') }} uc
+    on e.user_fk = uc.user_fk and boc.contract_fk = uc.contract_fk
 left join {{ source('dimensional', 'dim_date') }} d
     on a.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'

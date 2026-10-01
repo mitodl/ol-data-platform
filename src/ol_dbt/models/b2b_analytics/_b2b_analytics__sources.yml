@@ -52,6 +52,11 @@ sources:
     description: >
       MITx Online organization membership roster. Grain: one row per (user,
       organization). Includes members with no enrollments.
+  - name: bridge_user_contract
+    description: >
+      MITx Online contract membership with the learner's data-sharing consent.
+      Grain: one row per (user, contract). consented_to_data_sharing is null when
+      no decision is recorded. Only the learner-grain views read it.
   - name: afact_learner_courserun_daily_activity
     description: >
       Per-learner course activity. Grain: one row per (platform, user, course

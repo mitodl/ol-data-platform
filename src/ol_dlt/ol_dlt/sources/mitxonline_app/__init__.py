@@ -1,7 +1,7 @@
 """MITx Online application-database ingestion via dlt.
 
 Replaces the Airbyte connection ``MITx Online Production App DB → S3 Data Lake``
-(RFC 12319 §6.5, RFC 12711 step 8). Scope is the 64 tables that connection
+(RFC 12319 §6.5, RFC 12711 step 8). Scope is the 65 tables that connection
 declares, which is also what the inventory unit ``mitxonline/app_postgres``
 records.
 
@@ -22,8 +22,8 @@ which dlt has no practical equivalent for (INGESTION_INVENTORY_SPEC.md §3.4),
 so each of them needed either a replacement cursor or a decision to re-read it
 whole. They are all re-read whole, for three measured reasons:
 
-    Affordable.  The whole unit is 16.5M rows / 1.01 GB across 64 tables at the
-        current Iceberg snapshot (production Glue, 2026-08-31). The largest
+    Affordable.  The whole unit was 16.5M rows / 1.01 GB across 64 tables at
+        the Iceberg snapshot measured (production Glue, 2026-08-31). The largest
         table, ``openedx_openedxuser``, is 2.7M rows / 126 MB.
     Not safely keyable.  39 tables carry ``updated_on``, but that is Django's
         ``auto_now=True``, which fires on ``Model.save()`` and NOT on
@@ -81,6 +81,10 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="b2b_organizationindexpage", primary_key="page_ptr_id"),
         DatabaseTable(name="b2b_organizationpage", primary_key="page_ptr_id"),
         DatabaseTable(name="b2b_userorganization", primary_key="id"),
+        # Per-learner contract membership, carrying the learner's data-sharing
+        # consent. Replaced users_user_b2b_contracts as User.b2b_contracts' through
+        # table in MITx Online 1.168.2; the old table is no longer written.
+        DatabaseTable(name="b2b_userb2bcontract", primary_key="id"),
         # --- CMS: Wagtail page subclasses -----------------------------------
         DatabaseTable(name="cms_certificatepage", primary_key="page_ptr_id"),
         DatabaseTable(name="cms_courseindexpage", primary_key="page_ptr_id"),

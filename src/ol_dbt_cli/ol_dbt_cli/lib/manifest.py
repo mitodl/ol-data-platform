@@ -305,9 +305,10 @@ def registry_from_manifest(raw: dict[str, Any]) -> ManifestRegistry:
     for uid, node_data in all_nodes.items():
         model = _parse_node(node_data)
         registry.nodes[uid] = model
-        if model.is_model or model.resource_type == "seed":
-            # Seeds are ref()-able just like models and carry column metadata when
-            # a schema.yml is present, so index them for upstream resolution.
+        if model.is_model or model.resource_type in {"seed", "snapshot"}:
+            # Seeds and snapshots are ref()-able just like models and carry column
+            # metadata when a schema.yml is present, so index them for upstream
+            # resolution.
             registry.by_name[model.name] = model
         elif model.resource_type == "source":
             # Index by "source_name.table_name" matching the sql_parser placeholder format

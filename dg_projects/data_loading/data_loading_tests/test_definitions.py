@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from data_loading.definitions import defs
 from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
+from ol_dlt.sources import mitxonline_app
 
 _REPO = defs.get_repository_def()
 
@@ -127,12 +128,9 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
     with _repository_for(environment) as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert set(_B2B_PILOT_ASSET_KEYS) <= asset_keys
-        assert (
-            len(
-                [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
-            )
-            == 64
-        )
+        assert len(
+            [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
+        ) == len(mitxonline_app.MITXONLINE_APP_SPEC.tables)
         assert "mitxonline_app_ingest_schedule" in {s.name for s in repo.schedule_defs}
 
 

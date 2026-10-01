@@ -32,6 +32,7 @@ with activity as (
 contract_enrollments as (
     select
         c.organization_fk,
+        boc.contract_fk,
         e.user_fk,
         e.courserun_fk,
         cr.course_fk,
@@ -115,6 +116,46 @@ program_certificates as (
     group by ce.organization_fk, ce.user_fk
 ),
 
+-- Consent is recorded per (learner, contract) and this view's grain is (learner, org),
+-- so it is resolved across every contract of the organization the learner holds a
+-- membership or an enrollment under: any recorded false withholds, then any contract
+-- with no recorded decision leaves it null (the API resolves null against its
+-- fail-open setting), and only a true on every one shares. The rollup counts outcomes
+-- from every contract the learner enrolled under, including ones whose membership row
+-- is gone, so those contracts are in scope with no decision rather than skipped.
+-- A removed membership with no enrollment contributes no outcomes, so only current
+-- memberships join the scope from the bridge; a removed one with enrollments is
+-- already in scope from contract_enrollments and still carries its retained decision.
+-- consent_updated_on moves record_updated_on so a withdrawal reaches updated_since.
+consent_scope as (
+    select distinct organization_fk, user_fk, contract_fk
+    from contract_enrollments
+    union
+    select organization_fk, user_fk, contract_fk
+    from {{ source('dimensional', 'bridge_user_contract') }}
+    where organization_fk is not null
+      and membership_is_current
+),
+
+consent as (
+    select
+        s.organization_fk,
+        s.user_fk,
+        case
+            when sum(case when uc.consented_to_data_sharing = false then 1 else 0 end) > 0
+                then false
+            when sum(case when uc.consented_to_data_sharing is null then 1 else 0 end) > 0
+                then cast(null as boolean)
+            else true
+        end                                                                             as outcomes_shared,
+        max(case when uc.consented_to_data_sharing then uc.consent_modified_at end)          as latest_consent_on,
+        max(coalesce(uc.consent_modified_at, ''))                                          as consent_updated_on
+    from consent_scope s
+    left join {{ source('dimensional', 'bridge_user_contract') }} uc
+        on s.user_fk = uc.user_fk and s.contract_fk = uc.contract_fk
+    group by s.organization_fk, s.user_fk
+),
+
 -- Roster and enrollment legitimately disagree. A roster row with no active enrollment
 -- is an assigned, unstarted seat. An enrollment with no roster row is a learner removed
 -- from the organization who kept the enrollment, or an enrollment from before
@@ -172,9 +213,12 @@ select
     coalesce(pc.program_certificates_earned, 0)                                         as program_certificates_earned,
     cast(d.date as date)                                                                as last_active_on,
     coalesce(er.courses_in_progress, 0)                                                 as courses_in_progress,
+    c.outcomes_shared,
+    case when c.outcomes_shared then c.latest_consent_on end                            as outcomes_consent_on,
     nullif(greatest(
         coalesce(er.record_updated_on, ''),
-        coalesce(pc.program_certificate_updated_on, '')
+        coalesce(pc.program_certificate_updated_on, ''),
+        coalesce(c.consent_updated_on, '')
     ), '')                                                                              as record_updated_on
 from memberships m
 join {{ source('dimensional', 'dim_organization') }} org
@@ -185,6 +229,8 @@ left join enrollment_rollup er
     on m.organization_fk = er.organization_fk and m.user_fk = er.user_fk
 left join program_certificates pc
     on m.organization_fk = pc.organization_fk and m.user_fk = pc.user_fk
+left join consent c
+    on m.organization_fk = c.organization_fk and m.user_fk = c.user_fk
 left join {{ source('dimensional', 'dim_date') }} d
     on er.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'
