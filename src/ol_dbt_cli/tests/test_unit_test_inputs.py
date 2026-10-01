@@ -1,13 +1,17 @@
-"""Tests for lib/unit_test_inputs.py — stand-in relations for dbt unit test inputs."""
+"""Tests for lib/unit_test_inputs.py and the ``ol-dbt unit-test`` command."""
 
 from __future__ import annotations
 
+import json
+import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import duckdb
 import pytest
 
+from ol_dbt_cli.commands.unit_test import unit_test
 from ol_dbt_cli.lib.unit_test_inputs import create_stub_relations, stub_relations
 
 
@@ -166,3 +170,101 @@ def test_create_stub_relations_builds_empty_tables_and_reports_failures() -> Non
     assert failed[1].startswith("Could not create")
     assert conn.execute('select count(*) from main_staging."stg__a"').fetchone() == (0,)
     assert conn.execute('describe main_staging."stg__a"').fetchall()[0][:2] == ("id", "BIGINT")
+
+
+class TestUnitTestCommand:
+    """``ol-dbt unit-test`` orchestration, with dbt replaced by a fake subprocess."""
+
+    @pytest.fixture
+    def dbt_dir(self, tmp_path: Path) -> Path:
+        (tmp_path / "dbt_project.yml").write_text("name: test\nprofile: test\n")
+        (tmp_path / "profiles.yml").write_text(
+            "test:\n  outputs:\n    unit_test:\n      type: duckdb\n      path: dev_dbs/unit_test.duckdb\n"
+        )
+        return tmp_path
+
+    def _fake_dbt(
+        self, monkeypatch: pytest.MonkeyPatch, dbt_dir: Path, *, parse_rc: int = 0, test_rc: int = 0
+    ) -> list[list[str]]:
+        calls: list[list[str]] = []
+        manifest = _manifest(
+            _unit_test("int__b", {"input": "ref('stg__a')", "rows": [{"id": 1}]}),
+            nodes=[_model("stg__a"), _model("int__b")],
+        )
+        for node in manifest["nodes"].values():
+            node["database"] = "unit_test"
+
+        def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            if cmd[1] == "parse":
+                target = dbt_dir / "target" / "unit_test"
+                target.mkdir(parents=True, exist_ok=True)
+                (target / "manifest.json").write_text(json.dumps(manifest))
+                return subprocess.CompletedProcess(cmd, parse_rc)
+            return subprocess.CompletedProcess(cmd, test_rc)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        return calls
+
+    def test_stubs_inputs_then_runs_only_unit_tests(self, monkeypatch: pytest.MonkeyPatch, dbt_dir: Path) -> None:
+        calls = self._fake_dbt(monkeypatch, dbt_dir)
+
+        with pytest.raises(SystemExit) as exit_info:
+            unit_test(select="tfact_a tfact_b", project_dir=str(dbt_dir))
+
+        assert exit_info.value.code == 0
+        parse, test = calls
+        assert parse[1:] == [
+            "parse",
+            "--profiles-dir",
+            str(dbt_dir),
+            "--target",
+            "unit_test",
+            "--target-path",
+            "target/unit_test",
+        ]
+        # The selector is passed whole; --resource-type, not string concatenation, limits it.
+        assert test[1] == "test"
+        assert test[test.index("--select") + 1] == "tfact_a tfact_b"
+        assert test[test.index("--resource-type") + 1] == "unit_test"
+        with duckdb.connect(str(dbt_dir / "dev_dbs" / "unit_test.duckdb")) as conn:
+            assert conn.execute('describe main_staging."stg__a"').fetchall()[0][:2] == ("id", "BIGINT")
+
+    def test_no_select_runs_every_unit_test(self, monkeypatch: pytest.MonkeyPatch, dbt_dir: Path) -> None:
+        calls = self._fake_dbt(monkeypatch, dbt_dir)
+
+        with pytest.raises(SystemExit):
+            unit_test(project_dir=str(dbt_dir))
+
+        assert "--select" not in calls[1]
+
+    def test_scratch_database_is_recreated(self, monkeypatch: pytest.MonkeyPatch, dbt_dir: Path) -> None:
+        database = dbt_dir / "dev_dbs" / "unit_test.duckdb"
+        database.parent.mkdir()
+        with duckdb.connect(str(database)) as conn:
+            conn.execute("create table leftover (x int)")
+        self._fake_dbt(monkeypatch, dbt_dir)
+
+        with pytest.raises(SystemExit):
+            unit_test(project_dir=str(dbt_dir))
+
+        with duckdb.connect(str(database)) as conn:
+            tables = {row[0] for row in conn.execute("select table_name from information_schema.tables").fetchall()}
+        assert tables == {"stg__a"}
+
+    def test_parse_failure_exits_before_testing(self, monkeypatch: pytest.MonkeyPatch, dbt_dir: Path) -> None:
+        calls = self._fake_dbt(monkeypatch, dbt_dir, parse_rc=2)
+
+        with pytest.raises(SystemExit) as exit_info:
+            unit_test(project_dir=str(dbt_dir))
+
+        assert exit_info.value.code == 2
+        assert [cmd[1] for cmd in calls] == ["parse"]
+
+    def test_exit_status_is_dbt_test_status(self, monkeypatch: pytest.MonkeyPatch, dbt_dir: Path) -> None:
+        self._fake_dbt(monkeypatch, dbt_dir, test_rc=1)
+
+        with pytest.raises(SystemExit) as exit_info:
+            unit_test(project_dir=str(dbt_dir))
+
+        assert exit_info.value.code == 1
