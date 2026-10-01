@@ -692,3 +692,21 @@ retired:
     the rest of course_structure is not dlt-loaded. Under course_structure it
     never existed in production raw, because nothing loaded the files the
     archive assets wrote.
+- deployment: edxorg
+  layer: s3
+  raw_tables:
+  - raw__edxorg__s3__mitx_course
+  - raw__edxorg__s3__mitx_course_run
+  - raw__edxorg__s3__program
+  - raw__edxorg__s3__program_course
+  retired_on: '2026-10-01'
+  reason: >-
+    Replaced by edxorg/api's raw__edxorg__discovery__api__{mitx_course,
+    mitx_course_run,program,program_course}, which the mit_edx_programs dlt source
+    loads from the edX discovery API (#2789). The edxorg code location's assets
+    wrote these tables' landing files, the last at 2026-10-01 05:00Z, and the
+    "S3 edX.org course and program" Airbyte connection loaded them. Airbyte
+    inferred the schema from a sample of old files, so it dropped the fields #2721
+    added, and it re-appended files the assets overwrote.
+    bin/backfill-edxorg-catalog-raw.py copies their history into the dlt tables,
+    deduplicated. The tables and landing files stay in place, read-only.
