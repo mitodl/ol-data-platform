@@ -127,7 +127,7 @@ select
     , audience
     , location
     , event_type
-    , {{ format_timestamp_as_iso8601('event_start_on') }} as event_datetime
-    , {{ format_timestamp_as_iso8601('event_end_on') }} as event_end_datetime
+    , {{ format_timestamp_as_iso8601(timestamptz_at_utc('event_start_on')) }} as event_datetime
+    , {{ format_timestamp_as_iso8601(timestamptz_at_utc('event_end_on')) }} as event_end_datetime
 from items
 where event_start_on >= current_timestamp

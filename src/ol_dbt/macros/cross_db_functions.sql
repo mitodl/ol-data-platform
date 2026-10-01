@@ -818,6 +818,24 @@
 
 
 {#
+    timestamptz_at_utc: the same instant with its zone set to UTC, so that
+    format_timestamp_as_iso8601 renders it with a Z on Trino too (Trino's to_iso8601
+    keeps the value's zone). DuckDB's formatter already normalizes to UTC.
+#}
+{% macro timestamptz_at_utc(timestamp_expr) -%}
+    {{ adapter.dispatch('timestamptz_at_utc', 'open_learning')(timestamp_expr) }}
+{%- endmacro %}
+
+{% macro default__timestamptz_at_utc(timestamp_expr) -%}
+    at_timezone({{ timestamp_expr }}, 'UTC')
+{%- endmacro %}
+
+{% macro duckdb__timestamptz_at_utc(timestamp_expr) -%}
+    {{ timestamp_expr }}
+{%- endmacro %}
+
+
+{#
     local_timestamp_to_timestamptz: a wall-clock timestamp read in the zone that
     `zone_expr` evaluates to, as a zone-aware timestamp. Unlike
     local_date_to_timestamptz the zone is a SQL expression, so it can vary by row.

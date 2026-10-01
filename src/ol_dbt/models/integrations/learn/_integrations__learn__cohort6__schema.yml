@@ -152,11 +152,11 @@ models:
       qa_buildable: false
   columns:
   - name: feed_source_title
-    description: str, the feed source's title. With feed_source_url, the key Learn
-      matches a FeedSource on.
+    description: str, the feed source's title. Learn matches a FeedSource on (feed_type,
+      feed_source_url) and updates the title.
     tests: [not_null]
   - name: feed_source_url
-    description: str, the feed source's URL.
+    description: str, the feed source's URL. With feed_type, Learn's FeedSource key.
     tests: [not_null]
   - name: feed_source_description
     description: str, the feed source's description, exactly as Learn stores it.
@@ -209,11 +209,11 @@ models:
       qa_buildable: false
   columns:
   - name: feed_source_title
-    description: str, the feed source's title. With feed_source_url, the key Learn
-      matches a FeedSource on.
+    description: str, the feed source's title. Learn matches a FeedSource on (feed_type,
+      feed_source_url) and updates the title.
     tests: [not_null]
   - name: feed_source_url
-    description: str, the feed source's URL.
+    description: str, the feed source's URL. With feed_type, Learn's FeedSource key.
     tests: [not_null]
   - name: feed_source_description
     description: str, the feed source's description, exactly as Learn stores it.

@@ -6,9 +6,8 @@ models:
   description: >
     Start and end instants of every MIT Professional Education event, parsed from
     the feed's dates and free-text time range the way MIT Learn's
-    parse_date_time_range does (news_events/etl/utils.py). Events without a start
-    or
-    end date are dropped.
+    parse_date_time_range does (news_events/etl/utils.py). A missing start or
+    end date is filled from the other; an event with neither is dropped.
   columns:
   - name: event_id
     description: str, the event's uuid

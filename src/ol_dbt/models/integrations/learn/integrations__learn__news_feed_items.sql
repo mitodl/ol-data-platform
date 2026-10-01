@@ -81,9 +81,9 @@ News and updates from MIT Professional Education.
             else array[trim(news_author_raw)]
         end as authors
         , {{ empty_varchar_array() }} as topics
-        , {{ format_timestamp_as_iso8601(
+        , {{ format_timestamp_as_iso8601(timestamptz_at_utc(
             local_date_to_timestamptz("nullif(news_date_raw, '')", 'America/New_York')
-        ) }} as publish_date
+        )) }} as publish_date
     from mitpe_news
 )
 
