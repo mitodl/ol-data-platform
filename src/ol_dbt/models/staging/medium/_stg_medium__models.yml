@@ -1,0 +1,41 @@
+---
+version: 2
+
+models:
+- name: stg__medium__rss__posts
+  description: The posts in MIT Open Learning's Medium publication RSS feed, with
+    the channel's fields on each row.
+  columns:
+  - name: post_guid
+    description: str, the post's guid, e.g. https://medium.com/p/d9ccc1667ae6
+    tests:
+    - not_null
+    - unique
+  - name: post_title
+    description: str, post title
+  - name: post_url
+    description: str, URL of the post
+  - name: post_description
+    description: str, the item's <description>, which Medium leaves out
+  - name: post_content
+    description: str, the post's full HTML
+  - name: post_creators_json
+    description: str, JSON array of author names
+  - name: post_categories_json
+    description: str, JSON array of category tags
+  - name: post_published_on_raw
+    description: str, RFC 822 publication time in GMT
+  - name: post_updated_on_raw
+    description: str, ISO 8601 time the post was last updated
+  - name: feed_url
+    description: str, the RSS feed URL
+  - name: feed_title
+    description: str, the channel title
+  - name: feed_description
+    description: str, the channel description
+  - name: feed_image_url
+    description: str, URL of the channel image
+  - name: feed_image_title
+    description: str, title of the channel image
+  - name: retrieved_at
+    description: str, ISO 8601 time of the extraction

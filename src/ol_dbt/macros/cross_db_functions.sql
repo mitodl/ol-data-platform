@@ -709,6 +709,17 @@
 {% macro starrocks__null_varchar_array() -%}cast(null as array<varchar>){%- endmacro %}
 
 
+{% macro empty_varchar_array() -%}
+    {{ adapter.dispatch('empty_varchar_array', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__empty_varchar_array() -%}cast(array[] as array(varchar)){%- endmacro %}
+
+{% macro duckdb__empty_varchar_array() -%}cast([] as varchar[]){%- endmacro %}
+
+{% macro starrocks__empty_varchar_array() -%}cast([] as array<varchar>){%- endmacro %}
+
+
 {% macro array_length(array_expr) -%}
     {{ adapter.dispatch('array_length', 'open_learning')(array_expr) }}
 {%- endmacro %}
@@ -766,6 +777,19 @@
     {{ adapter.dispatch('regexp_replace_all', 'open_learning')(subject, pattern, replacement) }}
 {%- endmacro %}
 
+{% macro regexp_split(subject, pattern) -%}
+    {{ adapter.dispatch('regexp_split', 'open_learning')(subject, pattern) }}
+{%- endmacro %}
+
+{% macro default__regexp_split(subject, pattern) -%}
+    regexp_split({{ subject }}, {{ pattern }})
+{%- endmacro %}
+
+{% macro duckdb__regexp_split(subject, pattern) -%}
+    string_split_regex({{ subject }}, {{ pattern }})
+{%- endmacro %}
+
+
 {% macro default__regexp_replace_all(subject, pattern, replacement) -%}
     regexp_replace({{ subject }}, {{ pattern }}, {{ replacement }})
 {%- endmacro %}
@@ -790,6 +814,24 @@
 
 {% macro duckdb__local_date_to_timestamptz(date_expr, time_zone) -%}
     timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp))
+{%- endmacro %}
+
+
+{#
+    local_timestamp_to_timestamptz: a wall-clock timestamp read in the zone that
+    `zone_expr` evaluates to, as a zone-aware timestamp. Unlike
+    local_date_to_timestamptz the zone is a SQL expression, so it can vary by row.
+#}
+{% macro local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
+    {{ adapter.dispatch('local_timestamp_to_timestamptz', 'open_learning')(timestamp_expr, zone_expr) }}
+{%- endmacro %}
+
+{% macro default__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
+    with_timezone(cast({{ timestamp_expr }} as timestamp), {{ zone_expr }})
+{%- endmacro %}
+
+{% macro duckdb__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
+    timezone({{ zone_expr }}, cast({{ timestamp_expr }} as timestamp))
 {%- endmacro %}
 
 

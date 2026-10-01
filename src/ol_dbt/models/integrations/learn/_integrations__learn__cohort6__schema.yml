@@ -138,3 +138,122 @@ models:
         combination_of_columns:
         - readable_id
         - run_id
+
+- name: integrations__learn__news_feed_items
+  description: >
+    One row per news item MIT Learn's news_events app loads from an external feed,
+    with the feed source's fields repeated on each row: MIT Open Learning's Medium
+    publication and MIT Professional Education news. Learn's own website content
+    news stays in Learn. summary and content are the feed's HTML, unsanitized; Learn
+    sanitizes both with nh3 (the Medium summary to plain text), so the receiver must.
+  config:
+    meta:
+      # Every feed it reads is qa: omit in the inventory; QA raw holds none.
+      qa_buildable: false
+  columns:
+  - name: feed_source_title
+    description: str, the feed source's title. With feed_source_url, the key Learn
+      matches a FeedSource on.
+    tests: [not_null]
+  - name: feed_source_url
+    description: str, the feed source's URL.
+    tests: [not_null]
+  - name: feed_source_description
+    description: str, the feed source's description, exactly as Learn stores it.
+  - name: feed_source_image_url
+    description: str, the feed source's image URL, if it has one.
+  - name: feed_source_image_alt
+    description: str, the feed source image's alt text.
+  - name: feed_source_image_description
+    description: str, the feed source image's description.
+  - name: feed_type
+    description: str, always "news".
+    tests: [not_null]
+  - name: guid
+    description: str, the item's id in its feed. Learn's FeedItem key.
+    tests: [not_null, unique]
+  - name: title
+    description: str, headline.
+    tests: [not_null]
+  - name: url
+    description: str, absolute URL of the item.
+  - name: summary
+    description: str, HTML summary (unsanitized).
+  - name: content
+    description: str, HTML content (unsanitized).
+  - name: image_url
+    description: str, absolute image URL, if the item has one.
+  - name: image_alt
+    description: str, image alt text.
+  - name: image_description
+    description: str, image description.
+  - name: authors
+    description: array(varchar), author names.
+  - name: topics
+    description: array(varchar), topic tags, sorted.
+  - name: publish_date
+    description: str, ISO 8601 UTC publication time.
+    tests: [not_null]
+
+- name: integrations__learn__event_feed_items
+  description: >
+    One row per upcoming event MIT Learn's news_events app loads: openlearning.mit.edu
+    events and MIT Professional Education events, with the feed source's fields
+    repeated on each row. Upcoming means starting at or after the build, which is
+    what Learn holds after its loader deletes every event whose start has passed.
+    summary and content are the feed's HTML, unsanitized; the receiver must
+    sanitize them as Learn does.
+  config:
+    meta:
+      # Every feed it reads is qa: omit in the inventory; QA raw holds none.
+      qa_buildable: false
+  columns:
+  - name: feed_source_title
+    description: str, the feed source's title. With feed_source_url, the key Learn
+      matches a FeedSource on.
+    tests: [not_null]
+  - name: feed_source_url
+    description: str, the feed source's URL.
+    tests: [not_null]
+  - name: feed_source_description
+    description: str, the feed source's description, exactly as Learn stores it.
+  - name: feed_source_image_url
+    description: str, always null; neither events source has an image.
+  - name: feed_source_image_alt
+    description: str, always null.
+  - name: feed_source_image_description
+    description: str, always null.
+  - name: feed_type
+    description: str, always "events".
+    tests: [not_null]
+  - name: guid
+    description: str, the event's id in its feed. Learn's FeedItem key.
+    tests: [not_null, unique]
+  - name: title
+    description: str, event title.
+    tests: [not_null]
+  - name: url
+    description: str, absolute URL of the event page.
+  - name: summary
+    description: str, HTML summary (unsanitized).
+  - name: content
+    description: str, HTML content (unsanitized).
+  - name: image_url
+    description: str, absolute image URL, if the event has one.
+  - name: image_alt
+    description: str, image alt text.
+  - name: image_description
+    description: str, image description.
+  - name: audience
+    description: array(varchar), audience names. Every MIT PE event is for all four
+      of Learn's audiences.
+  - name: location
+    description: array(varchar), location names.
+  - name: event_type
+    description: array(varchar), event type names.
+  - name: event_datetime
+    description: str, ISO 8601 UTC start time.
+    tests: [not_null]
+  - name: event_end_datetime
+    description: str, ISO 8601 UTC end time. Null for openlearning.mit.edu events,
+      whose end time Learn does not load.

@@ -51,3 +51,50 @@ models:
     description: str, location text
   - name: course_duration
     description: str, free-text duration, e.g. 5 Days, 9-12 meses
+- name: stg__mitpe__api__news
+  description: MIT Professional Education news items from the /feeds/news/ API.
+  columns:
+  - name: news_id
+    description: str, the news item's uuid
+    tests:
+    - not_null
+    - unique
+  - name: news_title
+    description: str, headline as the feed gives it (may contain HTML entities)
+  - name: news_date_raw
+    description: str, YYYY-MM-DD publication date
+  - name: news_author_raw
+    description: str, author names as one string
+  - name: news_summary
+    description: str, HTML summary (may contain HTML entities)
+  - name: news_image_src
+    description: str, root-relative URL path of the image, may be empty
+  - name: news_url
+    description: str, root-relative URL path of the article
+  - name: retrieved_at
+    description: str, ISO 8601 time of the extraction
+- name: stg__mitpe__api__events
+  description: MIT Professional Education events from the /feeds/events/ API, past
+    ones included.
+  columns:
+  - name: event_id
+    description: str, the event's uuid
+    tests:
+    - not_null
+    - unique
+  - name: event_title
+    description: str, title as the feed gives it (may contain HTML entities)
+  - name: event_start_date_raw
+    description: str, YYYY-MM-DD start date
+  - name: event_end_date_raw
+    description: str, YYYY-MM-DD end date
+  - name: event_time_range_raw
+    description: str, free-text time of day, parsed by int__news_events__mitpe_event_times
+  - name: event_summary
+    description: str, HTML summary (may contain HTML entities)
+  - name: event_image_src
+    description: str, root-relative URL path of the image, may be empty
+  - name: event_url
+    description: str, root-relative URL path of the event page
+  - name: retrieved_at
+    description: str, ISO 8601 time of the extraction
