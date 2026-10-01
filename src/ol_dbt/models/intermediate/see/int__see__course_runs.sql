@@ -12,6 +12,10 @@ with offerings as (
     select * from {{ ref('stg__see__api__courses') }}
 )
 
+, currencies as (
+    select * from {{ ref('iso_4217_currencies') }}
+)
+
 , runs as (
     select
         offerings.course_id as readable_id
@@ -47,13 +51,8 @@ with offerings as (
             else coalesce(offerings.courseoffering_location, '')
         end as location
         , cast(offerings.courseoffering_price as decimal(12, 2)) as price
-        -- MIT Learn kept a valid ISO 4217 code and fell back to USD otherwise. The
-        -- warehouse has no currency list, so this checks the shape only.
-        , case
-            when {{ regexp_like('offerings.courseoffering_currency', "'^[A-Z]{3}$'") }}
-                then offerings.courseoffering_currency
-            else 'USD'
-        end as currency
+        -- MIT Learn kept a currency pycountry knows and fell back to USD otherwise.
+        , coalesce(currencies.currency_code, 'USD') as currency
         , {{ array_filter_nonempty(
             "split(" ~ regexp_replace_all(
                 "trim(coalesce(offerings.courseoffering_faculty_names_raw, ''))", "'\\s*,\\s*'", "','"
@@ -76,6 +75,7 @@ with offerings as (
         ) as integer) as max_weekly_hours
     from offerings
     inner join courses on offerings.course_id = courses.course_id
+    left join currencies on offerings.courseoffering_currency = currencies.currency_code
 )
 
 select

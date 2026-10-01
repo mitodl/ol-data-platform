@@ -96,11 +96,13 @@ models:
   - name: end_date
     description: str, ISO 8601 end, null if none.
   - name: delivery
-    description: str, MIT Learn delivery code.
+    description: array(str), the run's MIT Learn delivery code, as transform_run lists
+      it.
   - name: availability
     description: str, anytime for an online on-demand offering, else dated.
   - name: pace
-    description: str, self_paced for an online on-demand offering, else instructor_paced.
+    description: array(str), self_paced for an online on-demand offering, else instructor_paced,
+      as transform_run lists it.
   - name: format
     description: array(str), synchronous and/or asynchronous, synchronous first as
       MIT Learn's parse_format lists them.
@@ -109,7 +111,8 @@ models:
   - name: price
     description: decimal(12,2), the offering's price.
   - name: currency
-    description: str, ISO 4217 code of the price, USD when Sloan gives none.
+    description: str, ISO 4217 code of the price, USD when Sloan gives none or a code
+      pycountry doesn't know (iso_4217_currencies).
   - name: instructors
     description: array(str), faculty full names.
   - name: duration

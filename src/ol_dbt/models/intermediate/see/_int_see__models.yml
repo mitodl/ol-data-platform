@@ -41,7 +41,8 @@ models:
   - name: price
     description: decimal(12,2), the offering's price
   - name: currency
-    description: str, three-letter currency code, USD when Sloan gives none
+    description: str, ISO 4217 code of the price, USD when Sloan gives none or an
+      unknown code
   - name: instructors
     description: array(str), faculty full names
   - name: continuing_ed_credits
