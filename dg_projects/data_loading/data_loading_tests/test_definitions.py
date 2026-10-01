@@ -94,6 +94,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__edxorg__discovery__api__mitx_course",
         "ol_warehouse_raw_data/raw__edxorg__discovery__api__mitx_course_run",
         "ol_warehouse_raw_data/raw__posthog__learn__s3__events",
+        "ol_warehouse_raw_data/raw__see__api__courses",
+        "ol_warehouse_raw_data/raw__see__api__course_offerings",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
     ):
@@ -107,6 +109,7 @@ def test_schedules_and_sensors_load() -> None:
         "mit_climate_ingest_daily_schedule",
         "mit_edx_programs_ingest_daily_schedule",
         "podcast_rss_ingest_daily_schedule",
+        "see_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
     }
