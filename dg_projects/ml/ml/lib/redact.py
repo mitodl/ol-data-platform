@@ -13,11 +13,14 @@ EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 # Allowlist, not a denylist: the English NER model tags ordinary words in non-English
 # text as LOCATION/NRP, and the national-ID patterns match problem numbers like
 # "PS2.3.5". Neither identifies a learner, so only these types are masked.
+# US_BANK_NUMBER stays out: it is any 8-17 digit run, and in feedback it matched
+# ticket IDs, meeting IDs and decimals. IBAN_CODE is checksum-validated.
 REDACTED_ENTITIES = {
     "PERSON",
     "EMAIL_ADDRESS",
     "PHONE_NUMBER",
     "CREDIT_CARD",
+    "IBAN_CODE",
     "IP_ADDRESS",
     "US_SSN",
     "STREET_ADDRESS",

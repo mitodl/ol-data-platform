@@ -177,12 +177,13 @@ def test_redact_text_still_redacts_an_email_and_phone_contained_in_a_url(
 def test_redact_text_masks_only_identifying_entity_types(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """LOCATION, NRP and national-ID matches stay as written; PERSON is masked.
+    """LOCATION, NRP and national-ID matches stay as written; PERSON and IBAN are
+    masked.
 
     The English NER model tags ordinary Spanish words as LOCATION/NRP, and the
     driver's-license pattern matches problem numbers like "2.3.5".
     """
-    text = "Problema 2.3.5 de Colombia, pregunta de Ana"
+    text = "Problema 2.3.5 de Colombia, pregunta de Ana, IBAN DE89370400440532013000"
 
     def span(word: str) -> tuple[int, int]:
         start = text.index(word)
@@ -195,13 +196,14 @@ def test_redact_text_masks_only_identifying_entity_types(
                 _AnalyzerResult("LOCATION", *span("Colombia")),
                 _AnalyzerResult("NRP", *span("pregunta")),
                 _AnalyzerResult("PERSON", *span("Ana")),
+                _AnalyzerResult("IBAN_CODE", *span("DE89370400440532013000")),
             ]
 
     monkeypatch.setattr(redact, "_get_analyzer", _MixedAnalyzer)
     monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
 
-    assert (
-        redact._redact_text(text) == "Problema 2.3.5 de Colombia, pregunta de <PERSON>"
+    assert redact._redact_text(text) == (
+        "Problema 2.3.5 de Colombia, pregunta de <PERSON>, IBAN <IBAN_CODE>"
     )
 
 
