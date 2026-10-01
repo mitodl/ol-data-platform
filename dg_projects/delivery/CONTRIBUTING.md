@@ -156,9 +156,10 @@ upstream since. Declare its deps with the key lakehouse emits,
 `AssetKey(["integrations", "<model name>"])`, and wrap it with
 `deliver_after_upstream`, which runs it once a day after every dep has
 materialized since the tick of the lakehouse job that stages the source's
-inputs (`NON_AIRBYTE_STAGING_CRON` for dlt/Dagster-loaded sources,
-`AIRBYTE_SYNC_AND_STAGE_CRON` for Airbyte ones). Pass the wrong one and the
-delivery never fires, because the models were rebuilt before the tick:
+inputs (`NON_AIRBYTE_STAGING_CRON` for dlt/Dagster-loaded sources; the
+latest tick when inputs come from more than one job). Too late a tick and the
+delivery never fires, because the models were rebuilt before it. Too early and
+it fires after the first job's rebuild, on the other inputs' old data:
 
 ```python
 my_source_webhook, my_source_delivery_sensor = deliver_after_upstream(

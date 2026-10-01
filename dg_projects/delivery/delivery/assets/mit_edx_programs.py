@@ -30,8 +30,7 @@ didn't land rather than that edX emptied the program. MIT Learn's legacy ETL fai
 the run on such a program too.
 
 Scheduling: once a day, after its integrations models have materialized since
-00:00 UTC (the Airbyte sync_and_stage tick). See
-delivery.lib.scheduled_automation.
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging

@@ -68,11 +68,10 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # has to wait out. dbt_automation_sensor rebuilds the integrations models from
 # that staging afterwards. A source is delivered against the tick of whichever
 # job stages *its* inputs: waiting on a later tick than that never fires, since
-# the models were already rebuilt before it.
+# the models were already rebuilt before it. A source with inputs from more than
+# one job waits on the latest of them.
 # non_airbyte_staging_daily: dlt- and Dagster-loaded sources.
 NON_AIRBYTE_STAGING_CRON = "0 6 * * *"
-# daily_sync_and_stage_<group> for a 24-hour Airbyte group.
-AIRBYTE_SYNC_AND_STAGE_CRON = "0 0 * * *"
 LEARN_DELIVERY_SENSOR_INTERVAL_SECONDS = 300
 
 INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
