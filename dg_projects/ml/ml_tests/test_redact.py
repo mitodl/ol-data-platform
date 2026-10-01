@@ -174,6 +174,37 @@ def test_redact_text_still_redacts_an_email_and_phone_contained_in_a_url(
     assert "<PHONE_NUMBER>" in redacted
 
 
+def test_redact_text_masks_only_identifying_entity_types(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LOCATION, NRP and national-ID matches stay as written; PERSON is masked.
+
+    The English NER model tags ordinary Spanish words as LOCATION/NRP, and the
+    driver's-license pattern matches problem numbers like "2.3.5".
+    """
+    text = "Problema 2.3.5 de Colombia, pregunta de Ana"
+
+    def span(word: str) -> tuple[int, int]:
+        start = text.index(word)
+        return start, start + len(word)
+
+    class _MixedAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("US_DRIVER_LICENSE", *span("2.3.5")),
+                _AnalyzerResult("LOCATION", *span("Colombia")),
+                _AnalyzerResult("NRP", *span("pregunta")),
+                _AnalyzerResult("PERSON", *span("Ana")),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _MixedAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert (
+        redact._redact_text(text) == "Problema 2.3.5 de Colombia, pregunta de <PERSON>"
+    )
+
+
 def test_filter_unredacted_drops_already_redacted_rows() -> None:
     """Only rows missing from the feedback_redacted output should get re-run."""
     source_df = pl.DataFrame(

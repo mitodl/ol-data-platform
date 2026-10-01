@@ -8,11 +8,22 @@ JOIN_COLS = ["source_slug", "source_record_ref"]
 
 EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 
+# Allowlist, not a denylist: the English NER model tags ordinary words in non-English
+# text as LOCATION/NRP, and the national-ID patterns match problem numbers like
+# "PS2.3.5". Neither identifies a learner, so only these types are masked.
+REDACTED_ENTITIES = {
+    "PERSON",
+    "EMAIL_ADDRESS",
+    "PHONE_NUMBER",
+    "CREDIT_CARD",
+    "IP_ADDRESS",
+    "US_SSN",
+}
+
 # The only types that must be redacted even when fully contained in a URL/date span
 # (e.g. a reset link's ?email=... query param) -- real PII someone could paste into
-# feedback text. Everything else stays exempted: pattern recognizers for driver's
-# license/passport/bank numbers etc. routinely false-positive on UUIDs, order
-# numbers, and course IDs, which are common and harmless inside a URL.
+# feedback text. Everything else stays exempted: a NER or pattern match inside a URL
+# is usually a false positive on a path segment, UUID, or course ID.
 ALWAYS_REDACT_EVEN_IN_URL = {"EMAIL_ADDRESS", "PHONE_NUMBER"}
 
 # Presidio's built-in EmailRecognizer's local-part character class includes URL
@@ -73,7 +84,7 @@ def _redact_text(value: str | None) -> str | None:
     filtered_results = [
         result
         for result in results
-        if result.entity_type not in EXCLUDED_ENTITIES
+        if result.entity_type in REDACTED_ENTITIES
         and not (
             result.entity_type not in ALWAYS_REDACT_EVEN_IN_URL
             and any(
