@@ -30,7 +30,6 @@ def _iceberg_meta(
     *,
     enabled: bool = True,
     snapshot_retention_days: int = 7,
-    orphan_retention_days: int = 7,
     optimize_after_every_n_runs: int = 1,
     analyze_after_every_n_runs: int = 7,
 ) -> dict[str, object]:
@@ -38,7 +37,6 @@ def _iceberg_meta(
     return {
         "enabled": enabled,
         "snapshot_retention_days": snapshot_retention_days,
-        "orphan_retention_days": orphan_retention_days,
         "optimize_after_every_n_runs": optimize_after_every_n_runs,
         "analyze_after_every_n_runs": analyze_after_every_n_runs,
     }
@@ -100,7 +98,6 @@ class TestLoadMaintenanceConfigsFromManifest:
         assert cfg.model_name == "mart__revenue"
         assert cfg.schema_name == "ol_warehouse_production_mart"
         assert cfg.snapshot_retention_days == 14
-        assert cfg.orphan_retention_days == 7
         assert cfg.optimize_after_every_n_runs == 1
         assert cfg.analyze_after_every_n_runs == 7
         assert cfg.asset_key == ["mart", "mart__revenue"]
@@ -115,9 +112,7 @@ class TestLoadMaintenanceConfigsFromManifest:
                     "model.proj.dim_user",
                     schema="ol_warehouse_production_dimensional",
                     config_schema="dimensional",
-                    iceberg_meta=_iceberg_meta(
-                        snapshot_retention_days=14, orphan_retention_days=14
-                    ),
+                    iceberg_meta=_iceberg_meta(snapshot_retention_days=14),
                 )
             }
         )
@@ -233,9 +228,7 @@ class TestLoadMaintenanceConfigsFromManifest:
                     schema="ol_warehouse_production_dimensional",
                     config_schema="dimensional",
                     materialized="incremental",
-                    iceberg_meta=_iceberg_meta(
-                        snapshot_retention_days=14, orphan_retention_days=14
-                    ),
+                    iceberg_meta=_iceberg_meta(snapshot_retention_days=14),
                 )
             }
         )
@@ -356,7 +349,6 @@ class TestRawConfigForTable:
         """The _default sentinel has the expected retention values."""
         default = RAW_LAYER_GROUP_CONFIGS["_default"]
         assert default.snapshot_retention_days == 7
-        assert default.orphan_retention_days == 7
 
 
 # ── Environment scoping ───────────────────────────────────────────────────────

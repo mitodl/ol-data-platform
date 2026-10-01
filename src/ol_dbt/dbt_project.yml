@@ -113,7 +113,6 @@ models:
       +meta:
         iceberg_maintenance:
           snapshot_retention_days: 14
-          orphan_retention_days: 14
           optimize_after_every_n_runs: 1
           analyze_after_every_n_runs: 7
     intermediate:
@@ -132,7 +131,6 @@ models:
       +meta:
         iceberg_maintenance:
           snapshot_retention_days: 14
-          orphan_retention_days: 7
           optimize_after_every_n_runs: 1
           analyze_after_every_n_runs: 7
     reporting:
@@ -231,7 +229,6 @@ models:
       iceberg_maintenance:
         enabled: true
         snapshot_retention_days: 7
-        orphan_retention_days: 7
         optimize_after_every_n_runs: 1
         analyze_after_every_n_runs: 7
 
