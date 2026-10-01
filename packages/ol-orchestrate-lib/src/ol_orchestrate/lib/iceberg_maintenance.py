@@ -7,8 +7,10 @@ This module provides the building blocks for the two nightly maintenance assets:
 - ``iceberg_raw_layer_maintenance``: EXPIRE (pyiceberg) for the 1,300+
   Airbyte-ingested tables in ``ol_warehouse_production_raw``.
 
-Orphan-file cleanup is not done per table here. It belongs to the scheduled
-lake-wide orphan sweep, which also covers files left behind by dropped tables.
+Orphan-file cleanup is not done here. pyiceberg has no per-table orphan removal,
+and orphans are instead handled by ``bin/lake-orphan-sweep.py``, which deletes
+S3 prefixes no Glue table references (e.g. data left behind by dropped tables).
+It is a manual CLI today; scheduling it is planned.
 
 Three sources of truth are used deliberately — each layer of the lakehouse has
 a natural authoritative registry, and we use each one directly:
