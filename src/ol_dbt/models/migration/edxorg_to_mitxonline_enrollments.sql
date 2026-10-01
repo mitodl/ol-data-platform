@@ -268,14 +268,15 @@ with combined_enrollments as (
 , program_learner_report_certificates as (
     -- Course certificates in the program learner report that combined_enrollments is missing,
     -- limited to runs that already exist in MITx Online
-    select distinct
-        program_learner_report.courserunenrollment_created_on
-        , program_learner_report.courserunenrollment_enrollment_mode
+    -- One row per learner and run; the report repeats a run for each program it belongs to
+    select
+        min(program_learner_report.courserunenrollment_created_on) as courserunenrollment_created_on
+        , max(program_learner_report.courserunenrollment_enrollment_mode) as courserunenrollment_enrollment_mode
         , cast(program_learner_report.user_id as varchar) as user_id
         , program_learner_report.courserun_readable_id
         , mitx__users.user_edxorg_email as user_email
-        , program_learner_report.completed_course_on as courseruncertificate_created_on
-        , cast(program_learner_report.courserungrade_grade as double) as courserungrade_grade
+        , min(program_learner_report.completed_course_on) as courseruncertificate_created_on
+        , max(cast(program_learner_report.courserungrade_grade as double)) as courserungrade_grade
     from {{ ref('stg__edxorg__s3__program_learner_report') }} as program_learner_report
     inner join mitxonline__course_runs
         on program_learner_report.courserun_readable_id = mitxonline__course_runs.courserun_readable_id
@@ -293,6 +294,10 @@ with combined_enrollments as (
                 and {{ format_course_id('combined_enrollments.courserun_readable_id', false) }}
                     = program_learner_report.courserun_readable_id
         )
+    group by
+        program_learner_report.user_id
+        , program_learner_report.courserun_readable_id
+        , mitx__users.user_edxorg_email
 )
 
 , edxorg_enrollment as (
