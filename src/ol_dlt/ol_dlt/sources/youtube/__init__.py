@@ -27,6 +27,7 @@ Run standalone:
 """
 
 import base64
+import functools
 import logging
 from collections.abc import Generator, Iterable
 from typing import Any
@@ -254,6 +255,12 @@ def youtube_source(  # noqa: C901
     """
     table_format = config.active_table_format()
 
+    # One resolution per source instance: in deployed profiles each one is a Vault
+    # login and read, and all four resources need the key.
+    @functools.cache
+    def _api_key() -> str:
+        return _resolve_api_key(api_key)
+
     def _configs() -> list[dict[str, Any]]:
         return _fetch_channel_configs(
             repo=github_repo,
@@ -271,7 +278,7 @@ def youtube_source(  # noqa: C901
     )
     def youtube_channels() -> Generator[dict[str, Any]]:
         """Yield one record per configured YouTube channel."""
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         for channel_config in _configs():
             channel_id = channel_config["channel_id"]
             items = list(
@@ -300,7 +307,7 @@ def youtube_source(  # noqa: C901
     )
     def youtube_playlists() -> Generator[dict[str, Any]]:
         """Yield one record per ingested playlist across all channels."""
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         for channel_config in _configs():
             channel_id = channel_config["channel_id"]
             for playlist_id in _playlist_ids_for_config(channel_config, key):
@@ -330,7 +337,7 @@ def youtube_source(  # noqa: C901
     )
     def youtube_videos() -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         for batch in _batched(_channel_video_ids(_configs(), key), YOUTUBE_MAX_RESULTS):
             for video in _yt_paged_items(
                 "videos",
@@ -365,7 +372,7 @@ def youtube_source(  # noqa: C901
         )
         from youtube_transcript_api.formatters import TextFormatter
 
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         ytt_api = YouTubeTranscriptApi()
         formatter = TextFormatter()
         for video_id in _channel_video_ids(_configs(), key):

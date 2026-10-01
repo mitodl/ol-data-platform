@@ -195,6 +195,23 @@ def test_transcripts_resource_yields_formatted_text(monkeypatch):
     ]
 
 
+def test_source_resolves_the_api_key_once_for_all_resources(monkeypatch):
+    _install_fake_transcript_api(monkeypatch)
+    resolutions: list[str | None] = []
+
+    def _resolve(api_key: str | None) -> str:
+        resolutions.append(api_key)
+        return "k"
+
+    monkeypatch.setattr(youtube, "_resolve_api_key", _resolve)
+    monkeypatch.setattr(youtube, "_fetch_channel_configs", lambda **_kw: [])
+
+    source = youtube.youtube_source(api_key="k")
+    for resource in source.resources.values():
+        list(resource)
+    assert resolutions == ["k"]
+
+
 # Matches the real mitodl/open-video-data format: a YAML *list* of channel dicts.
 _CHANNELS_YAML = (
     b"---\n- channel_id: CHAN\n  offered_by: ocw\n  playlists:\n    - id: all\n"
