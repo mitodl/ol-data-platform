@@ -9,6 +9,16 @@ strategies:
   qa: ingest
   local: fixture
 loader: airbyte
+# Production loads this unit with Airbyte and QA with dlt
+# (MITXONLINE_APP_DLT_ENVIRONMENTS) until the production cutover, so the two
+# environments carry different metadata columns: `_airbyte_extracted_at` vs.
+# `_dlt_load_id`. Neither loader leaves more than one row per primary key.
+# Airbyte's Iceberg destination merges the deduped streams with equality deletes
+# and overwrites the rest, and the dlt source replaces every table. Measured
+# 2026-10-01 through Athena: 0 duplicate keys on all 65 production tables and
+# the 64 tables QA holds. With nothing to deduplicate, staging passes rows through,
+# which compiles against either loader and stays correct after the cutover.
+raw_metadata_column:
 table_prefix: raw__mitxonline__app__postgres__
 airbyte:
   source_kind: source-postgres

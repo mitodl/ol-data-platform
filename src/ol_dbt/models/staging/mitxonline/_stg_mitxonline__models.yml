@@ -175,6 +175,9 @@ models:
   columns:
   - name: basketdiscount_id
     description: int, primary key representing a discount in a user's basket
+    tests:
+    - not_null
+    - unique
   - name: basketdiscount_created_on
     description: timestamp, specifying when the basket discount was initially created
   - name: basketdiscount_updated_on
@@ -193,6 +196,9 @@ models:
   columns:
   - name: basketitem_id
     description: int, primary key representing a item in a user's basket
+    tests:
+    - not_null
+    - unique
   - name: basketitem_created_on
     description: timestamp, specifying when the basket item was initially created
   - name: basketitem_updated_on
@@ -387,6 +393,7 @@ models:
   - name: userdiscount_id
     description: int, primary key representing a discount user combo
     tests:
+    - unique
     - not_null
   - name: userdiscount_created_on
     description: timestamp, specifying when the discount user association was initially
@@ -414,6 +421,7 @@ models:
   - name: discountproduct_id
     description: int, primary key representing a discount product combo
     tests:
+    - unique
     - not_null
   - name: discountproduct_created_on
     description: timestamp, specifying when the discount product association was initially
@@ -487,6 +495,9 @@ models:
   columns:
   - name: discountredemption_id
     description: int, primary key representing a discount redemption
+    tests:
+    - not_null
+    - unique
   - name: discountredemption_timestamp
     description: timestamp, specifying when the discount was redeemed by the user
   - name: user_id
@@ -1924,6 +1935,7 @@ models:
   - name: wagtail_page_id
     description: int, foreign key to cms_coursepage referring to the course page
     tests:
+    - unique
     - not_null
   - name: instructor_name
     description: str, the name of the instructor.
@@ -2082,6 +2094,9 @@ models:
     description: str, third title of the signatory
   - name: wagtail_page_id
     description: int, foreign key to wagtailcore_page
+    tests:
+    - not_null
+    - unique
   - name: signatorypage_organization
     description: str, the organization of the signatory
   - name: wagtailimages_image_id
