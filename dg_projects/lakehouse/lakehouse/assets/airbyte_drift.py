@@ -26,6 +26,45 @@ from ol_dbt_cli.lib.validation import Severity, ValidationReport
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 
+# Airbyte pages its list endpoints by offset over an ordering that is not stable
+# between requests, so consecutive pages can overlap: a row shifts back onto the
+# next page and appears twice while another is never returned. Probed against
+# production on 2026-10-01, one listing in six came back as 39 rows holding 29
+# distinct connections, and on that day's 03:01Z run the two that went missing
+# were reported as deleted. A page this size holds the whole workspace (39
+# connections, 50 sources), so there is no page boundary for a row to cross; the
+# id check in `_list_all` is what still holds once the workspace outgrows it.
+LISTING_PAGE_SIZE = 100
+LISTING_ATTEMPTS = 3
+
+
+def _list_all(
+    client: Any, path: str, id_key: str, params: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """List a collection, re-reading it until no two pages overlapped.
+
+    Each page is a slice of whatever order the server used for that request, so
+    unless the collection itself changes mid-read a listing has as many rows as
+    the collection, and a record that was skipped shows up as another one
+    duplicated. Equal row and id counts is the test of completeness.
+    """
+    for _ in range(LISTING_ATTEMPTS):
+        items = list(
+            client._paginated_request(  # noqa: SLF001
+                method="GET",
+                url=f"{client.rest_api_base_url}/{path}",
+                params=dict(params),
+            )
+        )
+        if len({item[id_key] for item in items}) == len(items):
+            return items
+    msg = (
+        f"Airbyte's /{path} listing returned overlapping pages on all "
+        f"{LISTING_ATTEMPTS} attempts. Refusing to report drift against it: every "
+        "record a page boundary skipped would be reported as deleted."
+    )
+    raise Failure(description=msg)
+
 
 def _fetch_workspace(workspace: AirbyteOSSWorkspace) -> dict[str, list[dict[str, Any]]]:
     """Read the connections and sources the drift check compares against.
@@ -36,23 +75,9 @@ def _fetch_workspace(workspace: AirbyteOSSWorkspace) -> dict[str, list[dict[str,
     per-stream sync mode or cursor — which is most of what drift means here.
     """
     client = workspace.get_client()
-    common = {
-        "workspaceIds": workspace.workspace_id,
-        "limit": workspace.request_page_size,
-    }
-
-    connections = list(
-        client._paginated_request(  # noqa: SLF001
-            method="GET",
-            url=f"{client.rest_api_base_url}/connections",
-            params=dict(common),
-        )
-    )
-    sources = list(
-        client._paginated_request(  # noqa: SLF001
-            method="GET", url=f"{client.rest_api_base_url}/sources", params=dict(common)
-        )
-    )
+    common = {"workspaceIds": workspace.workspace_id, "limit": LISTING_PAGE_SIZE}
+    connections = _list_all(client, "connections", "connectionId", common)
+    sources = _list_all(client, "sources", "sourceId", common)
 
     # Some server versions omit stream configs from the list response; the same
     # re-fetch `bin/airbyte-inventory.py` does. A connection left without one is
