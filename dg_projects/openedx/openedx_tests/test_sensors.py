@@ -1,8 +1,10 @@
 """Tests for openedx.sensors.openedx."""
 
 import threading
+import time
 from collections.abc import Iterator
-from datetime import timedelta
+from concurrent.futures import Future
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx2 as httpx
@@ -10,6 +12,7 @@ import pytest
 from dagster import AssetKey, DagsterInstance, build_sensor_context
 from openedx.assets.openedx import (
     HTTP_NOT_FOUND,
+    _drain,
     courseware_data_version,
     courseware_version_source,
 )
@@ -579,3 +582,33 @@ def test_a_blocked_course_does_not_stop_the_rest_being_reached(
         "every course except the blocked one must be reachable"
     )
     assert len(set(cursors)) > 1, "the cursor must move rather than pin on the blocker"
+
+
+def test_a_request_that_finishes_past_the_deadline_stays_unswept() -> None:
+    """A finished request the drain never handled must not count as swept.
+
+    The second request completes while the first is still being handled, after
+    the deadline has passed, so as_completed times out without yielding it.
+    Counting it swept because it is done() would advance the cursor past a
+    batch whose versions were never recorded.
+    """
+    first: Future[str] = Future()
+    second: Future[str] = Future()
+    first.set_result("v1")
+    handled: list[str] = []
+
+    def handle(_future: Future[Any], course_run_ids: list[str]) -> None:
+        handled.extend(course_run_ids)
+        time.sleep(0.2)
+        second.set_result("v2")
+
+    timed_out, unswept = _drain(
+        {first: ["course-a"], second: ["course-b", "course-c"]},
+        datetime.now(tz=UTC) + timedelta(milliseconds=50),
+        handle,
+    )
+
+    assert timed_out
+    assert second.done()
+    assert handled == ["course-a"]
+    assert unswept == ["course-b", "course-c"]

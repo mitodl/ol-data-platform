@@ -188,15 +188,19 @@ def _drain(
         else max(0.0, (deadline - datetime.now(tz=UTC)).total_seconds())
     )
     timed_out = False
+    # Not future.done(): a request can finish after the timeout fires without
+    # as_completed ever yielding it, and nothing would have recorded its result.
+    handled: set[Future[Any]] = set()
     try:
         for future in as_completed(futures, timeout=timeout):
             handle(future, futures[future])
+            handled.add(future)
     except TimeoutError:
         timed_out = True
     unswept = [
         course_run_id
         for future, course_run_ids in futures.items()
-        if not future.done()
+        if future not in handled
         for course_run_id in course_run_ids
     ]
     return timed_out, unswept
