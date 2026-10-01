@@ -14,7 +14,8 @@ Data flow:
         → integrations__learn__oll_courses (dbt)
             → MIT Learn webhook (this asset)
 
-Scheduling: daily at 06:30 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -79,7 +80,7 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "Read Open Learning Library courses from the integrations__learn__oll_courses "
         "Iceberg table and POST as a signed webhook batch to MIT Learn."
     ),
-    deps=[AssetKey(["integrations", "learn", "integrations__learn__oll_courses"])],
+    deps=[AssetKey(["integrations", "integrations__learn__oll_courses"])],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
 def oll_webhook(

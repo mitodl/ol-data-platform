@@ -29,7 +29,8 @@ unlink every course, and no courses usually means the program-course extraction
 didn't land rather than that edX emptied the program. MIT Learn's legacy ETL failed
 the run on such a program too.
 
-Scheduling: daily at 06:45 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -306,8 +307,8 @@ def _read_table(context: AssetExecutionContext, table: str) -> pl.DataFrame:
         "review the programs MIT Learn still publishes instead."
     ),
     deps=[
-        AssetKey(["integrations", "learn", _PROGRAMS_TABLE]),
-        AssetKey(["integrations", "learn", _INSTRUCTORS_TABLE]),
+        AssetKey(["integrations", _PROGRAMS_TABLE]),
+        AssetKey(["integrations", _INSTRUCTORS_TABLE]),
     ],
     retry_policy=RetryPolicy(max_retries=3, delay=10.0),
 )

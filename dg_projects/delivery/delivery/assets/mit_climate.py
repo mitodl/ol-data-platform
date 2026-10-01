@@ -11,7 +11,8 @@ Data flow:
         → integrations__learn__mit_climate_articles (dbt)
             → MIT Learn webhook (this asset)
 
-Scheduling: daily at 06:00 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -76,9 +77,7 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "integrations__learn__mit_climate_articles "
         "Iceberg table and POST as a signed webhook batch to MIT Learn."
     ),
-    deps=[
-        AssetKey(["integrations", "learn", "integrations__learn__mit_climate_articles"])
-    ],
+    deps=[AssetKey(["integrations", "integrations__learn__mit_climate_articles"])],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
 def mit_climate_webhook(

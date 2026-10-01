@@ -55,7 +55,24 @@ discover from instance state.
 from collections.abc import Iterable, Mapping
 from typing import Protocol
 
+from dagster import (
+    AssetsDefinition,
+    AssetSelection,
+    AutomationCondition,
+    AutomationConditionSensorDefinition,
+    DefaultSensorStatus,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
+
+# The ticks that start each day's staging in lakehouse, which is what a delivery
+# has to wait out. dbt_automation_sensor rebuilds the integrations models from
+# that staging afterwards. A source is delivered against the tick of whichever
+# job stages *its* inputs: waiting on a later tick than that never fires, since
+# the models were already rebuilt before it. A source with inputs from more than
+# one job waits on the latest of them.
+# non_airbyte_staging_daily: dlt- and Dagster-loaded sources.
+NON_AIRBYTE_STAGING_CRON = "0 6 * * *"
+LEARN_DELIVERY_SENSOR_INTERVAL_SECONDS = 300
 
 INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Extraction, not delivery: fetches the Sloan Executive Education API and
@@ -69,15 +86,17 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "ovs_videos_api_schedule": frozenset({"production"}),
     # Cohort 2 delivery. Merged and registered but never executed anywhere (see
     # above). Registered in production so the enable stays a UI toggle; absent
-    # elsewhere so a fresh instance cannot start delivering on its own.
-    "mit_climate_schedule": frozenset({"production"}),
-    "mitpe_schedule": frozenset({"production"}),
-    "oll_schedule": frozenset({"production"}),
-    "mit_edx_programs_schedule": frozenset({"production"}),
+    # elsewhere so a fresh instance cannot start delivering on its own. These
+    # were cron schedules until they were found to fire before the models they
+    # read had been rebuilt -- see deliver_after_upstream.
+    "mit_climate_delivery_sensor": frozenset({"production"}),
+    "mitpe_delivery_sensor": frozenset({"production"}),
+    "oll_delivery_sensor": frozenset({"production"}),
+    "mit_edx_programs_delivery_sensor": frozenset({"production"}),
     # Cohort 3 delivery (podcasts), on the same terms as Cohort 2: registered
     # STOPPED in production, and not to be started before mit-learn #3557
     # lands the endpoint it POSTs to.
-    "podcast_schedule": frozenset({"production"}),
+    "podcast_delivery_sensor": frozenset({"production"}),
     # Commits the instructor user list to the access forge GitHub repository's
     # default branch. There is one of those, not one per environment, so a tick
     # outside production would write the real repo. Moved from lakehouse, where
@@ -150,3 +169,60 @@ def instigators_for_environment[T: _NamedInstigator](
         if environment in environments:
             kept.append(instigator)
     return kept
+
+
+def deliver_after_upstream(
+    webhook: AssetsDefinition,
+    sensor_name: str,
+    *,
+    staging_cron: str,
+    environment: str = DAGSTER_ENV,
+) -> tuple[AssetsDefinition, AutomationConditionSensorDefinition]:
+    """Deliver *webhook* once a day, after everything it reads is rebuilt.
+
+    Replaces a cron schedule, which POSTed whatever the integrations model held
+    at the tick. Those ticks (06:00-07:00) landed at or before the 06:00 staging
+    build the models are derived from, so each delivery sent yesterday's data.
+    ``on_cron`` waits past *staging_cron* until every dep has materialized
+    since it, then requests once. If a dep is not rebuilt that day
+    (dbt_automation_sensor skips a model whose inputs did not change) nothing is
+    delivered, which is also what a full-sync receiver needs: the previous batch
+    is still current.
+
+    A rebuild after the tick that is not driven by fresh staging (a deploy that
+    changes the model's SQL, a manual materialization) also counts, and uses up
+    that day's delivery on the previous day's inputs. Narrow, and the next day
+    corrects it, but it is not ruled out.
+
+    The deps live in lakehouse. The automation daemon evaluates against the
+    workspace asset graph, so a dep in another code location is observed the
+    same as a local one, provided the key matches what lakehouse emits.
+
+    One sensor per source, rather than one over all of them, so each source is
+    still enabled on its own. The condition is attached only where the sensor
+    registers: a conditioned asset no declared sensor targets is swept into
+    Dagster's synthesized ``default_automation_condition_sensor``, which would
+    exist even in environments this map leaves out.
+
+    :param webhook: The delivery asset.
+    :param sensor_name: Its sensor's name, which must have an entry in
+        :data:`INSTIGATOR_ENVIRONMENTS`.
+    :param staging_cron: The tick of the lakehouse job that stages this
+        source's inputs, e.g. :data:`NON_AIRBYTE_STAGING_CRON`.
+    :param environment: The environment to build for.
+    :returns: The asset, conditioned where it may run, and its sensor.
+    :rtype: tuple[AssetsDefinition, AutomationConditionSensorDefinition]
+    """
+    sensor = AutomationConditionSensorDefinition(
+        sensor_name,
+        target=AssetSelection.assets(webhook),
+        minimum_interval_seconds=LEARN_DELIVERY_SENSOR_INTERVAL_SECONDS,
+        default_status=DefaultSensorStatus.STOPPED,
+    )
+    if environment not in INSTIGATOR_ENVIRONMENTS[sensor_name]:
+        return webhook, sensor
+    condition = AutomationCondition.on_cron(staging_cron)
+    conditioned = webhook.map_asset_specs(
+        lambda spec: spec.replace_attributes(automation_condition=condition)
+    )
+    return conditioned, sensor
