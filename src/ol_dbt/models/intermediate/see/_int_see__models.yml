@@ -1,0 +1,104 @@
+---
+version: 2
+
+models:
+- name: int__see__course_runs
+  description: One row per Sloan Executive Education course offering, normalized as
+    MIT Learn's legacy Sloan ETL normalized a run (transform_run in learning_resources/etl/sloan.py).
+  columns:
+  - name: readable_id
+    description: str, the offering's course id
+    tests:
+    - not_null
+  - name: run_id
+    description: str, the offering's title, MIT Learn's run id
+    tests:
+    - not_null
+  - name: run_api_position
+    description: bigint, zero-based position of the offering in the API response
+  - name: title
+    description: str, the course title
+  - name: url
+    description: str, the course URL
+  - name: start_on
+    description: timestamp with time zone, midnight US Eastern of the start date
+  - name: end_on
+    description: timestamp with time zone, midnight US Eastern of the end date
+  - name: delivery
+    description: str, MIT Learn delivery code (see the learn_delivery macro)
+  - name: availability
+    description: str, anytime for an online on-demand offering, else dated
+  - name: pace
+    description: str, self_paced for an online on-demand offering, else instructor_paced
+  - name: is_synchronous
+    description: bool, whether the offering has a synchronous format
+  - name: is_asynchronous
+    description: bool, whether the offering has an asynchronous format
+  - name: format
+    description: array(str), synchronous and/or asynchronous, synchronous first
+  - name: location
+    description: str, the offering's location, empty for online offerings
+  - name: price
+    description: decimal(12,2), the offering's price
+  - name: currency
+    description: str, three-letter currency code, USD when Sloan gives none
+  - name: instructors
+    description: array(str), faculty full names
+  - name: continuing_ed_credits
+    description: str, decimal continuing-education credits
+  - name: duration
+    description: str, free-text duration, empty when Sloan gives none
+  - name: min_weeks
+    description: int, lower bound of the duration in weeks
+  - name: max_weeks
+    description: int, upper bound of the duration in weeks
+  - name: time_commitment
+    description: str, free-text time commitment, empty when Sloan gives none
+  - name: min_weekly_hours
+    description: int, first number of the time commitment
+  - name: max_weekly_hours
+    description: int, number after the first run of non-digits, else the first
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - readable_id
+        - run_id
+- name: int__see__courses
+  description: >
+    One row per Sloan Executive Education course MIT Learn's legacy Sloan ETL would
+    load (transform_courses), i.e. a course with a URL and at least one offering.
+  config:
+    meta:
+      qa_branches:
+      - mitlearn/app_postgres
+  columns:
+  - name: readable_id
+    description: str, Sloan's Salesforce course id
+    tests:
+    - not_null
+    - unique
+  - name: title
+    description: str, course title
+  - name: description
+    description: str, course description
+  - name: url
+    description: str, absolute URL of the course page
+  - name: image_url
+    description: str, absolute URL of the course image
+  - name: image_alt
+    description: str, the course title, which MIT Learn used as alt text
+  - name: sloan_certification_type
+    description: str, Sloan's certificate track; MIT Learn does not read it
+  - name: updated_on
+    description: str, ISO 8601 time Sloan last modified the course
+  - name: topics
+    description: array(str), MIT Learn topic names the Sloan topic resolves to
+  - name: delivery
+    description: array(str), distinct delivery codes of the course's runs
+  - name: pace
+    description: array(str), distinct pace codes of the course's runs
+  - name: format
+    description: array(str), distinct format codes of the course's runs
+  - name: continuing_ed_credits
+    description: str, credits of the course's first offering in API order

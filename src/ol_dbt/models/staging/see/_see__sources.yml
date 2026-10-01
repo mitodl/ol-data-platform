@@ -1,0 +1,72 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__see__api__courses
+    description: >
+      Sloan Executive Education courses from the Sloan unified-portal /courses API,
+      loaded whole by the see dlt pipeline. Full replace on every run.
+    columns:
+    - name: course_id
+      description: str, Sloan's Salesforce id for the course
+    - name: title
+      description: str, course title
+    - name: description
+      description: str, course description
+    - name: url
+      description: str, absolute URL of the course page on executive.mit.edu
+    - name: certification_type
+      description: str, Sloan's certificate track, e.g. Management and Leadership
+    - name: topics
+      description: 'str, one topic as "Category: Topic", e.g. "Business: Strategy"'
+    - name: image_src
+      description: str, absolute URL of the course image
+    - name: source_create_date
+      description: str, ISO 8601 time the course was created in Sloan's system
+    - name: source_last_modified_date
+      description: str, ISO 8601 time the course was last modified in Sloan's system
+    - name: retrieved_at
+      description: str, ISO 8601 time of the extraction
+    - name: api_position
+      description: bigint, zero-based position of the record in the API response
+  - name: raw__see__api__course_offerings
+    description: >
+      Sloan Executive Education course offerings (runs) from the Sloan
+      unified-portal /course-offerings API, loaded whole by the see dlt pipeline.
+      Full replace on every run.
+    columns:
+    - name: co_title
+      description: str, offering title, e.g. "FAM 10-18-2026"; MIT Learn's run id
+    - name: course_id
+      description: str, the offering's course
+    - name: start_date
+      description: str, YYYY-MM-DD start date, US Eastern
+    - name: end_date
+      description: str, YYYY-MM-DD end date, US Eastern
+    - name: delivery
+      description: str, Online, In Person or Blended
+    - name: format
+      description: str, e.g. "Asynchronous (On-Demand)"
+    - name: duration
+      description: str, free-text duration, e.g. "6 weeks", "2 days"
+    - name: price
+      description: str, decimal price, e.g. "13900.0"
+    - name: continuing_ed_credits
+      description: str, decimal continuing-education credits, e.g. "5.0"
+    - name: time_commitment
+      description: str, free-text commitment, e.g. "6-8 hours/week"
+    - name: location
+      description: str, location for in-person offerings
+    - name: currency
+      description: str, ISO 4217 currency code of the price; null means USD
+    - name: faculty_name
+      description: str, comma-separated faculty names
+    - name: retrieved_at
+      description: str, ISO 8601 time of the extraction
+    - name: api_position
+      description: bigint, zero-based position of the record in the API response
