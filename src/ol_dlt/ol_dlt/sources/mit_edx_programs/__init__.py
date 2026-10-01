@@ -301,7 +301,7 @@ def mitx_course_run_records(
                         "first_name": staff.get("given_name"),
                         "last_name": staff.get("family_name"),
                     }
-                    for staff in run.get("staff")
+                    for staff in run["staff"]
                 ]
             ),
             "weeks_to_complete": run["weeks_to_complete"],
