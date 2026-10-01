@@ -205,6 +205,54 @@ def test_redact_text_masks_only_identifying_entity_types(
     )
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "Ship it to 77 Massachusetts Ave, Cambridge, MA 02139.",
+            ["77 Massachusetts Ave", "MA 02139"],
+        ),
+        (
+            "1234 Elm Street, Apt 5B, IL 62704-1234",
+            ["1234 Elm Street", "IL 62704-1234"],
+        ),
+        (
+            "I live at 221B Baker Street, London NW1 6XE",
+            ["221B Baker Street", "NW1 6XE"],
+        ),
+        ("Mi dirección es Calle 45 #12-30, Bogotá", ["Calle 45 #12-30"]),
+    ],
+)
+def test_street_address_recognizer_matches_the_street_and_postal_code(
+    text: str, expected: list[str]
+) -> None:
+    """The street and ZIP/postcode are masked; a city or country alone is not."""
+    results = redact._STREET_ADDRESS_RECOGNIZER.analyze(
+        text=text, entities=["STREET_ADDRESS"]
+    )
+
+    assert sorted(text[r.start : r.end] for r in results) == sorted(expected)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Problem PS2.3.5 asks about 3 ways to sort",
+        "I watched 12 videos in week 3",
+        "my ma 02139 and 50 states",
+        "Vivo en Bogotá, Colombia",
+    ],
+)
+def test_street_address_recognizer_ignores_text_that_is_not_an_address(
+    text: str,
+) -> None:
+    results = redact._STREET_ADDRESS_RECOGNIZER.analyze(
+        text=text, entities=["STREET_ADDRESS"]
+    )
+
+    assert results == []
+
+
 def test_filter_unredacted_drops_already_redacted_rows() -> None:
     """Only rows missing from the feedback_redacted output should get re-run."""
     source_df = pl.DataFrame(

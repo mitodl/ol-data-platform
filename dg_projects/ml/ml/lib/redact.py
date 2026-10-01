@@ -1,5 +1,7 @@
 """Presidio-based PII redaction for feedback title/text."""
 
+import re
+
 import polars as pl
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
@@ -18,7 +20,47 @@ REDACTED_ENTITIES = {
     "CREDIT_CARD",
     "IP_ADDRESS",
     "US_SSN",
+    "STREET_ADDRESS",
 }
+
+_US_STATES = (
+    "AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|"
+    "MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|PR"
+)
+_STREET_TYPES = (
+    "Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|"
+    "Place|Pl|Square|Sq|Terrace|Parkway|Pkwy|Highway|Hwy"
+)
+_LATAM_STREET_TYPES = "Calle|Carrera|Avenida|Diagonal|Transversal|Cra|Cl|Av"
+# Presidio has no address recognizer; LOCATION only ever caught the city, leaving the
+# street and ZIP that place someone. Case-sensitive (Presidio defaults to IGNORECASE)
+# so "ma 02139" or "3 ways st" in prose don't match.
+_STREET_ADDRESS_RECOGNIZER = PatternRecognizer(
+    supported_entity="STREET_ADDRESS",
+    patterns=[
+        Pattern(
+            name="street_line",
+            regex=rf"\b\d{{1,6}}[A-Z]?(?:\s+[A-Z][\w'.-]*){{1,4}}\s+(?:{_STREET_TYPES})\b\.?",
+            score=0.85,
+        ),
+        Pattern(
+            name="latam_street_line",
+            regex=rf"\b(?:{_LATAM_STREET_TYPES})\.?\s+\d+[A-Z]?\s*(?:#|No\.?)\s*\d+[A-Z]?(?:\s*-\s*\d+)?",
+            score=0.85,
+        ),
+        Pattern(
+            name="us_state_zip",
+            regex=rf"\b(?:{_US_STATES})\s+\d{{5}}(?:-\d{{4}})?\b",
+            score=0.85,
+        ),
+        Pattern(
+            name="uk_postcode",
+            regex=r"\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b",
+            score=0.85,
+        ),
+    ],
+    global_regex_flags=re.MULTILINE,
+)
 
 # The only types that must be redacted even when fully contained in a URL/date span
 # (e.g. a reset link's ?email=... query param) -- real PII someone could paste into
@@ -50,6 +92,7 @@ def _get_analyzer() -> AnalyzerEngine:
         _analyzer = AnalyzerEngine()
         _analyzer.registry.remove_recognizer("EmailRecognizer")
         _analyzer.registry.add_recognizer(_STRICT_EMAIL_RECOGNIZER)
+        _analyzer.registry.add_recognizer(_STREET_ADDRESS_RECOGNIZER)
     return _analyzer
 
 
