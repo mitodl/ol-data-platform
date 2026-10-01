@@ -69,6 +69,11 @@ jobs:
       working-directory: src/ol_dbt
       run: python3 "${{ github.workspace }}/.github/scripts/assert_manifest_has_source_lineage.py"
 
+    # dbt reads a unit test input's columns from a real relation, which this job has
+    # none of. ol-dbt unit-test creates empty stand-ins from manifest.json first.
+    - name: dbt unit tests
+      run: uv run ol-dbt unit-test
+
     # Global gates. Dimensional layering (#2072 DoD) is baselined and fails only
     # on NEW marts/reporting → staging/intermediate references. The QA branch
     # contract (RFC 12711) fails when a model unioning several ingestion units
