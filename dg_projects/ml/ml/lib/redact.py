@@ -13,18 +13,22 @@ EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 # Allowlist, not a denylist: the English NER model tags ordinary words in non-English
 # text as LOCATION/NRP, and the national-ID patterns match problem numbers like
 # "PS2.3.5". Neither identifies a learner, so only these types are masked.
-# US_BANK_NUMBER stays out: it is any 8-17 digit run, and in feedback it matched
-# ticket IDs, meeting IDs and decimals. IBAN_CODE is checksum-validated.
 REDACTED_ENTITIES = {
     "PERSON",
     "EMAIL_ADDRESS",
     "PHONE_NUMBER",
     "CREDIT_CARD",
     "IBAN_CODE",
+    "US_BANK_NUMBER",
     "IP_ADDRESS",
     "US_SSN",
     "STREET_ADDRESS",
 }
+
+# US_BANK_NUMBER is any 8-17 digit run (score 0.05), which in feedback matched ticket
+# IDs, meeting IDs and decimals. Presidio raises it to 0.4 only next to a context word
+# like "account" or "bank", so mask it only then.
+MIN_SCORE_BY_ENTITY = {"US_BANK_NUMBER": 0.4}
 
 _US_STATES = (
     "AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|"
@@ -68,8 +72,16 @@ _STREET_ADDRESS_RECOGNIZER = PatternRecognizer(
 # The only types that must be redacted even when fully contained in a URL/date span
 # (e.g. a reset link's ?email=... query param) -- real PII someone could paste into
 # feedback text. Everything else stays exempted: a NER or pattern match inside a URL
-# is usually a false positive on a path segment, UUID, or course ID.
-ALWAYS_REDACT_EVEN_IN_URL = {"EMAIL_ADDRESS", "PHONE_NUMBER"}
+# is usually a false positive on a path segment, UUID, or course ID. Financial types
+# are listed because spaCy tags a bare account number as DATE_TIME, and they already
+# need a checksum or a context word to match.
+ALWAYS_REDACT_EVEN_IN_URL = {
+    "EMAIL_ADDRESS",
+    "PHONE_NUMBER",
+    "CREDIT_CARD",
+    "IBAN_CODE",
+    "US_BANK_NUMBER",
+}
 
 # Presidio's built-in EmailRecognizer's local-part character class includes URL
 # delimiters (/ ? = &), so an email right after a URL's domain/path (e.g. a reset
@@ -131,6 +143,7 @@ def _redact_text(value: str | None) -> str | None:
         result
         for result in results
         if result.entity_type in REDACTED_ENTITIES
+        and result.score >= MIN_SCORE_BY_ENTITY.get(result.entity_type, 0)
         and not (
             result.entity_type not in ALWAYS_REDACT_EVEN_IN_URL
             and any(

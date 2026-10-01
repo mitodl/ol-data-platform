@@ -16,10 +16,13 @@ class _Result:
 
 
 class _AnalyzerResult:
-    def __init__(self, entity_type: str, start: int, end: int) -> None:
+    def __init__(
+        self, entity_type: str, start: int, end: int, score: float = 0.85
+    ) -> None:
         self.entity_type = entity_type
         self.start = start
         self.end = end
+        self.score = score
 
 
 class _FakeAnalyzer:
@@ -253,6 +256,36 @@ def test_street_address_recognizer_ignores_text_that_is_not_an_address(
     )
 
     assert results == []
+
+
+def test_redact_text_masks_a_bank_number_only_next_to_a_context_word(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Presidio scores a bare 8-17 digit run 0.05 and one near "account" 0.4.
+
+    The bare runs in feedback are ticket and meeting IDs, so only the second masks,
+    even though spaCy also tags it DATE_TIME.
+    """
+    text = "Ticket EDX-12345678, bank account 987654321"
+
+    def span(word: str) -> tuple[int, int]:
+        start = text.index(word)
+        return start, start + len(word)
+
+    class _BankAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("US_BANK_NUMBER", *span("12345678"), score=0.05),
+                _AnalyzerResult("US_BANK_NUMBER", *span("987654321"), score=0.4),
+                _AnalyzerResult("DATE_TIME", *span("987654321")),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _BankAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert redact._redact_text(text) == (
+        "Ticket EDX-12345678, bank account <US_BANK_NUMBER>"
+    )
 
 
 def test_filter_unredacted_drops_already_redacted_rows() -> None:
