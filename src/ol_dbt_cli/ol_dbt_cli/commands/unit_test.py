@@ -1,8 +1,8 @@
 """Run dbt unit tests on DuckDB with no warehouse access.
 
 dbt reads each unit test input's columns from a real relation, so on its own ``dbt test
---select test_type:unit`` needs every input built first. This parses on the plain DuckDB
-``dev`` target, creates an empty stand-in table for every input relation (see
+--select test_type:unit`` needs every input built first. This parses on the DuckDB
+``unit_test`` target, creates an empty stand-in table for every input relation (see
 :mod:`ol_dbt_cli.lib.unit_test_inputs`), then runs the unit tests against them.
 
 Usage examples::
@@ -31,9 +31,11 @@ from ol_dbt_cli.lib.unit_test_inputs import create_stub_relations, stub_relation
 
 console = Console()
 
-# The stand-in tables are written into this target's database, so it must be one nothing else
-# reads from. The `dev` target is a plain local DuckDB file with no extensions or credentials.
-UNIT_TEST_TARGET = "dev"
+# A target whose database nothing else reads: the stand-ins replace whatever is there.
+UNIT_TEST_TARGET = "unit_test"
+# Kept apart from target/ so the manifest other ol-dbt commands read isn't swapped for one
+# parsed against this target.
+UNIT_TEST_TARGET_PATH = "target/unit_test"
 
 
 def _target_database_path(dbt_dir: Path) -> Path:
@@ -46,17 +48,21 @@ def _target_database_path(dbt_dir: Path) -> Path:
     return dbt_dir / output["path"]
 
 
+def _warn(message: str) -> None:
+    console.print(f"[yellow]{message}[/]", soft_wrap=True)
+
+
 def unit_test(
     select: Annotated[
-        str,
-        Parameter(name=["--select", "-s"], help="dbt selector, intersected with test_type:unit."),
-    ] = "test_type:unit",
+        str | None,
+        Parameter(name=["--select", "-s"], help="dbt selector; only the unit tests it selects run."),
+    ] = None,
     project_dir: Annotated[
         str | None,
         Parameter(name="--project-dir", help="dbt project root (default: src/ol_dbt under the repo root)."),
     ] = None,
 ) -> None:
-    """Run dbt unit tests against empty stand-in inputs on the local DuckDB ``dev`` target.
+    """Run dbt unit tests against empty stand-in inputs on a scratch DuckDB database.
 
     Needs no AWS or warehouse credentials. A fixture value's type is taken from the input
     column's documented ``data_type`` when it has one, else inferred from the fixture values
@@ -65,27 +71,28 @@ def unit_test(
     """
     dbt_dir = _find_dbt_dir(project_dir)
     base = [dbt_executable()]
-    common = ["--profiles-dir", str(dbt_dir), "--target", UNIT_TEST_TARGET]
+    common = ["--profiles-dir", str(dbt_dir), "--target", UNIT_TEST_TARGET, "--target-path", UNIT_TEST_TARGET_PATH]
 
     parse = subprocess.run([*base, "parse", *common], cwd=dbt_dir)  # noqa: S603
     if parse.returncode:
         sys.exit(parse.returncode)
 
-    manifest = json.loads((dbt_dir / "target" / "manifest.json").read_text())
-    stubs = stub_relations(manifest)
+    manifest = json.loads((dbt_dir / UNIT_TEST_TARGET_PATH / "manifest.json").read_text())
+    stubs, unresolved = stub_relations(manifest)
+    for problem in unresolved:
+        _warn(problem)
+
     database_path = _target_database_path(dbt_dir)
     database_path.parent.mkdir(parents=True, exist_ok=True)
+    database_path.unlink(missing_ok=True)
     with duckdb.connect(str(database_path)) as conn:
-        created = create_stub_relations(conn, stubs)
+        created, failed = create_stub_relations(conn, stubs)
     console.print(f"[dim]Created {len(created)} empty input relations in {database_path}[/]", soft_wrap=True)
-    for stub in stubs:
-        if not stub.columns():
-            console.print(
-                f"[yellow]No columns known for {stub.identifier}:[/] it documents none and its fixtures set none. "
-                "Document its columns or give it a `format: sql` fixture.",
-                soft_wrap=True,
-            )
+    for problem in failed:
+        _warn(problem)
 
-    selector = select if select == "test_type:unit" else f"{select},test_type:unit"
-    result = subprocess.run([*base, "test", *common, "--select", selector], cwd=dbt_dir)  # noqa: S603
+    selection = ["--select", select] if select else []
+    result = subprocess.run(  # noqa: S603
+        [*base, "test", *common, *selection, "--resource-type", "unit_test"], cwd=dbt_dir
+    )
     sys.exit(result.returncode)
