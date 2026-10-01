@@ -5,9 +5,14 @@ from collections.abc import Iterator
 from datetime import timedelta
 from typing import Any
 
+import httpx2 as httpx
 import pytest
 from dagster import AssetKey, DagsterInstance, build_sensor_context
-from openedx.assets.openedx import courseware_data_version
+from openedx.assets.openedx import (
+    HTTP_NOT_FOUND,
+    courseware_data_version,
+    courseware_version_source,
+)
 from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from openedx.sensors.openedx import (
     course_run_sensor,
@@ -43,12 +48,12 @@ class _FakeFactory:
     """Stand-in for OpenEdxApiClientFactory.
 
     Carries whichever client the sensor under test calls: discovery reads the
-    catalog, observation reads content versions.
+    catalog, observation reads content versions or outlines.
     """
 
     def __init__(
         self,
-        client: "_CatalogClient | _VersionsClient",
+        client: "_CatalogClient | _VersionsClient | _OutlineClient",
         deployment: str = "mitxonline",
     ) -> None:
         self.client = client
@@ -395,6 +400,108 @@ def test_each_kind_of_change_moves_its_own_part_of_the_data_version() -> None:
     assert [published[0] != base[0], published[1:] == base[1:]] == [True, True]
     assert [uploaded[1] != base[1], uploaded[::2] == base[::2]] == [True, True]
     assert [transcribed[2] != base[2], transcribed[:2] == base[:2]] == [True, True]
+
+
+@pytest.mark.parametrize(
+    ("deployment", "env", "source"),
+    [
+        ("mitxonline", "production", "content_versions"),
+        ("mitx", "production", "content_versions"),
+        ("xpro", "production", "course_outline"),
+        ("xpro", "qa", "content_versions"),
+        ("xpro", "dev", "content_versions"),
+        ("edxorg", "production", "course_outline"),
+        ("mitx", "an-unknown-env", "course_outline"),
+    ],
+)
+def test_only_opted_in_deployments_use_the_versions_endpoint(
+    deployment: str, env: str, source: str
+) -> None:
+    """Xpro production has no plugin with the endpoint yet, so it keeps outlines.
+
+    Its QA Studio already runs 0.4.0, which is why the choice is per environment.
+    Anything not listed falls back to outlines rather than risking a POST.
+    """
+    assert courseware_version_source(deployment, env) == source
+
+
+class _OutlineClient:
+    """Serves canned outlines, optionally 404ing or failing some of them.
+
+    Deliberately has no versions endpoint methods: a deployment on outlines must
+    never probe or POST to a Studio that may still route that path to an export.
+    """
+
+    def __init__(
+        self,
+        versions: dict[str, str],
+        missing: set[str] | None = None,
+        raises: set[str] | None = None,
+    ) -> None:
+        self.versions = versions
+        self.missing = missing or set()
+        self.raises = raises or set()
+
+    def get_course_outline(self, course_id: str) -> dict[str, str]:
+        if course_id in self.missing:
+            msg = f"no outline for {course_id}"
+            raise httpx.HTTPStatusError(
+                msg,
+                request=httpx.Request("GET", "https://lms.example/outline"),
+                response=httpx.Response(HTTP_NOT_FOUND),
+            )
+        if course_id in self.raises:
+            msg = f"boom for {course_id}"
+            raise ValueError(msg)
+        return {"published_version": self.versions[course_id]}
+
+
+@pytest.fixture
+def on_course_outlines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run the sensor as a deployment that has not opted in, e.g. xpro production."""
+    monkeypatch.setattr(
+        "openedx.sensors.openedx.courseware_version_source",
+        lambda _deployment: "course_outline",
+    )
+
+
+@pytest.mark.usefixtures("on_course_outlines")
+def test_a_deployment_on_outlines_reports_the_published_version_alone(
+    instance: DagsterInstance,
+) -> None:
+    """The version format a deployment had before opting in is left untouched.
+
+    Changing it would re-export every partition, which is for opting in to do.
+    """
+    _seed_partitions(instance, ["course-a", "course-gone", "course-bad"])
+    client = _OutlineClient(
+        {"course-a": "v1"}, missing={"course-gone"}, raises={"course-bad"}
+    )
+
+    result = courseware_observation_sensor(
+        build_sensor_context(instance=instance, sensor_name=OBSERVATION_SENSOR_NAME),
+        _FakeFactory(client),
+    )
+
+    assert _observations(result) == {"course-a": "v1"}
+    assert result.cursor == "0", "all three finished, so a full pass wraps to 0"
+
+
+@pytest.mark.usefixtures("on_course_outlines")
+def test_a_deployment_on_outlines_still_fails_when_every_lookup_fails(
+    instance: DagsterInstance,
+) -> None:
+    """A bad token or a down LMS is loud on either source."""
+    _seed_partitions(instance, ["course-a", "course-b"])
+    client = _OutlineClient({}, raises={"course-a", "course-b"})
+
+    with pytest.raises(RuntimeError, match="failed for all"):
+        courseware_observation_sensor(
+            build_sensor_context(
+                instance=instance, sensor_name=OBSERVATION_SENSOR_NAME
+            ),
+            _FakeFactory(client),
+        )
 
 
 def test_a_malformed_cursor_restarts_from_the_top() -> None:

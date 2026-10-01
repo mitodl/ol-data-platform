@@ -17,7 +17,11 @@ from dagster._core.definitions.data_version import (
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 
-from openedx.assets.openedx import COURSEWARE_ASSET_KEY, sweep_course_versions
+from openedx.assets.openedx import (
+    COURSEWARE_ASSET_KEY,
+    courseware_version_source,
+    sweep_course_versions,
+)
 from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
@@ -128,18 +132,21 @@ def courseware_observation_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
 ):
-    """Report the content version of every course run as an observation.
+    """Report the version of every course run as an observation.
 
     This is the whole trigger for the export graph. Every downstream carries
     ``upstream_or_code_changes()``, whose ``data_version_changed()`` term fires
     against the versions reported here; a course whose version is unchanged
     reports the same value and asks for nothing, which is what keeps a steady
-    state quiet. The version covers uploaded files and VAL transcripts as well
-    as the published version (``courseware_data_version``), because an export
-    carries all three and a publish moves only the last.
+    state quiet. For a deployment opted in to ``CONTENT_VERSION_DEPLOYMENTS``
+    the version covers uploaded files and VAL transcripts as well as the
+    published version (``courseware_data_version``), because an export carries
+    all three and a publish moves only the last. Any other deployment reports
+    the published version alone.
 
     Changing how the version is built changes it for every course at once, so
-    the first tick after such a deploy re-exports every partition. That is how
+    the first tick after such a deploy, or after opting a deployment in,
+    re-exports every partition. That is how
     the exports left stale before August's cutover get refreshed, and it only
     works if course_xml's automation condition is left alone in the same
     deploy: ``data_version_changed()`` returns nothing on a condition's first
@@ -174,6 +181,7 @@ def courseware_observation_sensor(
         openedx.client,
         ordered,
         context.log,
+        source=courseware_version_source(deployment),
         deadline=deadline,
     )
     context.log.info(
@@ -195,7 +203,7 @@ def courseware_observation_sensor(
     # leaving every downstream quiet, hourly, forever.
     if attempted and sweep.failures == attempted:
         msg = (
-            f"Course content version sweep failed for all {sweep.failures} attempted "
+            f"Courseware version sweep failed for all {sweep.failures} attempted "
             f"{deployment} courses"
         )
         raise RuntimeError(msg)
