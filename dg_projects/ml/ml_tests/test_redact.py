@@ -226,6 +226,11 @@ def test_redact_text_masks_only_identifying_entity_types(
             ["221B Baker Street", "NW1 6XE"],
         ),
         ("Mi dirección es Calle 45 #12-30, Bogotá", ["Calle 45 #12-30"]),
+        (
+            "ship to 77 massachusetts ave, cambridge, ma 02139",
+            ["77 massachusetts ave", "ma 02139"],
+        ),
+        ("vivo en calle 45 #12-30, bogotá", ["calle 45 #12-30"]),
     ],
 )
 def test_street_address_recognizer_matches_the_street_and_postal_code(
@@ -246,6 +251,9 @@ def test_street_address_recognizer_matches_the_street_and_postal_code(
         "I watched 12 videos in week 3",
         "my ma 02139 and 50 states",
         "Vivo en Bogotá, Colombia",
+        "I watched 12 videos on the way to work",
+        "it took 3 tries on the road to the answer",
+        "in 12345 cases, or 23456",
     ],
 )
 def test_street_address_recognizer_ignores_text_that_is_not_an_address(

@@ -39,10 +39,23 @@ _STREET_TYPES = (
     "Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|"
     "Place|Pl|Square|Sq|Terrace|Parkway|Pkwy|Highway|Hwy"
 )
+# State codes that are also common words (in, or, me, de...) only match in uppercase.
+_LOWERCASE_US_STATES = "|".join(
+    s
+    for s in _US_STATES.split("|")
+    if s not in {"AL", "DE", "HI", "ID", "IN", "LA", "ME", "OH", "OK", "OR", "PA"}
+)
 _LATAM_STREET_TYPES = "Calle|Carrera|Avenida|Diagonal|Transversal|Cra|Cl|Av"
+# Lowercase matching uses only street types that are rare in prose, and needs a
+# delimiter after them: "77 massachusetts ave, ..." but not "12 videos on the way".
+_LOWERCASE_STREET_TYPES = (
+    "street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|parkway|pkwy|highway|hwy|"
+    "terrace"
+)
 # Presidio has no address recognizer; LOCATION only ever caught the city, leaving the
-# street and ZIP that place someone. Case-sensitive (Presidio defaults to IGNORECASE)
-# so "ma 02139" or "3 ways st" in prose don't match.
+# street and ZIP that place someone. Case-sensitive by default (Presidio defaults to
+# IGNORECASE) so "in 12345 cases" doesn't match; the lowercase patterns need a stronger
+# signal instead: a delimiter after the street type, or a comma before the state.
 _STREET_ADDRESS_RECOGNIZER = PatternRecognizer(
     supported_entity="STREET_ADDRESS",
     patterns=[
@@ -52,13 +65,30 @@ _STREET_ADDRESS_RECOGNIZER = PatternRecognizer(
             score=0.85,
         ),
         Pattern(
+            name="lowercase_street_line",
+            regex=(
+                rf"(?i:\b\d{{1,6}}[a-z]?(?:\s+[a-z][\w'.-]*){{1,4}}\s+"
+                rf"(?:{_LOWERCASE_STREET_TYPES})\b\.?"
+                rf"(?=\s*(?:,|#|apt\b|suite\b|unit\b|$)))"
+            ),
+            score=0.85,
+        ),
+        Pattern(
             name="latam_street_line",
-            regex=rf"\b(?:{_LATAM_STREET_TYPES})\.?\s+\d+[A-Z]?\s*(?:#|No\.?)\s*\d+[A-Z]?(?:\s*-\s*\d+)?",
+            regex=(
+                rf"(?i:\b(?:{_LATAM_STREET_TYPES})\.?\s+\d+[a-z]?\s*(?:#|No\.?)"
+                rf"\s*\d+[a-z]?(?:\s*-\s*\d+)?)"
+            ),
             score=0.85,
         ),
         Pattern(
             name="us_state_zip",
             regex=rf"\b(?:{_US_STATES})\s+\d{{5}}(?:-\d{{4}})?\b",
+            score=0.85,
+        ),
+        Pattern(
+            name="lowercase_us_state_zip",
+            regex=rf"(?<=,\s)(?i:(?:{_LOWERCASE_US_STATES})\s+\d{{5}}(?:-\d{{4}})?\b)",
             score=0.85,
         ),
         Pattern(
