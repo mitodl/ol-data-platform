@@ -17,11 +17,17 @@ Data flow:
         -> raw__youtube__api__videos       (one row per video)
         -> raw__youtube__api__transcripts  (one row per video with a transcript)
 
+The API key is resolved lazily at run time. The qa and production profiles
+read it from Vault (``YOUTUBE_VAULT_PATH``), where the dagster stack in
+ol-infrastructure writes MIT Learn's key. Any other profile reads
+YOUTUBE_DEVELOPER_KEY from the environment.
+
 Run standalone:
     DLT_PROFILE=dev YOUTUBE_DEVELOPER_KEY=... python -m ol_dlt.sources.youtube
 """
 
 import base64
+import functools
 import logging
 from collections.abc import Generator, Iterable
 from typing import Any
@@ -30,7 +36,7 @@ import dlt
 import yaml
 from dlt.sources.helpers import requests
 
-from ol_dlt import config
+from ol_dlt import config, vault
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +48,9 @@ WILDCARD_PLAYLIST_ID = "all"
 
 _CONFIG_FILE_REPO_DEFAULT = "mitodl/open-video-data"
 _CONFIG_FILE_FOLDER_DEFAULT = "youtube"
+
+YOUTUBE_VAULT_MOUNT = "secret-data"
+YOUTUBE_VAULT_PATH = "pipelines/youtube"
 
 
 def _github_headers(token: str | None) -> dict[str, str]:
@@ -103,7 +112,15 @@ def _fetch_channel_configs(
 
 
 def _resolve_api_key(api_key: str | None) -> str:
-    """Resolve the YouTube Data API key lazily, failing loudly if it is absent."""
+    """Resolve the YouTube Data API key lazily, failing loudly if it is absent.
+
+    Deployed profiles take the key from Vault. Explicit arguments and the
+    environment apply only to the other profiles.
+    """
+    if config.active_profile() in config.ICEBERG_PROFILES:
+        return vault.read_kv_secret(YOUTUBE_VAULT_MOUNT, YOUTUBE_VAULT_PATH)[
+            "developer_key"
+        ]
     return config.require_secrets(
         YOUTUBE_DEVELOPER_KEY=config.resolve_secret(api_key, "YOUTUBE_DEVELOPER_KEY")
     )["YOUTUBE_DEVELOPER_KEY"]
@@ -227,8 +244,9 @@ def youtube_source(  # noqa: C901
     module loads cleanly when secrets are absent in local development.
 
     Args:
-        api_key: YouTube Data API v3 key. Resolved from YOUTUBE_DEVELOPER_KEY
-            if not provided.
+        api_key: YouTube Data API v3 key, for non-deployed profiles. Resolved
+            from YOUTUBE_DEVELOPER_KEY if not provided. Ignored by the qa and
+            production profiles, which read it from Vault.
         github_access_token: Optional GitHub token to raise the config-fetch
             rate limit; the public repo works unauthenticated.
         github_repo: GitHub repository containing the channel YAML configs.
@@ -236,6 +254,12 @@ def youtube_source(  # noqa: C901
         github_branch: Git branch to read configs from.
     """
     table_format = config.active_table_format()
+
+    # One resolution per source instance: in deployed profiles each one is a Vault
+    # login and read, and all four resources need the key.
+    @functools.cache
+    def _api_key() -> str:
+        return _resolve_api_key(api_key)
 
     def _configs() -> list[dict[str, Any]]:
         return _fetch_channel_configs(
@@ -254,7 +278,7 @@ def youtube_source(  # noqa: C901
     )
     def youtube_channels() -> Generator[dict[str, Any]]:
         """Yield one record per configured YouTube channel."""
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         for channel_config in _configs():
             channel_id = channel_config["channel_id"]
             items = list(
@@ -283,7 +307,7 @@ def youtube_source(  # noqa: C901
     )
     def youtube_playlists() -> Generator[dict[str, Any]]:
         """Yield one record per ingested playlist across all channels."""
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         for channel_config in _configs():
             channel_id = channel_config["channel_id"]
             for playlist_id in _playlist_ids_for_config(channel_config, key):
@@ -313,7 +337,7 @@ def youtube_source(  # noqa: C901
     )
     def youtube_videos() -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         for batch in _batched(_channel_video_ids(_configs(), key), YOUTUBE_MAX_RESULTS):
             for video in _yt_paged_items(
                 "videos",
@@ -348,7 +372,7 @@ def youtube_source(  # noqa: C901
         )
         from youtube_transcript_api.formatters import TextFormatter
 
-        key = _resolve_api_key(api_key)
+        key = _api_key()
         ytt_api = YouTubeTranscriptApi()
         formatter = TextFormatter()
         for video_id in _channel_video_ids(_configs(), key):

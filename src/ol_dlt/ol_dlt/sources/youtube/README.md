@@ -48,8 +48,11 @@ update in place.
 
 ## Configuration
 
-- **Secret:** `YOUTUBE_DEVELOPER_KEY` — YouTube Data API v3 key, resolved lazily
-  at run time (`config.resolve_secret` / `config.require_secrets`).
+- **Secret:** YouTube Data API v3 key, resolved lazily at run time. The `qa` and
+  `production` profiles read `developer_key` from Vault at
+  `secret-data/pipelines/youtube` (written by the dagster stack in
+  ol-infrastructure from MIT Learn's SOPS secrets). Other profiles read
+  `YOUTUBE_DEVELOPER_KEY` from the environment.
 - **Destination:** built by `ol_dlt.config.pipeline_for("youtube")` from the
   active `DLT_PROFILE` (no per-source `.dlt/config.toml` block).
 
