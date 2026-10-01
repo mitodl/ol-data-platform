@@ -430,6 +430,66 @@ unit_tests:
       feedback_occurred_at: "2024-01-15T00:00:00"
       feedback_created_at: "2024-01-15T00:00:00"
       feedback_updated_at: "2024-01-15T00:00:00"
+- name: test_tfact_feedback_refreshes_text_after_redaction_changes
+  description: >
+    A stored turn whose redacted text has since changed (a feedback_redacted full
+    refresh under a new masking policy) is re-selected and gets the new text, even
+    though the source ticket's updated_at did not move.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "zendesk"
+      source_record_ref: "TICKET-1"
+      channel_slug: "support"
+      conversation_ref: "CONV-1"
+      turn_index: 1
+      is_conversation_opening: true
+      subject_type: "ticket"
+      subject_ref: "TICKET-1"
+      subject_user_ref: "learner@example.com"
+      occurred_at: "2024-01-15T00:00:00"
+      created_at: "2024-01-15T00:00:00"
+      updated_at: "2024-01-15T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "learner@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows:
+    - source_slug: "zendesk"
+      source_record_ref: "TICKET-1"
+      title_redacted: "Refund"
+      text_redacted: "Ship it to <STREET_ADDRESS>, Cambridge"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Fails the `>` watermark and has current keys, so only the text check can select it.
+    rows:
+    - feedback_pk: "ff8fd307a4dfe4d8794b3b59332b1e07"  # pragma: allowlist secret
+      feedback_source_fk: "01260647de9803dd69df3ecc34a8d908"  # pragma: allowlist secret
+      user_fk: "USER_PK"
+      feedback_title: "Refund"
+      feedback_text: "Ship it to 77 Massachusetts Ave, <LOCATION>"
+      feedback_updated_at: "2024-01-15T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "ff8fd307a4dfe4d8794b3b59332b1e07"  # pragma: allowlist secret
+      feedback_text: "Ship it to <STREET_ADDRESS>, Cambridge"
 - name: test_tfact_feedback_resolves_course_keys_and_refreshes_stale_ones
   description: >
     A course-scoped chat turn resolves courserun_fk and content_block_fk, and the
