@@ -42,6 +42,21 @@ def test_resolve_api_key_raises_when_missing(monkeypatch):
         youtube._resolve_api_key(None)
 
 
+@pytest.mark.parametrize("profile", ["qa", "production"])
+def test_resolve_api_key_reads_vault_in_deployed_profiles(monkeypatch, profile):
+    monkeypatch.setenv("DLT_PROFILE", profile)
+    monkeypatch.setenv("YOUTUBE_DEVELOPER_KEY", "env-key")
+    reads: list[tuple[str, str]] = []
+
+    def _read_kv_secret(mount: str, path: str) -> dict[str, str]:
+        reads.append((mount, path))
+        return {"developer_key": "vault-key"}
+
+    monkeypatch.setattr(youtube.vault, "read_kv_secret", _read_kv_secret)
+    assert youtube._resolve_api_key("explicit-key") == "vault-key"
+    assert reads == [("secret-data", "pipelines/youtube")]
+
+
 def test_github_headers_includes_token_when_present():
     assert youtube._github_headers(None) == {"Accept": "application/vnd.github.v3+json"}
     assert youtube._github_headers("tok")["Authorization"] == "Bearer tok"
