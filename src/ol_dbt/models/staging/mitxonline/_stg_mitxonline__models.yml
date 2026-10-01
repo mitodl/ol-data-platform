@@ -631,6 +631,8 @@ models:
     description: string, readable id for the order. Shared with micromasters
     tests:
     - not_null
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: order_total_price_paid
     description: number, total order amount
 
