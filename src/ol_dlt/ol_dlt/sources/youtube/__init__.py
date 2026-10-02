@@ -14,6 +14,7 @@ Data flow:
         -> channel_id + playlist configs per channel
         -> raw__youtube__api__channels     (one row per configured channel)
         -> raw__youtube__api__playlists    (one row per playlist)
+        -> raw__youtube__api__playlist_items (one row per playlist + video)
         -> raw__youtube__api__videos       (one row per video)
         -> raw__youtube__api__transcripts  (one row per video with a transcript)
 
@@ -105,7 +106,7 @@ def _fetch_channel_configs(
                     file_meta["name"],
                 )
                 continue
-            configs.append(entry)
+            configs.append({**entry, "config_file": file_meta["name"]})
 
     logger.info("Loaded %d youtube configs from %s/%s", len(configs), repo, folder)
     return configs
@@ -188,6 +189,25 @@ def _playlist_ids_for_config(
         yield playlist_id
 
 
+def _playlist_create_videos(channel_config: dict[str, Any], playlist_id: str) -> bool:
+    """Return whether MIT Learn creates videos for a playlist or matches them.
+
+    Mirrors learning_resources/etl/youtube.py:_extract_playlists. A playlist
+    listed by id takes its own ``create_videos`` and falls back to the
+    channel's; a playlist reached only through the ``all`` wildcard always
+    takes the channel's. The channel setting defaults to true. When false
+    (the OCW channel), Learn attaches the videos to existing OCW content files
+    instead of creating YouTube video resources.
+    """
+    channel_setting = channel_config.get("create_videos", True)
+    for playlist_config in channel_config.get("playlists") or []:
+        if isinstance(playlist_config, dict) and playlist_config.get("id") == (
+            playlist_id
+        ):
+            return playlist_config.get("create_videos", channel_setting)
+    return channel_setting
+
+
 def _video_ids_for_playlist(playlist_id: str, api_key: str) -> Generator[str]:
     """Yield the video ids contained in a playlist."""
     for item in _yt_paged_items(
@@ -229,7 +249,7 @@ def youtube_source(  # noqa: C901
     github_folder: str = _CONFIG_FILE_FOLDER_DEFAULT,
     github_branch: str = "main",
 ) -> Generator[Any]:
-    """Load MIT Learn YouTube data from the Data API v3 into four raw tables.
+    """Load MIT Learn YouTube data from the Data API v3 into five raw tables.
 
     Channel configs are read from YAML files in the mitodl/open-video-data
     GitHub repository (one file per channel). For each channel the source
@@ -237,6 +257,7 @@ def youtube_source(  # noqa: C901
 
       raw__youtube__api__channels    - one record per configured channel
       raw__youtube__api__playlists   - one record per ingested playlist
+      raw__youtube__api__playlist_items - one record per video in a playlist
       raw__youtube__api__videos      - one record per video across all playlists
       raw__youtube__api__transcripts - one record per video that has a transcript
 
@@ -256,7 +277,7 @@ def youtube_source(  # noqa: C901
     table_format = config.active_table_format()
 
     # One resolution per source instance: in deployed profiles each one is a Vault
-    # login and read, and all four resources need the key.
+    # login and read, and every resource needs the key.
     @functools.cache
     def _api_key() -> str:
         return _resolve_api_key(api_key)
@@ -294,6 +315,9 @@ def youtube_source(  # noqa: C901
             yield {
                 "channel_id": channel_id,
                 "offered_by": channel_config.get("offered_by"),
+                # MIT Learn's YouTube ETL reads one file (YOUTUBE_CONFIG_URL),
+                # so the integrations models select channels by it.
+                "config_file": channel_config["config_file"],
                 "etl_source": "youtube",
                 **items[0],
             }
@@ -324,9 +348,44 @@ def youtube_source(  # noqa: C901
                 yield {
                     "playlist_id": playlist_id,
                     "channel_id": channel_id,
+                    "offered_by": channel_config.get("offered_by"),
+                    "create_videos": _playlist_create_videos(
+                        channel_config, playlist_id
+                    ),
                     "etl_source": "youtube",
                     **items[0],
                 }
+
+    @dlt.resource(
+        name="raw__youtube__api__playlist_items",
+        write_disposition="merge",
+        primary_key=("playlist_id", "video_id"),
+        table_format=table_format,
+        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    )
+    def youtube_playlist_items() -> Generator[dict[str, Any]]:
+        """Yield one record per video in each ingested playlist, in playlist order.
+
+        ``position`` is the video's index in the playlist listing, counting
+        entries whose video the videos endpoint may not return (private or
+        deleted). A video listed twice keeps its first position.
+        """
+        key = _api_key()
+        for channel_config in _configs():
+            for playlist_id in _playlist_ids_for_config(channel_config, key):
+                seen: set[str] = set()
+                for position, video_id in enumerate(
+                    _video_ids_for_playlist(playlist_id, key)
+                ):
+                    if video_id in seen:
+                        continue
+                    seen.add(video_id)
+                    yield {
+                        "playlist_id": playlist_id,
+                        "video_id": video_id,
+                        "position": position,
+                        "etl_source": "youtube",
+                    }
 
     @dlt.resource(
         name="raw__youtube__api__videos",
@@ -393,6 +452,7 @@ def youtube_source(  # noqa: C901
 
     yield youtube_channels
     yield youtube_playlists
+    yield youtube_playlist_items
     yield youtube_videos
     yield youtube_transcripts
 

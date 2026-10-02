@@ -59,7 +59,7 @@ podcast_rss_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
-# The four raw__youtube__api__* tables are materialized by a single @dlt_assets
+# The raw__youtube__api__* tables are all materialized by a single @dlt_assets
 # run, so schedule the whole youtube source group rather than one table.
 youtube_ingest_schedule = dg.ScheduleDefinition(
     name="youtube_ingest_daily_schedule",
