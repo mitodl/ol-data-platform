@@ -75,6 +75,17 @@ unit_tests:
       coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
         1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter
         display_name="Week 1"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # Inline html makes Tika read a block as HTML: no attribute text, so a
+    # vertical with no text of its own is skipped, and one with text is titled
+    # from its file name.
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Empty,
+      coursestructure_xml_block_path: course/vertical/empty_unit.xml, coursestructure_xml_raw_xml: '<vertical
+        display_name="Empty"><html display_name="Raw"></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Peer
+        Review, coursestructure_xml_block_path: course/vertical/peer_unit.xml, coursestructure_xml_raw_xml: '<vertical
+        display_name="Peer Review"><html><p>Assess</p></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # Residential MITx is not a Learn source.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
       coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Hidden,
@@ -112,6 +123,8 @@ unit_tests:
       url: null}
     - {edx_module_id: "block-v1:X+Y+R1+type@tabs+block@5244487e", title: 5244487E,
       url: null}
+    - {edx_module_id: "block-v1:X+Y+R1+type@vertical+block@peer_unit", title: Peer
+        Unit, url: null}
     - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf", title: Dash
         2010, url: "https://courses.xpro.mit.edu/asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf"}
     - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt", title: Intro

@@ -5,11 +5,12 @@
   document and transcript text the openedx location extracts from the course's
   static files.
 
-  Learn skips any file whose extracted text is empty, which is why OLX pointer
-  files (<html filename=.../>) and text-less verticals never reach it; the same
-  rule applies here. Block text approximates Tika's output for XML by stripping
-  tags. A file whose extraction failed keeps its row, with null content and
-  extraction_status "failed", so a consumer can tell it apart from a removed file.
+  Learn skips any file whose extracted text is empty, and the same rule applies
+  here, to block text that approximates Tika's (see block_files). That is why an
+  OLX pointer file (<html filename=.../>) or a vertical holding only inline html
+  never reaches Learn. A file whose extraction failed keeps its row, with null
+  content and extraction_status "failed", so a consumer can tell it apart from a
+  removed file.
 
   Not reproduced yet (tracked separately): Learn's exclusion of staff-only
   subtrees and of static files nothing in the course references
@@ -46,14 +47,19 @@ with blocks as (
         , coursestructure_xml_source_system as source_system
         , coursestructure_xml_block_path as source_path
         , '.xml' as file_extension
-        -- An approximation of Tika's text for XML, which carries attribute values
-        -- as well as text nodes; that is why Learn keeps every chapter and
-        -- vertical, whose XML has no text of its own. CDATA markers go first so a
-        -- script body inside one is not cut at its first ">".
+        -- An approximation of Tika's text for XML. Its XML parser carries
+        -- attribute values as well as text nodes, which is why Learn keeps every
+        -- chapter and sequential although their XML has no text of its own. A
+        -- block with an <html> element in it is read as HTML instead, which drops
+        -- the attributes: Learn has no vertical with inline html unless it also
+        -- has text, and titles those it has from the file name. CDATA markers go
+        -- first so a script body inside one is not cut at its first ">".
         , trim({{ regexp_replace_all(
             html_unescape(
                 "concat("
+                ~ "case when not has_html then "
                 ~ array_join("regexp_extract_all(coursestructure_xml_raw_xml, '=\"([^\"]*)\"', 1)", ' ')
+                ~ " else '' end"
                 ~ ", ' ', "
                 ~ regexp_replace_all(
                     "replace(replace(coursestructure_xml_raw_xml, '<![CDATA[', ' '), ']]>', ' ')"
@@ -64,9 +70,14 @@ with blocks as (
             , "'\\s+'", "' '"
         ) }}) as content
         , 'extracted' as extraction_status
-        , coursestructure_xml_block_display_name as xml_display_name
+        , case when not has_html then coursestructure_xml_block_display_name end as xml_display_name
         , cast(coursestructure_xml_retrieved_at as varchar) as extracted_at
-    from blocks
+    from (
+        select
+            *
+            , {{ regexp_like('coursestructure_xml_raw_xml', "'<html[\\s>/]'") }} as has_html
+        from blocks
+    ) as blocks_with_html
 )
 
 , static_files as (
@@ -78,7 +89,7 @@ with blocks as (
         , content_file_text as content
         , content_file_extraction_status as extraction_status
         , cast(null as varchar) as xml_display_name
-        , {{ cast_timestamp_to_iso8601('content_file_extracted_at') }} as extracted_at
+        , {{ format_timestamp_as_iso8601('content_file_extracted_at') }} as extracted_at
     from documents
     union all
     select
@@ -89,7 +100,7 @@ with blocks as (
         , content_file_text as content
         , content_file_extraction_status as extraction_status
         , cast(null as varchar) as xml_display_name
-        , {{ cast_timestamp_to_iso8601('content_file_extracted_at') }} as extracted_at
+        , {{ format_timestamp_as_iso8601('content_file_extracted_at') }} as extracted_at
     from transcripts
 )
 
