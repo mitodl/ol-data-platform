@@ -1,0 +1,87 @@
+---
+# MIT Learn integration layer — Cohort 4, ContentFiles.
+# Contract: docs/design/contentfile_scoped_pull_contract.md §9, and the content
+# file section of docs/learn_marts_contract.md.
+
+version: 2
+
+models:
+- name: integrations__learn__content_files
+  description: >
+    One row per ContentFile of an MITx Online or xPRO course run, for MIT Learn's
+    SyncOpenEdXContentFilesTask. A scoped pull filters and prunes on
+    (etl_source, run_readable_id). Built from the OLX blocks and the document and
+    transcript text the openedx location extracts. Not yet applied: Learn's
+    exclusion of staff-only subtrees and of static files nothing references, so
+    this carries files Learn hides; it is not ready to cut over until they are.
+    Also missing: the course root files course.xml and course/<run>.xml, and
+    Tika's metadata title (content_title is '').
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [etl_source, run_readable_id, key]
+  columns:
+  - name: etl_source
+    description: str, mitxonline or xpro. Half of the scoped pull's key.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitxonline, xpro]
+  - name: run_readable_id
+    description: str, course run id; equals ContentFile.run.run_id. Half of the scoped
+      pull's key.
+    tests: [not_null]
+  - name: key
+    description: str, ContentFile.key, the edX module id Learn derives from the file's
+      path. Unique within a run.
+    tests: [not_null]
+  - name: edx_module_id
+    description: str, same value as key.
+  - name: title
+    description: str, the block's display_name, the video name for a transcript, the
+      html pointer's display_name for an HTML file, or a title made from the file
+      name.
+  - name: description
+    description: str, always null; Learn's Open edX ETL sets none.
+  - name: url
+    description: str, LMS jump URL for a block with a UUID id or a transcript of a
+      video, the asset URL for other static files, else null.
+  - name: file_type
+    description: str, always null; Learn's Open edX ETL sets none.
+  - name: content
+    description: str, the file's extracted text; null when extraction failed. Block
+      text approximates Tika's (attribute values and text nodes).
+  - name: content_title
+    description: str, always ''. Learn stores Tika's metadata title here, which is
+      not carried yet.
+  - name: content_author
+    description: str, always null.
+  - name: content_language
+    description: str, always null.
+  - name: content_type
+    description: str, always "file".
+  - name: image_src
+    description: str, always null.
+  - name: uid
+    description: str, always null.
+  - name: source_path
+    description: str, path within the course export, e.g. course/static/handout.pdf.
+    tests: [not_null]
+  - name: file_extension
+    description: str, file extension with its dot, e.g. .pdf
+  - name: checksum
+    description: str, MD5 of content. Not Learn's archive_checksum, which hashes the
+      file's bytes.
+  - name: extraction_status
+    description: str, extracted, or failed for a file whose text could not be read.
+      A failed file is still present so a scoped prune does not unpublish it.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [extracted, failed]
+  - name: published
+    description: boolean, always true.
+  - name: last_modified
+    description: str, ISO 8601 time the file's text was extracted.

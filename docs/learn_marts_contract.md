@@ -67,12 +67,32 @@ Each source may add additional columns following its needs. Common patterns incl
 
 ### Content File Sources
 
+Content file models are one row per file, not per resource, so they do not carry
+`readable_id`. Their scope key is (`etl_source`, `run_readable_id`), which a scoped
+pull filters and prunes on; see
+[`design/contentfile_scoped_pull_contract.md`](design/contentfile_scoped_pull_contract.md) §9.
+`integrations__learn__content_files` (MITx Online and xPRO) carries:
+
 | Column | Type | Description |
 |--------|------|-------------|
-| `content_type` | string | File type classification |
-| `file_extension` | string | File extension (e.g., ".pdf", ".html") |
-| `file_size` | integer | File size in bytes |
-| `content` | string | Extracted text content (for embeddings) |
+| `etl_source` | string | `mitxonline` or `xpro` |
+| `run_readable_id` | string | Course run id; equals `ContentFile.run.run_id` |
+| `key` | string | `ContentFile.key`, the edX module id; unique within a run |
+| `edx_module_id` | string | Same value as `key` |
+| `title` | string | Display name, video name for a transcript, or a title made from the file name |
+| `url` | string | Jump URL in the LMS, or the asset URL; null where Learn has none |
+| `content` | string | Extracted text; null when extraction failed |
+| `content_title` | string | Tika's metadata title; `''` until it is carried |
+| `content_type` | string | Always `file` |
+| `source_path` | string | Path within the course export, e.g. `course/static/handout.pdf` |
+| `file_extension` | string | File extension with its dot, e.g. `.pdf` |
+| `checksum` | string | MD5 of `content` |
+| `extraction_status` | string | `extracted`, or `failed` for a file whose text could not be read |
+| `published` | boolean | Always true |
+| `last_modified` | string | ISO 8601 time the file's text was extracted |
+
+`description`, `file_type`, `content_author`, `content_language`, `image_src` and
+`uid` are present and null, as Learn's Open edX ETL leaves them unset.
 
 ## Grain Expectations
 
@@ -82,8 +102,9 @@ Each source may add additional columns following its needs. Common patterns incl
 ## Nullability Rules
 
 1. All required columns must be `NOT NULL`
-2. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
-3. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
+2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id`, `key`, `source_path` and `extraction_status`
+3. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
+4. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values
 
@@ -105,3 +126,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 |------|--------|---------|
 | 2026-05-27 | Initial draft | Foundation schema contract |
 | 2026-08-19 | Tobias Macey | Drop `micromasters`. MIT Learn unpublished and then deleted its MicroMasters resources (`learning_resources` migrations 0117/0118) and removed `micromasters` from its `ETLSource` enum, so the source has no destination. `integrations__learn__micromasters_programs` retired with it; Cohort 1 is 6 sources, not 7. |
+| 2026-10-02 | Tobias Macey | Content file columns rewritten to what `integrations__learn__content_files` carries, keyed by (`etl_source`, `run_readable_id`) per the scoped-pull contract. The earlier `file_size` column is not part of it. |
