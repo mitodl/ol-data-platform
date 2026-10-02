@@ -227,15 +227,13 @@ def _batched(items: Iterable[str], size: int) -> Generator[list[str]]:
         yield batch
 
 
-def _channel_video_ids(configs: list[dict[str, Any]], api_key: str) -> Generator[str]:
-    """Yield the deduplicated video ids across every configured channel."""
+def _unique(items: Iterable[str]) -> Generator[str]:
+    """Yield each item the first time it appears, keeping order."""
     seen: set[str] = set()
-    for channel_config in configs:
-        for playlist_id in _playlist_ids_for_config(channel_config, api_key):
-            for video_id in _video_ids_for_playlist(playlist_id, api_key):
-                if video_id not in seen:
-                    seen.add(video_id)
-                    yield video_id
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            yield item
 
 
 @dlt.source(name="youtube")
@@ -279,25 +277,60 @@ def youtube_source(  # noqa: C901
     def _api_key() -> str:
         return _resolve_api_key(api_key)
 
-    def _configs() -> list[dict[str, Any]]:
-        return _fetch_channel_configs(
+    def _table(name: str, primary_key: str | tuple[str, ...]) -> dict[str, Any]:
+        return {
+            "name": name,
+            "write_disposition": "merge",
+            "primary_key": primary_key,
+            "table_format": table_format,
+            "schema_contract": config.JSON_API_SCHEMA_CONTRACT,
+        }
+
+    @dlt.resource(name="youtube_listing", selected=False)
+    def youtube_listing() -> Generator[dict[str, Any]]:
+        """Yield the channel configs and every playlist's video ids, once.
+
+        Every table resource is a transformer of this one, and dlt evaluates a
+        shared parent once per extraction. So a run reads the config and lists
+        playlists and playlist items in a single pass against the API quota
+        MIT Learn's key shares, and every table of the run sees the same
+        snapshot. Nothing is kept between runs.
+        """
+        key = _api_key()
+        configs = _fetch_channel_configs(
             repo=github_repo,
             folder=github_folder,
             branch=github_branch,
             token=github_access_token,
         )
+        yield {
+            "configs": configs,
+            "playlists": [
+                {
+                    "channel_config": channel_config,
+                    "playlist_id": playlist_id,
+                    "video_ids": list(_video_ids_for_playlist(playlist_id, key)),
+                }
+                for channel_config in configs
+                for playlist_id in _playlist_ids_for_config(channel_config, key)
+            ],
+        }
 
-    @dlt.resource(
-        name="raw__youtube__api__channels",
-        write_disposition="merge",
-        primary_key="channel_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    def _video_ids(listing: dict[str, Any]) -> Generator[str]:
+        return _unique(
+            video_id
+            for playlist in listing["playlists"]
+            for video_id in playlist["video_ids"]
+        )
+
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__channels", "channel_id"),
     )
-    def youtube_channels() -> Generator[dict[str, Any]]:
+    def youtube_channels(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per configured YouTube channel."""
         key = _api_key()
-        for channel_config in _configs():
+        for channel_config in listing["configs"]:
             channel_id = channel_config["channel_id"]
             items = list(
                 _yt_paged_items(
@@ -319,82 +352,67 @@ def youtube_source(  # noqa: C901
                 **items[0],
             }
 
-    @dlt.resource(
-        name="raw__youtube__api__playlists",
-        write_disposition="merge",
-        primary_key="playlist_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__playlists", "playlist_id"),
     )
-    def youtube_playlists() -> Generator[dict[str, Any]]:
+    def youtube_playlists(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per ingested playlist across all channels."""
         key = _api_key()
-        for channel_config in _configs():
-            channel_id = channel_config["channel_id"]
-            for playlist_id in _playlist_ids_for_config(channel_config, key):
-                items = list(
-                    _yt_paged_items(
-                        "playlists",
-                        {"part": "snippet,contentDetails", "id": playlist_id},
-                        key,
-                    )
+        for playlist in listing["playlists"]:
+            channel_config = playlist["channel_config"]
+            playlist_id = playlist["playlist_id"]
+            items = list(
+                _yt_paged_items(
+                    "playlists",
+                    {"part": "snippet,contentDetails", "id": playlist_id},
+                    key,
                 )
-                if not items:
-                    logger.warning("No playlist data for playlist_id=%s", playlist_id)
-                    continue
-                yield {
-                    "playlist_id": playlist_id,
-                    "channel_id": channel_id,
-                    "offered_by": channel_config.get("offered_by"),
-                    "create_videos": _playlist_create_videos(
-                        channel_config, playlist_id
-                    ),
-                    "etl_source": "youtube",
-                    **items[0],
-                }
+            )
+            if not items:
+                logger.warning("No playlist data for playlist_id=%s", playlist_id)
+                continue
+            yield {
+                "playlist_id": playlist_id,
+                "channel_id": channel_config["channel_id"],
+                "offered_by": channel_config.get("offered_by"),
+                "create_videos": _playlist_create_videos(channel_config, playlist_id),
+                "etl_source": "youtube",
+                **items[0],
+            }
 
-    @dlt.resource(
-        name="raw__youtube__api__playlist_items",
-        write_disposition="merge",
-        primary_key=("playlist_id", "video_id"),
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__playlist_items", ("playlist_id", "video_id")),
     )
-    def youtube_playlist_items() -> Generator[dict[str, Any]]:
+    def youtube_playlist_items(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video in each ingested playlist, in playlist order.
 
         ``position`` is the video's index in the playlist listing, counting
         entries whose video the videos endpoint may not return (private or
         deleted). A video listed twice keeps its first position.
         """
-        key = _api_key()
-        for channel_config in _configs():
-            for playlist_id in _playlist_ids_for_config(channel_config, key):
-                seen: set[str] = set()
-                for position, video_id in enumerate(
-                    _video_ids_for_playlist(playlist_id, key)
-                ):
-                    if video_id in seen:
-                        continue
-                    seen.add(video_id)
-                    yield {
-                        "playlist_id": playlist_id,
-                        "video_id": video_id,
-                        "position": position,
-                        "etl_source": "youtube",
-                    }
+        for playlist in listing["playlists"]:
+            seen: set[str] = set()
+            for position, video_id in enumerate(playlist["video_ids"]):
+                if video_id in seen:
+                    continue
+                seen.add(video_id)
+                yield {
+                    "playlist_id": playlist["playlist_id"],
+                    "video_id": video_id,
+                    "position": position,
+                    "etl_source": "youtube",
+                }
 
-    @dlt.resource(
-        name="raw__youtube__api__videos",
-        write_disposition="merge",
-        primary_key="video_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__videos", "video_id"),
     )
-    def youtube_videos() -> Generator[dict[str, Any]]:
+    def youtube_videos(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
         key = _api_key()
-        for batch in _batched(_channel_video_ids(_configs(), key), YOUTUBE_MAX_RESULTS):
+        for batch in _batched(_video_ids(listing), YOUTUBE_MAX_RESULTS):
             for video in _yt_paged_items(
                 "videos",
                 {"part": "snippet,contentDetails,statistics", "id": ",".join(batch)},
@@ -406,14 +424,11 @@ def youtube_source(  # noqa: C901
                     **video,
                 }
 
-    @dlt.resource(
-        name="raw__youtube__api__transcripts",
-        write_disposition="merge",
-        primary_key="video_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__transcripts", "video_id"),
     )
-    def youtube_transcripts() -> Generator[dict[str, Any]]:
+    def youtube_transcripts(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video that has a transcript.
 
         Transcripts are fetched with ``youtube-transcript-api`` (imported lazily
@@ -428,10 +443,9 @@ def youtube_source(  # noqa: C901
         )
         from youtube_transcript_api.formatters import TextFormatter
 
-        key = _api_key()
         ytt_api = YouTubeTranscriptApi()
         formatter = TextFormatter()
-        for video_id in _channel_video_ids(_configs(), key):
+        for video_id in _video_ids(listing):
             try:
                 fetched = ytt_api.fetch(video_id)
             except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable):
@@ -447,6 +461,7 @@ def youtube_source(  # noqa: C901
                 "segments": fetched.to_raw_data(),
             }
 
+    yield youtube_listing
     yield youtube_channels
     yield youtube_playlists
     yield youtube_playlist_items
