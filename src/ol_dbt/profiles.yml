@@ -2,6 +2,19 @@
 open_learning:
   target: dev_local
   outputs:
+    # For the sqlfluff hooks only (bin/sqlfluff-dbt-hook.py), which render Trino SQL
+    # without connecting. Nothing listens on this port, so a model that queries while
+    # compiling fails instead of reaching a real warehouse.
+    sqlfluff:
+      type: trino
+      method: none
+      user: sqlfluff
+      database: ol_data_lake_qa
+      schema: ol_warehouse_qa
+      host: 127.0.0.1
+      port: 1
+      http_scheme: http
+      threads: 1
     qa:
       type: trino
       method: ldap
