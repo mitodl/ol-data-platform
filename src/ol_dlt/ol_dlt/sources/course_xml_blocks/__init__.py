@@ -10,10 +10,17 @@ land one JSON Lines file per course version in the production landing zone:
         {mitx,mitxonline,xpro}/openedx/processed_data/course_xml_blocks/
             <deployment>/<course>/<version hash>.json
 
-Nothing loaded those files into the warehouse, so the two raw tables below did
-not exist and their staging models could not build. This source appends every
-file's rows, stamped with the file they came from, and staging keeps each
-block's newest copy by ``_file_modified_at``.
+The openedx code location also lands the text it extracts from each course's
+static files, for MIT Learn's ContentFiles (Cohort 4), in the same layout:
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_document_text/
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_transcript_text/
+            <deployment>/<course>/<version hash>.jsonl
+
+Nothing loaded those files into the warehouse, so the raw tables below did not
+exist and their staging models could not build. This source appends every
+file's rows, stamped with the file they came from, and staging keeps the rows
+of each course's newest file.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks
@@ -56,7 +63,7 @@ BATCH_ROWS = 10_000
 # what it needs. xml_attributes is an object of arbitrary XML attribute names,
 # kept as a JSON string because dlt would otherwise flatten each attribute
 # name it meets into its own column.
-FIELDS = (
+XML_BLOCK_FIELDS = (
     "course_id",
     "source_system",
     "block_id",
@@ -72,7 +79,19 @@ FIELDS = (
     "weight",
     "markdown",
 )
-SCHEMA = pa.schema([pa.field(name, pa.string()) for name in FIELDS])
+# The row the document and transcript text assets write
+# (dg_projects/openedx/openedx/assets/content_files.py and transcripts.py).
+# size_bytes stays text like everything else here; staging casts it.
+CONTENT_TEXT_FIELDS = (
+    "course_id",
+    "source_system",
+    "file_path",
+    "file_extension",
+    "content_type",
+    "size_bytes",
+    "content",
+    "extraction_status",
+)
 
 
 @dataclass(frozen=True)
@@ -82,11 +101,31 @@ class XmlBlocksTable:
     :param raw_table: Raw warehouse table name.
     :param pipeline_prefix: Destination bucket prefix, the table's deployment.
     :param file_globs: Globs relative to ``LANDING_BUCKET``.
+    :param fields: Every field a line carries, in order.
+    :param optional_fields: Fields a line may leave out. A failed extraction
+        row has no file_extension.
+    :param pipeline_name: dlt pipeline name, which keys the cursor.
     """
 
     raw_table: str
     pipeline_prefix: str
     file_globs: tuple[str, ...]
+    fields: tuple[str, ...] = XML_BLOCK_FIELDS
+    optional_fields: frozenset[str] = frozenset()
+    pipeline_name: str = ""
+
+    def __post_init__(self) -> None:
+        # The two block tables predate the other tables and keep their names:
+        # renaming a pipeline re-reads the landing zone and, under append,
+        # inserts every row again.
+        if not self.pipeline_name:
+            object.__setattr__(
+                self, "pipeline_name", f"course_xml_blocks__{self.pipeline_prefix}"
+            )
+
+    @property
+    def schema(self) -> pa.Schema:
+        return pa.schema([pa.field(name, pa.string()) for name in self.fields])
 
 
 EDXORG = XmlBlocksTable(
@@ -102,7 +141,33 @@ OPENEDX = XmlBlocksTable(
         for deployment in ("mitx", "mitxonline", "xpro")
     ),
 )
-TABLES = {table.raw_table: table for table in (EDXORG, OPENEDX)}
+_OPENEDX_DEPLOYMENTS = ("mitx", "mitxonline", "xpro")
+OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_document_text",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_document_text/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=CONTENT_TEXT_FIELDS,
+    optional_fields=frozenset({"file_extension"}),
+    pipeline_name="course_document_text__openedx",
+)
+OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_transcript_text",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_transcript_text/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=CONTENT_TEXT_FIELDS,
+    optional_fields=frozenset({"file_extension"}),
+    pipeline_name="course_transcript_text__openedx",
+)
+TABLES = {
+    table.raw_table: table
+    for table in (EDXORG, OPENEDX, OPENEDX_DOCUMENT_TEXT, OPENEDX_TRANSCRIPT_TEXT)
+}
 
 
 def _text(value: Any) -> str | None:  # noqa: ANN401
@@ -112,15 +177,20 @@ def _text(value: Any) -> str | None:  # noqa: ANN401
     return json.dumps(value)
 
 
-def _row(line: str) -> dict[str, str | None]:
-    """Parse one JSON line into a row, failing on a line missing any field."""
+def _row(line: str, table: XmlBlocksTable = OPENEDX) -> dict[str, str | None]:
+    """Parse one JSON line into a row, failing on a line missing a required field."""
     record = json.loads(line)
-    return {name: _text(record[name]) for name in FIELDS}
+    return {
+        name: _text(record.get(name) if name in table.optional_fields else record[name])
+        for name in table.fields
+    }
 
 
 @dlt.transformer(standalone=True)
 def read_xml_blocks(
-    items: Iterable[FileItemDict], batch_rows: int = BATCH_ROWS
+    items: Iterable[FileItemDict],
+    table: XmlBlocksTable = OPENEDX,
+    batch_rows: int = BATCH_ROWS,
 ) -> Iterator[pa.Table]:
     """Stream each JSON Lines file as Arrow tables stamped with its provenance."""
     for item in items:
@@ -129,17 +199,19 @@ def read_xml_blocks(
             for line in text:
                 if not line.strip():
                     continue
-                rows.append(_row(line))
+                rows.append(_row(line, table))
                 if len(rows) == batch_rows:
-                    yield _stamp(rows, item)
+                    yield _stamp(rows, item, table)
                     rows = []
         if rows:
-            yield _stamp(rows, item)
+            yield _stamp(rows, item, table)
 
 
-def _stamp(rows: list[dict[str, str | None]], item: FileItemDict) -> pa.Table:
+def _stamp(
+    rows: list[dict[str, str | None]], item: FileItemDict, table: XmlBlocksTable
+) -> pa.Table:
     return add_file_metadata(
-        pa.Table.from_pylist(rows, schema=SCHEMA),
+        pa.Table.from_pylist(rows, schema=table.schema),
         source_file=item["file_url"],
         modified_at=item.get("modification_date"),
     )
@@ -173,7 +245,7 @@ def course_xml_blocks_source(
         budget_bytes=budget_bytes,
     )
     yield (
-        (files | read_xml_blocks())
+        (files | read_xml_blocks(table=table))
         .with_name(table.raw_table)
         .apply_hints(
             table_name=table.raw_table,
@@ -197,7 +269,4 @@ def course_xml_blocks_pipeline_for(raw_table: str) -> dlt.Pipeline:
     every row again.
     """
     table = TABLES[raw_table]
-    return config.pipeline_for(
-        table.pipeline_prefix,
-        pipeline_name=f"course_xml_blocks__{table.pipeline_prefix}",
-    )
+    return config.pipeline_for(table.pipeline_prefix, pipeline_name=table.pipeline_name)

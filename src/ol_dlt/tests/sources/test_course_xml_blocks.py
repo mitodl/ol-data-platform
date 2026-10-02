@@ -34,7 +34,7 @@ def test_row_keeps_xml_attributes_as_one_json_column() -> None:
     assert json.loads(row["xml_attributes"] or "") == _BLOCK["xml_attributes"]
     assert row["weight"] == "1.0"
     assert row["duration"] is None
-    assert list(row) == list(course_xml_blocks.FIELDS)
+    assert list(row) == list(course_xml_blocks.XML_BLOCK_FIELDS)
 
 
 def test_row_missing_a_field_fails() -> None:
@@ -105,3 +105,78 @@ def test_openedx_loads_every_deployment_into_one_table(
         )
     )
     assert pipeline.dataset()[course_xml_blocks.OPENEDX.raw_table].arrow().num_rows == 3
+
+
+_DOCUMENT: dict[str, Any] = {
+    "course_id": "course-v1:MITxT+7.05x+2T2026",
+    "source_system": "mitxonline",
+    "file_path": "static/handout.pdf",
+    "file_extension": ".pdf",
+    "content_type": "application/pdf",
+    "size_bytes": 1024,
+    "content": "Handout text",
+    "extraction_status": "extracted",
+}
+
+
+def test_content_text_row_allows_a_missing_file_extension() -> None:
+    """A failed extraction row is written without file_extension."""
+    failed = {key: value for key, value in _DOCUMENT.items() if key != "file_extension"}
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps({**failed, "content": None, "extraction_status": "failed"}),
+        course_xml_blocks.OPENEDX_DOCUMENT_TEXT,
+    )
+    assert row["file_extension"] is None
+    assert row["size_bytes"] == "1024"
+    assert list(row) == list(course_xml_blocks.CONTENT_TEXT_FIELDS)
+
+
+def test_content_text_row_still_requires_content() -> None:
+    incomplete = {key: value for key, value in _DOCUMENT.items() if key != "content"}
+    with pytest.raises(KeyError, match="content"):
+        course_xml_blocks._row(  # noqa: SLF001
+            json.dumps(incomplete), course_xml_blocks.OPENEDX_TRANSCRIPT_TEXT
+        )
+
+
+def test_every_table_has_its_own_pipeline() -> None:
+    """Two tables on one pipeline name would share, and fight over, one cursor."""
+    names = [table.pipeline_name for table in course_xml_blocks.TABLES.values()]
+    assert len(set(names)) == len(names)
+    # Renaming these would re-read the landing zone and append every row again.
+    assert course_xml_blocks.OPENEDX.pipeline_name == "course_xml_blocks__openedx"
+    assert course_xml_blocks.EDXORG.pipeline_name == "course_xml_blocks__edxorg"
+
+
+@pytest.mark.integration
+def test_document_text_reads_only_its_own_prefix(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    landing = tmp_path / "landing"
+    _write_version(
+        landing,
+        "mitxonline/openedx/processed_data/course_document_text/"
+        "mitxonline/course-v1:MITxT+7.05x+2T2026/v1.jsonl",
+        [_DOCUMENT],
+    )
+    _write_version(
+        landing,
+        "mitxonline/openedx/processed_data/course_transcript_text/"
+        "mitxonline/course-v1:MITxT+7.05x+2T2026/v1.jsonl",
+        [{**_DOCUMENT, "file_path": "static/subs_abc.srt.sjson"}],
+    )
+    monkeypatch.setattr(
+        course_xml_blocks.s3fs, "S3FileSystem", lambda: fsspec.filesystem("file")
+    )
+    raw_table = course_xml_blocks.OPENEDX_DOCUMENT_TEXT.raw_table
+    pipeline = course_xml_blocks.course_xml_blocks_pipeline_for(raw_table)
+    info = pipeline.run(
+        course_xml_blocks.course_xml_blocks_source(
+            raw_table=raw_table, bucket_url=landing.as_uri()
+        )
+    )
+    assert not info.has_failed_jobs
+
+    table = pipeline.dataset()[raw_table].arrow()
+    assert table.column("file_path").to_pylist() == ["static/handout.pdf"]
+    assert table.column("size_bytes").to_pylist() == ["1024"]
