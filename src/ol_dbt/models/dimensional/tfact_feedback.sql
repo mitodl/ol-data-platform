@@ -138,14 +138,18 @@ left join {{ this }} as existing
     -- covers a source with no rows in the table yet, so its first run backfills
     -- everything instead of needing a manual --full-refresh.
     where unioned.updated_at > coalesce(watermarks.max_updated_at, '0001-01-01T00:00:00')
-    -- Backfill: a row inserted before feedback_redacted existed carries the old
-    -- feedback_text = null stub forever under the watermark above alone, because
-    -- redaction landing does not bump the source ticket's updated_at. Reselect any
-    -- row still null in the fact where redaction has since produced real text.
+    -- Backfill: redaction landing or changing (a feedback_redacted full refresh under
+    -- a new masking policy) does not bump the source ticket's updated_at, so the
+    -- watermark alone would keep the old text forever. Reselect any row whose stored
+    -- text or title differs from the current redaction, including the original
+    -- null stub. A turn with no redaction row yet is left alone.
     or (
         existing.feedback_pk is not null
-        and existing.feedback_text is null
-        and redacted.text_redacted is not null
+        and redacted.source_record_ref is not null
+        and (
+            existing.feedback_text is distinct from redacted.text_redacted
+            or existing.feedback_title is distinct from redacted.title_redacted
+        )
     )
     -- Re-key: a stored key that no longer matches the current resolution won't move
     -- updated_at to trigger the watermark. user_fk changes on a dim_user re-key;
