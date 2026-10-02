@@ -934,5 +934,9 @@
         'raw__xpro__openedx__mysql__workflow_assessmentworkflow': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
         'raw__xpro__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
+        'raw__youtube__api__channels': '_dlt_load_id',
+        'raw__youtube__api__playlist_items': '_dlt_load_id',
+        'raw__youtube__api__playlists': '_dlt_load_id',
+        'raw__youtube__api__videos': '_dlt_load_id',
     }) %}
 {% endmacro %}

@@ -260,6 +260,7 @@ def test_fetch_channel_configs_parses_yaml_list(monkeypatch):
         repo="mitodl/open-video-data", folder="youtube", branch="main", token=None
     )
     assert [c["channel_id"] for c in configs] == ["CHAN_A", "CHAN_B"]
+    assert {c["config_file"] for c in configs} == {"channels.yaml"}
 
 
 def test_playlist_ids_bare_string_wildcard(monkeypatch):
@@ -276,6 +277,7 @@ def test_channels_resource_builds_record(monkeypatch):
     assert len(rows) == 1
     assert rows[0]["channel_id"] == "CHAN"
     assert rows[0]["offered_by"] == "ocw"
+    assert rows[0]["config_file"] == "channels.yaml"
     assert rows[0]["etl_source"] == "youtube"
     assert rows[0]["snippet"]["title"] == "A channel"
 
@@ -292,3 +294,93 @@ def test_youtube_channels_materialization(test_profile: Path, monkeypatch):
 
     dataset = pipeline.dataset()
     assert dataset["raw__youtube__api__channels"].arrow().num_rows == 1
+
+
+@pytest.mark.parametrize(
+    ("channel_config", "playlist_id", "expected"),
+    [
+        # No setting anywhere: Learn's default is to create videos.
+        ({"channel_id": "c", "playlists": [{"id": "all"}]}, "p", True),
+        # Wildcard-only playlists take the channel setting.
+        (
+            {"channel_id": "c", "create_videos": False, "playlists": [{"id": "all"}]},
+            "p",
+            False,
+        ),
+        # A listed playlist overrides the channel...
+        (
+            {
+                "channel_id": "c",
+                "create_videos": False,
+                "playlists": [{"id": "p", "create_videos": True}],
+            },
+            "p",
+            True,
+        ),
+        # ...and falls back to it when it says nothing.
+        (
+            {"channel_id": "c", "create_videos": False, "playlists": [{"id": "p"}]},
+            "p",
+            False,
+        ),
+    ],
+)
+def test_playlist_create_videos_follows_learn_precedence(
+    channel_config, playlist_id, expected
+):
+    assert youtube._playlist_create_videos(channel_config, playlist_id) is expected
+
+
+def test_playlists_resource_carries_offered_by_and_create_videos(monkeypatch):
+    monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
+    monkeypatch.setattr(
+        youtube,
+        "_fetch_channel_configs",
+        lambda **_kw: [
+            {
+                "channel_id": "CHAN",
+                "offered_by": "ocw",
+                "create_videos": False,
+                "playlists": [{"id": "PL"}],
+            }
+        ],
+    )
+    _queue_get(monkeypatch, [{"items": [{"id": "PL", "snippet": {"title": "t"}}]}])
+
+    source = youtube.youtube_source(api_key="k")
+    rows = list(source.resources["raw__youtube__api__playlists"])
+    assert len(rows) == 1
+    assert rows[0]["playlist_id"] == "PL"
+    assert rows[0]["channel_id"] == "CHAN"
+    assert rows[0]["offered_by"] == "ocw"
+    assert rows[0]["create_videos"] is False
+
+
+def test_playlist_items_resource_keeps_order_and_first_duplicate(monkeypatch):
+    monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
+    monkeypatch.setattr(
+        youtube,
+        "_fetch_channel_configs",
+        lambda **_kw: [{"channel_id": "CHAN", "playlists": [{"id": "PL"}]}],
+    )
+    _queue_get(
+        monkeypatch,
+        [
+            {
+                "items": [
+                    {"contentDetails": {"videoId": "v1"}},
+                    {"contentDetails": {"videoId": "v2"}},
+                    {"contentDetails": {"videoId": "v1"}},
+                    {"contentDetails": {"videoId": "v3"}},
+                ]
+            }
+        ],
+    )
+
+    source = youtube.youtube_source(api_key="k")
+    rows = list(source.resources["raw__youtube__api__playlist_items"])
+    assert [(r["playlist_id"], r["video_id"], r["position"]) for r in rows] == [
+        ("PL", "v1", 0),
+        ("PL", "v2", 1),
+        ("PL", "v3", 3),
+    ]

@@ -107,6 +107,10 @@ raw__oll__google_sheets__courses           ← Open Learning Library (Google She
 ```
 raw__podcast__rss__channels                ← MIT Learn podcast channels from RSS
 raw__podcast__rss__episodes                ← MIT Learn podcast episodes from RSS
+raw__youtube__api__channels                ← MIT Learn YouTube channels
+raw__youtube__api__playlists               ← MIT Learn YouTube playlists
+raw__youtube__api__playlist_items          ← YouTube playlist membership, in order
+raw__youtube__api__videos                  ← MIT Learn YouTube videos
 ```
 
 ### Client analytics (via dlt)
