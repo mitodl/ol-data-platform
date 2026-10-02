@@ -8,6 +8,7 @@ from typing import Any
 
 import dlt
 import pytest
+from dlt.extract.exceptions import ResourceExtractionError
 
 from ol_dlt import config
 from ol_dlt.sources import youtube
@@ -234,7 +235,17 @@ def test_source_resolves_the_api_key_once_for_all_resources(monkeypatch):
         return "k"
 
     monkeypatch.setattr(youtube, "_resolve_api_key", _resolve)
-    monkeypatch.setattr(youtube, "_fetch_channel_configs", lambda **_kw: [])
+    monkeypatch.setattr(
+        youtube,
+        "_fetch_channel_configs",
+        lambda **_kw: [
+            {"channel_id": "c", "playlists": [{"id": "PL"}], "config_file": "c.yaml"}
+        ],
+    )
+    monkeypatch.setattr(
+        youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter(["v1"])
+    )
+    monkeypatch.setattr(youtube, "_yt_paged_items", lambda *_args: iter([{"id": "x"}]))
 
     source = youtube.youtube_source(api_key="k")
     for resource in source.resources.values():
@@ -264,6 +275,11 @@ def _fake_channel_get(url, params=None, **_kwargs):
         return FakeResponse(
             json_data={"items": [{"id": "CHAN", "snippet": {"title": "A channel"}}]}
         )
+    # The listing needs at least one playlist item, or it refuses the snapshot.
+    if "youtube/v3/playlistItems" in url:
+        return FakeResponse(json_data={"items": [{"contentDetails": {"videoId": "v"}}]})
+    if "youtube/v3/playlists" in url:
+        return FakeResponse(json_data={"items": [{"id": "PL"}]})
     return FakeResponse(json_data={"items": []})
 
 
@@ -392,7 +408,9 @@ def test_playlists_resource_carries_offered_by_and_create_videos(monkeypatch):
 
     def _fake_get(url, params=None, **_kwargs):
         if url.endswith("/playlistItems"):
-            return FakeResponse(json_data={"items": []})
+            return FakeResponse(
+                json_data={"items": [{"contentDetails": {"videoId": "v"}}]}
+            )
         return FakeResponse(
             json_data={"items": [{"id": "PL", "snippet": {"title": "t"}}]}
         )
@@ -436,3 +454,40 @@ def test_playlist_items_resource_keeps_order_and_first_duplicate(monkeypatch):
         ("PL", "v2", 1),
         ("PL", "v3", 3),
     ]
+
+
+def test_listing_refuses_a_snapshot_with_no_playlist_items(monkeypatch):
+    """No playlist items is treated as an outage, not as every playlist emptied."""
+    monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
+    monkeypatch.setattr(
+        youtube,
+        "_fetch_channel_configs",
+        lambda **_kw: [{"channel_id": "c", "playlists": [{"id": "PL"}]}],
+    )
+    monkeypatch.setattr(
+        youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter([])
+    )
+    source = youtube.youtube_source(api_key="k")
+    with pytest.raises(ResourceExtractionError, match="no playlist items"):
+        list(source.resources["raw__youtube__api__playlist_items"])
+
+
+def test_table_resource_refuses_an_empty_snapshot(monkeypatch):
+    """Every configured channel returning nothing fails instead of loading 0 rows."""
+    monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
+    monkeypatch.setattr(
+        youtube,
+        "_fetch_channel_configs",
+        lambda **_kw: [
+            {"channel_id": "c", "playlists": [{"id": "PL"}], "config_file": "c.yaml"}
+        ],
+    )
+    monkeypatch.setattr(
+        youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter(["v1"])
+    )
+    monkeypatch.setattr(youtube, "_yt_paged_items", lambda *_args: iter([]))
+    source = youtube.youtube_source(api_key="k")
+    with pytest.raises(
+        ResourceExtractionError, match="youtube_channels produced no rows"
+    ):
+        list(source.resources["raw__youtube__api__channels"])

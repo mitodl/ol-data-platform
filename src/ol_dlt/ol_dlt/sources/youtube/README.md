@@ -50,6 +50,9 @@ only through `all` takes the channel's.
   playlist and its items once per extraction. The table resources are dlt
   transformers of it, so a run makes one listing pass against the API key's
   daily quota (shared with MIT Learn), and every table sees the same snapshot.
+- A run that would write no channels, playlists, playlist items or videos
+  fails instead. Merge loading writes no load id for an empty table, so the
+  previous snapshot would stay current downstream.
 - A config file that doesn't parse, or a channel entry with no `channel_id`,
   fails the run. Skipping it would load a short channel set that the dbt
   integrations models read as complete.

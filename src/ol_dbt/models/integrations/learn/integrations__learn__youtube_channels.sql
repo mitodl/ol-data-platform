@@ -9,7 +9,9 @@
   keeps the _dlt_load_id of the last load that saw it. Only rows from the most
   recent load are kept. Unlike the podcast models there is no grace window: the
   youtube dlt source raises on an API error or a bad config file instead of
-  skipping a channel, so a load writes every configured channel or nothing. (A
+  skipping a channel, so a load writes every configured channel or nothing.
+  It also refuses a run that would write no rows to a table: such a run writes
+  no load id, so the previous snapshot would stay newest here. (A
   channel YouTube returns no data for is the exception; see below.)
 
   Only channels from the config file MIT Learn reads are kept. Learn's

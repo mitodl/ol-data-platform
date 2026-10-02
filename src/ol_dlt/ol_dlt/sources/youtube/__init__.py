@@ -30,7 +30,7 @@ Run standalone:
 import base64
 import functools
 import logging
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Iterator
 from typing import Any
 
 import dlt
@@ -227,6 +227,30 @@ def _batched(items: Iterable[str], size: int) -> Generator[list[str]]:
         yield batch
 
 
+def _refuse_empty(
+    transform: Callable[[dict[str, Any]], Iterator[dict[str, Any]]],
+) -> Callable[[dict[str, Any]], Generator[dict[str, Any]]]:
+    """Fail a table resource that would load an empty snapshot.
+
+    The tables are merge-loaded and the dbt integrations models read each one
+    at its newest load id. A run that writes no rows to a table writes no load
+    id either, so the previous snapshot would stay current. An empty YouTube
+    response is far more likely an outage than a real state, so fail the run.
+    """
+
+    @functools.wraps(transform)
+    def _wrapped(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
+        rows = 0
+        for row in transform(listing):
+            rows += 1
+            yield row
+        if not rows:
+            msg = f"{transform.__name__} produced no rows; refusing an empty snapshot"
+            raise ValueError(msg)
+
+    return _wrapped
+
+
 def _unique(items: Iterable[str]) -> Generator[str]:
     """Yield each item the first time it appears, keeping order."""
     seen: set[str] = set()
@@ -303,17 +327,23 @@ def youtube_source(  # noqa: C901
             branch=github_branch,
             token=github_access_token,
         )
+        playlists = [
+            {
+                "channel_config": channel_config,
+                "playlist_id": playlist_id,
+                "video_ids": list(_video_ids_for_playlist(playlist_id, key)),
+            }
+            for channel_config in configs
+            for playlist_id in _playlist_ids_for_config(channel_config, key)
+        ]
+        # See _refuse_empty: an empty listing would leave the previous
+        # snapshot current downstream.
+        if not any(playlist["video_ids"] for playlist in playlists):
+            msg = "youtube listing found no playlist items; refusing an empty snapshot"
+            raise ValueError(msg)
         yield {
             "configs": configs,
-            "playlists": [
-                {
-                    "channel_config": channel_config,
-                    "playlist_id": playlist_id,
-                    "video_ids": list(_video_ids_for_playlist(playlist_id, key)),
-                }
-                for channel_config in configs
-                for playlist_id in _playlist_ids_for_config(channel_config, key)
-            ],
+            "playlists": playlists,
         }
 
     def _video_ids(listing: dict[str, Any]) -> Generator[str]:
@@ -327,6 +357,7 @@ def youtube_source(  # noqa: C901
         data_from=youtube_listing,
         **_table("raw__youtube__api__channels", "channel_id"),
     )
+    @_refuse_empty
     def youtube_channels(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per configured YouTube channel."""
         key = _api_key()
@@ -356,6 +387,7 @@ def youtube_source(  # noqa: C901
         data_from=youtube_listing,
         **_table("raw__youtube__api__playlists", "playlist_id"),
     )
+    @_refuse_empty
     def youtube_playlists(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per ingested playlist across all channels."""
         key = _api_key()
@@ -409,6 +441,7 @@ def youtube_source(  # noqa: C901
         data_from=youtube_listing,
         **_table("raw__youtube__api__videos", "video_id"),
     )
+    @_refuse_empty
     def youtube_videos(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
         key = _api_key()
