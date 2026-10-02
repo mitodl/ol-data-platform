@@ -1,0 +1,62 @@
+---
+version: 2
+
+models:
+- name: int__news_events__mitpe_event_times
+  description: >
+    Start and end instants of every MIT Professional Education event, parsed from
+    the feed's dates and free-text time range the way MIT Learn's
+    parse_date_time_range does (news_events/etl/utils.py). A missing start or
+    end date is filled from the other; an event with neither is dropped.
+  columns:
+  - name: event_id
+    description: str, the event's uuid
+    tests:
+    - not_null
+    - unique
+  - name: start_on
+    description: timestamp with time zone, the event's start
+    tests:
+    - not_null
+  - name: end_on
+    description: timestamp with time zone, the event's end, never before its start
+    tests:
+    - not_null
+
+unit_tests:
+- name: test_int__news_events__mitpe_event_times_matches_learn
+  description: >
+    Expected values are what MIT Learn's parse_date_time_range returns for the same
+    inputs, run with the server zone at UTC.
+  model: int__news_events__mitpe_event_times
+  given:
+  - input: ref('stg__mitpe__api__events')
+    rows:
+    - {event_id: a, event_start_date_raw: "2026-09-15", event_end_date_raw: "2026-09-15",
+      event_time_range_raw: "12:30pm - 1pm"}
+    # Learn's rule: a start hour of 12 before a PM end is read as 12 AM.
+    - {event_id: b, event_start_date_raw: "2025-03-27", event_end_date_raw: "2025-03-27",
+      event_time_range_raw: "12-1pm ET"}
+    - {event_id: c, event_start_date_raw: "2022-11-08", event_end_date_raw: "2022-11-08",
+      event_time_range_raw: "8:00AM - 1:00PM JST"}
+    - {event_id: d, event_start_date_raw: "2026-05-26", event_end_date_raw: "2026-05-31",
+      event_time_range_raw: ""}
+    - {event_id: e, event_start_date_raw: "2022-09-16", event_end_date_raw: "", event_time_range_raw: "40\
+        \ minutes"}
+    - {event_id: f, event_start_date_raw: "2026-07-17", event_end_date_raw: "2026-07-17",
+      event_time_range_raw: "9am-10am EDT"}
+    - {event_id: g, event_start_date_raw: "2026-04-07", event_end_date_raw: "2026-04-07",
+      event_time_range_raw: "12:00 PM EST"}
+    - {event_id: h, event_start_date_raw: "2026-06-17", event_end_date_raw: "2026-06-17",
+      event_time_range_raw: "10 - 9 AM"}
+    - {event_id: i, event_start_date_raw: "", event_end_date_raw: "", event_time_range_raw: "9am"}
+  expect:
+    rows:
+    - {event_id: a, start_on: "2026-09-15 16:30:00+00", end_on: "2026-09-15 17:00:00+00"}
+    - {event_id: b, start_on: "2025-03-27 05:00:00+00", end_on: "2025-03-27 18:00:00+00"}
+    - {event_id: c, start_on: "2022-11-07 23:00:00+00", end_on: "2022-11-08 04:00:00+00"}
+    - {event_id: d, start_on: "2026-05-26 16:00:00+00", end_on: "2026-05-31 16:00:00+00"}
+    - {event_id: e, start_on: "2022-09-16 16:00:00+00", end_on: "2022-09-16 16:00:00+00"}
+    - {event_id: f, start_on: "2026-07-17 13:00:00+00", end_on: "2026-07-17 14:00:00+00"}
+    - {event_id: g, start_on: "2026-04-07 17:00:00+00", end_on: "2026-04-07 17:00:00+00"}
+    - {event_id: h, start_on: "2026-06-17 14:00:00+00", end_on: "2026-06-17 14:00:00+00"}

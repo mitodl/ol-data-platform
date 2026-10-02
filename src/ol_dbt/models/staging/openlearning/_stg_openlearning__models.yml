@@ -1,0 +1,45 @@
+---
+version: 2
+
+models:
+- name: stg__openlearning__api__events
+  description: Every event on openlearning.mit.edu, past and upcoming, with its taxonomy
+    terms and image resolved.
+  columns:
+  - name: event_id
+    description: str, the Drupal node's uuid
+    tests:
+    - not_null
+    - unique
+  - name: event_title
+    description: str, event title
+  - name: event_path_alias
+    description: str, root-relative URL path of the event page
+  - name: event_start_on_raw
+    description: str, ISO 8601 start time with UTC offset
+  - name: event_end_on_raw
+    description: str, ISO 8601 end time with UTC offset
+  - name: event_body
+    description: str, HTML body
+  - name: event_body_summary
+    description: str, plain-text summary, usually empty
+  - name: event_is_published
+    description: boolean, whether the node is published
+  - name: event_created_on_raw
+    description: str, ISO 8601 time the node was created
+  - name: event_updated_on_raw
+    description: str, ISO 8601 time the node was last changed
+  - name: event_audience_json
+    description: str, JSON array of audience names
+  - name: event_category_json
+    description: str, JSON array of event type names
+  - name: event_location_json
+    description: str, JSON array of location names
+  - name: event_image_src
+    description: str, root-relative URL path of the event image
+  - name: event_image_alt
+    description: str, the image's alt text
+  - name: event_image_title
+    description: str, the image's title text
+  - name: retrieved_at
+    description: str, ISO 8601 time of the extraction
