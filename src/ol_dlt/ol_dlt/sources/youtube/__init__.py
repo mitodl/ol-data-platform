@@ -91,21 +91,18 @@ def _fetch_channel_configs(
         file_resp.raise_for_status()
         raw_content = base64.b64decode(file_resp.json()["content"]).decode("utf-8")
 
-        try:
-            parsed = yaml.safe_load(raw_content)
-        except yaml.YAMLError:
-            logger.exception("Failed to parse YAML config: %s", file_meta["name"])
-            continue
+        # A broken file fails the run rather than being skipped. Skipping it
+        # would load a run without that file's channels, and the integrations
+        # models read the newest load as the complete channel set, so MIT Learn
+        # would unpublish them. Learn's own ETL loads nothing on a bad config.
+        parsed = yaml.safe_load(raw_content)
 
         # A file is either a single channel dict or a list of channel dicts.
         entries = parsed if isinstance(parsed, list) else [parsed]
         for entry in entries:
             if not isinstance(entry, dict) or "channel_id" not in entry:
-                logger.warning(
-                    "Skipping youtube config entry without channel_id in %s",
-                    file_meta["name"],
-                )
-                continue
+                msg = f"youtube config entry without channel_id in {file_meta['name']}"
+                raise ValueError(msg)
             configs.append({**entry, "config_file": file_meta["name"]})
 
     logger.info("Loaded %d youtube configs from %s/%s", len(configs), repo, folder)

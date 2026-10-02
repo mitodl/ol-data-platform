@@ -8,8 +8,9 @@
   STALENESS: the raw table is merge-loaded, so a channel removed from the config
   keeps the _dlt_load_id of the last load that saw it. Only rows from the most
   recent load are kept. Unlike the podcast models there is no grace window: the
-  youtube dlt source raises on any API error instead of skipping a channel, so a
-  load either writes every configured channel or writes nothing.
+  youtube dlt source raises on an API error or a bad config file instead of
+  skipping a channel, so a load writes every configured channel or nothing. (A
+  channel YouTube returns no data for is the exception; see below.)
 
   Only channels from the config file MIT Learn reads are kept. Learn's
   YOUTUBE_CONFIG_URL names one file (youtube/channels.yaml in every deployed
