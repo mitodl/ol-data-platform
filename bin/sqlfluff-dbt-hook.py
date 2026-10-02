@@ -19,7 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Models that query the warehouse while compiling.
+# Models that query the warehouse while compiling. On the sqlfluff target that
+# query cannot connect, which dbt reports as a Database Error; any other failure
+# in these models still fails the hook.
 ALLOWED_COMPILE_FAILURES = frozenset(
     {
         "src/ol_dbt/models/dimensional/dim_date.sql",  # dbt_utils.date_spine
@@ -45,6 +47,7 @@ cli()
 # one of these levels.
 _LOG_LINE = re.compile(r"^\s*(?:WARNING|ERROR|CRITICAL)\s+(.*)")
 _SKIPPED = re.compile(r"Skipped file (\S+) because (.+)")
+_NO_WAREHOUSE = "dbt raised a fatal exception during compilation: Database Error"
 
 
 def _repo_path(path: str) -> str:
@@ -61,9 +64,7 @@ def _allowed(message: str) -> bool:
     path, reason = _repo_path(match.group(1)), match.group(2)
     if reason.startswith("it is disabled"):
         return True
-    return path in ALLOWED_COMPILE_FAILURES and reason.startswith(
-        "dbt raised a fatal exception during compilation"
-    )
+    return path in ALLOWED_COMPILE_FAILURES and reason.rstrip() == _NO_WAREHOUSE
 
 
 def _unlinted(output: str) -> list[str]:
