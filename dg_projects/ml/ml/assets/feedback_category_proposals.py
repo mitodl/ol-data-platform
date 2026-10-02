@@ -68,6 +68,13 @@ class FeedbackCategoryProposalsConfig(Config):
             "BEDROCK_CATEGORY_MODEL_VERSION."
         ),
     )
+    relabel_all: bool = Field(
+        default=False,
+        description=(
+            "Label every active cluster_key again, replacing existing labels. Use "
+            "to fix duplicate or near-duplicate labels."
+        ),
+    )
 
 
 @asset(
@@ -98,9 +105,9 @@ def feedback_category_proposals(
     Propose a category label for every active cluster_key that doesn't have one
     yet.
 
-    A cluster_key that already has a proposal row is never re-proposed -- only a
-    genuinely new/split/merged key, or one an earlier LLM call failed for, costs a
-    call. Samples representative conversation
+    A cluster_key that already has a proposal row is not re-proposed unless
+    config.relabel_all is set -- only a genuinely new/split/merged key, or one an
+    earlier LLM call failed for, costs a call. Samples representative conversation
     text per cluster_key (feedback_cluster_membership + int__feedback__conversation)
     and each cluster's most common support tags (afact_feedback_conversation.
     dominant_tag_label) as prompt context. Output is
@@ -136,7 +143,7 @@ def feedback_category_proposals(
     )
     already_proposed: set[str] = set()
     active_labels: list[str] = []
-    if table_exists(
+    if not config.relabel_all and table_exists(
         catalog, f"{intermediate_database_name}.feedback_category_proposal"
     ):
         existing_proposals = (
