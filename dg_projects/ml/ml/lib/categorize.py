@@ -80,6 +80,9 @@ CATEGORY_PROMPT = (
     'course prerequisites". Use sentence case. If one of the support tags already '
     "describes the common theme, reuse it or refine it lightly. Otherwise, propose "
     "a new label. Describe what the group has in common, not a single example.\n\n"
+    "These labels are already used by other groups. Propose a label that names "
+    "what is specific to this group and does not repeat or closely paraphrase any "
+    "of them:\n{{taken_labels}}\n\n"
     "Respond with only a JSON object, no other text, in this exact shape: "
     '{"category_label": "...", "category_description": "one sentence"}'
 )
@@ -91,22 +94,14 @@ def _category_prompt(
     dominant_tags: list[str], samples: list[str], taken_labels: Sequence[str] = ()
 ) -> str:
     """CATEGORY_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
-    prompt = render_prompt(
+    return render_prompt(
         CATEGORY_PROMPT_NAME,
         CATEGORY_PROMPT,
         dominant_tags=", ".join(dominant_tags) or "(none)",
         samples="\n---\n".join(samples),
+        taken_labels="\n".join(f"- {label}" for label in sorted(taken_labels))
+        or "(none)",
     )
-    # Appended after rendering, not a template variable, so it applies whatever the
-    # Opik Prompt Library version of the template contains.
-    if taken_labels:
-        prompt += (
-            "\n\nThese labels are already used by other groups. Propose a label "
-            "that names what is specific to this group and does not repeat or "
-            "closely paraphrase any of them. Still respond with only the JSON "
-            "object.\n- " + "\n- ".join(sorted(taken_labels))
-        )
-    return prompt
 
 
 def new_category_slug(category_label: str) -> str:
