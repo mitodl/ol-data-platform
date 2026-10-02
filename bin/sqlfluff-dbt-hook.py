@@ -50,9 +50,9 @@ def _repo_path(path: str) -> str:
     return path
 
 
-def _unlinted(stderr: str) -> list[str]:
+def _unlinted(output: str) -> list[str]:
     problems = []
-    for line in stderr.splitlines():
+    for line in output.splitlines():
         if "Fatal linting error" in line or "Skipping to avoid parser lock" in line:
             problems.append(line.strip())
             continue
@@ -73,12 +73,14 @@ def _unlinted(stderr: str) -> list[str]:
 def main() -> int:
     result = subprocess.run(  # noqa: S603
         [sys.executable, "-c", _RUN_SQLFLUFF, *sys.argv[1:]],
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         check=False,
     )
+    sys.stdout.write(result.stdout)
     sys.stderr.write(result.stderr)
-    problems = _unlinted(result.stderr)
+    # sqlfluff logs to stdout in its default format, and to stderr with --format json.
+    problems = _unlinted(result.stdout + result.stderr)
     if problems:
         sys.stderr.write("sqlfluff did not lint every file:\n")
         sys.stderr.writelines(f"  {problem}\n" for problem in problems)
