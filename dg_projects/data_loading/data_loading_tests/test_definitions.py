@@ -98,6 +98,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__see__api__course_offerings",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
     ):
         assert expected in asset_keys
 

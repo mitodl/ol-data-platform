@@ -302,7 +302,8 @@ edxorg_s3_table_assets = [
 # independently.
 course_xml_blocks_assets = [
     build_batched_assets(
-        name=f"course_xml_blocks_{table.pipeline_prefix}",
+        # course_xml_blocks_openedx etc. for the block tables, as before.
+        name=table.pipeline_name.replace("__", "_"),
         build_source=partial(
             course_xml_blocks.course_xml_blocks_source, raw_table=raw_table
         ),
