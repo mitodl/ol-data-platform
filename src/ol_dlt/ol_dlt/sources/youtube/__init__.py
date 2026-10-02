@@ -272,7 +272,7 @@ def youtube_source(  # noqa: C901
     table_format = config.active_table_format()
 
     # One resolution per source instance: in deployed profiles each one is a Vault
-    # login and read, and every resource needs the key.
+    # login and read, and the listing and three of the table resources need it.
     @functools.cache
     def _api_key() -> str:
         return _resolve_api_key(api_key)
