@@ -40,6 +40,10 @@ deployments:
   # data — the channel set is configured per run — so `podcast` names the
   # collection, the same shape as `openedx` below.
 - podcast
+  # The YouTube channels configured in mitodl/open-video-data, read from the
+  # YouTube Data API. A collection like `podcast`, named for MIT Learn's
+  # etl_source.
+- youtube
   # We run three Open edX instances — mitx, mitxonline and xpro, each its own
   # deployment above. `openedx` is not a fourth: it names the shared pipeline
   # that reads all three, whose output lands in one table rather than three.

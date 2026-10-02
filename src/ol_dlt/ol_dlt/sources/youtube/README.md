@@ -28,15 +28,34 @@ GitHub (mitodl/open-video-data/youtube/*.yaml)
     → YouTube Data API v3 (channels / playlists / playlistItems / videos)
         → raw__youtube__api__channels    (one row per configured channel)
         → raw__youtube__api__playlists   (one row per ingested playlist)
+        → raw__youtube__api__playlist_items (one row per playlist + video)
         → raw__youtube__api__videos      (one row per video)
     → youtube-transcript-api
         → raw__youtube__api__transcripts (one row per video with a transcript)
 ```
 
-All tables use `write_disposition="merge"` keyed on the entity id so reruns
-update in place.
+All tables use `write_disposition="merge"` keyed on the entity id (playlist
+items on `playlist_id` + `video_id`) so reruns update in place. Merge never
+deletes, so a playlist, video or membership that disappears keeps its last
+`_dlt_load_id`; the dbt integrations models filter on load recency for that.
+
+Playlist rows carry the channel's `offered_by` and a resolved `create_videos`
+flag, using MIT Learn's precedence: a playlist listed by id takes its own
+`create_videos`, else the channel's, which defaults to true. A playlist reached
+only through `all` takes the channel's.
 
 ## Implementation notes
+
+- A deselected `youtube_listing` resource reads the config and lists every
+  playlist and its items once per extraction. The table resources are dlt
+  transformers of it, so a run makes one listing pass against the API key's
+  daily quota (shared with MIT Learn), and every table sees the same snapshot.
+- A run that would write no channels, playlists, playlist items or videos
+  fails instead. Merge loading writes no load id for an empty table, so the
+  previous snapshot would stay current downstream.
+- A config file that doesn't parse, or a channel entry with no `channel_id`,
+  fails the run. Skipping it would load a short channel set that the dbt
+  integrations models read as complete.
 
 - The Data API is called directly over HTTP with `requests` (API-key auth via
   the `key` query param), not the `google-api-python-client` SDK, to stay
