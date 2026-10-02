@@ -11,10 +11,10 @@ models:
     One row per ContentFile of an MITx Online or xPRO course run, for MIT Learn's
     SyncOpenEdXContentFilesTask. A scoped pull filters and prunes on
     (etl_source, run_readable_id). Built from the OLX blocks and the document and
-    transcript text the openedx location extracts. Not yet applied: Learn's
-    exclusion of staff-only subtrees and of static files nothing references, so
-    this carries files Learn hides; it is not ready to cut over until they are.
-    Also missing: the course root files course.xml and course/<run>.xml, and
+    transcript text the openedx location extracts, less the files Learn's
+    excluded_olx_paths hides (staff-only subtrees, asset manifests, unreferenced
+    static files). A run appears once its export has been through that check.
+    Still missing: the course root files course.xml and course/<run>.xml, and
     Tika's metadata title (content_title is '').
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:

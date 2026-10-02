@@ -104,3 +104,26 @@ sources:
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at
       description: timestamp, that file's S3 modification time
+  - name: raw__openedx__s3__course_file_exclusions
+    description: >
+      Every file in each Open edX course run's export, flagged with whether MIT
+      Learn leaves it out of its ContentFiles, written by the openedx location's
+      extract_course_file_exclusions asset (a port of Learn's excluded_olx_paths).
+      Appended one file per course version; staging keeps each course's newest file.
+    columns:
+    - name: course_id
+      description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    - name: source_system
+      description: str, Open edX deployment (mitxonline, xpro, mitx)
+    - name: file_path
+      description: str, path of the file within the course export, relative to its
+        root, e.g. static/handout.pdf
+    - name: excluded
+      description: str, true or false, whether Learn excludes the file
+    - name: exclusion_reason
+      description: str, staff_only, non_content or unreferenced_static; null when
+        the file is kept
+    - name: _source_file
+      description: str, the landing-zone file the row was read from
+    - name: _file_modified_at
+      description: timestamp, that file's S3 modification time

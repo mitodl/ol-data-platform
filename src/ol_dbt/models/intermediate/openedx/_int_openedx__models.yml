@@ -9,8 +9,9 @@ models:
     ContentFile, derived as Learn's process_olx_path does: OLX block XML from
     course_xml_blocks plus the document and transcript text the openedx location
     extracts. Files with no text are skipped, as Learn skips them; a failed
-    extraction keeps its row with null content. Learn's staff-only and
-    unreferenced-static exclusions are not applied yet.
+    extraction keeps its row with null content. Files Learn's excluded_olx_paths
+    drops (staff-only, asset manifests, unreferenced static files) are dropped, and
+    a run the exclusion check has not covered yet has no rows.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -54,7 +55,7 @@ unit_tests:
   description: >
     Keys, titles and URLs as MIT Learn derives them, each case checked against
     Learn's content files for course-v1:MITxT+7.05x+2T2026 and
-    course-v1:xPRO+SysEngx1+R28 on 2026-10-02.
+    course-v1:xPRO+SysEngx1+R28 on 2026-10-02, and the exclusion filter.
   model: int__openedx__content_files
   given:
   - input: ref('stg__openedx__s3__course_xml_blocks')
@@ -86,6 +87,14 @@ unit_tests:
       coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Peer
         Review, coursestructure_xml_block_path: course/vertical/peer_unit.xml, coursestructure_xml_raw_xml: '<vertical
         display_name="Peer Review"><html><p>Assess</p></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: problem, coursestructure_xml_block_display_name: Staff
+        Check, coursestructure_xml_block_path: course/problem/staff_check.xml, coursestructure_xml_raw_xml: '<problem
+        display_name="Staff Check"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R2", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Unchecked,
+      coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter
+        display_name="Unchecked"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # Residential MITx is not a Learn source.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
       coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Hidden,
@@ -109,11 +118,24 @@ unit_tests:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
       content_file_path: policies/assets.json, content_file_extension: .json, content_file_text: "{}",
       content_file_extraction_status: extracted}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/answer_key.pdf, content_file_extension: .pdf, content_file_text: Answers,
+      content_file_extraction_status: extracted}
   - input: ref('stg__openedx__s3__course_transcript_text')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
       content_file_path: static/intro clip-en.srt, content_file_extension: .srt, content_file_text: Hi
         there, content_file_extraction_status: extracted}
+  # Only the excluded rows and one row per checked run matter to the model.
+  # R2 was never checked, so its chapter is held back.
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: chapter/week_1.xml, content_file_is_excluded: false}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/answer_key.pdf, content_file_is_excluded: true}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: problem/staff_check.xml, content_file_is_excluded: true}
   expect:
     rows:
     - {edx_module_id: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",
