@@ -6,8 +6,11 @@
 #
 # Unlike the Cohort 2 sources, podcasts deliver as a NESTED payload: MIT Learn's
 # load_podcasts() expects each podcast to carry its episodes inline under an
-# "episodes" key. The two models here stay flat and relational; the
+# "episodes" key. The two podcast models stay flat and relational; the
 # mit_learn_delivery/podcast_webhook asset joins them into that nested shape.
+# YouTube follows the same rule: channels, playlists, videos and the
+# playlist-video ordering are separate models, and the delivery asset nests
+# videos under their playlist the way transform_playlist does.
 
 version: 2
 
@@ -157,3 +160,223 @@ models:
     description: Always 'anytime'.
   - name: published
     description: Always true.
+
+- name: integrations__learn__youtube_channels
+  description: >
+    YouTube channels configured in mitodl/open-video-data, exposed for MIT
+    Learn's VideoChannel rows. Mirrors transform_channel in
+    learning_resources/etl/youtube.py. Only rows from the most recent dlt load
+    are kept, so a channel removed from the config drops out at the next load.
+    Only channels in the config file MIT Learn reads (var
+    youtube_learn_config_file, default channels.yaml) are kept.
+  columns:
+  - name: channel_id
+    description: YouTube's channel id. VideoChannel.channel_id in MIT Learn.
+    tests: [not_null, unique]
+  - name: title
+    description: Channel title (snippet.title).
+    tests: [not_null]
+  - name: offered_by
+    description: >
+      MIT Learn offeror code from the channel config, e.g. ocw or mitx. Null
+      when the config sets none. The channel row itself carries no offeror in
+      MIT Learn; its playlists and videos inherit this.
+  - name: etl_source
+    description: Always 'youtube'.
+  - name: published
+    description: Always true.
+  - name: dlt_load_id
+    description: The dlt load the row came from. Its playlists must share it.
+
+- name: integrations__learn__youtube_playlists
+  description: >
+    YouTube playlists exposed for MIT Learn's video_playlist LearningResources.
+    Mirrors transform_playlist in learning_resources/etl/youtube.py. Only rows
+    from the most recent dlt load whose channel is delivered are kept.
+    NOTE: create_videos = false playlists (the OCW channel) are published by
+    MIT Learn only when at least 60% of their videos match an OCW ContentFile.
+    That check needs Learn's content files, so it stays in the receiver.
+  columns:
+  - name: readable_id
+    description: YouTube's playlist id.
+    tests: [not_null, unique]
+  - name: channel_id
+    description: The configured channel the playlist was ingested under.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('integrations__learn__youtube_channels')
+        field: channel_id
+  - name: title
+    description: Playlist title (snippet.title).
+    tests: [not_null]
+  - name: url
+    description: https://www.youtube.com/playlist?list=<readable_id>
+  - name: image_url
+    description: URL of the playlist's high-resolution thumbnail.
+  - name: image_alt
+    description: The playlist title, as transform_playlist sets image.alt.
+  - name: offered_by
+    description: The channel config's offered_by code.
+  - name: create_videos
+    description: >
+      Whether MIT Learn creates YouTube videos for the playlist (true) or
+      attaches them to existing OCW content-file videos (false). The playlist's
+      own config entry wins, then the channel's, then true.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'youtube'.
+  - name: platform
+    description: Always 'youtube'.
+  - name: resource_type
+    description: Always 'video_playlist'.
+  - name: availability
+    description: Always 'anytime'.
+  - name: published
+    description: Always true.
+  - name: dlt_load_id
+    description: >
+      The dlt load the row came from. Its memberships and videos are current
+      only when they carry the same load id.
+
+- name: integrations__learn__youtube_playlist_videos
+  description: >
+    The videos of each delivered YouTube playlist, in playlist order. MIT Learn
+    stores these as PLAYLIST_VIDEOS relationships. Private and deleted videos
+    are excluded, and position counts only the videos that remain.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [playlist_readable_id, video_readable_id]
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [playlist_readable_id, position]
+  columns:
+  - name: playlist_readable_id
+    description: The playlist's readable_id.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('integrations__learn__youtube_playlists')
+        field: readable_id
+  - name: video_readable_id
+    description: The video's readable_id (its YouTube id).
+    tests: [not_null]
+  - name: position
+    description: Zero-based, dense position of the video in the playlist.
+    tests: [not_null]
+
+- name: integrations__learn__youtube_videos
+  description: >
+    YouTube videos in the delivered playlists, exposed for MIT Learn's video
+    LearningResources. Mirrors transform_video in
+    learning_resources/etl/youtube.py. One row per video. offered_by comes from
+    the playlist each video is loaded with, so the delivery asset sets it.
+  columns:
+  - name: readable_id
+    description: YouTube's video id.
+    tests: [not_null, unique]
+  - name: youtube_id
+    description: YouTube's video id. MIT Learn matches OCW content files on it.
+    tests: [not_null]
+  - name: title
+    description: Localized video title (snippet.localized.title).
+  - name: description_raw
+    description: >
+      YouTube's description text, uncleaned. MIT Learn stores it after
+      clean_data and clean_youtube_description; the delivery asset applies both.
+  - name: url
+    description: https://www.youtube.com/watch?v=<readable_id>
+  - name: image_url
+    description: URL of the video's high-resolution thumbnail.
+  - name: last_modified
+    description: ISO 8601 time the video was published (snippet.publishedAt).
+  - name: duration
+    description: ISO 8601 duration from contentDetails.duration, e.g. PT1H2M3S.
+  - name: etl_source
+    description: Always 'youtube'.
+  - name: platform
+    description: Always 'youtube'.
+  - name: resource_type
+    description: Always 'video'.
+  - name: availability
+    description: Always 'anytime'.
+  - name: published
+    description: Always true.
+
+unit_tests:
+- name: test_integrations__learn__youtube_playlists_keeps_latest_load_of_delivered_channels
+  description: >
+    Merge loading never deletes, so a playlist dropped from YouTube keeps an old
+    load id and must not be delivered. A playlist whose channel is not delivered
+    is dropped too.
+  model: integrations__learn__youtube_playlists
+  given:
+  - input: ref('stg__youtube__api__playlists')
+    rows:
+    - {playlist_id: current, channel_id: chan, playlist_title: Current, playlist_offered_by: ocw,
+      playlist_create_videos: false, playlist_dlt_load_id: '2'}
+    - {playlist_id: removed, channel_id: chan, playlist_title: Removed, playlist_offered_by: ocw,
+      playlist_create_videos: false, playlist_dlt_load_id: '1'}
+    - {playlist_id: orphan, channel_id: gone, playlist_title: Orphan, playlist_offered_by: ocw,
+      playlist_create_videos: true, playlist_dlt_load_id: '2'}
+  - input: ref('integrations__learn__youtube_channels')
+    rows:
+    - {channel_id: chan}
+  expect:
+    rows:
+    - readable_id: current
+      channel_id: chan
+      title: Current
+      url: https://www.youtube.com/playlist?list=current
+      image_alt: Current
+      offered_by: ocw
+      create_videos: false
+      dlt_load_id: '2'
+
+- name: test_integrations__learn__youtube_playlist_videos_uses_the_playlists_load
+  description: >
+    A membership or video is current only with its playlist's load id. v_old was
+    removed from the playlist, v_private is still listed but YouTube no longer
+    returns it, and the emptied playlist's only rows are stale, so it delivers
+    no videos. Positions are dense over the videos that remain.
+  model: integrations__learn__youtube_playlist_videos
+  given:
+  - input: ref('stg__youtube__api__playlist_items')
+    rows:
+    - {playlist_id: pl, video_id: v_a, playlist_item_position: 0, playlist_item_dlt_load_id: '2'}
+    - {playlist_id: pl, video_id: v_private, playlist_item_position: 1, playlist_item_dlt_load_id: '2'}
+    - {playlist_id: pl, video_id: v_b, playlist_item_position: 2, playlist_item_dlt_load_id: '2'}
+    - {playlist_id: pl, video_id: v_old, playlist_item_position: 3, playlist_item_dlt_load_id: '1'}
+    - {playlist_id: emptied, video_id: v_a, playlist_item_position: 0, playlist_item_dlt_load_id: '1'}
+  - input: ref('stg__youtube__api__videos')
+    rows:
+    - {video_id: v_a, video_dlt_load_id: '2'}
+    - {video_id: v_b, video_dlt_load_id: '2'}
+    - {video_id: v_private, video_dlt_load_id: '1'}
+    - {video_id: v_old, video_dlt_load_id: '1'}
+  - input: ref('integrations__learn__youtube_playlists')
+    rows:
+    - {readable_id: pl, dlt_load_id: '2'}
+    - {readable_id: emptied, dlt_load_id: '2'}
+  expect:
+    rows:
+    - {playlist_readable_id: pl, video_readable_id: v_a, position: 0}
+    - {playlist_readable_id: pl, video_readable_id: v_b, position: 1}
+
+- name: test_integrations__learn__youtube_channels_keeps_learns_config_file_and_latest_load
+  description: >
+    MIT Learn reads only youtube/channels.yaml, so the shorts.yaml channel the
+    dlt source also loads is dropped, as is a channel removed from the config.
+  model: integrations__learn__youtube_channels
+  given:
+  - input: ref('stg__youtube__api__channels')
+    rows:
+    - {channel_id: ocw, channel_title: OCW, channel_offered_by: ocw, channel_config_file: channels.yaml,
+      channel_dlt_load_id: '2'}
+    - {channel_id: shorts, channel_title: Shorts, channel_offered_by: null, channel_config_file: shorts.yaml,
+      channel_dlt_load_id: '2'}
+    - {channel_id: removed, channel_title: Removed, channel_offered_by: mitx, channel_config_file: channels.yaml,
+      channel_dlt_load_id: '1'}
+  expect:
+    rows:
+    - {channel_id: ocw, title: OCW, offered_by: ocw, etl_source: youtube, published: true,
+      dlt_load_id: '2'}
