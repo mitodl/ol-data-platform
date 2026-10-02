@@ -115,6 +115,9 @@ sources:
       description: str, course run ID formatted as course-v1:{org}+{course}+{run}
     - name: source_system
       description: str, Open edX deployment (mitxonline, xpro, mitx)
+    - name: course_xml_version
+      description: str, SHA-256 of the course export the rules ran over; the course_xml_blocks
+        file parsed from that export is named after it
     - name: file_path
       description: str, path of the file within the course export, relative to its
         root, e.g. static/handout.pdf

@@ -143,6 +143,7 @@ CONTENT_TEXT_FIELDS = (
 FILE_EXCLUSION_FIELDS = (
     "course_id",
     "source_system",
+    "course_xml_version",
     "file_path",
     "excluded",
     "exclusion_reason",

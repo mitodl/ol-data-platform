@@ -99,6 +99,7 @@ def rows(tmp_path: Path) -> dict[str, dict[str, Any]]:
             olx_root,
             course_id="course-v1:MITx+7.05x+2T2026",
             source_system="mitxonline",
+            course_xml_version="abc",
         )
     }
 
@@ -169,7 +170,9 @@ def test_an_archive_without_course_xml_excludes_only_staff_only(tmp_path):
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     assert not any(
         row["excluded"]
-        for row in build_file_rows(olx_root, course_id="c", source_system="xpro")
+        for row in build_file_rows(
+            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+        )
     )
 
 
@@ -179,4 +182,6 @@ def test_malformed_block_xml_fails_rather_than_guessing(tmp_path):
     tree.mkdir()
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     with pytest.raises(ET.ParseError):
-        build_file_rows(olx_root, course_id="c", source_system="xpro")
+        build_file_rows(
+            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+        )
