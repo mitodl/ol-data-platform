@@ -237,15 +237,7 @@ def _fake_channel_get(url, params=None, **_kwargs):
     return FakeResponse(json_data={"items": []})
 
 
-def test_fetch_channel_configs_parses_yaml_list(monkeypatch):
-    """A YAML file that is a list of channel dicts loads every valid entry."""
-    yaml_bytes = (
-        b"---\n"
-        b"- channel_id: CHAN_A\n  offered_by: ocw\n"
-        b"- channel_id: CHAN_B\n"
-        b"- offered_by: no_channel_id\n"  # invalid: skipped
-    )
-
+def _serve_config_file(monkeypatch, yaml_bytes):
     def _fake_get(url, params=None, **_kwargs):
         if "contents" in url:
             return FakeResponse(
@@ -256,6 +248,28 @@ def test_fetch_channel_configs_parses_yaml_list(monkeypatch):
         )
 
     monkeypatch.setattr(youtube.requests, "get", _fake_get)
+
+
+@pytest.mark.parametrize(
+    "yaml_bytes",
+    [
+        b"---\n- channel_id: CHAN_A\n- offered_by: no_channel_id\n",
+        b"---\n- channel_id: [unclosed\n",
+    ],
+)
+def test_fetch_channel_configs_fails_on_a_bad_file(monkeypatch, yaml_bytes):
+    """A bad file fails the run instead of loading a short channel set."""
+    _serve_config_file(monkeypatch, yaml_bytes)
+    with pytest.raises((ValueError, youtube.yaml.YAMLError)):
+        youtube._fetch_channel_configs(
+            repo="mitodl/open-video-data", folder="youtube", branch="main", token=None
+        )
+
+
+def test_fetch_channel_configs_parses_yaml_list(monkeypatch):
+    """A YAML file that is a list of channel dicts loads every entry."""
+    yaml_bytes = b"---\n- channel_id: CHAN_A\n  offered_by: ocw\n- channel_id: CHAN_B\n"
+    _serve_config_file(monkeypatch, yaml_bytes)
     configs = youtube._fetch_channel_configs(
         repo="mitodl/open-video-data", folder="youtube", branch="main", token=None
     )

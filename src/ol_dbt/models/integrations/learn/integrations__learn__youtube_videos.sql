@@ -5,14 +5,16 @@
   learning_resources/etl/youtube.py. One row per video, however many playlists
   it is in; integrations__learn__youtube_playlist_videos says which.
 
-  A video is here only if it is in a delivered playlist, so the same staleness
-  rule applies. offered_by is not a video attribute: transform_video takes it
-  from the playlist being loaded, so the delivery asset sets it per playlist.
+  A video is here only if it is in integrations__learn__youtube_playlist_videos,
+  which applies the staleness rules.
 
-  description is YouTube's raw text. MIT Learn runs it through clean_data (nh3)
-  and clean_youtube_description, which drops boilerplate, timestamp, MIT course
-  title and URL lines; the delivery asset applies the same cleaning, as the
-  podcast delivery asset normalizes durations.
+  Left to the delivery asset, which does not exist yet:
+  - offered_by. It is not a video attribute: transform_video takes it from the
+    playlist being loaded, so it has to be set per playlist.
+  - Cleaning description_raw, YouTube's raw text. MIT Learn runs it through
+    clean_data (nh3) and clean_youtube_description, which drops boilerplate,
+    timestamp, MIT course title and URL lines. The podcast delivery asset
+    normalizes durations the same way.
 
   For a create_videos = false playlist MIT Learn does not create these as
   YouTube videos. It merges them into the matching OCW ContentFile's video, so

@@ -186,7 +186,7 @@ models:
   - name: published
     description: Always true.
   - name: dlt_load_id
-    description: The dlt load the row came from. Its playlists must share it.
+    description: The dlt load the row came from (the channels table's newest).
 
 - name: integrations__learn__youtube_playlists
   description: >
@@ -235,9 +235,7 @@ models:
   - name: published
     description: Always true.
   - name: dlt_load_id
-    description: >
-      The dlt load the row came from. Its memberships and videos are current
-      only when they carry the same load id.
+    description: The dlt load the row came from (the playlists table's newest).
 
 - name: integrations__learn__youtube_playlist_videos
   description: >
@@ -261,7 +259,10 @@ models:
     description: The video's readable_id (its YouTube id).
     tests: [not_null]
   - name: position
-    description: Zero-based, dense position of the video in the playlist.
+    description: >
+      Zero-based, dense position of the video in the playlist. Matches Learn
+      for create_videos = true playlists. For create_videos = false, Learn
+      numbers only the videos it matched to OCW content files.
     tests: [not_null]
 
 - name: integrations__learn__youtube_videos
@@ -269,7 +270,7 @@ models:
     YouTube videos in the delivered playlists, exposed for MIT Learn's video
     LearningResources. Mirrors transform_video in
     learning_resources/etl/youtube.py. One row per video. offered_by comes from
-    the playlist each video is loaded with, so the delivery asset sets it.
+    the playlist each video is loaded with, so the delivery asset has to set it.
   columns:
   - name: readable_id
     description: YouTube's video id.
@@ -282,7 +283,8 @@ models:
   - name: description_raw
     description: >
       YouTube's description text, uncleaned. MIT Learn stores it after
-      clean_data and clean_youtube_description; the delivery asset applies both.
+      clean_data and clean_youtube_description, so the delivery asset has to
+      apply both.
   - name: url
     description: https://www.youtube.com/watch?v=<readable_id>
   - name: image_url
@@ -332,19 +334,21 @@ unit_tests:
       create_videos: false
       dlt_load_id: '2'
 
-- name: test_integrations__learn__youtube_playlist_videos_uses_the_playlists_load
+- name: test_integrations__learn__youtube_playlist_videos_uses_each_tables_newest_load
   description: >
-    A membership or video is current only with its playlist's load id. v_old was
-    removed from the playlist, v_private is still listed but YouTube no longer
-    returns it, and the emptied playlist's only rows are stale, so it delivers
-    no videos. Positions are dense over the videos that remain.
+    Playlist items and videos each come from their own table's newest load, a
+    full snapshot even when Dagster materializes only some youtube assets (here
+    the videos table is a load behind the items table). v_old was removed from
+    the playlist, v_private is still listed but YouTube no longer returns it,
+    and the emptied playlist has no rows in the newest items load, so it gets no
+    videos. Positions are dense over the videos that remain.
   model: integrations__learn__youtube_playlist_videos
   given:
   - input: ref('stg__youtube__api__playlist_items')
     rows:
-    - {playlist_id: pl, video_id: v_a, playlist_item_position: 0, playlist_item_dlt_load_id: '2'}
-    - {playlist_id: pl, video_id: v_private, playlist_item_position: 1, playlist_item_dlt_load_id: '2'}
-    - {playlist_id: pl, video_id: v_b, playlist_item_position: 2, playlist_item_dlt_load_id: '2'}
+    - {playlist_id: pl, video_id: v_a, playlist_item_position: 0, playlist_item_dlt_load_id: '3'}
+    - {playlist_id: pl, video_id: v_private, playlist_item_position: 1, playlist_item_dlt_load_id: '3'}
+    - {playlist_id: pl, video_id: v_b, playlist_item_position: 2, playlist_item_dlt_load_id: '3'}
     - {playlist_id: pl, video_id: v_old, playlist_item_position: 3, playlist_item_dlt_load_id: '1'}
     - {playlist_id: emptied, video_id: v_a, playlist_item_position: 0, playlist_item_dlt_load_id: '1'}
   - input: ref('stg__youtube__api__videos')
@@ -352,7 +356,7 @@ unit_tests:
     - {video_id: v_a, video_dlt_load_id: '2'}
     - {video_id: v_b, video_dlt_load_id: '2'}
     - {video_id: v_private, video_dlt_load_id: '1'}
-    - {video_id: v_old, video_dlt_load_id: '1'}
+    - {video_id: v_old, video_dlt_load_id: '2'}
   - input: ref('integrations__learn__youtube_playlists')
     rows:
     - {readable_id: pl, dlt_load_id: '2'}

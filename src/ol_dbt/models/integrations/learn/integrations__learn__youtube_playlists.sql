@@ -15,7 +15,7 @@
   ContentFile by youtube_id and publishes the playlist only if at least 60% of
   its videos match (OCW_PLAYLIST_VIDEO_THRESHOLD), so an empty one is never
   published (mit-learn #3882). The content files live in MIT Learn, so the
-  receiver applies that rule. A create_videos = true playlist is published even
+  receiver has to apply that rule. A create_videos = true playlist is published even
   when it has no videos, as on mit-learn main.
 #}
 
