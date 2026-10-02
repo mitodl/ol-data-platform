@@ -307,8 +307,9 @@ def propose_categories(
 
     Labels must stay unique: dim_feedback_category keeps one row per slug, so two
     clusters with the same label show as one category. Each call sees the labels
-    already in use (existing_labels plus this batch's earlier picks), and a
-    proposal whose slug still collides is asked for once more.
+    already in use (existing_labels plus this batch's earlier picks). A proposal
+    whose slug collides is asked for once more, then skipped, so the next run
+    tries that cluster again.
     """
     taken = {new_category_slug(label): label for label in existing_labels}
     rows = []
@@ -350,10 +351,11 @@ def propose_categories(
         slug = new_category_slug(proposal["category_label"])
         if slug in taken:
             logger.warning(
-                "Cluster %s still got the in-use label %r; it will share that category",
+                "Cluster %s still got the in-use label %r; skipping",
                 cluster_key,
                 proposal["category_label"],
             )
+            continue
         taken[slug] = proposal["category_label"]
         rows.append(
             {

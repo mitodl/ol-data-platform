@@ -143,7 +143,7 @@ def feedback_category_proposals(
     )
     already_proposed: set[str] = set()
     active_labels: list[str] = []
-    if not config.relabel_all and table_exists(
+    if table_exists(
         catalog, f"{intermediate_database_name}.feedback_category_proposal"
     ):
         existing_proposals = (
@@ -154,8 +154,9 @@ def feedback_category_proposals(
             .select(["cluster_key", "category_label"])
             .collect()
         )
-        already_proposed = set(existing_proposals["cluster_key"])
-        # Labels of the clusters that stay active, so new labels don't repeat them.
+        if not config.relabel_all:
+            already_proposed = set(existing_proposals["cluster_key"])
+        # Loaded for relabel_all too: a cluster that fails to relabel keeps its row.
         active_labels = (
             existing_proposals.filter(pl.col("cluster_key").is_in(active_cluster_keys))[
                 "category_label"
