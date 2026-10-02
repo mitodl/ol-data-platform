@@ -22,6 +22,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
+from openedx.assets.content_file_exclusions import extract_course_file_exclusions
 from openedx.assets.content_files import extract_course_document_text
 from openedx.assets.irx_export import build_irx_export_asset
 from openedx.assets.openedx import (
@@ -116,6 +117,13 @@ class OpenEdxDeploymentComponent:
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
+        file_exclusions_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(
+                extract_course_file_exclusions, self.deployment_name
+            ),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
         return {
             "courseware_asset": courseware_asset,
             "course_structure_asset": course_structure_asset,
@@ -124,6 +132,7 @@ class OpenEdxDeploymentComponent:
             "course_content_webhook_asset": course_content_webhook_asset,
             "document_text_asset": document_text_asset,
             "transcript_text_asset": transcript_text_asset,
+            "file_exclusions_asset": file_exclusions_asset,
             "irx_export_asset": build_irx_export_asset(self.deployment_name),
         }
 
