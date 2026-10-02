@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 from typing import Any
 
+import dlt
 import pytest
 
 from ol_dlt import config
@@ -121,30 +122,54 @@ def test_video_ids_for_playlist_reads_content_details(monkeypatch):
     assert list(youtube._video_ids_for_playlist("pl", "k")) == ["v1", "v2"]
 
 
-def test_channel_video_ids_deduplicates(monkeypatch):
-    _queue_get(
-        monkeypatch,
-        [
-            {"items": [{"id": "pl1"}, {"id": "pl2"}]},
-            {
-                "items": [
-                    {"contentDetails": {"videoId": "v1"}},
-                    {"contentDetails": {"videoId": "v2"}},
-                ]
-            },
-            {
-                "items": [
-                    {"contentDetails": {"videoId": "v2"}},
-                    {"contentDetails": {"videoId": "v3"}},
-                ]
-            },
-        ],
+def test_unique_keeps_first_occurrence_order():
+    assert list(youtube._unique(["v1", "v2", "v1", "v3", "v2"])) == ["v1", "v2", "v3"]
+
+
+def test_resources_share_one_playlist_listing(monkeypatch, tmp_path):
+    """Playlists, items and videos read one listing per run, not one each."""
+    monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
+    config_fetches: list[int] = []
+
+    def _configs(**_kw):
+        config_fetches.append(1)
+        return [{"channel_id": "c", "playlists": [{"id": "all"}]}]
+
+    monkeypatch.setattr(youtube, "_fetch_channel_configs", _configs)
+    listings: list[str] = []
+
+    def _fake_get(url, params=None, **_kwargs):
+        params = params or {}
+        if url.endswith("/playlists") and "channelId" in params:
+            listings.append("channel_playlists")
+            return FakeResponse(json_data={"items": [{"id": "pl1"}, {"id": "pl2"}]})
+        if url.endswith("/playlistItems"):
+            listings.append(params["playlistId"])
+            videos = {"pl1": ["v1", "v2"], "pl2": ["v2", "v3"]}[params["playlistId"]]
+            return FakeResponse(
+                json_data={
+                    "items": [{"contentDetails": {"videoId": v}} for v in videos]
+                }
+            )
+        if url.endswith("/videos"):
+            return FakeResponse(
+                json_data={"items": [{"id": v} for v in params["id"].split(",")]}
+            )
+        return FakeResponse(json_data={"items": [{"id": params.get("id")}]})
+
+    monkeypatch.setattr(youtube.requests, "get", _fake_get)
+    source = youtube.youtube_source(api_key="k").with_resources(
+        "raw__youtube__api__playlists",
+        "raw__youtube__api__playlist_items",
+        "raw__youtube__api__videos",
     )
-    assert list(youtube._channel_video_ids([{"channel_id": "c"}], "k")) == [
-        "v1",
-        "v2",
-        "v3",
-    ]
+    pipeline = dlt.pipeline(
+        pipeline_name="youtube_listing_once", pipelines_dir=str(tmp_path)
+    )
+    pipeline.extract(source)
+
+    assert sorted(listings) == ["channel_playlists", "pl1", "pl2"]
+    assert len(config_fetches) == 1
 
 
 def _install_fake_transcript_api(monkeypatch):
@@ -178,9 +203,14 @@ def _install_fake_transcript_api(monkeypatch):
 def test_transcripts_resource_yields_formatted_text(monkeypatch):
     _install_fake_transcript_api(monkeypatch)
     monkeypatch.setattr(youtube, "_resolve_api_key", lambda _key: "k")
-    monkeypatch.setattr(youtube, "_fetch_channel_configs", lambda **_kw: [{"c": 1}])
     monkeypatch.setattr(
-        youtube, "_channel_video_ids", lambda _configs, _key: iter(["vid1"])
+        youtube, "_fetch_channel_configs", lambda **_kw: [{"channel_id": "c"}]
+    )
+    monkeypatch.setattr(
+        youtube, "_playlist_ids_for_config", lambda _config, _key: iter(["pl"])
+    )
+    monkeypatch.setattr(
+        youtube, "_video_ids_for_playlist", lambda _playlist_id, _key: iter(["vid1"])
     )
 
     source = youtube.youtube_source(api_key="k")
@@ -359,7 +389,15 @@ def test_playlists_resource_carries_offered_by_and_create_videos(monkeypatch):
             }
         ],
     )
-    _queue_get(monkeypatch, [{"items": [{"id": "PL", "snippet": {"title": "t"}}]}])
+
+    def _fake_get(url, params=None, **_kwargs):
+        if url.endswith("/playlistItems"):
+            return FakeResponse(json_data={"items": []})
+        return FakeResponse(
+            json_data={"items": [{"id": "PL", "snippet": {"title": "t"}}]}
+        )
+
+    monkeypatch.setattr(youtube.requests, "get", _fake_get)
 
     source = youtube.youtube_source(api_key="k")
     rows = list(source.resources["raw__youtube__api__playlists"])
