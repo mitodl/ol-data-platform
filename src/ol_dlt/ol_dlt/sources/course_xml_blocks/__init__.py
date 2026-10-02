@@ -17,6 +17,12 @@ static files, for MIT Learn's ContentFiles (Cohort 4), in the same layout:
         {mitx,mitxonline,xpro}/openedx/processed_data/course_transcript_text/
             <deployment>/<course>/<version hash>.jsonl
 
+and, for the same ContentFiles, every file in each course export flagged with
+whether MIT Learn excludes it (staff-only, manifests, unreferenced static files):
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_file_exclusions/
+            <deployment>/<course>/<version hash>.jsonl
+
 Nothing loaded those files into the warehouse, so the raw tables below did not
 exist and their staging models could not build. This source appends every
 file's rows, stamped with the file they came from, and staging keeps the rows
@@ -93,6 +99,16 @@ CONTENT_TEXT_FIELDS = (
     "extraction_status",
 )
 
+# The row the file exclusions asset writes
+# (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
+FILE_EXCLUSION_FIELDS = (
+    "course_id",
+    "source_system",
+    "file_path",
+    "excluded",
+    "exclusion_reason",
+)
+
 
 @dataclass(frozen=True)
 class XmlBlocksTable:
@@ -164,9 +180,25 @@ OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
     optional_fields=frozenset({"file_extension"}),
     pipeline_name="course_transcript_text__openedx",
 )
+OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_file_exclusions",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_file_exclusions/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=FILE_EXCLUSION_FIELDS,
+    pipeline_name="course_file_exclusions__openedx",
+)
 TABLES = {
     table.raw_table: table
-    for table in (EDXORG, OPENEDX, OPENEDX_DOCUMENT_TEXT, OPENEDX_TRANSCRIPT_TEXT)
+    for table in (
+        EDXORG,
+        OPENEDX,
+        OPENEDX_DOCUMENT_TEXT,
+        OPENEDX_TRANSCRIPT_TEXT,
+        OPENEDX_FILE_EXCLUSIONS,
+    )
 }
 
 
