@@ -80,9 +80,10 @@ CATEGORY_PROMPT = (
     'course prerequisites". Use sentence case. If one of the support tags already '
     "describes the common theme, reuse it or refine it lightly. Otherwise, propose "
     "a new label. Describe what the group has in common, not a single example.\n\n"
-    "These labels are already used by other groups. Propose a label that names "
-    "what is specific to this group and does not repeat or closely paraphrase any "
-    "of them:\n{{taken_labels}}\n\n"
+    "These labels are already used by other groups:\n{{taken_labels}}\n\n"
+    "If this group is about the same need as one of them, respond with that exact "
+    "label. Otherwise, propose a new label that is clearly different from all of "
+    "them.\n\n"
     "Respond with only a JSON object, no other text, in this exact shape: "
     '{"category_label": "...", "category_description": "one sentence"}'
 )
@@ -300,11 +301,9 @@ def propose_categories(
     whole run -- a few hundred clusters means one bad call shouldn't lose every
     other cluster's proposal.
 
-    Labels must stay unique: dim_feedback_category keeps one row per slug, so two
-    clusters with the same label show as one category. Each call sees the labels
-    already in use (existing_labels plus this batch's earlier picks). A proposal
-    whose slug collides is asked for once more, then skipped, so the next run
-    tries that cluster again.
+    Each call sees the labels already in use (existing_labels plus this batch's
+    earlier picks) and may reuse one to join that category: dim_feedback_category
+    keeps one row per slug, so clusters sharing a label show as one category.
     """
     taken = {new_category_slug(label): label for label in existing_labels}
     rows = []
@@ -329,13 +328,6 @@ def propose_categories(
                 trace_metadata=trace_metadata,
                 taken_labels=list(taken.values()),
             )
-            if new_category_slug(proposal["category_label"]) in taken:
-                proposal = client.propose(
-                    inputs["dominant_tags"],
-                    inputs["samples"],
-                    trace_metadata=trace_metadata,
-                    taken_labels=list(taken.values()),
-                )
         except Exception:
             logger.warning(
                 "Failed to propose a category for cluster %s",
@@ -345,12 +337,9 @@ def propose_categories(
             continue
         slug = new_category_slug(proposal["category_label"])
         if slug in taken:
-            logger.warning(
-                "Cluster %s still got the in-use label %r; skipping",
-                cluster_key,
-                proposal["category_label"],
-            )
-            continue
+            # Keep the in-use spelling so the joined category shows one label.
+            proposal["category_label"] = taken[slug]
+            logger.info("Cluster %s joined category %r", cluster_key, taken[slug])
         taken[slug] = proposal["category_label"]
         rows.append(
             {

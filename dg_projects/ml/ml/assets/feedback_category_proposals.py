@@ -15,6 +15,7 @@ from ml.lib.categorize import (
     CATEGORY_PROPOSAL_SCHEMA,
     build_category_label_client,
     build_cluster_prompt_inputs,
+    new_category_slug,
     propose_categories,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
@@ -235,8 +236,27 @@ def feedback_category_proposals(
         len(cluster_prompt_inputs),
         cluster_run_id,
     )
+    # A cluster that reused an in-use label joined that category; list them so a
+    # wrong merge is visible on the run page.
+    in_use_slugs = {new_category_slug(label) for label in active_labels}
+    joined = (
+        proposals_df.filter(
+            pl.col("category_slug").is_in(in_use_slugs)
+            | pl.col("category_slug").is_duplicated()
+        )
+        if proposals_df.height
+        else proposals_df
+    )
     context.add_output_metadata(
         {
+            "clusters_joined_existing": MetadataValue.int(joined.height),
+            "joined_categories": MetadataValue.md(
+                "\n".join(
+                    f"- {row['cluster_key']} -> {row['category_label']}"
+                    for row in joined.iter_rows(named=True)
+                )
+                or "none"
+            ),
             "cluster_run_id": MetadataValue.text(cluster_run_id),
             "clusters_proposed": MetadataValue.int(proposals_df.height),
             "clusters_needing_proposal": MetadataValue.int(
