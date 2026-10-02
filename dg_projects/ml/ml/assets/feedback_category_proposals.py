@@ -15,7 +15,6 @@ from ml.lib.categorize import (
     CATEGORY_PROPOSAL_SCHEMA,
     build_category_label_client,
     build_cluster_prompt_inputs,
-    pick_support_tag,
     propose_categories,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
@@ -103,8 +102,8 @@ def feedback_category_proposals(
     genuinely new/split/merged key, or one an earlier LLM call failed for, costs a
     call. Samples representative conversation
     text per cluster_key (feedback_cluster_membership + int__feedback__conversation)
-    and each cluster's most common support tags (bridge_feedback_tag, via
-    tfact_feedback) as prompt context. Output is
+    and each cluster's most common support tags (afact_feedback_conversation.
+    dominant_tag_label) as prompt context. Output is
     category_source='llm_discovered', category_status='proposed' by construction --
     populated onto afact_feedback_conversation immediately, not gated on human
     approval; approval is a correction a human applies afterward, not a gate
@@ -178,39 +177,18 @@ def feedback_category_proposals(
     )
 
     member_pks = membership_df["feedback_conversation_pk"]
-    # Real support tags only, not afact.category_fk: that column prefers an earlier
-    # run's LLM label, which the prompt would then reuse, so a split cluster got
-    # its parent's name. Filtered to this batch's members before collect() -- the
-    # corpus is much larger than the clusters needing a proposal here.
-    conversation_tags_df = (
+    # dominant_tag_label, not category_fk: category_fk prefers an earlier run's LLM
+    # label, which the prompt would reuse, so a split cluster got its parent's name.
+    tag_df = (
         get_dbt_model_as_dataframe(
             database_name=dimensional_database_name,
             table_name="afact_feedback_conversation",
         )
         .filter(pl.col("feedback_conversation_pk").is_in(member_pks))
-        .select(["feedback_conversation_pk", "conversation_id", "feedback_source_fk"])
-        .join(
-            get_dbt_model_as_dataframe(
-                database_name=dimensional_database_name, table_name="tfact_feedback"
-            ).select(["feedback_pk", "conversation_id", "feedback_source_fk"]),
-            on=["conversation_id", "feedback_source_fk"],
+        .select(
+            "feedback_conversation_pk",
+            pl.col("dominant_tag_label").alias("category_label"),
         )
-        .join(
-            get_dbt_model_as_dataframe(
-                database_name=dimensional_database_name,
-                table_name="bridge_feedback_tag",
-            ).select(["feedback_pk", "feedback_tag_pk"]),
-            on="feedback_pk",
-        )
-        .join(
-            get_dbt_model_as_dataframe(
-                database_name=dimensional_database_name,
-                table_name="dim_feedback_tag",
-            ).select(["feedback_tag_pk", "tag_label"]),
-            on="feedback_tag_pk",
-        )
-        .select(["feedback_conversation_pk", "tag_label"])
-        .unique()
         .collect()
     )
     conversation_df = (
@@ -224,11 +202,7 @@ def feedback_category_proposals(
     )
 
     joined = (
-        membership_df.join(
-            pick_support_tag(conversation_tags_df),
-            on="feedback_conversation_pk",
-            how="left",
-        )
+        membership_df.join(tag_df, on="feedback_conversation_pk", how="left")
         .join(conversation_df, on="feedback_conversation_pk", how="left")
         .select(["cluster_key", "conversation_text", "category_label"])
     )

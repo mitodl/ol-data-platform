@@ -296,6 +296,9 @@ models:
     description: str, foreign key to dim_feedback_category. A cluster-derived category
       wins over the tag-seed guess (the tag with the highest corpus frequency, tie-broken
       on tag_slug) when both exist. Null for a conversation with neither.
+  - name: dominant_tag_label
+    description: str, the conversation's support tag (the tag-seed guess above), before
+      any cluster-derived category replaces it. Null for a conversation with no tags.
   - name: cluster_key
     description: str, the stable cluster this conversation belongs to (survives re-clustering).
       Null if the conversation isn't near any active cluster (noise or unplaced).

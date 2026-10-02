@@ -117,20 +117,6 @@ def _conversation_row(
     }
 
 
-def test_pick_support_tag_keeps_the_most_common_tag_per_conversation() -> None:
-    """Each conversation keeps its most common tag across the frame; ties by name."""
-    tags = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["a", "a", "b", "c", "c"],
-            "tag_label": ["refund", "certificate", "certificate", "login", "billing"],
-        }
-    )
-
-    picked = dict(categorize.pick_support_tag(tags).iter_rows())
-
-    assert picked == {"a": "certificate", "b": "certificate", "c": "billing"}
-
-
 def test_build_cluster_prompt_inputs_groups_by_cluster_key() -> None:
     df = pl.DataFrame(
         [

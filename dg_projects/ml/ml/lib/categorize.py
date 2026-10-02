@@ -247,25 +247,6 @@ def build_category_label_client(
     )
 
 
-def pick_support_tag(conversation_tags_df: pl.DataFrame) -> pl.DataFrame:
-    """One support tag per conversation: the one most common across the frame.
-
-    conversation_tags_df has one row per (feedback_conversation_pk, tag_label). Ties
-    break on tag_label so the pick is deterministic.
-    """
-    tag_frequency = conversation_tags_df.group_by("tag_label").agg(
-        pl.len().alias("tag_count")
-    )
-    return (
-        conversation_tags_df.join(tag_frequency, on="tag_label")
-        .sort(["tag_count", "tag_label"], descending=[True, False])
-        .unique(subset="feedback_conversation_pk", keep="first", maintain_order=True)
-        .select(
-            ["feedback_conversation_pk", pl.col("tag_label").alias("category_label")]
-        )
-    )
-
-
 def build_cluster_prompt_inputs(
     conversation_df: pl.DataFrame,
     sample_size: int = CATEGORY_PROPOSAL_SAMPLE_SIZE,
@@ -276,10 +257,10 @@ def build_cluster_prompt_inputs(
 
     Args:
         conversation_df: one row per conversation, with (at least) cluster_key,
-            conversation_text, and category_label (the conversation's support tag,
-            from pick_support_tag; nullable) columns. Callers pass only the cluster_keys
-            needing a proposal (new/split/merged) -- there is no noise/continued
-            filtering here.
+            conversation_text, and category_label (afact.dominant_tag_label;
+            nullable) columns. Callers pass only the cluster_keys needing a
+            proposal (new/split/merged) -- there is no noise/continued filtering
+            here.
         sample_size: representative conversations to sample per cluster.
         dominant_tag_count: how many of a cluster's most common category_labels
             to surface as context.
