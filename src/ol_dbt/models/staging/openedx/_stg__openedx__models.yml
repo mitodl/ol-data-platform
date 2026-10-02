@@ -56,3 +56,79 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [courserun_readable_id, coursestructure_xml_block_id, coursestructure_xml_block_type,
         coursestructure_xml_retrieved_at]
+
+- name: stg__openedx__s3__course_document_text
+  description: Text Tika extracted from the documents in each Open edX course run's
+    static assets, from the course's newest landed file only, so a document removed
+    from a course drops out.
+  columns:
+  - name: courserun_readable_id
+    description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: content_file_source_system
+    description: str, Open edX deployment (mitxonline, xpro, mitx)
+    tests:
+    - not_null
+  - name: content_file_path
+    description: str, path of the file within the course export, e.g. static/handout.pdf
+    tests:
+    - not_null
+  - name: content_file_extension
+    description: str, lower-cased file extension with its dot, taken from the path
+      when the extraction row has none
+  - name: content_file_mime_type
+    description: str, the MIME type the file was sent to Tika as
+  - name: content_file_size_bytes
+    description: bigint, the file's size in bytes
+  - name: content_file_text
+    description: str, the extracted text; null when extraction was empty or failed
+  - name: content_file_extraction_status
+    description: str, extracted, empty or failed
+    tests:
+    - accepted_values:
+        arguments:
+          values: [extracted, empty, failed]
+  - name: content_file_extracted_at
+    description: timestamp, S3 modification time of the file the row came from
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [content_file_source_system, courserun_readable_id, content_file_path]
+
+- name: stg__openedx__s3__course_transcript_text
+  description: Plain text parsed from the subtitle files in each Open edX course run's
+    static assets, from the course's newest landed file only.
+  columns:
+  - name: courserun_readable_id
+    description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: content_file_source_system
+    description: str, Open edX deployment (mitxonline, xpro, mitx)
+    tests:
+    - not_null
+  - name: content_file_path
+    description: str, path of the subtitle file within the course export
+    tests:
+    - not_null
+  - name: content_file_extension
+    description: str, lower-cased file extension with its dot (.srt, .sjson, .vtt)
+  - name: content_file_mime_type
+    description: str, MIME type of the subtitle format
+  - name: content_file_size_bytes
+    description: bigint, the file's size in bytes
+  - name: content_file_text
+    description: str, transcript text without cue timings; null when empty or failed
+  - name: content_file_extraction_status
+    description: str, extracted, empty or failed
+    tests:
+    - accepted_values:
+        arguments:
+          values: [extracted, empty, failed]
+  - name: content_file_extracted_at
+    description: timestamp, S3 modification time of the file the row came from
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [content_file_source_system, courserun_readable_id, content_file_path]
