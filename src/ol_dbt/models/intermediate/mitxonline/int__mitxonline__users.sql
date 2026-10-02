@@ -3,7 +3,7 @@ with users as (
         *
         , {{ element_at_array('split(user_full_name, \' \')', 1) }} as user_first_name
         , if(
-            cardinality(split(user_full_name, ' ')) > 1
+            {{ array_length("split(user_full_name, ' ')") }} > 1
            , {{ element_at_array('split(user_full_name, \' \')', -1) }}
            , null
         ) as user_last_name
