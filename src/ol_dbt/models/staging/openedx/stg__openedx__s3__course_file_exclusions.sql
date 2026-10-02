@@ -5,6 +5,7 @@ with source as (
 select
     course_id                               as courserun_readable_id
     , source_system                         as content_file_source_system
+    , course_xml_version                    as content_file_course_xml_version
     , file_path                             as content_file_path
     , excluded = 'true'                     as content_file_is_excluded
     , exclusion_reason                      as content_file_exclusion_reason

@@ -52,6 +52,9 @@ models:
       the archive
     tests:
     - not_null
+  - name: coursestructure_xml_archive_version
+    description: str, SHA-256 of the course export the blocks were parsed from, taken
+      from the landed file's name
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [courserun_readable_id, coursestructure_xml_block_id, coursestructure_xml_block_type,
@@ -151,6 +154,10 @@ models:
   - name: content_file_path
     description: str, path of the file within the course export, relative to its root,
       e.g. static/handout.pdf
+    tests:
+    - not_null
+  - name: content_file_course_xml_version
+    description: str, SHA-256 of the course export the exclusion rules ran over
     tests:
     - not_null
   - name: content_file_is_excluded

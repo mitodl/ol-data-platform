@@ -354,7 +354,7 @@ def unpack_olx_tree(archive_path: Path, destination: Path) -> Path:
 
 
 def build_file_rows(
-    olx_root: Path, *, course_id: str, source_system: str
+    olx_root: Path, *, course_id: str, source_system: str, course_xml_version: str
 ) -> list[dict[str, Any]]:
     """One row per file in the export, flagged with whether Learn excludes it.
 
@@ -363,13 +363,16 @@ def build_file_rows(
     everything" apart from "not checked yet".
 
     Paths are relative to the OLX root (static/handout.pdf, html/intro.xml), as
-    the document and transcript text rows are.
+    the document and transcript text rows are. course_xml_version is the
+    export's SHA-256, which also names the course_xml_blocks file parsed from
+    the same export, so dbt can tell whether a course's blocks were checked.
     """
     excluded = excluded_olx_paths(olx_root)
     return [
         {
             "course_id": course_id,
             "source_system": source_system,
+            "course_xml_version": course_xml_version,
             "file_path": path.relative_to(olx_root).as_posix(),
             "excluded": path in excluded,
             "exclusion_reason": excluded.get(path),
@@ -386,6 +389,10 @@ def build_file_rows(
     io_manager_key="s3file_io_manager",
     automation_condition=upstream_or_code_changes(),
     required_resource_keys={"openedx"},
+    # Each run downloads a whole course export, and a new asset or a code change
+    # asks for every partition at once. As with openedx_course_export, naming the
+    # pool only makes a limit settable (Deployment -> Concurrency).
+    pool="openedx_file_exclusions",
     description=(
         "Every file in a course export, flagged with whether MIT Learn leaves it "
         "out of its ContentFiles (staff-only, asset manifests, unreferenced "
@@ -397,45 +404,58 @@ def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: U
     source_system = context.resources.openedx.deployment
     course_id = context.partition_key
 
-    with TemporaryDirectory() as workdir:
-        archive_path = Path(workdir, "course.tar.gz")
-        course_xml.fs.get_file(str(course_xml), str(archive_path))
-        tree_dir = Path(workdir, "tree")
-        tree_dir.mkdir()
-        rows = build_file_rows(
-            unpack_olx_tree(archive_path, tree_dir),
-            course_id=course_id,
-            source_system=source_system,
-        )
-
-    # The output file outlives the work directory: the IO manager uploads it
-    # after this function returns.
     output_file = Path(
         NamedTemporaryFile(delete=False, suffix="_file_exclusions.jsonl").name
     )
-    with jsonlines.open(output_file, "w") as writer:
-        writer.write_all(rows)
-    with output_file.open("rb") as handle:
-        data_version = hashlib.file_digest(handle, "sha256").hexdigest()
-    object_key = (
-        f"{'/'.join(context.asset_key.path)}/{source_system}/"
-        f"{course_id}/{data_version}.jsonl"
-    )
-    excluded = [row for row in rows if row["excluded"]]
-    context.log.info("%s: %d of %d files excluded", course_id, len(excluded), len(rows))
-    return Output(
-        (output_file, object_key),
-        data_version=DataVersion(data_version),
-        metadata={
-            "course_id": course_id,
-            "object_key": object_key,
-            "file_count": len(rows),
-            "excluded_count": len(excluded),
-            "excluded_by_reason": json.dumps(
-                {
-                    reason: sum(row["exclusion_reason"] == reason for row in excluded)
-                    for reason in sorted({row["exclusion_reason"] for row in excluded})
-                }
-            ),
-        },
-    )
+    try:
+        with TemporaryDirectory() as workdir:
+            archive_path = Path(workdir, "course.tar.gz")
+            course_xml.fs.get_file(str(course_xml), str(archive_path))
+            # Hashed as extract_courserun_details hashes it, which names the
+            # course_xml_blocks file after it.
+            with archive_path.open("rb") as handle:
+                course_xml_version = hashlib.file_digest(handle, "sha256").hexdigest()
+            tree_dir = Path(workdir, "tree")
+            tree_dir.mkdir()
+            rows = build_file_rows(
+                unpack_olx_tree(archive_path, tree_dir),
+                course_id=course_id,
+                source_system=source_system,
+                course_xml_version=course_xml_version,
+            )
+
+        with jsonlines.open(output_file, "w") as writer:
+            writer.write_all(rows)
+        with output_file.open("rb") as handle:
+            data_version = hashlib.file_digest(handle, "sha256").hexdigest()
+        object_key = (
+            f"{'/'.join(context.asset_key.path)}/{source_system}/"
+            f"{course_id}/{data_version}.jsonl"
+        )
+        excluded = [row for row in rows if row["excluded"]]
+        context.log.info(
+            "%s: %d of %d files excluded", course_id, len(excluded), len(rows)
+        )
+        yield Output(
+            (output_file, object_key),
+            data_version=DataVersion(data_version),
+            metadata={
+                "course_id": course_id,
+                "object_key": object_key,
+                "course_xml_version": course_xml_version,
+                "file_count": len(rows),
+                "excluded_count": len(excluded),
+                "excluded_by_reason": json.dumps(
+                    {
+                        reason: sum(
+                            row["exclusion_reason"] == reason for row in excluded
+                        )
+                        for reason in sorted(
+                            {row["exclusion_reason"] for row in excluded}
+                        )
+                    }
+                ),
+            },
+        )
+    finally:
+        output_file.unlink(missing_ok=True)

@@ -146,6 +146,7 @@ def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
             {
                 "course_id": "course-v1:MITxT+7.05x+2T2026",
                 "source_system": "mitxonline",
+                "course_xml_version": "ee211fd8",
                 "file_path": "static/unused.pdf",
                 "excluded": True,
                 "exclusion_reason": "unreferenced_static",

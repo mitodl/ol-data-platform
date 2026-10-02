@@ -15,9 +15,10 @@
   Files Learn's excluded_olx_paths drops (staff-only subtrees, the asset
   manifests, static files nothing in the course references) are dropped here by
   stg__openedx__s3__course_file_exclusions, which runs a port of those rules over
-  each export. A run that has not been through it yet has no rows here at all:
-  without the check its files would include ones Learn hides, and a scoped pull
-  would publish them.
+  each export. A run whose newest blocks file has not been through it (no
+  exclusion rows, or rows from an older export) has no rows here at all: without
+  the check its files would include ones Learn hides, and a scoped pull would
+  publish them.
 
   Not reproduced yet: Tika's metadata title for documents, and the course root
   files course.xml and course/<run>.xml, which course_xml_blocks does not carry.
@@ -119,11 +120,26 @@ with blocks as (
     select * from {{ ref('stg__openedx__s3__course_file_exclusions') }}
 )
 
-, checked_runs as (
+, block_versions as (
     select distinct
         courserun_readable_id
-        , content_file_source_system as source_system
+        , coursestructure_xml_source_system as source_system
+        , coursestructure_xml_archive_version as course_xml_version
+    from blocks
+)
+
+-- A run is checked when the exclusions ran over the same export its blocks came
+-- from. Exclusions from an older export would miss a block hidden since, and
+-- let it through.
+, checked_runs as (
+    select distinct
+        file_exclusions.courserun_readable_id
+        , file_exclusions.content_file_source_system as source_system
     from file_exclusions
+    inner join block_versions
+        on file_exclusions.courserun_readable_id = block_versions.courserun_readable_id
+        and file_exclusions.content_file_source_system = block_versions.source_system
+        and file_exclusions.content_file_course_xml_version = block_versions.course_xml_version
 )
 
 -- excluded_olx_paths. The exclusion rows are keyed by the path below the

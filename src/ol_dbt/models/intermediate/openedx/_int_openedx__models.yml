@@ -61,45 +61,53 @@ unit_tests:
   - input: ref('stg__openedx__s3__course_xml_blocks')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: video, coursestructure_xml_block_display_name: Intro
-        Video, coursestructure_xml_block_path: course/video/0123456789abcdef0123456789abcdef.xml,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: video,
+      coursestructure_xml_block_display_name: Intro Video, coursestructure_xml_block_path: course/video/0123456789abcdef0123456789abcdef.xml,
       coursestructure_xml_raw_xml: '<video display_name="Intro Video"><transcript
         language="en" src="intro clip-en.srt"/></video>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # A pointer file: attributes only. It shares its key with html/abcd.html,
     # and the .html wins.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: html, coursestructure_xml_block_display_name: Welcome,
-      coursestructure_xml_block_path: course/html/abcd.xml, coursestructure_xml_raw_xml: '<html
-        filename="abcd" display_name="Welcome"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: html,
+      coursestructure_xml_block_display_name: Welcome, coursestructure_xml_block_path: course/html/abcd.xml,
+      coursestructure_xml_raw_xml: '<html filename="abcd" display_name="Welcome"/>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # A url_name that is not a UUID has no jump URL.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
-        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter
-        display_name="Week 1"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
+      coursestructure_xml_block_display_name: Week 1, coursestructure_xml_block_path: course/chapter/week_1.xml,
+      coursestructure_xml_raw_xml: '<chapter display_name="Week 1"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # Inline html makes Tika read a block as HTML: no attribute text, so a
     # vertical with no text of its own is skipped, and one with text is titled
     # from its file name.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Empty,
-      coursestructure_xml_block_path: course/vertical/empty_unit.xml, coursestructure_xml_raw_xml: '<vertical
-        display_name="Empty"><html display_name="Raw"></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: vertical,
+      coursestructure_xml_block_display_name: Empty, coursestructure_xml_block_path: course/vertical/empty_unit.xml,
+      coursestructure_xml_raw_xml: '<vertical display_name="Empty"><html display_name="Raw"></html></vertical>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Peer
-        Review, coursestructure_xml_block_path: course/vertical/peer_unit.xml, coursestructure_xml_raw_xml: '<vertical
-        display_name="Peer Review"><html><p>Assess</p></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: vertical,
+      coursestructure_xml_block_display_name: Peer Review, coursestructure_xml_block_path: course/vertical/peer_unit.xml,
+      coursestructure_xml_raw_xml: '<vertical display_name="Peer Review"><html><p>Assess</p></html></vertical>',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: problem, coursestructure_xml_block_display_name: Staff
-        Check, coursestructure_xml_block_path: course/problem/staff_check.xml, coursestructure_xml_raw_xml: '<problem
-        display_name="Staff Check"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: problem,
+      coursestructure_xml_block_display_name: Staff Check, coursestructure_xml_block_path: course/problem/staff_check.xml,
+      coursestructure_xml_raw_xml: '<problem display_name="Staff Check"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     - {courserun_readable_id: "course-v1:X+Y+R2", coursestructure_xml_source_system: xpro,
-      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Unchecked,
-      coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter
-        display_name="Unchecked"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
+      coursestructure_xml_block_display_name: Unchecked, coursestructure_xml_block_path: course/chapter/week_1.xml,
+      coursestructure_xml_raw_xml: '<chapter display_name="Unchecked"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # Checked, but against an older export than these blocks.
+    - {courserun_readable_id: "course-v1:X+Y+R3", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v2, coursestructure_xml_block_type: chapter,
+      coursestructure_xml_block_display_name: Stale, coursestructure_xml_block_path: course/chapter/week_1.xml,
+      coursestructure_xml_raw_xml: '<chapter display_name="Stale"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # Residential MITx is not a Learn source.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
-      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Hidden,
-      coursestructure_xml_block_path: course/chapter/other.xml, coursestructure_xml_raw_xml: '<chapter
-        display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
+      coursestructure_xml_block_display_name: Hidden, coursestructure_xml_block_path: course/chapter/other.xml,
+      coursestructure_xml_raw_xml: '<chapter display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
   - input: ref('stg__openedx__s3__course_document_text')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
@@ -127,15 +135,22 @@ unit_tests:
       content_file_path: static/intro clip-en.srt, content_file_extension: .srt, content_file_text: Hi
         there, content_file_extraction_status: extracted}
   # Only the excluded rows and one row per checked run matter to the model.
-  # R2 was never checked, so its chapter is held back.
+  # R2 was never checked and R3 was checked against an older export, so their
+  # chapters are held back.
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
-      content_file_path: chapter/week_1.xml, content_file_is_excluded: false}
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
-      content_file_path: static/answer_key.pdf, content_file_is_excluded: true}
+      content_file_course_xml_version: v1, content_file_path: static/answer_key.pdf,
+      content_file_is_excluded: true}
     - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
-      content_file_path: problem/staff_check.xml, content_file_is_excluded: true}
+      content_file_course_xml_version: v1, content_file_path: problem/staff_check.xml,
+      content_file_is_excluded: true}
+    - {courserun_readable_id: "course-v1:X+Y+R3", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false}
   expect:
     rows:
     - {edx_module_id: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",
