@@ -15,6 +15,7 @@ from ml.lib.categorize import (
     CATEGORY_PROPOSAL_SCHEMA,
     build_category_label_client,
     build_cluster_prompt_inputs,
+    pick_support_tag,
     propose_categories,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
@@ -71,7 +72,7 @@ class FeedbackCategoryProposalsConfig(Config):
 
 
 @asset(
-    code_version="feedback_category_proposals_v1",
+    code_version="feedback_category_proposals_v2",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_category_proposal"]),
     deps=[AssetKey(["intermediate", "feedback_cluster_membership"])],
@@ -102,8 +103,8 @@ def feedback_category_proposals(
     genuinely new/split/merged key, or one an earlier LLM call failed for, costs a
     call. Samples representative conversation
     text per cluster_key (feedback_cluster_membership + int__feedback__conversation)
-    and each cluster's dominant existing tag category (afact_feedback_conversation.
-    category_fk, resolved via dim_feedback_category) as prompt context. Output is
+    and each cluster's most common support tags (bridge_feedback_tag, via
+    tfact_feedback) as prompt context. Output is
     category_source='llm_discovered', category_status='proposed' by construction --
     populated onto afact_feedback_conversation immediately, not gated on human
     approval; approval is a correction a human applies afterward, not a gate
@@ -135,17 +136,26 @@ def feedback_category_proposals(
         .to_list()
     )
     already_proposed: set[str] = set()
+    active_labels: list[str] = []
     if table_exists(
         catalog, f"{intermediate_database_name}.feedback_category_proposal"
     ):
-        already_proposed = set(
+        existing_proposals = (
             get_dbt_model_as_dataframe(
                 database_name=intermediate_database_name,
                 table_name="feedback_category_proposal",
             )
-            .select("cluster_key")
+            .select(["cluster_key", "category_label"])
+            .collect()
+        )
+        already_proposed = set(existing_proposals["cluster_key"])
+        # Labels of the clusters that stay active, so new labels don't repeat them.
+        active_labels = (
+            existing_proposals.filter(pl.col("cluster_key").is_in(active_cluster_keys))[
+                "category_label"
+            ]
             .unique()
-            .collect()["cluster_key"]
+            .to_list()
         )
     cluster_keys_needing_proposal = [
         key for key in active_cluster_keys if key not in already_proposed
@@ -167,25 +177,40 @@ def feedback_category_proposals(
         .collect()
     )
 
-    category_df = (
-        get_dbt_model_as_dataframe(
-            database_name=dimensional_database_name,
-            table_name="dim_feedback_category",
-        )
-        .select(["feedback_category_pk", "category_label"])
-        .collect()
-    )
     member_pks = membership_df["feedback_conversation_pk"]
-    # Filtered to just this batch's cluster members before collect() -- the
-    # corpus (~198K conversations) is much larger than the handful of clusters
-    # needing a proposal here.
-    afact_df = (
+    # Real support tags only, not afact.category_fk: that column prefers an earlier
+    # run's LLM label, which the prompt would then reuse, so a split cluster got
+    # its parent's name. Filtered to this batch's members before collect() -- the
+    # corpus is much larger than the clusters needing a proposal here.
+    conversation_tags_df = (
         get_dbt_model_as_dataframe(
             database_name=dimensional_database_name,
             table_name="afact_feedback_conversation",
         )
         .filter(pl.col("feedback_conversation_pk").is_in(member_pks))
-        .select(["feedback_conversation_pk", "category_fk"])
+        .select(["feedback_conversation_pk", "conversation_id", "feedback_source_fk"])
+        .join(
+            get_dbt_model_as_dataframe(
+                database_name=dimensional_database_name, table_name="tfact_feedback"
+            ).select(["feedback_pk", "conversation_id", "feedback_source_fk"]),
+            on=["conversation_id", "feedback_source_fk"],
+        )
+        .join(
+            get_dbt_model_as_dataframe(
+                database_name=dimensional_database_name,
+                table_name="bridge_feedback_tag",
+            ).select(["feedback_pk", "feedback_tag_pk"]),
+            on="feedback_pk",
+        )
+        .join(
+            get_dbt_model_as_dataframe(
+                database_name=dimensional_database_name,
+                table_name="dim_feedback_tag",
+            ).select(["feedback_tag_pk", "tag_label"]),
+            on="feedback_tag_pk",
+        )
+        .select(["feedback_conversation_pk", "tag_label"])
+        .unique()
         .collect()
     )
     conversation_df = (
@@ -199,11 +224,9 @@ def feedback_category_proposals(
     )
 
     joined = (
-        membership_df.join(afact_df, on="feedback_conversation_pk", how="left")
-        .join(
-            category_df,
-            left_on="category_fk",
-            right_on="feedback_category_pk",
+        membership_df.join(
+            pick_support_tag(conversation_tags_df),
+            on="feedback_conversation_pk",
             how="left",
         )
         .join(conversation_df, on="feedback_conversation_pk", how="left")
@@ -220,7 +243,9 @@ def feedback_category_proposals(
     client = build_category_label_client(
         llm, config.model_version, config.bedrock_model_version
     )
-    proposals_df = propose_categories(cluster_prompt_inputs, client, cluster_run_id)
+    proposals_df = propose_categories(
+        cluster_prompt_inputs, client, cluster_run_id, existing_labels=active_labels
+    )
 
     context.log.info(
         "Proposed %d/%d cluster categories for run %s",

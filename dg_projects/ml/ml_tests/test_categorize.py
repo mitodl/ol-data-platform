@@ -1,5 +1,7 @@
 """Tests for ml.lib.categorize."""
 
+from collections.abc import Sequence
+
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
@@ -115,6 +117,20 @@ def _conversation_row(
     }
 
 
+def test_pick_support_tag_keeps_the_most_common_tag_per_conversation() -> None:
+    """Each conversation keeps its most common tag across the frame; ties by name."""
+    tags = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["a", "a", "b", "c", "c"],
+            "tag_label": ["refund", "certificate", "certificate", "login", "billing"],
+        }
+    )
+
+    picked = dict(categorize.pick_support_tag(tags).iter_rows())
+
+    assert picked == {"a": "certificate", "b": "certificate", "c": "billing"}
+
+
 def test_build_cluster_prompt_inputs_groups_by_cluster_key() -> None:
     df = pl.DataFrame(
         [
@@ -179,6 +195,7 @@ class _FakeCategoryClient:
         samples: list[str],
         *,
         trace_metadata: dict[str, object],
+        taken_labels: Sequence[str] = (),  # noqa: ARG002
     ) -> dict[str, str]:
         # Keyed by sample count so each test cluster gets a distinct canned reply.
         self.trace_metadata_calls.append(trace_metadata)
@@ -216,6 +233,43 @@ def test_propose_categories_builds_one_row_per_cluster() -> None:
     )
 
 
+def test_propose_categories_asks_again_when_a_label_is_already_in_use() -> None:
+    """A label that repeats an in-use one is re-asked with the in-use list."""
+
+    class _CollidingClient:
+        model_version = "test-model"
+
+        def __init__(self) -> None:
+            self.taken_label_calls: list[list[str]] = []
+
+        def propose(
+            self,
+            dominant_tags: list[str],  # noqa: ARG002
+            samples: list[str],  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+            taken_labels: Sequence[str] = (),
+        ) -> dict[str, str]:
+            self.taken_label_calls.append(list(taken_labels))
+            label = (
+                "Genetics problem solving confusion"
+                if len(self.taken_label_calls) == 1
+                else "Genetic mapping and probability"
+            )
+            return {"category_label": label, "category_description": "d"}
+
+    client = _CollidingClient()
+    result = categorize.propose_categories(
+        {"key-a": {"samples": ["x"], "dominant_tags": [], "total_conversations": 1}},
+        client,
+        "run-1",
+        existing_labels=["Genetics problem solving confusion"],
+    )
+
+    assert result["category_label"].to_list() == ["Genetic mapping and probability"]
+    assert client.taken_label_calls == [["Genetics problem solving confusion"]] * 2
+
+
 def test_propose_categories_skips_a_cluster_with_no_samples() -> None:
     cluster_prompt_inputs = {
         "key-a": {"samples": [], "dominant_tags": [], "total_conversations": 0},
@@ -237,6 +291,7 @@ def test_propose_categories_skips_a_cluster_whose_call_fails() -> None:
             samples: list[str],  # noqa: ARG002
             *,
             trace_metadata: dict[str, object],  # noqa: ARG002
+            taken_labels: Sequence[str] = (),  # noqa: ARG002
         ) -> dict[str, str]:
             msg = "boom"
             raise ValueError(msg)

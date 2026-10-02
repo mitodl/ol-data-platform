@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import polars as pl
@@ -86,14 +87,26 @@ CATEGORY_PROMPT = (
 logger = logging.getLogger(__name__)
 
 
-def _category_prompt(dominant_tags: list[str], samples: list[str]) -> str:
+def _category_prompt(
+    dominant_tags: list[str], samples: list[str], taken_labels: Sequence[str] = ()
+) -> str:
     """CATEGORY_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
-    return render_prompt(
+    prompt = render_prompt(
         CATEGORY_PROMPT_NAME,
         CATEGORY_PROMPT,
         dominant_tags=", ".join(dominant_tags) or "(none)",
         samples="\n---\n".join(samples),
     )
+    # Appended after rendering, not a template variable, so it applies whatever the
+    # Opik Prompt Library version of the template contains.
+    if taken_labels:
+        prompt += (
+            "\n\nThese labels are already used by other groups. Propose a label "
+            "that names what is specific to this group and does not repeat or "
+            "closely paraphrase any of them. Still respond with only the JSON "
+            "object.\n- " + "\n- ".join(sorted(taken_labels))
+        )
+    return prompt
 
 
 def new_category_slug(category_label: str) -> str:
@@ -151,13 +164,14 @@ class AnthropicCategoryLabelClient:
         samples: list[str],
         *,
         trace_metadata: dict[str, Any],
+        taken_labels: Sequence[str] = (),
     ) -> dict[str, str]:
         attach_span_metadata(trace_metadata)
         message = call_anthropic(
             self._client,
             self.model_version,
             max_tokens=CATEGORY_MAX_TOKENS,
-            prompt=_category_prompt(dominant_tags, samples),
+            prompt=_category_prompt(dominant_tags, samples, taken_labels),
         )
         if not message.content:
             msg = (
@@ -196,12 +210,13 @@ class OpenAICategoryLabelClient:
         samples: list[str],
         *,
         trace_metadata: dict[str, Any],
+        taken_labels: Sequence[str] = (),
     ) -> dict[str, str]:
         attach_span_metadata(trace_metadata)
         response = call_openai(
             self._client,
             self.model_version,
-            prompt=_category_prompt(dominant_tags, samples),
+            prompt=_category_prompt(dominant_tags, samples, taken_labels),
         )
         content = response.choices[0].message.content
         if not content:
@@ -232,6 +247,25 @@ def build_category_label_client(
     )
 
 
+def pick_support_tag(conversation_tags_df: pl.DataFrame) -> pl.DataFrame:
+    """One support tag per conversation: the one most common across the frame.
+
+    conversation_tags_df has one row per (feedback_conversation_pk, tag_label). Ties
+    break on tag_label so the pick is deterministic.
+    """
+    tag_frequency = conversation_tags_df.group_by("tag_label").agg(
+        pl.len().alias("tag_count")
+    )
+    return (
+        conversation_tags_df.join(tag_frequency, on="tag_label")
+        .sort(["tag_count", "tag_label"], descending=[True, False])
+        .unique(subset="feedback_conversation_pk", keep="first", maintain_order=True)
+        .select(
+            ["feedback_conversation_pk", pl.col("tag_label").alias("category_label")]
+        )
+    )
+
+
 def build_cluster_prompt_inputs(
     conversation_df: pl.DataFrame,
     sample_size: int = CATEGORY_PROPOSAL_SAMPLE_SIZE,
@@ -242,8 +276,8 @@ def build_cluster_prompt_inputs(
 
     Args:
         conversation_df: one row per conversation, with (at least) cluster_key,
-            conversation_text, and category_label (the conversation's seed-tag
-            category, nullable) columns. Callers pass only the cluster_keys
+            conversation_text, and category_label (the conversation's support tag,
+            from pick_support_tag; nullable) columns. Callers pass only the cluster_keys
             needing a proposal (new/split/merged) -- there is no noise/continued
             filtering here.
         sample_size: representative conversations to sample per cluster.
@@ -282,30 +316,49 @@ def propose_categories(
     cluster_prompt_inputs: dict[str, dict[str, Any]],
     client: AnthropicCategoryLabelClient | OpenAICategoryLabelClient,
     cluster_run_id: str,
+    existing_labels: Iterable[str] = (),
 ) -> pl.DataFrame:
     """Call the LLM once per cluster_key, returning one proposal row per cluster.
 
     A cluster whose proposal call fails is skipped (logged), not fatal to the
     whole run -- a few hundred clusters means one bad call shouldn't lose every
     other cluster's proposal.
+
+    Labels must stay unique: dim_feedback_category keeps one row per slug, so two
+    clusters with the same label show as one category. Each call sees the labels
+    already in use (existing_labels plus this batch's earlier picks), and a
+    proposal whose slug still collides is asked for once more.
     """
+    taken = {new_category_slug(label): label for label in existing_labels}
     rows = []
-    for cluster_key, inputs in cluster_prompt_inputs.items():
+    # Largest clusters first, so they get the plainest names.
+    ordered = sorted(
+        cluster_prompt_inputs.items(),
+        key=lambda item: item[1]["total_conversations"],
+        reverse=True,
+    )
+    for cluster_key, inputs in ordered:
         if not inputs["samples"]:
             logger.warning(
                 "Cluster %s has no non-null conversation_text to sample; skipping",
                 cluster_key,
             )
             continue
+        trace_metadata = {"cluster_key": cluster_key, "cluster_run_id": cluster_run_id}
         try:
             proposal = client.propose(
                 inputs["dominant_tags"],
                 inputs["samples"],
-                trace_metadata={
-                    "cluster_key": cluster_key,
-                    "cluster_run_id": cluster_run_id,
-                },
+                trace_metadata=trace_metadata,
+                taken_labels=list(taken.values()),
             )
+            if new_category_slug(proposal["category_label"]) in taken:
+                proposal = client.propose(
+                    inputs["dominant_tags"],
+                    inputs["samples"],
+                    trace_metadata=trace_metadata,
+                    taken_labels=list(taken.values()),
+                )
         except Exception:
             logger.warning(
                 "Failed to propose a category for cluster %s",
@@ -313,11 +366,19 @@ def propose_categories(
                 exc_info=True,
             )
             continue
+        slug = new_category_slug(proposal["category_label"])
+        if slug in taken:
+            logger.warning(
+                "Cluster %s still got the in-use label %r; it will share that category",
+                cluster_key,
+                proposal["category_label"],
+            )
+        taken[slug] = proposal["category_label"]
         rows.append(
             {
                 "cluster_key": cluster_key,
                 "cluster_run_id": cluster_run_id,
-                "category_slug": new_category_slug(proposal["category_label"]),
+                "category_slug": slug,
                 "category_label": proposal["category_label"],
                 "category_description": proposal["category_description"],
                 "sample_size": len(inputs["samples"]),
