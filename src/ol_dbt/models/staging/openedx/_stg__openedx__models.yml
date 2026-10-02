@@ -91,6 +91,7 @@ models:
           values: [extracted, empty, failed]
   - name: content_file_extracted_at
     description: timestamp, S3 modification time of the file the row came from
+    data_type: timestamp
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -128,6 +129,7 @@ models:
           values: [extracted, empty, failed]
   - name: content_file_extracted_at
     description: timestamp, S3 modification time of the file the row came from
+    data_type: timestamp
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
