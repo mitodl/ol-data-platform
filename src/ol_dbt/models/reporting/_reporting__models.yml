@@ -508,7 +508,8 @@ models:
   - name: user_email
     description: string, user email that user registered
   - name: enrolled_count
-    description: int, a count of 1 means the learner enrolled otherwise 0
+    description: int, 1 on the date of the learner's earliest currently active enrollment
+      (courserunenrollment_is_active) in the course run, otherwise 0
   - name: organization_key
     description: str, key of the organization that lists the course. e.g. MITx, MITxT,
       null
@@ -587,8 +588,8 @@ models:
   - name: video_watched_count
     description: int, count of videos watched
   - name: enrolled_ind
-    description: boolean, true if courserunenrollment_enrollment_status is null else
-      false
+    description: boolean, true if the learner has a currently active enrollment (courserunenrollment_is_active)
+      in the course run
   - name: ever_active_ind
     description: boolean, true if user had any video, problem, navigation, discussion,
       chatbot , unique_course_certificate_earners otherwise false
@@ -670,11 +671,12 @@ models:
     description: int, count of certificates granted on that particular activity date
       for a user and courserun
   - name: enrollment_count
-    description: int, count of enrollments on that particular activity date for a
-      user and courserun
+    description: int, count of currently active enrollments (courserunenrollment_is_active)
+      created on that particular activity date for a user and courserun
   - name: unenrolled_count
-    description: int, count of unenrollments on that particular activity date for
-      a user and courserun
+    description: int, count of enrollments created on that particular activity date
+      for a user and courserun that are no longer active (courserunenrollment_is_active
+      is false)
   - name: audit_count
     description: int, count of enrollments that have a enrollment mode status of audit
       on that particular activity date for a user and courserun
