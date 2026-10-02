@@ -9,8 +9,9 @@ On its own, sqlfluff's dbt templater can exit 0 without linting a file:
 - Before linting, it asks the warehouse which tables exist. With no warehouse,
   it stops at "Fatal linting error". Here that question gets the answer "none",
   so nothing connects, and incremental models render as a full refresh.
-- It skips any file dbt can't compile. Here a skipped file fails the hook,
-  unless the model is disabled or listed in ALLOWED_COMPILE_FAILURES.
+- It skips a file with only a logged warning, e.g. any file dbt can't compile.
+  Here any warning fails the hook, unless it is the skip of a disabled model or
+  of one listed in ALLOWED_COMPILE_FAILURES.
 """
 
 import re
@@ -40,6 +41,9 @@ from sqlfluff.cli.commands import cli
 cli()
 """
 
+# sqlfluff reports every skipped file, and every early stop, in a log line at
+# one of these levels.
+_LOG_LINE = re.compile(r"^\s*(?:WARNING|ERROR|CRITICAL)\s+(.*)")
 _SKIPPED = re.compile(r"Skipped file (\S+) because (.+)")
 
 
@@ -50,24 +54,24 @@ def _repo_path(path: str) -> str:
     return path
 
 
+def _allowed(message: str) -> bool:
+    match = _SKIPPED.match(message)
+    if match is None:
+        return False
+    path, reason = _repo_path(match.group(1)), match.group(2)
+    if reason.startswith("it is disabled"):
+        return True
+    return path in ALLOWED_COMPILE_FAILURES and reason.startswith(
+        "dbt raised a fatal exception during compilation"
+    )
+
+
 def _unlinted(output: str) -> list[str]:
-    problems = []
-    for line in output.splitlines():
-        if "Fatal linting error" in line or "Skipping to avoid parser lock" in line:
-            problems.append(line.strip())
-            continue
-        match = _SKIPPED.search(line)
-        if match is None:
-            continue
-        path, reason = _repo_path(match.group(1)), match.group(2)
-        if reason.startswith("it is disabled"):
-            continue
-        if path in ALLOWED_COMPILE_FAILURES and reason.startswith(
-            "dbt raised a fatal exception during compilation"
-        ):
-            continue
-        problems.append(line.strip())
-    return problems
+    return [
+        line.strip()
+        for line in output.splitlines()
+        if (match := _LOG_LINE.match(line)) and not _allowed(match.group(1))
+    ]
 
 
 def main() -> int:
