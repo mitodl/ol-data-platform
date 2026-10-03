@@ -139,6 +139,26 @@ def test_content_text_row_still_requires_content() -> None:
         )
 
 
+def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
+    """Staging compares excluded to 'true', so the bool must arrive JSON-encoded."""
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(
+            {
+                "course_id": "course-v1:MITxT+7.05x+2T2026",
+                "source_system": "mitxonline",
+                "course_xml_version": "ee211fd8",
+                "file_path": "static/unused.pdf",
+                "excluded": True,
+                "exclusion_reason": "unreferenced_static",
+            }
+        ),
+        course_xml_blocks.OPENEDX_FILE_EXCLUSIONS,
+    )
+    assert row["excluded"] == "true"
+    assert row["exclusion_reason"] == "unreferenced_static"
+    assert list(row) == list(course_xml_blocks.FILE_EXCLUSION_FIELDS)
+
+
 def test_every_table_has_its_own_pipeline() -> None:
     """Two tables on one pipeline name would share, and fight over, one cursor."""
     names = [table.pipeline_name for table in course_xml_blocks.TABLES.values()]
