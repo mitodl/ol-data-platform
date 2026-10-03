@@ -151,6 +151,7 @@ with blocks as (
 , video_transcripts as (
     select
         blocks.courserun_readable_id
+        , blocks.coursestructure_xml_source_system as source_system
         , concat(
             'asset-v1:', replace(blocks.courserun_readable_id, 'course-v1:', '')
             , '+type@asset+block@'
@@ -172,16 +173,18 @@ with blocks as (
 , video_transcript_map as (
     select
         courserun_readable_id
+        , source_system
         , transcript_module_id
         , min(video_id) as video_id
         , min(video_title) as video_title
     from video_transcripts
-    group by courserun_readable_id, transcript_module_id
+    group by courserun_readable_id, source_system, transcript_module_id
 )
 
 , html_titles as (
     select
         courserun_readable_id
+        , coursestructure_xml_source_system as source_system
         , coursestructure_xml_block_path as xml_path
         , coursestructure_xml_block_display_name as display_name
     from blocks
@@ -217,10 +220,12 @@ with blocks as (
     from module_files
     left join video_transcript_map
         on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id
+        and module_files.source_system = video_transcript_map.source_system
         and module_files.edx_module_id = video_transcript_map.transcript_module_id
     left join html_titles
         on module_files.file_extension = '.html'
         and module_files.courserun_readable_id = html_titles.courserun_readable_id
+        and module_files.source_system = html_titles.source_system
         and html_titles.xml_path = concat('course/html/', module_files.original_stem, '.xml')
     -- Learn skips a file whose text is empty. A failed extraction is kept.
     where module_files.extraction_status = 'failed' or trim(coalesce(module_files.content, '')) != ''
@@ -247,10 +252,12 @@ with blocks as (
                     , {{ element_at_array("split(edx_module_id, '@')", array_length("split(edx_module_id, '@')")) }}
                 )
         end as url
-        -- One ContentFile per (run, key): Learn upserts on key, so of two files
-        -- that map to one key only one survives. Prefer a file with text.
+        -- One ContentFile per (source, run, key): Learn upserts on key, so of
+        -- two files that map to one key only one survives. Prefer a file with
+        -- text. The source is part of the scope because run ids can repeat
+        -- across sources (contentfile_scoped_pull_contract.md).
         , row_number() over (
-            partition by courserun_readable_id, edx_module_id
+            partition by source_system, courserun_readable_id, edx_module_id
             order by
                 case when extraction_status = 'failed' then 1 else 0 end
                 , case when file_extension = '.xml' then 1 else 0 end
