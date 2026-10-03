@@ -69,7 +69,7 @@ repos:
     - types-pymysql
     - types-requests
 - repo: https://github.com/sqlfluff/sqlfluff
-  rev: 4.3.0
+  rev: 4.4.0
   hooks:
   - id: sqlfluff-fix
       # Arbitrary arguments to show an example
