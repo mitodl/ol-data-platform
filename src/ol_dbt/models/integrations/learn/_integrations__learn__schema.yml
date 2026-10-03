@@ -272,8 +272,6 @@ models:
     description: Comma-separated list of course readable_ids belonging to this program.
 
 - name: integrations__learn__mit_edx_courses
-  config:
-    tags: [qa_scheduled]
   description: >
     MIT edX (MITx on edX.org) courses exposed for MIT Learn's Trino-pull ETL.
     One row per course with at least one published run.
