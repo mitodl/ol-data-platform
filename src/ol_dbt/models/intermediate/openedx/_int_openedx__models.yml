@@ -1,0 +1,131 @@
+---
+version: 2
+
+models:
+- name: int__openedx__content_files
+  description: >
+    One row per file of an MITx Online or xPRO course run that MIT Learn loads as
+    a
+    ContentFile, derived as Learn's process_olx_path does: OLX block XML from
+    course_xml_blocks plus the document and transcript text the openedx location
+    extracts. Files with no text are skipped, as Learn skips them; a failed
+    extraction keeps its row with null content. Learn's staff-only and
+    unreferenced-static exclusions are not applied yet.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [source_system, courserun_readable_id, edx_module_id]
+  columns:
+  - name: courserun_readable_id
+    description: str, course run ID
+    tests:
+    - not_null
+  - name: source_system
+    description: str, mitxonline or xpro
+    tests:
+    - not_null
+  - name: edx_module_id
+    description: str, the module id Learn derives from the file's path (get_edx_module_id),
+      and its ContentFile key
+    tests:
+    - not_null
+  - name: source_path
+    description: str, path within the course export, e.g. course/static/handout.pdf
+    tests:
+    - not_null
+  - name: file_extension
+    description: str, lower-cased file extension with its dot
+  - name: title
+    description: str, the title Learn's get_title_for_content gives the file
+  - name: url
+    description: str, the LMS jump URL or asset URL Learn's get_url_from_module_id
+      gives
+  - name: content
+    description: str, the file's text; null for a failed extraction
+  - name: extraction_status
+    description: str, extracted or failed
+    tests:
+    - not_null
+  - name: extracted_at
+    description: str, ISO 8601 time the text was extracted
+
+unit_tests:
+- name: test_int__openedx__content_files_matches_learn_derivations
+  description: >
+    Keys, titles and URLs as MIT Learn derives them, each case checked against
+    Learn's content files for course-v1:MITxT+7.05x+2T2026 and
+    course-v1:xPRO+SysEngx1+R28 on 2026-10-02.
+  model: int__openedx__content_files
+  given:
+  - input: ref('stg__openedx__s3__course_xml_blocks')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: video, coursestructure_xml_block_display_name: Intro
+        Video, coursestructure_xml_block_path: course/video/0123456789abcdef0123456789abcdef.xml,
+      coursestructure_xml_raw_xml: '<video display_name="Intro Video"><transcript
+        language="en" src="intro clip-en.srt"/></video>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # A pointer file: attributes only. It shares its key with html/abcd.html,
+    # and the .html wins.
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: html, coursestructure_xml_block_display_name: Welcome,
+      coursestructure_xml_block_path: course/html/abcd.xml, coursestructure_xml_raw_xml: '<html
+        filename="abcd" display_name="Welcome"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # A url_name that is not a UUID has no jump URL.
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Week
+        1, coursestructure_xml_block_path: course/chapter/week_1.xml, coursestructure_xml_raw_xml: '<chapter
+        display_name="Week 1"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # Inline html makes Tika read a block as HTML: no attribute text, so a
+    # vertical with no text of its own is skipped, and one with text is titled
+    # from its file name.
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Empty,
+      coursestructure_xml_block_path: course/vertical/empty_unit.xml, coursestructure_xml_raw_xml: '<vertical
+        display_name="Empty"><html display_name="Raw"></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_block_type: vertical, coursestructure_xml_block_display_name: Peer
+        Review, coursestructure_xml_block_path: course/vertical/peer_unit.xml, coursestructure_xml_raw_xml: '<vertical
+        display_name="Peer Review"><html><p>Assess</p></html></vertical>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # Residential MITx is not a Learn source.
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
+      coursestructure_xml_block_type: chapter, coursestructure_xml_block_display_name: Hidden,
+      coursestructure_xml_block_path: course/chapter/other.xml, coursestructure_xml_raw_xml: '<chapter
+        display_name="Hidden"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: html/abcd.html, content_file_extension: .html, content_file_text: Hello,
+      content_file_extraction_status: extracted}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: tabs/5244487e.html, content_file_extension: .html, content_file_text: Tab,
+      content_file_extraction_status: extracted}
+    # Learn skips a file with no text, and keeps a failed one out of its prune.
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: about/effort.html, content_file_extension: .html, content_file_text: null,
+      content_file_extraction_status: empty}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/Dash 2010.pdf, content_file_extension: .pdf, content_file_text: null,
+      content_file_extraction_status: failed}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: policies/assets.json, content_file_extension: .json, content_file_text: "{}",
+      content_file_extraction_status: extracted}
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/intro clip-en.srt, content_file_extension: .srt, content_file_text: Hi
+        there, content_file_extraction_status: extracted}
+  expect:
+    rows:
+    - {edx_module_id: "block-v1:X+Y+R1+type@video+block@0123456789abcdef0123456789abcdef",
+      title: Intro Video, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/0123456789abcdef0123456789abcdef"}
+    - {edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd", title: Welcome, url: null}
+    - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1", title: Week 1,
+      url: null}
+    - {edx_module_id: "block-v1:X+Y+R1+type@tabs+block@5244487e", title: 5244487E,
+      url: null}
+    - {edx_module_id: "block-v1:X+Y+R1+type@vertical+block@peer_unit", title: Peer
+        Unit, url: null}
+    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf", title: Dash
+        2010, url: "https://courses.xpro.mit.edu/asset-v1:X+Y+R1+type@asset+block@Dash_2010.pdf"}
+    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@intro_clip-en.srt", title: Intro
+        Video, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/0123456789abcdef0123456789abcdef"}

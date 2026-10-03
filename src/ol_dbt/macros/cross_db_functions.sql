@@ -574,6 +574,16 @@
       alias:     table alias for the result
       col_name:  column name for each array element
 #}
+{#
+    unnest_regexp_matches: one row per match of `pattern` in `string_expr`, holding
+    the pattern's first capture group. Trino and DuckDB both spell this
+    unnest(regexp_extract_all(s, p, 1)), so it has no per-adapter bodies.
+#}
+{% macro unnest_regexp_matches(string_expr, pattern, alias, col_name) -%}
+    unnest(regexp_extract_all({{ string_expr }}, {{ pattern }}, 1)) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+
 {% macro unnest_json_array(json_expr, alias, col_name) -%}
     {{ adapter.dispatch('unnest_json_array', 'open_learning')(json_expr, alias, col_name) }}
 {%- endmacro %}
@@ -790,6 +800,63 @@
 
 {% macro duckdb__local_date_to_timestamptz(date_expr, time_zone) -%}
     timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp))
+{%- endmacro %}
+
+
+{#
+    md5_hex: lowercase hex MD5 of a string's UTF-8 bytes, as Python's
+    hashlib.md5(s.encode()).hexdigest() gives it.
+#}
+{% macro md5_hex(string_expr) -%}
+    {{ adapter.dispatch('md5_hex', 'open_learning')(string_expr) }}
+{%- endmacro %}
+
+{% macro default__md5_hex(string_expr) -%}
+    lower(to_hex(md5(to_utf8({{ string_expr }}))))
+{%- endmacro %}
+
+{% macro duckdb__md5_hex(string_expr) -%}
+    md5({{ string_expr }})
+{%- endmacro %}
+
+
+{#
+    title_case: Python's str.title(). A letter is upper-cased when it starts the
+    string or follows a non-letter, and lower-cased otherwise, so digits and
+    punctuation start a new word too: "l3.1x intro" -> "L3.1X Intro". Built
+    character by character because neither engine has a case-changing regex
+    replacement that the other shares.
+#}
+{% macro title_case(string_expr) -%}
+    {{ adapter.dispatch('title_case', 'open_learning')(string_expr) }}
+{%- endmacro %}
+
+{% macro default__title_case(string_expr) -%}
+    case when {{ string_expr }} = '' then '' else array_join(
+        transform(
+            sequence(1, length({{ string_expr }}))
+            , i -> case
+                when i = 1 or not regexp_like(substr({{ string_expr }}, i - 1, 1), '\p{L}')
+                    then upper(substr({{ string_expr }}, i, 1))
+                else lower(substr({{ string_expr }}, i, 1))
+            end
+        )
+        , ''
+    ) end
+{%- endmacro %}
+
+{% macro duckdb__title_case(string_expr) -%}
+    case when {{ string_expr }} = '' then '' else array_to_string(
+        list_transform(
+            range(1, length({{ string_expr }}) + 1)
+            , i -> case
+                when i = 1 or not regexp_matches(substr({{ string_expr }}, i - 1, 1), '\p{L}')
+                    then upper(substr({{ string_expr }}, i, 1))
+                else lower(substr({{ string_expr }}, i, 1))
+            end
+        )
+        , ''
+    ) end
 {%- endmacro %}
 
 

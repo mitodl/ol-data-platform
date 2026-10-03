@@ -175,10 +175,11 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
     },
 )
 
-# Loads the course XML blocks the edxorg and openedx archive assets land, ahead
-# of the lakehouse's non_airbyte_staging_daily at 06:00. The first run walks
-# the whole ~63 GB backlog a budget at a time; later runs read only new course
-# versions.
+# Loads the course XML blocks the edxorg and openedx archive assets land, and the
+# document and transcript text the openedx location extracts from them, ahead of
+# the lakehouse's non_airbyte_staging_daily at 06:00. The first run walks the
+# whole backlog (~63 GB of blocks, ~22 GB of text on 2026-10-01) a budget at a
+# time; later runs read only new course versions.
 #
 # RUNNING by default in production, unlike the schedules above. A schedule
 # without default_status starts STOPPED, which is how the PostHog ingest never
