@@ -16,7 +16,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: [courserun_readable_id, edx_module_id]
+        column_list: [source_system, courserun_readable_id, edx_module_id]
   columns:
   - name: courserun_readable_id
     description: str, course run ID

@@ -1,5 +1,7 @@
 with source as (
-    {{ newest_course_file_rows(source('ol_warehouse_raw_data', 'raw__openedx__s3__course_document_text')) }}
+    {{ newest_course_file_rows(
+        source('ol_warehouse_raw_data', 'raw__openedx__s3__course_document_text'), extracted_at_column='extracted_at'
+    ) }}
 )
 
 select
@@ -16,3 +18,6 @@ select
     , extraction_status                     as content_file_extraction_status
     , _file_modified_at                     as content_file_extracted_at
 from source
+-- An empty snapshot loads as one marker row so it can become the newest file;
+-- the marker itself is not a file.
+where file_path is not null
