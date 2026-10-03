@@ -32,6 +32,7 @@ import logging
 from collections.abc import Generator, Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import unquote
 
 import dlt
 import pyarrow as pa
@@ -82,6 +83,7 @@ XML_BLOCK_FIELDS = (
 # The row the document and transcript text assets write
 # (dg_projects/openedx/openedx/assets/content_files.py and transcripts.py).
 # size_bytes stays text like everything else here; staging casts it.
+# extracted_at is absent from files written before the assets stamped it.
 CONTENT_TEXT_FIELDS = (
     "course_id",
     "source_system",
@@ -91,6 +93,7 @@ CONTENT_TEXT_FIELDS = (
     "size_bytes",
     "content",
     "extraction_status",
+    "extracted_at",
 )
 
 
@@ -105,6 +108,10 @@ class XmlBlocksTable:
     :param optional_fields: Fields a line may leave out. A failed extraction
         row has no file_extension.
     :param pipeline_name: dlt pipeline name, which keys the cursor.
+    :param marks_empty_files: Load a marker row for a file with no lines. The
+        text assets write an empty file when a course has nothing left to
+        extract, and without a row that file never becomes the course's newest
+        in staging, so its last non-empty version would stay current forever.
     """
 
     raw_table: str
@@ -113,6 +120,7 @@ class XmlBlocksTable:
     fields: tuple[str, ...] = XML_BLOCK_FIELDS
     optional_fields: frozenset[str] = frozenset()
     pipeline_name: str = ""
+    marks_empty_files: bool = False
 
     def __post_init__(self) -> None:
         # The two block tables predate the other tables and keep their names:
@@ -150,8 +158,9 @@ OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=CONTENT_TEXT_FIELDS,
-    optional_fields=frozenset({"file_extension"}),
+    optional_fields=frozenset({"file_extension", "extracted_at"}),
     pipeline_name="course_document_text__openedx",
+    marks_empty_files=True,
 )
 OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
     raw_table="raw__openedx__s3__course_transcript_text",
@@ -161,8 +170,9 @@ OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=CONTENT_TEXT_FIELDS,
-    optional_fields=frozenset({"file_extension"}),
+    optional_fields=frozenset({"file_extension", "extracted_at"}),
     pipeline_name="course_transcript_text__openedx",
+    marks_empty_files=True,
 )
 TABLES = {
     table.raw_table: table
@@ -195,16 +205,35 @@ def read_xml_blocks(
     """Stream each JSON Lines file as Arrow tables stamped with its provenance."""
     for item in items:
         rows: list[dict[str, str | None]] = []
+        empty = True
         with item.open() as raw, io.TextIOWrapper(raw, encoding="utf-8") as text:
             for line in text:
                 if not line.strip():
                     continue
+                empty = False
                 rows.append(_row(line, table))
                 if len(rows) == batch_rows:
                     yield _stamp(rows, item, table)
                     rows = []
+        if empty and table.marks_empty_files:
+            rows.append(_empty_file_marker(item["file_url"], table))
         if rows:
             yield _stamp(rows, item, table)
+
+
+def _empty_file_marker(file_url: str, table: XmlBlocksTable) -> dict[str, str | None]:
+    """Build the row standing for an empty file: its course from the path, nothing else.
+
+    The path is .../<deployment>/<course>/<version>.jsonl, percent-encoded as
+    dlt gives it. Staging picks each course's newest file and then drops the
+    marker, whose file_path is null.
+    """
+    *_, source_system, course_id, _version = file_url.split("/")
+    return {
+        **dict.fromkeys(table.fields),
+        "course_id": unquote(course_id),
+        "source_system": unquote(source_system),
+    }
 
 
 def _stamp(
