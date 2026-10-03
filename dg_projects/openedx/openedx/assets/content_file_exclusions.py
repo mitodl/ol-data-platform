@@ -1,18 +1,20 @@
 """Which files of an Open edX course export MIT Learn leaves out of its ContentFiles.
 
-MIT Learn skips files the course itself does not use: blocks under a
+MIT Learn skips files no learner of the course can reach: blocks under a
 visible_to_staff_only subtree (with their html bodies and video transcripts),
-the asset manifests and the announcement archive, and anything under static/
-that nothing in the course refers to (hq#13350). integrations__learn__content_files
-has to skip the same files to match it, and the rules need the whole OLX tree
-(the course.xml walk, every block's text), which the warehouse does not hold in
-a form SQL can walk. So this asset runs Learn's rules over the export and lands
-one row per file in it, flagged excluded or not, for dbt to filter on.
+tab pages outside the navigation, about pages the platform does not show, the
+course settings, the asset manifests and announcements, and anything under
+static/ that nothing learners see refers to (hq#13350, mit-learn#4014).
+integrations__learn__content_files has to skip the same files to match it, and
+the rules need the whole OLX tree (the course.xml walk, every block's text),
+which the warehouse does not hold in a form SQL can walk. So this asset runs
+Learn's rules over the export and lands one row per file in it, flagged
+excluded or not, for dbt to filter on.
 
 The functions below are a port of learning_resources/etl/utils.py on mit-learn
-main as of 2026-10-02 (excluded_olx_paths and its helpers). They are kept as
-close to the original as the setting allows, so a change there can be diffed
-across; the differences are noted where they occur.
+main as of 2026-10-02, after mit-learn#4014 (excluded_olx_paths and its
+helpers). They are kept as close to the original as the setting allows, so a
+change there can be diffed across; the differences are noted where they occur.
 
 Data flow:
     openedx/raw_data/course_xml                        (tar.gz, per course run)
@@ -28,6 +30,7 @@ import logging
 import re
 import tarfile
 from bisect import bisect_left
+from collections.abc import Iterable
 from itertools import accumulate
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -290,16 +293,69 @@ def static_olx_references(root: Path, skip: set[Path]) -> tuple[set[Path], set[P
     return referenced, unreferenced
 
 
-def excluded_olx_paths(olx_path: str | Path) -> dict[Path, str]:
+def unreachable_static_tabs(root: Path) -> set[Path]:
     """
-    Files an OLX export contains that the course itself does not use, each with
-    the rule that excluded it: staff-only subtrees, the asset manifests and
-    announcement archive, and anything under static/ that nothing refers to.
+    Tab pages no navigation leads a learner to. Studio exports every static tab
+    it stores, but the LMS serves only the ones in the course's tab list, and
+    leaves staff-only and hidden ones out of the navigation. Empty when the tab
+    list cannot be read, so a tab is never dropped on a guess.
+    """
+    course = _parse_olx_block(root, "", "course")
+    url_name = course.get("url_name") if course is not None else None
+    try:
+        # A missing url_name raises TypeError here, caught below, as in Learn.
+        policy = json.loads(
+            (root / "policies" / url_name / "policy.json").read_text(  # type: ignore[operator]
+                errors="ignore"
+            )
+        )
+        tabs = policy[f"course/{url_name}"]["tabs"]
+    except (TypeError, OSError, ValueError, KeyError):
+        return set()
+    if not isinstance(tabs, list):
+        return set()
+    reachable = {
+        tab.get("url_slug")
+        for tab in tabs
+        if isinstance(tab, dict)
+        and not (tab.get("course_staff_only") or tab.get("is_hidden"))
+    }
+    # recursive because edX also reads tab pages from a tabs/<url_name>/ folder
+    return {path for path in root.glob("tabs/**/*") if path.stem not in reachable}
+
+
+# The about page is the only place about/ files show, and only Open Learning
+# Library serves it; the other platforms redirect it to the course home. Of what
+# it shows, effort and end date are single values rather than prose (effort is
+# already on the run as time_commitment), so only the prose is content.
+ABOUT_PAGE_FILES = frozenset({"overview.html", "short_description.html"})
+# ETLSource.oll in mit-learn's learning_resources/etl/constants.py
+OLL_ETL_SOURCE = "oll"
+
+
+def _exclude(excluded: dict[Path, str], paths: Iterable[Path], reason: str) -> None:
+    """Learn's excluded.update(paths), keeping the first rule to name a path."""
+    for path in paths:
+        excluded.setdefault(path, reason)
+
+
+def excluded_olx_paths(  # noqa: C901 (kept in Learn's shape for diffing)
+    olx_path: str | Path, etl_source: str | None = None
+) -> dict[Path, str]:
+    """
+    Files an OLX export contains that no learner of the course can reach, each
+    with the rule that excluded it: staff-only subtrees, tab pages outside the
+    navigation, about pages the platform does not show, the course settings,
+    the asset manifests, announcements, and anything under static/ that nothing
+    learners see refers to.
 
     Learn returns a set; this returns the same keys with a reason attached, so
-    a parity difference can be traced to the rule that produced it.
+    a parity difference can be traced to the rule that produced it. Where Learn
+    adds a path twice, the first rule to name it is the reason recorded.
 
     :param olx_path: The path to the directory with the OLX data
+    :param etl_source: The Learn ETL source the archive is from, which decides
+        whether the about page is shown. None means one that does not.
     :returns: files that should not be ingested, mapped to why
     :rtype: dict[Path, str]
     """
@@ -307,9 +363,44 @@ def excluded_olx_paths(olx_path: str | Path) -> dict[Path, str]:
     excluded = dict.fromkeys(staff_only_olx_paths(root), "staff_only")
     if not (root / "course.xml").is_file():
         return excluded
+    _exclude(
+        excluded,
+        (root / name for name in NON_CONTENT_OLX_FILES if (root / name).is_file()),
+        "non_content",
+    )
+    _exclude(excluded, unreachable_static_tabs(root), "unreachable_tab")
+    shown = ABOUT_PAGE_FILES if etl_source == OLL_ETL_SOURCE else ()
+    # recursive for the about/<url_name>/ folder edX also reads
+    _exclude(
+        excluded,
+        (path for path in root.glob("about/**/*") if path.name not in shown),
+        "about_page",
+    )
+    referenced, unreferenced = static_olx_references(root, set(excluded))
+    _exclude(excluded, unreferenced, "unreferenced_static")
+    # A hidden video's transcripts are in the staff-only set, but the same file is
+    # often also the transcript of the visible copy of that video, so put back
+    # anything a visible block still links.
+    for path in referenced:
+        excluded.pop(path, None)
+    # Settings rather than content, but what they name (textbooks, the course
+    # image) is shown, so they were still read as references above
+    _exclude(excluded, root.glob("policies/**/*"), "course_settings")
+    # Old-style announcements: Studio empties updates.html whenever an
+    # announcement is saved, so what is left is legacy announcements or Studio's
+    # sample text. Like the live ones, they still counted as references above.
+    _exclude(excluded, root.glob("info/**/updates.html"), "legacy_announcements")
+    return excluded
     for name in NON_CONTENT_OLX_FILES:
         if (root / name).is_file():
-            excluded[root / name] = "non_content"
+            excluded.setdefault(root / name, "non_content")
+    for path in unreachable_static_tabs(root):
+        excluded.setdefault(path, "unreachable_tab")
+    shown = ABOUT_PAGE_FILES if etl_source == OLL_ETL_SOURCE else ()
+    # recursive for the about/<url_name>/ folder edX also reads
+    for path in root.glob("about/**/*"):
+        if path.name not in shown:
+            excluded.setdefault(path, "about_page")
     referenced, unreferenced = static_olx_references(root, set(excluded))
     for path in unreferenced:
         excluded.setdefault(path, "unreferenced_static")
@@ -318,6 +409,15 @@ def excluded_olx_paths(olx_path: str | Path) -> dict[Path, str]:
     # anything a visible block still links.
     for path in referenced:
         excluded.pop(path, None)
+    # Settings rather than content, but what they name (textbooks, the course
+    # image) is shown, so they were still read as references above
+    for path in root.glob("policies/**/*"):
+        excluded.setdefault(path, "course_settings")
+    # Old-style announcements: Studio empties updates.html whenever an
+    # announcement is saved, so what is left is legacy announcements or Studio's
+    # sample text. Like the live ones, they still counted as references above.
+    for path in root.glob("info/**/updates.html"):
+        excluded.setdefault(path, "legacy_announcements")
     return excluded
 
 
@@ -367,7 +467,8 @@ def build_file_rows(
     export's SHA-256, which also names the course_xml_blocks file parsed from
     the same export, so dbt can tell whether a course's blocks were checked.
     """
-    excluded = excluded_olx_paths(olx_root)
+    # Learn's etl_source for an Open edX run is the deployment name.
+    excluded = excluded_olx_paths(olx_root, source_system)
     return [
         {
             "course_id": course_id,
