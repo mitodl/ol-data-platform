@@ -180,3 +180,46 @@ def test_document_text_reads_only_its_own_prefix(
     table = pipeline.dataset()[raw_table].arrow()
     assert table.column("file_path").to_pylist() == ["static/handout.pdf"]
     assert table.column("size_bytes").to_pylist() == ["1024"]
+
+
+def test_empty_text_file_marker_names_its_course() -> None:
+    marker = course_xml_blocks._empty_file_marker(  # noqa: SLF001
+        "s3://bucket/xpro/openedx/processed_data/course_transcript_text/"
+        "xpro/course-v1%3AxPRO%2BQCFx1%2BR24/abc.jsonl",
+        course_xml_blocks.OPENEDX_TRANSCRIPT_TEXT,
+    )
+    assert marker["course_id"] == "course-v1:xPRO+QCFx1+R24"
+    assert marker["source_system"] == "xpro"
+    assert marker["file_path"] is None
+    assert list(marker) == list(course_xml_blocks.CONTENT_TEXT_FIELDS)
+
+
+@pytest.mark.integration
+def test_an_empty_text_file_loads_as_a_marker_row(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A course left with no documents must still land a newer file in raw."""
+    landing = tmp_path / "landing"
+    prefix = (
+        "mitxonline/openedx/processed_data/course_document_text/"
+        "mitxonline/course-v1:MITxT+7.05x+2T2026/"
+    )
+    _write_version(landing, prefix + "v1.jsonl", [_DOCUMENT])
+    _write_version(landing, prefix + "v2.jsonl", [])
+    monkeypatch.setattr(
+        course_xml_blocks.s3fs, "S3FileSystem", lambda: fsspec.filesystem("file")
+    )
+    raw_table = course_xml_blocks.OPENEDX_DOCUMENT_TEXT.raw_table
+    pipeline = course_xml_blocks.course_xml_blocks_pipeline_for(raw_table)
+    info = pipeline.run(
+        course_xml_blocks.course_xml_blocks_source(
+            raw_table=raw_table, bucket_url=landing.as_uri()
+        )
+    )
+    assert not info.has_failed_jobs
+
+    rows = pipeline.dataset()[raw_table].arrow().to_pylist()
+    by_file = {row["_source_file"].rsplit("/", 1)[-1]: row for row in rows}
+    assert by_file["v1.jsonl"]["file_path"] == "static/handout.pdf"
+    assert by_file["v2.jsonl"]["file_path"] is None
+    assert by_file["v2.jsonl"]["course_id"] == "course-v1:MITxT+7.05x+2T2026"

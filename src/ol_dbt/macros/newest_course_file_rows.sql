@@ -6,8 +6,10 @@
   course. A row that disappeared from a course is still there in the older file,
   so deduplicating per row would keep it forever; the course's newest file is the
   course's current state. S3 mtimes are whole seconds, so two versions can tie on
-  _file_modified_at, and the file path breaks the tie so exactly one file is
-  chosen per course.
+  _file_modified_at. Pass extracted_at_column when the producer stamps its rows
+  with when it ran, and that breaks the tie; the file path, a content hash that
+  orders nothing, only makes the pick deterministic after that. ISO 8601 UTC
+  strings sort chronologically, so the column is compared as text.
 
   File names are content hashes, and the asset rewrites the same key when a
   re-run produces the same text, which gives it a new mtime and gets it appended
@@ -17,7 +19,7 @@
   Usage, as a CTE body:
     with source as ({{ newest_course_file_rows(source('ol_warehouse_raw_data', 'raw__x')) }})
 #}
-{% macro newest_course_file_rows(relation) %}
+{% macro newest_course_file_rows(relation, extracted_at_column=none) %}
     select raw_rows.*
     from {{ relation }} as raw_rows
     inner join (
@@ -30,7 +32,12 @@
                 , max(_file_modified_at) as file_modified_at
                 , row_number() over (
                     partition by source_system, course_id
-                    order by max(_file_modified_at) desc, _source_file desc
+                    order by
+                        max(_file_modified_at) desc
+                        {%- if extracted_at_column is not none %}
+                        , max({{ extracted_at_column }}) desc nulls last
+                        {%- endif %}
+                        , _source_file desc
                 ) as file_rank
             from {{ relation }}
             group by source_system, course_id, _source_file

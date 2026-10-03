@@ -66,7 +66,10 @@ sources:
     - name: content
       description: str, the extracted text; null when extraction was empty or failed
     - name: extraction_status
-      description: str, extracted, empty or failed
+      description: str, extracted, empty or failed; null on an empty-file marker row
+    - name: extracted_at
+      description: str, ISO 8601 UTC time the asset extracted the file's text, one
+        value per landed file; null in files written before the assets stamped it
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at
@@ -93,7 +96,10 @@ sources:
     - name: content
       description: str, transcript text without cue timings; null when empty or failed
     - name: extraction_status
-      description: str, extracted, empty or failed
+      description: str, extracted, empty or failed; null on an empty-file marker row
+    - name: extracted_at
+      description: str, ISO 8601 UTC time the asset extracted the file's text, one
+        value per landed file; null in files written before the assets stamped it
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

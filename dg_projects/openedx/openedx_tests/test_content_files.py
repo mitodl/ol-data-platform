@@ -5,6 +5,7 @@ and the failure accounting -- without a Dagster context or a live Tika service.
 """
 
 import io
+import json
 import mimetypes
 import tarfile
 from pathlib import Path
@@ -20,7 +21,7 @@ from openedx.assets.content_files import (
     build_document_rows,
     file_extension,
     open_bundle_members,
-    output_digest,
+    write_text_snapshot,
 )
 from upath import UPath
 
@@ -427,7 +428,7 @@ def test_filtered_out_members_are_never_read():
 # --- data_version ----------------------------------------------------------
 
 
-def test_output_digest_changes_when_the_extracted_text_changes(tmp_path):
+def test_snapshot_version_changes_when_the_extracted_text_changes(tmp_path):
     """The version must track the output, not the input bundle.
 
     Versioning on the bundle hash meant a Tika upgrade, a parser change, or a
@@ -435,22 +436,30 @@ def test_output_digest_changes_when_the_extracted_text_changes(tmp_path):
     same DataVersion and the same S3 key: the corrected output overwrote the
     old one and no downstream data_version_changed() check fired.
     """
-    partial = tmp_path / "partial.jsonl"
-    partial.write_text('{"content": null}\n')
-    complete = tmp_path / "complete.jsonl"
-    complete.write_text('{"content": "the real text"}\n')
+    partial = write_text_snapshot([{"content": None}], tmp_path / "partial.jsonl")
+    complete = write_text_snapshot(
+        [{"content": "the real text"}], tmp_path / "complete.jsonl"
+    )
 
-    assert output_digest(partial) != output_digest(complete)
+    assert partial != complete
 
 
-def test_output_digest_is_stable_for_identical_output(tmp_path):
-    """Identical extraction must hash identically, or nothing ever caches."""
-    one = tmp_path / "one.jsonl"
-    one.write_text('{"content": "same"}\n')
-    two = tmp_path / "two.jsonl"
-    two.write_text('{"content": "same"}\n')
+def test_snapshot_version_ignores_the_extraction_stamp(tmp_path):
+    """Identical text keeps its version, and its S3 key, across re-runs."""
+    one = write_text_snapshot([{"content": "same"}], tmp_path / "one.jsonl")
+    two = write_text_snapshot([{"content": "same"}], tmp_path / "two.jsonl")
 
-    assert output_digest(one) == output_digest(two)
+    assert one == two
+
+
+def test_every_snapshot_row_carries_one_extraction_stamp(tmp_path):
+    output = tmp_path / "out.jsonl"
+    write_text_snapshot([{"content": "a"}, {"content": "b"}], output)
+
+    rows = [json.loads(line) for line in output.read_text().splitlines()]
+    stamps = {row["extracted_at"] for row in rows}
+    assert len(stamps) == 1
+    assert [row["content"] for row in rows] == ["a", "b"]
 
 
 # --- reading the bundle ----------------------------------------------------
