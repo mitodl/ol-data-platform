@@ -124,8 +124,9 @@ sources:
     - name: excluded
       description: str, true or false, whether Learn excludes the file
     - name: exclusion_reason
-      description: str, staff_only, non_content or unreferenced_static; null when
-        the file is kept
+      description: str, the rule that excluded the file (staff_only, non_content,
+        unreachable_tab, about_page, unreferenced_static, course_settings, legacy_announcements);
+        null when the file is kept
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

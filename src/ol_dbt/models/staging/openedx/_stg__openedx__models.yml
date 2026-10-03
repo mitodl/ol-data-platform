@@ -166,12 +166,13 @@ models:
     tests:
     - not_null
   - name: content_file_exclusion_reason
-    description: str, the rule that excluded the file (staff_only, non_content, unreferenced_static);
+    description: str, the rule that excluded the file (see the source's exclusion_reason);
       null when it is kept
     tests:
     - accepted_values:
         arguments:
-          values: [staff_only, non_content, unreferenced_static]
+          values: [staff_only, non_content, unreachable_tab, about_page, unreferenced_static,
+            course_settings, legacy_announcements]
   - name: content_file_checked_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp

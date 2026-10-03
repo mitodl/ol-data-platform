@@ -59,6 +59,32 @@ COURSE_FILES = {
     ),
     "video/hidden_lecture.xml": "<video/>",
     "policies/assets.json": json.dumps({"unused.pdf": {}, "handout.pdf": {}}),
+    # Names the textbook PDF, which keeps it, but is itself a setting.
+    "policies/2T2026/policy.json": json.dumps(
+        {
+            "course/2T2026": {
+                "pdf_textbooks": [{"url": "/static/textbook.pdf"}],
+                "tabs": [
+                    {"type": "static_tab", "url_slug": "syllabus"},
+                    {
+                        "type": "static_tab",
+                        "url_slug": "staff_notes",
+                        "course_staff_only": True,
+                    },
+                    {"type": "static_tab", "url_slug": "old", "is_hidden": True},
+                ],
+            }
+        }
+    ),
+    "tabs/syllabus.html": "<p>Syllabus</p>",
+    "tabs/staff_notes.html": '<a href="/static/notes_only.pdf">notes</a>',
+    "tabs/old.html": "<p>Old</p>",
+    "tabs/orphan.html": "<p>Not in the tab list</p>",
+    "about/overview.html": "<p>About this course</p>",
+    "about/effort.html": "5 hours",
+    "info/updates.html": "<p>Legacy announcement</p>",
+    "static/textbook.pdf": "%PDF",
+    "static/notes_only.pdf": "%PDF",
     "info/updates.items.json": json.dumps(
         [
             {"content": '<a href="/static/announced.pdf">x</a>', "status": "visible"},
@@ -128,6 +154,15 @@ def test_exclusions_match_learns_rules(rows):
         "html/solutions_body.html": "staff_only",
         "video/hidden_lecture.xml": "staff_only",
         "policies/assets.json": "non_content",
+        "policies/2T2026/policy.json": "course_settings",
+        "tabs/staff_notes.html": "unreachable_tab",
+        "tabs/old.html": "unreachable_tab",
+        "tabs/orphan.html": "unreachable_tab",
+        "about/overview.html": "about_page",
+        "about/effort.html": "about_page",
+        "info/updates.html": "legacy_announcements",
+        # Linked only from a tab no learner reaches.
+        "static/notes_only.pdf": "unreferenced_static",
         "info/updates.items.json": "non_content",
         # Referenced only from staff-only text, which does not count.
         "static/answer_key.pdf": "unreferenced_static",
@@ -149,6 +184,8 @@ def test_kept_files_include_what_visible_content_uses(rows):
         "static/shared-en.srt",
         # Legacy transcript linked by its video id.
         "static/subs_abc123.srt.sjson",
+        "static/textbook.pdf",
+        "tabs/syllabus.html",
         "course.xml",
     ):
         assert not rows[path]["excluded"], path
@@ -203,3 +240,17 @@ def test_an_entity_declaration_fails_the_course_as_in_learn(tmp_path):
         build_file_rows(
             olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
         )
+
+
+def test_open_learning_library_keeps_the_about_page_prose(tmp_path):
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(COURSE_FILES, tmp_path), tree)
+    rows = {
+        row["file_path"]: row
+        for row in build_file_rows(
+            olx_root, course_id="c", source_system="oll", course_xml_version="abc"
+        )
+    }
+    assert not rows["about/overview.html"]["excluded"]
+    assert rows["about/effort.html"]["exclusion_reason"] == "about_page"
