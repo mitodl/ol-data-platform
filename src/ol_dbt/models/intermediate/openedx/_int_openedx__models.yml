@@ -10,7 +10,8 @@ models:
     course_xml_blocks plus the document and transcript text the openedx location
     extracts. Files with no text are skipped, as Learn skips them; a failed
     extraction keeps its row with null content. Files Learn's excluded_olx_paths
-    drops (staff-only, asset manifests, unreferenced static files) are dropped, and
+    drops (staff-only, unreachable tabs and about pages, course settings, asset
+    manifests, unreferenced static files) are dropped, and
     a run the exclusion check has not covered yet has no rows.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:

@@ -12,10 +12,10 @@ models:
     SyncOpenEdXContentFilesTask. A scoped pull filters and prunes on
     (etl_source, run_readable_id). Built from the OLX blocks and the document and
     transcript text the openedx location extracts, less the files Learn's
-    excluded_olx_paths hides (staff-only subtrees, asset manifests, unreferenced
-    static files). A run appears once its export has been through that check.
-    Still missing: the course root files course.xml and course/<run>.xml, and
-    Tika's metadata title (content_title is '').
+    excluded_olx_paths hides (staff-only subtrees, unreachable tabs and about
+    pages, course settings, asset manifests, unreferenced static files). A run appears
+    once its export has been through that check.
+    Still missing: the course root files course.xml and course/<run>.xml.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -53,8 +53,9 @@ models:
     description: str, the file's extracted text; null when extraction failed. Block
       text approximates Tika's (attribute values and text nodes).
   - name: content_title
-    description: str, always ''. Learn stores Tika's metadata title here, which is
-      not carried yet.
+    description: str, always ''. Learn reads Tika's metadata title into this field,
+      but its production content files have '' throughout, PDFs with an embedded title
+      included, so '' matches what Learn stores.
   - name: content_author
     description: str, always null.
   - name: content_language
