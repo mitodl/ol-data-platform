@@ -27,7 +27,6 @@ import json
 import logging
 import re
 import tarfile
-import xml.etree.ElementTree as ET
 from bisect import bisect_left
 from itertools import accumulate
 from pathlib import Path
@@ -44,6 +43,7 @@ from dagster import (
     Output,
     asset,
 )
+from defusedxml import ElementTree
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from upath import UPath
 
@@ -72,7 +72,7 @@ def _parse_olx_block(root: Path, tag: str, url_name: str):
     so a course is never ingested with unverified staff-only status.
     """
     try:
-        return ET.parse(root / tag / f"{url_name}.xml").getroot()  # noqa: S314
+        return ElementTree.parse(root / tag / f"{url_name}.xml").getroot()
     except (FileNotFoundError, NotADirectoryError):
         return None
 
@@ -239,8 +239,8 @@ def _olx_video_ids(sources: list[Path]) -> set[str] | None:
         if path.suffix.lower() != ".xml":
             continue
         try:
-            element = ET.parse(path).getroot()  # noqa: S314
-        except ET.ParseError:
+            element = ElementTree.parse(path).getroot()
+        except ElementTree.ParseError:
             log.warning("Malformed XML in %s, keeping all legacy transcripts", path)
             return None
         # iter() finds <video> whether it has its own file or sits inline

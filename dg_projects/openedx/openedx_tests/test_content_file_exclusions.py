@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from defusedxml import EntitiesForbidden
 from openedx.assets.content_file_exclusions import build_file_rows, unpack_olx_tree
 
 COURSE_FILES = {
@@ -182,6 +183,23 @@ def test_malformed_block_xml_fails_rather_than_guessing(tmp_path):
     tree.mkdir()
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     with pytest.raises(ET.ParseError):
+        build_file_rows(
+            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+        )
+
+
+def test_an_entity_declaration_fails_the_course_as_in_learn(tmp_path):
+    """Defusedxml refuses entities, so Learn ingests nothing for such a course."""
+    files = {
+        **COURSE_FILES,
+        "chapter/week1.xml": (
+            '<!DOCTYPE c [<!ENTITY e "x">]><chapter display_name="&e;"/>'
+        ),
+    }
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    with pytest.raises(EntitiesForbidden):
         build_file_rows(
             olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
         )
