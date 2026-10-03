@@ -12,16 +12,17 @@
   content and extraction_status "failed", so a consumer can tell it apart from a
   removed file.
 
-  Files Learn's excluded_olx_paths drops (staff-only subtrees, the asset
-  manifests, static files nothing in the course references) are dropped here by
+  Files Learn's excluded_olx_paths drops (staff-only subtrees, unreachable tabs
+  and about pages, course settings, asset manifests, static files nothing
+  learners see references) are dropped here by
   stg__openedx__s3__course_file_exclusions, which runs a port of those rules over
   each export. A run whose newest blocks file has not been through it (no
   exclusion rows, or rows from an older export) has no rows here at all: without
   the check its files would include ones Learn hides, and a scoped pull would
   publish them.
 
-  Not reproduced yet: Tika's metadata title for documents, and the course root
-  files course.xml and course/<run>.xml, which course_xml_blocks does not carry.
+  Not reproduced yet: the course root files course.xml and course/<run>.xml,
+  which course_xml_blocks does not carry.
 #}
 
 {% set valid_text_file_types = [
