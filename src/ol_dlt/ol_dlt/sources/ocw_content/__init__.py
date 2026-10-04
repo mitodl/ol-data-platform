@@ -278,8 +278,10 @@ def _extract_text(
     try:
         body = fs.cat_file(f"{bucket}/{key}")
     except FileNotFoundError:
-        # Listed a moment ago and gone now, e.g. a publish in progress.
-        return None, STATUS_MISSING, False
+        # Listed a moment ago and gone now, e.g. a publish in progress. If the
+        # same bytes come back the ETags will not show it, so the course is
+        # read again.
+        return None, STATUS_MISSING, True
     if not body:
         return None, STATUS_EMPTY, False
     try:
@@ -434,7 +436,10 @@ def external_files_changed(
 
 
 def _waited(since: str, now: datetime) -> bool:
-    return now - datetime.fromisoformat(since) >= WAIT_BETWEEN_READS
+    then = datetime.fromisoformat(since)
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=UTC)
+    return now - then >= WAIT_BETWEEN_READS
 
 
 def _unpublished_row(slug: str, retrieved_at: datetime) -> dict[str, Any]:
@@ -497,16 +502,29 @@ def record_read(
     return f"{version}|{attempts + 1}|{now.isoformat(timespec='seconds')}"
 
 
-def _refuse_mass_unpublish(unpublishing: int, known: int, reason: str) -> None:
+def count_unpublished(
+    state: dict[str, Any], now: datetime, added: int, known: int
+) -> None:
+    """Add to the courses unpublished lately, refusing to pass the limit.
+
+    Counted in dlt state over ``WAIT_BETWEEN_READS`` and not per load, because
+    one sweep is split across loads wherever the byte budget falls.
+    """
+    window = state.get("unpublish_window")
+    if window is None or _waited(window["since"], now):
+        window = {"since": now.isoformat(timespec="seconds"), "count": 0}
+    count = window["count"] + added
     if (
         known >= MIN_COURSES_FOR_UNPUBLISH_GUARD
-        and unpublishing > known * MAX_UNPUBLISH_FRACTION
+        and count > known * MAX_UNPUBLISH_FRACTION
     ):
         msg = (
-            f"{unpublishing} of the {known} known OCW courses {reason}. "
-            "Refusing to unpublish that many in one run."
+            f"{count} of the {known} known OCW courses are gone from the "
+            "bucket listing or have no data.json. Refusing to unpublish that "
+            "many in one run."
         )
         raise RuntimeError(msg)
+    state["unpublish_window"] = {**window, "count": count}
 
 
 def _unpublished_rows(
@@ -514,9 +532,6 @@ def _unpublished_rows(
 ) -> list[dict[str, Any]]:
     """Build the row that empties each known course no longer in the bucket."""
     gone = sorted(set(versions) - set(live))
-    _refuse_mass_unpublish(
-        len(gone), len(versions), "are missing from the bucket listing"
-    )
     return [_unpublished_row(slug, retrieved_at) for slug in gone]
 
 
@@ -556,15 +571,14 @@ def ocw_content_source(
         fs = s3fs.S3FileSystem(anon=True, use_listings_cache=False)
         live = list_courses(fs, bucket)
 
-        unpublishing = 0
         if courses is None:
             unpublished = _unpublished_rows(versions, live, now)
             if unpublished:
+                count_unpublished(state, now, len(unpublished), known)
                 yield pa.Table.from_pylist(unpublished, schema=SCHEMA)
             for row in unpublished:
                 del versions[row["course_slug"]]
                 external_files.pop(row["course_slug"], None)
-            unpublishing = len(unpublished)
             # A sweep that a load's budget cut short resumes after the last
             # course it read, then wraps round to the ones before it.
             resume_after = state.get("resume_after", "")
@@ -591,10 +605,7 @@ def ocw_content_source(
                             recorded, version, now
                         )
                         if unpublish:
-                            unpublishing += 1
-                            _refuse_mass_unpublish(
-                                unpublishing, known, "are gone or have no data.json"
-                            )
+                            count_unpublished(state, now, 1, known)
                             external_files.pop(slug, None)
                             row = _unpublished_row(slug, datetime.now(tz=UTC))
                             yield pa.Table.from_pylist([row], schema=SCHEMA)

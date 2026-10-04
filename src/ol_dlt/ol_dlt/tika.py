@@ -64,7 +64,9 @@ class TikaClient:
         # retries that case itself.
         retry = Retry(
             total=RETRIES,
-            read=0,
+            # False, not 0: with 0 urllib3 wraps a read timeout in
+            # MaxRetryError, which requests raises as ConnectionError.
+            read=False,
             backoff_factor=2,
             status_forcelist=(502, 503, 504),
             allowed_methods=("PUT",),
@@ -90,7 +92,7 @@ class TikaClient:
                 )
             except requests.Timeout:
                 raise
-            except requests.ConnectionError:
+            except (requests.ConnectionError, requests.exceptions.ChunkedEncodingError):
                 # e.g. the Tika pod restarting under the request.
                 if attempt == DROPPED_CONNECTION_ATTEMPTS:
                     raise

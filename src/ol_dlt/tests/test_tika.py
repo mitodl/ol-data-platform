@@ -1,5 +1,7 @@
 """Tests for the Tika client."""
 
+import socket
+import threading
 from typing import Any
 
 import pytest
@@ -57,25 +59,50 @@ def test_client_for_profile_needs_a_token_outside_deployed_profiles(
         tika.client_for_profile()
 
 
-def test_extract_text_retries_a_dropped_connection_but_not_a_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = tika.TikaClient("https://tika.example", "token")
-    outcomes: list[Any] = [
-        requests.ConnectionError("Connection aborted."),
-        FakeResponse(json_data=[{"X-TIKA:content": "Body"}]),
-    ]
+class _Server:
+    """A local server that takes connections and then hangs or hangs up."""
 
-    def put(_url: str, **_kwargs: Any) -> FakeResponse:
-        outcome = outcomes.pop(0)
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
+    def __init__(self, *, hang: bool) -> None:
+        self.connections = 0
+        self._held: list[socket.socket] = []
+        self._socket = socket.create_server(("127.0.0.1", 0))
+        self.url = f"http://127.0.0.1:{self._socket.getsockname()[1]}"
+        threading.Thread(target=self._serve, args=(hang,), daemon=True).start()
 
-    monkeypatch.setattr(client._session, "put", put)  # noqa: SLF001
-    assert client.extract_text(b"%PDF") == "Body"
+    def _serve(self, hang: bool) -> None:  # noqa: FBT001
+        while True:
+            try:
+                connection, _address = self._socket.accept()
+            except OSError:
+                return
+            self.connections += 1
+            if hang:
+                self._held.append(connection)
+            else:
+                connection.close()
 
-    outcomes[:] = [requests.ReadTimeout(), FakeResponse(json_data=[])]
-    with pytest.raises(requests.ReadTimeout):
-        client.extract_text(b"%PDF")
-    assert len(outcomes) == 1
+    def close(self) -> None:
+        self._socket.close()
+        for connection in self._held:
+            connection.close()
+
+
+def test_hung_tika_is_tried_once() -> None:
+    """Through the real session: a retry here doubles every file's timeout."""
+    server = _Server(hang=True)
+    try:
+        with pytest.raises(requests.ReadTimeout):
+            tika.TikaClient(server.url, "token").extract_text(b"%PDF", timeout=0.5)
+        assert server.connections == 1
+    finally:
+        server.close()
+
+
+def test_dropped_connection_is_tried_again() -> None:
+    server = _Server(hang=False)
+    try:
+        with pytest.raises(requests.ConnectionError):
+            tika.TikaClient(server.url, "token").extract_text(b"%PDF", timeout=5)
+        assert server.connections == tika.DROPPED_CONNECTION_ATTEMPTS
+    finally:
+        server.close()

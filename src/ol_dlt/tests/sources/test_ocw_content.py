@@ -21,6 +21,8 @@ class FakeS3:
 
     def __init__(self, objects: dict[str, bytes]) -> None:
         self.objects = objects
+        # Keys still listed that can no longer be read.
+        self.vanished: set[str] = set()
 
     def ls(self, path: str, *, detail: bool = False) -> list[str]:  # noqa: ARG002
         prefix = path.removeprefix(f"{_BUCKET}/")
@@ -47,7 +49,10 @@ class FakeS3:
         raise FileNotFoundError(path)
 
     def cat_file(self, path: str) -> bytes:
-        return self.objects[path.removeprefix(f"{_BUCKET}/")]
+        key = path.removeprefix(f"{_BUCKET}/")
+        if key in self.vanished:
+            raise FileNotFoundError(path)
+        return self.objects[key]
 
 
 class FakeTika:
@@ -536,6 +541,52 @@ def test_refuses_to_unpublish_many_courses_left_without_data_json(
 
     pipeline = config.pipeline_for("ocw", pipeline_name="ocw_content")
     assert pipeline.dataset()[ocw_content.RAW_TABLE].arrow().num_rows == len(rows)
+
+
+@pytest.mark.integration
+def test_file_gone_between_listing_and_read_is_missing_and_read_again_later(
+    test_profile: Path,
+    bucket: FakeS3,
+    fake_tika: FakeTika,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bucket.vanished.add("courses/a-course/abc_notes0.pdf")
+
+    rows = _load()
+
+    statuses = {
+        row["course_slug"]: row["extraction_status"] for row in rows if row["file_key"]
+    }
+    assert statuses == {"a-course": "missing", "b-course": "extracted"}
+    assert len(_load()) == len(rows)
+
+    class Tomorrow(ocw_content.datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return super().now(tz) + timedelta(days=1)
+
+    bucket.vanished.clear()
+    monkeypatch.setattr(ocw_content, "datetime", Tomorrow)
+    again = _load()
+    notes = [
+        row["extraction_status"]
+        for row in again
+        if row["s3_key"] == "courses/a-course/resources/notes-0/data.json"
+    ]
+    assert sorted(notes) == ["extracted", "missing"]
+
+
+def test_unpublish_limit_counts_across_loads() -> None:
+    """A sweep is split across loads, so a count per load would never trip."""
+    state: dict[str, Any] = {}
+    for _load_number in range(3):
+        ocw_content.count_unpublished(state, _at(1), 1, 30)
+    with pytest.raises(RuntimeError, match="Refusing to unpublish"):
+        ocw_content.count_unpublished(state, _at(1, 6), 1, 30)
+    assert state["unpublish_window"]["count"] == 3  # noqa: PLR2004
+    # A later day starts the count again.
+    ocw_content.count_unpublished(state, _at(2, 6), 1, 30)
+    assert state["unpublish_window"]["count"] == 1
 
 
 def test_file_over_the_size_limit_is_failed_without_being_read(
