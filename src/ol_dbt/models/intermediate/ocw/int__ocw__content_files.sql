@@ -96,7 +96,7 @@ with content as (
         , coalesce({{ regexp_extract_or_null('extension_path', extension_pattern) }}, '') as file_extension
         , case
             when not is_video then null
-            when not is_current_format then coursecontent_legacy_thumbnail_file
+            when not is_current_format then nullif(coursecontent_legacy_thumbnail_file, '')
             when coalesce(coursecontent_video_youtube_id, '') != ''
                 then 'https://i.ytimg.com/vi/' || coursecontent_video_youtube_id || '/hqdefault.jpg'
         end as image_src

@@ -42,13 +42,16 @@ class FakeS3:
 
 
 class FakeTika:
-    def __init__(self, *, fail: bool = False) -> None:
+    """Tika that fails every document, or every one but the outage probe."""
+
+    def __init__(self, *, fail: bool = False, probe_ok: bool = False) -> None:
         self.fail = fail
+        self.probe_ok = probe_ok
         self.calls = 0
 
     def extract_text(self, body: bytes) -> str | None:
         self.calls += 1
-        if self.fail:
+        if self.fail and not (self.probe_ok and body == ocw_content.PROBE_DOCUMENT):
             raise requests.ConnectionError
         return f"text of {body.decode()}"
 
@@ -139,6 +142,11 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
             "courses/a/t.pdf",
         ),
         ({"file": "/courses/a/legacy.txt"}, "courses/a/legacy.txt"),
+        # Learn takes what lies between the first two "courses".
+        (
+            {"resourcetype": "Document", "file": "/courses/a/courses/x.pdf"},
+            "courses/a/",
+        ),
     ],
 )
 def test_text_file_key_follows_learn(
@@ -192,8 +200,14 @@ def test_loads_each_course_once_until_it_changes(
     bucket.objects["courses/b-course/pages/syllabus/data.json"] = b'{"title": "New"}'
     rows = _load()
     assert len(rows) == 9  # noqa: PLR2004
-    assert len({row["course_retrieved_at"] for row in rows}) == 2  # noqa: PLR2004
     assert len({row["course_version"] for row in rows}) == 3  # noqa: PLR2004
+    # One stamp per read of a course, so staging can pick its newest set.
+    reads = {(row["course_slug"], row["course_retrieved_at"]) for row in rows}
+    assert sorted(slug for slug, _stamp in reads) == [
+        "a-course",
+        "b-course",
+        "b-course",
+    ]
 
 
 @pytest.mark.integration
@@ -245,6 +259,43 @@ def test_budget_ends_a_load_and_the_next_resumes_after_it(
     }
     # The sweep reached the end, so the next one starts over and finds nothing.
     assert len(_load(budget_bytes=1)) == 6  # noqa: PLR2004
+    # A course before the last cursor is still seen once it changes.
+    bucket.objects["courses/a-course/pages/syllabus/data.json"] = b'{"title": "New"}'
+    assert len(_load(budget_bytes=1)) == 9  # noqa: PLR2004
+
+
+@pytest.mark.integration
+def test_load_starting_mid_sweep_wraps_round_to_the_courses_before_it(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    _load(budget_bytes=1)
+    bucket.objects["courses/a-course/pages/syllabus/data.json"] = b'{"title": "New"}'
+
+    rows = _load()
+
+    assert len(rows) == 9  # noqa: PLR2004
+
+
+@pytest.mark.integration
+def test_prefix_left_without_data_json_supersedes_its_last_set(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    _load()
+    for key in [key for key in bucket.objects if key.endswith("data.json")]:
+        if key.startswith("courses/b-course/"):
+            del bucket.objects[key]
+
+    rows = _load()
+
+    newest = max(
+        row["course_retrieved_at"] for row in rows if row["course_slug"] == "b-course"
+    )
+    assert [
+        row["content_kind"]
+        for row in rows
+        if row["course_slug"] == "b-course" and row["course_retrieved_at"] == newest
+    ] == ["unpublished"]
+    assert len(_load()) == len(rows)
 
 
 @pytest.mark.integration
@@ -275,6 +326,64 @@ def test_one_failed_file_is_recorded_and_the_course_still_loads(
     }
 
     assert statuses == {"a-course": "failed", "b-course": "missing"}
+
+
+@pytest.mark.integration
+def test_course_tika_cannot_read_is_recorded_when_tika_is_up(
+    test_profile: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Otherwise every load would fail at this course and none after it load."""
+    fake = FakeS3(
+        {
+            **_course("a-course", files=ocw_content.MIN_FILES_FOR_OUTAGE),
+            **_course("b-course"),
+        }
+    )
+    monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
+    tika = FakeTika(fail=True, probe_ok=True)
+    monkeypatch.setattr(ocw_content.tika, "client_for_profile", lambda: tika)
+
+    rows = _load()
+
+    assert {row["course_slug"] for row in rows} == {"a-course", "b-course"}
+    assert {row["extraction_status"] for row in rows if row["file_key"]} == {"failed"}
+    # Read again on a later day, not again in the same run.
+    calls = tika.calls
+    assert len(_load()) == len(rows)
+    assert tika.calls == calls
+
+
+def test_failing_course_is_read_again_on_a_bounded_number_of_days() -> None:
+    state = ocw_content.record_read(None, "v1", "2026-10-01", retry=True)
+    assert not ocw_content.needs_read(state, "v1", "2026-10-01")
+    assert ocw_content.needs_read(state, "v1", "2026-10-02")
+    assert ocw_content.needs_read(state, "v2", "2026-10-01")
+
+    for day in ("2026-10-02", "2026-10-03"):
+        state = ocw_content.record_read(state, "v1", day, retry=True)
+    assert state == "v1|3|2026-10-03"
+    assert not ocw_content.needs_read(state, "v1", "2026-10-04")
+
+    assert ocw_content.record_read(state, "v1", "2026-10-04", retry=False) == "v1"
+    assert not ocw_content.needs_read("v1", "v1", "2026-10-05")
+    # A new version starts its attempts over.
+    assert ocw_content.record_read(state, "v2", "2026-10-04", retry=True) == (
+        "v2|1|2026-10-04"
+    )
+
+
+def test_file_over_the_size_limit_is_failed_without_being_read(
+    bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(ocw_content, "MAX_FILE_BYTES", 3)
+    tika = FakeTika()
+
+    result = ocw_content._extract_text(  # noqa: SLF001
+        bucket, tika, _BUCKET, "courses/a-course/abc_notes0.pdf", 4
+    )
+
+    assert result == (None, "failed", False)
+    assert tika.calls == 0
 
 
 @pytest.mark.integration
