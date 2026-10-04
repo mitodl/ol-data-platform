@@ -217,5 +217,5 @@ sources:
     - name: course_version
       description: str, digest of the ETags the course's rows were built from
     - name: course_retrieved_at
-      description: timestamp, when the load that read this set of the course's rows
-        started
+      data_type: timestamp with time zone
+      description: timestamp, when this set of the course's rows was read

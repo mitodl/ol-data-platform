@@ -19,14 +19,16 @@ in dlt state. A publish that rewrites identical bytes keeps every ETag, so it
 changes nothing here. A changed course appends a full new set of rows stamped
 with one ``course_retrieved_at``, and staging keeps each course's newest set.
 A course that leaves the bucket appends one ``unpublished`` row, which becomes
-its newest set and so empties it downstream.
+its newest set and so empties it downstream. So does a course whose prefix
+has no ``data.json`` on two days running.
 
 A file Tika fails on is loaded with ``extraction_status`` ``failed``. When the
 failure may pass (a timeout, a 5xx), the course is read again on up to
-``MAX_ATTEMPTS`` days. When every file of a course fails, a probe document
-tells a Tika outage, which fails the load, from a course Tika cannot read,
-which is recorded so the courses after it still load. Tika rejecting the
-access token always fails the load.
+``MAX_ATTEMPTS`` days, and staging keeps the text of an earlier read of the
+same file. When ``FAILURES_BEFORE_PROBE`` files of a course fail in a row, or
+all of them do, a probe document tells a Tika outage, which fails the load,
+from a course Tika cannot read, which is recorded so the courses after it
+still load. Tika rejecting the access token always fails the load.
 
 One load covers at most ``budget_bytes`` of source files. The caller re-runs
 the source until a load reads nothing (``build_batched_assets`` in the
@@ -116,10 +118,11 @@ LISTING_WINDOW = 32
 MAX_UNPUBLISH_FRACTION = 0.1
 MIN_COURSES_FOR_UNPUBLISH_GUARD = 20
 
-# A course with at least this many files to extract, all of which Tika failed
-# on, may mean Tika is down. A probe document settles it.
-MIN_FILES_FOR_OUTAGE = 5
+# This many files of a course failing in a row, or all of them, may mean Tika
+# is down. A probe document settles it.
+FAILURES_BEFORE_PROBE = 8
 PROBE_DOCUMENT = b"OCW content extraction probe."
+PROBE_TIMEOUT_SECONDS = 30
 AUTH_FAILURES = frozenset({401, 403})
 
 # A larger file is recorded as failed without being read: eight are held in
@@ -141,6 +144,10 @@ STATUS_EXTRACTED = "extracted"
 STATUS_EMPTY = "empty"
 STATUS_FAILED = "failed"
 STATUS_MISSING = "missing"
+
+# State of a known course whose prefix was last seen with no data.json, with
+# the day it was seen.
+EMPTY_MARK = "!empty"
 
 SCHEMA = pa.schema(
     [
@@ -275,21 +282,33 @@ def _extract_text(
     return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
 
 
-def _raise_if_tika_is_down(client: tika.TikaClient, slug: str, failed: int) -> None:
+def _raise_if_tika_is_down(
+    client: tika.TikaClient, pool: ThreadPoolExecutor, slug: str, failed: int
+) -> None:
     """Fail the load when Tika cannot read a document known to be readable.
 
     Without the probe, a course whose files Tika really cannot read would fail
     every load at the same place, and no course sorted after it would load.
     """
     try:
-        client.extract_text(PROBE_DOCUMENT)
+        client.extract_text(PROBE_DOCUMENT, timeout=PROBE_TIMEOUT_SECONDS)
     except requests.RequestException as error:
+        # The files still queued would each wait out a timeout first.
+        pool.shutdown(wait=False, cancel_futures=True)
         msg = (
-            f"Tika extracted none of the {failed} files of {slug} and failed "
-            "a probe document. Treating it as a Tika outage, so the course "
-            "is not recorded as read."
+            f"Tika failed {failed} files of {slug} and then a probe document. "
+            "Treating it as a Tika outage, so the course is not recorded as "
+            "read."
         )
         raise RuntimeError(msg) from error
+
+
+def _object_info(fs: s3fs.S3FileSystem, bucket: str, key: str) -> dict[str, Any] | None:
+    """Return an object's listing entry, or None when it is not in the bucket."""
+    try:
+        return fs.info(f"{bucket}/{key}")
+    except FileNotFoundError:
+        return None
 
 
 def read_course(  # noqa: PLR0913
@@ -335,42 +354,49 @@ def read_course(  # noqa: PLR0913
                 "course_retrieved_at": retrieved_at,
             }
         )
-    if not rows:
-        # A prefix left with no data.json is no longer a course. Without a
-        # row, its last set would stay the newest.
-        return [_unpublished_row(slug, retrieved_at)], 0, False
+    # A resource can point at a file under another course, which this course's
+    # listing does not cover. Learn reads any key in the bucket.
+    files: CourseObjects = {}
+    for key in sorted({row["file_key"] for row in rows if row["file_key"]}):
+        info = objects.get(key) or _object_info(fs, bucket, key)
+        if info is not None:
+            files[key] = info
 
-    file_keys = sorted({row["file_key"] for row in rows if row["file_key"] in objects})
-    texts = dict(
-        zip(
-            file_keys,
-            pool.map(
-                lambda key: _extract_text(
-                    fs, client, bucket, key, objects[key]["size"]
-                ),
-                file_keys,
-            ),
-            strict=True,
-        )
+    texts: dict[str, tuple[str | None, str, bool]] = {}
+    failed_in_a_row = 0
+    probed = False
+    results = pool.map(
+        lambda key: _extract_text(fs, client, bucket, key, files[key]["size"]),
+        files,
     )
-    retry = any(may_pass for _text, _status, may_pass in texts.values())
-    if len(file_keys) >= MIN_FILES_FOR_OUTAGE and all(
-        status == STATUS_FAILED for _text, status, _may_pass_again in texts.values()
+    for key, result in zip(files, results, strict=True):
+        texts[key] = result
+        failed_in_a_row = failed_in_a_row + 1 if result[1] == STATUS_FAILED else 0
+        if failed_in_a_row >= FAILURES_BEFORE_PROBE and not probed:
+            _raise_if_tika_is_down(client, pool, slug, failed_in_a_row)
+            probed = True
+    if (
+        texts
+        and not probed
+        and all(status == STATUS_FAILED for _text, status, _retry in texts.values())
     ):
-        _raise_if_tika_is_down(client, slug, len(file_keys))
+        _raise_if_tika_is_down(client, pool, slug, len(texts))
 
     for row in rows:
         file_key = row["file_key"]
         if file_key is None:
             continue
-        if file_key not in objects:
+        if file_key not in files:
             row["extraction_status"] = STATUS_MISSING
             continue
-        row["content"], row["extraction_status"], _may_pass_again = texts[file_key]
-        row["file_etag"] = _etag(objects[file_key])
-        row["file_size_bytes"] = objects[file_key]["size"]
+        row["content"], row["extraction_status"], _retry = texts[file_key]
+        row["file_etag"] = _etag(files[file_key])
+        row["file_size_bytes"] = files[file_key]["size"]
 
-    source_bytes = sum(objects[key]["size"] for key in (*json_keys, *file_keys))
+    retry = any(may_pass for _text, _status, may_pass in texts.values())
+    source_bytes = sum(objects[key]["size"] for key in json_keys) + sum(
+        info["size"] for info in files.values()
+    )
     return rows, source_bytes, retry
 
 
@@ -398,6 +424,28 @@ def needs_read(recorded: str | None, version: str, today: str) -> bool:
         return False
     attempts, _, last_read = retry.partition("|")
     return int(attempts) < MAX_ATTEMPTS and last_read != today
+
+
+def settle_empty_course(
+    recorded: str | None, version: str, today: str
+) -> tuple[bool, str]:
+    """Decide what a prefix with no ``data.json`` means for its course.
+
+    A course that had rows is unpublished only once its prefix has been seen
+    empty on two days: a publish in progress can leave it empty for a moment,
+    and an unpublished row empties the course downstream.
+
+    :returns: Whether to load the unpublished row, and the state to hold.
+    """
+    if recorded is None:
+        return False, version
+    if recorded.startswith(f"{EMPTY_MARK}|"):
+        if recorded == f"{EMPTY_MARK}|{today}":
+            return False, recorded
+        return True, version
+    if recorded.partition("|")[0] == version:
+        return False, recorded
+    return False, f"{EMPTY_MARK}|{today}"
 
 
 def record_read(recorded: str | None, version: str, today: str, *, retry: bool) -> str:
@@ -487,6 +535,14 @@ def ocw_content_source(
                 for slug, objects in zip(window, listings, strict=True):
                     version = course_version(slug, objects)
                     recorded = versions.get(slug)
+                    if not any(content_kind(slug, key) for key in objects):
+                        unpublish, versions[slug] = settle_empty_course(
+                            recorded, version, today
+                        )
+                        if unpublish:
+                            row = _unpublished_row(slug, datetime.now(tz=UTC))
+                            yield pa.Table.from_pylist([row], schema=SCHEMA)
+                        continue
                     if courses is None and not needs_read(recorded, version, today):
                         continue
                     client = client or tika.client_for_profile()

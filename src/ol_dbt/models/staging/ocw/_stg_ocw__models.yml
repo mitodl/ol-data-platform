@@ -349,3 +349,42 @@ models:
       file to extract
   - name: coursecontent_retrieved_on
     description: timestamp, when the load that read the course started
+
+unit_tests:
+- name: test_stg__ocw__s3__course_content_keeps_the_newest_set_and_earlier_text
+  description: >
+    Each course's newest read is the course, an unpublished marker empties it,
+    and a file that failed on a retry keeps the text of an earlier read of the
+    same ETag.
+  model: stg__ocw__s3__course_content
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__ocw__s3__course_content')
+    rows:
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/notes/data.json,
+      data_json: '{"title": "Notes"}', file_key: courses/a-course/abc_notes.pdf, file_etag: e1,
+      content: Lecture notes, extraction_status: extracted, course_retrieved_at: "2026-10-01\
+        \ 00:00:00+00"}
+    - {course_slug: a-course, content_kind: page, s3_key: courses/a-course/pages/removed/data.json,
+      data_json: '{"title": "Removed"}', course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/notes/data.json,
+      data_json: '{"title": "Notes"}', file_key: courses/a-course/abc_notes.pdf, file_etag: e1,
+      content: null, extraction_status: failed, course_retrieved_at: "2026-10-02 00:00:00+00"}
+    # A changed file has no earlier text to fall back on.
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/slides/data.json,
+      data_json: '{"title": "Slides"}', file_key: courses/a-course/abc_slides.pdf,
+      file_etag: e3, content: null, extraction_status: failed, course_retrieved_at: "2026-10-02\
+        \ 00:00:00+00"}
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/slides/data.json,
+      data_json: '{"title": "Slides"}', file_key: courses/a-course/abc_slides.pdf,
+      file_etag: e2, content: Old slides, extraction_status: extracted, course_retrieved_at: "2026-10-01\
+        \ 00:00:00+00"}
+    - {course_slug: gone-course, content_kind: page, s3_key: courses/gone-course/pages/a/data.json,
+      data_json: '{"title": "A"}', course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_slug: gone-course, content_kind: unpublished, course_retrieved_at: "2026-10-02\
+        \ 00:00:00+00"}
+  expect:
+    rows:
+    - {course_slug: a-course, coursecontent_s3_key: courses/a-course/resources/notes/data.json,
+      coursecontent_title: Notes, coursecontent_text: Lecture notes, coursecontent_text_extraction_status: extracted}
+    - {course_slug: a-course, coursecontent_s3_key: courses/a-course/resources/slides/data.json,
+      coursecontent_title: Slides, coursecontent_text: null, coursecontent_text_extraction_status: failed}

@@ -13,6 +13,22 @@ with source as (
     group by course_slug
 )
 
+-- A course is read whole again to retry a file Tika failed on, and a file
+-- that extracted before can fail on the retry. The file has not changed while
+-- its ETag has not, so its last extracted text still stands.
+, extracted as (
+    select
+        s3_key
+        , file_etag
+        , content
+        , row_number() over (
+            partition by s3_key, file_etag
+            order by course_retrieved_at desc
+        ) as read_rank
+    from source
+    where extraction_status = 'extracted'
+)
+
 select
     source.course_slug
     , source.content_kind as coursecontent_kind
@@ -37,14 +53,21 @@ select
     , {{ json_extract_scalar('source.data_json', "'$.site_uid'") }} as course_site_uid
     , {{ json_extract_scalar('source.data_json', "'$.legacy_uid'") }} as course_legacy_uid
     , source.file_key as coursecontent_text_file_key
-    , source.content as coursecontent_text
-    , source.extraction_status as coursecontent_text_extraction_status
+    , coalesce(extracted.content, source.content) as coursecontent_text
+    , case when extracted.content is not null then 'extracted' else source.extraction_status end
+        as coursecontent_text_extraction_status
     , {{ cast_timestamp_to_iso8601('source.course_retrieved_at') }} as coursecontent_retrieved_on
 from source
 inner join newest
     on
         source.course_slug = newest.course_slug
         and source.course_retrieved_at = newest.course_retrieved_at
+left join extracted
+    on
+        source.extraction_status = 'failed'
+        and source.s3_key = extracted.s3_key
+        and source.file_etag = extracted.file_etag
+        and extracted.read_rank = 1
 -- A course that left the bucket loads one "unpublished" row so that it becomes
 -- the newest set; the row itself is not content.
 where source.content_kind != 'unpublished'

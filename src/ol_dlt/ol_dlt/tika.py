@@ -56,8 +56,11 @@ class TikaClient:
                 "X-Tika-PDFOcrStrategy": OCR_STRATEGY,
             }
         )
+        # A read timeout is not retried: a hung Tika would hold each file for
+        # four timeouts before it counted as failed.
         retry = Retry(
             total=RETRIES,
+            read=0,
             backoff_factor=2,
             status_forcelist=(502, 503, 504),
             allowed_methods=("PUT",),
@@ -65,18 +68,19 @@ class TikaClient:
         self._session.mount("https://", HTTPAdapter(max_retries=retry))
         self._session.mount("http://", HTTPAdapter(max_retries=retry))
 
-    def extract_text(self, body: bytes) -> str | None:
+    def extract_text(self, body: bytes, timeout: float = TIMEOUT_SECONDS) -> str | None:
         """Return the document's text, or None when Tika finds none.
 
         No Content-Type is sent, so Tika detects the format from the bytes.
         MIT Learn's OCW ETL does the same.
 
         :param body: The document.
+        :param timeout: Seconds to wait for Tika.
         :returns: The text as Tika gives it, unstripped, or None when empty.
         :raises requests.RequestException: Tika refused or failed the document.
         """
         response = self._session.put(
-            f"{self.base_url}/rmeta/text", data=body, timeout=TIMEOUT_SECONDS
+            f"{self.base_url}/rmeta/text", data=body, timeout=timeout
         )
         response.raise_for_status()
         return "".join(part.get(CONTENT_FIELD, "") for part in response.json()) or None

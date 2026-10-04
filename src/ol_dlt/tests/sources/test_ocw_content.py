@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,12 @@ class FakeS3:
             if key.startswith(prefix)
         }
 
+    def info(self, path: str) -> dict[str, Any]:
+        key = path.removeprefix(f"{_BUCKET}/")
+        if key not in self.objects:
+            raise FileNotFoundError(path)
+        return self.find(path)[path]
+
     def cat_file(self, path: str) -> bytes:
         return self.objects[path.removeprefix(f"{_BUCKET}/")]
 
@@ -49,7 +56,7 @@ class FakeTika:
         self.probe_ok = probe_ok
         self.calls = 0
 
-    def extract_text(self, body: bytes) -> str | None:
+    def extract_text(self, body: bytes, timeout: float = 0) -> str | None:  # noqa: ARG002
         self.calls += 1
         if self.fail and not (self.probe_ok and body == ocw_content.PROBE_DOCUMENT):
             raise requests.ConnectionError
@@ -276,15 +283,39 @@ def test_load_starting_mid_sweep_wraps_round_to_the_courses_before_it(
     assert len(rows) == 9  # noqa: PLR2004
 
 
+def test_known_course_seen_empty_is_unpublished_on_the_second_day() -> None:
+    """A publish in progress can leave a prefix without data.json for a moment."""
+    seen = ocw_content.settle_empty_course("v1", "v0", "2026-10-01")
+    assert seen == (False, "!empty|2026-10-01")
+    assert ocw_content.settle_empty_course(seen[1], "v0", "2026-10-01") == seen
+    assert ocw_content.settle_empty_course(seen[1], "v0", "2026-10-02") == (True, "v0")
+    # Settled, and a prefix that never held a course loads nothing.
+    assert ocw_content.settle_empty_course("v0", "v0", "2026-10-03") == (False, "v0")
+    assert ocw_content.settle_empty_course(None, "v0", "2026-10-01") == (False, "v0")
+    # The course coming back is a new version, so it is read.
+    assert ocw_content.needs_read(seen[1], "v2", "2026-10-01")
+
+
 @pytest.mark.integration
-def test_prefix_left_without_data_json_supersedes_its_last_set(
-    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+def test_prefix_left_without_data_json_keeps_its_set_until_seen_empty_again(
+    test_profile: Path,
+    bucket: FakeS3,
+    fake_tika: FakeTika,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _load()
+    rows = _load()
     for key in [key for key in bucket.objects if key.endswith("data.json")]:
         if key.startswith("courses/b-course/"):
             del bucket.objects[key]
 
+    assert len(_load()) == len(rows)
+
+    class Tomorrow(ocw_content.datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return super().now(tz) + timedelta(days=1)
+
+    monkeypatch.setattr(ocw_content, "datetime", Tomorrow)
     rows = _load()
 
     newest = max(
@@ -296,6 +327,42 @@ def test_prefix_left_without_data_json_supersedes_its_last_set(
         if row["course_slug"] == "b-course" and row["course_retrieved_at"] == newest
     ] == ["unpublished"]
     assert len(_load()) == len(rows)
+
+
+@pytest.mark.integration
+def test_file_under_another_course_is_read(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    bucket.objects["courses/a-course/resources/shared/data.json"] = json.dumps(
+        {
+            "title": "Shared notes",
+            "resourcetype": "Document",
+            "file": "/courses/b-course/abc_notes0.pdf",
+        }
+    ).encode()
+
+    by_key = {row["s3_key"]: row for row in _load()}
+
+    shared = by_key["courses/a-course/resources/shared/data.json"]
+    assert shared["extraction_status"] == "extracted"
+    assert shared["content"] == "text of b-course notes 0"
+
+
+@pytest.mark.integration
+def test_run_of_failures_is_probed_before_the_rest_of_the_course_is_tried(
+    test_profile: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = ocw_content.FAILURES_BEFORE_PROBE * 20
+    fake = FakeS3(_course("a-course", files=files))
+    monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
+    tika = FakeTika(fail=True)
+    monkeypatch.setattr(ocw_content.tika, "client_for_profile", lambda: tika)
+    monkeypatch.setattr(ocw_content, "WORKERS", 1)
+
+    with pytest.raises(PipelineStepFailed, match="Tika outage"):
+        _load()
+
+    assert tika.calls < files
 
 
 @pytest.mark.integration
@@ -315,7 +382,9 @@ def test_one_failed_file_is_recorded_and_the_course_still_loads(
     test_profile: Path, bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        ocw_content.tika, "client_for_profile", lambda: FakeTika(fail=True)
+        ocw_content.tika,
+        "client_for_profile",
+        lambda: FakeTika(fail=True, probe_ok=True),
     )
     del bucket.objects["courses/b-course/abc_notes0.pdf"]
 
@@ -335,7 +404,7 @@ def test_course_tika_cannot_read_is_recorded_when_tika_is_up(
     """Otherwise every load would fail at this course and none after it load."""
     fake = FakeS3(
         {
-            **_course("a-course", files=ocw_content.MIN_FILES_FOR_OUTAGE),
+            **_course("a-course", files=ocw_content.FAILURES_BEFORE_PROBE),
             **_course("b-course"),
         }
     )
@@ -387,14 +456,14 @@ def test_file_over_the_size_limit_is_failed_without_being_read(
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("files", [1, ocw_content.MIN_FILES_FOR_OUTAGE])
+@pytest.mark.parametrize("files", [1, ocw_content.FAILURES_BEFORE_PROBE])
 def test_rejected_tika_token_fails_the_load_whatever_the_course_size(
     test_profile: Path, monkeypatch: pytest.MonkeyPatch, files: int
 ) -> None:
     """A bad token must not record every course as read with failed files."""
 
     class Unauthorized:
-        def extract_text(self, _body: bytes) -> str | None:
+        def extract_text(self, _body: bytes, timeout: float = 0) -> str | None:  # noqa: ARG002
             response = requests.Response()
             response.status_code = 401
             raise requests.HTTPError(response=response)
@@ -414,12 +483,12 @@ def test_course_tika_refuses_outright_is_probed_before_it_is_recorded(
     """Every file refused with a 4xx still asks whether Tika itself is down."""
 
     class Refuses:
-        def extract_text(self, _body: bytes) -> str | None:
+        def extract_text(self, _body: bytes, timeout: float = 0) -> str | None:  # noqa: ARG002
             response = requests.Response()
             response.status_code = 422
             raise requests.HTTPError(response=response)
 
-    fake = FakeS3(_course("a-course", files=ocw_content.MIN_FILES_FOR_OUTAGE))
+    fake = FakeS3(_course("a-course", files=ocw_content.FAILURES_BEFORE_PROBE))
     monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
     monkeypatch.setattr(ocw_content.tika, "client_for_profile", Refuses)
 
@@ -431,7 +500,7 @@ def test_course_tika_refuses_outright_is_probed_before_it_is_recorded(
 def test_course_with_no_text_at_all_fails_the_load(
     test_profile: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake = FakeS3(_course("a-course", files=ocw_content.MIN_FILES_FOR_OUTAGE))
+    fake = FakeS3(_course("a-course", files=ocw_content.FAILURES_BEFORE_PROBE))
     monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
     monkeypatch.setattr(
         ocw_content.tika, "client_for_profile", lambda: FakeTika(fail=True)
