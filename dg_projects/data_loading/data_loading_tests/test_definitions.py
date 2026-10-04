@@ -100,6 +100,7 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
+        "ol_warehouse_raw_data/raw__ocw__s3__course_content",
     ):
         assert expected in asset_keys
 
@@ -114,6 +115,7 @@ def test_schedules_and_sensors_load() -> None:
         "see_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
+        "ocw_content_ingest_daily_schedule",
     }
     assert "edxorg_upstream_changes_sensor" in {s.name for s in _REPO.sensor_defs}
 

@@ -3,7 +3,7 @@
 import json
 
 import dagster as dg
-from ol_dlt.sources import course_xml_blocks
+from ol_dlt.sources import course_xml_blocks, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
@@ -202,6 +202,42 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
+
+
+def no_ocw_content_run_in_flight(context: dg.ScheduleEvaluationContext) -> bool:
+    """Skip a tick while the previous run is still reading courses.
+
+    The first run reads every course and can outlast a day. A second run
+    starting from the same saved state would read the same courses and append
+    them twice.
+    """
+    return not context.instance.get_run_records(
+        dg.RunsFilter(
+            tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+            statuses=list(IN_FLIGHT_RUN_STATUSES),
+        ),
+        limit=1,
+    )
+
+
+# OCW course pages and resource text for MIT Learn's ContentFiles, ahead of the
+# lakehouse's non_airbyte_staging_daily at 06:00. RUNNING by default in
+# production only: the source always reads the production OCW bucket, and every
+# changed course costs Tika calls.
+ocw_content_ingest_schedule = dg.ScheduleDefinition(
+    name=OCW_CONTENT_SCHEDULE_NAME,
+    target=dg.AssetSelection.keys(["ol_warehouse_raw_data", ocw_content.RAW_TABLE]),
+    cron_schedule="35 4 * * *",
+    execution_timezone="Etc/UTC",
+    should_execute=no_ocw_content_run_in_flight,
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -215,5 +251,6 @@ defs = dg.Definitions(
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
+        ocw_content_ingest_schedule,
     ],
 )

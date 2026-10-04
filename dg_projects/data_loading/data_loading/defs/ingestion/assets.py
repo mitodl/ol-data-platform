@@ -26,6 +26,7 @@ from ol_dlt.sources import (
     mit_edx_programs,
     mitpe,
     mitxonline_app,
+    ocw_content,
     oll,
     podcast_rss,
     posthog_events,
@@ -331,6 +332,17 @@ posthog_events_assets = build_batched_assets(
     translator=RawDataDltTranslator(),
 )
 
+# One load covers at most ocw_content.BUDGET_BYTES of course files, and each
+# load saves which courses it finished, so a run cut off mid-backlog resumes
+# there. The first run extracts every course (~70,000 files through Tika);
+# later runs read only the courses whose objects changed.
+ocw_content_assets = build_batched_assets(
+    name="ocw_content_ingest",
+    build_source=ocw_content.build_source,
+    pipeline=ocw_content.ocw_content_pipeline,
+    translator=RawDataDltTranslator(),
+)
+
 
 defs = Definitions(
     assets=with_failure_hooks(
@@ -345,6 +357,7 @@ defs = Definitions(
             youtube_assets,
             see_assets,
             posthog_events_assets,
+            ocw_content_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
         ]
