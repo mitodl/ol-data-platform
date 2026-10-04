@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -285,17 +285,25 @@ def test_load_starting_mid_sweep_wraps_round_to_the_courses_before_it(
     assert len(rows) == 9  # noqa: PLR2004
 
 
-def test_known_course_seen_empty_is_unpublished_on_the_second_day() -> None:
+def _at(day: int, hour: int = 4, minute: int = 35) -> datetime:
+    return datetime(2026, 10, day, hour, minute, tzinfo=UTC)
+
+
+def test_known_course_seen_empty_is_unpublished_on_a_later_day() -> None:
     """A publish in progress can leave a prefix without data.json for a moment."""
-    seen = ocw_content.settle_empty_course("v1", "v0", "2026-10-01")
-    assert seen == (False, "!empty|2026-10-01")
-    assert ocw_content.settle_empty_course(seen[1], "v0", "2026-10-01") == seen
-    assert ocw_content.settle_empty_course(seen[1], "v0", "2026-10-02") == (True, "v0")
+    seen = ocw_content.settle_empty_course("v1", "v0", _at(1, 23, 59))
+    assert seen == (False, "!empty|2026-10-01T23:59:00+00:00")
+    # A run that crosses midnight has not waited a day.
+    assert ocw_content.settle_empty_course(seen[1], "v0", _at(2, 0, 1)) == seen
+    assert ocw_content.settle_empty_course(seen[1], "v0", _at(3)) == (True, "v0")
     # Settled, and a prefix that never held a course loads nothing.
-    assert ocw_content.settle_empty_course("v0", "v0", "2026-10-03") == (False, "v0")
-    assert ocw_content.settle_empty_course(None, "v0", "2026-10-01") == (False, "v0")
+    assert ocw_content.settle_empty_course("v0", "v0", _at(4)) == (False, "v0")
+    assert ocw_content.settle_empty_course(None, "v0", _at(1)) == (False, "v0")
     # The course coming back is a new version, so it is read.
-    assert ocw_content.needs_read(seen[1], "v2", "2026-10-01")
+    assert ocw_content.needs_read(seen[1], "v2", _at(1, 23, 59))
+    assert ocw_content.record_read(seen[1], "v2", _at(2), retry=True) == (
+        "v2|1|2026-10-02T04:35:00+00:00"
+    )
 
 
 @pytest.mark.integration
@@ -459,22 +467,75 @@ def test_course_tika_cannot_read_is_recorded_when_tika_is_up(
 
 
 def test_failing_course_is_read_again_on_a_bounded_number_of_days() -> None:
-    state = ocw_content.record_read(None, "v1", "2026-10-01", retry=True)
-    assert not ocw_content.needs_read(state, "v1", "2026-10-01")
-    assert ocw_content.needs_read(state, "v1", "2026-10-02")
-    assert ocw_content.needs_read(state, "v2", "2026-10-01")
+    state = ocw_content.record_read(None, "v1", _at(1, 23, 59), retry=True)
+    assert not ocw_content.needs_read(state, "v1", _at(1, 23, 59))
+    # Not again in a run that crosses midnight.
+    assert not ocw_content.needs_read(state, "v1", _at(2, 0, 1))
+    assert ocw_content.needs_read(state, "v1", _at(2, 23, 59))
+    assert ocw_content.needs_read(state, "v2", _at(1, 23, 59))
 
-    for day in ("2026-10-02", "2026-10-03"):
-        state = ocw_content.record_read(state, "v1", day, retry=True)
-    assert state == "v1|3|2026-10-03"
-    assert not ocw_content.needs_read(state, "v1", "2026-10-04")
+    for day in (3, 4):
+        state = ocw_content.record_read(state, "v1", _at(day), retry=True)
+    assert state == "v1|3|2026-10-04T04:35:00+00:00"
+    assert not ocw_content.needs_read(state, "v1", _at(5))
 
-    assert ocw_content.record_read(state, "v1", "2026-10-04", retry=False) == "v1"
-    assert not ocw_content.needs_read("v1", "v1", "2026-10-05")
+    assert ocw_content.record_read(state, "v1", _at(5), retry=False) == "v1"
+    assert not ocw_content.needs_read("v1", "v1", _at(6))
     # A new version starts its attempts over.
-    assert ocw_content.record_read(state, "v2", "2026-10-04", retry=True) == (
-        "v2|1|2026-10-04"
+    assert ocw_content.record_read(state, "v2", _at(5), retry=True) == (
+        "v2|1|2026-10-05T04:35:00+00:00"
     )
+
+
+@pytest.mark.integration
+def test_course_is_read_again_when_a_file_it_reads_from_another_course_changes(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    key = "courses/a-course/resources/shared/data.json"
+    bucket.objects[key] = json.dumps(
+        {
+            "title": "Shared notes",
+            "resourcetype": "Document",
+            "file": "/courses/c-other/abc_shared.pdf",
+        }
+    ).encode()
+    bucket.objects["courses/c-other/abc_shared.pdf"] = b"shared notes"
+    first = _load()
+    assert len(_load()) == len(first)
+
+    # c-other has no data.json, so only a-course can notice this.
+    bucket.objects["courses/c-other/abc_shared.pdf"] = b"revised shared notes"
+    rows = _load()
+
+    texts = {row["content"] for row in rows if row["s3_key"] == key}
+    assert texts == {"text of shared notes", "text of revised shared notes"}
+    assert len(_load()) == len(rows)
+
+
+@pytest.mark.integration
+def test_refuses_to_unpublish_many_courses_left_without_data_json(
+    test_profile: Path,
+    bucket: FakeS3,
+    fake_tika: FakeTika,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ocw_content, "MIN_COURSES_FOR_UNPUBLISH_GUARD", 2)
+    _load()
+    for key in [key for key in bucket.objects if key.endswith("data.json")]:
+        del bucket.objects[key]
+    rows = _load()
+
+    class Tomorrow(ocw_content.datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return super().now(tz) + timedelta(days=1)
+
+    monkeypatch.setattr(ocw_content, "datetime", Tomorrow)
+    with pytest.raises(PipelineStepFailed, match="Refusing to unpublish"):
+        _load()
+
+    pipeline = config.pipeline_for("ocw", pipeline_name="ocw_content")
+    assert pipeline.dataset()[ocw_content.RAW_TABLE].arrow().num_rows == len(rows)
 
 
 def test_file_over_the_size_limit_is_failed_without_being_read(

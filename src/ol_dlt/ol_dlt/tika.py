@@ -38,6 +38,8 @@ OCR_STRATEGY = "no_ocr"
 
 CONTENT_FIELD = "X-TIKA:content"
 
+DROPPED_CONNECTION_ATTEMPTS = 2
+
 
 class TikaClient:
     """Extract plain text from document bytes.
@@ -56,10 +58,10 @@ class TikaClient:
                 "X-Tika-PDFOcrStrategy": OCR_STRATEGY,
             }
         )
-        # Read errors are not retried: a hung Tika would hold each file for
-        # four timeouts before it counted as failed. That also covers a
-        # connection dropped mid-request, which the source retries by reading
-        # the course again on a later day.
+        # Read errors are not retried here: a hung Tika would hold each file
+        # for four timeouts before it counted as failed. urllib3 counts a
+        # connection dropped mid-request as a read error too, so extract_text
+        # retries that case itself.
         retry = Retry(
             total=RETRIES,
             read=0,
@@ -81,9 +83,19 @@ class TikaClient:
         :returns: The text as Tika gives it, unstripped, or None when empty.
         :raises requests.RequestException: Tika refused or failed the document.
         """
-        response = self._session.put(
-            f"{self.base_url}/rmeta/text", data=body, timeout=timeout
-        )
+        for attempt in range(1, DROPPED_CONNECTION_ATTEMPTS + 1):
+            try:
+                response = self._session.put(
+                    f"{self.base_url}/rmeta/text", data=body, timeout=timeout
+                )
+            except requests.Timeout:
+                raise
+            except requests.ConnectionError:
+                # e.g. the Tika pod restarting under the request.
+                if attempt == DROPPED_CONNECTION_ATTEMPTS:
+                    raise
+                continue
+            break
         response.raise_for_status()
         return "".join(part.get(CONTENT_FIELD, "") for part in response.json()) or None
 

@@ -3,6 +3,7 @@
 from typing import Any
 
 import pytest
+import requests
 
 from ol_dlt import tika
 from tests.conftest import FakeResponse
@@ -54,3 +55,27 @@ def test_client_for_profile_needs_a_token_outside_deployed_profiles(
 
     with pytest.raises(Exception, match="TIKA_ACCESS_TOKEN"):
         tika.client_for_profile()
+
+
+def test_extract_text_retries_a_dropped_connection_but_not_a_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = tika.TikaClient("https://tika.example", "token")
+    outcomes: list[Any] = [
+        requests.ConnectionError("Connection aborted."),
+        FakeResponse(json_data=[{"X-TIKA:content": "Body"}]),
+    ]
+
+    def put(_url: str, **_kwargs: Any) -> FakeResponse:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(client._session, "put", put)  # noqa: SLF001
+    assert client.extract_text(b"%PDF") == "Body"
+
+    outcomes[:] = [requests.ReadTimeout(), FakeResponse(json_data=[])]
+    with pytest.raises(requests.ReadTimeout):
+        client.extract_text(b"%PDF")
+    assert len(outcomes) == 1

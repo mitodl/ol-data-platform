@@ -15,18 +15,36 @@ with source as (
 
 -- A course is read whole again to retry a file Tika failed on, and a file
 -- that extracted before can fail on the retry. The file has not changed while
--- its ETag has not, so its last extracted text still stands.
+-- its ETag has not, so its last extracted text still stands. Only the files
+-- failed in a newest set are looked up, so the cost does not grow with the
+-- table's history.
+, failed as (
+    select
+        source.s3_key
+        , source.file_etag
+    from source
+    inner join newest
+        on
+            source.course_slug = newest.course_slug
+            and source.course_retrieved_at = newest.course_retrieved_at
+    where source.extraction_status = 'failed'
+)
+
 , extracted as (
     select
-        s3_key
-        , file_etag
-        , content
+        source.s3_key
+        , source.file_etag
+        , source.content
         , row_number() over (
-            partition by s3_key, file_etag
-            order by course_retrieved_at desc
+            partition by source.s3_key, source.file_etag
+            order by source.course_retrieved_at desc
         ) as read_rank
     from source
-    where extraction_status = 'extracted'
+    inner join failed
+        on
+            source.s3_key = failed.s3_key
+            and source.file_etag = failed.file_etag
+    where source.extraction_status = 'extracted'
 )
 
 select

@@ -14,13 +14,14 @@ objects, so the warehouse holds what Learn would have extracted:
     -> raw__ocw__s3__course_content
 
 A course is read whole, and only when it changed. Its version is a digest of
-the ETags of the objects above and of the files under its own prefix, held
-in dlt state. A publish that rewrites identical bytes keeps every ETag, so it
-changes nothing here. A changed course appends a full new set of rows stamped
-with one ``course_retrieved_at``, and staging keeps each course's newest set.
-A course that leaves the bucket appends one ``unpublished`` row, which becomes
-its newest set and so empties it downstream. So does a course whose prefix
-has no ``data.json`` on two days running.
+the ETags of the objects above and of the files under its own prefix, held in
+dlt state with the ETags of any files it read from another course's prefix. A
+publish that rewrites identical bytes keeps every ETag, so it changes nothing
+here. A changed course appends a full new set of rows stamped with one
+``course_retrieved_at``, and staging keeps each course's newest set. A course
+that leaves the bucket appends one ``unpublished`` row, which becomes its
+newest set and so empties it downstream. So does a course whose prefix has no
+``data.json`` on two reads ``WAIT_BETWEEN_READS`` apart.
 
 A file Tika fails on is loaded with ``extraction_status`` ``failed``. When the
 failure may pass (a timeout, a 5xx), the course is read again on up to
@@ -46,7 +47,7 @@ import json
 import logging
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import unquote
@@ -122,14 +123,22 @@ MIN_COURSES_FOR_UNPUBLISH_GUARD = 20
 # is down. A probe document settles it.
 FAILURES_BEFORE_PROBE = 8
 PROBE_DOCUMENT = b"OCW content extraction probe."
-# Long enough for a Tika busy with this course's own files to answer.
-PROBE_TIMEOUT_SECONDS = 120
+# Two tries, so a Tika busy with this course's own files gets a second chance
+# to answer before the load is failed.
+PROBE_ATTEMPTS = 2
+PROBE_TIMEOUT_SECONDS = 60
 AUTH_FAILURES = frozenset({401, 403})
 
 # A larger file is recorded as failed without being read: eight are held in
 # memory at once. The largest of 800 MB sampled across 60 courses was under
 # 100 MB.
 MAX_FILE_BYTES = 256 * 1024**2
+
+# The least time between two reads of a course that is waiting on something:
+# a retry of a failed file, or a second look at an empty prefix. Under a day,
+# so the daily run counts, and long enough that one run crossing midnight
+# does not.
+WAIT_BETWEEN_READS = timedelta(hours=20)
 
 # How many daily reads a course gets while Tika keeps failing on one of its
 # files for a reason that may pass (a timeout, a 5xx). After that the failed
@@ -287,25 +296,25 @@ def _extract_text(
     return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
 
 
-def _raise_if_tika_is_down(
-    client: tika.TikaClient, pool: ThreadPoolExecutor, slug: str, failed: int
-) -> None:
+def _raise_if_tika_is_down(client: tika.TikaClient, slug: str, failed: int) -> None:
     """Fail the load when Tika cannot read a document known to be readable.
 
     Without the probe, a course whose files Tika really cannot read would fail
     every load at the same place, and no course sorted after it would load.
     """
-    try:
-        client.extract_text(PROBE_DOCUMENT, timeout=PROBE_TIMEOUT_SECONDS)
-    except requests.RequestException as error:
-        # The files still queued would each wait out a timeout first.
-        pool.shutdown(wait=False, cancel_futures=True)
-        msg = (
-            f"Tika failed {failed} files of {slug} and then a probe document. "
-            "Treating it as a Tika outage, so the course is not recorded as "
-            "read."
-        )
-        raise RuntimeError(msg) from error
+    for attempt in range(1, PROBE_ATTEMPTS + 1):
+        try:
+            client.extract_text(PROBE_DOCUMENT, timeout=PROBE_TIMEOUT_SECONDS)
+        except requests.RequestException as error:
+            if attempt < PROBE_ATTEMPTS:
+                continue
+            msg = (
+                f"Tika failed {failed} files of {slug} and then a probe "
+                "document. Treating it as a Tika outage, so the course is not "
+                "recorded as read."
+            )
+            raise RuntimeError(msg) from error
+        return
 
 
 def _object_info(fs: s3fs.S3FileSystem, bucket: str, key: str) -> dict[str, Any] | None:
@@ -328,11 +337,12 @@ def read_course(  # noqa: PLR0913
     slug: str,
     objects: CourseObjects,
     version: str,
-) -> tuple[list[dict[str, Any]], int, bool]:
+) -> tuple[list[dict[str, Any]], int, bool, dict[str, str]]:
     """Read one course's ``data.json`` files and the text of its resource files.
 
     :returns: The course's rows, how many source bytes they were read from,
-        and whether a file failed in a way another read might not.
+        whether a file failed in a way another read might not, and the ETag of
+        each file read from outside the course's prefix.
     :raises RuntimeError: Tika is down.
     """
     retrieved_at = datetime.now(tz=UTC)
@@ -381,14 +391,14 @@ def read_course(  # noqa: PLR0913
         texts[key] = result
         failed_in_a_row = failed_in_a_row + 1 if result[1] == STATUS_FAILED else 0
         if failed_in_a_row >= FAILURES_BEFORE_PROBE and not probed:
-            _raise_if_tika_is_down(client, pool, slug, failed_in_a_row)
+            _raise_if_tika_is_down(client, slug, failed_in_a_row)
             probed = True
     if (
         texts
         and not probed
         and all(status == STATUS_FAILED for _text, status, _retry in texts.values())
     ):
-        _raise_if_tika_is_down(client, pool, slug, len(texts))
+        _raise_if_tika_is_down(client, slug, len(texts))
 
     for row in rows:
         file_key = row["file_key"]
@@ -405,7 +415,26 @@ def read_course(  # noqa: PLR0913
     source_bytes = sum(objects[key]["size"] for key in json_keys) + sum(
         info["size"] for info in files.values()
     )
-    return rows, source_bytes, retry
+    external = {key: _etag(info) for key, info in files.items() if key not in objects}
+    return rows, source_bytes, retry, external
+
+
+def external_files_changed(
+    fs: s3fs.S3FileSystem, bucket: str, recorded: dict[str, str] | None
+) -> bool:
+    """Tell whether a file a course read from another prefix has changed.
+
+    Those files are not in the course's own listing, so not in its version.
+    """
+    for key, etag in (recorded or {}).items():
+        info = _object_info(fs, bucket, key)
+        if info is None or _etag(info) != etag:
+            return True
+    return False
+
+
+def _waited(since: str, now: datetime) -> bool:
+    return now - datetime.fromisoformat(since) >= WAIT_BETWEEN_READS
 
 
 def _unpublished_row(slug: str, retrieved_at: datetime) -> dict[str, Any]:
@@ -417,10 +446,10 @@ def _unpublished_row(slug: str, retrieved_at: datetime) -> dict[str, Any]:
     }
 
 
-def needs_read(recorded: str | None, version: str, today: str) -> bool:
+def needs_read(recorded: str | None, version: str, now: datetime) -> bool:
     """Tell whether a course's recorded state calls for reading it again.
 
-    The state is the version, or ``version|attempts|date`` while a file of
+    The state is the version, or ``version|attempts|time`` while a file of
     that version is failing in a way that may pass.
     """
     if recorded is None:
@@ -431,39 +460,53 @@ def needs_read(recorded: str | None, version: str, today: str) -> bool:
     if not retry:
         return False
     attempts, _, last_read = retry.partition("|")
-    return int(attempts) < MAX_ATTEMPTS and last_read != today
+    return int(attempts) < MAX_ATTEMPTS and _waited(last_read, now)
 
 
 def settle_empty_course(
-    recorded: str | None, version: str, today: str
+    recorded: str | None, version: str, now: datetime
 ) -> tuple[bool, str]:
     """Decide what a prefix with no ``data.json`` means for its course.
 
     A course that had rows is unpublished only once its prefix has been seen
-    empty on two days: a publish in progress can leave it empty for a moment,
-    and an unpublished row empties the course downstream.
+    empty twice, ``WAIT_BETWEEN_READS`` apart: a publish in progress can leave
+    it empty for a moment, and an unpublished row empties the course
+    downstream.
 
     :returns: Whether to load the unpublished row, and the state to hold.
     """
     if recorded is None:
         return False, version
-    if recorded.startswith(f"{EMPTY_MARK}|"):
-        if recorded == f"{EMPTY_MARK}|{today}":
-            return False, recorded
-        return True, version
-    if recorded.partition("|")[0] == version:
+    recorded_version, _, first_seen = recorded.partition("|")
+    if recorded_version == EMPTY_MARK:
+        return (True, version) if _waited(first_seen, now) else (False, recorded)
+    if recorded_version == version:
         return False, recorded
-    return False, f"{EMPTY_MARK}|{today}"
+    return False, f"{EMPTY_MARK}|{now.isoformat(timespec='seconds')}"
 
 
-def record_read(recorded: str | None, version: str, today: str, *, retry: bool) -> str:
+def record_read(
+    recorded: str | None, version: str, now: datetime, *, retry: bool
+) -> str:
     """Return the state to hold for a course that was just read."""
     if not retry:
         return version
     attempts = 0
     if recorded is not None and recorded.startswith(f"{version}|"):
         attempts = int(recorded.split("|")[1])
-    return f"{version}|{attempts + 1}|{today}"
+    return f"{version}|{attempts + 1}|{now.isoformat(timespec='seconds')}"
+
+
+def _refuse_mass_unpublish(unpublishing: int, known: int, reason: str) -> None:
+    if (
+        known >= MIN_COURSES_FOR_UNPUBLISH_GUARD
+        and unpublishing > known * MAX_UNPUBLISH_FRACTION
+    ):
+        msg = (
+            f"{unpublishing} of the {known} known OCW courses {reason}. "
+            "Refusing to unpublish that many in one run."
+        )
+        raise RuntimeError(msg)
 
 
 def _unpublished_rows(
@@ -471,16 +514,9 @@ def _unpublished_rows(
 ) -> list[dict[str, Any]]:
     """Build the row that empties each known course no longer in the bucket."""
     gone = sorted(set(versions) - set(live))
-    if (
-        len(versions) >= MIN_COURSES_FOR_UNPUBLISH_GUARD
-        and len(gone) > len(versions) * MAX_UNPUBLISH_FRACTION
-    ):
-        msg = (
-            f"{len(gone)} of the {len(versions)} known OCW courses are missing "
-            "from the bucket listing. Refusing to unpublish that many in one "
-            "run."
-        )
-        raise RuntimeError(msg)
+    _refuse_mass_unpublish(
+        len(gone), len(versions), "are missing from the bucket listing"
+    )
     return [_unpublished_row(slug, retrieved_at) for slug in gone]
 
 
@@ -512,17 +548,23 @@ def ocw_content_source(
     def course_content() -> Iterator[pa.Table]:
         state = dlt.current.resource_state()
         versions: dict[str, str] = state.setdefault("course_versions", {})
-        started_at = datetime.now(tz=UTC)
-        today = started_at.date().isoformat()
+        external_files: dict[str, dict[str, str]] = state.setdefault(
+            "external_files", {}
+        )
+        now = datetime.now(tz=UTC)
+        known = len(versions)
         fs = s3fs.S3FileSystem(anon=True, use_listings_cache=False)
         live = list_courses(fs, bucket)
 
+        unpublishing = 0
         if courses is None:
-            unpublished = _unpublished_rows(versions, live, started_at)
+            unpublished = _unpublished_rows(versions, live, now)
             if unpublished:
                 yield pa.Table.from_pylist(unpublished, schema=SCHEMA)
             for row in unpublished:
                 del versions[row["course_slug"]]
+                external_files.pop(row["course_slug"], None)
+            unpublishing = len(unpublished)
             # A sweep that a load's budget cut short resumes after the last
             # course it read, then wraps round to the ones before it.
             resume_after = state.get("resume_after", "")
@@ -536,7 +578,8 @@ def ocw_content_source(
         # injectable context is not thread-safe (see .dlt/config.toml).
         client: tika.TikaClient | None = None
         spent = 0
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        pool = ThreadPoolExecutor(max_workers=WORKERS)
+        try:
             for start in range(0, len(pending), LISTING_WINDOW):
                 window = pending[start : start + LISTING_WINDOW]
                 listings = pool.map(lambda slug: list_course(fs, bucket, slug), window)
@@ -545,16 +588,27 @@ def ocw_content_source(
                     recorded = versions.get(slug)
                     if not any(content_kind(slug, key) for key in objects):
                         unpublish, versions[slug] = settle_empty_course(
-                            recorded, version, today
+                            recorded, version, now
                         )
                         if unpublish:
+                            unpublishing += 1
+                            _refuse_mass_unpublish(
+                                unpublishing, known, "are gone or have no data.json"
+                            )
+                            external_files.pop(slug, None)
                             row = _unpublished_row(slug, datetime.now(tz=UTC))
                             yield pa.Table.from_pylist([row], schema=SCHEMA)
                         continue
-                    if courses is None and not needs_read(recorded, version, today):
+                    if (
+                        courses is None
+                        and not needs_read(recorded, version, now)
+                        and not external_files_changed(
+                            fs, bucket, external_files.get(slug)
+                        )
+                    ):
                         continue
                     client = client or tika.client_for_profile()
-                    rows, source_bytes, retry = read_course(
+                    rows, source_bytes, retry, external = read_course(
                         fs=fs,
                         pool=pool,
                         client=client,
@@ -564,11 +618,20 @@ def ocw_content_source(
                         version=version,
                     )
                     yield pa.Table.from_pylist(rows, schema=SCHEMA)
-                    versions[slug] = record_read(recorded, version, today, retry=retry)
+                    versions[slug] = record_read(recorded, version, now, retry=retry)
+                    if external:
+                        external_files[slug] = external
+                    else:
+                        external_files.pop(slug, None)
                     spent += source_bytes
                     if courses is None and spent >= budget_bytes:
                         state["resume_after"] = slug
                         return
+        finally:
+            # Not waited for: when Tika is down, the calls in flight would each
+            # hold the failure back by a timeout. Nothing is in flight when
+            # the sweep ends normally.
+            pool.shutdown(wait=False, cancel_futures=True)
         if courses is None:
             state["resume_after"] = ""
 
