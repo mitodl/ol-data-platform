@@ -56,8 +56,10 @@ class TikaClient:
                 "X-Tika-PDFOcrStrategy": OCR_STRATEGY,
             }
         )
-        # A read timeout is not retried: a hung Tika would hold each file for
-        # four timeouts before it counted as failed.
+        # Read errors are not retried: a hung Tika would hold each file for
+        # four timeouts before it counted as failed. That also covers a
+        # connection dropped mid-request, which the source retries by reading
+        # the course again on a later day.
         retry = Retry(
             total=RETRIES,
             read=0,

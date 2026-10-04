@@ -14,7 +14,7 @@ objects, so the warehouse holds what Learn would have extracted:
     -> raw__ocw__s3__course_content
 
 A course is read whole, and only when it changed. Its version is a digest of
-the ETags of the objects above and of the files a resource can point at, held
+the ETags of the objects above and of the files under its own prefix, held
 in dlt state. A publish that rewrites identical bytes keeps every ETag, so it
 changes nothing here. A changed course appends a full new set of rows stamped
 with one ``course_retrieved_at``, and staging keeps each course's newest set.
@@ -122,7 +122,8 @@ MIN_COURSES_FOR_UNPUBLISH_GUARD = 20
 # is down. A probe document settles it.
 FAILURES_BEFORE_PROBE = 8
 PROBE_DOCUMENT = b"OCW content extraction probe."
-PROBE_TIMEOUT_SECONDS = 30
+# Long enough for a Tika busy with this course's own files to answer.
+PROBE_TIMEOUT_SECONDS = 120
 AUTH_FAILURES = frozenset({401, 403})
 
 # A larger file is recorded as failed without being read: eight are held in
@@ -265,7 +266,11 @@ def _extract_text(
     if size > MAX_FILE_BYTES:
         logger.warning("%s is %s bytes, over the limit; not extracted", key, size)
         return None, STATUS_FAILED, False
-    body = fs.cat_file(f"{bucket}/{key}")
+    try:
+        body = fs.cat_file(f"{bucket}/{key}")
+    except FileNotFoundError:
+        # Listed a moment ago and gone now, e.g. a publish in progress.
+        return None, STATUS_MISSING, False
     if not body:
         return None, STATUS_EMPTY, False
     try:
@@ -306,9 +311,12 @@ def _raise_if_tika_is_down(
 def _object_info(fs: s3fs.S3FileSystem, bucket: str, key: str) -> dict[str, Any] | None:
     """Return an object's listing entry, or None when it is not in the bucket."""
     try:
-        return fs.info(f"{bucket}/{key}")
+        info = fs.info(f"{bucket}/{key}")
     except FileNotFoundError:
         return None
+    # A key that is only a prefix comes back as a directory, with nothing to
+    # read.
+    return info if info["type"] == "file" else None
 
 
 def read_course(  # noqa: PLR0913

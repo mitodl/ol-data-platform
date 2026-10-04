@@ -40,9 +40,11 @@ class FakeS3:
 
     def info(self, path: str) -> dict[str, Any]:
         key = path.removeprefix(f"{_BUCKET}/")
-        if key not in self.objects:
-            raise FileNotFoundError(path)
-        return self.find(path)[path]
+        if key in self.objects:
+            return {**self.find(path)[path], "type": "file"}
+        if any(other.startswith(key) for other in self.objects):
+            return {"type": "directory", "size": 0}
+        raise FileNotFoundError(path)
 
     def cat_file(self, path: str) -> bytes:
         return self.objects[path.removeprefix(f"{_BUCKET}/")]
@@ -346,6 +348,40 @@ def test_file_under_another_course_is_read(
     shared = by_key["courses/a-course/resources/shared/data.json"]
     assert shared["extraction_status"] == "extracted"
     assert shared["content"] == "text of b-course notes 0"
+
+
+@pytest.mark.integration
+def test_file_value_naming_only_a_prefix_is_missing(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    """Otherwise reading the prefix as a file would fail every load here."""
+    bucket.objects["courses/a-course/resources/odd/data.json"] = json.dumps(
+        {
+            "title": "Odd",
+            "resourcetype": "Document",
+            "file": "/courses/a-course/courses.pdf",
+        }
+    ).encode()
+
+    by_key = {row["s3_key"]: row for row in _load()}
+
+    odd = by_key["courses/a-course/resources/odd/data.json"]
+    assert (odd["file_key"], odd["extraction_status"]) == (
+        "courses/a-course/",
+        "missing",
+    )
+
+
+@pytest.mark.integration
+def test_small_course_with_every_file_failed_fails_the_load_when_tika_is_down(
+    test_profile: Path, bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        ocw_content.tika, "client_for_profile", lambda: FakeTika(fail=True)
+    )
+
+    with pytest.raises(PipelineStepFailed, match="Tika outage"):
+        _load()
 
 
 @pytest.mark.integration
