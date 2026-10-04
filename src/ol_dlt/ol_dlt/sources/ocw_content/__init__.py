@@ -23,9 +23,10 @@ its newest set and so empties it downstream.
 
 A file Tika fails on is loaded with ``extraction_status`` ``failed``. When the
 failure may pass (a timeout, a 5xx), the course is read again on up to
-``MAX_ATTEMPTS`` days. When every file of a course fails that way, a probe
-document tells a Tika outage, which fails the load, from a course Tika cannot
-read, which is recorded so the courses after it still load.
+``MAX_ATTEMPTS`` days. When every file of a course fails, a probe document
+tells a Tika outage, which fails the load, from a course Tika cannot read,
+which is recorded so the courses after it still load. Tika rejecting the
+access token always fails the load.
 
 One load covers at most ``budget_bytes`` of source files. The caller re-runs
 the source until a load reads nothing (``build_batched_assets`` in the
@@ -119,6 +120,7 @@ MIN_COURSES_FOR_UNPUBLISH_GUARD = 20
 # on, may mean Tika is down. A probe document settles it.
 MIN_FILES_FOR_OUTAGE = 5
 PROBE_DOCUMENT = b"OCW content extraction probe."
+AUTH_FAILURES = frozenset({401, 403})
 
 # A larger file is recorded as failed without being read: eight are held in
 # memory at once. The largest of 800 MB sampled across 60 courses was under
@@ -262,6 +264,12 @@ def _extract_text(
     try:
         text = client.extract_text(body)
     except requests.RequestException as error:
+        status = error.response.status_code if error.response is not None else None
+        if status in AUTH_FAILURES:
+            # Not about this file: every other one would fail the same way
+            # and be recorded as unreadable.
+            msg = f"Tika rejected the access token ({status}) reading {key}."
+            raise RuntimeError(msg) from error
         logger.exception("Tika could not read %s", key)
         return None, STATUS_FAILED, _may_pass(error)
     return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
@@ -347,7 +355,7 @@ def read_course(  # noqa: PLR0913
     )
     retry = any(may_pass for _text, _status, may_pass in texts.values())
     if len(file_keys) >= MIN_FILES_FOR_OUTAGE and all(
-        may_pass for _text, _status, may_pass in texts.values()
+        status == STATUS_FAILED for _text, status, _may_pass_again in texts.values()
     ):
         _raise_if_tika_is_down(client, slug, len(file_keys))
 

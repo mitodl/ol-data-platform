@@ -387,6 +387,47 @@ def test_file_over_the_size_limit_is_failed_without_being_read(
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("files", [1, ocw_content.MIN_FILES_FOR_OUTAGE])
+def test_rejected_tika_token_fails_the_load_whatever_the_course_size(
+    test_profile: Path, monkeypatch: pytest.MonkeyPatch, files: int
+) -> None:
+    """A bad token must not record every course as read with failed files."""
+
+    class Unauthorized:
+        def extract_text(self, _body: bytes) -> str | None:
+            response = requests.Response()
+            response.status_code = 401
+            raise requests.HTTPError(response=response)
+
+    fake = FakeS3(_course("a-course", files=files))
+    monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
+    monkeypatch.setattr(ocw_content.tika, "client_for_profile", Unauthorized)
+
+    with pytest.raises(PipelineStepFailed, match="rejected the access token"):
+        _load()
+
+
+@pytest.mark.integration
+def test_course_tika_refuses_outright_is_probed_before_it_is_recorded(
+    test_profile: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every file refused with a 4xx still asks whether Tika itself is down."""
+
+    class Refuses:
+        def extract_text(self, _body: bytes) -> str | None:
+            response = requests.Response()
+            response.status_code = 422
+            raise requests.HTTPError(response=response)
+
+    fake = FakeS3(_course("a-course", files=ocw_content.MIN_FILES_FOR_OUTAGE))
+    monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
+    monkeypatch.setattr(ocw_content.tika, "client_for_profile", Refuses)
+
+    with pytest.raises(PipelineStepFailed, match="Tika outage"):
+        _load()
+
+
+@pytest.mark.integration
 def test_course_with_no_text_at_all_fails_the_load(
     test_profile: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
