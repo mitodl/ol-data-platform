@@ -619,15 +619,22 @@ def ocw_content_source(
                     ):
                         continue
                     client = client or tika.client_for_profile()
-                    rows, source_bytes, retry, external = read_course(
-                        fs=fs,
-                        pool=pool,
-                        client=client,
-                        bucket=bucket,
-                        slug=slug,
-                        objects=objects,
-                        version=version,
-                    )
+                    try:
+                        rows, source_bytes, retry, external = read_course(
+                            fs=fs,
+                            pool=pool,
+                            client=client,
+                            bucket=bucket,
+                            slug=slug,
+                            objects=objects,
+                            version=version,
+                        )
+                    except FileNotFoundError:
+                        # A data.json listed a moment ago is gone: the course
+                        # is being published. Nothing is recorded, so the
+                        # next load lists it afresh and reads it.
+                        logger.warning("%s changed while it was read; skipped", slug)
+                        continue
                     yield pa.Table.from_pylist(rows, schema=SCHEMA)
                     versions[slug] = record_read(recorded, version, now, retry=retry)
                     if external:

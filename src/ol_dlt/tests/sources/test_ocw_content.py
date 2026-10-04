@@ -576,6 +576,19 @@ def test_file_gone_between_listing_and_read_is_missing_and_read_again_later(
     assert sorted(notes) == ["extracted", "missing"]
 
 
+@pytest.mark.integration
+def test_data_json_gone_between_listing_and_read_skips_the_course_for_now(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    """A course caught mid-publish must not fail the load for every course."""
+    bucket.vanished.add("courses/a-course/pages/syllabus/data.json")
+
+    assert {row["course_slug"] for row in _load()} == {"b-course"}
+
+    bucket.vanished.clear()
+    assert {row["course_slug"] for row in _load()} == {"a-course", "b-course"}
+
+
 def test_unpublish_limit_counts_across_loads() -> None:
     """A sweep is split across loads, so a count per load would never trip."""
     state: dict[str, Any] = {}
