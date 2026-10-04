@@ -276,6 +276,13 @@ reading an already-materialized view).
 
 ## 8. OCW has no sender at all
 
+**Update 2026-10-03: the extraction and the view exist; the sender still does not.** The
+`ocw_content` dlt source in the `data_loading` location reads the OCW live bucket daily (04:35 UTC),
+re-reads only the courses whose objects changed, and feeds `integrations__learn__ocw_content_files`.
+That is the second trigger candidate below at a daily cadence: it learns of a publish or an unpublish
+from the bucket, up to a day late. Nothing yet tells MIT Learn a course's files changed, and the
+latency question below is still open.
+
 The three senders are openedx, edxorg and canvas. **There is no OCW content-file sender anywhere
 in `dg_projects`, and no OCW dg project** — OCW's only Learn-facing model is the course-level
 `integrations__learn__ocw_courses` (Cohort 1). So OCW needs a *new* sending asset built regardless
@@ -304,7 +311,7 @@ reconciliation sweep is not a substitute for that latency. Not designed here.
 | `SyncOCWContentFilesTask` | `integrations.integrations__learn__ocw_content_files` |
 | `SyncOpenEdXContentFilesTask` | `integrations.integrations__learn__content_files` |
 
-Neither model exists yet. Both must expose at minimum the scope key, `etl_source` (needed by the
+Both must expose at minimum the scope key, `etl_source` (needed by the
 §4 prune predicate to disambiguate scope keys across sources), plus the `ContentFile` fields MIT
 Learn persists — `key`, `title`, `description`, `url`, `file_type`, `content`, `content_title`,
 `content_author`, `content_language`, `content_type`, `image_src`, `uid`, `edx_module_id`,
