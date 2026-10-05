@@ -602,6 +602,7 @@ models:
     tests:
     - not_null
   - name: examrun_passing_grade
+    data_type: double
     description: float, passing grade for the exam run, range between 0 to 1. Default
       to 0.5.
     tests:

@@ -239,8 +239,12 @@ with micromasters_courseruns as (
         on courseruns_with_fk.platform = dim_platform_lookup.platform_readable_id
 )
 
+-- DISTINCT here and in records_to_expire keeps the merge idempotent when upstream
+-- briefly carries duplicate copies of a run. Without it each copy became its own current
+-- row, and the expire join multiplied existing x incoming rows on every later change
+-- (2026-09-01: two runs grew to ~1,000 versions in a day).
 , final as (
-    select
+    select distinct
         {{ dbt_utils.generate_surrogate_key([
             'platform',
             'courserun_readable_id'
@@ -294,7 +298,7 @@ with micromasters_courseruns as (
 {% if is_incremental() %}
 -- Expire prior current rows that have changed
 , records_to_expire as (
-    select
+    select distinct
         existing.courserun_pk
         , existing.courserun_readable_id
         , existing.source_id

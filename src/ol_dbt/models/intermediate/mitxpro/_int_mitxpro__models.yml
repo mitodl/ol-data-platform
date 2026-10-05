@@ -1403,6 +1403,7 @@ models:
     tests:
     - not_null
   - name: courserun_is_live
+    data_type: boolean
     description: boolean, indicating whether the course run is available to users
       on MITxPro website
   - name: courserun_title
