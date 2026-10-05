@@ -97,6 +97,9 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # STOPPED in production, and not to be started before mit-learn #3557
     # lands the endpoint it POSTs to.
     "podcast_delivery_sensor": frozenset({"production"}),
+    # YouTube, on the same terms. #3557 has no video_playlist route, so starting
+    # this before MIT Learn adds one delivers batches it logs and skips.
+    "youtube_delivery_sensor": frozenset({"production"}),
     # Commits the instructor user list to the access forge GitHub repository's
     # default branch. There is one of those, not one per environment, so a tick
     # outside production would write the real repo. Moved from lakehouse, where

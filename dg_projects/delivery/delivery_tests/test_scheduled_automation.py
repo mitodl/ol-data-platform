@@ -219,6 +219,7 @@ WEBHOOK_DELIVERY_SENSOR_NAMES = frozenset(
         "oll_delivery_sensor",
         "mit_edx_programs_delivery_sensor",
         "podcast_delivery_sensor",
+        "youtube_delivery_sensor",
     }
 )
 

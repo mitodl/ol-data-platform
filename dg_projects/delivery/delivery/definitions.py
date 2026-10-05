@@ -7,6 +7,8 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - MIT Professional Education courses and programs
 - Open Learning Library courses
 - MIT edX programs
+- MIT podcasts
+- YouTube playlists and their videos
 
 It also pushes the instructor onboarding user list, read from the warehouse, to
 the access-forge GitHub repository.
@@ -57,6 +59,7 @@ from delivery.assets.ovs_videos import (
 )
 from delivery.assets.podcasts import podcast_webhook
 from delivery.assets.sloan_api import sloan_course_metadata
+from delivery.assets.youtube import youtube_webhook
 from delivery.lib.scheduled_automation import (
     NON_AIRBYTE_STAGING_CRON,
     deliver_after_upstream,
@@ -115,6 +118,11 @@ mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstr
 podcast_webhook, podcast_delivery_sensor = deliver_after_upstream(
     podcast_webhook,
     "podcast_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
+)
+youtube_webhook, youtube_delivery_sensor = deliver_after_upstream(
+    youtube_webhook,
+    "youtube_delivery_sensor",
     staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 
@@ -214,6 +222,7 @@ defs = Definitions(
             mit_edx_programs_webhook,
             # Media/feed webhook delivery
             podcast_webhook,
+            youtube_webhook,
             # Warehouse data pushed to the access-forge repository
             generate_instructor_onboarding_user_list,
             update_access_forge_repo,
@@ -239,6 +248,7 @@ defs = Definitions(
             oll_delivery_sensor,
             mit_edx_programs_delivery_sensor,
             podcast_delivery_sensor,
+            youtube_delivery_sensor,
             *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),
