@@ -2,6 +2,7 @@ import hashlib
 import logging
 import os
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -115,6 +116,39 @@ def compute_zip_content_hash(zip_path: Path, skip_filename: str) -> str:
                         hasher.update(chunk)
 
     return hasher.hexdigest()
+
+
+def flatten_nested_dict(nested: Mapping[str, Any], delimiter: str) -> dict[str, Any]:
+    """Flatten nested mappings into a single level, joining keys with a delimiter.
+
+    Only mappings are descended into, so a list stays as the value of its key. A
+    nested mapping with no entries contributes nothing to the result.
+
+    Args:
+        nested: The mapping to flatten.
+        delimiter: The string placed between a parent key and a child key.
+
+    Returns:
+        A dict keyed by the joined key path of every non-mapping value.
+
+    Raises:
+        ValueError: If two key paths join to the same flattened key.
+    """
+    flattened: dict[str, Any] = {}
+
+    def _flatten(mapping: Mapping[str, Any], parent_key: str | None) -> None:
+        for key, value in mapping.items():
+            flat_key = key if parent_key is None else f"{parent_key}{delimiter}{key}"
+            if isinstance(value, Mapping):
+                _flatten(value, flat_key)
+                continue
+            if flat_key in flattened:
+                msg = f"duplicated key '{flat_key}'"
+                raise ValueError(msg)
+            flattened[flat_key] = value
+
+    _flatten(nested, None)
+    return flattened
 
 
 def fetch_all_drf_pages(
