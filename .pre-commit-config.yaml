@@ -73,16 +73,11 @@ repos:
   - id: sqlfluff-fix
     name: sqlfluff-fix
     # Local hooks instead of sqlfluff's own, which can pass without linting anything
-    # (see bin/sqlfluff-dbt-hook.py). Single-process, so the wrapper's patch covers
-    # every file.
-    entry: python bin/sqlfluff-dbt-hook.py fix --show-lint-violations --disable-progress-bar
-    language: python
-    additional_dependencies:
-    - sqlfluff==4.4.0
-    - sqlfluff-templater-dbt==4.4.0
-    - dbt-trino==1.10.2
-    # Same version as the dbt deps step in .github/workflows/autofix.yml.
-    - dbt-core==1.12.5
+    # (see bin/sqlfluff-dbt-hook.py). Tool versions come from the sqlfluff group in
+    # uv.lock. Single-process, because each run compiles the whole dbt project.
+    entry: uv run --frozen --only-group sqlfluff python bin/sqlfluff-dbt-hook.py fix
+      --show-lint-violations --disable-progress-bar
+    language: system
     types: [sql]
     files: ^src/ol_dbt/(models|tests)/
     # Models and tests with findings from before these hooks worked. Remove a file
@@ -98,7 +93,6 @@ repos:
       dimensional/dim_payment_method|
       dimensional/dim_user|
       dimensional/tfact_certificate|
-      dimensional/tfact_chatbot_events|
       dimensional/tfact_discussion_events|
       dimensional/tfact_enrollment|
       dimensional/tfact_enrollment_order|
@@ -111,30 +105,30 @@ repos:
       intermediate/combined/int__combined__user_course_roles|
       intermediate/edxorg/int__edxorg__mitx_learn_course_best_runs|
       intermediate/edxorg/int__edxorg__mitx_learn_programs|
+      intermediate/feedback/int__feedback__learn_ai_tutor|
       intermediate/learn-ai/int__learn_ai__chatbot|
       intermediate/mitxonline/int__mitxonline__program_requirements|
       intermediate/zendesk/int__zendesk__ticket|
+      intermediate/zendesk/int__zendesk__ticket_comment|
       marts/combined/marts__combined__products|
       marts/combined/marts__combined__users|
       migration/edxorg_to_mitxonline_enrollments|
-      reporting/Enrollment_Activity_Counts_Dataset|
+      reporting/chatbot_usage_report|
       reporting/combined_enrollments_with_gender_and_date|
       reporting/edxorg_mitlearn_user_mapping|
       reporting/enrollment_detail_report|
+      reporting/instructor_module_report|
       reporting/mitxonline_video_engagements_w_video_counts|
-      reporting/organization_administration_report
+      reporting/organization_administration_report|
+      staging/zendesk/stg__zendesk__brand|
+      staging/zendesk/stg__zendesk__group
       )|tests/assert_dim_user_identity_keys_cover_idless_learners)\.sql$
     require_serial: true
   - id: sqlfluff-lint
     name: sqlfluff-lint
-    entry: python bin/sqlfluff-dbt-hook.py lint --disable-progress-bar
-    language: python
-    additional_dependencies:
-    - sqlfluff==4.4.0
-    - sqlfluff-templater-dbt==4.4.0
-    - dbt-trino==1.10.2
-    # Same version as the dbt deps step in .github/workflows/autofix.yml.
-    - dbt-core==1.12.5
+    entry: uv run --frozen --only-group sqlfluff python bin/sqlfluff-dbt-hook.py lint
+      --disable-progress-bar
+    language: system
     types: [sql]
     files: ^src/ol_dbt/(models|tests)/
     exclude: *sqlfluff_baseline

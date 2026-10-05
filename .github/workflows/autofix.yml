@@ -48,7 +48,7 @@ jobs:
     # a warehouse connection.
     - name: Install dbt packages
       working-directory: src/ol_dbt
-      run: uvx --from dbt-core==1.12.5 dbt deps
+      run: uv run --frozen --only-group sqlfluff dbt deps
     - name: Tree is clean before hooks run
       id: clean-tree
       run: |

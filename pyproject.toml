@@ -52,6 +52,13 @@ constraint-dependencies = [
 
 [dependency-groups]
 prek = ["prek==0.5.5"]
+# The sqlfluff hooks run in this group (see bin/sqlfluff-dbt-hook.py).
+sqlfluff = [
+    "dbt-core>=1.12",
+    "dbt-duckdb>=1.10.0",
+    "sqlfluff[rs]>=4.4.0,<5",
+    "sqlfluff-templater-dbt>=4.4.0,<5",
+]
 dev = [
     {include-group = "prek"},
     "dagster-dg-cli>=1.12.10",
@@ -63,7 +70,7 @@ dev = [
     "pytest-cov>=7.1,<8",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
-    "sqlfluff[rs]>=4.0.0",
+    {include-group = "sqlfluff"},
     "types-boto3>=1.42.65",
 ]
 
@@ -84,7 +91,8 @@ exclude=["target/**/*", "dbt_packages/**/*"]
 
 [tool.sqlfluff.core]
 templater = "dbt"
-dialect = "trino"
+# The dbt templater compiles with DuckDB (the sqlfluff target), so the dialect matches.
+dialect = "duckdb"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 max_line_length = 120
 # Lint files of any size (by default sqlfluff skips files over 20KB).
@@ -113,7 +121,7 @@ unwrap_wrapped_queries = true
 project_dir = "src/ol_dbt/"
 profiles_dir = "src/ol_dbt/"
 profile = "open_learning"
-# A target that needs no credentials, defined in src/ol_dbt/profiles.yml.
+# An in-memory DuckDB target, defined in src/ol_dbt/profiles.yml.
 target = "sqlfluff"
 
 [tool.mypy]
