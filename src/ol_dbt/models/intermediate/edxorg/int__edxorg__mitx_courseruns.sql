@@ -17,12 +17,15 @@ with runs_from_bigquery as (
 )
 
 , instructors as (
+    {%- set first_name = json_extract_scalar('t.instructor', "'$.first_name'") -%}
+    {%- set last_name = json_extract_scalar('t.instructor', "'$.last_name'") -%}
+    {#- Trino's concat returns NULL when either name is NULL and array_join then skips the
+        entry. DuckDB's concat skips NULL arguments, so the guard keeps both engines alike. -#}
     {%- set instructor_name -%}
-        concat(
-            {{ json_extract_scalar('t.instructor', "'$.first_name'") }}
-            , ' '
-            , {{ json_extract_scalar('t.instructor', "'$.last_name'") }}
-        )
+        case
+            when {{ first_name }} is not null and {{ last_name }} is not null
+                then concat({{ first_name }}, ' ', {{ last_name }})
+        end
     {%- endset %}
     select
         courseruns.courserun_readable_id
