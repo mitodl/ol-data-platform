@@ -191,9 +191,15 @@ that version is not carried over.)
 The consumer's predicate is `coalesce(needs_attention_since <= <today>, false)`. N is a dbt
 var, `needs_attention_quiet_days`, default 30, replacing `NEEDS_ATTENTION_QUIET_DAYS`.
 
+"Today" is the current UTC date. `needs_attention_since`, the enrollment date and
+`last_active_on` are all UTC dates, so a UTC comparison flags a `not_started` learner from
+the day they enroll. The consumer asks for the UTC date explicitly and does not rely on
+the session timezone. The StarRocks Helm values in ol-infrastructure set `timeZone: UTC`,
+so this matches the API's current `CURRENT_DATE()` as long as the running clusters carry
+that setting, which has not been checked on the live clusters.
+
 #87 flags `not_started` unconditionally. The fallback date keeps that true when
-`enrollment_created_on` is null, which the fact allows. Which "today" the consumer uses
-also matters for this row and is an open question (§9).
+`enrollment_created_on` is null, which the fact allows.
 
 The column follows the row's current status, as #87 does. A learner whose certificate is
 revoked and who is not passing is `in_progress` again on the next build and gets a
@@ -240,7 +246,7 @@ After the views are rebuilt in production:
 - Delete both `_COMPLETION_STATUS` definitions and select the column.
 - `_needs_attention(cutoff)` becomes `COALESCE(needs_attention_since <= <cutoff>, FALSE)`.
   `NEEDS_ATTENTION_QUIET_DAYS` and the `DATE_SUB` in `NEEDS_ATTENTION_CUTOFF_QUERY` are
-  removed; the query resolves today's date only.
+  removed; the query resolves the current UTC date only, still once per request.
 - `_recomputed_learners` keeps its shape and its `include_inactive` / `contract_id`
   filters, and counts the flags in place of the status CASE.
 
@@ -402,11 +408,6 @@ Blocking for phase 1:
 
 - Which enrollment represents a (user, course run) when `tfact_enrollment` has more than
   one. Not measured how often that happens.
-- Which "today" the consumer compares against. The API uses the StarRocks cluster's
-  `CURRENT_DATE()`; the enrollment date and `last_active_on` are UTC dates. If the cluster
-  is not on UTC, a learner who enrolls late in the UTC day is not flagged until the cluster
-  date catches up. The cluster's timezone has not been checked. Comparing against the UTC
-  date in the API would remove the question.
 
 Non-blocking:
 
