@@ -72,7 +72,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say']
+          values: '{{ gender_values(["m", "f", "o"]) }}'
   - name: user_highest_education
     description: str, user highest education. May be null.
     tests:
