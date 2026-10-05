@@ -27,7 +27,7 @@ from ml.lib.summarize import (
     summarize_and_checkpoint,
 )
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import get_prompt_version
+from ml.resources.opik_auth import LOCAL_PROMPT_VERSION, get_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
@@ -213,11 +213,16 @@ def feedback_summaries(
     client = build_summary_client(
         llm, config.model_version, config.bedrock_model_version
     )
+    prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     unsummarized_df = filter_unsummarized(
         source_df,
         already_summarized_df,
         current_model_version=client.model_version,
-        current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT),
+        # "local" means Opik was unreachable, not a prompt edit; comparing it would
+        # re-summarize the whole corpus.
+        current_prompt_version=None
+        if prompt_version == LOCAL_PROMPT_VERSION
+        else prompt_version,
     )
 
     errors: list[str] = []

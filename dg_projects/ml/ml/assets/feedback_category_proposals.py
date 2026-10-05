@@ -242,7 +242,8 @@ def feedback_category_proposals(
     joined = (
         proposals_df.filter(
             pl.col("category_slug").is_in(in_use_slugs)
-            | pl.col("category_slug").is_duplicated()
+            # A new label's first cluster created the category, so it isn't a join.
+            | (pl.int_range(pl.len()).over("category_slug") > 0)
         )
         if proposals_df.height
         else proposals_df
