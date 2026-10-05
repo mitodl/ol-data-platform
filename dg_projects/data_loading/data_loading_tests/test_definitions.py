@@ -100,6 +100,10 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__mitpe__api__events",
         "ol_warehouse_raw_data/raw__openlearning__api__events",
         "ol_warehouse_raw_data/raw__medium__rss__posts",
+        "ol_warehouse_raw_data/raw__youtube__api__channels",
+        "ol_warehouse_raw_data/raw__youtube__api__playlists",
+        "ol_warehouse_raw_data/raw__youtube__api__playlist_items",
+        "ol_warehouse_raw_data/raw__youtube__api__videos",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
     ):

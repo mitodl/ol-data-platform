@@ -1,0 +1,101 @@
+---
+version: 2
+
+models:
+- name: stg__youtube__api__channels
+  description: YouTube channels configured in mitodl/open-video-data, one row per
+    channel.
+  columns:
+  - name: channel_id
+    description: str, YouTube's channel id
+    tests:
+    - not_null
+    - unique
+  - name: channel_title
+    description: str, channel title
+  - name: channel_description
+    description: str, channel description
+  - name: channel_custom_url
+    description: str, the channel's @handle
+  - name: channel_published_at
+    description: timestamp, when the channel was created
+  - name: channel_image_url
+    description: str, URL of the channel's high-resolution thumbnail
+  - name: channel_offered_by
+    description: str, MIT Learn offeror code from the channel config, e.g. ocw
+  - name: channel_config_file
+    description: str, the open-video-data youtube/ file the channel is configured
+      in
+  - name: channel_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
+
+- name: stg__youtube__api__playlists
+  description: YouTube playlists ingested for the configured channels, one row per
+    playlist.
+  columns:
+  - name: playlist_id
+    description: str, YouTube's playlist id
+    tests:
+    - not_null
+    - unique
+  - name: channel_id
+    description: str, id of the configured channel the playlist was ingested under
+  - name: playlist_title
+    description: str, playlist title
+  - name: playlist_description
+    description: str, playlist description
+  - name: playlist_image_url
+    description: str, URL of the playlist's high-resolution thumbnail
+  - name: playlist_published_at
+    description: timestamp, when the playlist was created
+  - name: playlist_item_count
+    description: bigint, number of items YouTube reports in the playlist
+  - name: playlist_offered_by
+    description: str, the channel config's offered_by
+  - name: playlist_create_videos
+    description: boolean, MIT Learn's create_videos for the playlist
+  - name: playlist_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
+
+- name: stg__youtube__api__playlist_items
+  description: Videos in each ingested YouTube playlist, one row per playlist and
+    video.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [playlist_id, video_id]
+  columns:
+  - name: playlist_id
+    description: str, YouTube's playlist id
+    tests:
+    - not_null
+  - name: video_id
+    description: str, YouTube's video id
+    tests:
+    - not_null
+  - name: playlist_item_position
+    description: bigint, zero-based index of the entry in the playlist listing
+  - name: playlist_item_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
+
+- name: stg__youtube__api__videos
+  description: YouTube videos across all ingested playlists, one row per video.
+  columns:
+  - name: video_id
+    description: str, YouTube's video id
+    tests:
+    - not_null
+    - unique
+  - name: video_channel_id
+    description: str, id of the channel that uploaded the video
+  - name: video_title
+    description: str, localized video title (snippet.localized.title)
+  - name: video_description
+    description: str, video description, plain text and uncleaned
+  - name: video_image_url
+    description: str, URL of the video's high-resolution thumbnail
+  - name: video_published_at
+    description: timestamp, when the video was published
+  - name: video_duration
+    description: str, ISO 8601 duration, e.g. PT1H2M3S
+  - name: video_dlt_load_id
+    description: str, id of the dlt load that last wrote the row
