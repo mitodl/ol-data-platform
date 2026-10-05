@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Map courses to instructors (many-to-many)
 with mitxonline_course_instructors as (
     select

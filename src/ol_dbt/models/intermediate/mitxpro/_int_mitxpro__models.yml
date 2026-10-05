@@ -1538,7 +1538,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       arguments:

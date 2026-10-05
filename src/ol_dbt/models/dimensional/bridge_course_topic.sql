@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Map courses to topics (many-to-many)
 -- Note: OCW courses not yet in dim_course (Phase 1-2), so omitted here
 with mitxonline_course_topics as (

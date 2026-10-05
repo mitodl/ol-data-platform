@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Consolidate instructors from all platforms
 with mitxonline_instructors as (
     select

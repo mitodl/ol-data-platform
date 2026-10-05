@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Program requirements define which courses belong to which programs
 with micromasters_course_keys as (
     select

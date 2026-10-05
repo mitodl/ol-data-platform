@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- B2B organizations: MITx Online enterprise organizations and xPro corporate clients.
 -- Grain: one row per unique organization per platform.
 with mitxonline_organizations as (

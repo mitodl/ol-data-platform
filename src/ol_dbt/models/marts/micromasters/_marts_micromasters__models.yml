@@ -271,7 +271,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_first_name
     description: str, first name from user's profile on MITx Online or MicroMasters
   - name: user_last_name

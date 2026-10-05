@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- User to B2B organization membership bridge.
 -- Grain: one row per (user, organization) membership.
 with user_organizations as (
