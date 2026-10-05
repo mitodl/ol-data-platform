@@ -12,7 +12,6 @@ dependencies = [
     # is a single resolved version across the image (no two-manifest drift).
     "ol-dlt",
     "ol-orchestrate-lib",
-    "sqlalchemy>=2.0.46",
 ]
 
 [project.entry-points]
