@@ -650,26 +650,26 @@ with mitx_users as (
     select
         -- Outranks id_source_rank: an id-less emeritus row (9) must still lose to an
         -- id-bearing global_alumni row (10).
-        case when id_source_user_id is null then 1 else 0 end as has_no_source_id
+        case when combined_accounts.id_source_user_id is null then 1 else 0 end as has_no_source_id
         , case
-            when user_global_id is not null then 0
-            when id_source = 'mitlearn' then 1
-            when id_source = 'mitxonline' then 2
-            when id_source = 'edxorg' then 3
-            when id_source = 'micromasters' then 4
-            when id_source = 'mitxonline_openedx' then 5
-            when id_source = 'mitxpro' then 6
-            when id_source = 'residential' then 7
-            when id_source = 'bootcamps' then 8
-            when id_source = 'emeritus' then 9
-            when id_source = 'global_alumni' then 10
+            when combined_accounts.user_global_id is not null then 0
+            when combined_accounts.id_source = 'mitlearn' then 1
+            when combined_accounts.id_source = 'mitxonline' then 2
+            when combined_accounts.id_source = 'edxorg' then 3
+            when combined_accounts.id_source = 'micromasters' then 4
+            when combined_accounts.id_source = 'mitxonline_openedx' then 5
+            when combined_accounts.id_source = 'mitxpro' then 6
+            when combined_accounts.id_source = 'residential' then 7
+            when combined_accounts.id_source = 'bootcamps' then 8
+            when combined_accounts.id_source = 'emeritus' then 9
+            when combined_accounts.id_source = 'global_alumni' then 10
         end as id_source_rank
         -- Emeritus and Global Alumni ids are varchar, and agg_view surfaces them with a
         -- lexicographic max(). Nulling sort_id falls the ordering through to the
         -- lexicographic key below so the key names the account agg_view's ids come from.
         , case
-            when id_source in ('emeritus', 'global_alumni') then null
-            else try_cast(id_source_user_id as bigint)
+            when combined_accounts.id_source in ('emeritus', 'global_alumni') then null
+            else try_cast(combined_accounts.id_source_user_id as bigint)
         end as sort_id
         , combined_accounts.*
     from combined_accounts
@@ -678,19 +678,19 @@ with mitx_users as (
 , account_identity as (
     select
         first_value(case
-            when user_global_id is not null then 'global'
-            when id_source_user_id is not null then id_source
+            when ranked_accounts.user_global_id is not null then 'global'
+            when ranked_accounts.id_source_user_id is not null then ranked_accounts.id_source
             else 'email'
         end) over w as user_identity_source
-        , first_value(coalesce(user_global_id, id_source_user_id, email))
+        , first_value(coalesce(ranked_accounts.user_global_id, ranked_accounts.id_source_user_id, ranked_accounts.email))
             over w as user_identity_id
         , ranked_accounts.*
     from ranked_accounts
     window w as (
         partition by email
         order by
-            has_no_source_id
-            , id_source_rank
+            has_no_source_id asc
+            , id_source_rank asc
             , user_global_id desc
             , sort_id desc nulls last
             , id_source_user_id desc
@@ -724,8 +724,8 @@ with mitx_users as (
                     , coalesce(user_joined_on_residential, '')
                     , coalesce(user_joined_on_bootcamps, '')
                 ) desc
-                , id_source
-                , id_source_user_id
+                , id_source asc
+                , id_source_user_id asc
         ) as row_num
     from combined_users
 )
