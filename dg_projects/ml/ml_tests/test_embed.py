@@ -39,6 +39,7 @@ class _FakeEmbeddingClient:
         self.model_version = model_version
         self.dim = dim
         self.max_request_batch_size = max_request_batch_size
+        self.max_input_chars: int | None = None
         self.batch_calls: list[list[str]] = []
         self.trace_metadata_calls: list[dict[str, object] | None] = []
 
@@ -684,6 +685,7 @@ def test_embed_and_checkpoint_runs_request_batches_concurrently() -> None:
         model_version = "test-model"
         dim = 3
         max_request_batch_size = 1
+        max_input_chars = None
 
         def embed_batch(
             self,

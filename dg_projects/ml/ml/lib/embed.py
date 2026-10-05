@@ -77,9 +77,8 @@ EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "500"))
 # How many embed_batch sub-batch calls run at once.
 EMBEDDING_MAX_CONCURRENCY = int(os.environ.get("EMBEDDING_MAX_CONCURRENCY", "20"))
 
-# Titan v2's input limits. A character cap alone can't keep a text under the token
-# limit, so _embed_titan also shortens the text on a token-limit error and retries.
-TITAN_MAX_INPUT_CHARS = 50_000
+# A character cap can't keep a Titan text under its 8,192-token limit, so
+# _embed_titan_text also shortens the text on a token-limit error and retries.
 TITAN_MAX_SHORTEN_ATTEMPTS = 3
 _TITAN_TOKEN_COUNTS = re.compile(
     r"Max input tokens: (\d+), request input token count: (\d+)"
@@ -96,6 +95,9 @@ class EmbeddingClient(Protocol):
     # how many rows are checkpointed together. _embed_chunk splits a checkpoint
     # chunk into sub-batches of this size before calling embed_batch.
     max_request_batch_size: int
+    # The longest text the provider accepts, in characters; _embed_request_batch
+    # cuts longer texts. None when the provider's limit is in tokens only.
+    max_input_chars: int | None
 
     def embed_batch(
         self, texts: list[str], *, trace_metadata: dict[str, Any] | None = None
@@ -107,6 +109,7 @@ class OpenAIEmbeddingClient:
 
     # OpenAI's embeddings API accepts up to 2048 inputs per request.
     max_request_batch_size = 2048
+    max_input_chars: int | None = None
 
     def __init__(self, client: OpenAI, model_version: str, dim: int) -> None:
         self._client = client
@@ -150,6 +153,7 @@ class GeminiEmbeddingClient:
 
     # Gemini's embed_content accepts up to 250 texts per request.
     max_request_batch_size = 250
+    max_input_chars: int | None = None
 
     def __init__(self, client: genai.Client, model_version: str, dim: int) -> None:
         self._client = client
@@ -215,6 +219,13 @@ class BedrockEmbeddingClient:
         self.max_request_batch_size = (
             1 if model_version.startswith("amazon.titan-embed") else 96
         )
+        self.max_input_chars: int | None = None
+        if model_version.startswith("amazon.titan-embed"):
+            self.max_input_chars = 50_000
+        elif model_version.startswith(
+            ("cohere.embed-english-v3", "cohere.embed-multilingual-v3")
+        ):
+            self.max_input_chars = 2048
 
     @traced(
         "feedback_embed_bedrock",
@@ -242,8 +253,6 @@ class BedrockEmbeddingClient:
         return [self._embed_titan_text(text) for text in texts]
 
     def _embed_titan_text(self, text: str) -> list[float]:
-        # Long tickets embed from their first part rather than failing every run.
-        text = text[:TITAN_MAX_INPUT_CHARS]
         for _ in range(TITAN_MAX_SHORTEN_ATTEMPTS):
             try:
                 return self._invoke_titan(text)
@@ -461,6 +470,11 @@ def _is_isolatable_error(error: Exception) -> bool:
     return False
 
 
+def _input_text(row: dict[str, Any], client: EmbeddingClient) -> str:
+    # Long tickets embed from their first part rather than failing every run.
+    return row["resolved_text"][: client.max_input_chars]
+
+
 def _embed_request_batch(
     chunk: list[dict[str, Any]],
     client: EmbeddingClient,
@@ -486,7 +500,7 @@ def _embed_request_batch(
     """
     try:
         vectors = client.embed_batch(
-            [row["resolved_text"] for row in chunk],
+            [_input_text(row, client) for row in chunk],
             trace_metadata={
                 "feedback_conversation_pks": [
                     row["feedback_conversation_pk"] for row in chunk
@@ -515,7 +529,7 @@ def _embed_request_batch(
         for row in chunk:
             try:
                 vector = client.embed_batch(
-                    [row["resolved_text"]],
+                    [_input_text(row, client)],
                     trace_metadata={
                         "feedback_conversation_pks": [row["feedback_conversation_pk"]],
                         "conversation_refs": [row["conversation_ref"]],
