@@ -15,7 +15,6 @@ dependencies = [
     # plugin versions the ranges below resolve to.
     "dagster==1.13.25",
     "dagster-aws~=0.29.0",
-    "dagster-azure~=0.29.0",
     "dagster-graphql==1.13.25",
     "dagster-k8s~=0.29.0",
     "dagster-postgres~=0.29.0",
