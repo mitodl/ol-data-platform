@@ -23,7 +23,7 @@ dependencies = [
     # kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x
     # does not handle, raising AttributeError at launch time. Pin until dagster-k8s
     # upstream resolves the incompatibility.
-    "kubernetes<36",
+    "kubernetes<37",
     # OpenTelemetry auto-instrumentation for the webserver and the daemon.
     #
     # These are agent packages, not runtime dependencies: nothing in
