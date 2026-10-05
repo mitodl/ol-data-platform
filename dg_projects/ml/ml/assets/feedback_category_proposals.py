@@ -79,7 +79,7 @@ class FeedbackCategoryProposalsConfig(Config):
 
 
 @asset(
-    code_version="feedback_category_proposals_v2",
+    code_version="feedback_category_proposals_v3",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_category_proposal"]),
     deps=[AssetKey(["intermediate", "feedback_cluster_membership"])],
