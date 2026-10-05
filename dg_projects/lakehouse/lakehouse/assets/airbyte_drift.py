@@ -68,8 +68,8 @@ def _list_all(
         previous = ids
     msg = (
         f"Airbyte's /{path} listing did not return the same complete set twice in "
-        f"{LISTING_ATTEMPTS} attempts. Refusing to report drift against it: every "
-        "record a page boundary skipped would be reported as deleted."
+        f"{LISTING_ATTEMPTS} attempts. Refusing to report drift against it: a "
+        "record skipped at a page boundary would be missing from the comparison."
     )
     raise Failure(description=msg)
 
