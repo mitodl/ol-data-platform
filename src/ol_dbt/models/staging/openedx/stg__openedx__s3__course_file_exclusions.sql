@@ -1,5 +1,7 @@
 with source as (
-    {{ newest_course_file_rows(source('ol_warehouse_raw_data', 'raw__openedx__s3__course_file_exclusions')) }}
+    {{ newest_course_file_rows(
+        source('ol_warehouse_raw_data', 'raw__openedx__s3__course_file_exclusions'), extracted_at_column='extracted_at'
+    ) }}
 )
 
 select

@@ -157,6 +157,8 @@ def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
     assert row["excluded"] == "true"
     assert row["exclusion_reason"] == "unreferenced_static"
     assert list(row) == list(course_xml_blocks.FILE_EXCLUSION_FIELDS)
+    # Files written before the asset stamped its rows have no extracted_at.
+    assert row["extracted_at"] is None
 
 
 def test_every_table_has_its_own_pipeline() -> None:

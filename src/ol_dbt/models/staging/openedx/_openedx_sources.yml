@@ -127,6 +127,9 @@ sources:
       description: str, the rule that excluded the file (staff_only, non_content,
         unreachable_tab, about_page, unreferenced_static, course_settings, legacy_announcements);
         null when the file is kept
+    - name: extracted_at
+      description: str, ISO 8601 UTC time the asset ran the rules, one value per landed
+        file; null in files written before the asset stamped it
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

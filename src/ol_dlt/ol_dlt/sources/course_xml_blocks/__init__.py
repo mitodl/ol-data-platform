@@ -140,6 +140,7 @@ CONTENT_TEXT_FIELDS = (
 
 # The row the file exclusions asset writes
 # (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
+# extracted_at is absent from files written before the asset stamped it.
 FILE_EXCLUSION_FIELDS = (
     "course_id",
     "source_system",
@@ -147,6 +148,7 @@ FILE_EXCLUSION_FIELDS = (
     "file_path",
     "excluded",
     "exclusion_reason",
+    "extracted_at",
 )
 
 
@@ -253,6 +255,7 @@ OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=FILE_EXCLUSION_FIELDS,
+    optional_fields=frozenset({"extracted_at"}),
     pipeline_name="course_file_exclusions__openedx",
 )
 TABLES = {

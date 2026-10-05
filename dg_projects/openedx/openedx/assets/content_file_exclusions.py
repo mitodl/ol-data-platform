@@ -37,7 +37,6 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Any
 from urllib.parse import unquote
 
-import jsonlines
 from dagster import (
     AssetExecutionContext,
     AssetIn,
@@ -49,6 +48,8 @@ from dagster import (
 from defusedxml import ElementTree
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from upath import UPath
+
+from openedx.assets.content_files import write_text_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -339,7 +340,7 @@ def _exclude(excluded: dict[Path, str], paths: Iterable[Path], reason: str) -> N
         excluded.setdefault(path, reason)
 
 
-def excluded_olx_paths(  # noqa: C901 (kept in Learn's shape for diffing)
+def excluded_olx_paths(
     olx_path: str | Path, etl_source: str | None = None
 ) -> dict[Path, str]:
     """
@@ -390,34 +391,6 @@ def excluded_olx_paths(  # noqa: C901 (kept in Learn's shape for diffing)
     # announcement is saved, so what is left is legacy announcements or Studio's
     # sample text. Like the live ones, they still counted as references above.
     _exclude(excluded, root.glob("info/**/updates.html"), "legacy_announcements")
-    return excluded
-    for name in NON_CONTENT_OLX_FILES:
-        if (root / name).is_file():
-            excluded.setdefault(root / name, "non_content")
-    for path in unreachable_static_tabs(root):
-        excluded.setdefault(path, "unreachable_tab")
-    shown = ABOUT_PAGE_FILES if etl_source == OLL_ETL_SOURCE else ()
-    # recursive for the about/<url_name>/ folder edX also reads
-    for path in root.glob("about/**/*"):
-        if path.name not in shown:
-            excluded.setdefault(path, "about_page")
-    referenced, unreferenced = static_olx_references(root, set(excluded))
-    for path in unreferenced:
-        excluded.setdefault(path, "unreferenced_static")
-    # A hidden video's transcripts are in the staff-only set, but the same file is
-    # often also the transcript of the visible copy of that video, so put back
-    # anything a visible block still links.
-    for path in referenced:
-        excluded.pop(path, None)
-    # Settings rather than content, but what they name (textbooks, the course
-    # image) is shown, so they were still read as references above
-    for path in root.glob("policies/**/*"):
-        excluded.setdefault(path, "course_settings")
-    # Old-style announcements: Studio empties updates.html whenever an
-    # announcement is saved, so what is left is legacy announcements or Studio's
-    # sample text. Like the live ones, they still counted as references above.
-    for path in root.glob("info/**/updates.html"):
-        excluded.setdefault(path, "legacy_announcements")
     return excluded
 
 
@@ -525,10 +498,7 @@ def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: U
                 course_xml_version=course_xml_version,
             )
 
-        with jsonlines.open(output_file, "w") as writer:
-            writer.write_all(rows)
-        with output_file.open("rb") as handle:
-            data_version = hashlib.file_digest(handle, "sha256").hexdigest()
+        data_version = write_text_snapshot(rows, output_file)
         object_key = (
             f"{'/'.join(context.asset_key.path)}/{source_system}/"
             f"{course_id}/{data_version}.jsonl"
