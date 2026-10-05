@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- The analysis fact: one row per conversation. A complaint usually emerges over several
 -- turns, so the conversation is the unit that gets summarized, embedded, scored and
 -- clustered. Fully rebuildable without touching tfact_feedback.

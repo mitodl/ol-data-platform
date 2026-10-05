@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- MITx Online B2B contracts dimension.
 -- Grain: one row per contract.
 with contracts as (

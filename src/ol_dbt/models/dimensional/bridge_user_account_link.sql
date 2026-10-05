@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Edges between platform accounts, independent of dim_user's own identity-
 -- collapsing (grouping by hashed email). from_platform = to_platform is a
 -- merge redirect (old account -> canonical, confirmed via mitxonline audit

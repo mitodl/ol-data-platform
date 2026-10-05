@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 select
     course_readable_id
     , course_name

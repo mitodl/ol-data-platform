@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Consolidate departments from platforms that have this metadata
 with ocw_departments as (
     select distinct
