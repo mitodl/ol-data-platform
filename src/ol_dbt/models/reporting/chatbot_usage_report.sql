@@ -14,7 +14,7 @@ with chatbot as (
 , tutorbot as (
     select
         *
-        , json_parse(json_extract_scalar(tutorbot_chat_json, '$')) as chat_json
+        , json_parse({{ json_extract_scalar('tutorbot_chat_json', "'$'") }}) as chat_json
     from {{ ref("int__learn_ai__tutorbot") }}
 )
 
@@ -25,12 +25,12 @@ with chatbot as (
         -- t is the unnest alias below, which the duckdb parser can't read.
         , t.idx as message_index
         , case
-            when json_extract_scalar(t.element, '$.type') = 'HumanMessage'
-                then json_extract_scalar(t.element, '$.content')
+            when {{ json_extract_scalar('t.element', "'$.type'") }} = 'HumanMessage'
+                then {{ json_extract_scalar('t.element', "'$.content'") }}
         end as human_message
         , case
-            when json_extract_scalar(t.element, '$.type') = 'AIMessage'
-                then json_extract_scalar(t.element, '$.content')
+            when {{ json_extract_scalar('t.element', "'$.type'") }} = 'AIMessage'
+                then {{ json_extract_scalar('t.element', "'$.content'") }}
         end as agent_message
         -- noqa: enable=RF01
     from tutorbot
