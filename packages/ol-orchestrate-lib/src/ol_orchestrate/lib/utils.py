@@ -133,6 +133,7 @@ def flatten_nested_dict(nested: Mapping[str, Any], delimiter: str) -> dict[str, 
 
     Raises:
         ValueError: If two key paths join to the same flattened key.
+        AttributeError: If ``nested`` is not a mapping.
     """
     flattened: dict[str, Any] = {}
 
