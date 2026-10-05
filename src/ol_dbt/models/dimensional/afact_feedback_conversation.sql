@@ -76,7 +76,7 @@ with conversation as (
         , conversation_tag.tag_label
         , row_number() over (
             partition by conversation_tag.feedback_source_fk, conversation_tag.conversation_id
-            order by tag_frequency.conversation_count desc, conversation_tag.tag_slug
+            order by tag_frequency.conversation_count desc, conversation_tag.tag_slug asc
         ) as tag_rank
     from conversation_tag
     inner join tag_frequency on conversation_tag.tag_slug = tag_frequency.tag_slug

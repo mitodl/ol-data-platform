@@ -26,7 +26,7 @@ with mitxonline_edxorg_link as (
     where dim_user.mitxonline_application_user_id is not null
 )
 
-, merges as (
+, account_merges as (
     select from_user_id as platform_user_id_before, to_user_id as platform_user_id_after
     from {{ ref('bridge_user_account_link') }}
     where from_platform = 'mitxonline' and to_platform = 'mitxonline'
@@ -38,7 +38,7 @@ with mitxonline_edxorg_link as (
 -- two merged-away accounts carry genuinely conflicting non-null values.
 , merged_away_links as (
     select
-        merges.platform_user_id_after as mitxonline_user_id
+        account_merges.platform_user_id_after as mitxonline_user_id
         , case
             when count(distinct users.edxorg_user_id) <= 1
                 then max(users.edxorg_user_id)
@@ -47,10 +47,10 @@ with mitxonline_edxorg_link as (
             when count(distinct users.mitlearn_application_user_id) <= 1
                 then max(users.mitlearn_application_user_id)
         end as mitlearn_application_user_id
-    from merges
+    from account_merges
     inner join users
-        on merges.platform_user_id_before = users.mitxonline_application_user_id
-    group by merges.platform_user_id_after
+        on account_merges.platform_user_id_before = users.mitxonline_application_user_id
+    group by account_merges.platform_user_id_after
 )
 
 , mapped as (
@@ -62,7 +62,7 @@ with mitxonline_edxorg_link as (
     from users
     left join merged_away_links
         on users.mitxonline_application_user_id = merged_away_links.mitxonline_user_id
-    where users.mitxonline_application_user_id not in (select platform_user_id_before from merges)
+    where users.mitxonline_application_user_id not in (select account_merges.platform_user_id_before from account_merges)
 )
 
 select mitxonline_openedx_user_id, edxorg_user_id, mitlearn_application_user_id
