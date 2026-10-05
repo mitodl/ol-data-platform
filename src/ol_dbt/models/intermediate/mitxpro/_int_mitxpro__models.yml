@@ -1403,6 +1403,7 @@ models:
     tests:
     - not_null
   - name: courserun_is_live
+    data_type: boolean
     description: boolean, indicating whether the course run is available to users
       on MITxPro website
   - name: courserun_title
@@ -1537,7 +1538,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       arguments:

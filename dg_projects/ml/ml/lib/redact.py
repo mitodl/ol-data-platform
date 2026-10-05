@@ -1,5 +1,7 @@
 """Presidio-based PII redaction for feedback title/text."""
 
+import re
+
 import polars as pl
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
@@ -8,12 +10,110 @@ JOIN_COLS = ["source_slug", "source_record_ref"]
 
 EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 
+# Allowlist, not a denylist: the English NER model tags ordinary words in non-English
+# text as LOCATION/NRP, and the national-ID patterns match problem numbers like
+# "PS2.3.5". Neither identifies a learner, so only these types are masked.
+REDACTED_ENTITIES = {
+    "PERSON",
+    "EMAIL_ADDRESS",
+    "PHONE_NUMBER",
+    "CREDIT_CARD",
+    "IBAN_CODE",
+    "US_BANK_NUMBER",
+    "IP_ADDRESS",
+    "US_SSN",
+    "STREET_ADDRESS",
+}
+
+# US_BANK_NUMBER (any 8-17 digit run) and US_SSN's weak patterns (any 9 digits) score
+# 0.05; in feedback they matched ticket IDs, tracking params, ZIP+4 codes and decimals.
+# Presidio raises them to 0.4 only next to a context word ("account", "ssn"), and a
+# formatted SSN like 234-56-7890 scores 0.5, so mask only at 0.4 and up.
+MIN_SCORE_BY_ENTITY = {"US_BANK_NUMBER": 0.4, "US_SSN": 0.4}
+
+_US_STATES = (
+    "AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|"
+    "MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|PR"
+)
+_STREET_TYPES = (
+    "Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|"
+    "Place|Pl|Square|Sq|Terrace|Parkway|Pkwy|Highway|Hwy"
+)
+# State codes that are also common words (in, or, me, de...) only match in uppercase.
+_LOWERCASE_US_STATES = "|".join(
+    s
+    for s in _US_STATES.split("|")
+    if s not in {"AL", "DE", "HI", "ID", "IN", "LA", "ME", "OH", "OK", "OR", "PA"}
+)
+_LATAM_STREET_TYPES = "Calle|Carrera|Avenida|Diagonal|Transversal|Cra|Cl|Av"
+# Lowercase matching uses only street types that are rare in prose, and needs a
+# delimiter after them: "77 massachusetts ave, ..." but not "12 videos on the way".
+_LOWERCASE_STREET_TYPES = (
+    "street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|parkway|pkwy|highway|hwy|"
+    "terrace"
+)
+# Presidio has no address recognizer; LOCATION only ever caught the city, leaving the
+# street and ZIP that place someone. Case-sensitive by default (Presidio defaults to
+# IGNORECASE) so "in 12345 cases" doesn't match; the lowercase patterns need a stronger
+# signal instead: a delimiter after the street type, or a comma before the state.
+_STREET_ADDRESS_RECOGNIZER = PatternRecognizer(
+    supported_entity="STREET_ADDRESS",
+    patterns=[
+        Pattern(
+            name="street_line",
+            regex=rf"\b\d{{1,6}}[A-Z]?(?:\s+[A-Z][\w'.-]*){{1,4}}\s+(?:{_STREET_TYPES})\b\.?",
+            score=0.85,
+        ),
+        Pattern(
+            name="lowercase_street_line",
+            regex=(
+                rf"(?i:\b\d{{1,6}}[a-z]?(?:\s+[a-z][\w'.-]*){{1,4}}\s+"
+                rf"(?:{_LOWERCASE_STREET_TYPES})\b\.?"
+                rf"(?=\s*(?:,|#|apt\b|suite\b|unit\b|$)))"
+            ),
+            score=0.85,
+        ),
+        Pattern(
+            name="latam_street_line",
+            regex=(
+                rf"(?i:\b(?:{_LATAM_STREET_TYPES})\.?\s+\d+[a-z]?\s*(?:#|No\.?)"
+                rf"\s*\d+[a-z]?(?:\s*-\s*\d+)?)"
+            ),
+            score=0.85,
+        ),
+        Pattern(
+            name="us_state_zip",
+            regex=rf"\b(?:{_US_STATES})\s+\d{{5}}(?:-\d{{4}})?\b",
+            score=0.85,
+        ),
+        Pattern(
+            name="lowercase_us_state_zip",
+            regex=rf"(?<=,\s)(?i:(?:{_LOWERCASE_US_STATES})\s+\d{{5}}(?:-\d{{4}})?\b)",
+            score=0.85,
+        ),
+        Pattern(
+            name="uk_postcode",
+            regex=r"\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b",
+            score=0.85,
+        ),
+    ],
+    global_regex_flags=re.MULTILINE,
+)
+
 # The only types that must be redacted even when fully contained in a URL/date span
 # (e.g. a reset link's ?email=... query param) -- real PII someone could paste into
-# feedback text. Everything else stays exempted: pattern recognizers for driver's
-# license/passport/bank numbers etc. routinely false-positive on UUIDs, order
-# numbers, and course IDs, which are common and harmless inside a URL.
-ALWAYS_REDACT_EVEN_IN_URL = {"EMAIL_ADDRESS", "PHONE_NUMBER"}
+# feedback text. Everything else stays exempted: a NER or pattern match inside a URL
+# is usually a false positive on a path segment, UUID, or course ID. Financial and
+# SSN types are listed because spaCy tags a bare account number as DATE_TIME, and
+# they already need a checksum, a format or a context word to match.
+ALWAYS_REDACT_EVEN_IN_URL = {
+    "EMAIL_ADDRESS",
+    "PHONE_NUMBER",
+    "CREDIT_CARD",
+    "IBAN_CODE",
+    "US_BANK_NUMBER",
+    "US_SSN",
+}
 
 # Presidio's built-in EmailRecognizer's local-part character class includes URL
 # delimiters (/ ? = &), so an email right after a URL's domain/path (e.g. a reset
@@ -39,6 +139,7 @@ def _get_analyzer() -> AnalyzerEngine:
         _analyzer = AnalyzerEngine()
         _analyzer.registry.remove_recognizer("EmailRecognizer")
         _analyzer.registry.add_recognizer(_STRICT_EMAIL_RECOGNIZER)
+        _analyzer.registry.add_recognizer(_STREET_ADDRESS_RECOGNIZER)
     return _analyzer
 
 
@@ -73,7 +174,8 @@ def _redact_text(value: str | None) -> str | None:
     filtered_results = [
         result
         for result in results
-        if result.entity_type not in EXCLUDED_ENTITIES
+        if result.entity_type in REDACTED_ENTITIES
+        and result.score >= MIN_SCORE_BY_ENTITY.get(result.entity_type, 0)
         and not (
             result.entity_type not in ALWAYS_REDACT_EVEN_IN_URL
             and any(

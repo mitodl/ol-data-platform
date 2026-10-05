@@ -1,4 +1,4 @@
-{{ config(materialized="table", unique_key="program_pk") }}
+{{ config(unique_key="program_pk") }}
 
 with
     mitxonline_programs as (

@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- User to course run roles bridge across all platforms.
 -- Grain: one row per (user, course_run, role).
 with user_course_roles as (

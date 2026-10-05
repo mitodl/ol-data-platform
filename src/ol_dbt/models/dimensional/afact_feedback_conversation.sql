@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- The analysis fact: one row per conversation. A complaint usually emerges over several
 -- turns, so the conversation is the unit that gets summarized, embedded, scored and
 -- clustered. Fully rebuildable without touching tfact_feedback.
@@ -53,6 +49,7 @@ with conversation as (
         feedback.feedback_source_fk
         , feedback.conversation_id
         , feedback_tag.tag_slug
+        , feedback_tag.tag_label
     from feedback
     inner join {{ ref('bridge_feedback_tag') }} as bridge
         on feedback.feedback_pk = bridge.feedback_pk
@@ -76,6 +73,7 @@ with conversation as (
         conversation_tag.feedback_source_fk
         , conversation_tag.conversation_id
         , conversation_tag.tag_slug
+        , conversation_tag.tag_label
         , row_number() over (
             partition by conversation_tag.feedback_source_fk, conversation_tag.conversation_id
             order by tag_frequency.conversation_count desc, conversation_tag.tag_slug
@@ -89,6 +87,7 @@ with conversation as (
         feedback_source_fk
         , conversation_id
         , tag_slug
+        , tag_label
     from ranked_tag
     where tag_rank = 1
 )
@@ -184,6 +183,7 @@ select
     -- conversation with neither stays null, the queryable unassigned state.
     , coalesce(cluster_category.feedback_category_pk, feedback_category.feedback_category_pk)
         as category_fk
+    , dominant_tag.tag_label as dominant_tag_label
     , cluster_assignment.cluster_key
     , cluster_assignment.cluster_similarity
     , cluster_assignment.cluster_assignment_method

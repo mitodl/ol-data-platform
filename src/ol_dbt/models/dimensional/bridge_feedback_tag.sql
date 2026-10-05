@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- One row per turn and tag, so you can filter turns by tag without joining the fact.
 with unioned as (
     select

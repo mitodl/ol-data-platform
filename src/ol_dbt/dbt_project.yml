@@ -69,14 +69,6 @@ vars:
     micromasters_media_url: "https://ol-micromasters-app-production.s3.amazonaws.com/"
     micromasters_production_url: "https://micromasters.mit.edu/"
 
-    highest_education_values: ["Doctorate", "Master''s or professional degree", "Bachelor''s\
-        \ degree", "Associate degree", "Secondary/high school", "Junior secondary/junior\
-        \ high/middle school", "Elementary/primary school", "No formal education",
-      "Other education", "Doctorate in science or engineering", "Doctorate in another\
-        \ field", ""]
-    gender_values: ["Male", "Female", "Transgender", "Non-binary/non-conforming",
-      "Binary", "Other/Prefer Not to Say", ""]
-
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 

@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 with xpro_tax_rates as (
     select * from {{ ref('stg__mitxpro__app__postgres__ecommerce_taxrate') }}
 )

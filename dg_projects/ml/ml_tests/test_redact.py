@@ -16,10 +16,13 @@ class _Result:
 
 
 class _AnalyzerResult:
-    def __init__(self, entity_type: str, start: int, end: int) -> None:
+    def __init__(
+        self, entity_type: str, start: int, end: int, score: float = 0.85
+    ) -> None:
         self.entity_type = entity_type
         self.start = start
         self.end = end
+        self.score = score
 
 
 class _FakeAnalyzer:
@@ -172,6 +175,156 @@ def test_redact_text_still_redacts_an_email_and_phone_contained_in_a_url(
     redacted = redact._redact_text(text)
     assert "<EMAIL_ADDRESS>" in redacted
     assert "<PHONE_NUMBER>" in redacted
+
+
+def test_redact_text_masks_only_identifying_entity_types(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LOCATION, NRP and national-ID matches stay as written; PERSON and IBAN are
+    masked.
+
+    The English NER model tags ordinary Spanish words as LOCATION/NRP, and the
+    driver's-license pattern matches problem numbers like "2.3.5".
+    """
+    text = "Problema 2.3.5 de Colombia, pregunta de Ana, IBAN DE89370400440532013000"
+
+    def span(word: str) -> tuple[int, int]:
+        start = text.index(word)
+        return start, start + len(word)
+
+    class _MixedAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("US_DRIVER_LICENSE", *span("2.3.5")),
+                _AnalyzerResult("LOCATION", *span("Colombia")),
+                _AnalyzerResult("NRP", *span("pregunta")),
+                _AnalyzerResult("PERSON", *span("Ana")),
+                _AnalyzerResult("IBAN_CODE", *span("DE89370400440532013000")),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _MixedAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert redact._redact_text(text) == (
+        "Problema 2.3.5 de Colombia, pregunta de <PERSON>, IBAN <IBAN_CODE>"
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "Ship it to 77 Massachusetts Ave, Cambridge, MA 02139.",
+            ["77 Massachusetts Ave", "MA 02139"],
+        ),
+        (
+            "1234 Elm Street, Apt 5B, IL 62704-1234",
+            ["1234 Elm Street", "IL 62704-1234"],
+        ),
+        (
+            "I live at 221B Baker Street, London NW1 6XE",
+            ["221B Baker Street", "NW1 6XE"],
+        ),
+        ("Mi dirección es Calle 45 #12-30, Bogotá", ["Calle 45 #12-30"]),
+        (
+            "ship to 77 massachusetts ave, cambridge, ma 02139",
+            ["77 massachusetts ave", "ma 02139"],
+        ),
+        ("vivo en calle 45 #12-30, bogotá", ["calle 45 #12-30"]),
+    ],
+)
+def test_street_address_recognizer_matches_the_street_and_postal_code(
+    text: str, expected: list[str]
+) -> None:
+    """The street and ZIP/postcode are masked; a city or country alone is not."""
+    results = redact._STREET_ADDRESS_RECOGNIZER.analyze(
+        text=text, entities=["STREET_ADDRESS"]
+    )
+
+    assert sorted(text[r.start : r.end] for r in results) == sorted(expected)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Problem PS2.3.5 asks about 3 ways to sort",
+        "I watched 12 videos in week 3",
+        "my ma 02139 and 50 states",
+        "Vivo en Bogotá, Colombia",
+        "I watched 12 videos on the way to work",
+        "it took 3 tries on the road to the answer",
+        "in 12345 cases, or 23456",
+    ],
+)
+def test_street_address_recognizer_ignores_text_that_is_not_an_address(
+    text: str,
+) -> None:
+    results = redact._STREET_ADDRESS_RECOGNIZER.analyze(
+        text=text, entities=["STREET_ADDRESS"]
+    )
+
+    assert results == []
+
+
+def test_redact_text_masks_a_bank_number_only_next_to_a_context_word(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Presidio scores a bare 8-17 digit run 0.05 and one near "account" 0.4.
+
+    The bare runs in feedback are ticket and meeting IDs, so only the second masks,
+    even though spaCy also tags it DATE_TIME.
+    """
+    text = "Ticket EDX-12345678, bank account 987654321"
+
+    def span(word: str) -> tuple[int, int]:
+        start = text.index(word)
+        return start, start + len(word)
+
+    class _BankAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("US_BANK_NUMBER", *span("12345678"), score=0.05),
+                _AnalyzerResult("US_BANK_NUMBER", *span("987654321"), score=0.4),
+                _AnalyzerResult("DATE_TIME", *span("987654321")),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _BankAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert redact._redact_text(text) == (
+        "Ticket EDX-12345678, bank account <US_BANK_NUMBER>"
+    )
+
+
+def test_redact_text_masks_a_formatted_ssn_even_inside_a_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A formatted SSN (score 0.5) is masked inside a URL; a bare 9-digit order ID
+    (weak SSN pattern, score 0.05) in the same kind of span is not.
+    """
+    text = (
+        "See https://example.test/?ssn=234-56-7890 and https://example.test/r/512345678"
+    )
+
+    def span(word: str) -> tuple[int, int]:
+        start = text.index(word)
+        return start, start + len(word)
+
+    class _SsnInUrlAnalyzer:
+        def analyze(self, text: str, language: str) -> list[_AnalyzerResult]:  # noqa: ARG002
+            return [
+                _AnalyzerResult("URL", *span("https://example.test/?ssn=234-56-7890")),
+                _AnalyzerResult("US_SSN", *span("234-56-7890"), score=0.5),
+                _AnalyzerResult("URL", *span("https://example.test/r/512345678")),
+                _AnalyzerResult("US_SSN", *span("512345678"), score=0.05),
+            ]
+
+    monkeypatch.setattr(redact, "_get_analyzer", _SsnInUrlAnalyzer)
+    monkeypatch.setattr(redact, "_get_anonymizer", _FakeAnonymizer)
+
+    assert redact._redact_text(text) == (
+        "See https://example.test/?ssn=<US_SSN> and https://example.test/r/512345678"
+    )
 
 
 def test_filter_unredacted_drops_already_redacted_rows() -> None:

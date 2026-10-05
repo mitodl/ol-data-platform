@@ -97,6 +97,10 @@ raw__edxorg__discovery__api__programs      ← MIT-authored programs from the ed
 ```
 raw__mit_climate__api__articles            ← MIT Climate Portal Explainers + Ask MIT Climate
 raw__mitpe__api__courses                   ← MIT Professional Education course feed
+raw__mitpe__api__news                      ← MIT Professional Education news feed
+raw__mitpe__api__events                    ← MIT Professional Education events feed
+raw__openlearning__api__events             ← openlearning.mit.edu events (Drupal JSON:API)
+raw__medium__rss__posts                    ← MIT Open Learning's Medium publication (RSS)
 raw__see__api__courses                     ← Sloan Executive Education courses
 raw__see__api__course_offerings            ← Sloan Executive Education course offerings (runs)
 raw__oll__google_sheets__courses           ← Open Learning Library (Google Sheets CSV export)
@@ -107,6 +111,10 @@ raw__oll__google_sheets__courses           ← Open Learning Library (Google She
 ```
 raw__podcast__rss__channels                ← MIT Learn podcast channels from RSS
 raw__podcast__rss__episodes                ← MIT Learn podcast episodes from RSS
+raw__youtube__api__channels                ← MIT Learn YouTube channels
+raw__youtube__api__playlists               ← MIT Learn YouTube playlists
+raw__youtube__api__playlist_items          ← YouTube playlist membership, in order
+raw__youtube__api__videos                  ← MIT Learn YouTube videos
 ```
 
 ### Client analytics (via dlt)

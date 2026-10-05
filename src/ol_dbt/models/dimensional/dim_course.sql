@@ -25,7 +25,7 @@ with mitxonline_courses as (
         , course_title
         -- Extract course_number from readable_id (format: course-v1:{org}+{course_number})
         , case
-            when cardinality(split(course_readable_id, '+')) >= 2
+            when {{ array_length("split(course_readable_id, '+')") }} >= 2
                 then split(course_readable_id, '+')[2]
         end as course_number
         , cast(null as varchar) as course_description  -- mitxpro doesn't have course_description
@@ -90,7 +90,7 @@ with mitxonline_courses as (
     select distinct
         course_id
         , case
-            when cardinality(split(courserun_readable_id, '+')) >= 2
+            when {{ array_length("split(courserun_readable_id, '+')") }} >= 2
                 then split(courserun_readable_id, '+')[2]
         end as course_number
         -- Use course_readable_id from int__bootcamps__course_runs which already has course_id
@@ -134,7 +134,7 @@ with mitxonline_courses as (
 
 -- SCD Type 2 logic: Detect changes
 , new_and_changed_courses as (
-    select
+    select distinct
         {{ dbt_utils.generate_surrogate_key([
             'platform',
             'course_readable_id'
@@ -171,7 +171,7 @@ with mitxonline_courses as (
 {% if is_incremental() %}
 -- Update existing records: Set end_date and is_current for changed records
 , records_to_expire as (
-    select
+    select distinct
         existing.course_pk
         , existing.course_readable_id
         , existing.source_id

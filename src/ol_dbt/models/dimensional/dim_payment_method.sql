@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Seed table or hardcoded reference data.
 -- payment_method_code is the canonical warehouse code used for joins in tfact_payment.
 -- Cybersource's raw req_payment_method field uses different values (e.g. 'card' for credit card);

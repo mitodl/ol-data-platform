@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Resolves which order produced each enrollment. xPRO enrollments carry a direct
 -- order FK (tfact_enrollment.order_id), authoritative even after deferral to a
 -- different course run or bundling into a program purchase; if that order hasn't

@@ -1071,7 +1071,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
     - not_null
 
 - name: stg__mitxpro__app__postgres__courses_platform

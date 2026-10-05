@@ -75,7 +75,7 @@ with enrollment_detail as (
         , courserun_readable_id
         , min(cast(substring(courserunenrollment_created_on, 1, 10) as date)) as enroll_date
     from enrollment_detail
-    where courserunenrollment_enrollment_status is null
+    where courserunenrollment_is_active
     group by
         user_email
         , courserun_readable_id

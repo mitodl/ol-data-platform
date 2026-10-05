@@ -90,7 +90,7 @@ with mitxonline_products as (
 )
 
 , final as (
-    select
+    select distinct
         {{ dbt_utils.generate_surrogate_key([
             'cast(product_id as varchar)',
             'platform'
@@ -127,7 +127,7 @@ with mitxonline_products as (
 {% if is_incremental() %}
 -- Expire prior current rows when price changes
 , records_to_expire as (
-    select
+    select distinct
         existing.product_pk
         , existing.source_product_id
         , existing.product_type

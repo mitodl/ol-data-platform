@@ -88,13 +88,13 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_highest_education
     description: str, user highest education
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   - name: latest_income_usd
     description: numeric, latest user income in usd
   - name: latest_original_income

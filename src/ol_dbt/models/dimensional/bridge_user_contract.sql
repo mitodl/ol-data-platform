@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- User to B2B contract membership bridge, carrying the learner's data-sharing consent.
 -- Grain: one row per (user, contract).
 -- Consent is recorded per contract, not per organization, so a learner seated under

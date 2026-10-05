@@ -326,7 +326,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
     - not_null
 
 - name: stg__bootcamps__app__postgres__courses_course

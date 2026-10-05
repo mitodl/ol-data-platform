@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Build hierarchical topic taxonomy from all platforms
 with mitxonline_topics_raw as (
     select distinct

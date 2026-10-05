@@ -13,17 +13,12 @@ dependencies = [
     "ol-orchestrate-lib",
     # The Dagster plugins pin dagster exactly, so this line decides which
     # plugin versions the ranges below resolve to.
-    "dagster==1.13.24",
+    "dagster==1.13.25",
     "dagster-aws~=0.29.0",
-    "dagster-azure~=0.29.0",
-    "dagster-graphql==1.13.24",
+    "dagster-graphql==1.13.25",
     "dagster-k8s~=0.29.0",
     "dagster-postgres~=0.29.0",
-    "dagster-webserver==1.13.24",
-    # kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x
-    # does not handle, raising AttributeError at launch time. Pin until dagster-k8s
-    # upstream resolves the incompatibility.
-    "kubernetes<36",
+    "dagster-webserver==1.13.25",
     # OpenTelemetry auto-instrumentation for the webserver and the daemon.
     #
     # These are agent packages, not runtime dependencies: nothing in
@@ -38,26 +33,31 @@ dependencies = [
     # PINNED, and the pins are load-bearing rather than routine hygiene. The
     # preemption budget ol-infrastructure sets for run workers
     # (dagster_instance.yaml: OTEL_BSP_SCHEDULE_DELAY, OTEL_EXPORTER_OTLP_TIMEOUT)
-    # is derived from opentelemetry-sdk 1.44.0 internals, and two of them are not
+    # is derived from opentelemetry-sdk 1.45.0 internals, and two of them are not
     # stable API:
-    #   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.44.0 -- BatchProcessor stores
+    #   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.45.0 -- BatchProcessor stores
     #     _export_timeout_millis and never reads it -- so the shutdown drain runs at
     #     a hardcoded 30s join. A release that wires it up changes the budget.
     #   - The Python HTTP exporter reads OTEL_EXPORTER_OTLP_TIMEOUT in SECONDS
-    #     (DEFAULT_TIMEOUT = 10  # in seconds), contradicting the OTel spec, which
-    #     defines it in milliseconds. An upstream fix would silently reinterpret
-    #     ol-infrastructure's "2" as 2ms and fail every export.
+    #     (_resolve_timeout returns float(value), _DEFAULT_TIMEOUT = 10),
+    #     contradicting the OTel spec, which defines it in milliseconds. An
+    #     upstream fix would silently reinterpret ol-infrastructure's "2" as 2ms
+    #     and fail every export.
     # opentelemetry-sdk is pinned explicitly rather than left to the distro's range
     # for that reason: it is the package the reasoning actually depends on.
     # Re-check that reasoning when bumping these, not just the test suite.
-    "opentelemetry-distro==0.65b0",
-    "opentelemetry-sdk==1.44.0",
-    "opentelemetry-exporter-otlp-proto-http==1.44.0",
-    "opentelemetry-instrumentation-sqlalchemy==0.65b0",
-    "opentelemetry-instrumentation-grpc==0.65b0",
-    "opentelemetry-instrumentation-botocore==0.65b0",
-    "opentelemetry-instrumentation-requests==0.65b0",
-    "opentelemetry-instrumentation-urllib3==0.65b0",
+    #
+    # Since 1.45.0 the HTTP exporter sends through urllib3, which this image
+    # instruments. Its requests stay untraced only because the SDK suppresses
+    # instrumentation around each export.
+    "opentelemetry-distro==0.66b0",
+    "opentelemetry-sdk==1.45.0",
+    "opentelemetry-exporter-otlp-proto-http==1.45.0",
+    "opentelemetry-instrumentation-sqlalchemy==0.66b0",
+    "opentelemetry-instrumentation-grpc==0.66b0",
+    "opentelemetry-instrumentation-botocore==0.66b0",
+    "opentelemetry-instrumentation-requests==0.66b0",
+    "opentelemetry-instrumentation-urllib3==0.66b0",
 ]
 
 [tool.uv]
