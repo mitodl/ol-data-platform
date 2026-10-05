@@ -15,6 +15,7 @@ ol-infrastructure writes in every environment. Any other profile reads
 """
 
 import os
+import threading
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -50,29 +51,41 @@ class TikaClient:
 
     def __init__(self, base_url: str, access_token: str) -> None:
         self.base_url = base_url.rstrip("/")
-        self._session = requests.Session()
-        self._session.headers.update(
-            {
-                "Accept": "application/json",
-                "X-Access-Token": access_token,
-                "X-Tika-PDFOcrStrategy": OCR_STRATEGY,
-            }
-        )
-        # Read errors are not retried here: a hung Tika would hold each file
-        # for four timeouts before it counted as failed. urllib3 counts a
-        # connection dropped mid-request as a read error too, so extract_text
-        # retries that case itself.
-        retry = Retry(
-            total=RETRIES,
-            # False, not 0: with 0 urllib3 wraps a read timeout in
-            # MaxRetryError, which requests raises as ConnectionError.
-            read=False,
-            backoff_factor=2,
-            status_forcelist=(502, 503, 504),
-            allowed_methods=("PUT",),
-        )
-        self._session.mount("https://", HTTPAdapter(max_retries=retry))
-        self._session.mount("http://", HTTPAdapter(max_retries=retry))
+        self._headers = {
+            "Accept": "application/json",
+            "X-Access-Token": access_token,
+            "X-Tika-PDFOcrStrategy": OCR_STRATEGY,
+        }
+        self._local = threading.local()
+
+    @property
+    def _session(self) -> requests.Session:
+        """Return the calling thread's session.
+
+        One per thread: requests does not promise a Session is safe to share,
+        and the OCW source calls this client from a pool of workers.
+        """
+        session: requests.Session | None = getattr(self._local, "session", None)
+        if session is None:
+            session = requests.Session()
+            session.headers.update(self._headers)
+            # Read errors are not retried here: a hung Tika would hold each
+            # file for four timeouts before it counted as failed. urllib3
+            # counts a connection dropped mid-request as a read error too, so
+            # extract_text retries that case itself.
+            retry = Retry(
+                total=RETRIES,
+                # False, not 0: with 0 urllib3 wraps a read timeout in
+                # MaxRetryError, which requests raises as ConnectionError.
+                read=False,
+                backoff_factor=2,
+                status_forcelist=(502, 503, 504),
+                allowed_methods=("PUT",),
+            )
+            session.mount("https://", HTTPAdapter(max_retries=retry))
+            session.mount("http://", HTTPAdapter(max_retries=retry))
+            self._local.session = session
+        return session
 
     def extract_text(self, body: bytes, timeout: float = TIMEOUT_SECONDS) -> str | None:
         """Return the document's text, or None when Tika finds none.

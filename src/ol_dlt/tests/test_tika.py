@@ -106,3 +106,16 @@ def test_dropped_connection_is_tried_again() -> None:
         assert server.connections == tika.DROPPED_CONNECTION_ATTEMPTS
     finally:
         server.close()
+
+
+def test_each_thread_gets_its_own_session() -> None:
+    client = tika.TikaClient("https://tika.example", "token")
+    sessions: list[requests.Session] = []
+
+    worker = threading.Thread(target=lambda: sessions.append(client._session))  # noqa: SLF001
+    worker.start()
+    worker.join()
+
+    assert client._session is client._session  # noqa: SLF001
+    assert sessions[0] is not client._session  # noqa: SLF001
+    assert sessions[0].headers["X-Access-Token"] == "token"
