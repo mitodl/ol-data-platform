@@ -98,6 +98,7 @@ models:
       exam
       run. Null for all other platforms and non-exam MITxOnline course runs.
   - name: passing_grade
+    data_type: double
     description: >
       Passing score threshold (0.0–1.0) set per MicroMasters proctored exam run.
       Populated only for MITxOnline course runs that correspond to a MicroMasters
