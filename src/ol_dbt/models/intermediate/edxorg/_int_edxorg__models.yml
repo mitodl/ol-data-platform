@@ -51,6 +51,7 @@ models:
     description: str, the pacing of the course. Possible values are 'self_paced' or
       'instructor_paced'.
   - name: courserun_is_published
+    data_type: boolean
     description: boolean, indicating whether the course run is published and open
       for enrollment
   - name: courserun_enrollment_mode

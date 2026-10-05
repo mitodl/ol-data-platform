@@ -22,11 +22,13 @@ from ol_dlt.sources import (
     course_xml_blocks,
     edxorg_s3,
     keycloak,
+    medium,
     mit_climate,
     mit_edx_programs,
     mitpe,
     mitxonline_app,
     oll,
+    openlearning,
     podcast_rss,
     posthog_events,
     see,
@@ -123,6 +125,16 @@ mitxonline_app_assets = (
 )
 see_assets = build_ingest_assets(
     name="see_ingest", source=see.build_source(), pipeline=see.see_pipeline
+)
+openlearning_assets = build_ingest_assets(
+    name="openlearning_ingest",
+    source=openlearning.build_source(),
+    pipeline=openlearning.openlearning_pipeline,
+)
+medium_assets = build_ingest_assets(
+    name="medium_ingest",
+    source=medium.build_source(),
+    pipeline=medium.medium_pipeline,
 )
 youtube_assets = build_ingest_assets(
     name="youtube_ingest",
@@ -343,6 +355,8 @@ defs = Definitions(
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
             youtube_assets,
             see_assets,
+            openlearning_assets,
+            medium_assets,
             posthog_events_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,

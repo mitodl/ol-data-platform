@@ -47,13 +47,13 @@ repos:
     - src/ol_dbt/package-lock.yml
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.16.9'
+  rev: 'v0.16.10'
   hooks:
   - id: ruff-format
   - id: ruff-check
     args: [--extend-ignore=D1, --fix]
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v2.3.1
+  rev: v2.4.0
   hooks:
   - id: mypy
     args:
@@ -78,8 +78,8 @@ repos:
     entry: python bin/sqlfluff-dbt-hook.py fix --show-lint-violations --disable-progress-bar
     language: python
     additional_dependencies:
-    - sqlfluff==4.3.0
-    - sqlfluff-templater-dbt==4.3.0
+    - sqlfluff==4.4.0
+    - sqlfluff-templater-dbt==4.4.0
     - dbt-trino==1.10.2
     # Same version as the dbt deps step in .github/workflows/autofix.yml.
     - dbt-core==1.12.5
@@ -127,8 +127,8 @@ repos:
     entry: python bin/sqlfluff-dbt-hook.py lint --disable-progress-bar
     language: python
     additional_dependencies:
-    - sqlfluff==4.3.0
-    - sqlfluff-templater-dbt==4.3.0
+    - sqlfluff==4.4.0
+    - sqlfluff-templater-dbt==4.4.0
     - dbt-trino==1.10.2
     # Same version as the dbt deps step in .github/workflows/autofix.yml.
     - dbt-core==1.12.5

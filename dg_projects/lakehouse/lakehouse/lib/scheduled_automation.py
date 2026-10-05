@@ -113,6 +113,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # and stays one click away, which is also what a deliberate QA run under
     # step 8 needs.
     "dbt_docs_artifacts_daily": frozenset({"production"}),
+    # `dbt source freshness`, publishing sources.json for OpenMetadata.
+    # Production-only for the same reason as the docs schedule above: it reports
+    # on the production sources. Its job is likewise registered in `jobs` in
+    # every environment, so a deliberate run elsewhere stays possible.
+    "dbt_source_freshness_daily": frozenset({"production"}),
     # Builds the tag:starrocks models, then refreshes their downstream MVs.
     # Always target-correct via STARROCKS_DBT_TARGET, but a QA run reads the
     # empty QA lake and publishes a B2B dashboard's worth of silently partial

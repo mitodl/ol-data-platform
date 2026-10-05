@@ -1,0 +1,107 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__youtube__api__channels
+    description: >
+      One row per YouTube channel configured in mitodl/open-video-data, from the
+      YouTube Data API channels endpoint, loaded by the youtube dlt pipeline.
+      Merged on channel_id.
+    columns:
+    - name: channel_id
+      description: str, YouTube's channel id
+    - name: offered_by
+      description: str, MIT Learn offeror code from the channel config, e.g. ocw
+    - name: config_file
+      description: >
+        str, the mitodl/open-video-data youtube/ file the channel is configured
+        in, e.g. channels.yaml
+    - name: snippet__title
+      description: str, channel title
+    - name: snippet__description
+      description: str, channel description
+    - name: snippet__custom_url
+      description: str, the channel's @handle
+    - name: snippet__published_at
+      description: timestamp, when the channel was created
+    - name: snippet__thumbnails__high__url
+      description: str, URL of the channel's high-resolution thumbnail
+    - name: _dlt_load_id
+      description: str, id of the dlt load that last wrote the row
+
+  - name: raw__youtube__api__playlists
+    description: >
+      One row per playlist ingested for a configured channel, from the YouTube
+      Data API playlists endpoint. A channel whose config lists `all` contributes
+      every playlist on the channel. Merged on playlist_id.
+    columns:
+    - name: playlist_id
+      description: str, YouTube's playlist id
+    - name: channel_id
+      description: str, id of the configured channel the playlist was ingested under
+    - name: offered_by
+      description: str, the channel config's offered_by
+    - name: create_videos
+      description: >
+        boolean, MIT Learn's create_videos for the playlist: its own config
+        entry's value, else the channel's, else true. False means Learn matches
+        the videos to existing OCW content files instead of creating videos.
+    - name: snippet__title
+      description: str, playlist title
+    - name: snippet__description
+      description: str, playlist description
+    - name: snippet__thumbnails__high__url
+      description: str, URL of the playlist's high-resolution thumbnail
+    - name: snippet__published_at
+      description: timestamp, when the playlist was created
+    - name: content_details__item_count
+      description: bigint, number of items YouTube reports in the playlist
+    - name: _dlt_load_id
+      description: str, id of the dlt load that last wrote the row
+
+  - name: raw__youtube__api__playlist_items
+    description: >
+      One row per video in an ingested playlist, from the YouTube Data API
+      playlistItems endpoint. A video listed twice in one playlist keeps its
+      first position. Merged on playlist_id + video_id.
+    columns:
+    - name: playlist_id
+      description: str, YouTube's playlist id
+    - name: video_id
+      description: str, YouTube's video id
+    - name: position
+      description: >
+        bigint, zero-based index of the entry in the playlist listing, counting
+        entries whose video the videos endpoint does not return
+    - name: _dlt_load_id
+      description: str, id of the dlt load that last wrote the row
+
+  - name: raw__youtube__api__videos
+    description: >
+      One row per video across all ingested playlists, from the YouTube Data API
+      videos endpoint. Private and deleted videos are not returned and so never
+      land. Merged on video_id.
+    columns:
+    - name: video_id
+      description: str, YouTube's video id
+    - name: snippet__channel_id
+      description: str, id of the channel that uploaded the video
+    - name: snippet__title
+      description: str, video title in its default language
+    - name: snippet__localized__title
+      description: str, localized video title; the one MIT Learn uses
+    - name: snippet__description
+      description: str, video description, plain text
+    - name: snippet__thumbnails__high__url
+      description: str, URL of the video's high-resolution thumbnail
+    - name: snippet__published_at
+      description: timestamp, when the video was published
+    - name: content_details__duration
+      description: str, ISO 8601 duration, e.g. PT1H2M3S
+    - name: _dlt_load_id
+      description: str, id of the dlt load that last wrote the row
