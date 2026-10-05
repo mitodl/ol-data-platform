@@ -160,7 +160,13 @@ Every uncertified bootcamps enrollment is therefore `not_started` and gets a
 `needs_attention_since`. The gaps are closed in the inputs by the passing and certificate
 tasks in §7, not by platform branches in this model.
 
-Access: see the open question in §9 before building.
+Access: the model keeps the `dimensional` layer's grants. Its inputs (enrollments, grades,
+certificates, `dim_user`) are already readable by those roles, so it exposes no new source
+data, only the derived status and needs-attention date. Consent is not applied in the
+dimensional layer. It is applied where the model is joined to consent for a consumer: the
+mart, reporting and integration layers. The B2B path already works this way: the StarRocks
+views join consent and emit `outcomes_shared`, and the API withholds outcomes on it. A new
+consumer-facing model built on this one must carry or apply consent itself.
 
 Tests: `unique_combination_of_columns` on (user_fk, courserun_fk), `not_null` on both,
 `accepted_values` on `completion_status`, and dbt unit tests (run by `ol-dbt unit-test`)
@@ -394,13 +400,6 @@ the API's CI reads it from the manifest.
 
 Blocking for phase 1:
 
-- Access to the new table. `dimensional` grants select to `read_only_production`,
-  `ol_data_analyst`, `business_intelligence`, `ol_business_analyst` and `reverse_etl`. The
-  inputs (enrollments, grades, certificates, `dim_user`) are already readable by those
-  roles, so no new source data is exposed. What is new is a derived per-learner status and
-  needs-attention date, joinable to `dim_user.email`, with no consent gate:
-  `outcomes_shared` is applied only in the StarRocks views and the API. Either accept that
-  for internal roles, or give the model narrower grants.
 - Which enrollment represents a (user, course run) when `tfact_enrollment` has more than
   one. Not measured how often that happens.
 - Which "today" the consumer compares against. The API uses the StarRocks cluster's
