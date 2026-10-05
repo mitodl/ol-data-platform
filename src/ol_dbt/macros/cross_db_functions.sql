@@ -589,13 +589,36 @@
 {%- endmacro %}
 
 {% macro default__unnest_json_array(json_expr, alias, col_name) -%}
+    {# UNNEST skips NULL inputs, yielding 0 rows for malformed/non-array input. #}
+    unnest({{ try_parse_json_array(json_expr) }}) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+{#
+    try_parse_json_array: a varchar JSON array string as an array of JSON values, or
+    NULL where unnest_json_array would yield no rows. The json_array test uses it to
+    report the rows unnest_json_array drops.
+#}
+{% macro try_parse_json_array(json_expr) -%}
+    {{ adapter.dispatch('try_parse_json_array', 'open_learning')(json_expr) }}
+{%- endmacro %}
+
+{% macro default__try_parse_json_array(json_expr) -%}
     {#
         Trino: try() wraps json_parse() so malformed JSON returns NULL before try_cast
         sees it (json_parse raises before try_cast can catch). try_cast then converts
         the JSON value to array(json), returning NULL for non-array JSON.
-        UNNEST skips NULL inputs, yielding 0 rows for malformed/non-array input.
     #}
-    unnest(try_cast(try(json_parse({{ json_expr }})) as array(json))) as {{ alias }} ({{ col_name }})
+    try_cast(try(json_parse({{ json_expr }})) as array(json))
+{%- endmacro %}
+
+{% macro duckdb__try_parse_json_array(json_expr) -%}
+    {# DuckDB: cast the varchar JSON array string directly to json[] (list of json values). #}
+    try_cast({{ json_expr }} as json[])
+{%- endmacro %}
+
+{% macro starrocks__try_parse_json_array(json_expr) -%}
+    {# StarRocks: parse the JSON string, then cast to an array of JSON elements #}
+    cast(parse_json({{ json_expr }}) as array<json>)
 {%- endmacro %}
 
 {#
@@ -625,18 +648,6 @@
     cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<varchar>)
 {%- endmacro %}
 
-{% macro duckdb__unnest_json_array(json_expr, alias, col_name) -%}
-    {#
-        DuckDB: cast the varchar JSON array string directly to json[] (list of json values).
-        try_cast returns NULL for malformed input → unnest of NULL produces 0 rows.
-    #}
-    unnest(try_cast({{ json_expr }} as json[])) as {{ alias }} ({{ col_name }})
-{%- endmacro %}
-
-{% macro starrocks__unnest_json_array(json_expr, alias, col_name) -%}
-    {# StarRocks: parse the JSON string, cast to an array of JSON elements, then unnest #}
-    unnest(cast(parse_json({{ json_expr }}) as array<json>)) as {{ alias }} ({{ col_name }})
-{%- endmacro %}
 
 
 {% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
