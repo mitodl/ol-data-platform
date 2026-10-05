@@ -7,15 +7,16 @@
     override if that lands.
 
     The location is `<root>/<schema>`, where the root comes from the
-    `iceberg_schema_location_roots` var keyed by catalog. That is where Trino
-    put every schema dbt created (the Galaxy catalog's default directory), so a
+    `iceberg_schema_location_roots` var keyed by catalog. Every suffixed schema
+    dbt has created through Trino has that Glue location, so a
     developer-suffixed schema lands in the same place whichever engine made it.
     The canonical layer schemas (ol_warehouse_<env>_<layer>) sit at their own
     bucket roots, but those are provisioned outside dbt and never reach here:
     dbt only creates schemas that are missing.
 
     The adapter leaves a node's database unset and creates schemas in the
-    session's catalog, so target.catalog is the catalog being written to.
+    session's catalog, so target.catalog is the catalog being written to. A
+    model-level config(catalog=...) is not visible here and gets no schema.
 #}
 {% macro starrocks__create_schema(relation) -%}
   {%- set catalog = target.catalog -%}
