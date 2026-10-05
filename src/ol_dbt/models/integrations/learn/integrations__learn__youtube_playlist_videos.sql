@@ -22,8 +22,8 @@ with playlist_items as (
     select * from {{ ref('stg__youtube__api__playlist_items') }}
     where
         playlist_item_dlt_load_id = (
-            select max(playlist_item_dlt_load_id)
-            from {{ ref('stg__youtube__api__playlist_items') }}
+            select max(playlist_item_loads.playlist_item_dlt_load_id)
+            from {{ ref('stg__youtube__api__playlist_items') }} as playlist_item_loads
         )
 )
 
@@ -31,8 +31,8 @@ with playlist_items as (
     select * from {{ ref('stg__youtube__api__videos') }}
     where
         video_dlt_load_id = (
-            select max(video_dlt_load_id)
-            from {{ ref('stg__youtube__api__videos') }}
+            select max(video_loads.video_dlt_load_id)
+            from {{ ref('stg__youtube__api__videos') }} as video_loads
         )
 )
 
