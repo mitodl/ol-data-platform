@@ -498,6 +498,55 @@ def test_bedrock_embedding_client_titan_calls_once_per_text() -> None:
     assert fake_client.calls[0]["dimensions"] == 2
 
 
+class _TokenLimitedTitanClient(_FakeBedrockClient):
+    """Rejects texts over max_chars the way Titan does, counting 2 chars per token."""
+
+    def __init__(self, max_chars: int, message: str | None = None) -> None:
+        super().__init__([])
+        self._max_chars = max_chars
+        self._message = message
+
+    def invoke_model(self, *, modelId: str, body: str) -> dict[str, Any]:
+        text = json.loads(body)["inputText"]
+        self.calls.append({"modelId": modelId, "inputText": text})
+        if len(text) > self._max_chars:
+            message = self._message or (
+                "400 Bad Request: Too many input tokens. Max input tokens: "
+                f"{self._max_chars // 2}, request input token count: {len(text) // 2} "
+            )
+            raise ClientError(
+                {"Error": {"Code": "ValidationException", "Message": message}},
+                "InvokeModel",
+            )
+        return {"body": _FakeBedrockBody({"embedding": [0.1, 0.2]})}
+
+
+def test_bedrock_titan_shortens_a_text_over_the_token_limit_and_retries() -> None:
+    fake_client = _TokenLimitedTitanClient(max_chars=10_000)
+    client = embed.BedrockEmbeddingClient(
+        fake_client, "amazon.titan-embed-text-v2:0", 2
+    )
+
+    result = client.embed_batch(["x" * 40_000])
+
+    assert result == [[0.1, 0.2]]
+    assert client.max_input_chars == 50_000
+    assert [len(call["inputText"]) for call in fake_client.calls] == [40_000, 9_000]
+
+
+def test_bedrock_titan_raises_a_validation_error_that_is_not_about_length() -> None:
+    fake_client = _TokenLimitedTitanClient(
+        max_chars=0, message="The provided model identifier is invalid."
+    )
+    client = embed.BedrockEmbeddingClient(
+        fake_client, "amazon.titan-embed-text-v2:0", 2
+    )
+
+    with pytest.raises(ClientError, match="model identifier is invalid"):
+        client.embed_batch(["a"])
+    assert len(fake_client.calls) == 1
+
+
 def test_bedrock_embedding_client_cohere_batches_in_one_call() -> None:
     fake_client = _FakeBedrockClient([{"embeddings": [[0.1, 0.2], [0.3, 0.4]]}])
     client = embed.BedrockEmbeddingClient(fake_client, "cohere.embed-english-v3", 2)
