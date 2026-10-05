@@ -86,8 +86,8 @@ models:
         column_list: ["conversation_ref", "turn_index"]
 
 - name: int__feedback__learn_ai_tutor
-  description: One row per user message sent to the Learn AI tutor chatbot. Bot replies
-    are excluded.
+  description: One row per user message sent to the AskTIM chatbot. Bot replies are
+    excluded.
   config:
     meta:
       qa_branches:
@@ -167,16 +167,16 @@ models:
   - name: updated_at
     description: str, the chat session's updated_at.
   - name: source_metadata
-    description: str, JSON of fields specific to Learn AI tutor, not shared with other
-      sources - chatsession_agent, checkpoint_source, checkpoint_type.
+    description: str, JSON of fields specific to AskTIM, not shared with other sources
+      - chatsession_agent, checkpoint_source, checkpoint_type.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["conversation_ref", "turn_index"]
 
 - name: int__feedback__content_feedback
-  description: One row per MIT Learn content feedback submission that has a comment,
-    conformed to the common feedback event contract. Each submission is its own single-turn
+  description: One row per content feedback submission that has a comment, conformed
+    to the common feedback event contract. Each submission is its own single-turn
     conversation. Sentiment-only submissions are dropped, because they have no text
     to summarize.
   config:
@@ -353,8 +353,8 @@ models:
         column_list: ["conversation_ref", "turn_index"]
 - name: int__feedback__unioned
   description: >
-    One row per feedback turn, from every source: Zendesk, Learn AI tutor, MIT Learn
-    content feedback.
+    One row per feedback turn, from every source: Zendesk, AskTIM, content feedback,
+    and the course discussion forum.
 
     PII: this model carries raw, unredacted feedback text under the intermediate
     schema's grants. Presidio masking happens in the feedback_redacted Dagster asset
