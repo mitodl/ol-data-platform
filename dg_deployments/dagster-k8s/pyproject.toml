@@ -13,13 +13,13 @@ dependencies = [
     "ol-orchestrate-lib",
     # The Dagster plugins pin dagster exactly, so this line decides which
     # plugin versions the ranges below resolve to.
-    "dagster==1.13.24",
+    "dagster==1.13.25",
     "dagster-aws~=0.29.0",
     "dagster-azure~=0.29.0",
-    "dagster-graphql==1.13.24",
+    "dagster-graphql==1.13.25",
     "dagster-k8s~=0.29.0",
     "dagster-postgres~=0.29.0",
-    "dagster-webserver==1.13.24",
+    "dagster-webserver==1.13.25",
     # kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x
     # does not handle, raising AttributeError at launch time. Pin until dagster-k8s
     # upstream resolves the incompatibility.
