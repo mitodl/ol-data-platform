@@ -419,9 +419,13 @@ models:
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
     description: string, enrollment status for users whose enrollment changed on the
-      corresponding platform
+      corresponding platform. Records why an enrollment changed, not whether it is
+      in force; use courserunenrollment_is_active for that
   - name: courserunenrollment_is_active
-    description: boolean, indicating whether the enrollment is active
+    description: boolean, indicating whether the enrollment is active. This is the
+      canonical "currently enrolled" flag; use it rather than the enrollment status,
+      which edX.org and Residential never populate and which MITx Online sets to 'deferred'
+      on enrollments that remain active in audit mode
     tests:
     - not_null
   - name: courserunenrollment_is_edx_enrolled
