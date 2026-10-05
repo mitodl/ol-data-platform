@@ -16,9 +16,36 @@ _PAGES: dict[int, list[dict[str, str]]] = {
     ],
     1: [],
 }
+_NEWS = [
+    {
+        "id": "6eda0dd3-b3be-4e47-9f22-784bbaf9ae3d",
+        "title": "The ripple effect of learning at MIT",
+        "date": "2026-06-23",
+        "author": "MIT Professional Education",
+        "summary": "Summary",
+        "image": "/sites/default/files/news.png",
+        "url": "/news/articles/ripple-effect-learning-mit",
+    }
+]
+_EVENTS = [
+    {
+        "id": "4d608f71-d97e-4dc8-b212-e09922d2e663",
+        "title": "Open House: Crisis Management &amp; Business Resiliency",
+        "start_date": "2026-09-24",
+        "end_date": "2026-09-24",
+        "time_range": "12:30PM EDT",
+        "summary": "Summary",
+        "image": "",
+        "url": "/events/open-house",
+    }
+]
 
 
-def _fake_get(_url: str, *, params: dict[str, int], **_kwargs: object) -> FakeResponse:
+def _fake_get(url: str, *, params: dict[str, int], **_kwargs: object) -> FakeResponse:
+    if url.endswith("/feeds/news/"):
+        return FakeResponse(json_data=_NEWS if params["page"] == 0 else [])
+    if url.endswith("/feeds/events/"):
+        return FakeResponse(json_data=_EVENTS if params["page"] == 0 else [])
     return FakeResponse(json_data=_PAGES[params["page"]])
 
 
@@ -41,6 +68,20 @@ def test_mitpe_materialization(
     table = pipeline.dataset()["raw__mitpe__api__courses"].arrow()
     assert table.num_rows == 2  # noqa: PLR2004
     assert {"title", "url"} <= set(table.column_names)
+
+    news = pipeline.dataset()["raw__mitpe__api__news"].arrow()
+    assert news.column("date").to_pylist() == ["2026-06-23"]
+    events = pipeline.dataset()["raw__mitpe__api__events"].arrow()
+    assert events.column("time_range").to_pylist() == ["12:30PM EDT"]
+    assert events.schema.field("start_date").type == "string"
+
+
+def test_feed_rows_carry_retrieved_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mitpe.requests, "get", _fake_get)
+    source = mitpe.mitpe_source()
+    (event,) = list(source.resources["raw__mitpe__api__events"])
+    assert event["id"] == _EVENTS[0]["id"]
+    assert event["retrieved_at"]
 
 
 @pytest.mark.integration

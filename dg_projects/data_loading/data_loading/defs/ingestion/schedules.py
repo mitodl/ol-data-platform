@@ -87,6 +87,28 @@ see_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+# The four feeds MIT Learn's news_events app polls (news_events/etl/), ahead of
+# the lakehouse's non_airbyte_staging_daily at 06:00. Learn polls every three
+# hours, but the integrations models only rebuild daily, so a more frequent load
+# would change nothing downstream. RUNNING by default in production, where the
+# feeds are public and the same in every environment.
+news_events_ingest_schedule = dg.ScheduleDefinition(
+    name="news_events_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__mitpe__api__news"],
+        ["ol_warehouse_raw_data", "raw__mitpe__api__events"],
+        ["ol_warehouse_raw_data", "raw__openlearning__api__events"],
+        ["ol_warehouse_raw_data", "raw__medium__rss__posts"],
+    ),
+    cron_schedule="50 4 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 keycloak_ingest_schedule = dg.ScheduleDefinition(
     name="keycloak_ingest_daily_schedule",
     # Selected by group rather than by key so adding a table to KEYCLOAK_SPEC
@@ -210,6 +232,7 @@ defs = dg.Definitions(
         podcast_rss_ingest_schedule,
         youtube_ingest_schedule,
         see_ingest_schedule,
+        news_events_ingest_schedule,
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         posthog_events_ingest_schedule,

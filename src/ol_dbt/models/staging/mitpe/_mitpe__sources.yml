@@ -26,3 +26,48 @@ sources:
       description: str, alt text for the course image (dlt-flattened from image.alt)
     - name: topics
       description: str, pipe-separated topic labels
+  - name: raw__mitpe__api__news
+    description: >
+      MIT Professional Education news from the /feeds/news/ API, loaded whole by
+      the mitpe dlt pipeline. Full replace on every run.
+    columns:
+    - name: id
+      description: str, the news item's uuid
+    - name: title
+      description: str, headline, HTML-escaped
+    - name: date
+      description: str, YYYY-MM-DD publication date
+    - name: author
+      description: str, author names as one string
+    - name: summary
+      description: str, HTML summary, HTML-escaped
+    - name: image
+      description: str, root-relative URL path of the image, may be empty
+    - name: url
+      description: str, root-relative URL path of the article
+    - name: retrieved_at
+      description: str, ISO 8601 time of the extraction
+  - name: raw__mitpe__api__events
+    description: >
+      MIT Professional Education events from the /feeds/events/ API, past ones
+      included, loaded whole by the mitpe dlt pipeline. Full replace on every run.
+    columns:
+    - name: id
+      description: str, the event's uuid
+    - name: title
+      description: str, event title, HTML-escaped
+    - name: start_date
+      description: str, YYYY-MM-DD start date
+    - name: end_date
+      description: str, YYYY-MM-DD end date
+    - name: time_range
+      description: str, free-text time of day, e.g. "12:30pm - 1pm" or "9am - 10 am
+        EDT", may be empty
+    - name: summary
+      description: str, HTML summary, HTML-escaped
+    - name: image
+      description: str, root-relative URL path of the image, may be empty
+    - name: url
+      description: str, root-relative URL path of the event page
+    - name: retrieved_at
+      description: str, ISO 8601 time of the extraction

@@ -1,0 +1,50 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__openlearning__api__events
+    description: >
+      Every event node on openlearning.mit.edu, from its Drupal JSON:API, loaded
+      by the openlearning dlt pipeline with the audience, category, location and
+      image relationships resolved onto the row. Full replace on every run.
+    columns:
+    - name: id
+      description: str, the node's uuid
+    - name: title
+      description: str, event title
+    - name: path_alias
+      description: str, root-relative URL path of the event page
+    - name: event_date
+      description: str, ISO 8601 start time with UTC offset
+    - name: event_end_date
+      description: str, ISO 8601 end time with UTC offset
+    - name: body_value
+      description: str, HTML body
+    - name: body_summary
+      description: str, plain-text summary, usually empty
+    - name: status
+      description: str, "true" when the node is published
+    - name: created
+      description: str, ISO 8601 time the node was created
+    - name: changed
+      description: str, ISO 8601 time the node was last changed
+    - name: event_audience
+      description: str, JSON array of the audience taxonomy term names, in the order
+        the node lists them
+    - name: event_category
+      description: str, JSON array of the event type taxonomy term names
+    - name: location_tag
+      description: str, JSON array of the location taxonomy term names
+    - name: image_url
+      description: str, root-relative URL path of the event image file
+    - name: image_alt
+      description: str, the image's alt text
+    - name: image_title
+      description: str, the image's title text
+    - name: retrieved_at
+      description: str, ISO 8601 time of the extraction

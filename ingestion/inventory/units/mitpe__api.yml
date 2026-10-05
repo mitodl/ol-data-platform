@@ -21,3 +21,11 @@ tables:
   primary_key:
   - - title
   - - url
+- name: raw__mitpe__api__news
+  raw_table: raw__mitpe__api__news
+  sync_mode: full_refresh_overwrite
+  modeled: true
+- name: raw__mitpe__api__events
+  raw_table: raw__mitpe__api__events
+  sync_mode: full_refresh_overwrite
+  modeled: true
