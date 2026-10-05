@@ -22,6 +22,20 @@ exist and their staging models could not build. This source appends every
 file's rows, stamped with the file they came from, and staging keeps the rows
 of each course's newest file.
 
+The edxorg code location also un-nests each course's structure document into
+one JSON Lines file of blocks per structure version
+(dg_projects/edxorg/.../edxorg_archive.py):
+
+        edxorg-raw-data/edxorg/processed_data/course_blocks/
+            <course>|{prod,edge}/<structure hash>.json
+
+An Airbyte source-s3 connection loads those into raw__edxorg__s3__course_blocks,
+and on 2026-10-05 that table held 6,466 of the 9,860 landed files. This source
+loads them into raw__edxorg__s3__course_structure_blocks, which is to replace
+it. A re-materialized structure overwrites its file with a new retrieved_at, so
+the landing zone holds only the latest copy of each: the Airbyte table has
+earlier copies of 1,918 files that this source cannot read.
+
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks
 """
@@ -80,6 +94,28 @@ XML_BLOCK_FIELDS = (
     "weight",
     "markdown",
 )
+# The row ol_orchestrate.lib.openedx.un_nest_course_structure writes, in the
+# order Airbyte landed the columns. block_details is the block's whole structure
+# entry, kept as a JSON string for staging to extract from. course_id is a
+# string in some files and a one-element list in others (138,244 of 428,478
+# rows across 431 files sampled 2026-10-05), and the list becomes its JSON text,
+# which is what Airbyte landed and what staging strips the brackets from.
+STRUCTURE_BLOCK_FIELDS = (
+    "block_id",
+    "block_due",
+    "course_id",
+    "block_type",
+    "block_index",
+    "block_start",
+    "block_title",
+    "block_parent",
+    "course_start",
+    "course_title",
+    "retrieved_at",
+    "block_details",
+    "block_content_hash",
+    "course_content_hash",
+)
 # The row the document and transcript text assets write
 # (dg_projects/openedx/openedx/assets/content_files.py and transcripts.py).
 # size_bytes stays text like everything else here; staging casts it.
@@ -107,6 +143,7 @@ class XmlBlocksTable:
     :param fields: Every field a line carries, in order.
     :param optional_fields: Fields a line may leave out. A failed extraction
         row has no file_extension.
+    :param integer_fields: Fields loaded as bigint instead of text.
     :param pipeline_name: dlt pipeline name, which keys the cursor.
     :param marks_empty_files: Load a marker row for a file with no lines. The
         text assets write an empty file when a course has nothing left to
@@ -119,6 +156,7 @@ class XmlBlocksTable:
     file_globs: tuple[str, ...]
     fields: tuple[str, ...] = XML_BLOCK_FIELDS
     optional_fields: frozenset[str] = frozenset()
+    integer_fields: frozenset[str] = frozenset()
     pipeline_name: str = ""
     marks_empty_files: bool = False
 
@@ -133,13 +171,29 @@ class XmlBlocksTable:
 
     @property
     def schema(self) -> pa.Schema:
-        return pa.schema([pa.field(name, pa.string()) for name in self.fields])
+        return pa.schema(
+            [
+                pa.field(
+                    name, pa.int64() if name in self.integer_fields else pa.string()
+                )
+                for name in self.fields
+            ]
+        )
 
 
 EDXORG = XmlBlocksTable(
     raw_table="raw__edxorg__s3__course_xml_blocks",
     pipeline_prefix="edxorg",
     file_globs=("edxorg-raw-data/edxorg/processed_data/course_xml_blocks/**/*.json",),
+)
+EDXORG_STRUCTURE_BLOCKS = XmlBlocksTable(
+    raw_table="raw__edxorg__s3__course_structure_blocks",
+    pipeline_prefix="edxorg",
+    file_globs=("edxorg-raw-data/edxorg/processed_data/course_blocks/**/*.json",),
+    fields=STRUCTURE_BLOCK_FIELDS,
+    # bigint in the Airbyte table, and staging passes it through uncast.
+    integer_fields=frozenset({"block_index"}),
+    pipeline_name="course_structure_blocks__edxorg",
 )
 OPENEDX = XmlBlocksTable(
     raw_table="raw__openedx__s3__course_xml_blocks",
@@ -176,7 +230,13 @@ OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
 )
 TABLES = {
     table.raw_table: table
-    for table in (EDXORG, OPENEDX, OPENEDX_DOCUMENT_TEXT, OPENEDX_TRANSCRIPT_TEXT)
+    for table in (
+        EDXORG,
+        EDXORG_STRUCTURE_BLOCKS,
+        OPENEDX,
+        OPENEDX_DOCUMENT_TEXT,
+        OPENEDX_TRANSCRIPT_TEXT,
+    )
 }
 
 
@@ -187,13 +247,14 @@ def _text(value: Any) -> str | None:  # noqa: ANN401
     return json.dumps(value)
 
 
-def _row(line: str, table: XmlBlocksTable = OPENEDX) -> dict[str, str | None]:
+def _row(line: str, table: XmlBlocksTable = OPENEDX) -> dict[str, str | int | None]:
     """Parse one JSON line into a row, failing on a line missing a required field."""
     record = json.loads(line)
-    return {
-        name: _text(record.get(name) if name in table.optional_fields else record[name])
-        for name in table.fields
-    }
+    row: dict[str, str | int | None] = {}
+    for name in table.fields:
+        value = record.get(name) if name in table.optional_fields else record[name]
+        row[name] = value if name in table.integer_fields else _text(value)
+    return row
 
 
 @dlt.transformer(standalone=True)
@@ -204,7 +265,7 @@ def read_xml_blocks(
 ) -> Iterator[pa.Table]:
     """Stream each JSON Lines file as Arrow tables stamped with its provenance."""
     for item in items:
-        rows: list[dict[str, str | None]] = []
+        rows: list[dict[str, str | int | None]] = []
         empty = True
         with item.open() as raw, io.TextIOWrapper(raw, encoding="utf-8") as text:
             for line in text:
@@ -221,7 +282,9 @@ def read_xml_blocks(
             yield _stamp(rows, item, table)
 
 
-def _empty_file_marker(file_url: str, table: XmlBlocksTable) -> dict[str, str | None]:
+def _empty_file_marker(
+    file_url: str, table: XmlBlocksTable
+) -> dict[str, str | int | None]:
     """Build the row standing for an empty file: its course from the path, nothing else.
 
     The path is .../<deployment>/<course>/<version>.jsonl, percent-encoded as
@@ -237,7 +300,7 @@ def _empty_file_marker(file_url: str, table: XmlBlocksTable) -> dict[str, str | 
 
 
 def _stamp(
-    rows: list[dict[str, str | None]], item: FileItemDict, table: XmlBlocksTable
+    rows: list[dict[str, str | int | None]], item: FileItemDict, table: XmlBlocksTable
 ) -> pa.Table:
     return add_file_metadata(
         pa.Table.from_pylist(rows, schema=table.schema),
