@@ -9,8 +9,14 @@ as model fields.
 """
 
 import json
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
+import httpx2 as httpx
+import polars as pl
 import pytest
+from dagster import build_asset_context
+from delivery.assets import youtube
 from delivery.assets.youtube import (
     MIN_PLAYLIST_VIDEOS,
     MIN_PLAYLISTS,
@@ -18,6 +24,7 @@ from delivery.assets.youtube import (
     batch_resources,
     build_playlist_resources,
     clean_youtube_description,
+    youtube_webhook,
 )
 
 # transform_video's keys.
@@ -275,3 +282,107 @@ def test_a_resource_over_the_limit_alone_is_an_error():
 
     with pytest.raises(RuntimeError, match="PL-huge"):
         list(batch_resources([resource], max_bytes=200))
+
+
+def test_membership_naming_a_video_the_videos_table_lacks_is_an_error():
+    with pytest.raises(RuntimeError, match="PL-one lists video vid-gone"):
+        build_playlist_resources(
+            [_channel()],
+            [_playlist()],
+            [_membership("PL-one", "vid-gone", 0)],
+            [_video()],
+        )
+
+
+def _fake_tables(monkeypatch, playlist_count=MIN_PLAYLISTS, videos_per_playlist=10):
+    playlists = [_playlist(f"PL-{number:03d}") for number in range(playlist_count)]
+    videos = [_video(f"vid-{number}") for number in range(videos_per_playlist)]
+    tables = {
+        "integrations__learn__youtube_channels": [_channel()],
+        "integrations__learn__youtube_playlists": playlists,
+        "integrations__learn__youtube_playlist_videos": [
+            _membership(playlist["readable_id"], video["readable_id"], position)
+            for playlist in playlists
+            for position, video in enumerate(videos)
+        ],
+        "integrations__learn__youtube_videos": videos,
+    }
+    monkeypatch.setattr(
+        youtube,
+        "get_dbt_model_as_dataframe",
+        lambda *, table_name, **_: pl.DataFrame(tables[table_name]).lazy(),
+    )
+
+
+def _run(client):
+    return youtube_webhook(build_asset_context(), SimpleNamespace(client=client))
+
+
+def test_asset_sends_every_playlist_across_batches(monkeypatch):
+    _fake_tables(monkeypatch)
+    one_playlist_bytes = len(json.dumps(_expected_resource(), separators=(",", ":")))
+    monkeypatch.setattr(youtube, "MAX_BATCH_BYTES", one_playlist_bytes * 4)
+    # batch_resources binds its default at definition, so pass the limit through
+    monkeypatch.setattr(
+        youtube,
+        "batch_resources",
+        lambda resources: batch_resources(resources, one_playlist_bytes * 4),
+    )
+    client = MagicMock()
+    client.notify_learning_resources.return_value = {"status": "ok"}
+
+    summary = _run(client)
+
+    sent = [call.args[0] for call in client.notify_learning_resources.call_args_list]
+    assert len(sent) > 1
+    assert [resource["readable_id"] for batch in sent for resource in batch] == [
+        f"PL-{number:03d}" for number in range(MIN_PLAYLISTS)
+    ]
+    assert summary == {
+        "resource_count": MIN_PLAYLISTS,
+        "playlist_video_count": MIN_PLAYLISTS * 10,
+        "batch_count": len(sent),
+        "webhook_status": "success",
+    }
+
+
+def _expected_resource():
+    (resource,) = build_playlist_resources(
+        [_channel()],
+        [_playlist("PL-000")],
+        [_membership("PL-000", f"vid-{number}", number) for number in range(10)],
+        [_video(f"vid-{number}") for number in range(10)],
+    )
+    return resource
+
+
+def test_asset_sends_nothing_when_a_playlist_is_over_the_limit(monkeypatch):
+    _fake_tables(monkeypatch)
+    monkeypatch.setattr(
+        youtube, "batch_resources", lambda resources: batch_resources(resources, 4000)
+    )
+    client = MagicMock()
+
+    with pytest.raises(RuntimeError, match="over the 4000 byte batch limit"):
+        _run(client)
+
+    client.notify_learning_resources.assert_not_called()
+
+
+def test_asset_refuses_an_empty_membership_table(monkeypatch):
+    _fake_tables(monkeypatch, videos_per_playlist=0)
+    client = MagicMock()
+
+    with pytest.raises(RuntimeError, match="unpublishes the videos"):
+        _run(client)
+
+    client.notify_learning_resources.assert_not_called()
+
+
+def test_asset_reports_a_failed_batch(monkeypatch):
+    _fake_tables(monkeypatch)
+    client = MagicMock()
+    client.notify_learning_resources.side_effect = httpx.ReadTimeout("timed out")
+
+    with pytest.raises(RuntimeError, match="batch 1 of 1 failed after 0 delivered"):
+        _run(client)

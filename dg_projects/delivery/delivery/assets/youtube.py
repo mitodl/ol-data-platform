@@ -25,8 +25,9 @@ RECEIVER GAP: mit-learn #3557 routes course, program, document, video and
 podcast. It logs and skips ``video_playlist``, so until MIT Learn adds that
 route this asset changes nothing there. Delivering the videos alone as
 ``video`` resources is not a substitute: for a ``create_videos = false`` (OCW)
-playlist MIT Learn does not create YouTube videos at all, it attaches the
-YouTube data to the matching OCW ContentFile's video.
+playlist MIT Learn loads a video only when it matches an OCW ContentFile by
+YouTube id, and takes its url, title, description and platform from that
+content file and its course.
 
 BATCHING: MIT Learn verifies the signature over ``request.body``, which Django
 refuses above ``DATA_UPLOAD_MAX_MEMORY_SIZE`` (2.5 MB, and mit-learn does not
@@ -36,10 +37,13 @@ playlists it leaves out: a playlist or channel that is removed upstream stops
 being delivered, and unpublishing it needs a signal this payload does not carry
 yet.
 
-A short read is still guarded. ``load_playlist`` unpublishes the videos of a
-playlist that are absent from it, so an empty or half-written membership or
-videos table would empty every delivered playlist. ``assert_deliverable``
-refuses that.
+An empty read is still guarded. ``load_playlist`` unpublishes the videos of a
+playlist that are absent from it, so an empty membership or videos table would
+empty every delivered playlist. ``assert_deliverable`` refuses that. Its floors
+are far under the catalog's size, so a table that is partly written passes.
+
+A retry sends every batch again, including those MIT Learn already accepted.
+The loaders upsert, so that repeats work without changing the result.
 
 Scheduling: once a day, after its integrations models have materialized since
 06:00 UTC. See delivery.lib.scheduled_automation.
@@ -76,9 +80,10 @@ _PLAYLISTS_TABLE = "integrations__learn__youtube_playlists"
 _PLAYLIST_VIDEOS_TABLE = "integrations__learn__youtube_playlist_videos"
 _VIDEOS_TABLE = "integrations__learn__youtube_videos"
 
-# Floors for the short-read guard. The production raw tables on 2026-10-02 held
+# Floors for the empty-read guard. The production raw tables on 2026-10-02 held
 # 380 playlists and about 6,700 videos for the two channels MIT Learn reads, so
-# these catch an empty or truncated table, not a channel dropped from the config.
+# these catch an empty or nearly empty table, not a channel dropped from the
+# config.
 MIN_PLAYLISTS = 10
 MIN_PLAYLIST_VIDEOS = 100
 
@@ -215,6 +220,8 @@ def build_playlist_resources(
     :param videos: Rows of integrations__learn__youtube_videos.
     :returns: One webhook resource per playlist, ordered by channel and playlist id.
     :rtype: list[dict[str, Any]]
+    :raises RuntimeError: When a playlist lists a video the videos table lacks,
+        which is two tables read at different builds.
     """
     channels_by_id = {channel["channel_id"]: channel for channel in channels}
     videos_by_id = {video["readable_id"]: video for video in videos}
@@ -223,9 +230,15 @@ def build_playlist_resources(
     for membership in sorted(
         playlist_videos, key=lambda m: (m["playlist_readable_id"], m["position"])
     ):
-        videos_by_playlist[membership["playlist_readable_id"]].append(
-            videos_by_id[membership["video_readable_id"]]
-        )
+        playlist_id = membership["playlist_readable_id"]
+        video_id = membership["video_readable_id"]
+        if video_id not in videos_by_id:
+            msg = (
+                f"Playlist {playlist_id} lists video {video_id}, which is not in "
+                f"{_VIDEOS_TABLE}: the tables were read at different builds."
+            )
+            raise RuntimeError(msg)
+        videos_by_playlist[playlist_id].append(videos_by_id[video_id])
 
     return [
         _playlist_to_resource(
@@ -348,9 +361,13 @@ def youtube_webhook(
     playlist_video_count = sum(len(resource["videos"]) for resource in resources)
     assert_deliverable(len(resources), playlist_video_count)
 
+    # Every batch is built before the first is sent, so a playlist over the
+    # limit stops the delivery before MIT Learn has part of it.
+    batches = list(batch_resources(resources))
+
     client = cast(MITLearnApiClient, learn_api.client)
     responses = []
-    for number, batch in enumerate(batch_resources(resources), start=1):
+    for number, batch in enumerate(batches, start=1):
         context.log.info(
             "Delivering batch %d (%d playlists) to MIT Learn webhook",
             number,
@@ -358,11 +375,10 @@ def youtube_webhook(
         )
         try:
             responses.append(client.notify_learning_resources(batch))
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             msg = (
-                f"YouTube webhook batch {number} failed with status "
-                f"{exc.response.status_code} after {len(responses)} delivered "
-                f"batches: {exc}"
+                f"YouTube webhook batch {number} of {len(batches)} failed after "
+                f"{len(responses)} delivered batches: {exc}"
             )
             context.log.exception(msg)
             raise RuntimeError(msg) from exc

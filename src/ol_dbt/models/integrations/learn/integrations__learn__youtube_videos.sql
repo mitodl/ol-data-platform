@@ -15,9 +15,9 @@
     clean_data (nh3) and clean_youtube_description, which drops boilerplate,
     timestamp, MIT course title and URL lines.
 
-  For a create_videos = false playlist MIT Learn does not create these as
-  YouTube videos. It merges them into the matching OCW ContentFile's video, so
-  url, title and description there come from the content file.
+  For a create_videos = false playlist MIT Learn loads a video only when it
+  matches an OCW ContentFile by youtube_id, and takes its url, title and
+  description from that content file.
 #}
 
 with videos as (
