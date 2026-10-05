@@ -34,6 +34,7 @@ import mimetypes
 import tarfile
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -231,29 +232,30 @@ def raise_if_service_failure(error: Exception, relative_path: str) -> None:
         raise TikaUnavailableError(msg) from error
 
 
-def output_digest(output_file: Path) -> str:
-    """Return the SHA-256 of the emitted JSONL, as the asset's data version.
+def write_text_snapshot(rows: Iterable[dict[str, Any]], output_file: Path) -> str:
+    """Write the rows as JSONL, each stamped with one extracted_at, and version them.
 
-    Versioning on the *input* bundle hash was wrong: extracted text is a
-    function of the archive AND the extractor, and the extractor is not fixed.
-    A Tika upgrade, a parser change, or a run whose partial failures later
-    succeed all produce different text from the same bundle -- and all reused
-    the same DataVersion and the same S3 object key, so the corrected output
-    silently overwrote the old one while every downstream
-    `data_version_changed()` check saw nothing move.
+    The returned SHA-256 is the asset's data version and names the S3 object.
+    It covers the rows *without* the stamp, so it versions the output and not
+    the input bundle: a Tika upgrade, a parser change, or a run whose partial
+    failures later succeed all produce different text from the same bundle, and
+    versioning on the bundle hash let the corrected output overwrite the old
+    one under the same DataVersion while every downstream
+    `data_version_changed()` check saw nothing move. Leaving the stamp out
+    keeps a re-run that produces the same text on the same key.
 
-    Hashing what was actually written closes that: any difference in the output
-    is a different version, with no constant for anyone to forget to bump.
-    `hashlib.file_digest` reads in chunks, so this does not undo the streaming
-    the extraction itself does.
-
-    The tradeoff is that the version is only known after the work is done, so
-    it cannot be used to skip extraction up front. That is acceptable here --
-    the upstream bundle asset is already content-addressed, so an unchanged
-    course does not re-materialise this asset in the first place.
+    extracted_at is there for staging. It keeps each course's newest landed
+    file, and S3 mtimes are whole seconds, so two snapshots of one course can
+    tie; the file name is a content hash and orders nothing. The stamp breaks
+    that tie by when the text was actually extracted.
     """
-    with output_file.open("rb") as handle:
-        return hashlib.file_digest(handle, "sha256").hexdigest()
+    extracted_at = datetime.now(tz=UTC).isoformat()
+    digest = hashlib.sha256()
+    with jsonlines.open(output_file, "w") as writer:
+        for row in rows:
+            digest.update(json.dumps(row, sort_keys=True).encode() + b"\n")
+            writer.write({**row, "extracted_at": extracted_at})
+    return digest.hexdigest()
 
 
 def build_document_rows(
@@ -470,10 +472,7 @@ def extract_course_document_text(
             NamedTemporaryFile(delete=False, suffix="_document_text.jsonl").name
         )
         temp_files.append(output_file)
-        with jsonlines.open(output_file, "w") as writer:
-            writer.write_all(rows)
-
-        data_version = output_digest(output_file)
+        data_version = write_text_snapshot(rows, output_file)
         object_key = (
             f"{'/'.join(context.asset_key.path)}/{source_system}/"
             f"{course_id}/{data_version}.jsonl"

@@ -34,7 +34,6 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-import jsonlines
 from dagster import (
     AssetExecutionContext,
     AssetIn,
@@ -53,7 +52,7 @@ from openedx.assets.content_files import (
     file_extension,
     is_transcript,
     open_bundle_members,
-    output_digest,
+    write_text_snapshot,
 )
 
 log = logging.getLogger(__name__)
@@ -353,10 +352,7 @@ def extract_course_transcript_text(
             NamedTemporaryFile(delete=False, suffix="_transcript_text.jsonl").name
         )
         temp_files.append(output_file)
-        with jsonlines.open(output_file, "w") as writer:
-            writer.write_all(rows)
-
-        data_version = output_digest(output_file)
+        data_version = write_text_snapshot(rows, output_file)
         object_key = (
             f"{'/'.join(context.asset_key.path)}/{source_system}/"
             f"{course_id}/{data_version}.jsonl"

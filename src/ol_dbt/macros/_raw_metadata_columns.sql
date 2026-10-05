@@ -599,6 +599,8 @@
         'raw__open_discussions__app__postgres__social_auth_usersocialauth': '_airbyte_extracted_at',
         'raw__open_discussions__app__postgres__widgets_widgetinstance': '_airbyte_extracted_at',
         'raw__open_discussions__app__postgres__widgets_widgetlist': '_airbyte_extracted_at',
+        'raw__openedx__s3__course_document_text': '_file_modified_at',
+        'raw__openedx__s3__course_transcript_text': '_file_modified_at',
         'raw__openedx__s3__course_xml_blocks': '_file_modified_at',
         'raw__openlearning__api__events': '_dlt_load_id',
         'raw__ovs__postgres__auth_group': '_airbyte_extracted_at',
