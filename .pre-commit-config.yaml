@@ -105,6 +105,9 @@ repos:
       dimensional/tfact_grade|
       dimensional/tfact_order|
       dimensional/tfact_payment|
+      integrations/learn/integrations__learn__youtube_channels|
+      integrations/learn/integrations__learn__youtube_playlist_videos|
+      integrations/learn/integrations__learn__youtube_playlists|
       intermediate/combined/int__combined__user_course_roles|
       intermediate/edxorg/int__edxorg__mitx_learn_course_best_runs|
       intermediate/edxorg/int__edxorg__mitx_learn_programs|
