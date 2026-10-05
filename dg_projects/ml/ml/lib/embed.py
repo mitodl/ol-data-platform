@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -75,6 +76,14 @@ EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "500"))
 
 # How many embed_batch sub-batch calls run at once.
 EMBEDDING_MAX_CONCURRENCY = int(os.environ.get("EMBEDDING_MAX_CONCURRENCY", "20"))
+
+# Titan v2's input limits. A character cap alone can't keep a text under the token
+# limit, so _embed_titan also shortens the text on a token-limit error and retries.
+TITAN_MAX_INPUT_CHARS = 50_000
+TITAN_MAX_SHORTEN_ATTEMPTS = 3
+_TITAN_TOKEN_COUNTS = re.compile(
+    r"Max input tokens: (\d+), request input token count: (\d+)"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -230,15 +239,30 @@ class BedrockEmbeddingClient:
     def _embed_titan(self, texts: list[str]) -> list[list[float]]:
         # Titan's invoke_model embeds one inputText per call -- no batch endpoint,
         # unlike Cohere's below.
-        embeddings = []
-        for text in texts:
-            body = json.dumps(
-                {"inputText": text, "dimensions": self.dim, "normalize": True}
-            )
-            response = self._client.invoke_model(modelId=self.model_version, body=body)
-            payload = json.loads(response["body"].read())
-            embeddings.append(payload["embedding"])
-        return embeddings
+        return [self._embed_titan_text(text) for text in texts]
+
+    def _embed_titan_text(self, text: str) -> list[float]:
+        # Long tickets embed from their first part rather than failing every run.
+        text = text[:TITAN_MAX_INPUT_CHARS]
+        for _ in range(TITAN_MAX_SHORTEN_ATTEMPTS):
+            try:
+                return self._invoke_titan(text)
+            except ClientError as error:
+                counts = _TITAN_TOKEN_COUNTS.search(
+                    error.response.get("Error", {}).get("Message", "")
+                )
+                if counts is None:
+                    raise
+                max_tokens, actual_tokens = (int(n) for n in counts.groups())
+                text = text[: int(len(text) * max_tokens / actual_tokens * 0.9)]
+        return self._invoke_titan(text)
+
+    def _invoke_titan(self, text: str) -> list[float]:
+        body = json.dumps(
+            {"inputText": text, "dimensions": self.dim, "normalize": True}
+        )
+        response = self._client.invoke_model(modelId=self.model_version, body=body)
+        return json.loads(response["body"].read())["embedding"]
 
     def _embed_cohere(self, texts: list[str]) -> list[list[float]]:
         # v4 speaks Cohere's newer v2-style embed contract: embedding_types is
