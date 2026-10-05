@@ -78,7 +78,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
 - name: stg__mitxresidential__openedx__user_courseaccessrole
   description: This table lists the users who have a privileged role or roles for
     working in a course on Residential MITx Platform

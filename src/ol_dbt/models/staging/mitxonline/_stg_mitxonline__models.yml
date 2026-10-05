@@ -828,7 +828,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_company_size
     description: str, company size
     tests:
@@ -850,7 +850,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   - name: user_profile_created_on
     description: timestamp, date and time when this profile data was initially created
   - name: user_profile_updated_on
