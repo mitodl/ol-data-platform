@@ -250,6 +250,19 @@ columns:
   type: INTEGER
   verbose_name: null
 - advanced_data_type: null
+  column_name: database_name
+  datetime_format: null
+  description: Use instead of database_id, which differs between Superset instances.
+  expression: (select d.database_name from public.dbs d where d.id = tables.database_id)
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: cache_timeout
   datetime_format: null
   description: null
