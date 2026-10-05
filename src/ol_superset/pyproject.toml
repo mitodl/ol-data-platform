@@ -10,6 +10,7 @@ dependencies = [
     "rich>=13.0.0",
     "sqlglot>=20.0",
     "superset-sup",
+    "yarl>=1.9",
 ]
 
 [project.scripts]
