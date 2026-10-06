@@ -1921,6 +1921,11 @@ models:
 
 - name: stg__mitxonline__app__postgres__cms_coursepage_topics
   columns:
+  - name: coursepage_topic_id
+    description: int, primary key in this table
+    tests:
+    - unique
+    - not_null
   - name: wagtail_page_id
     description: int, foreign key to cms_coursepage referring to the course page
     tests:
