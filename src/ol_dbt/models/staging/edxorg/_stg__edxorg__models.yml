@@ -1264,15 +1264,11 @@ models:
     description: array, list of the available modes for this course. The member field
       includes type, price, currency, upgrade_deadline, credit_provider and credit_hours
     tests:
-    - json_array:
-        config:
-          severity: warn
+    - json_array
   - name: courserun_instructors
     description: array, list of instructors associated with the course
     tests:
-    - json_array:
-        config:
-          severity: warn
+    - json_array
   - name: courserun_duration
     description: str, the number of weeks to complete the course. e.g. '4 weeks'
   - name: courserun_time_commitment
