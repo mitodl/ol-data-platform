@@ -12,6 +12,7 @@ Checks:
   9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
  10. QA branch contract: union models must declare their expected QA branches (RFC 12711)
  11. Data contract: models and sources must keep the columns and types their OpenMetadata contract lists
+ 12. Metric registry: every metric in metrics/ is well formed and names columns its models still have
 """
 
 from __future__ import annotations
@@ -50,6 +51,12 @@ from ol_dbt_cli.lib.git_utils import (
 )
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
+from ol_dbt_cli.lib.metric_registry import (
+    DEFAULT_METRICS_DIR,
+    METRIC_REGISTRY_CHECK,
+    check_metric_registry,
+    load_metrics,
+)
 from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
 from ol_dbt_cli.lib.qa_contract import (
     QA_CONTRACT_CHECK,
@@ -1007,7 +1014,7 @@ def validate(
             help=(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
-                "dimensional_layering, qa_branch_contract, data_contract."
+                "dimensional_layering, qa_branch_contract, data_contract, metric_registry."
             ),
         ),
     ] = None,
@@ -1019,7 +1026,7 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract. "
+                "data_contract, metric_registry. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1096,6 +1103,16 @@ def validate(
             ),
         ),
     ] = None,
+    metrics_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--metrics-dir"],
+            help=(
+                "Business metric definitions directory for the metric_registry check. "
+                "Defaults to <repo>/metrics, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     update_baseline: Annotated[
         bool,
         Parameter(
@@ -1140,6 +1157,9 @@ def validate(
     11. data_contract        — every column an OpenMetadata contract in <repo>/contracts/ lists
                                for a dbt model or source is still declared, selected, and of a
                                compatible data_type
+    12. metric_registry      — every metric in <repo>/metrics/ has a conventional, unique name,
+                               sets only fields and enum values OpenMetadata accepts, and names
+                               columns its implemented_by models still declare and select
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1207,6 +1227,7 @@ def validate(
         "dimensional_layering",
         QA_CONTRACT_CHECK,
         DATA_CONTRACT_CHECK,
+        METRIC_REGISTRY_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1517,6 +1538,11 @@ def validate(
             Path(contracts_dir_path).resolve() if contracts_dir_path else dbt_dir.parents[1] / DEFAULT_CONTRACTS_DIR
         )
         _check_data_contract(manifest, sql_models_by_name, contracts_dir, report)
+
+    # Global for the same reason: a metric file edit changes no model.
+    if METRIC_REGISTRY_CHECK not in skipped:
+        metrics_dir = Path(metrics_dir_path).resolve() if metrics_dir_path else dbt_dir.parents[1] / DEFAULT_METRICS_DIR
+        check_metric_registry(load_metrics(metrics_dir), yaml_registry, sql_models_by_name, report)
 
     # Output
     if output_format == "json":

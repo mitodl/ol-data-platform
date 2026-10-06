@@ -10,6 +10,7 @@ from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
 from ol_dbt_cli.commands.inventory import inventory_app
 from ol_dbt_cli.commands.local_dev import local_app
+from ol_dbt_cli.commands.metrics import metrics_app
 from ol_dbt_cli.commands.run import run_app
 from ol_dbt_cli.commands.starrocks import starrocks_app
 from ol_dbt_cli.commands.unit_test import unit_test
@@ -69,6 +70,7 @@ app.command(run_app)
 app.command(starrocks_app)
 app.command(inventory_app)
 app.command(contracts_app)
+app.command(metrics_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 app.command(diff, name="diff")
