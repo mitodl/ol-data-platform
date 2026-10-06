@@ -526,9 +526,9 @@ models:
     tests:
     - not_null
   - name: certificate_created_on
-    description: Certificate creation timestamp
+    description: Certificate creation timestamp (for incremental processing)
   - name: certificate_updated_on
-    description: Certificate last update timestamp
+    description: Certificate last update timestamp (for incremental processing)
   - name: certificate_issued_on
     description: Certificate issuance timestamp. For MITx Online, this is the actual
       issued_on date from the source system. For other platforms, this falls back
@@ -714,22 +714,21 @@ unit_tests:
   given:
   - input: ref('int__mitxonline__courserun_certificates')
     rows:
-    # Two unrevoked certificates for one learner and run: the later issued one stays,
-    # here the one with the lower id.
+    # Two unrevoked certificates for one learner and run: the later one stays.
     - courseruncertificate_id: 101
-      user_id: 1
-      courserun_readable_id: "course-v1:MITxT+A"
-      courseruncertificate_is_revoked: false
-      courseruncertificate_created_on: "2024-01-03T00:00:00"
-      courseruncertificate_updated_on: "2024-01-03T00:00:00"
-      courseruncertificate_issued_on: "2024-01-03T00:00:00"
-    - courseruncertificate_id: 102
       user_id: 1
       courserun_readable_id: "course-v1:MITxT+A"
       courseruncertificate_is_revoked: false
       courseruncertificate_created_on: "2024-01-01T00:00:00"
       courseruncertificate_updated_on: "2024-01-01T00:00:00"
       courseruncertificate_issued_on: "2024-01-01T00:00:00"
+    - courseruncertificate_id: 102
+      user_id: 1
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-01-03T00:00:00"
+      courseruncertificate_updated_on: "2024-01-03T00:00:00"
+      courseruncertificate_issued_on: "2024-01-03T00:00:00"
     # A later revoked certificate does not displace the one that stands.
     - courseruncertificate_id: 201
       user_id: 2
