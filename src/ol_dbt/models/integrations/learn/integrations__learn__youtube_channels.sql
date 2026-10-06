@@ -1,7 +1,7 @@
 {#
   integrations__learn__youtube_channels
   Exposes the YouTube channels configured in mitodl/open-video-data for MIT
-  Learn's VideoChannel rows (webhook delivery). Mirrors transform_channel in
+  Learn's VideoChannel rows (warehouse pull). Mirrors transform_channel in
   learning_resources/etl/youtube.py.
   Contract: docs/learn_marts_contract.md
 
@@ -20,7 +20,7 @@
   shorts.yaml, whose channel reaches Learn through OVS instead.
 
   Known difference: a configured channel YouTube returns no data for is dropped
-  here, so the webhook would unpublish it. MIT Learn's Celery task instead logs a
+  here, so the pull unpublishes it. MIT Learn's Celery task instead logs a
   warning and leaves the channel and its playlists as they were.
 #}
 

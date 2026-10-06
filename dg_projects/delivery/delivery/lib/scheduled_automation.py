@@ -93,10 +93,6 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "mitpe_delivery_sensor": frozenset({"production"}),
     "oll_delivery_sensor": frozenset({"production"}),
     "mit_edx_programs_delivery_sensor": frozenset({"production"}),
-    # Cohort 3 delivery (podcasts), on the same terms as Cohort 2: registered
-    # STOPPED in production, and not to be started before mit-learn #3557
-    # lands the endpoint it POSTs to.
-    "podcast_delivery_sensor": frozenset({"production"}),
     # Commits the instructor user list to the access forge GitHub repository's
     # default branch. There is one of those, not one per environment, so a tick
     # outside production would write the real repo. Moved from lakehouse, where

@@ -1,24 +1,23 @@
 {#
   integrations__learn__youtube_videos
   Exposes the videos of the playlists in integrations__learn__youtube_playlists
-  for MIT Learn (webhook delivery). Mirrors transform_video in
+  for MIT Learn (warehouse pull). Mirrors transform_video in
   learning_resources/etl/youtube.py. One row per video, however many playlists
   it is in; integrations__learn__youtube_playlist_videos says which.
 
   A video is here only if it is in integrations__learn__youtube_playlist_videos,
   which applies the staleness rules.
 
-  Left to the delivery asset, which does not exist yet:
+  Left to MIT Learn's pull task:
   - offered_by. It is not a video attribute: transform_video takes it from the
     playlist being loaded, so it has to be set per playlist.
   - Cleaning description_raw, YouTube's raw text. MIT Learn runs it through
     clean_data (nh3) and clean_youtube_description, which drops boilerplate,
-    timestamp, MIT course title and URL lines. The podcast delivery asset
-    normalizes durations the same way.
+    timestamp, MIT course title and URL lines.
 
-  For a create_videos = false playlist MIT Learn does not create these as
-  YouTube videos. It merges them into the matching OCW ContentFile's video, so
-  url, title and description there come from the content file.
+  For a create_videos = false playlist MIT Learn loads a video only when it
+  matches an OCW ContentFile by youtube_id, and takes its url, title and
+  description from that content file.
 #}
 
 with videos as (

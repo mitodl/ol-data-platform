@@ -2,11 +2,7 @@
 
 import pytest
 from delivery.assets.mitpe import _row_to_resource
-from delivery.lib.sanitize import (
-    ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
-    ALLOWED_HTML_TAGS_WITH_LINKS,
-    clean_html,
-)
+from delivery.lib.sanitize import clean_html
 
 from delivery_tests.test_mitpe import course_row
 
@@ -38,28 +34,6 @@ def test_clean_html_strips_links_by_default():
     assert "<a" not in cleaned
     assert "href" not in cleaned
     assert cleaned == "Docs"
-
-
-def test_clean_html_preserves_links_when_asked():
-    """The WITH_LINKS allowlists keep href and title, for the podcast path."""
-    cleaned = clean_html(
-        '<a href="https://example.com" title="Docs">Docs</a>',
-        tags=ALLOWED_HTML_TAGS_WITH_LINKS,
-        attributes=ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
-    )
-    assert 'href="https://example.com"' in cleaned
-    assert 'title="Docs"' in cleaned
-
-
-def test_clean_html_drops_disallowed_link_attributes():
-    """Under WITH_LINKS, attributes outside href/title are still stripped."""
-    cleaned = clean_html(
-        '<a href="https://example.com" onclick="x()">Docs</a>',
-        tags=ALLOWED_HTML_TAGS_WITH_LINKS,
-        attributes=ALLOWED_HTML_ATTRIBUTES_WITH_LINKS,
-    )
-    assert "onclick" not in cleaned
-    assert 'href="https://example.com"' in cleaned
 
 
 @pytest.mark.parametrize(
