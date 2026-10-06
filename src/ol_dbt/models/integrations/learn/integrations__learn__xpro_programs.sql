@@ -59,6 +59,8 @@ with programs as (
 )
 
 -- Program.first_unexpired_run: the earliest unexpired run of the live course in position 1
+-- The API does not require that run to have a product, unlike the runs it lists under a
+-- course, so neither does this.
 , first_runs as (
     select
         courses.program_id
