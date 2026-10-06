@@ -375,7 +375,8 @@ def check_qa_gaps(  # noqa: PLR0913
             f"Resolved baseline entry: {resolved}",
             "QA holds this table now, or no declaring model reads it, and the entry would "
             "tolerate the gap coming back. Run `ol-dbt validate --update-qa-baseline` and "
-            "commit the result.",
+            "commit the result (re-run `dbt parse` first if target/manifest.json predates "
+            "the change).",
         )
 
 
