@@ -262,7 +262,8 @@ with mitxonline_problem_events as (
 -- resolves today. The watermarks above only re-select events newer than the last run,
 -- so without this a dim_user re-key strands historical activity under the obsolete
 -- key -- the same hazard tfact_grade and tfact_certificate guard against with their
--- stale_user_fk_lookup. delete+insert on event_id replaces the row in place.
+-- stale_user_fk_lookup. delete+insert on event_id replaces the row in place, which
+-- only works because these rows keep their stored event_id (see batch below).
 -- One CTE per platform because the dim_user join keys differ per platform; each
 -- prunes to one partition (the model is partitioned by platform) and joins by
 -- equality rather than an OR across every platform's key pair.
@@ -275,7 +276,8 @@ with mitxonline_problem_events as (
 -- here, never nulled.
 , stale_key_mitxonline as (
     select
-        stored.platform
+        stored.event_id
+        , stored.platform
         , users.user_pk as user_fk
         , stored.openedx_user_id
         , stored.user_username
@@ -307,7 +309,8 @@ with mitxonline_problem_events as (
 
 , stale_key_mitxpro as (
     select
-        stored.platform
+        stored.event_id
+        , stored.platform
         , users.user_pk as user_fk
         , stored.openedx_user_id
         , stored.user_username
@@ -339,7 +342,8 @@ with mitxonline_problem_events as (
 
 , stale_key_residential as (
     select
-        stored.platform
+        stored.event_id
+        , stored.platform
         , users.user_pk as user_fk
         , stored.openedx_user_id
         , stored.user_username
@@ -371,7 +375,8 @@ with mitxonline_problem_events as (
 
 , stale_key_edxorg as (
     select
-        stored.platform
+        stored.event_id
+        , stored.platform
         , users.user_pk as user_fk
         , stored.openedx_user_id
         , stored.user_username
@@ -597,12 +602,67 @@ with mitxonline_problem_events as (
         , time_fk
         , date_fk
     from combined_studentmodule
+)
+
+-- Deduplicate on (platform, user, course, problem, attempt):
+--   - problem_check: keep the earliest event (rn=1) — tracking log events typically
+--     have earlier timestamps than studentmodule events for the same submission
+--   - showanswer and other types: keep all rows regardless of rank
+, deduped_combined as (
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
+                order by event_timestamp
+            ) as rn
+        from combined
+    )
+    where rn = 1 or event_type != 'problem_check'
+)
+
+, batch as (
+    select
+        -- Surrogate key: unique per (platform, user, course, problem, attempt, event_type, timestamp).
+        -- Includes event_timestamp so showanswer events (multiple per attempt) each get a distinct key,
+        -- and problem_check events are idempotent across runs (same event → same key → no duplicate insert).
+        {{ dbt_utils.generate_surrogate_key([
+            'deduped_combined.platform',
+            'deduped_combined.openedx_user_id',
+            'deduped_combined.courserun_readable_id',
+            'deduped_combined.problem_block_id',
+            'deduped_combined.attempt',
+            'deduped_combined.event_type',
+            'deduped_combined.event_timestamp'
+        ]) }} as event_id
+        , deduped_combined.platform
+        , deduped_combined.user_fk
+        , deduped_combined.openedx_user_id
+        , deduped_combined.user_username
+        , deduped_combined.courserun_readable_id
+        , deduped_combined.event_type
+        , deduped_combined.event_json
+        , deduped_combined.problem_block_id
+        , deduped_combined.answers
+        , deduped_combined.attempt
+        , deduped_combined.success
+        , deduped_combined.grade
+        , deduped_combined.max_grade
+        , deduped_combined.event_timestamp
+        , deduped_combined.event_timestamp_iso8601
+        , deduped_combined.time_fk
+        , deduped_combined.date_fk
+    from deduped_combined
 
     {% if is_incremental() %}
     union all
 
+    -- Stored event_id, not a rehash: event_timestamp reads back in UTC, while the source path
+    -- hashed it with its original offset, so a rehash would insert a second row for the event.
     select
-        platform
+        event_id
+        , platform
         , user_fk
         , openedx_user_id
         , user_username
@@ -623,73 +683,25 @@ with mitxonline_problem_events as (
     {% endif %}
 )
 
--- One row per event_id: delete+insert does not dedupe within a batch, and a dim_user
--- fan-out in stale_key_rows has inserted the same key twice. Runs before the attempt rank
--- below, because two independent rankings can each pick a different copy and drop both.
-, key_deduped_combined as (
-    select *
-    from (
-        select
-            *
-            , row_number() over (
-                partition by
-                    platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                    , event_type, event_timestamp
-                order by user_fk nulls last
-            ) as key_rn
-        from combined
-    )
-    where key_rn = 1
-)
-
--- Deduplicate on (platform, user, course, problem, attempt):
---   - problem_check: keep the earliest event (rn=1) — tracking log events typically
---     have earlier timestamps than studentmodule events for the same submission
---   - showanswer and other types: keep all rows regardless of rank
-, deduped_combined as (
-    select *
-    from (
-        select
-            *
-            , row_number() over (
-                partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                order by event_timestamp
-            ) as rn
-        from key_deduped_combined
-    )
-    where rn = 1 or event_type != 'problem_check'
-)
-
 select
-    -- Surrogate key: unique per (platform, user, course, problem, attempt, event_type, timestamp).
-    -- Includes event_timestamp so showanswer events (multiple per attempt) each get a distinct key,
-    -- and problem_check events are idempotent across runs (same event → same key → no duplicate insert).
-    {{ dbt_utils.generate_surrogate_key([
-        'deduped_combined.platform',
-        'deduped_combined.openedx_user_id',
-        'deduped_combined.courserun_readable_id',
-        'deduped_combined.problem_block_id',
-        'deduped_combined.attempt',
-        'deduped_combined.event_type',
-        'deduped_combined.event_timestamp'
-    ]) }} as event_id
+    batch.event_id
     , platform.platform_pk as platform_fk
-    , deduped_combined.user_fk
-    , deduped_combined.platform
-    , deduped_combined.openedx_user_id
-    , deduped_combined.user_username
-    , deduped_combined.courserun_readable_id
-    , deduped_combined.event_type
-    , deduped_combined.problem_block_id as problem_block_fk
-    , deduped_combined.answers
-    , deduped_combined.attempt
-    , deduped_combined.success
-    , deduped_combined.grade
-    , deduped_combined.max_grade
-    , deduped_combined.event_timestamp
-    , deduped_combined.event_timestamp_iso8601
-    , deduped_combined.time_fk
-    , deduped_combined.date_fk
-    , deduped_combined.event_json
-from deduped_combined
-left join platform on deduped_combined.platform = platform.platform_readable_id
+    , batch.user_fk
+    , batch.platform
+    , batch.openedx_user_id
+    , batch.user_username
+    , batch.courserun_readable_id
+    , batch.event_type
+    , batch.problem_block_id as problem_block_fk
+    , batch.answers
+    , batch.attempt
+    , batch.success
+    , batch.grade
+    , batch.max_grade
+    , batch.event_timestamp
+    , batch.event_timestamp_iso8601
+    , batch.time_fk
+    , batch.date_fk
+    , batch.event_json
+from batch
+left join platform on batch.platform = platform.platform_readable_id

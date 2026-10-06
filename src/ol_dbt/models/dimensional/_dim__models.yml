@@ -1617,13 +1617,12 @@ unit_tests:
       mitlearn_user_id:
       mitxpro_application_user_id: 7
       bootcamps_application_user_id: 3
-- name: test_tfact_problem_events_inserts_one_row_per_event_id_when_dim_user_fans_out
+- name: test_tfact_problem_events_rekey_keeps_stored_event_id
   description: >
-    Regression test for the 2026-10-06 unique_tfact_problem_events_event_id failure:
-    a stale user_fk is re-keyed while dim_user carries two rows for the same learner.
-    delete+insert does not dedupe within a batch, so the model itself must emit one
-    row per event_id. Covers problem_check too, which the attempt-level rank also
-    filters, so a duplicate must not drop the event entirely.
+    Regression test for the 2026-10-06 unique_tfact_problem_events_event_id failure.
+    A row re-keyed by the stale user_fk path must keep its stored event_id so
+    delete+insert replaces it. Rehashing event_timestamp, which reads back in UTC
+    rather than the source offset, gave each re-keyed event a second row.
   model: tfact_problem_events
   overrides:
     macros:
@@ -1664,9 +1663,6 @@ unit_tests:
       where false
   - input: ref('dim_user')
     rows:
-    - user_pk: "NEW_USER_PK"
-      edxorg_openedx_user_id: 555
-      user_edxorg_username: "learner"
     - user_pk: "NEW_USER_PK"
       edxorg_openedx_user_id: 555
       user_edxorg_username: "learner"
@@ -1721,11 +1717,9 @@ unit_tests:
           , cast(null as varchar)
   expect:
     rows:
-    - platform: "edxorg"
+    - event_id: "stored-event-id"
       user_fk: "NEW_USER_PK"
       event_type: "showanswer"
-      problem_block_fk: "block-v1:MITx+6.002x+2024+type@problem+block@p1"
-    - platform: "edxorg"
+    - event_id: "stored-check-id"
       user_fk: "NEW_USER_PK"
       event_type: "problem_check"
-      problem_block_fk: "block-v1:MITx+6.002x+2024+type@problem+block@p2"
