@@ -705,9 +705,23 @@ class TestChangeLogSql:
         ):
             assert "group by `organization_key`, `user_pk`" in sql
 
+    def test_a_duplicated_key_is_hashed_over_all_its_rows(self):
+        """max() over the rows' hashes would not move when a row other than
+        the greatest changed, and per-column maxima could pair identity values
+        from different rows.
+        """
+        sql = stamp_change_log_sql(LEARNER_VIEW)
+        assert (
+            "md5(array_join(array_sort(array_agg(content_hash)), ',')) as row_hash"
+            in sql
+        )
+        assert "max_by(`sso_organization_id`, content_hash)" in sql
+        assert "max_by(`user_global_id`, content_hash)" in sql
+        assert "max(`" not in sql
+
     def test_identity_columns_are_hashed_and_key_columns_are_not(self):
         sql = stamp_change_log_sql(LEARNER_VIEW)
-        hashed = sql[sql.index("md5(") : sql.index(" as row_hash")]
+        hashed = sql[sql.index("md5(concat_ws") : sql.index(" as content_hash")]
         assert re.findall(r"cast\(`(\w+)` as varchar\)", hashed) == [
             "sso_organization_id",
             "user_global_id",
@@ -770,6 +784,22 @@ class TestAfterRefresh:
         seen: list[str] = []
         self._run(starrocks, ["b2b_analytics.mv_a"], seen.append)
         assert seen == ["b2b_analytics.mv_a"]
+
+    def test_a_failing_follow_up_does_not_rerun_the_refresh(self):
+        """Even when its error reads like a rebuilt base table. The REFRESH
+        already succeeded, and the retry loop is for the REFRESH alone.
+        """
+
+        def after_refresh(_relation):
+            raise RuntimeError(BASE_TABLE_RECREATED_FAILURE)
+
+        starrocks = ScriptedStarRocks({})
+        with pytest.raises(MaterializedViewRefreshError) as excinfo:
+            self._run(starrocks, ["b2b_analytics.mv_a"], after_refresh)
+        assert starrocks.statements == [
+            "REFRESH MATERIALIZED VIEW b2b_analytics.mv_a WITH SYNC MODE"
+        ]
+        assert set(excinfo.value.failures) == {"b2b_analytics.mv_a"}
 
     def test_a_failing_follow_up_is_reported_and_does_not_stop_the_rest(self):
         def after_refresh(relation):

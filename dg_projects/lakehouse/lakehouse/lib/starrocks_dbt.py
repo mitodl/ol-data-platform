@@ -157,7 +157,8 @@ class MaterializedViewRefreshError(Exception):
         self.failures = dict(failures)
         detail = "\n".join(f"{name}: {exc}" for name, exc in self.failures.items())
         super().__init__(
-            f"{len(self.failures)} materialized view(s) failed to refresh:\n{detail}"
+            f"{len(self.failures)} materialized view(s) failed to refresh "
+            f"or in the step after it:\n{detail}"
         )
 
 
@@ -184,8 +185,9 @@ def refresh_materialized_views(
     :param sleep: Injected so tests don't wait out the retry delay.
     :param after_refresh: Called with a relation straight after its REFRESH
         succeeds, and never for one that failed. If it raises, that relation is
-        reported as failed like any other.
-    :raises MaterializedViewRefreshError: if any MV still failed.
+        reported as failed, and its REFRESH is not retried.
+    :raises MaterializedViewRefreshError: if any MV still failed, or its
+        `after_refresh` did.
     """
     failures: dict[str, Exception] = {}
     for relation in relations:
@@ -193,8 +195,6 @@ def refresh_materialized_views(
         for attempt in range(1, MAX_MV_REFRESH_ATTEMPTS + 1):
             try:
                 execute(f"REFRESH MATERIALIZED VIEW {relation} WITH SYNC MODE")
-                if after_refresh:
-                    after_refresh(relation)
             except Exception as exc:
                 if (
                     attempt == MAX_MV_REFRESH_ATTEMPTS
@@ -215,6 +215,14 @@ def refresh_materialized_views(
                 sleep(MV_REFRESH_RETRY_DELAY_SECONDS)
             else:
                 log.info("Refreshed %s", relation)
+                if after_refresh:
+                    # Outside the retried block: the REFRESH succeeded, so an
+                    # error here must not run it again, whatever its text.
+                    try:
+                        after_refresh(relation)
+                    except Exception as exc:
+                        log.exception("Follow-up to refreshing %s failed", relation)
+                        failures[relation] = exc
                 break
     if failures:
         raise MaterializedViewRefreshError(failures)
@@ -401,16 +409,37 @@ def _current_rows_sql(view: ChangeTrackedView) -> str:
     holds. The grain tests on these models are severity: warn, and the stamp
     joins the MV to the log on the key: a key duplicated in the MV would be
     written to the log twice, and each later stamp would multiply it again.
+
+    A duplicated key is hashed as a group, over the sorted hashes of all its
+    rows, so a change to any one of them moves the hash. Its identity columns
+    all come from the one row with the greatest hash; taking each column's own
+    maximum could pair values from different rows.
     """
     hashed = ", ".join(
         f"coalesce(cast(`{column}` as varchar), {_NULL_MARKER})"
         for column in view.identity + view.tracked
     )
-    select = [f"`{column}`" for column in view.key]
-    select += [f"max(`{column}`) as `{column}`" for column in view.identity]
-    select.append(f"max(md5(concat_ws({_FIELD_SEPARATOR}, {hashed}))) as row_hash")
-    group_by = ", ".join(f"`{column}`" for column in view.key)
-    return f"select {', '.join(select)} from {view.relation} group by {group_by}"  # noqa: S608
+    key = ", ".join(f"`{column}`" for column in view.key)
+    rows = ", ".join(
+        [
+            *(f"`{column}`" for column in view.key + view.identity),
+            f"md5(concat_ws({_FIELD_SEPARATOR}, {hashed})) as content_hash",
+        ]
+    )
+    select = ", ".join(
+        [
+            key,
+            *(
+                f"max_by(`{column}`, content_hash) as `{column}`"
+                for column in view.identity
+            ),
+            "md5(array_join(array_sort(array_agg(content_hash)), ',')) as row_hash",
+        ]
+    )
+    return (
+        f"select {select} "  # noqa: S608
+        f"from (select {rows} from {view.relation}) r group by {key}"
+    )
 
 
 def seed_change_log_sql(view: ChangeTrackedView) -> str:
