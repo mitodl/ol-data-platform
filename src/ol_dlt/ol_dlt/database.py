@@ -233,11 +233,12 @@ class EmptyTableLoader(TableLoader):
     destination table for a resource that produced no data item. The raw table
     for an empty source table then never exists, while the run still succeeds
     and Dagster records the asset as materialized, and the dbt staging model
-    that reads it fails on a missing source. The QA xPro load landed 54 of 55
-    tables this way (``ecommerce_couponselection`` is empty there).
+    that reads it fails on a missing source.
 
     A zero-row Arrow table counts as a data item, so the table is created with
-    its reflected schema.
+    its reflected columns. A column whose source type dlt cannot map has no
+    type until a row supplies one, so it is absent from a table created empty
+    and is added by the first load that reads a row.
     """
 
     def _convert_result(
@@ -245,6 +246,7 @@ class EmptyTableLoader(TableLoader):
         result: Any,  # noqa: ANN401
         backend_kwargs: dict[str, Any],
     ) -> Iterator[Any]:
+        column_names = list(result.keys())
         yielded = False
         for item in super()._convert_result(result, backend_kwargs):
             yielded = True
@@ -254,7 +256,7 @@ class EmptyTableLoader(TableLoader):
                 [],
                 columns={
                     name: self.columns.get(name, {"name": name})
-                    for name in result.keys()  # noqa: SIM118
+                    for name in column_names
                 },
                 tz=backend_kwargs.get("tz", "UTC"),
             )
