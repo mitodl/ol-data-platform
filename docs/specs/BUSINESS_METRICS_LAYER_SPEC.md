@@ -129,21 +129,22 @@ enrollment a real outcome is reported against.
 The key filters drop 129,940 of 196,646 residential course enrollments and 7,097 MITx
 Online ones that have no `courserun_fk`, and about 3,100 rows with no `user_fk`.
 
-Certificates: `tfact_certificate` already keeps one row per (user, course run, scope) per
-build when both keys resolve (`cross_source_deduped`). The model joins it on
-`certificate_scope = 'course'` without reducing it again. Two limits follow, both owned by
-the certificate task in §7 and not fixed here: when a learner has a revoked and a reissued
-certificate on one platform, the surviving row is arbitrary; and incremental runs can leave
-more than one row, which this model's uniqueness test will surface.
+Certificates: `tfact_certificate` can hold more than one course certificate per (user,
+course run). Measured on production on 2026-10-06: 11 pairs, 10 with an edX.org row and a
+MicroMasters copy of it left behind by incremental runs, and 1 MITx Online pair with two
+live certificates. ol-data-platform#2864 adds `is_current` to the fact, true for one
+certificate per (user, course run, scope): the unrevoked one, then the latest issued, then
+the highest id. The model joins on `certificate_scope = 'course' and is_current` and does
+not reduce the fact again, so #2864 merges before the model.
 
 | Column | Definition |
 | --- | --- |
 | `user_fk`, `courserun_fk`, `platform` | Keys, from `tfact_enrollment`. |
 | `enrollment_created_on`, `enrollment_updated_on`, `enrollment_is_active`, `enrollment_mode`, `enrollment_status` | Carried from `tfact_enrollment`. |
 | `is_passing`, `grade_value`, `letter_grade`, `grade_updated_on` | Carried from `tfact_grade`. |
-| `certificate_is_revoked`, `certificate_issued_on`, `certificate_updated_on` | Carried from `tfact_certificate` unchanged, revoked or not. `certificate_is_revoked` stays three-valued: null means no certificate. |
+| `certificate_is_revoked`, `certificate_issued_on`, `certificate_updated_on` | Carried from the current course certificate in `tfact_certificate`, revoked or not. `certificate_is_revoked` stays three-valued: null means no certificate. |
 | `is_certified` | `coalesce(certificate_is_revoked = false, false)`. Never null. |
-| `last_active_on` | DATE of the latest row in `afact_learner_courserun_daily_activity`. |
+| `last_active_on` | DATE of the latest row in `afact_learner_courserun_daily_activity`, as that fact buckets days (see 4.2). |
 | `completion_status` | `certified` when `is_certified`; else `passed` when `is_passing`; else `in_progress` when `grade_value > 0` or `last_active_on` is not null; else `not_started`. |
 | `is_in_progress`, `is_not_started` | `completion_status` equals that value. Never null. |
 | `needs_attention_since` | DATE. See 4.2. |
@@ -205,12 +206,16 @@ that version is not carried over.)
 The consumer's predicate is `coalesce(needs_attention_since <= <today>, false)`. N is a dbt
 var, `needs_attention_quiet_days`, default 30, replacing `NEEDS_ATTENTION_QUIET_DAYS`.
 
-"Today" is the current UTC date. `needs_attention_since`, the enrollment date and
-`last_active_on` are all UTC dates, so a UTC comparison flags a `not_started` learner from
-the day they enroll. The consumer asks for the UTC date explicitly and does not rely on
-the session timezone. The StarRocks Helm values in ol-infrastructure set `timeZone: UTC`,
-so this matches the API's current `CURRENT_DATE()` as long as the running clusters carry
-that setting, which has not been checked on the live clusters.
+"Today" is the current UTC date. The consumer asks for the UTC date explicitly and does
+not rely on the session timezone. The StarRocks Helm values in ol-infrastructure set
+`timeZone: UTC`, so this matches the API's current `CURRENT_DATE()` as long as the running
+clusters carry that setting, which has not been checked on the live clusters.
+
+The input days are not converted to UTC. The enrollment day is `enrollment_date_key` and
+`last_active_on` is the latest `activity_date_key`, both read through `dim_date` as the
+facts wrote them. The activity fact takes its day from the event timestamp with the offset
+dropped, not shifted, so an event near midnight in a non-UTC source can land a day away
+from its UTC date and move the threshold by one day.
 
 #87 flags `not_started` unconditionally. The fallback date keeps that true when
 `enrollment_created_on` is null, which the fact allows.
