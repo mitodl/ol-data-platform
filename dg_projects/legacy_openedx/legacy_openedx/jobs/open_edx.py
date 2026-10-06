@@ -32,8 +32,8 @@ from legacy_openedx.ops.open_edx import (
         "destination": "s3",
         "owner": "platform-engineering",
         "consumer": "institutional-research",
-        # Step outputs live on the run pod's filesystem, so a retry from failure
-        # after the pod is lost cannot load its parent's outputs.
+        # Step outputs live on the run pod's filesystem and a retry runs in a new
+        # pod, so a retry from failure cannot load its parent's outputs.
         "dagster/retry_strategy": "ALL_STEPS",
     },
 )
