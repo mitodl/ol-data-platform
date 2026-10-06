@@ -48,27 +48,27 @@ with program_requirements as (
 
 , child_requirements as (
     select
-        programrequirement_requirement_id
-        , course_id
-        , program_id
-        , programrequirement_type
-        , programrequirement_title
-        , electiveset_required_number
-        , programrequirement_path
-        , course_node_path
+        all_requirements.programrequirement_requirement_id
+        , all_requirements.course_id
+        , all_requirements.program_id
+        , all_requirements.programrequirement_type
+        , all_requirements.programrequirement_title
+        , all_requirements.electiveset_required_number
+        , all_requirements.programrequirement_path
+        , all_requirements.course_node_path
     from all_requirements
     where all_requirements.requirement_nesting = 1
 )
 
 , parent_requirements as (
     select
-        programrequirement_requirement_id
-        , course_id
-        , program_id
-        , programrequirement_type
-        , programrequirement_title
-        , electiveset_required_number
-        , programrequirement_path
+        all_requirements.programrequirement_requirement_id
+        , all_requirements.course_id
+        , all_requirements.program_id
+        , all_requirements.programrequirement_type
+        , all_requirements.programrequirement_title
+        , all_requirements.electiveset_required_number
+        , all_requirements.programrequirement_path
     from all_requirements
     where all_requirements.requirement_nesting = 2
 )

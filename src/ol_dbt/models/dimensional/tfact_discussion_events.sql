@@ -232,25 +232,25 @@ with mitxonline_discussion_events as (
 select
     dim_platform_lookup.platform_pk as platform_fk
     , combined.platform
-    , user_fk
-    , openedx_user_id
-    , user_username
+    , combined.user_fk
+    , combined.openedx_user_id
+    , combined.user_username
     , dim_course_run.courserun_pk as courserun_fk
     , combined.courserun_readable_id
-    , event_type
-    , event_json
-    , post_id
-    , post_title
-    , post_content
-    , commentable_id
-    , discussion_component_id
-    , discussion_component_name
-    , page_url
-    , user_forums_roles
-    , event_timestamp
-    , event_timestamp_iso8601
-    , time_fk
-    , date_fk
+    , combined.event_type
+    , combined.event_json
+    , combined.post_id
+    , combined.post_title
+    , combined.post_content
+    , combined.commentable_id
+    , combined.discussion_component_id
+    , combined.discussion_component_name
+    , combined.page_url
+    , combined.user_forums_roles
+    , combined.event_timestamp
+    , combined.event_timestamp_iso8601
+    , combined.time_fk
+    , combined.date_fk
 from combined
 left join dim_course_run
     on combined.courserun_readable_id = dim_course_run.courserun_readable_id

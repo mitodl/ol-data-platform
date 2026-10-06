@@ -14,7 +14,7 @@ with current_courses as (
     select course_readable_id
     from {{ ref('stg__edxorg__api__course') }}
     where
-        course_retrieved_at = (select max(course_retrieved_at) from {{ ref('stg__edxorg__api__course') }})
+        course_retrieved_at = (select max(latest.course_retrieved_at) from {{ ref('stg__edxorg__api__course') }} as latest)
         -- courses MIT Learn skips as deleted
         and not (
             lower(trim(course_title)) like '%[delete]%'
@@ -42,9 +42,9 @@ with current_courses as (
     from {{ ref('stg__edxorg__api__courserun') }}
     where
         courserun_retrieved_at = (
-            select max(courserun_retrieved_at) from {{ ref('stg__edxorg__api__courserun') }}
+            select max(latest.courserun_retrieved_at) from {{ ref('stg__edxorg__api__courserun') }} as latest
         )
-        and course_readable_id in (select course_readable_id from current_courses)
+        and course_readable_id in (select current_courses.course_readable_id from current_courses)
         -- runs MIT Learn skips as deleted
         and not (
             lower(trim(courserun_title)) like '%[delete]%'
@@ -86,13 +86,13 @@ with current_courses as (
             , row_number() over (
                 partition by course_readable_id
                 order by
-                    best_run_tier
+                    best_run_tier asc
                     -- enrollable: earliest start then end; upcoming: earliest start;
                     -- started: latest start
                     , case when best_run_tier in (1, 2) then coalesce(start_on, current_timestamp) end asc
                     , case when best_run_tier = 1 then coalesce(end_on, current_timestamp) end asc
                     , case when best_run_tier = 3 then start_on end desc
-                    , courserun_readable_id
+                    , courserun_readable_id asc
             ) as best_run_rank
         from ranked_runs
     )
