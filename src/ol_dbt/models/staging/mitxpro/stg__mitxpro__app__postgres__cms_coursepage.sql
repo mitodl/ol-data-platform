@@ -3,7 +3,7 @@ with coursepage as (
 )
 
 {{ deduplicate_raw_table(
-    raw_table='raw__xpro__app__postgres__cms_coursepage', partition_columns='course_id', source_cte='coursepage'
+    order_by='page_ptr_id', partition_columns='course_id', source_cte='coursepage'
 ) }}
 
 , externalcoursepage as (
@@ -11,7 +11,7 @@ with coursepage as (
 )
 
 {{ deduplicate_raw_table(
-    raw_table='raw__xpro__app__postgres__cms_externalcoursepage'
+    order_by='page_ptr_id'
     , partition_columns='course_id'
     , source_cte='externalcoursepage'
 ) }}
