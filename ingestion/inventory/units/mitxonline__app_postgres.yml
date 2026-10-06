@@ -30,6 +30,7 @@ airbyte:
     sync_interval_hours: 6
     streams:
     - b2b_contractpage
+    - b2b_contractprogramitem
     - b2b_discountcontractattachmentredemption
     - b2b_organizationindexpage
     - b2b_organizationpage
@@ -101,6 +102,13 @@ tables:
   namespace: public
   primary_key:
   - - page_ptr_id
+  modeled: true
+- name: b2b_contractprogramitem
+  raw_table: raw__mitxonline__app__postgres__b2b_contractprogramitem
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
   modeled: true
 - name: b2b_discountcontractattachmentredemption
   raw_table: raw__mitxonline__app__postgres__b2b_discountcontractattachmentredemption
