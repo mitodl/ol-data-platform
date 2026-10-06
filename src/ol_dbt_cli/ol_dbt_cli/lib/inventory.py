@@ -1319,8 +1319,9 @@ def _compare_source(  # noqa: PLR0913
     `replication_method` is recorded deliberately and is not decorative (§3.4):
     it is what `tk-determine-per-source-incremental-cursor-viabilit-51f299`
     reads to decide which connections need a replacement cursor, or a full
-    re-read, before dlt can take over. A source flipped from xmin to a cursor column changes nothing
-    about the streams, so comparing streams alone would report no drift while
+    re-read, before dlt can take over. A source flipped from xmin to a cursor
+    column changes nothing about the streams, so comparing streams alone would
+    report no drift while
     that answer silently went wrong.
     """
     source = live_sources.get(str(live.get("sourceId", "")))
