@@ -268,6 +268,38 @@ populated:
   (`cursor_missing`) exits non-zero. Note what it cannot tell you: whether the column is stamped
   on *every* mutation path. A write-once column yields a load that captures inserts and silently
   never reflects an edit, so a `cursor_available` finding is a shortlist entry, not an approval.
+  The replacement is declared on the dlt source, as `DatabaseTable.cursor_column` in
+  `ol_dlt.sources.<app>`, and not as `cursor_field` on the Airbyte unit: `ol-dbt inventory
+  drift` compares `cursor_field` with the live stream (rule 5), so writing one there fails the
+  daily check for as long as Airbyte still loads the unit.
+
+  The two units with a dlt source, `mitxonline/app_postgres` and `xpro/app_postgres`, chose
+  no cursor at all. They load only the `modeled: true` tables and replace each one, because
+  Django's `auto_now` does not fire on `queryset.update()`, the Wagtail page subclasses carry
+  no timestamp, and replace is the only disposition that carries a source delete. The same
+  choice is affordable for the other five active xmin units. Their modeled tables, counted in
+  production raw through Athena on 2026-10-06:
+
+  | Unit | Modeled tables | Rows | Largest table |
+  |---|---|---|---|
+  | `mitlearn/app_postgres` | 11 | 3,236,889 | `users_user`, 899,713 |
+  | `micromasters/app_postgres` | 28 | 1,862,217 | `grades_finalgrade`, 410,561 |
+  | `learn_ai/app_postgres` | 5 | 1,631,455 | `ai_chatbots_djangocheckpoint`, 1,393,373 |
+  | `ocw/app_postgres` | 4 | 228,774 | `websites_websitecontent`, 211,686 |
+  | `ovs/app_postgres` | 6 | 100,289 | `ui_video`, 51,232 |
+
+  For scale, xPro's 55 modeled tables were 2,493,174 rows the same day. These are rows in raw,
+  which overstate the source wherever Airbyte appended: `ai_chatbots_djangocheckpoint` holds
+  1,025,498 distinct ids. `open_discussions/app_postgres` has no modeled table and an inactive
+  connection, so it needs no dlt source.
+
+  One table needs a decision before its unit moves. `ai_chatbots_djangocheckpoint` is 2.75 GB
+  of Parquet (`mitlearn`'s `users_user` is 92 MB), and a replace re-reads all of it on every
+  load. Its only timestamp is `created_on` (`auto_now_add`), which
+  is not a safe cursor: learn-ai upserts checkpoints in place (`AsyncDjangoSaver.aput` calls
+  `aupdate_or_create`), `repair_checkpoints` bulk-updates `metadata`, and deleting a stale
+  `UserChatSession` cascades to its checkpoints. An append keyed on `created_on` or `id` misses
+  all three.
 - The Airbyte-side deadline: source-postgres 3.8+ refuses xmin mode outright on any database
   that has ever exceeded 2^32 lifetime transactions
   (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent

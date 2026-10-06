@@ -301,10 +301,13 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
             Severity.WARNING,
             unit.key,
             f"{len(riders)} incremental stream(s) ride xmin, which dlt cannot reproduce",
-            "Each needs a replacement cursor column chosen before dlt can take "
-            "over this unit, and source-postgres 3.8+ refuses xmin outright on any "
+            "Each needs a replacement cursor column, or a decision to re-read the "
+            "table whole, before dlt can take over this unit. That choice belongs "
+            "on the dlt source (`DatabaseTable.cursor_column`), not in a "
+            "`cursor_field` here, which the drift check compares against Airbyte. "
+            "Independently, source-postgres 3.8+ refuses xmin outright on any "
             "database that has ever wrapped around. See "
-            "tk-determine-per-source-incremental-cursor-viabilit-51f299.",
+            "INGESTION_INVENTORY_SPEC.md §3.4.",
         )
 
 
