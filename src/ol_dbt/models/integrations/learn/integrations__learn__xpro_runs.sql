@@ -19,7 +19,7 @@ with runs as (
     select
         course_id
         , course_readable_id
-    from {{ ref('int__mitxpro__courses') }}
+    from {{ ref('stg__mitxpro__app__postgres__courses_course') }}
 )
 
 , pages as (

@@ -2317,13 +2317,13 @@ models:
   - name: courserun_title
     description: str, title of the course run
   - name: courserun_start_on
-    description: timestamp, when the run starts
+    description: str, ISO 8601 UTC time when the run starts
   - name: courserun_end_on
-    description: timestamp, when the run ends
+    description: str, ISO 8601 UTC time when the run ends
   - name: courserun_enrollment_start_on
-    description: timestamp, when enrollment opens
+    description: str, ISO 8601 UTC time when enrollment opens
   - name: courserun_enrollment_end_on
-    description: timestamp, when enrollment closes
+    description: str, ISO 8601 UTC time when enrollment closes
   - name: product_id
     description: int, the run's active ecommerce product; null if it has none
   - name: courserun_current_price
@@ -2331,6 +2331,7 @@ models:
   - name: courserun_is_unexpired
     description: boolean, whether at build time the run has not ended, enrollment
       has opened and has not closed (CourseRun.is_unexpired in mitxpro)
+    tests: [not_null]
 
 - name: int__mitxpro__catalog_pages
   description: The CMS page of each xPRO course and program with what xPRO's catalog
@@ -2372,3 +2373,21 @@ models:
     description: double, CEUs from the page's first live certificate child page
   - name: page_instructors
     description: array(str), names from the page's first live faculty child page
+
+- name: int__mitxpro__catalog_product_prices
+  description: The current price of each xPRO ecommerce product, as xPRO's catalog
+    API derives it. One row per product.
+  columns:
+  - name: product_id
+    description: int, primary key of the product
+    tests: [unique, not_null]
+  - name: courserun_id
+    description: int, the course run the product sells; null for a program product
+  - name: program_id
+    description: int, the program the product sells; null for a course run product
+  - name: product_is_active
+    description: boolean, whether the product is active. xPRO's default product queries
+      return active products only.
+  - name: product_current_price
+    description: decimal, price of the product's most recently created version; null
+      if it has none

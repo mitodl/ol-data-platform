@@ -6,7 +6,15 @@
 #}
 
 with courses as (
-    select * from {{ ref('int__mitxpro__courses') }}
+    select
+        courses.course_id
+        , courses.course_readable_id
+        , courses.course_title
+        , courses.course_is_live
+        , platforms.platform_name
+    from {{ ref('stg__mitxpro__app__postgres__courses_course') }} as courses
+    left join {{ ref('stg__mitxpro__app__postgres__courses_platform') }} as platforms
+        on courses.platform_id = platforms.platform_id
 )
 
 , pages as (
@@ -56,4 +64,6 @@ from courses
 inner join pages on courses.course_id = pages.course_id
 left join topics on courses.course_id = topics.course_id
 left join priced_runs on courses.course_id = priced_runs.course_id
+-- A course with both a course page and an external course page is staged with its course
+-- page only. The API would also list it on a live external page; no course has both.
 where courses.course_is_live and pages.page_is_live

@@ -7,7 +7,15 @@
 #}
 
 with programs as (
-    select * from {{ ref('int__mitxpro__programs') }}
+    select
+        programs.program_id
+        , programs.program_readable_id
+        , programs.program_title
+        , programs.program_is_live
+        , platforms.platform_name
+    from {{ ref('stg__mitxpro__app__postgres__courses_program') }} as programs
+    left join {{ ref('stg__mitxpro__app__postgres__courses_platform') }} as platforms
+        on programs.platform_id = platforms.platform_id
 )
 
 , pages as (
@@ -30,24 +38,15 @@ with programs as (
     select * from {{ ref('int__mitxpro__catalog_course_runs') }}
 )
 
--- Product's default manager returns active products only
+-- ProgramViewSet lists a program that has any product, active or not, and takes the price
+-- from its active one
 , program_products as (
     select
         program_id
-        , product_id
-        , row_number() over (partition by program_id order by product_id) as product_rank
-    from {{ ref('int__mitxpro__ecommerce_product') }}
-    where product_is_active and program_id is not null
-)
-
-, latest_versions as (
-    select
-        product_id
-        , productversion_price
-        , row_number() over (
-            partition by product_id order by productversion_created_on desc, productversion_id desc
-        ) as version_rank
-    from {{ ref('stg__mitxpro__app__postgres__ecommerce_productversion') }}
+        , max(case when product_is_active then product_current_price end) as price
+    from {{ ref('int__mitxpro__catalog_product_prices') }}
+    where program_id is not null
+    group by program_id
 )
 
 , program_courses as (
@@ -66,7 +65,8 @@ with programs as (
         , catalog_runs.courserun_start_on
         , catalog_runs.courserun_enrollment_start_on
         , row_number() over (
-            partition by courses.program_id order by catalog_runs.courserun_start_on
+            partition by courses.program_id
+            order by catalog_runs.courserun_start_on, catalog_runs.courserun_id
         ) as run_rank
     from courses
     inner join catalog_runs on courses.course_id = catalog_runs.course_id
@@ -111,12 +111,12 @@ select
     , pages.page_description as description
     , '{{ var("mitxpro_url") }}/programs/' || programs.program_readable_id || '/' as url
     , coalesce(pages.page_thumbnail_url, '{{ var("mitxpro_url") }}/static/images/mit-dome.png') as image_url
-    , coalesce(latest_versions.productversion_price > 0, false) as published
+    , coalesce(program_products.price > 0, false) as published
     , programs.platform_name as platform
     , topics.topics
     , pages.page_instructors as instructors
     , program_courses.courses
-    , latest_versions.productversion_price as price
+    , program_products.price
     , coalesce(first_runs.courserun_start_on, first_runs.courserun_enrollment_start_on) as start_date
     , last_runs.end_date
     , first_runs.courserun_enrollment_start_on as enrollment_start
@@ -131,10 +131,7 @@ select
     , pages.page_max_weekly_hours as max_weekly_hours
 from programs
 inner join pages on programs.program_id = pages.program_id
-inner join program_products
-    on programs.program_id = program_products.program_id and program_products.product_rank = 1
-left join latest_versions
-    on program_products.product_id = latest_versions.product_id and latest_versions.version_rank = 1
+inner join program_products on programs.program_id = program_products.program_id
 left join program_courses on programs.program_id = program_courses.program_id
 left join first_runs on programs.program_id = first_runs.program_id and first_runs.run_rank = 1
 left join last_runs on programs.program_id = last_runs.program_id

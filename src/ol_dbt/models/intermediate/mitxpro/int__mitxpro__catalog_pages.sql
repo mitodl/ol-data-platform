@@ -66,7 +66,10 @@ with pages as (
 , faculty_pages as (
     select
         product_pages.wagtail_page_id
-        , {{ json_string_array('faculty.cms_facultymemberspage_faculty', '$[*].value.name') }} as instructors
+        -- parenthesized because the macro's Trino form ends in a line comment
+        , (
+            {{ json_array_field_values('faculty.cms_facultymemberspage_faculty', 'value.name') }}
+        ) as instructors
         , row_number() over (
             partition by product_pages.wagtail_page_id order by faculty_wagtail.wagtail_page_path
         ) as faculty_rank

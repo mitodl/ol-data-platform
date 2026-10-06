@@ -277,8 +277,7 @@ models:
     tags: [qa_scheduled]
   description: >
     The programs xPRO's catalog API lists: live programs with a live CMS page and
-    an
-    active product. One row per program, with the fields MIT Learn's xPRO ETL reads
+    a product. One row per program, with the fields MIT Learn's xPRO ETL reads
     from the API, including the price and dates of the one run MIT Learn gives a
     program.
   columns:
@@ -320,7 +319,8 @@ models:
     description: str, comma-separated readable ids of the program's live courses,
       in program order.
   - name: price
-    description: decimal, price in USD from the latest version of the program's product.
+    description: decimal, price in USD from the latest version of the program's active
+      product; null if it has none.
   - name: start_date
     description: str, ISO 8601 UTC start of the earliest open run of the program's
       first course; null if it has none.

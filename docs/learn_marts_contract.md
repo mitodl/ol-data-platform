@@ -105,8 +105,8 @@ and MIT Learn unpublishes a run that is absent.
 | `instructors` | array(string) | Names on the course page's faculty page |
 | `published` | boolean | Whether `price` is above zero |
 
-`integrations__learn__xpro_programs` has one row per live program with a live CMS page and an
-active product. It has the course columns above, plus `instructors` (array, the program
+`integrations__learn__xpro_programs` has one row per live program with a live CMS page and a
+product. It has the course columns above, plus `instructors` (array, the program
 page's faculty), `courses` (comma-separated readable ids of its live courses, in program
 order), and the fields of the single run MIT Learn gives a program: `price`, `start_date` and
 `enrollment_start` (from the earliest open run of the program's first course) and `end_date`

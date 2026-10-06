@@ -970,30 +970,3 @@
 {% macro duckdb__json_array_string(json_col, json_path) -%}
     cast(json_extract({{ json_col }}, {{ json_path }}) as varchar)
 {%- endmacro %}
-
-
-{#
-    json_string_array(json_col, json_path)
-
-    The strings a JSON path selects from a JSON document, as array(varchar). Use it for a
-    wildcard path over an array of objects, e.g. '$[*].value.name'. Null when json_col is null.
-
-    Parameters:
-      json_col:  column or expression holding JSON text
-      json_path: the path, unquoted and without 'lax' (e.g. $[*].value.name)
-#}
-{% macro json_string_array(json_col, json_path) -%}
-    {{ adapter.dispatch('json_string_array', 'open_learning')(json_col, json_path) }}
-{%- endmacro %}
-
-{% macro default__json_string_array(json_col, json_path) -%}
-    cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path }}' with array wrapper)) as array(varchar))
-{%- endmacro %}
-
-{% macro duckdb__json_string_array(json_col, json_path) -%}
-    json_extract_string({{ json_col }}, '{{ json_path }}')
-{%- endmacro %}
-
-{% macro starrocks__json_string_array(json_col, json_path) -%}
-    cast(json_query(parse_json({{ json_col }}), '{{ json_path }}') as array<varchar>)
-{%- endmacro %}
