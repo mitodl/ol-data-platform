@@ -150,6 +150,103 @@ with micromasters_courseruns as (
     from {{ ref('int__bootcamps__course_runs') }} as runs
 )
 
+-- Emeritus and Global Alumni have no course run table; a run is identified by the Wrike run code
+-- on each enrollment. Codes that match a MITxPro run are that run. The rest become runs of their
+-- own, with attributes from the most recent enrollment row, matching int__combined__course_runs.
+-- Their course_readable_id is the course code parsed from the run code, which links them to a
+-- course in courseruns_with_fk.
+, mitxpro_external_run_codes as (
+    select distinct courserun_external_readable_id
+    from {{ ref('int__mitxpro__course_runs') }}
+    where courserun_external_readable_id is not null
+        and courserun_external_readable_id != ''
+)
+
+, emeritus_courseruns as (
+    select
+        courserun_readable_id
+        , cast(null as integer) as source_id
+        , cast(null as integer) as course_id
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+        , cast(null as varchar) as enrollment_start
+        , cast(null as varchar) as enrollment_end
+        , cast(null as boolean) as courserun_is_live
+        , cast(null as varchar) as courserun_created_on
+        , {{ wrike_course_code('courserun_readable_id') }} as course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
+        , 'emeritus' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
+    from (
+        select
+            enrollments.courserun_external_readable_id as courserun_readable_id
+            , enrollments.courserun_title
+            , enrollments.courserun_start_on
+            , enrollments.courserun_end_on
+            , row_number() over (
+                partition by enrollments.courserun_external_readable_id
+                order by
+                    enrollments.courserun_start_on desc
+                    , enrollments.courserun_end_on desc
+                    , enrollments.enrollment_created_on desc
+                    , enrollments.courserun_title asc
+            ) as row_num
+        from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }} as enrollments
+        left join mitxpro_external_run_codes
+            on enrollments.courserun_external_readable_id
+            = mitxpro_external_run_codes.courserun_external_readable_id
+        where
+            enrollments.courserun_external_readable_id is not null
+            and mitxpro_external_run_codes.courserun_external_readable_id is null
+    ) as runs
+    where row_num = 1
+)
+
+, global_alumni_courseruns as (
+    select
+        courserun_readable_id
+        , cast(null as integer) as source_id
+        , cast(null as integer) as course_id
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+        , cast(null as varchar) as enrollment_start
+        , cast(null as varchar) as enrollment_end
+        , cast(null as boolean) as courserun_is_live
+        , cast(null as varchar) as courserun_created_on
+        , {{ wrike_course_code('courserun_readable_id') }} as course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
+        , 'global_alumni' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
+    from (
+        select
+            enrollments.courserun_external_readable_id as courserun_readable_id
+            , enrollments.courserun_title
+            , enrollments.courserun_start_on
+            , enrollments.courserun_end_on
+            -- no enrollment_created_on in this source
+            , row_number() over (
+                partition by enrollments.courserun_external_readable_id
+                order by
+                    enrollments.courserun_start_on desc
+                    , enrollments.courserun_end_on desc
+                    , enrollments.user_gdpr_consent_date desc
+                    , enrollments.courserun_title asc
+            ) as row_num
+        from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }} as enrollments
+        left join mitxpro_external_run_codes
+            on enrollments.courserun_external_readable_id
+            = mitxpro_external_run_codes.courserun_external_readable_id
+        where
+            enrollments.courserun_external_readable_id is not null
+            and mitxpro_external_run_codes.courserun_external_readable_id is null
+    ) as runs
+    where row_num = 1
+)
+
 , combined_courseruns as (
     select * from mitxonline_courseruns
     union all
@@ -160,6 +257,10 @@ with micromasters_courseruns as (
     select * from residential_courseruns
     union all
     select * from bootcamps_courseruns
+    union all
+    select * from emeritus_courseruns
+    union all
+    select * from global_alumni_courseruns
 )
 
 -- Pre-compute course_readable_id for all platforms so the dim_course join is a simple equality
@@ -203,6 +304,10 @@ with micromasters_courseruns as (
 )
 
 -- Join to dim_course to get course_fk
+, external_mitxpro_course_links as (
+    {{ wrike_course_codes_of_external_mitxpro_courses() }}
+)
+
 , dim_course as (
     select
         course_pk
@@ -217,9 +322,31 @@ with micromasters_courseruns as (
         combined_courseruns_resolved.*
         , dim_course.course_pk as course_fk
     from combined_courseruns_resolved
+    -- An Emeritus or Global Alumni run of an external xPro course belongs to that xPro course:
+    -- the partner's own course for the code if there is one, else the other partner's
+    left join external_mitxpro_course_links as same_partner_links
+        on combined_courseruns_resolved.platform in ('emeritus', 'global_alumni')
+        and combined_courseruns_resolved.course_readable_id = same_partner_links.wrike_course_code
+    left join (
+        select distinct wrike_course_code_without_partner, mitxpro_course_readable_id
+        from external_mitxpro_course_links
+    ) as other_partner_links
+        on combined_courseruns_resolved.platform in ('emeritus', 'global_alumni')
+        and same_partner_links.wrike_course_code is null
+        and {{ wrike_course_code('combined_courseruns_resolved.courserun_readable_id', include_partner=false) }}
+        = other_partner_links.wrike_course_code_without_partner
     left join dim_course
-        on combined_courseruns_resolved.platform = dim_course.primary_platform
-        and combined_courseruns_resolved.course_readable_id = dim_course.course_readable_id
+        on dim_course.primary_platform = case
+            when coalesce(
+                same_partner_links.mitxpro_course_readable_id, other_partner_links.mitxpro_course_readable_id
+            ) is not null then 'mitxpro'
+            else combined_courseruns_resolved.platform
+        end
+        and dim_course.course_readable_id = coalesce(
+            same_partner_links.mitxpro_course_readable_id
+            , other_partner_links.mitxpro_course_readable_id
+            , combined_courseruns_resolved.course_readable_id
+        )
 )
 
 , courseruns_with_all_fks as (

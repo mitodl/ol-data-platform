@@ -113,6 +113,65 @@ with mitxonline_courses as (
     left join bootcamps_course_numbers as course_numbers on courses.course_id = course_numbers.course_id
 )
 
+-- Emeritus and Global Alumni have no course table. Most of their courses are external xPro
+-- courses, already in mitxpro_courses, and their runs link to those in dim_course_run. The
+-- rest are added here, one per course code parsed from the Wrike run codes, with the title of
+-- the most recent run. source_id is null because these platforms expose no course ID.
+, external_mitxpro_course_codes as (
+    select distinct wrike_course_code_without_partner
+    from ({{ wrike_course_codes_of_external_mitxpro_courses() }}) as course_links
+)
+
+, emeritus_global_alumni_runs as (
+    select
+        'emeritus' as platform
+        , {{ wrike_course_code('courserun_external_readable_id') }} as course_readable_id
+        , {{ wrike_course_code('courserun_external_readable_id', include_partner=false) }} as course_number
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+    from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+
+    union all
+
+    select
+        'global_alumni' as platform
+        , {{ wrike_course_code('courserun_external_readable_id') }} as course_readable_id
+        , {{ wrike_course_code('courserun_external_readable_id', include_partner=false) }} as course_number
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+    from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
+)
+
+, emeritus_global_alumni_courses as (
+    select
+        course_readable_id
+        , cast(null as integer) as source_id
+        -- Run titles end in the run month, e.g. "Leading Teams (Mar-2025)"
+        , trim({{ regexp_replace_all('courserun_title', "'\\s*\\([A-Za-z]{3}-[0-9]{4}\\)\\s*$'", "''") }})
+        as course_title
+        , course_number
+        , cast(null as varchar) as course_description
+        , cast(null as boolean) as course_is_live
+        , platform
+    from (
+        select
+            runs.*
+            , row_number() over (
+                partition by runs.platform, runs.course_readable_id
+                order by runs.courserun_start_on desc, runs.courserun_end_on desc, runs.courserun_title asc
+            ) as _row_num
+        from emeritus_global_alumni_runs as runs
+        left join external_mitxpro_course_codes
+            on runs.course_number = external_mitxpro_course_codes.wrike_course_code_without_partner
+        where
+            runs.course_readable_id is not null
+            and external_mitxpro_course_codes.wrike_course_code_without_partner is null
+    ) as runs
+    where _row_num = 1
+)
+
 , combined_courses as (
     select * from mitxonline_courses
     union all
@@ -123,6 +182,8 @@ with mitxonline_courses as (
     select * from ocw_courses
     union all
     select * from bootcamps_courses
+    union all
+    select * from emeritus_global_alumni_courses
 )
 
 -- All (platform, course_readable_id) combinations are kept as distinct rows.
