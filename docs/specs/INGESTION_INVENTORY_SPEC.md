@@ -891,15 +891,16 @@ with, each fixed above rather than worked around:
   table; requiring the trailing `__` left only `raw__<dep>__openedx__`, which swallows that
   deployment's mysql, api and mongodb units.
 
-**Step 3's acceptance criterion is not yet met, and `reconcile` exits non-zero saying so.**
-348 of 374 dbt-declared raw tables map to a unit. Of the 26 that do not, 19 bootcamps tables
-are retired in `retired.yml` — reported as a warning, because the graveyard explains them and
-the stale reader is the dbt model, not the inventory. The remaining 7 are `assessment_ai*`
-sources under mitxonline and xpro that those deployments have never synced
-(`tk-7-assessment-ai-dbt-sources-under-mitxonline-and-e489de`); they stay ERROR because
-nothing yet explains them, so a clean checkout exits 1. That is the honest state rather than
-a baseline to be silenced, and it is why `reconcile` is not a CI gate yet: it becomes one
-when that task closes.
+**Step 3's acceptance criterion was met on 2026-10-06, and `reconcile` is a CI gate.** When
+the inventory was populated, 348 of 374 dbt-declared raw tables mapped to a unit. Of the 26
+that did not, 19 bootcamps tables are retired in `retired.yml`, reported as a warning because
+the graveyard explains them and the stale reader is the dbt model, not the inventory. The
+other 7 were `assessment_ai*` sources under mitxonline and xpro
+(`tk-7-assessment-ai-dbt-sources-under-mitxonline-and-e489de`). Those deployments never
+loaded them: the tables are in neither the production nor the QA raw database, and no model
+read the sources, so the declarations were removed rather than retired. `reconcile` now exits
+0 on a clean checkout and runs in `ingestion_inventory_ci.yaml` on any change to the
+inventory or to a dbt YAML file.
 
 **`reconcile` cannot tell you the inventory is incomplete.** The `keycloak` and `podcast`
 units were missing from the first populated draft, and both are actively scheduled daily in
