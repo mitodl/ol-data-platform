@@ -78,7 +78,8 @@ with programs as (
         and catalog_runs.courserun_is_unexpired
 )
 
--- ProgramSerializer.get_end_date: the latest end of any live run of any course in the program
+-- ProgramSerializer.get_end_date: the latest end of any live run of any course in the program.
+-- The API reads Program.course_runs, which does not filter on the course being live.
 , last_runs as (
     select
         courses.program_id
@@ -90,7 +91,8 @@ with programs as (
     group by courses.program_id
 )
 
--- ProgramSerializer.get_topics: the topics of every course in the program
+-- ProgramSerializer.get_topics: the topics of every course in the program, live or not, as
+-- the API reads them from instance.courses.all()
 , topics as (
     select
         courses.program_id
