@@ -282,7 +282,11 @@ with mitxonline_certificates as (
         *
         , row_number() over (
             partition by certificate_id, platform, certificate_scope
-            order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last, user_fk
+            order by
+                coalesce(certificate_updated_on, certificate_created_on) desc nulls last
+                , user_fk
+                , courserun_fk
+                , program_fk
         ) as _key_row_num
     from certificates_with_fks
 )
@@ -349,15 +353,25 @@ with mitxonline_certificates as (
     from {{ this }}
     group by platform, certificate_scope)
 
--- Snapshot of the target's current (certificate_key, user_fk) pairs, used to re-select rows
--- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
--- change, so the activity-timestamp watermark alone would never catch it).
+-- Snapshot of the target's current user_fk and is_current per certificate_key, used to
+-- re-select rows where either has gone stale: user_fk after a dim_user re-key, is_current
+-- when another certificate takes it. The source row itself did not change in either case,
+-- so the activity-timestamp watermark alone would never catch it.
 , stale_user_fk_lookup as (
     select
         certificate_key
         , user_fk as stored_user_fk
         , {% if target_has_is_current %}is_current{% else %}cast(null as boolean){% endif %} as stored_is_current
     from {{ this }}
+)
+
+-- If a platform's source model is empty for a run, nothing below treats its certificates
+-- as gone: only a (platform, scope) the source still produces can lose rows.
+, source_platforms as (
+    select distinct
+        platform
+        , certificate_scope
+    from cross_source_deduped
 )
 {% endif %}
 
@@ -408,7 +422,8 @@ with mitxonline_certificates as (
     )
 
     -- A certificate that has left the source can never be re-selected above, so it would
-    -- stay current forever. Carry it forward from the target as not current.
+    -- stay current forever. Carry it forward from the target as not current. This is also
+    -- what retires a micromasters copy loaded before its edxorg record resolved.
     union all
 
     select
@@ -429,6 +444,9 @@ with mitxonline_certificates as (
         , target.certificate_issued_on
         , false as is_current
     from {{ this }} as target
+    inner join source_platforms
+        on target.platform = source_platforms.platform
+        and target.certificate_scope = source_platforms.certificate_scope
     left join cross_source_deduped as source_certificates
         on target.certificate_key = {{ dbt_utils.generate_surrogate_key([
             "cast(source_certificates.certificate_id as varchar)",

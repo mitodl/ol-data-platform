@@ -1001,6 +1001,106 @@ unit_tests:
       certificate_is_revoked: false
       certificate_issued_on: "2024-05-01T00:00:00"
       is_current: true
+- name: test_tfact_certificate_moves_is_current_to_a_newer_certificate
+  description: >
+    A newer certificate for the same learner and run takes is_current from the
+    one already in the table. The older row's own timestamps did not move and
+    sit below the watermark, so only the stored-flag comparison re-selects it.
+  model: tfact_certificate
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserun_certificates')
+    rows:
+    - courseruncertificate_id: 601
+      user_id: 6
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-01-01T00:00:00"
+      courseruncertificate_updated_on: "2024-01-01T00:00:00"
+      courseruncertificate_issued_on: "2024-01-01T00:00:00"
+    - courseruncertificate_id: 602
+      user_id: 6
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-03-01T00:00:00"
+      courseruncertificate_updated_on: "2024-03-01T00:00:00"
+      courseruncertificate_issued_on: "2024-03-01T00:00:00"
+    # Another learner's certificate, already loaded, that sets the watermark.
+    - courseruncertificate_id: 603
+      user_id: 7
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-02-01T00:00:00"
+      courseruncertificate_updated_on: "2024-02-01T00:00:00"
+      courseruncertificate_issued_on: "2024-02-01T00:00:00"
+  - input: ref('int__mitxpro__courserun_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_certificates')
+    rows: []
+  - input: ref('int__micromasters__course_certificates')
+    rows: []
+  - input: ref('int__mitxonline__program_certificates')
+    rows: []
+  - input: ref('int__mitxpro__program_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_certificates')
+    rows: []
+  - input: ref('int__bootcamps__courserun_certificates')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_6"
+      mitxonline_application_user_id: 6
+    - user_pk: "USER_7"
+      mitxonline_application_user_id: 7
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "RUN_MITXONLINE"
+      courserun_readable_id: "course-v1:MITxT+A"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  - input: ref('dim_certificate_type')
+    rows:
+    - certificate_type_pk: "CERT_TYPE_VERIFIED"
+      certificate_type_code: "verified"
+  - input: ref('dim_program')
+    rows: []
+  - input: this
+    rows:
+    - certificate_key: "2495afff5576d5d87516c9126e83b3e2"  # pragma: allowlist secret
+      certificate_id: "601"
+      user_fk: "USER_6"
+      platform: "mitxonline"
+      certificate_scope: "course"
+      certificate_created_on: "2024-01-01T00:00:00"
+      certificate_updated_on: "2024-01-01T00:00:00"
+      is_current: true
+    - certificate_key: "1b2015ff4fd23135bbb3c6bd5504f9f0"  # pragma: allowlist secret
+      certificate_id: "603"
+      user_fk: "USER_7"
+      platform: "mitxonline"
+      certificate_scope: "course"
+      certificate_created_on: "2024-02-01T00:00:00"
+      certificate_updated_on: "2024-02-01T00:00:00"
+      is_current: true
+  expect:
+    rows:
+    - certificate_id: "601"
+      user_fk: "USER_6"
+      is_current: false
+    - certificate_id: "602"
+      user_fk: "USER_6"
+      is_current: true
+    # At the watermark, so re-selected with the same values.
+    - certificate_id: "603"
+      user_fk: "USER_7"
+      is_current: true
 - name: test_tfact_enrollment_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
