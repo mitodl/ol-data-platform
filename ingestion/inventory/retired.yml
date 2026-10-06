@@ -786,14 +786,15 @@ retired:
   layer: app_postgres
   raw_tables:
   - raw__mitxonline__app__postgres__b2b_contractpage_programs
-  retired_on: '2025-11-07'
+  retired_on: '2025-11-12'
   reason: >-
     MITx Online removed ContractPage.programs, the many-to-many field behind
     this table, in b2b migration 0016_remove_contractpage_programs
-    (mitodl/mitxonline#3079), replacing it with the ordered
+    (mitodl/mitxonline#3079, merged 2025-11-10), replacing it with the ordered
     b2b_contractprogramitem. The table was landed in Glue without ever being
-    declared in the unit. Its newest data object in production is from
-    2025-11-07 (measured 2026-10-06), three days before that migration was
-    committed, so this date is the last time it received rows and not
-    necessarily when the stream stopped. dbt never modeled it.
+    declared in the unit. This date is the tag date of v0.135.0, the first
+    MITx Online release carrying the migration, which drops the source table
+    when it deploys; the production deploy time itself was not checked. The
+    table's newest data object is from 2025-11-07 (measured 2026-10-06), which
+    shows only when a row last changed. dbt never modeled it.
     b2b_contractprogramitem is not ingested.
