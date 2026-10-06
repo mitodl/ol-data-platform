@@ -180,12 +180,13 @@ def _register_project_macros(env: jinja2.Environment, macro_sources: MacroSource
                 env.globals[name] = value
 
 
-_ONLY_MACRO_CALLS_RE = re.compile(r"/\* __jinja_macro__ \*/|__macro__|__undefined__|[\s;]")
+_SQL_COMMENT_RE = re.compile(r"/\*.*?\*/|--[^\n]*", re.DOTALL)
+_ONLY_MACRO_CALLS_RE = re.compile(r"__macro__|__undefined__|[\s;]")
 
 
 def _is_only_macro_calls(rendered: str) -> bool:
-    """Return True if *rendered* holds nothing but macro placeholders."""
-    return not _ONLY_MACRO_CALLS_RE.sub("", rendered)
+    """Return True if *rendered* holds nothing but macro placeholders and SQL comments."""
+    return not _ONLY_MACRO_CALLS_RE.sub("", _SQL_COMMENT_RE.sub("", rendered))
 
 
 def _render_jinja(
@@ -341,6 +342,8 @@ class JinjaStripResult:
 
     e.g. ``{"source_ol_warehouse_raw_data_raw__users_user": "ol_warehouse_raw_data.raw__users_user"}``
     """
+    macros_expanded: bool = False
+    """True if the model was only macro calls and ``clean_sql`` is the SQL those macros produce."""
 
 
 def _collapse_broken_column_expressions(sql: str) -> str:
@@ -426,11 +429,13 @@ def strip_jinja(sql: str, macro_sources: MacroSources | None = None) -> JinjaStr
     """
     try:
         rendered, ref_names, source_names, ref_placeholder_map, source_placeholder_map = _render_jinja(sql)
+        macros_expanded = False
         if macro_sources is not None and _is_only_macro_calls(rendered):
             try:
                 rendered, ref_names, source_names, ref_placeholder_map, source_placeholder_map = _render_jinja(
                     sql, macro_sources
                 )
+                macros_expanded = not _is_only_macro_calls(rendered)
             except Exception:  # noqa: BLE001, S110 — a macro needing a real dbt context; keep the placeholders
                 pass
         return JinjaStripResult(
@@ -439,6 +444,7 @@ def strip_jinja(sql: str, macro_sources: MacroSources | None = None) -> JinjaStr
             source_names=source_names,
             ref_placeholder_map=ref_placeholder_map,
             source_placeholder_map=source_placeholder_map,
+            macros_expanded=macros_expanded,
         )
     except jinja2.TemplateError:
         pass
@@ -526,7 +532,8 @@ class ParsedModel:
     parse_error: str | None = None
     """Non-None if sqlglot could not parse the SQL."""
     compiled_path: Path | None = None
-    """Path to the compiled SQL file used for parsing, if any."""
+    """Path to the model's fresh compiled SQL file, if any. The columns come from
+    it unless the model is only macro calls (see :func:`parse_model_file`)."""
     source_path: Path | None = None
     """Path to the raw (Jinja) SQL source file."""
     compiled_stale: bool = False
@@ -952,6 +959,18 @@ def parse_model_file(
     if compiled_dir is not None:
         compiled_sql, compiled_path = _find_compiled_sql(path.stem, compiled_dir)
         if compiled_sql is not None and compiled_path is not None and _compiled_is_fresh(compiled_path, path):
+            jinja_result = strip_jinja(raw_sql, macro_sources)
+            if jinja_result.macros_expanded:
+                # A macro-only model's columns live in the macro files, so its own
+                # mtime says nothing about whether the compiled SQL is current:
+                # editing the macro leaves the model file untouched. Take the
+                # columns from the expanded raw SQL, which always reflects the
+                # macros on disk.
+                expanded = parse_model_sql(path.stem, raw_sql, macro_sources)
+                if expanded.parse_error is None:
+                    expanded.source_path = path
+                    expanded.compiled_path = compiled_path
+                    return expanded
             # Column extraction from compiled SQL (accurate, Jinja-free).
             result = _parse_clean_sql(path.stem, compiled_sql)
             result.compiled_path = compiled_path
@@ -959,7 +978,6 @@ def parse_model_file(
             # Lineage (refs/sources) must come from the raw SQL because compiled
             # SQL replaces {{ ref('x') }} with physical relation names that have no
             # reliable 'ref_' prefix convention.
-            jinja_result = strip_jinja(raw_sql, macro_sources)
             result.macro_sources = macro_sources
             result.refs = jinja_result.ref_names
             result.source_refs = jinja_result.source_names

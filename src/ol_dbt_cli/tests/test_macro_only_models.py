@@ -6,6 +6,7 @@ macros for it (and only for it).
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -94,6 +95,42 @@ class TestParseMacroOnlyModel:
         parsed = parse_model_sql("m", "{{ not_a_project_macro(ref('stg_activity')) }}\n", MACROS)
         assert parsed.parse_error is not None
         assert parsed.refs == ["stg_activity"]
+
+    def test_sql_comments_around_the_call_do_not_stop_the_expansion(self) -> None:
+        for comment in ("-- Course activity events for one platform\n", "/* Course activity\n   events */\n"):
+            parsed = parse_model_sql("m", comment + MODEL + comment, MACROS)
+            assert parsed.parse_error is None, comment
+            assert parsed.output_columns == {"user_id", "courserun_id", "event_id"}, comment
+
+    def test_macro_edit_after_compile_is_not_masked_by_compiled_sql(self, tmp_path: Path) -> None:
+        """Editing a macro leaves the model file's mtime alone, so compiled SQL looks fresh."""
+        model = tmp_path / "models" / "m.sql"
+        compiled = tmp_path / "compiled" / "m.sql"
+        model.parent.mkdir()
+        compiled.parent.mkdir()
+        model.write_text(MODEL)
+        compiled.write_text("select user_id, courserun_id, event_id from activities\n")
+        os.utime(compiled, (model.stat().st_mtime + 60, model.stat().st_mtime + 60))
+        edited = {**MACROS, "macros/activity.sql": ACTIVITY_MACROS.replace("    , courserun_id\n", "")}
+
+        parsed = parse_model_file(model, compiled_dir=compiled.parent, macro_sources=edited)
+
+        assert parsed.output_columns == {"user_id", "event_id"}
+        assert parsed.compiled_path == compiled
+        assert parsed.refs == ["stg_activity"]
+
+    def test_model_with_its_own_sql_still_reads_compiled_sql(self, tmp_path: Path) -> None:
+        model = tmp_path / "models" / "m.sql"
+        compiled = tmp_path / "compiled" / "m.sql"
+        model.parent.mkdir()
+        compiled.parent.mkdir()
+        model.write_text("select {{ dbt_utils.star(ref('stg_activity')) }} from {{ ref('stg_activity') }}\n")
+        compiled.write_text("select user_id, courserun_id from stg_activity\n")
+        os.utime(compiled, (model.stat().st_mtime + 60, model.stat().st_mtime + 60))
+
+        parsed = parse_model_file(model, compiled_dir=compiled.parent, macro_sources=MACROS)
+
+        assert parsed.output_columns == {"user_id", "courserun_id"}
 
     def test_columns_read_from_ref_see_the_expanded_sql(self, tmp_path: Path) -> None:
         model = tmp_path / "m.sql"
