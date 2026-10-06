@@ -233,7 +233,8 @@ class TestOverlappingPages:
         served: list[tuple[dict[str, Any], ...]] = []
         self.reads = 0
 
-        def paginated_request(_self, **_):
+        def paginated_request(_self, **request):
+            self.request = request
             self.reads += 1
             return list(served[min(self.reads, len(served)) - 1])
 
@@ -246,6 +247,11 @@ class TestOverlappingPages:
 
         assert self.reads == 2
         assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
+        assert self.request == {
+            "method": "GET",
+            "url": "https://airbyte.example.invalid/api/public/v1/connections",
+            "params": {"workspaceIds": "workspace-1"},
+        }
 
     def test_an_overlapping_listing_is_read_again(self, client, listings) -> None:
         listings.extend([self.OVERLAPPED, self.CLEAN])

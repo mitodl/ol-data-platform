@@ -185,8 +185,7 @@ class AirbyteOSSClient(AirbyteClient):
         """Execute paginated requests and yield all items."""
         result_data = []
         _url_parsed = urlparse(url)
-        # Without a limit the server pages at its own default. The `next` URL
-        # carries the limit forward, so only the first request needs it.
+        # Without a limit the server pages at its own default.
         params = {"limit": self.max_items_per_page, **params}
         while url != "":
             response = self._single_request(

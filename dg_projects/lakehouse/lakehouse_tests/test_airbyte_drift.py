@@ -61,8 +61,9 @@ class FakeClient:
         self._detail = detail
         self.detail_calls = 0
 
-    def list_collection(self, path: str, id_key: str) -> list[dict[str, Any]]:  # noqa: ARG002
-        return self._collections[path]
+    def list_collection(self, path: str, id_key: str) -> list[dict[str, Any]]:
+        # Keyed the way the real client keys it, so a wrong id field fails here.
+        return list({row[id_key]: row for row in self._collections[path]}.values())
 
     def _single_request(self, **_: Any) -> dict[str, Any]:
         self.detail_calls += 1
