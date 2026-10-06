@@ -34,7 +34,7 @@ from dagster import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
-from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
 from delivery.lib.sanitize import clean_html
 
@@ -215,13 +215,14 @@ def mitpe_webhook(
         context.log.exception(msg)
         raise RuntimeError(msg) from exc
 
+    status = webhook_status(response)
     context.add_output_metadata(
         {
             "delivered_count": len(resources),
             "course_count": len(courses_df),
             "program_count": len(programs_df),
-            "webhook_status": "success",
+            "webhook_status": status,
             "response": MetadataValue.json(response),
         }
     )
-    return {"delivered_count": len(resources), "webhook_status": "success"}
+    return {"delivered_count": len(resources), "webhook_status": status}

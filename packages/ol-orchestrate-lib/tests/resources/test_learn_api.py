@@ -1,7 +1,7 @@
-"""Tests for reading MIT Learn's published programs."""
+"""Tests for the MIT Learn API client."""
 
 import httpx2 as httpx
-from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
 FIRST_PAGE = "https://learn.example.com/api/v1/programs/?platform=edx&limit=100"
 SECOND_PAGE = f"{FIRST_PAGE}&offset=100"
@@ -26,3 +26,17 @@ def test_get_published_programs_follows_pagination() -> None:
 
     assert [p["readable_id"] for p in programs] == ["a", "b"]
     assert len(requests) == 2
+
+
+def test_webhook_status_names_a_shadow_run() -> None:
+    """A response carrying shadow counts was loaded and rolled back, not delivered."""
+    delivered = {"status": "success", "message": "Webhook received"}
+    shadowed = {
+        **delivered,
+        "shadow": [
+            {"etl_source": "mitpe", "resource_type": "course", "counts": {"created": 1}}
+        ],
+    }
+
+    assert webhook_status(delivered) == "success"
+    assert webhook_status(shadowed) == "shadow"
