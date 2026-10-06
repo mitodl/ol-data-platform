@@ -1931,9 +1931,10 @@ models:
     - not_null
   tests:
   - dbt_utils.unique_combination_of_columns:
-      combination_of_columns:
-      - wagtail_page_id
-      - coursetopic_id
+      arguments:
+        combination_of_columns:
+        - wagtail_page_id
+        - coursetopic_id
 
 - name: stg__mitxonline__app__postgres__cms_instructorpage
   columns:

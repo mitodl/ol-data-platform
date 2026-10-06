@@ -1579,12 +1579,8 @@ unit_tests:
     rows: []
   - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
     rows: []
-  # Its YAML documents no columns, so `ol-dbt unit-test` has nothing to build a stand-in from.
   - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
-    format: sql
-    rows: |
-      select cast(null as bigint) as user_id, cast(null as varchar) as openedxuser_username
-      where false
+    rows: []
   - input: ref('stg__mitxonline__openedx__mysql__auth_user')
     rows: []
   - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
