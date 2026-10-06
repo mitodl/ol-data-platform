@@ -419,16 +419,28 @@ models:
 - name: tfact_certificate
   description: >
     Transaction fact table for certificate issuance events.
-    Grain: One row per certificate issued (course or program). MicroMasters course
+    Grain: One row per certificate issued (course or program), and one course
+    certificate per (user, course run) when both keys resolve. MicroMasters course
     certificates are earned on and issued by edX.org, so the micromasters and edxorg
     sources both produce a row for the same (user, course run) pair; these are collapsed
-    to a single row, preferring the edxorg record as canonical.
+    to a single row, preferring the edxorg record as canonical. When one platform
+    holds two certificates for a pair, the unrevoked one is kept, then the latest
+    issued. Rebuilt in full every run, so a certificate that loses that pick or is
+    removed at the source does not linger.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - certificate_id
       - platform
       - certificate_scope
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - user_fk
+        - courserun_fk
+      config:
+        where: certificate_scope = 'course' and user_fk is not null and courserun_fk
+          is not null
   config:
     meta:
       qa_branches:
@@ -691,35 +703,78 @@ unit_tests:
       transaction_type: "payment"
       transaction_status: "fulfilled"
       transaction_created_on: "2024-01-15T00:00:00"
-- name: test_tfact_certificate_refreshes_stale_user_fk_after_dim_user_rekey
+- name: test_tfact_certificate_keeps_one_course_certificate_per_user_and_run
   description: >
-    Regression test for the dim_user re-key incident: when dim_user.user_pk changes
-    for
-    a user, tfact_certificate's incremental filter must re-select the affected certificate
-    and write the refreshed user_fk, even though the source row's own timestamp did
-    not
-    change and the activity-timestamp watermark alone would not have caught it.
+    Consumers join this fact on (user_fk, courserun_fk), so two course
+    certificates for one pair double their rows. Pins which one survives:
+    edxorg over its micromasters copy, an unrevoked certificate over a revoked
+    one, then the latest issued. Certificates whose user does not resolve are
+    all kept.
   model: tfact_certificate
-  overrides:
-    macros:
-      is_incremental: true
   given:
   - input: ref('int__mitxonline__courserun_certificates')
     rows:
-    - courseruncertificate_id: 5001
-      user_id: 555
-      courserun_readable_id: "course-v1:MITxT+1"
-      courseruncertificate_uuid: "uuid-1"
+    # Two unrevoked certificates for one learner and run: the later one stays.
+    - courseruncertificate_id: 101
+      user_id: 1
+      courserun_readable_id: "course-v1:MITxT+A"
       courseruncertificate_is_revoked: false
-      courseruncertificate_created_on: "2024-01-15T00:00:00"
-      courseruncertificate_updated_on: "2024-01-15T00:00:00"
-      courseruncertificate_issued_on: "2024-01-15T00:00:00"
+      courseruncertificate_created_on: "2024-01-01T00:00:00"
+      courseruncertificate_updated_on: "2024-01-01T00:00:00"
+      courseruncertificate_issued_on: "2024-01-01T00:00:00"
+    - courseruncertificate_id: 102
+      user_id: 1
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-01-03T00:00:00"
+      courseruncertificate_updated_on: "2024-01-03T00:00:00"
+      courseruncertificate_issued_on: "2024-01-03T00:00:00"
+    # A later revoked certificate does not displace the one that stands.
+    - courseruncertificate_id: 201
+      user_id: 2
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-02-01T00:00:00"
+      courseruncertificate_updated_on: "2024-02-01T00:00:00"
+      courseruncertificate_issued_on: "2024-02-01T00:00:00"
+    - courseruncertificate_id: 202
+      user_id: 2
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: true
+      courseruncertificate_created_on: "2024-03-01T00:00:00"
+      courseruncertificate_updated_on: "2024-03-01T00:00:00"
+      courseruncertificate_issued_on: "2024-03-01T00:00:00"
+    # No dim_user row for this learner, so nothing ties the two together.
+    - courseruncertificate_id: 401
+      user_id: 4
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-04-01T00:00:00"
+      courseruncertificate_updated_on: "2024-04-01T00:00:00"
+      courseruncertificate_issued_on: "2024-04-01T00:00:00"
+    - courseruncertificate_id: 402
+      user_id: 4
+      courserun_readable_id: "course-v1:MITxT+A"
+      courseruncertificate_is_revoked: false
+      courseruncertificate_created_on: "2024-04-02T00:00:00"
+      courseruncertificate_updated_on: "2024-04-02T00:00:00"
+      courseruncertificate_issued_on: "2024-04-02T00:00:00"
   - input: ref('int__mitxpro__courserun_certificates')
     rows: []
   - input: ref('int__edxorg__mitx_courserun_certificates')
-    rows: []
+    rows:
+    - user_id: 30
+      courserun_readable_id: "MITx/1.00x/2020"
+      courseruncertificate_mode: "verified"
+      courseruncertificate_created_on: "2020-05-01T00:00:00"
+      courseruncertificate_updated_on: "2020-05-01T00:00:00"
+  # The same certificate as the edxorg row above, keyed on email and dated later.
   - input: ref('int__micromasters__course_certificates')
-    rows: []
+    rows:
+    - user_email: "Carol@example.com"
+      courserun_readable_id: "MITx/1.00x/2020"
+      courseruncertificate_uuid: "mm-uuid"
+      courseruncertificate_created_on: "2020-05-02T00:00:00"
   - input: ref('int__mitxonline__program_certificates')
     rows: []
   - input: ref('int__mitxpro__program_certificates')
@@ -728,61 +783,71 @@ unit_tests:
     rows: []
   - input: ref('int__bootcamps__courserun_certificates')
     rows: []
-      # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
   - input: ref('dim_user')
     rows:
-    - user_pk: "NEW_USER_PK"
-      mitxonline_application_user_id: 555
+    - user_pk: "USER_1"
+      email: "one@example.com"
+      mitxonline_application_user_id: 1
+      edxorg_openedx_user_id:
+    - user_pk: "USER_2"
+      email: "two@example.com"
+      mitxonline_application_user_id: 2
+      edxorg_openedx_user_id:
+    - user_pk: "USER_3"
+      email: "carol@example.com"
+      mitxonline_application_user_id:
+      edxorg_openedx_user_id: 30
   - input: ref('dim_course_run')
-    rows: []
+    rows:
+    - courserun_pk: "RUN_MITXONLINE"
+      courserun_readable_id: "course-v1:MITxT+A"
+      platform: "mitxonline"
+      is_current: true
+    - courserun_pk: "RUN_EDXORG"
+      courserun_readable_id: "MITx/1.00x/2020"
+      platform: "edxorg"
+      is_current: true
   - input: ref('dim_platform')
     rows:
     - platform_pk: "PLATFORM_MITXONLINE"
       platform_readable_id: "mitxonline"
+    - platform_pk: "PLATFORM_EDXORG"
+      platform_readable_id: "edxorg"
+    - platform_pk: "PLATFORM_MICROMASTERS"
+      platform_readable_id: "micromasters"
   - input: ref('dim_certificate_type')
     rows:
     - certificate_type_pk: "CERT_TYPE_VERIFIED"
       certificate_type_code: "verified"
   - input: ref('dim_program')
     rows: []
-      # Existing target state carries the pre-rekey user_fk; an unrelated later-dated certificate pushes the watermark past our row so only the stale-user_fk check can reselect it.
-  - input: this
-    rows:
-    - certificate_key: "341dbc50d750419afb7297181f38422a"  # pragma: allowlist secret
-      certificate_id: "5001"
-      certificate_issued_date_key: 20240115
-      user_fk: "OLD_USER_PK"
-      platform: "mitxonline"
-      certificate_scope: "course"
-      certificate_uuid: "uuid-1"
-      certificate_is_revoked: false
-      certificate_created_on: "2024-01-15T00:00:00"
-      certificate_updated_on: "2024-01-15T00:00:00"
-      certificate_issued_on: "2024-01-15T00:00:00"
-    - certificate_key: "unrelated-later-certificate"
-      certificate_id: "9999"
-      certificate_issued_date_key: 20240201
-      user_fk: "SOME_OTHER_USER_PK"
-      platform: "mitxonline"
-      certificate_scope: "course"
-      certificate_uuid: "uuid-9999"
-      certificate_is_revoked: false
-      certificate_created_on: "2024-02-01T00:00:00"
-      certificate_updated_on: "2024-02-01T00:00:00"
-      certificate_issued_on: "2024-02-01T00:00:00"
   expect:
     rows:
-    - certificate_key: "341dbc50d750419afb7297181f38422a"  # pragma: allowlist secret
-      certificate_id: "5001"
-      certificate_issued_date_key: 20240115
-      user_fk: "NEW_USER_PK"
-      platform: "mitxonline"
-      certificate_scope: "course"
-      certificate_uuid: "uuid-1"
+    - platform: "mitxonline"
+      user_fk: "USER_1"
+      courserun_fk: "RUN_MITXONLINE"
       certificate_is_revoked: false
-      certificate_created_on: "2024-01-15T00:00:00"
-      certificate_updated_on: "2024-01-15T00:00:00"
-      certificate_issued_on: "2024-01-15T00:00:00"
+      certificate_issued_on: "2024-01-03T00:00:00"
+    - platform: "mitxonline"
+      user_fk: "USER_2"
+      courserun_fk: "RUN_MITXONLINE"
+      certificate_is_revoked: false
+      certificate_issued_on: "2024-02-01T00:00:00"
+    - platform: "edxorg"
+      user_fk: "USER_3"
+      courserun_fk: "RUN_EDXORG"
+      certificate_is_revoked: false
+      certificate_issued_on: "2020-05-01T00:00:00"
+    - platform: "mitxonline"
+      user_fk:
+      courserun_fk: "RUN_MITXONLINE"
+      certificate_is_revoked: false
+      certificate_issued_on: "2024-04-01T00:00:00"
+    - platform: "mitxonline"
+      user_fk:
+      courserun_fk: "RUN_MITXONLINE"
+      certificate_is_revoked: false
+      certificate_issued_on: "2024-04-02T00:00:00"
 - name: test_tfact_enrollment_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
