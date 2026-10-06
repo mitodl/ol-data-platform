@@ -200,6 +200,13 @@ models:
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
           "ol_business_analyst", "reverse_etl", "mit_irx"]
+      # Every build replaces these tables whole, so a compacted copy lasts only
+      # until the next build, there are no old snapshots to expire, and the
+      # CREATE TABLE AS already writes statistics.
+      +meta:
+        required_docs: true
+        iceberg_maintenance:
+          enabled: false
     +properties:
       format: "'PARQUET'"
     +meta:
