@@ -51,9 +51,14 @@ def merge_iceberg_table(
     if snapshot is not None and snapshot.schema_id != table.schema().schema_id:
         table.append(table.schema().as_arrow().empty_table())
     batch_columns = set(data.column_names)
-    data = data.select(
-        [field.name for field in table.schema().fields if field.name in batch_columns]
-    )
+    ordered = [
+        field.name for field in table.schema().fields if field.name in batch_columns
+    ]
+    if len(ordered) != data.num_columns:
+        missing = sorted(batch_columns - set(ordered))
+        msg = f"{load_table_name}: batch columns not in the table schema: {missing}"
+        raise ValueError(msg)
+    data = data.select(ordered)
     _dlt_merge_iceberg_table(
         table=table, data=data, schema=schema, load_table_name=load_table_name
     )

@@ -150,3 +150,18 @@ def test_guarded_upsert_accepts_a_new_column_in_another_order(
         ("h2", "0.9", "<item/>"),
         ("h3", "0.1", "<item/>"),
     ]
+
+
+def test_guard_refuses_to_drop_a_batch_column(
+    table: IcebergTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A column the schema union did not add fails the load, not vanishes from it."""
+    monkeypatch.setattr(
+        dlt_pyiceberg, "ensure_iceberg_compatible_arrow_schema", lambda _: _BATCH.schema
+    )
+    batch = _BATCH.append_column("rss", pa.array(["<item/>", "<item/>"]))
+
+    with pytest.raises(ValueError, match=r"not in the table schema: \['rss'\]"):
+        dlt_pyiceberg.merge_iceberg_table(
+            table=table, data=batch, schema=_DLT_TABLE_SCHEMA, load_table_name="t"
+        )
