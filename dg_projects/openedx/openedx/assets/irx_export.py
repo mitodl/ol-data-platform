@@ -40,7 +40,7 @@ from pyiceberg.table import Table
 from upath import UPath
 
 IRX_EXPORT_GROUP = "irx_export"
-IRX_EXPORT_CODE_VERSION = "irx_export_v2"
+IRX_EXPORT_CODE_VERSION = "irx_export_v3"
 IRX_GLUE_DATABASE = "ol_warehouse_production_external"
 
 # end_offset=1 makes today the latest partition, so the scheduled run on
