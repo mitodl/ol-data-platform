@@ -117,11 +117,11 @@ left join brand
     on ticket.brand_id = brand.brand_id
 left join groups
     on ticket.group_id = groups.group_id
-left join user as submitter
+left join users as submitter
     on ticket.ticket_submitter_user_id = submitter.user_id
-left join user as requester
+left join users as requester
     on ticket.ticket_requester_user_id = requester.user_id
-left join user as assignee
+left join users as assignee
     on ticket.ticket_assignee_user_id = assignee.user_id
 left join named_custom_fields
     on ticket.ticket_id = named_custom_fields.ticket_id
