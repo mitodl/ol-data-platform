@@ -85,6 +85,8 @@ class MITLearnApiClient(BaseApiClient):
         self,
         resources: list[dict[str, Any]],
         endpoint: str = "/api/v1/webhooks/learning_resources/",
+        *,
+        sync: list[tuple[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Send a batch of pre-computed LearningResource dicts to MIT Learn.
 
@@ -103,5 +105,16 @@ class MITLearnApiClient(BaseApiClient):
                 ``resource_type``.
             endpoint: Webhook path to POST to. Defaults to the consolidated
                 learning_resources endpoint.
+            sync: ``(etl_source, resource_type)`` pairs this batch is the
+                complete set for. MIT Learn only prunes a pair that has
+                resources in the batch, so a pair that has gone empty stays
+                published unless it is declared here. Learn accepts course,
+                program and document.
         """
-        return self._post_signed_webhook(endpoint, {"resources": resources})
+        data: dict[str, Any] = {"resources": resources}
+        if sync:
+            data["sync"] = [
+                {"etl_source": etl_source, "resource_type": resource_type}
+                for etl_source, resource_type in sync
+            ]
+        return self._post_signed_webhook(endpoint, data)

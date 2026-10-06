@@ -50,6 +50,7 @@ _PROGRAMS_TABLE = "integrations__learn__mitpe_programs"
 _RUNS_TABLE = "integrations__learn__mitpe_runs"
 
 _PLATFORM = "mitpe"
+_ETL_SOURCE = "mitpe"
 _CURRENCY_USD = "USD"
 
 
@@ -197,6 +198,14 @@ def mitpe_webhook(
         len(runs_df),
     )
 
+    # MIT Learn only prunes a type that has resources in the batch, so programs
+    # are declared: when the last program leaves the feed, MIT Learn unpublishes
+    # the ones it holds. An empty course table is a broken build, not a catalog
+    # with no courses, and with programs declared it would unpublish them all.
+    if courses_df.is_empty():
+        msg = f"{_COURSES_TABLE} has no rows; not delivering MIT PE to MIT Learn"
+        raise RuntimeError(msg)
+
     resources = build_resources(
         courses_df.iter_rows(named=True),
         programs_df.iter_rows(named=True),
@@ -208,7 +217,7 @@ def mitpe_webhook(
     )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
-            resources
+            resources, sync=[(_ETL_SOURCE, "program")]
         )
     except httpx.HTTPStatusError as exc:
         msg = f"MIT PE webhook failed with status {exc.response.status_code}: {exc}"
