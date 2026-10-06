@@ -1234,6 +1234,14 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
     }
+    # Run once over the whole project whatever --model / --changed-only selects.
+    global_checks = {
+        "yaml_integrity",
+        "dimensional_layering",
+        QA_CONTRACT_CHECK,
+        DATA_CONTRACT_CHECK,
+        METRIC_REGISTRY_CHECK,
+    }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
         raise SystemExit(1)
@@ -1394,17 +1402,23 @@ def validate(
                 target_names.append(name)
 
         if not target_names:
-            if macro_files or yaml_files:
-                # Changes WERE detected, they just didn't resolve to any model to
-                # validate (no manifest for macro mapping, or a YAML file that
-                # declares no models). Say so rather than claiming nothing changed.
-                console.print(
-                    f"[dim]Changed macro/YAML file(s) detected vs {base_ref}, but none mapped to "
-                    "models to validate (see warnings above).[/]"
-                )
-            else:
-                console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
-            return
+            # A diff that touches only metrics/, contracts/ or the ingestion
+            # inventory changes no model, and the global checks are the only
+            # ones that read those files, so they still run.
+            run_global_checks = bool(global_checks - skipped)
+            if output_format == "text" or not run_global_checks:
+                if macro_files or yaml_files:
+                    # Changes WERE detected, they just didn't resolve to any model to
+                    # validate (no manifest for macro mapping, or a YAML file that
+                    # declares no models). Say so rather than claiming nothing changed.
+                    console.print(
+                        f"[dim]Changed macro/YAML file(s) detected vs {base_ref}, but none mapped to "
+                        "models to validate (see warnings above).[/]"
+                    )
+                else:
+                    console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
+            if not run_global_checks:
+                return
     else:
         target_names = [f.stem for f in all_sql_files]
 
@@ -1415,7 +1429,10 @@ def validate(
             mode = f"changed models vs {base_ref}"
         else:
             mode = "all models"
-        console.print(f"\n[bold]Validating {len(target_names)} {mode}[/]\n")
+        if target_names:
+            console.print(f"\n[bold]Validating {len(target_names)} {mode}[/]\n")
+        else:
+            console.print("\n[bold]Running the project-wide checks only[/]\n")
 
     # Parse all SQL files up-front (needed for cross-model reference resolution)
     sql_file_map_all: dict[str, Path] = {f.stem: f for f in all_sql_files}

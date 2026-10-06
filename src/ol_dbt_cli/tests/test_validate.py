@@ -6,7 +6,9 @@ import textwrap
 from pathlib import Path
 
 import pytest
+import yaml
 
+from ol_dbt_cli.commands import validate as validate_module
 from ol_dbt_cli.commands.validate import (
     Severity,
     ValidationReport,
@@ -20,6 +22,7 @@ from ol_dbt_cli.commands.validate import (
     _resolve_star_with_qualify,
     _resolve_star_with_registry,
 )
+from ol_dbt_cli.lib.manifest import ManifestRegistry
 from ol_dbt_cli.lib.sql_parser import ParsedModel, parse_model_file
 from ol_dbt_cli.lib.yaml_registry import (
     YamlColumn,
@@ -1039,3 +1042,63 @@ class TestPkTestCoverage:
         report = ValidationReport()
         _check_pk_test_coverage("dim_untracked", YamlRegistry(), report)
         assert not report.issues
+
+
+class TestChangedOnlyWithNoChangedModel:
+    """A diff that changes no model still gets the project-wide checks."""
+
+    @pytest.fixture
+    def repo(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        """Lay out a repo whose diff against the base ref touches no model."""
+        dbt_dir = tmp_path / "src" / "ol_dbt"
+        (dbt_dir / "models").mkdir(parents=True)
+        (dbt_dir / "dbt_project.yml").write_text("name: test\n")
+        (dbt_dir / "models" / "stg_users.sql").write_text("select user_id from raw_users\n")
+        for helper in ("get_changed_sql_models", "get_changed_macro_files", "get_changed_yaml_models"):
+            monkeypatch.setattr(validate_module, helper, lambda *_args, **_kwargs: [])
+        return tmp_path
+
+    def _validate(self, repo: Path, **kwargs: str) -> None:
+        validate_module.validate(dbt_dir_path=str(repo / "src" / "ol_dbt"), changed_only=True, **kwargs)
+
+    def test_metrics_only_diff_runs_the_metric_registry(self, repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        (repo / "metrics").mkdir()
+        (repo / "metrics" / "learner_completion_status.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "metric": {"name": "learner_completion_status", "metricType": "OTHER"},
+                    "implemented_by": [{"dbt_model": "no_such_model", "columns": ["completion_status"]}],
+                }
+            )
+        )
+        with pytest.raises(SystemExit) as exc:
+            self._validate(repo)
+        assert exc.value.code == 1
+        assert "no_such_model" in capsys.readouterr().out
+
+    def test_contracts_only_diff_runs_the_data_contract(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (repo / "contracts").mkdir()
+        (repo / "contracts" / "c.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "entity": {"type": "table", "dbt_model": "no_such_model"},
+                    "contract": {"name": "c", "schema": [{"name": "user_pk", "dataType": "VARCHAR"}]},
+                }
+            )
+        )
+        monkeypatch.setattr(validate_module, "find_manifest", lambda _dbt_dir: repo / "manifest.json")
+        monkeypatch.setattr(validate_module, "load_manifest", lambda _path: ManifestRegistry())
+        with pytest.raises(SystemExit) as exc:
+            self._validate(repo, skip_checks="qa_branch_contract")
+        assert exc.value.code == 1
+        assert "names a dbt_model that does not exist" in capsys.readouterr().out
+
+    def test_returns_early_when_every_global_check_is_skipped(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._validate(repo, only_checks="yaml_sql_sync")
+        out = capsys.readouterr().out
+        assert "No changed models" in out
+        assert "Summary" not in out
