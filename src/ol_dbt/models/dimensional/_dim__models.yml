@@ -1854,23 +1854,34 @@ unit_tests:
       courserun_fk: run-1
       certificate_scope: course
       certificate_is_revoked: false
+      is_current: true
     - user_fk: certified_and_passing
       courserun_fk: run-1
       certificate_scope: course
       certificate_is_revoked: false
+      is_current: true
     - user_fk: revoked_and_passing
       courserun_fk: run-1
       certificate_scope: course
       certificate_is_revoked: true
+      is_current: true
     - user_fk: revoked_not_passing
       courserun_fk: run-1
       certificate_scope: course
       certificate_is_revoked: true
+      is_current: true
+    # A superseded certificate does not count, even unrevoked.
+    - user_fk: passing
+      courserun_fk: run-1
+      certificate_scope: course
+      certificate_is_revoked: false
+      is_current: false
     # Only course certificates count.
     - user_fk: nothing
       courserun_fk: run-1
       certificate_scope: program
       certificate_is_revoked: false
+      is_current: true
   - input: ref('afact_learner_courserun_daily_activity')
     rows:
     - user_fk: revoked_not_passing

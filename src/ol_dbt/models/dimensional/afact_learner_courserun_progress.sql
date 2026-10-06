@@ -47,7 +47,10 @@ with enrollments_ranked as (
         , certificate_issued_on
         , certificate_updated_on
     from {{ ref('tfact_certificate') }}
+    -- is_current leaves one certificate per (user, course run): the unrevoked one, then
+    -- the latest issued.
     where certificate_scope = 'course'
+      and is_current
 )
 
 -- activity_date_key is YYYYMMDD, so its max is the latest day.
