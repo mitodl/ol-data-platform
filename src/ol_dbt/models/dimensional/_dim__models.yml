@@ -1632,11 +1632,13 @@ models:
     tests:
     - not_null
   - name: needs_attention_since
-    description: date, the UTC date from which the learner needs attention. A learner
-      needs attention when coalesce(needs_attention_since <= <current UTC date>, false).
-      not_started is the enrollment date (1970-01-01 when the enrollment has none);
-      in_progress is last_active_on plus var needs_attention_quiet_days (30); null
-      for in_progress with a grade but no tracked activity, and for passed and certified.
+    description: date, the day from which the learner needs attention. A learner needs
+      attention when coalesce(needs_attention_since <= <current UTC date>, false).
+      The enrollment and activity days are read from the source timestamps as written,
+      so a source that records a local offset can be a day off UTC. not_started is
+      the enrollment date (1970-01-01 when the enrollment has none); in_progress is
+      last_active_on plus var needs_attention_quiet_days (30); null for in_progress
+      with a grade but no tracked activity, and for passed and certified.
 
 unit_tests:
 - name: test_dim_user_pk_is_minted_from_the_group_identity
@@ -1742,6 +1744,9 @@ unit_tests:
     ol-analytics-api and the B2B views read these columns in place of their
     own copies of the rule, so a changed branch changes what partners see.
   model: afact_learner_courserun_progress
+  overrides:
+    vars:
+      needs_attention_quiet_days: 30
   given:
   - input: ref('tfact_enrollment')
     rows:
@@ -1875,6 +1880,13 @@ unit_tests:
     - user_fk: active_only
       courserun_fk: run-1
       activity_date_key: 20240215
+    # Going quiet after finishing is expected, so these two get no threshold date.
+    - user_fk: certified_and_passing
+      courserun_fk: run-1
+      activity_date_key: 20240215
+    - user_fk: passing
+      courserun_fk: run-1
+      activity_date_key: 20240215
   - input: ref('dim_date')
     rows:
     - date_key: 20240110
@@ -1897,7 +1909,7 @@ unit_tests:
       completion_status: certified
       is_in_progress: false
       is_not_started: false
-      last_active_on:
+      last_active_on: "2024-02-15"
       needs_attention_since:
     - user_fk: revoked_and_passing
       is_certified: false
@@ -1911,7 +1923,7 @@ unit_tests:
       completion_status: passed
       is_in_progress: false
       is_not_started: false
-      last_active_on:
+      last_active_on: "2024-02-15"
       needs_attention_since:
     # A revoked certificate without a passing grade puts the learner back in progress.
     - user_fk: revoked_not_passing
