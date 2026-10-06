@@ -6,7 +6,8 @@ with source as (
 
 , cleaned as (
     select
-        page_id as wagtail_page_id
+        id as instructorpagelink_id
+        , page_id as wagtail_page_id
         , linked_instructor_page_id as instructor_wagtail_page_id
     from most_recent_source
 )
