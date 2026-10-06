@@ -29,6 +29,9 @@ sources:
     - name: text_redacted
       description: str, PII-masked turn body. Null where the source turn's text was
         null.
+    - name: redaction_version
+      description: str, the masking rules version (REDACTION_VERSION in ml.lib.redact)
+        that produced this row. Null on rows redacted before the column existed.
     tests:
     - dbt_expectations.expect_compound_columns_to_be_unique:
         arguments:
