@@ -98,8 +98,8 @@ CTAS with the per-unit column allowlist, then a metadata stamp. Do not add
 `ol-dbt validate` has solved this exact tension once already.
 `_check_dimensional_layering` (`src/ol_dbt_cli/ol_dbt_cli/commands/validate.py:568-619`)
 treats new violations as `ERROR`, collapses known ones listed in
-`dimensional_layering_baseline.txt` into a single `INFO` summary, and surfaces baseline
-entries that no longer occur at `INFO` so the baseline gets shrunk. `--update-baseline`
+`dimensional_layering_baseline.txt` into a single `INFO` summary, and treats baseline
+entries that no longer occur as `ERROR` so the baseline only shrinks. `--update-baseline`
 (`validate.py:997-1004`) rewrites the file. `_check_pk_test_coverage` documents the same
 intent explicitly: warn now, "promote to ERROR once the outstanding models are covered
 (mirrors the dimensional_layering baseline approach)".
@@ -125,7 +125,7 @@ each other, which the RFC identifies as "the actual deliverable".
 
 The second is the case the RFC is worried about. Baselining it means a lapsed layer is
 acknowledged in `qa_branch_baseline.txt` with a reviewable diff, QA builds keep running, and
-the resolved-entry `INFO` nags the baseline back down as layers are repaired.
+the resolved-entry `ERROR` forces the baseline back down once a refreshed observation shows a layer repaired.
 
 ### Where it lives
 
@@ -196,7 +196,8 @@ the gap, and both are visible in review.
 Only tables that a declaring model reads count, through manifest lineage. The baseline
 (`ingestion/inventory/qa_branch_baseline.txt`) is keyed per table, not per branch: a model that
 starts reading an empty table of an already-baselined branch is a new finding. New findings are
-reported as one ERROR per branch. `ol-dbt validate --update-qa-baseline` rewrites the baseline.
+reported as one ERROR per branch. A baseline line that is no longer a gap is an ERROR as well,
+so a closed gap cannot reopen unnoticed. `ol-dbt validate --update-qa-baseline` rewrites the baseline.
 
 The first observation (2026-09-18) gives 48 baselined tables across 14 branches, all `empty`.
 No `stale` finding can fire yet, because step 4 declared only scoped units and no model declares

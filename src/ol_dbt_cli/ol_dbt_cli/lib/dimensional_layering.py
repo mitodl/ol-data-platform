@@ -170,6 +170,7 @@ def render_baseline(violations: list[LayeringViolation]) -> str:
         "# violations that existed when the lint was introduced; the #2072 migration",
         "# shrinks this list over time. The lint fails only on violations NOT listed",
         "# here, so new regressions are blocked while existing debt is tolerated.",
+        "# It also fails on a line whose reference is gone, so the list only shrinks.",
         "#",
         "# Regenerate with: ol-dbt validate --update-baseline",
         "",
