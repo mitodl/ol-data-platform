@@ -14,9 +14,17 @@ That is how adding ``_dlt_load_id`` stuck three production merge tables
 (DAGSTER-5Y). An empty append commits a snapshot under the current schema
 without changing any rows, after which the upsert reads matched rows correctly.
 
-Remove this module once a pyiceberg release fixes apache/iceberg-python#3105;
-``tests/test_iceberg_upsert_guard.py`` fails as soon as the unguarded path
-stops raising.
+The upsert also compares a batch to the rows it matches with
+``source_table.cast(target_table.schema)``, which pyarrow resolves by position.
+dlt writes a batch in its own schema's column order and the table keeps the
+order its columns were added in, so a batch that names the same columns in
+another order fails with the same error. That stopped the podcast load once
+``_dlt_load_id`` led the batch and trailed in the table. The batch is put in
+the table's column order before the merge.
+
+Remove this module once a pyiceberg release fixes apache/iceberg-python#3105
+and casts by name; ``tests/test_iceberg_upsert_guard.py`` fails as soon as
+either unguarded path stops raising.
 """
 
 import pyarrow as pa
@@ -33,7 +41,7 @@ def merge_iceberg_table(
     schema: TTableSchema,
     load_table_name: str,
 ) -> None:
-    """Run dlt's merge after bringing the head snapshot up to the current schema."""
+    """Run dlt's merge on a batch and a head snapshot that match the table's schema."""
     with table.update_schema() as update:
         update.union_by_name(
             dlt_pyiceberg.ensure_iceberg_compatible_arrow_schema(data.schema)
@@ -41,6 +49,10 @@ def merge_iceberg_table(
     snapshot = table.current_snapshot()
     if snapshot is not None and snapshot.schema_id != table.schema().schema_id:
         table.append(table.schema().as_arrow().empty_table())
+    batch_columns = set(data.column_names)
+    data = data.select(
+        [name for name in table.schema().column_names if name in batch_columns]
+    )
     _dlt_merge_iceberg_table(
         table=table, data=data, schema=schema, load_table_name=load_table_name
     )

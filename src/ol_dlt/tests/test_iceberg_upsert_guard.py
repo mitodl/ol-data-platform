@@ -88,3 +88,45 @@ def test_guarded_upsert_updates_matches_and_inserts_new_rows(
         ("h2", "0.9", "L1"),
         ("h3", "0.1", "L1"),
     ]
+
+
+@pytest.fixture
+def reordered_batch(table: IcebergTable) -> pa.Table:
+    """The batch with its columns in another order than the table's.
+
+    The table gets a snapshot under its current schema first, so the stale
+    snapshot is not what fails.
+    """
+    table.append(table.schema().as_arrow().empty_table())
+    return _BATCH.select(["_dlt_load_id", "row_hash", "extracted_course_key", "grade"])
+
+
+def test_unguarded_upsert_fails_on_column_order(
+    table: IcebergTable, reordered_batch: pa.Table
+) -> None:
+    """If this stops raising, pyiceberg casts by name and the reorder can go."""
+    with pytest.raises(ValueError, match="field names are not matching"):
+        iceberg_upsert_guard._dlt_merge_iceberg_table(  # noqa: SLF001
+            table=table,
+            data=reordered_batch,
+            schema=_DLT_TABLE_SCHEMA,
+            load_table_name="t",
+        )
+
+
+def test_guarded_upsert_accepts_another_column_order(
+    table: IcebergTable, reordered_batch: pa.Table
+) -> None:
+    dlt_pyiceberg.merge_iceberg_table(
+        table=table,
+        data=reordered_batch,
+        schema=_DLT_TABLE_SCHEMA,
+        load_table_name="t",
+    )
+
+    rows = sorted(table.scan().to_arrow().to_pylist(), key=lambda r: r["row_hash"])
+    assert [(r["row_hash"], r["grade"], r["_dlt_load_id"]) for r in rows] == [
+        ("h1", "0.5", None),
+        ("h2", "0.9", "L1"),
+        ("h3", "0.1", "L1"),
+    ]
