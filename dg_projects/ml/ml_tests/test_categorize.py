@@ -219,10 +219,10 @@ def test_propose_categories_builds_one_row_per_cluster() -> None:
     )
 
 
-def test_propose_categories_asks_again_when_a_label_is_already_in_use() -> None:
-    """A label that repeats an in-use one is re-asked with the in-use list."""
+def test_propose_categories_joins_the_category_when_a_label_is_in_use() -> None:
+    """Reusing an in-use label joins that category, with its exact spelling."""
 
-    class _CollidingClient:
+    class _JoiningClient:
         model_version = "test-model"
 
         def __init__(self) -> None:
@@ -237,23 +237,21 @@ def test_propose_categories_asks_again_when_a_label_is_already_in_use() -> None:
             taken_labels: Sequence[str] = (),
         ) -> dict[str, str]:
             self.taken_label_calls.append(list(taken_labels))
-            label = (
-                "Genetics problem solving confusion"
-                if len(self.taken_label_calls) == 1
-                else "Genetic mapping and probability"
-            )
-            return {"category_label": label, "category_description": "d"}
+            return {
+                "category_label": "seeks course recommendations",
+                "category_description": "d",
+            }
 
-    client = _CollidingClient()
+    client = _JoiningClient()
     result = categorize.propose_categories(
         {"key-a": {"samples": ["x"], "dominant_tags": [], "total_conversations": 1}},
         client,
         "run-1",
-        existing_labels=["Genetics problem solving confusion"],
+        existing_labels=["Seeks course recommendations"],
     )
 
-    assert result["category_label"].to_list() == ["Genetic mapping and probability"]
-    assert client.taken_label_calls == [["Genetics problem solving confusion"]] * 2
+    assert result["category_label"].to_list() == ["Seeks course recommendations"]
+    assert client.taken_label_calls == [["Seeks course recommendations"]]
 
 
 def test_propose_categories_skips_a_cluster_with_no_samples() -> None:

@@ -19,16 +19,16 @@ params:
     subject: table_name
   - clause: WHERE
     comparator:
-    - 1
+    - Trino
     datasourceWarning: false
     expressionType: SIMPLE
-    filterOptionName: filter_database_id_trino
+    filterOptionName: filter_database_name_trino
     isExtra: false
     isNew: false
     operator: IN
     operatorId: IN
     sqlExpression: null
-    subject: database_id
+    subject: database_name
   - clause: WHERE
     comparator: No filter
     expressionType: SIMPLE

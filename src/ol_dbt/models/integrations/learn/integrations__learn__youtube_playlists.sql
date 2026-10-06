@@ -1,7 +1,7 @@
 {#
   integrations__learn__youtube_playlists
   Exposes YouTube playlists for MIT Learn's video_playlist LearningResources
-  (webhook delivery). Mirrors transform_playlist in
+  (warehouse pull). Mirrors transform_playlist in
   learning_resources/etl/youtube.py. Videos are in
   integrations__learn__youtube_videos, ordered per playlist by
   integrations__learn__youtube_playlist_videos.
@@ -14,8 +14,8 @@
   those playlists MIT Learn's load_playlist matches each video to an OCW
   ContentFile by youtube_id and publishes the playlist only if at least 60% of
   its videos match (OCW_PLAYLIST_VIDEO_THRESHOLD), so an empty one is never
-  published (mit-learn #3882). The content files live in MIT Learn, so the
-  receiver has to apply that rule. A create_videos = true playlist is published even
+  published (mit-learn #3882). The content files live in MIT Learn, so its
+  pull task applies that rule. A create_videos = true playlist is published even
   when it has no videos, as on mit-learn main.
 #}
 

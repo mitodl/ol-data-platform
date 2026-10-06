@@ -12,7 +12,7 @@ strategies:
   local: fixture
 mirror_max_age_days: 90
 loader: dagster
-table_prefix: raw__edxorg__s3__course_
+table_prefix: raw__edxorg__s3__course_structure__
 tables:
 # The pipeline writes files; an Airbyte S3 connection loads them into the four
 # course_structure tables, which carry _airbyte_extracted_at and

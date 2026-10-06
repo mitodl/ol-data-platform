@@ -165,7 +165,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v4",
+            code_version="feedback_clusters_v5",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -175,7 +175,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v4",
+            code_version="feedback_clusters_v5",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),

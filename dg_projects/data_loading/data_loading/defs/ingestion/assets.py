@@ -311,8 +311,8 @@ edxorg_s3_table_assets = [
 
 # The course archive assets in the edxorg and openedx code locations land one
 # JSON Lines file of parsed XML blocks per course version; nothing else loads
-# them into raw. One op per table, like edxorg_s3, so the two drain
-# independently.
+# them into raw. The edxorg structure blocks are the same layout. One op per
+# table, like edxorg_s3, so they drain independently.
 course_xml_blocks_assets = [
     build_batched_assets(
         # course_xml_blocks_openedx etc. for the block tables, as before.

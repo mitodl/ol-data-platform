@@ -146,6 +146,10 @@ def test_every_table_has_its_own_pipeline() -> None:
     # Renaming these would re-read the landing zone and append every row again.
     assert course_xml_blocks.OPENEDX.pipeline_name == "course_xml_blocks__openedx"
     assert course_xml_blocks.EDXORG.pipeline_name == "course_xml_blocks__edxorg"
+    assert (
+        course_xml_blocks.EDXORG_STRUCTURE_BLOCKS.pipeline_name
+        == "course_structure_blocks__edxorg"
+    )
 
 
 @pytest.mark.integration
@@ -223,3 +227,91 @@ def test_an_empty_text_file_loads_as_a_marker_row(
     assert by_file["v1.jsonl"]["file_path"] == "static/handout.pdf"
     assert by_file["v2.jsonl"]["file_path"] is None
     assert by_file["v2.jsonl"]["course_id"] == "course-v1:MITxT+7.05x+2T2026"
+
+
+_STRUCTURE_BLOCK: dict[str, Any] = {
+    "block_content_hash": "ef87a5b9",
+    "block_details": {
+        "category": "chapter",
+        "children": ["block-v1:MITx+RES+1T2027+type@sequential+block@a1"],
+        "metadata": {"display_name": "Week 1", "start": "2027-03-31T00:00:00Z"},
+    },
+    "block_due": None,
+    "block_id": "block-v1:MITx+RES+1T2027+type@chapter+block@c1",
+    "block_index": 2,
+    "block_parent": "block-v1:MITx+RES+1T2027+type@course+block@course",
+    "block_start": "2027-03-31T00:00:00Z",
+    "block_title": "Week 1",
+    "block_type": "chapter",
+    "course_content_hash": "1d6aff27",
+    "course_id": "MITx-RES-1T2027",
+    "course_start": "2027-03-31T00:00:00Z",
+    "course_title": "Real Estate Development",
+    "retrieved_at": "2026-09-30T03:13:40.123456+00:00",
+}
+
+
+def test_structure_block_row_keeps_the_index_an_integer() -> None:
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(_STRUCTURE_BLOCK), course_xml_blocks.EDXORG_STRUCTURE_BLOCKS
+    )
+
+    assert row["block_index"] == _STRUCTURE_BLOCK["block_index"]
+    assert json.loads(str(row["block_details"])) == _STRUCTURE_BLOCK["block_details"]
+    assert list(row) == list(course_xml_blocks.STRUCTURE_BLOCK_FIELDS)
+
+
+def test_structure_block_row_lands_a_list_course_id_as_its_json_text() -> None:
+    """Older files carry the course id as a one-element list.
+
+    Staging strips the brackets and quotes Airbyte landed it with.
+    """
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps({**_STRUCTURE_BLOCK, "course_id": ["MITx-RES-1T2027"]}),
+        course_xml_blocks.EDXORG_STRUCTURE_BLOCKS,
+    )
+
+    assert row["course_id"] == '["MITx-RES-1T2027"]'
+
+
+@pytest.mark.integration
+def test_structure_blocks_load_from_their_own_prefix(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    landing = tmp_path / "landing"
+    processed = "edxorg-raw-data/edxorg/processed_data"
+    _write_version(
+        landing,
+        f"{processed}/course_blocks/MITx-RES-1T2027|prod/v1.json",
+        [_STRUCTURE_BLOCK, {**_STRUCTURE_BLOCK, "block_index": 3}],
+    )
+    # The XML blocks sit beside them and belong to the other edxorg table.
+    _write_version(
+        landing, f"{processed}/course_xml_blocks/prod/MITx-RES-1T2027/v1.json", [_BLOCK]
+    )
+    monkeypatch.setattr(
+        course_xml_blocks.s3fs, "S3FileSystem", lambda: fsspec.filesystem("file")
+    )
+    raw_table = course_xml_blocks.EDXORG_STRUCTURE_BLOCKS.raw_table
+
+    pipeline = course_xml_blocks.course_xml_blocks_pipeline_for(raw_table)
+    info = pipeline.run(
+        course_xml_blocks.course_xml_blocks_source(
+            raw_table=raw_table, bucket_url=landing.as_uri()
+        )
+    )
+    assert not info.has_failed_jobs
+
+    table = pipeline.dataset()[raw_table].arrow()
+    assert sorted(table.column("block_index").to_pylist()) == [2, 3]
+    assert {"_source_file", "_file_modified_at", *config.DLT_LOAD_ID_COLUMN} <= set(
+        table.column_names
+    )
+
+    # A second run finds nothing past the cursor and appends nothing.
+    pipeline.run(
+        course_xml_blocks.course_xml_blocks_source(
+            raw_table=raw_table, bucket_url=landing.as_uri()
+        )
+    )
+    assert pipeline.dataset()[raw_table].arrow().num_rows == 2

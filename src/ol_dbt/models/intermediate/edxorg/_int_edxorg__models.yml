@@ -263,11 +263,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-            "Associate degree", "Secondary/high school", "Junior secondary/junior\
-              \ high/middle school", "Elementary/primary school", "No formal education",
-            "Other education", "Doctorate in science or engineering", "Doctorate in\
-              \ another field", ""]
+          values: '{{ highest_education_values() }}'
   - name: user_birth_year
     description: int, A year of birth provided by the learner on their profile
   - name: user_profile_meta
@@ -280,7 +276,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+          values: '{{ gender_values(["m", "f", "o"]) }}'
   - name: user_last_login
     description: timestamp, Timestamp indicating the last time the user logged into
       the edX platform

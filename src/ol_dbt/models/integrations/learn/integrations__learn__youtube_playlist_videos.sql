@@ -14,8 +14,8 @@
   position is zero-based and dense over the videos that exist. For a
   create_videos = true playlist that matches load_playlist's enumerate() over
   the videos YouTube returned. For create_videos = false, Learn enumerates only
-  the videos it matched to OCW content files, so its positions skip unmatched
-  videos and the receiver has to renumber.
+  the videos it matched to OCW content files, so its positions are dense over
+  those and differ from position here wherever a video went unmatched.
 #}
 
 with playlist_items as (

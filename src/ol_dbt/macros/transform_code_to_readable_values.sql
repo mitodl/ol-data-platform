@@ -49,11 +49,24 @@
     Values for an accepted_values test, which quotes each one without escaping
     it. The empty string is accepted alongside the labels, as it was in the
     project vars these lists replace.
+
+    Pass `codes` to accept only the labels of the codes an app offers (e.g.
+    xPro's gender field has m, f and o), so the test fails if another mapped
+    code starts arriving from that app. A code missing from the mapping still
+    passes, because the transform turns it into null.
 #}
-{% macro code_labels_accepted_values(code_labels) %}
+{% macro code_labels_accepted_values(code_labels, codes=none) %}
+    {% for code in codes or [] %}
+        {% if code not in code_labels %}
+            {{ exceptions.raise_compiler_error("code_labels_accepted_values: unknown code '" ~ code ~ "'") }}
+        {% endif %}
+    {% endfor %}
     {% set labels = [] %}
-    {% for label in code_labels.values() | unique %}
-        {% do labels.append(label | replace("'", "''")) %}
+    {% for code, label in code_labels.items() %}
+        {% set escaped = label | replace("'", "''") %}
+        {% if (codes is none or code in codes) and escaped not in labels %}
+            {% do labels.append(escaped) %}
+        {% endif %}
     {% endfor %}
     {% do return(labels + ['']) %}
 {% endmacro %}
@@ -62,16 +75,16 @@
     {{ code_labels_case(column_name, gender_code_labels()) }}
 {% endmacro %}
 
-{% macro gender_values() %}
-    {% do return(code_labels_accepted_values(gender_code_labels())) %}
+{% macro gender_values(codes=none) %}
+    {% do return(code_labels_accepted_values(gender_code_labels(), codes)) %}
 {% endmacro %}
 
 {% macro transform_education_value(column_name) %}
     {{ code_labels_case(column_name, education_code_labels()) }}
 {% endmacro %}
 
-{% macro highest_education_values() %}
-    {% do return(code_labels_accepted_values(education_code_labels())) %}
+{% macro highest_education_values(codes=none) %}
+    {% do return(code_labels_accepted_values(education_code_labels(), codes)) %}
 {% endmacro %}
 
 {% macro transform_company_size_value(column_name='company_size') %}

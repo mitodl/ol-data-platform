@@ -1,5 +1,11 @@
+{# Wagtail added description after QA's last xPro sync (2026-06-04), so the QA raw
+   table does not have the column yet. #}
+{% set raw_images = source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__wagtailimages_image') %}
+{% set description_exists = not execute
+    or 'description' in adapter.get_columns_in_relation(raw_images) | map(attribute='name') | map('lower') %}
+
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__wagtailimages_image') }}
+    select * from {{ raw_images }}
 )
 
 , cleaned as (
@@ -19,7 +25,7 @@ with source as (
         , focal_point_width as image_focal_point_width
         , focal_point_height as image_focal_point_height
         , uploaded_by_user_id
-        , description as image_description
+        , {{ 'description' if description_exists else 'cast(null as varchar)' }} as image_description
     from source
 )
 
