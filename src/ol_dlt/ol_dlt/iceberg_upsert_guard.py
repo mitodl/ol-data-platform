@@ -1,4 +1,4 @@
-"""Keep pyiceberg's upsert from reading matched rows at a stale schema.
+"""Keep pyiceberg's upsert from failing on a stale snapshot schema or column order.
 
 pyiceberg's ``Transaction.upsert`` reads the rows its batch matches through a
 scan pinned to the branch head (``use_ref``), and a pinned scan projects the
@@ -15,7 +15,8 @@ That is how adding ``_dlt_load_id`` stuck three production merge tables
 without changing any rows, after which the upsert reads matched rows correctly.
 
 The upsert also compares a batch to the rows it matches with
-``source_table.cast(target_table.schema)``, which pyarrow resolves by position.
+``source_table.cast(target_table.schema)``, and pyarrow's ``Table.cast`` raises
+unless both list the same field names in the same order.
 dlt writes a batch in its own schema's column order and the table keeps the
 order its columns were added in, so a batch that names the same columns in
 another order fails with the same error. That stopped the podcast load once
@@ -51,7 +52,7 @@ def merge_iceberg_table(
         table.append(table.schema().as_arrow().empty_table())
     batch_columns = set(data.column_names)
     data = data.select(
-        [name for name in table.schema().column_names if name in batch_columns]
+        [field.name for field in table.schema().fields if field.name in batch_columns]
     )
     _dlt_merge_iceberg_table(
         table=table, data=data, schema=schema, load_table_name=load_table_name
