@@ -1613,3 +1613,109 @@ unit_tests:
       mitlearn_user_id:
       mitxpro_application_user_id: 7
       bootcamps_application_user_id: 3
+- name: test_tfact_problem_events_rekey_keeps_stored_event_id
+  description: >
+    Regression test for the 2026-10-06 unique_tfact_problem_events_event_id failure.
+    A row re-keyed by the stale user_fk path must keep its stored event_id so
+    delete+insert replaces it. Rehashing event_timestamp, which reads back in UTC
+    rather than the source offset, gave each re-keyed event a second row.
+  model: tfact_problem_events
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__mitxonline__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
+    rows: []
+  # Empty, but typed: an empty dict fixture makes event_timestamp VARCHAR.
+  - input: ref('tfact_studentmodule_problems')
+    format: sql
+    rows: |
+      select
+          cast(null as varchar) as user_fk
+          , cast(null as varchar) as platform
+          , cast(null as integer) as openedx_user_id
+          , cast(null as varchar) as user_username
+          , cast(null as varchar) as courserun_readable_id
+          , cast(null as integer) as studentmodule_id
+          , cast(null as integer) as studentmodulehistoryextended_id
+          , cast(null as varchar) as problem_block_id
+          , cast(null as varchar) as attempt
+          , cast(null as varchar) as seed
+          , cast(null as varchar) as correct_map
+          , cast(null as varchar) as answers
+          , cast(null as varchar) as grade
+          , cast(null as varchar) as max_grade
+          , cast(null as varchar) as success
+          , cast(null as timestamp with time zone) as event_timestamp
+          , cast(null as varchar) as event_timestamp_iso8601
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
+      where false
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      edxorg_openedx_user_id: 555
+      user_edxorg_username: "learner"
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_EDXORG"
+      platform_readable_id: "edxorg"
+  # sql format so event_timestamp is a timestamp; a dict fixture infers VARCHAR here.
+  - input: this
+    format: sql
+    rows: |
+      select
+          'stored-event-id' as event_id
+          , 'PLATFORM_EDXORG' as platform_fk
+          , 'OLD_USER_PK' as user_fk
+          , 'edxorg' as platform
+          , 555 as openedx_user_id
+          , 'learner' as user_username
+          , 'MITx/6.002x/2024' as courserun_readable_id
+          , 'showanswer' as event_type
+          , 'block-v1:MITx+6.002x+2024+type@problem+block@p1' as problem_block_fk
+          , cast(null as varchar) as answers
+          , '1' as attempt
+          , cast(null as varchar) as success
+          , cast(null as varchar) as grade
+          , cast(null as varchar) as max_grade
+          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone) as event_timestamp
+          , '2024-01-15T00:00:00Z' as event_timestamp_iso8601
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
+          , cast(null as varchar) as event_json
+      union all
+      select
+          'stored-check-id'
+          , 'PLATFORM_EDXORG'
+          , 'OLD_USER_PK'
+          , 'edxorg'
+          , 555
+          , 'learner'
+          , 'MITx/6.002x/2024'
+          , 'problem_check'
+          , 'block-v1:MITx+6.002x+2024+type@problem+block@p2'
+          , cast(null as varchar)
+          , '1'
+          , cast(null as varchar)
+          , cast(null as varchar)
+          , cast(null as varchar)
+          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone)
+          , '2024-01-15T00:00:00Z'
+          , cast(null as integer)
+          , cast(null as integer)
+          , cast(null as varchar)
+  expect:
+    rows:
+    - event_id: "stored-event-id"
+      user_fk: "NEW_USER_PK"
+      event_type: "showanswer"
+    - event_id: "stored-check-id"
+      user_fk: "NEW_USER_PK"
+      event_type: "problem_check"
