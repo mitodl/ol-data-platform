@@ -596,7 +596,8 @@ def _check_dimensional_layering(
             child,
             f"Resolved baseline entry: {stale_key}",
             "This violation no longer exists, and the entry would tolerate it coming back. Run "
-            "`ol-dbt validate --update-baseline` and commit the result.",
+            "`ol-dbt validate --update-baseline` and commit the result (re-run `dbt parse` first "
+            "if target/manifest.json predates the change).",
         )
 
 

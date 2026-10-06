@@ -19,8 +19,9 @@ locally without one.
 
 Because ~39 violations exist today while the #2072 migration is in flight, the
 lint ships with a checked-in **baseline** of known ``child -> parent`` pairs.
-Only violations *not* in the baseline fail; the migration shrinks the baseline
-over time (regenerate with ``ol-dbt validate --update-baseline``).
+Violations *not* in the baseline fail, and so do baseline entries whose
+violation is gone; the migration shrinks the baseline over time (regenerate
+with ``ol-dbt validate --update-baseline``).
 """
 
 from __future__ import annotations
@@ -168,9 +169,10 @@ def render_baseline(violations: list[LayeringViolation]) -> str:
         "# Each line is a known `child -> parent` reference where a marts/reporting",
         "# model references a staging/intermediate model directly. These are the",
         "# violations that existed when the lint was introduced; the #2072 migration",
-        "# shrinks this list over time. The lint fails only on violations NOT listed",
+        "# shrinks this list over time. The lint fails on violations NOT listed",
         "# here, so new regressions are blocked while existing debt is tolerated.",
-        "# It also fails on a line whose reference is gone, so the list only shrinks.",
+        "# It also fails on a line whose reference is gone, so a removed reference",
+        "# cannot come back unnoticed.",
         "#",
         "# Regenerate with: ol-dbt validate --update-baseline",
         "",

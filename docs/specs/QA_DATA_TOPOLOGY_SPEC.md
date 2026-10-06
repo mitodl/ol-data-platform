@@ -96,10 +96,10 @@ CTAS with the per-unit column allowlist, then a metadata stamp. Do not add
 **Decision: neither. A baselined ratchet — the pattern this repo already runs.**
 
 `ol-dbt validate` has solved this exact tension once already.
-`_check_dimensional_layering` (`src/ol_dbt_cli/ol_dbt_cli/commands/validate.py:568-619`)
+`_check_dimensional_layering` (`src/ol_dbt_cli/ol_dbt_cli/commands/validate.py:547-602`)
 treats new violations as `ERROR`, collapses known ones listed in
 `dimensional_layering_baseline.txt` into a single `INFO` summary, and treats baseline
-entries that no longer occur as `ERROR` so the baseline only shrinks. `--update-baseline`
+entries that no longer occur as `ERROR` so a removed entry cannot return unnoticed. `--update-baseline`
 (`validate.py:997-1004`) rewrites the file. `_check_pk_test_coverage` documents the same
 intent explicitly: warn now, "promote to ERROR once the outstanding models are covered
 (mirrors the dimensional_layering baseline approach)".
