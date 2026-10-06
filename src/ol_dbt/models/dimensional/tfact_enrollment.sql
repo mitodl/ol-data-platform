@@ -185,8 +185,8 @@ with mitxonline_enrollments as (
 , emeritus_enrollments as (
     select
         -- Source has no native enrollment_id. Keyed on the staging model's unique grain, not
-        -- the student id: an id that arrives on a later load would change the key and leave
-        -- the old row behind.
+        -- the student id: any change to this id moving forward would change the key and
+        -- result in a duplicate record.
         {{ dbt_utils.generate_surrogate_key([
             'emeritus_enrollments.courserun_external_readable_id',
             'emeritus_enrollments.user_email',
