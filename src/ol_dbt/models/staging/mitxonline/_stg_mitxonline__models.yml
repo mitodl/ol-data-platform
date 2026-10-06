@@ -1929,6 +1929,11 @@ models:
     description: int, foreign key to courses_coursetopic
     tests:
     - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - wagtail_page_id
+      - coursetopic_id
 
 - name: stg__mitxonline__app__postgres__cms_instructorpage
   columns:
@@ -1950,6 +1955,11 @@ models:
 
 - name: stg__mitxonline__app__postgres__cms_instructorpagelink
   columns:
+  - name: instructorpagelink_id
+    description: int, primary key in this table
+    tests:
+    - unique
+    - not_null
   - name: wagtail_page_id
     description: int, foreign key to wagtail_page referring to the course page
     tests:
@@ -2012,39 +2022,36 @@ models:
     tests:
     - not_null
 
-  - name: stg__mitxonline__app__postgres__openedx_openedxuser
-    description: Mapping of MITx Online users to open edX users
-    columns:
-    - name: openedxuser_id
-      description: int, the primary key for the openedx_openedxuser table
-      tests:
-      - not_null
-      - unique
-    - name: user_id
-      description: int, the foreign key referencing the users_user table in the MITx
-        Online application
-      tests:
-      - unique
-      - not_null
-    - name: openedxuser_platform
-      description: str, the platform where the user is registered. e.g. "edx"
-      tests:
-      - not_null
-    - name: openedxuser_username
-      description: str, the username of the user on the open edX platform
-      tests:
-      - unique
-    - name: openedxuser_desired_username
-      description: str, the desired username for the user on the open edX platform
-      tests:
-      - unique
-    - name: openedxuser_has_been_synced
-      description: boolean, indicating whether a corresponding user has been created
-        on the open edX platform
-    - name: openedxuser_created_on
-      description: timestamp, date and time when this record was created
-    - name: openedxuser_updated_on
-      description: timestamp, date and time when this record was last updated
+- name: stg__mitxonline__app__postgres__openedx_openedxuser
+  description: Mapping of MITx Online users to open edX users
+  columns:
+  - name: openedxuser_id
+    description: int, the primary key for the openedx_openedxuser table
+    tests:
+    - not_null
+    - unique
+  - name: user_id
+    description: int, the foreign key referencing the users_user table in the MITx
+      Online application
+    tests:
+    - not_null
+  - name: openedxuser_platform
+    description: str, the platform where the user is registered. e.g. "edx"
+    tests:
+    - not_null
+  - name: openedxuser_username
+    description: str, the username of the user on the open edX platform
+    tests:
+    - unique
+  - name: openedxuser_desired_username
+    description: str, the desired username for the user on the open edX platform
+  - name: openedxuser_has_been_synced
+    description: boolean, indicating whether a corresponding user has been created
+      on the open edX platform
+  - name: openedxuser_created_on
+    description: timestamp, date and time when this record was created
+  - name: openedxuser_updated_on
+    description: timestamp, date and time when this record was last updated
 
 - name: stg__mitxonline__app__postgres__cms_wagtailcore_revision
   description: Wagtail page revisions in MITx Online CMS
