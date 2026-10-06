@@ -440,6 +440,8 @@ models:
       config:
         where: is_current and certificate_scope = 'course' and user_fk is not null
           and courserun_fk is not null
+        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
+        error_if: ">0"
   config:
     meta:
       qa_branches:
@@ -1006,6 +1008,8 @@ unit_tests:
     A newer certificate for the same learner and run takes is_current from the
     one already in the table. The older row's own timestamps did not move and
     sit below the watermark, so only the stored-flag comparison re-selects it.
+    A micromasters copy loaded before its edxorg record resolved is retired
+    too, even though every micromasters source row now has an edxorg record.
   model: tfact_certificate
   overrides:
     macros:
@@ -1038,9 +1042,18 @@ unit_tests:
   - input: ref('int__mitxpro__courserun_certificates')
     rows: []
   - input: ref('int__edxorg__mitx_courserun_certificates')
-    rows: []
+    rows:
+    - user_id: 30
+      courserun_readable_id: "MITx/1.00x/2020"
+      courseruncertificate_mode: "verified"
+      courseruncertificate_created_on: "2020-05-01T00:00:00"
+      courseruncertificate_updated_on: "2020-05-01T00:00:00"
   - input: ref('int__micromasters__course_certificates')
-    rows: []
+    rows:
+    - user_email: "Carol@example.com"
+      courserun_readable_id: "MITx/1.00x/2020"
+      courseruncertificate_uuid: "mm-uuid"
+      courseruncertificate_created_on: "2020-05-02T00:00:00"
   - input: ref('int__mitxonline__program_certificates')
     rows: []
   - input: ref('int__mitxpro__program_certificates')
@@ -1055,16 +1068,27 @@ unit_tests:
       mitxonline_application_user_id: 6
     - user_pk: "USER_7"
       mitxonline_application_user_id: 7
+    - user_pk: "USER_3"
+      email: "carol@example.com"
+      edxorg_openedx_user_id: 30
   - input: ref('dim_course_run')
     rows:
     - courserun_pk: "RUN_MITXONLINE"
       courserun_readable_id: "course-v1:MITxT+A"
       platform: "mitxonline"
       is_current: true
+    - courserun_pk: "RUN_EDXORG"
+      courserun_readable_id: "MITx/1.00x/2020"
+      platform: "edxorg"
+      is_current: true
   - input: ref('dim_platform')
     rows:
     - platform_pk: "PLATFORM_MITXONLINE"
       platform_readable_id: "mitxonline"
+    - platform_pk: "PLATFORM_EDXORG"
+      platform_readable_id: "edxorg"
+    - platform_pk: "PLATFORM_MICROMASTERS"
+      platform_readable_id: "micromasters"
   - input: ref('dim_certificate_type')
     rows:
     - certificate_type_pk: "CERT_TYPE_VERIFIED"
@@ -1089,6 +1113,15 @@ unit_tests:
       certificate_created_on: "2024-02-01T00:00:00"
       certificate_updated_on: "2024-02-01T00:00:00"
       is_current: true
+    # The micromasters copy, loaded while it was the only record for this learner and run.
+    - certificate_key: "e24742b0f5b468eacbaaa53be62fc856"  # pragma: allowlist secret
+      certificate_id: "a95efe981eb93e8b542e257910b7e45c"  # pragma: allowlist secret
+      user_fk: "USER_3"
+      platform: "micromasters"
+      certificate_scope: "course"
+      certificate_created_on: "2020-05-02T00:00:00"
+      certificate_updated_on: "2020-05-02T00:00:00"
+      is_current: true
   expect:
     rows:
     - certificate_id: "601"
@@ -1101,6 +1134,12 @@ unit_tests:
     - certificate_id: "603"
       user_fk: "USER_7"
       is_current: true
+    - certificate_id: "b681f2a24ab4d531a36b76195f8cc185"  # pragma: allowlist secret
+      user_fk: "USER_3"
+      is_current: true
+    - certificate_id: "a95efe981eb93e8b542e257910b7e45c"  # pragma: allowlist secret
+      user_fk: "USER_3"
+      is_current: false
 - name: test_tfact_enrollment_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
