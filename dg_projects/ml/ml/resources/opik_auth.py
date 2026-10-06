@@ -24,6 +24,7 @@ F = TypeVar("F", bound="Callable[..., Any]")
 log = logging.getLogger(__name__)
 
 OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "dagster-ml")
+LOCAL_PROMPT_VERSION = "local"
 
 _REFRESH_SKEW_SECONDS = 30
 _TOKEN_REQUEST_TIMEOUT_SECONDS = 10
@@ -259,10 +260,10 @@ def get_prompt_version(name: str, default_template: str | None = None) -> str:
             if prompt is None and default_template is not None:
                 prompt = client.create_prompt(name=name, prompt=default_template)
             if prompt is not None:
-                return prompt.version or prompt.commit or "local"
+                return prompt.version or prompt.commit or LOCAL_PROMPT_VERSION
         except Exception:
             log.warning("Opik prompt version fetch failed for %s", name, exc_info=True)
-    return "local"
+    return LOCAL_PROMPT_VERSION
 
 
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:

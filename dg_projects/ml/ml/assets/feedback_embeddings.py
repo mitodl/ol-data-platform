@@ -98,7 +98,7 @@ class FeedbackEmbeddingsConfig(Config):
 
 
 @asset(
-    code_version="feedback_embeddings_v3",
+    code_version="feedback_embeddings_v4",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_embeddings"]),
     deps=[
@@ -217,9 +217,12 @@ def feedback_embeddings(
     )
 
     # A null resolved_text or a failed API call is dropped from embeddings_df
-    # entirely, so this difference is exactly the failure count -- including rows
-    # never attempted because of an early abort.
+    # entirely, so this difference counts both -- including rows never attempted
+    # because of an early abort.
     dropped_count = unembedded_df.height - embeddings_df.height
+    # No text yet (redaction hasn't reached it) is skipped without a call, not failed.
+    no_text_count = unembedded_df["resolved_text"].null_count()
+    failed_count = dropped_count - no_text_count
     # len(errors) rather than dropped_count: a null resolved_text is dropped
     # without an API call or an error message, so dropped_count alone would
     # overstate how many embed calls actually ran.
@@ -227,11 +230,12 @@ def feedback_embeddings(
 
     context.log.info(
         "Embedded %d conversations (%d already embedded, %d total upstream, "
-        "%d dropped)",
+        "%d failed, %d with no text yet)",
         embeddings_df.height,
         already_embedded_df.height,
         resolved_df.height,
-        dropped_count,
+        failed_count,
+        no_text_count,
     )
 
     # 100% failure would otherwise look identical to "nothing new to embed".
@@ -247,11 +251,16 @@ def feedback_embeddings(
         )
         raise Failure(msg)
 
-    if dropped_count:
+    if failed_count:
         context.log.warning(
-            "%d conversation(s) were not embedded this run; will be retried on the "
+            "%d conversation(s) failed to embed this run; will be retried on the "
             "next upstream/code-triggered run",
-            dropped_count,
+            failed_count,
+        )
+    if no_text_count:
+        context.log.info(
+            "%d conversation(s) have no text yet and were skipped",
+            no_text_count,
         )
 
     context.add_output_metadata(
@@ -260,6 +269,8 @@ def feedback_embeddings(
             "embedding_dim": MetadataValue.int(client.dim),
             "embedded_count": MetadataValue.int(embeddings_df.height),
             "dropped_count": MetadataValue.int(dropped_count),
+            "failed_count": MetadataValue.int(failed_count),
+            "no_text_count": MetadataValue.int(no_text_count),
             "already_embedded_count": MetadataValue.int(already_embedded_df.height),
             "total_upstream_count": MetadataValue.int(resolved_df.height),
         }

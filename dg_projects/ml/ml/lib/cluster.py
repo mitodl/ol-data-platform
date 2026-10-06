@@ -150,9 +150,8 @@ UMAP_N_COMPONENTS = int(os.environ.get("UMAP_N_COMPONENTS", "10"))
 UMAP_N_NEIGHBORS = int(os.environ.get("UMAP_N_NEIGHBORS", "15"))
 
 # At conversation grain this reads directly as "how many conversations before
-# we call it systemic" (§C) -- a starting point for tuning, not an authoritative
-# number from the spec.
-HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "15"))
+# we call it systemic" (§C). 231 is the size the promoted 2026-10 run used.
+HDBSCAN_MIN_CLUSTER_SIZE = int(os.environ.get("HDBSCAN_MIN_CLUSTER_SIZE", "231"))
 
 # Unset, HDBSCAN reuses min_cluster_size here, so a larger min_cluster_size also
 # turns half the corpus into noise and then collapses it into 1-2 clusters.
@@ -163,9 +162,14 @@ HDBSCAN_CLUSTER_SELECTION_METHOD = os.environ.get(
     "HDBSCAN_CLUSTER_SELECTION_METHOD", "leaf"
 )
 
-# More clusters than this means more categories than a person can act on, so
-# reduce_and_cluster raises min_cluster_size until the run fits.
-MAX_CLUSTERS = int(os.environ.get("CLUSTER_MAX_CLUSTERS", "50"))
+# Unset by default: a cap forces min_cluster_size up as the corpus grows, which
+# merges established categories. When set, reduce_and_cluster raises
+# min_cluster_size until the run fits.
+MAX_CLUSTERS: int | None = (
+    int(os.environ["CLUSTER_MAX_CLUSTERS"])
+    if os.environ.get("CLUSTER_MAX_CLUSTERS")
+    else None
+)
 
 # Fixed rather than left to UMAP/HDBSCAN's own default (None -- a fresh random
 # state per call): a clustering run must be reproducible for the run-vs-run
