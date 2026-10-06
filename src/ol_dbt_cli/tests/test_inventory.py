@@ -184,6 +184,26 @@ class TestMirrorRules:
         report = _run(inventory)
         assert report.errors == [], _messages(report)
 
+    def test_a_json_keys_mode_passes(self, inventory: Path) -> None:
+        columns = {"_dlt_load_id": "copy", "via": {"json_keys": ["channel"]}}
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": columns}))
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+
+    @pytest.mark.parametrize(
+        "mode",
+        [
+            {"json_keys": []},
+            {"json_keys": ["source.from"]},
+            {"json_keys": ["channel", "channel"]},
+            {"json_keys": ["channel"], "also": "copy"},
+            {"json_key": ["channel"]},
+        ],
+    )
+    def test_a_malformed_json_keys_mode_is_rejected_by_the_schema(self, inventory: Path, mode: dict[str, Any]) -> None:
+        _write(inventory, "edxorg__s3", _mirrored_unit({"columns": {"_dlt_load_id": "copy", "via": mode}}))
+        assert _run(inventory).errors
+
     def test_mirror_on_a_unit_qa_does_not_mirror_is_rejected(self, inventory: Path) -> None:
         unit = copy.deepcopy(APP_UNIT)
         unit["tables"][0]["mirror"] = {"columns": {"_airbyte_extracted_at": "copy"}}
