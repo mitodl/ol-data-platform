@@ -200,6 +200,23 @@ def list_files_at_ref(directory: Path, ref: str, repo_root: Path | None = None) 
     return [root / name for name in raw.split("\0") if name]
 
 
+def get_macro_sources_at_ref(dbt_dir: Path, ref: str, repo_root: Path | None = None) -> dict[str, str]:
+    """Return the macro files under ``<dbt_dir>/macros`` at git *ref* as ``{relative path: content}``.
+
+    The counterpart of :func:`ol_dbt_cli.lib.sql_parser.read_macro_sources` for a
+    model read at *ref*: a macro-only model has to be expanded with the macros of
+    its own revision, or a change made inside a macro shows on neither side.
+    """
+    sources: dict[str, str] = {}
+    for path in list_files_at_ref(dbt_dir / "macros", ref, repo_root=repo_root):
+        if path.suffix != ".sql":
+            continue
+        content = get_file_at_ref(path, ref, repo_root=repo_root)
+        if content is not None:
+            sources[path.relative_to(dbt_dir).as_posix()] = content
+    return sources
+
+
 def _is_under(path: Path, directory: Path) -> bool:
     """Return True if *path* is inside *directory*."""
     try:

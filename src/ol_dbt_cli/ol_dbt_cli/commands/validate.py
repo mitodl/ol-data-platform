@@ -72,6 +72,7 @@ from ol_dbt_cli.lib.sql_parser import (
     find_compiled_dir,
     get_columns_read_from_ref,
     parse_model_file,
+    read_macro_sources,
     resolve_star_columns,
 )
 from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
@@ -1437,9 +1438,10 @@ def validate(
     # Parse all SQL files up-front (needed for cross-model reference resolution)
     sql_file_map_all: dict[str, Path] = {f.stem: f for f in all_sql_files}
     sql_models_by_name: dict[str, ParsedModel] = {}
+    macro_sources = read_macro_sources(dbt_dir)
     for name, path in sql_file_map_all.items():
         try:
-            parsed_m = parse_model_file(path, compiled_dir=compiled_dir)
+            parsed_m = parse_model_file(path, compiled_dir=compiled_dir, macro_sources=macro_sources)
             sql_models_by_name[name] = parsed_m
         except Exception as exc:  # noqa: BLE001
             # Store a minimal ParsedModel so the model still appears in checks
