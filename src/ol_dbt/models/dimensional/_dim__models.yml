@@ -1622,7 +1622,8 @@ unit_tests:
     Regression test for the 2026-10-06 unique_tfact_problem_events_event_id failure:
     a stale user_fk is re-keyed while dim_user carries two rows for the same learner.
     delete+insert does not dedupe within a batch, so the model itself must emit one
-    row per event_id.
+    row per event_id. Covers problem_check too, which the attempt-level rank also
+    filters, so a duplicate must not drop the event entirely.
   model: tfact_problem_events
   overrides:
     macros:
@@ -1656,10 +1657,10 @@ unit_tests:
           , cast(null as varchar) as grade
           , cast(null as varchar) as max_grade
           , cast(null as varchar) as success
-          , cast(null as timestamptz) as event_timestamp
+          , cast(null as timestamp with time zone) as event_timestamp
           , cast(null as varchar) as event_timestamp_iso8601
-          , cast(null as varchar) as time_fk
-          , cast(null as varchar) as date_fk
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
       where false
   - input: ref('dim_user')
     rows:
@@ -1692,14 +1693,39 @@ unit_tests:
           , cast(null as varchar) as success
           , cast(null as varchar) as grade
           , cast(null as varchar) as max_grade
-          , cast('2024-01-15 00:00:00+00' as timestamptz) as event_timestamp
+          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone) as event_timestamp
           , '2024-01-15T00:00:00Z' as event_timestamp_iso8601
-          , cast(null as varchar) as time_fk
-          , cast(null as varchar) as date_fk
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
           , cast(null as varchar) as event_json
+      union all
+      select
+          'stored-check-id'
+          , 'PLATFORM_EDXORG'
+          , 'OLD_USER_PK'
+          , 'edxorg'
+          , 555
+          , 'learner'
+          , 'MITx/6.002x/2024'
+          , 'problem_check'
+          , 'block-v1:MITx+6.002x+2024+type@problem+block@p2'
+          , cast(null as varchar)
+          , '1'
+          , cast(null as varchar)
+          , cast(null as varchar)
+          , cast(null as varchar)
+          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone)
+          , '2024-01-15T00:00:00Z'
+          , cast(null as integer)
+          , cast(null as integer)
+          , cast(null as varchar)
   expect:
     rows:
     - platform: "edxorg"
       user_fk: "NEW_USER_PK"
       event_type: "showanswer"
       problem_block_fk: "block-v1:MITx+6.002x+2024+type@problem+block@p1"
+    - platform: "edxorg"
+      user_fk: "NEW_USER_PK"
+      event_type: "problem_check"
+      problem_block_fk: "block-v1:MITx+6.002x+2024+type@problem+block@p2"

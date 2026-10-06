@@ -623,12 +623,29 @@ with mitxonline_problem_events as (
     {% endif %}
 )
 
+-- One row per event_id: delete+insert does not dedupe within a batch, and a dim_user
+-- fan-out in stale_key_rows has inserted the same key twice. Runs before the attempt rank
+-- below, because two independent rankings can each pick a different copy and drop both.
+, key_deduped_combined as (
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by
+                    platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
+                    , event_type, event_timestamp
+                order by user_fk nulls last
+            ) as key_rn
+        from combined
+    )
+    where key_rn = 1
+)
+
 -- Deduplicate on (platform, user, course, problem, attempt):
 --   - problem_check: keep the earliest event (rn=1) — tracking log events typically
 --     have earlier timestamps than studentmodule events for the same submission
 --   - showanswer and other types: keep all rows regardless of rank
--- key_rn keeps one row per event_id: delete+insert does not dedupe within a batch, and a
--- dim_user fan-out in stale_key_rows has inserted the same key twice.
 , deduped_combined as (
     select *
     from (
@@ -638,15 +655,9 @@ with mitxonline_problem_events as (
                 partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
                 order by event_timestamp
             ) as rn
-            , row_number() over (
-                partition by
-                    platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                    , event_type, event_timestamp
-                order by user_fk nulls last
-            ) as key_rn
-        from combined
+        from key_deduped_combined
     )
-    where (rn = 1 or event_type != 'problem_check') and key_rn = 1
+    where rn = 1 or event_type != 'problem_check'
 )
 
 select
