@@ -324,21 +324,21 @@ with mitxonline_enrollments as (
             'platform',
             'enrollment_scope'
         ]) }} as enrollment_key
-        , enrollment_id
-        , enrollment_scope as enrollment_type
-        , enrollment_date_key
-        , user_fk
-        , courserun_fk
-        , program_fk
-        , platform_fk
+        , ewf.enrollment_id
+        , ewf.enrollment_scope as enrollment_type
+        , ewf.enrollment_date_key
+        , ewf.user_fk
+        , ewf.courserun_fk
+        , ewf.program_fk
+        , ewf.platform_fk
         , ewf.platform
-        , enrollment_is_active
-        , enrollment_mode
-        , enrollment_status
-        , enrollment_created_on
-        , enrollment_updated_on
-        , enrollment_is_edx_enrolled
-        , order_id
+        , ewf.enrollment_is_active
+        , ewf.enrollment_mode
+        , ewf.enrollment_status
+        , ewf.enrollment_created_on
+        , ewf.enrollment_updated_on
+        , ewf.enrollment_is_edx_enrolled
+        , ewf.order_id
     from enrollments_with_fks as ewf
 
     {% if is_incremental() %}

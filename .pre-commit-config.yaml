@@ -93,7 +93,6 @@ repos:
       dimensional/dim_payment_method|
       dimensional/tfact_certificate|
       dimensional/tfact_discussion_events|
-      dimensional/tfact_enrollment|
       dimensional/tfact_enrollment_order|
       dimensional/tfact_grade|
       dimensional/tfact_order|
