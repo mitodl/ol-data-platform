@@ -132,6 +132,9 @@ def parse_binding(path: Path, raw: Any, *, label: str = "`entity`") -> EntityBin
         msg = f"{path}: {label} needs exactly one of {', '.join(_BINDING_KEYS)}, got {keys or 'none'}"
         raise ValueError(msg)
     kind = keys[0]
+    if not isinstance(raw[kind], str) or not raw[kind]:
+        msg = f"{path}: {label} needs a name for its {kind}, got {raw[kind]!r}"
+        raise ValueError(msg)
     if raw["type"] not in ENTITY_COLLECTIONS:
         msg = f"{path}: entity type {raw['type']!r} is not one of {', '.join(ENTITY_COLLECTIONS)}"
         raise ValueError(msg)

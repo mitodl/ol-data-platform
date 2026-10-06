@@ -44,7 +44,7 @@ DEFAULT_METRICS_DIR = Path("metrics")
 
 # OpenMetadata's Metric FQN is the bare name, so names are global:
 # `<subject>_<measure>` in snake case, which also rules out `__`.
-_METRIC_NAME = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$")
+_METRIC_NAME = re.compile(r"[a-z][a-z0-9]*(_[a-z0-9]+)+")
 
 # From OpenMetadata 2.0.2: api/data/createMetric.json (additionalProperties is
 # false, so any other key fails the PUT), entity/data/metric.json for the three
@@ -201,9 +201,13 @@ def check_metric_registry(
             _check_implementation(metric, implementation, yaml_registry, sql_models_by_name, report)
 
 
+def _is_one_of(value: Any, allowed: frozenset[str]) -> bool:
+    return isinstance(value, str) and value in allowed
+
+
 def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
     label = metric.path.name
-    if not _METRIC_NAME.match(metric.name):
+    if not _METRIC_NAME.fullmatch(metric.name):
         report.add(
             METRIC_REGISTRY_CHECK,
             Severity.ERROR,
@@ -231,7 +235,7 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
             "with `source: Glossary`.",
         )
     for key, allowed in METRIC_ENUMS.items():
-        if key in metric.body and metric.body[key] not in allowed:
+        if key in metric.body and not _is_one_of(metric.body[key], allowed):
             report.add(
                 METRIC_REGISTRY_CHECK,
                 Severity.ERROR,
@@ -239,7 +243,7 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
                 f"`metric.{key}` is {metric.body[key]!r}, which OpenMetadata does not accept",
                 f"Use one of: {', '.join(sorted(allowed))}.",
             )
-    if metric.status is not None and metric.status not in ENTITY_STATUSES:
+    if metric.status is not None and not _is_one_of(metric.status, ENTITY_STATUSES):
         report.add(
             METRIC_REGISTRY_CHECK,
             Severity.ERROR,

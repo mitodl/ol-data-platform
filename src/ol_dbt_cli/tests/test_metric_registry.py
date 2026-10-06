@@ -82,8 +82,7 @@ def test_missing_model_errors(tmp_path: Path) -> None:
     assert messages == [f"Metric {NAME}.yaml names a dbt_model that does not exist"]
 
 
-def test_model_absent_from_manifest_is_resolved_from_project_files(tmp_path: Path) -> None:
-    """A StarRocks-only model is disabled on the CI target; its files still resolve the binding."""
+def test_column_missing_from_sql_reports_only_that(tmp_path: Path) -> None:
     data = _metric(implemented_by=[{"dbt_model": MODEL, "columns": ["completion_status", "is_certified"]}])
     assert _run(tmp_path, data, _project({"completion_status", "is_certified"}, {"completion_status"})) == [
         "Column 'is_certified' is not selected by the model SQL"
@@ -103,7 +102,13 @@ def test_model_without_yaml_entry_errors(tmp_path: Path) -> None:
 
 
 def test_unresolved_select_star_skips_the_sql_half(tmp_path: Path) -> None:
-    assert _run(tmp_path, _metric(), _project({"completion_status"}, set(), has_star=True)) == []
+    assert _run(tmp_path, _metric(), _project({"completion_status"}, {"other"}, has_star=True)) == []
+
+
+def test_unparsed_sql_skips_the_sql_half(tmp_path: Path) -> None:
+    registry, parsed = _project({"completion_status"}, {"other"})
+    parsed[MODEL].parse_error = "could not parse"
+    assert _run(tmp_path, _metric(), (registry, parsed)) == []
 
 
 def test_column_names_are_case_insensitive(tmp_path: Path) -> None:
@@ -134,9 +139,9 @@ def test_file_not_named_after_the_metric_errors(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("metricType", "GAUGE"), ("unitOfMeasurement", "SECONDS"), ("granularity", "day")],
+    [("metricType", "GAUGE"), ("unitOfMeasurement", "SECONDS"), ("granularity", "day"), ("metricType", ["COUNT"])],
 )
-def test_value_outside_the_openmetadata_enum_errors(tmp_path: Path, field: str, value: str) -> None:
+def test_value_outside_the_openmetadata_enum_errors(tmp_path: Path, field: str, value: Any) -> None:
     assert _run(tmp_path, _metric({field: value})) == [
         f"`metric.{field}` is {value!r}, which OpenMetadata does not accept"
     ]
@@ -181,6 +186,8 @@ def test_status_is_optional(tmp_path: Path) -> None:
             {"metric": {"name": NAME}, "implemented_by": [{"dbt_source": "raw.users", "columns": ["c"]}]},
             "can't be a dbt_source",
         ),
+        ({"metric": {"name": NAME}, "implemented_by": [{"dbt_model": None, "columns": ["c"]}]}, "needs a name"),
+        ({"metric": {"name": NAME}, "implemented_by": [{"fqn": {"a": "b"}, "columns": ["c"]}]}, "needs a name"),
     ],
 )
 def test_malformed_file_raises(tmp_path: Path, data: dict[str, Any], message: str) -> None:
