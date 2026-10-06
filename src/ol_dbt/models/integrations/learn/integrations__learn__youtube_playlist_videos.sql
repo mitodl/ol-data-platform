@@ -15,7 +15,7 @@
   create_videos = true playlist that matches load_playlist's enumerate() over
   the videos YouTube returned. For create_videos = false, Learn enumerates only
   the videos it matched to OCW content files, so its positions skip unmatched
-  videos and the receiver has to renumber.
+  videos and renumbers them.
 #}
 
 with playlist_items as (

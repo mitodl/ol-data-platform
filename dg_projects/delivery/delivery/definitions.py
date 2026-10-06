@@ -55,7 +55,6 @@ from delivery.assets.ovs_videos import (
     video_metadata,
     video_webhook,
 )
-from delivery.assets.podcasts import podcast_webhook
 from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
     NON_AIRBYTE_STAGING_CRON,
@@ -110,11 +109,6 @@ mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstr
     # The edX discovery tables are dlt-loaded and staged at 06:00. Its MIT Learn
     # Postgres inputs are staged by the midnight sync_and_stage job, so a
     # midnight tick would deliver after that rebuild, on yesterday's edX data.
-    staging_cron=NON_AIRBYTE_STAGING_CRON,
-)
-podcast_webhook, podcast_delivery_sensor = deliver_after_upstream(
-    podcast_webhook,
-    "podcast_delivery_sensor",
     staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 
@@ -212,8 +206,6 @@ defs = Definitions(
             mitpe_webhook,
             oll_webhook,
             mit_edx_programs_webhook,
-            # Media/feed webhook delivery
-            podcast_webhook,
             # Warehouse data pushed to the access-forge repository
             generate_instructor_onboarding_user_list,
             update_access_forge_repo,
@@ -238,7 +230,6 @@ defs = Definitions(
             mitpe_delivery_sensor,
             oll_delivery_sensor,
             mit_edx_programs_delivery_sensor,
-            podcast_delivery_sensor,
             *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),

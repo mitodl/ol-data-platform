@@ -4,13 +4,11 @@
 # Naming: integrations__learn__<entity>
 # See: docs/learn_marts_contract.md for the full schema contract.
 #
-# Unlike the Cohort 2 sources, podcasts deliver as a NESTED payload: MIT Learn's
-# load_podcasts() expects each podcast to carry its episodes inline under an
-# "episodes" key. The two podcast models stay flat and relational; the
-# mit_learn_delivery/podcast_webhook asset joins them into that nested shape.
-# YouTube follows the same rule: channels, playlists, videos and the
-# playlist-video ordering are separate models, and the delivery asset nests
-# videos under their playlist the way transform_playlist does.
+# MIT Learn pulls these from the warehouse (SyncPodcastsTask, SyncYouTubeTask);
+# nothing pushes them. Its loaders take a nested shape: a podcast carries its
+# episodes and a playlist its videos. The models stay flat and relational, and
+# the Learn task does the nesting, the HTML cleaning and the duration and date
+# parsing with the functions its Celery ETL uses.
 
 version: 2
 
@@ -84,19 +82,17 @@ models:
     offered_by values.
     Episodes with no <enclosure> (no audio file) are dropped at ingest.
     NOTE: duration_raw and published_on_raw are deliberately un-normalized —
-    both are free-form/RFC 2822 strings that the delivery asset parses in
-    Python, mirroring the Celery ETL's iso8601_duration() and dateutil parse.
+    both are free-form/RFC 2822 strings that MIT Learn parses with its own
+    iso8601_duration() and dateutil parse.
     NOTE: filtered by the same dlt-load grace window as
     integrations__learn__podcasts, but on each episode's OWN load recency — a
     feed can drop one old episode while the channel keeps refreshing daily.
     NOTE: the parent is read from integrations__learn__podcasts rather than
     from staging. Joining grace-filtered episodes to the UNFILTERED staging
     channels would let an episode still inside its window attach to a channel
-    that had already aged out, producing rows no delivered podcast claims.
-    The delivery asset drops those, so the payload stayed correct — but they
-    would inflate the row count MIN_EPISODES uses to detect a short read, and
-    the two tables rank recency over independent _dlt_load_id universes, so
-    "3 loads ago" need not mean the same instant in each.
+    that had already aged out, producing rows no podcast in the other model
+    claims. The two tables also rank recency over independent _dlt_load_id
+    universes, so "3 loads ago" need not mean the same instant in each.
   columns:
   - name: readable_id
     description: >
@@ -106,7 +102,7 @@ models:
   - name: podcast_readable_id
     description: >
       readable_id of the parent podcast in integrations__learn__podcasts.
-      The delivery asset groups episodes by this column. Read from that model
+      MIT Learn groups episodes by this column. Read from that model
       directly, so an episode cannot reference a podcast that does not ship —
       the relationships test below pins that guarantee.
     tests:
@@ -134,11 +130,11 @@ models:
   - name: duration_raw
     description: >
       Raw itunes:duration text ("HH:MM:SS", "MM:SS", or a seconds count).
-      Normalized to an ISO-8601 duration by the delivery asset.
+      Normalized to an ISO-8601 duration by MIT Learn.
   - name: published_on_raw
     description: >
-      Raw RFC 2822 <pubDate>. Parsed into the resource's last_modified by the
-      delivery asset.
+      Raw RFC 2822 <pubDate>. Parsed into the resource's last_modified by MIT
+      Learn.
   - name: rss
     description: >
       The RSS <item> element as XML, delivered as podcast_episode.rss. MIT
@@ -195,7 +191,7 @@ models:
     from the most recent dlt load whose channel is delivered are kept.
     NOTE: create_videos = false playlists (the OCW channel) are published by
     MIT Learn only when at least 60% of their videos match an OCW ContentFile.
-    That check needs Learn's content files, so it stays in the receiver.
+    That check needs Learn's content files, so it stays in MIT Learn.
   columns:
   - name: readable_id
     description: YouTube's playlist id.
@@ -270,7 +266,7 @@ models:
     YouTube videos in the delivered playlists, exposed for MIT Learn's video
     LearningResources. Mirrors transform_video in
     learning_resources/etl/youtube.py. One row per video. offered_by comes from
-    the playlist each video is loaded with, so the delivery asset has to set it.
+    the playlist each video is loaded with, so MIT Learn sets it per playlist.
   columns:
   - name: readable_id
     description: YouTube's video id.
@@ -283,8 +279,7 @@ models:
   - name: description_raw
     description: >
       YouTube's description text, uncleaned. MIT Learn stores it after
-      clean_data and clean_youtube_description, so the delivery asset has to
-      apply both.
+      clean_data and clean_youtube_description, which its pull task applies.
   - name: url
     description: https://www.youtube.com/watch?v=<readable_id>
   - name: image_url
