@@ -43,9 +43,26 @@ with mitxonline_users as (
         , user_address_city
         , user_address_state
         , user_address_postal_code
+        -- Same deterministic tie-break as dim_user's emeritus_users, plus the address columns
+        -- this model also selects.
         , row_number() over (
             partition by coalesce(user_id, user_email, user_full_name)
-            order by user_gdpr_consent_date desc, enrollment_created_on desc
+            order by
+                user_gdpr_consent_date desc
+                , enrollment_created_on desc
+                , enrollment_updated_on desc
+                , user_id ASC
+                , user_email ASC
+                , user_full_name ASC
+                , user_address_country ASC
+                , user_gender ASC
+                , user_company ASC
+                , user_job_title ASC
+                , user_industry ASC
+                , user_address_street ASC
+                , user_address_city ASC
+                , user_address_state ASC
+                , user_address_postal_code ASC
         ) as row_num
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
 )
@@ -66,7 +83,21 @@ with mitxonline_users as (
         , user_address_postal_code
         , row_number() over (
             partition by user_email
-            order by user_gdpr_consent_date desc, courserun_start_on desc
+            order by
+                user_gdpr_consent_date desc
+                , courserun_start_on desc
+                , user_id ASC
+                , user_email ASC
+                , user_full_name ASC
+                , user_address_country ASC
+                , user_gender ASC
+                , user_company ASC
+                , user_job_title ASC
+                , user_industry ASC
+                , user_address_street ASC
+                , user_address_city ASC
+                , user_address_state ASC
+                , user_address_postal_code ASC
         ) as row_num
     from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
 )
