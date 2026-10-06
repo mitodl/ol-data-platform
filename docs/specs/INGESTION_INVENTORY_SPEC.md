@@ -274,11 +274,12 @@ populated:
   daily check for as long as Airbyte still loads the unit.
 
   The two units with a dlt source, `mitxonline/app_postgres` and `xpro/app_postgres`, chose
-  no cursor at all. They load only the `modeled: true` tables and replace each one, because
-  Django's `auto_now` does not fire on `queryset.update()`, the Wagtail page subclasses carry
-  no timestamp, and replace is the only disposition that carries a source delete. The same
-  choice is affordable for the other five active xmin units. Their modeled tables, counted in
-  production raw through Athena on 2026-10-06:
+  no cursor at all. Each replaces every table it loads (MITx Online all 66 the unit declares,
+  xPro only its 55 `modeled: true` ones), because Django's `auto_now` does not fire on
+  `queryset.update()`, the Wagtail page subclasses carry no timestamp, and replace is the only
+  disposition that carries a source delete. The same choice is affordable for the other five
+  active xmin units at xPro's scope. Their modeled tables, counted in production raw through
+  Athena on 2026-10-06:
 
   | Unit | Modeled tables | Rows | Largest table |
   |---|---|---|---|
