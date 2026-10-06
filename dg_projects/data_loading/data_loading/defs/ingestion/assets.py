@@ -130,10 +130,10 @@ mitxonline_app_assets = (
 # "xPro Production App DB → S3 Data Lake" still loads the unit there under the
 # same asset keys.
 #
-# QA is different from MITx Online in one respect. Its raw__xpro__app__postgres__*
-# tables were last written by an Airbyte Iceberg destination (2026-06), so a QA
-# connection that the lakehouse selector (endswith "s3 data lake") matches may
-# still exist. That connection has to be deleted in QA Airbyte before this
+# QA is different from MITx Online in one respect. QA_DATA_TOPOLOGY_SPEC.md §7
+# measured the QA xPro connection on 2026-09-17 as active on the Iceberg
+# destination with no jobs, so the lakehouse selector (endswith "s3 data lake")
+# may match it. That connection has to be deleted in QA Airbyte before this
 # deploys there, or the lakehouse code location claims the same keys.
 #
 # Add "production" in the SAME change that disables the Airbyte connection and

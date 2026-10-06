@@ -19,7 +19,16 @@ INVENTORY_UNIT = (
 # Unmodeled tables the production Airbyte connection syncs that hold sessions
 # and tokens. Named here so that marking one `modeled: true` cannot quietly
 # pull it into the load.
-CREDENTIAL_TABLE_PREFIXES = ("django_session", "oauth2_provider_", "social_auth_")
+CREDENTIAL_TABLE_PREFIXES = (
+    "courseware_openedxapiauth",
+    "django_session",
+    "oauth2_provider_",
+    "oauth_toolkit_extensions_",
+    "sheets_googleapiauth",
+    "social_auth_",
+    "users_changeemailrequest",
+    "wagtailcore_pageviewrestriction",
+)
 
 
 def _inventory_tables() -> list[dict[str, Any]]:

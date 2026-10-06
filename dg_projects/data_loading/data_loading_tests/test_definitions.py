@@ -194,7 +194,7 @@ def test_the_xpro_group_holds_only_the_app_database_tables() -> None:
     """The schedule targets the `xpro` group, so nothing else may join it."""
     with _repository_for("qa") as repo:
         selected = dg.AssetSelection.groups("xpro").resolve(repo.asset_graph)
-        assert selected
+        assert len(selected) == len(xpro_app.XPRO_APP_SPEC.tables)
         assert all(
             key.path[-1].startswith("raw__xpro__app__postgres__") for key in selected
         )
