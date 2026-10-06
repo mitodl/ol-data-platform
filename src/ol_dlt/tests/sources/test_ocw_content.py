@@ -669,3 +669,56 @@ def test_course_with_no_text_at_all_fails_the_load(
 
     with pytest.raises(PipelineStepFailed, match="Tika outage"):
         _load()
+
+
+@pytest.mark.integration
+def test_course_is_read_again_when_a_file_under_its_resources_changes(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    """Files under resources/ are not in the course version."""
+    key = "courses/a-course/resources/handout/data.json"
+    file_key = "courses/a-course/resources/handout/abc_handout.pdf"
+    bucket.objects[key] = json.dumps(
+        {"title": "Handout", "resourcetype": "Document", "file": f"/{file_key}"}
+    ).encode()
+    bucket.objects[file_key] = b"handout"
+    first = _load()
+    assert len(_load()) == len(first)
+
+    bucket.objects[file_key] = b"revised handout"
+    rows = _load()
+
+    texts = {row["content"] for row in rows if row["s3_key"] == key}
+    assert texts == {"text of handout", "text of revised handout"}
+    assert len(_load()) == len(rows)
+
+
+@pytest.mark.integration
+def test_vanished_file_does_not_hide_a_tika_outage(
+    test_profile: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeS3(_course("a-course", files=2))
+    fake.vanished.add("courses/a-course/abc_notes0.pdf")
+    monkeypatch.setattr(ocw_content.s3fs, "S3FileSystem", lambda **_kwargs: fake)
+    monkeypatch.setattr(
+        ocw_content.tika, "client_for_profile", lambda: FakeTika(fail=True)
+    )
+
+    with pytest.raises(PipelineStepFailed, match="Tika outage"):
+        _load()
+
+
+@pytest.mark.integration
+def test_probe_refused_for_its_token_is_not_reported_as_an_outage(
+    test_profile: Path, bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class DownThenUnauthorized:
+        def extract_text(self, body: bytes, timeout: float = 0) -> str | None:  # noqa: ARG002
+            response = requests.Response()
+            response.status_code = 401 if body == ocw_content.PROBE_DOCUMENT else 503
+            raise requests.HTTPError(response=response)
+
+    monkeypatch.setattr(ocw_content.tika, "client_for_profile", DownThenUnauthorized)
+
+    with pytest.raises(PipelineStepFailed, match="rejected the access token"):
+        _load()

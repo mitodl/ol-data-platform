@@ -223,18 +223,28 @@ def content_kind(slug: str, key: str) -> str | None:
     return None
 
 
-def course_version(slug: str, objects: CourseObjects) -> str:
-    """Digest the ETags of everything a course's rows are built from."""
+def in_course_version(slug: str, key: str) -> bool:
+    """Tell whether a key of a course's own listing counts toward its version."""
+    if content_kind(slug, key):
+        return True
     prefix = f"courses/{slug}/"
+    path = PurePosixPath(key)
+    return (
+        not key.startswith((f"{prefix}pages/", f"{prefix}resources/"))
+        and path.name not in SITE_FILES
+        and path.suffix.lower() in VALID_FILE_TYPES
+    )
+
+
+def course_version(slug: str, objects: CourseObjects) -> str:
+    """Digest the ETags of the listed objects a course's rows are built from.
+
+    A file a resource points at under ``pages/`` or ``resources/`` is left out,
+    as is one under another course. ``read_course`` returns the ETags of those.
+    """
     digest = hashlib.md5(usedforsecurity=False)
     for key in sorted(objects):
-        path = PurePosixPath(key)
-        is_file = (
-            not key.startswith((f"{prefix}pages/", f"{prefix}resources/"))
-            and path.name not in SITE_FILES
-            and path.suffix.lower() in VALID_FILE_TYPES
-        )
-        if content_kind(slug, key) or is_file:
+        if in_course_version(slug, key):
             digest.update(f"{key}\t{objects[key]['ETag']}\n".encode())
     return digest.hexdigest()
 
@@ -264,6 +274,14 @@ def _may_pass(error: requests.RequestException) -> bool:
     return response.status_code >= 500 or response.status_code == 429  # noqa: PLR2004
 
 
+def _raise_if_token_rejected(error: requests.RequestException, reading: str) -> None:
+    """Fail the load on a rejected token, which no file or probe can get past."""
+    status = error.response.status_code if error.response is not None else None
+    if status in AUTH_FAILURES:
+        msg = f"Tika rejected the access token ({status}) reading {reading}."
+        raise RuntimeError(msg) from error
+
+
 def _extract_text(
     fs: s3fs.S3FileSystem,
     client: tika.TikaClient,
@@ -287,12 +305,9 @@ def _extract_text(
     try:
         text = client.extract_text(body)
     except requests.RequestException as error:
-        status = error.response.status_code if error.response is not None else None
-        if status in AUTH_FAILURES:
-            # Not about this file: every other one would fail the same way
-            # and be recorded as unreadable.
-            msg = f"Tika rejected the access token ({status}) reading {key}."
-            raise RuntimeError(msg) from error
+        # Not about this file: every other one would fail the same way and be
+        # recorded as unreadable.
+        _raise_if_token_rejected(error, key)
         logger.exception("Tika could not read %s", key)
         return None, STATUS_FAILED, _may_pass(error)
     return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
@@ -308,6 +323,7 @@ def _raise_if_tika_is_down(client: tika.TikaClient, slug: str, failed: int) -> N
         try:
             client.extract_text(PROBE_DOCUMENT, timeout=PROBE_TIMEOUT_SECONDS)
         except requests.RequestException as error:
+            _raise_if_token_rejected(error, "the probe document")
             if attempt < PROBE_ATTEMPTS:
                 continue
             msg = (
@@ -344,7 +360,7 @@ def read_course(  # noqa: PLR0913
 
     :returns: The course's rows, how many source bytes they were read from,
         whether a file failed in a way another read might not, and the ETag of
-        each file read from outside the course's prefix.
+        each file read that the course's version does not cover.
     :raises RuntimeError: Tika is down.
     """
     retrieved_at = datetime.now(tz=UTC)
@@ -391,16 +407,19 @@ def read_course(  # noqa: PLR0913
     )
     for key, result in zip(files, results, strict=True):
         texts[key] = result
+        # A file gone from the bucket was never sent to Tika, so it neither
+        # counts as a failure nor breaks a run of them.
+        if result[1] == STATUS_MISSING:
+            continue
         failed_in_a_row = failed_in_a_row + 1 if result[1] == STATUS_FAILED else 0
         if failed_in_a_row >= FAILURES_BEFORE_PROBE and not probed:
             _raise_if_tika_is_down(client, slug, failed_in_a_row)
             probed = True
-    if (
-        texts
-        and not probed
-        and all(status == STATUS_FAILED for _text, status, _retry in texts.values())
-    ):
-        _raise_if_tika_is_down(client, slug, len(texts))
+    read = [
+        status for _text, status, _retry in texts.values() if status != STATUS_MISSING
+    ]
+    if read and not probed and all(status == STATUS_FAILED for status in read):
+        _raise_if_tika_is_down(client, slug, len(read))
 
     for row in rows:
         file_key = row["file_key"]
@@ -417,16 +436,21 @@ def read_course(  # noqa: PLR0913
     source_bytes = sum(objects[key]["size"] for key in json_keys) + sum(
         info["size"] for info in files.values()
     )
-    external = {key: _etag(info) for key, info in files.items() if key not in objects}
+    external = {
+        key: _etag(info)
+        for key, info in files.items()
+        if not (key in objects and in_course_version(slug, key))
+    }
     return rows, source_bytes, retry, external
 
 
 def external_files_changed(
     fs: s3fs.S3FileSystem, bucket: str, recorded: dict[str, str] | None
 ) -> bool:
-    """Tell whether a file a course read from another prefix has changed.
+    """Tell whether a file a course read outside its version has changed.
 
-    Those files are not in the course's own listing, so not in its version.
+    That is a file under another course, or under this course's ``pages/`` or
+    ``resources/``.
     """
     for key, etag in (recorded or {}).items():
         info = _object_info(fs, bucket, key)
