@@ -20,7 +20,8 @@ metric:                         # an OpenMetadata CreateMetric body
   metricType: OTHER
   owners: [{type: team, name: data-engineering}]   # optional; resolved to ids on sync
   reviewers: [{type: team, name: data-engineering}]
-  tags: [{tagFQN: <glossary>.<term>, source: Glossary}]
+  tags:
+  - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
 status: Approved                # entityStatus; applied by PATCH, not part of CreateMetric
 implemented_by:
 - dbt_model: afact_learner_courserun_progress
@@ -29,28 +30,26 @@ implemented_by:
   columns: [completion_status]
 ```
 
-`metric` uses OpenMetadata's field names, so the file needs no translation.
-CreateMetric rejects a field it does not know, so the file may set only these:
-`name`, `displayName`, `description`, `metricExpression`, `metricType`,
-`unitOfMeasurement`, `customUnitOfMeasurement`, `granularity`, `dimensions`,
-`measures`, `filters`, `relatedMetrics`, `assets`, `owners`, `reviewers`,
-`tags`, `domains`, `dataProducts`, `extension`, `provider`. `id` and
-`fullyQualifiedName` belong to sync. `metricExpression` is documentation only.
+`metric` uses OpenMetadata's field names, so the file needs no translation. The
+fields it may set, their shapes and their enum values (`metricType`,
+`unitOfMeasurement`, `granularity`, `status`, ...) are the server's own: see
+`CreateMetric` in
+`src/ol_dbt_cli/ol_dbt_cli/lib/openmetadata_metric_schema.json`, a snapshot of
+the request schema our OpenMetadata publishes. Two differences from that
+schema:
+
+- `owners` and `reviewers` are `{type: team | user, name: ...}`. OpenMetadata
+  takes an id, which only exists in the live catalog, so sync resolves the name.
+- `id` and `fullyQualifiedName` belong to sync.
+
+A glossary term is a `tags` entry with `source: Glossary`. `metricExpression`
+is documentation only.
 
 `implemented_by` is ours. Each entry is a `dbt_model` and the columns that
 carry the metric. The first entry is the defining implementation; later entries
 are places it is served from, e.g. a StarRocks view that selects the column.
 An entry may instead give an `fqn` (with a `type`, default `table`) for an
 OpenMetadata entity dbt does not build. CI cannot check those.
-
-Enum values, from OpenMetadata 2.0.2:
-
-| Field | Values |
-| --- | --- |
-| `metricType` | `COUNT`, `SUM`, `AVERAGE`, `RATIO`, `PERCENTAGE`, `MIN`, `MAX`, `MEDIAN`, `MODE`, `STANDARD_DEVIATION`, `VARIANCE`, `SIMPLE`, `CUMULATIVE`, `DERIVED`, `CONVERSION`, `OTHER` |
-| `unitOfMeasurement` | `COUNT`, `DOLLARS`, `PERCENTAGE`, `TIMESTAMP`, `SIZE`, `REQUESTS`, `EVENTS`, `TRANSACTIONS`, `OTHER` |
-| `granularity` | `SECOND`, `MINUTE`, `HOUR`, `DAY`, `WEEK`, `MONTH`, `QUARTER`, `YEAR` |
-| `status` | `Draft`, `In Review`, `Approved`, `Archived`, `Deprecated`, `Rejected`, `Unprocessed` |
 
 ## Naming
 
@@ -69,9 +68,9 @@ touches `metrics/`, the dbt project or the CLI. It fails when:
   its SQL (skipped when the SQL is a `SELECT *` that could not be expanded);
 - two files declare the same metric, the name breaks the convention, or the
   file is not named after the metric;
-- `metricType`, `unitOfMeasurement`, `granularity` or `status` is not one of
-  the values above;
-- `metric` sets a field outside the list above.
+- `metric` sets a field `CreateMetric` does not have;
+- a value in `metric`, or `status`, does not fit the schema snapshot (a wrong
+  type, a value outside an enum, a nested object missing a required key).
 
 Changing or removing a column that carries a metric therefore means changing
 the metric file in the same PR, where the reviewer sees it.
@@ -88,8 +87,16 @@ naming the file.
 ## Commands
 
 ```bash
-# Credential-free, what CI runs. Needs no manifest.
+# Credential-free, what CI runs. Needs no manifest and no network.
 ol-dbt validate --only metric_registry
+
+# After an OpenMetadata upgrade: rewrite the schema snapshot from the server's
+# published OpenAPI document (no token needed), then commit the diff.
+ol-dbt metrics refresh-schema --server-url https://data.ol.mit.edu/api
 ```
+
+The snapshot is committed instead of fetched in CI so that a PR check does not
+depend on the catalog being reachable, and so that an upgrade changes what a
+metric file may contain in a reviewed commit.
 
 Publishing these files to OpenMetadata (`ol-dbt metrics sync`) is not built yet.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,9 @@ import yaml
 
 from ol_dbt_cli.lib.metric_registry import (
     METRIC_REGISTRY_CHECK,
+    SCHEMA_SNAPSHOT,
+    SCHEMA_VERSION_KEY,
+    build_schema_snapshot,
     check_metric_registry,
     load_metrics,
 )
@@ -142,9 +146,89 @@ def test_file_not_named_after_the_metric_errors(tmp_path: Path) -> None:
     [("metricType", "GAUGE"), ("unitOfMeasurement", "SECONDS"), ("granularity", "day"), ("metricType", ["COUNT"])],
 )
 def test_value_outside_the_openmetadata_enum_errors(tmp_path: Path, field: str, value: Any) -> None:
-    assert _run(tmp_path, _metric({field: value})) == [
-        f"`metric.{field}` is {value!r}, which OpenMetadata does not accept"
-    ]
+    (message,) = _run(tmp_path, _metric({field: value}))
+    assert message.startswith(f"`metric.{field}`: {value!r} is not ")
+
+
+@pytest.mark.parametrize(
+    ("body", "location"),
+    [
+        ({"metricExpression": "SQL"}, "metric.metricExpression"),
+        ({"metricExpression": {"language": "COBOL", "code": "x"}}, "metric.metricExpression.language"),
+        ({"dimensions": {"name": "platform"}}, "metric.dimensions"),
+        ({"dimensions": [{"type": "TIME"}]}, "metric.dimensions.0"),
+        ({"filters": [{"when": "x > 0"}]}, "metric.filters.0"),
+        ({"relatedMetrics": "contract_seats_used"}, "metric.relatedMetrics"),
+        ({"tags": [{"tagFQN": "Glossary.Term", "source": "Glossary"}]}, "metric.tags.0"),
+        ({"owners": [{"type": "team"}]}, "metric.owners.0"),
+        ({"owners": [{"type": "group", "name": "data-engineering"}]}, "metric.owners.0.type"),
+        ({"reviewers": [{"id": "4b1d6f0e-0000-4000-8000-000000000000", "type": "team"}]}, "metric.reviewers.0"),
+        ({"description": ["not", "text"]}, "metric.description"),
+    ],
+)
+def test_malformed_value_openmetadata_would_reject_errors(tmp_path: Path, body: dict[str, Any], location: str) -> None:
+    (message,) = _run(tmp_path, _metric(body))
+    assert message.startswith(f"`{location}`: ")
+
+
+def test_well_formed_nested_values_pass(tmp_path: Path) -> None:
+    body = {
+        "metricExpression": {"language": "SQL", "code": "count(*)"},
+        "dimensions": [{"name": "platform", "type": "CATEGORICAL"}],
+        "filters": [{"where": "enrollment_is_active"}],
+        "owners": [{"type": "team", "name": "data-engineering"}],
+        "reviewers": [{"type": "user", "name": "tmacey"}],
+        "tags": [{"tagFQN": "Glossary.Term", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}],
+        "lifeCycle": {"created": {"timestamp": 1790744717397}},
+    }
+    assert _run(tmp_path, _metric(body)) == []
+
+
+def test_readme_example_passes(tmp_path: Path) -> None:
+    readme = (REPO_ROOT / "metrics" / "README.md").read_text()
+    example = yaml.safe_load(readme.split("```yaml\n", 1)[1].split("```", 1)[0])
+    project = _project({"completion_status"}, {"completion_status"})
+    project[1]["mv_b2b_learner_enrollment"] = project[1][MODEL]
+    project[0].models["mv_b2b_learner_enrollment"] = project[0].models[MODEL]
+    assert _run(tmp_path, example, project) == []
+
+
+def test_committed_snapshot_is_what_refresh_writes() -> None:
+    """The snapshot holds only server schemas, so rebuilding it from itself changes nothing."""
+    snapshot = json.loads(SCHEMA_SNAPSHOT.read_text())
+    openapi = {
+        "info": {"version": snapshot[SCHEMA_VERSION_KEY]},
+        "components": {
+            "schemas": snapshot["components"]["schemas"]
+            | {"Metric": {"properties": {"entityStatus": snapshot["properties"]["status"]}}}
+        },
+    }
+    assert build_schema_snapshot(openapi) == snapshot
+
+
+def test_snapshot_keeps_only_schemas_create_metric_reaches() -> None:
+    openapi = {
+        "info": {"version": "9.9.9"},
+        "components": {
+            "schemas": {
+                "CreateMetric": {
+                    "properties": {
+                        "tags": {"type": "array", "items": {"$ref": "#/components/schemas/TagLabel"}},
+                        "owners": {"type": "array", "items": {"$ref": "#/components/schemas/EntityReference"}},
+                    }
+                },
+                "TagLabel": {"properties": {"style": {"$ref": "#/components/schemas/Style"}}},
+                "Style": {"type": "object"},
+                "EntityReference": {"properties": {"owner": {"$ref": "#/components/schemas/EntityReference"}}},
+                "Metric": {"properties": {"entityStatus": {"enum": ["Draft"]}}},
+                "Table": {"type": "object"},
+            }
+        },
+    }
+    snapshot = build_schema_snapshot(openapi)
+    assert list(snapshot["components"]["schemas"]) == ["CreateMetric", "EntityReference", "Style", "TagLabel"]
+    assert snapshot[SCHEMA_VERSION_KEY] == "9.9.9"
+    assert snapshot["properties"]["status"] == {"enum": ["Draft"]}
 
 
 def test_openmetadata_enum_values_pass(tmp_path: Path) -> None:
@@ -165,7 +249,8 @@ def test_non_string_metric_keys_are_reported(tmp_path: Path) -> None:
 
 
 def test_unknown_status_errors(tmp_path: Path) -> None:
-    assert _run(tmp_path, _metric(status="Live")) == ["`status` is 'Live', which OpenMetadata does not accept"]
+    (message,) = _run(tmp_path, _metric(status="Live"))
+    assert message.startswith("`status`: 'Live' is not one of ")
 
 
 def test_status_is_optional(tmp_path: Path) -> None:
