@@ -25,7 +25,9 @@ Examples:
 
 ## Required Columns
 
-Every Learn mart must expose the following columns:
+Every catalog model (courses and programs) must expose the following columns.
+Content file and media models are keyed differently and are exempt; their own
+keys and non-null columns are given in their sections below.
 
 | Column | Type | Description | Nullability |
 |--------|------|-------------|-------------|
@@ -118,13 +120,21 @@ Left to Learn, which applies the functions its Celery ETL uses:
 - `offered_by` of a video, which is its playlist's
 - For a `create_videos = false` playlist, matching videos to OCW content files and the 60% rule
 
-Column descriptions are in
+The media models are exempt from the required columns above. Each has its own
+key and non-null columns, which its dbt tests enforce:
+
+| Model | Unique key | Other non-null columns |
+|-------|------------|------------------------|
+| `integrations__learn__youtube_channels` | `channel_id` | `title` |
+| `integrations__learn__youtube_playlists` | `readable_id` | `channel_id`, `title`, `create_videos` |
+| `integrations__learn__youtube_playlist_videos` | (`playlist_readable_id`, `video_readable_id`) and (`playlist_readable_id`, `position`) | none |
+| `integrations__learn__youtube_videos` | `readable_id` | `youtube_id` |
+| `integrations__learn__podcasts` | `readable_id` | `title`, `rss_url`, `last_modified`, `etl_source` |
+| `integrations__learn__podcast_episodes` | `readable_id` | `podcast_readable_id`, `audio_url`, `etl_source` |
+
+Only `_youtube_videos` and `_podcasts` have a `last_modified` column. The other
+columns are described in
 `src/ol_dbt/models/integrations/learn/_integrations__learn__cohort3__schema.yml`.
-Of the required columns, only `integrations__learn__youtube_videos` and
-`integrations__learn__podcasts` carry all four. `_youtube_playlists` and
-`_podcast_episodes` have no `last_modified`, `_youtube_channels` is keyed by
-`channel_id` and has no `last_modified`, and `_youtube_playlist_videos` is a
-membership table with none of them.
 
 ## Grain Expectations
 
@@ -134,10 +144,11 @@ membership table with none of them.
 
 ## Nullability Rules
 
-1. All required columns must be `NOT NULL`
+1. All required columns must be `NOT NULL` in catalog models
 2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id`, `key`, `source_path` and `extraction_status`
-3. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
-4. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
+3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
+4. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
+5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values
 
