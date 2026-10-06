@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, Self
 from urllib.parse import urlparse, urlunparse
 
+from dagster import Failure
 from dagster._annotations import beta
 from dagster_airbyte.resources import AirbyteClient, AirbyteWorkspace
 from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
@@ -21,6 +22,16 @@ IN_FLIGHT_JOB_STATUSES = (
     AirbyteJobStatusType.PENDING,
     AirbyteJobStatusType.INCOMPLETE,
 )
+
+# Airbyte pages its list endpoints by offset over an ordering that is not stable
+# between requests, so consecutive pages can overlap: a row shifts back onto the
+# next page and appears twice while another is never returned. Probed against
+# production on 2026-10-01 at 15 rows a page, one listing in six came back as 39
+# rows holding 29 distinct connections. `max_items_per_page` (100, the most the
+# API accepts) holds the whole workspace (39 connections, 50 sources), so there
+# is no page boundary for a row to cross; the checks in `list_collection` are
+# what still hold once the workspace outgrows it.
+LISTING_ATTEMPTS = 4
 
 
 @beta
@@ -61,12 +72,6 @@ class AirbyteOSSClient(AirbyteClient):
         description=(
             "Time (in seconds) after which the requests to Airbyte "
             "are declared timed out."
-        ),
-    )
-    request_page_size: int = Field(
-        default=15,
-        description=(
-            "The number of records to include in paginated requests to the Airbyte API"
         ),
     )
     rest_api_base_url: str = Field(
@@ -123,6 +128,52 @@ class AirbyteOSSClient(AirbyteClient):
         superseded = {job.id for job in in_flight if job.id != newest_id}
         return [job for job in jobs if job.id not in superseded]
 
+    def list_collection(self, path: str, id_key: str) -> list[Mapping[str, Any]]:
+        """List a collection until two consecutive reads agree and neither overlapped.
+
+        Each page is a slice of whatever order the server used for that request. If
+        the collection holds still, a listing has as many rows as the collection, so
+        a skipped record shows up as another one duplicated. If a record is deleted
+        between two page fetches, every later row shifts back and the one on the
+        page boundary is skipped with nothing duplicated; the next read returns it,
+        so it cannot match. Requiring two matching reads covers both.
+
+        :param path: The collection's path under the REST API, e.g. ``connections``.
+        :param id_key: The field that identifies a record in the collection.
+        :returns: Every record in the workspace's collection, each exactly once.
+        :raises Failure: When no two consecutive reads agree.
+        """
+        previous: set[str] | None = None
+        for _ in range(LISTING_ATTEMPTS):
+            items = list(
+                self._paginated_request(
+                    method="GET",
+                    url=f"{self.rest_api_base_url}/{path}",
+                    params={"workspaceIds": self.workspace_id},
+                )
+            )
+            ids = {item[id_key] for item in items}
+            if len(ids) != len(items):
+                previous = None
+                continue
+            if ids == previous:
+                return items
+            previous = ids
+        msg = (
+            f"Airbyte's /{path} listing did not return the same complete set twice in "
+            f"{LISTING_ATTEMPTS} attempts. Refusing to use it: a record skipped at a "
+            "page boundary would be missing from the result."
+        )
+        raise Failure(description=msg)
+
+    def get_connections(self) -> Sequence[Mapping[str, Any]]:
+        """List the workspace's connections, each exactly once.
+
+        The asset graph is built from this, so a connection skipped at a page
+        boundary would leave the graph without its assets and raise nothing.
+        """
+        return self.list_collection("connections", "connectionId")
+
     def _paginated_request(
         self,
         method: str,
@@ -134,6 +185,8 @@ class AirbyteOSSClient(AirbyteClient):
         """Execute paginated requests and yield all items."""
         result_data = []
         _url_parsed = urlparse(url)
+        # Without a limit the server pages at its own default.
+        params = {"limit": self.max_items_per_page, **params}
         while url != "":
             response = self._single_request(
                 method=method,
@@ -200,12 +253,6 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
             "are declared timed out."
         ),
     )
-    request_page_size: int = Field(
-        default=15,
-        description=(
-            "The number of records to include in paginated requests to the Airbyte API"
-        ),
-    )
     rest_api_base_url: str = Field(
         "", description="The full URL of the Airbyte REST API"
     )
@@ -216,7 +263,7 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
     _client: AirbyteOSSClient = PrivateAttr(default=None)  # type: ignore[assignment]
 
     @cached_method
-    def get_client(self) -> AirbyteClient:
+    def get_client(self) -> AirbyteOSSClient:
         """Build the OSS client, carrying every setting the base class carries.
 
         The polling four -- poll_interval, poll_timeout, cancel_on_termination
@@ -237,6 +284,7 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
             request_max_retries=self.request_max_retries,
             request_retry_delay=self.request_retry_delay,
             request_timeout=self.request_timeout,
+            max_items_per_page=self.max_items_per_page,
             poll_interval=self.poll_interval,
             poll_timeout=self.poll_timeout,
             cancel_on_termination=self.cancel_on_termination,

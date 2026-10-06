@@ -7,10 +7,17 @@ is not hypothetical: the four polling settings were missing, so configuring
 poll_previous_running_sync on the workspace set a field the client never read.
 """
 
+from typing import Any
+
 import pytest
+from dagster import Failure
 from dagster_airbyte.resources import AirbyteClient
 from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
-from lakehouse.resources.airbyte import AirbyteOSSWorkspace
+from lakehouse.resources.airbyte import (
+    LISTING_ATTEMPTS,
+    AirbyteOSSClient,
+    AirbyteOSSWorkspace,
+)
 
 # Non-default values throughout, so a setting that fails to propagate shows up
 # as the library default rather than coincidentally matching.
@@ -22,6 +29,7 @@ WORKSPACE_SETTINGS = {
     "request_max_retries": 7,
     "request_retry_delay": 1.5,
     "request_timeout": 60,
+    "max_items_per_page": 50,
     "poll_interval": 17.0,
     "poll_timeout": 1234.0,
     "cancel_on_termination": False,
@@ -49,6 +57,7 @@ def client():
         ("request_max_retries", 7),
         ("request_retry_delay", 1.5),
         ("request_timeout", 60),
+        ("max_items_per_page", 50),
     ],
 )
 def test_workspace_settings_reach_the_client(client, setting, expected) -> None:
@@ -166,3 +175,110 @@ class TestConcurrentInFlightJobsAreCollapsed:
         jobs = [_job(1, AirbyteJobStatusType.SUCCEEDED)]
         _stub_super_jobs(monkeypatch, jobs)
         assert client.get_jobs_for_connection(connection_id="c") == jobs
+
+
+class TestPaginatedRequest:
+    def test_the_first_request_sets_the_page_size_and_next_keeps_our_host(
+        self, client, monkeypatch
+    ) -> None:
+        # The server pages at its own default when no limit is sent, and its
+        # `next` URL names localhost in a self-hosted deployment.
+        requests: list[tuple[str, dict[str, Any]]] = []
+        pages = [
+            {
+                "data": [{"connectionId": "conn-1"}],
+                "next": "http://localhost:8006/api/public/v1/connections?limit=50&offset=50",
+            },
+            {"data": [{"connectionId": "conn-2"}]},
+        ]
+
+        def single_request(self, url, params, **_):  # noqa: ARG001
+            requests.append((url, dict(params)))
+            return pages[len(requests) - 1]
+
+        monkeypatch.setattr(AirbyteOSSClient, "_single_request", single_request)
+        rows = client._paginated_request(
+            method="GET",
+            url=f"{client.rest_api_base_url}/connections",
+            params={"workspaceIds": "workspace-1"},
+        )
+
+        assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
+        assert requests == [
+            (
+                "https://airbyte.example.invalid/api/public/v1/connections",
+                {"limit": 50, "workspaceIds": "workspace-1"},
+            ),
+            (
+                "https://airbyte.example.invalid/api/public/v1/connections?limit=50&offset=50",
+                {},
+            ),
+        ]
+
+
+class TestOverlappingPages:
+    """Airbyte offset paging can repeat one record and skip another."""
+
+    OVERLAPPED = (
+        # Same row count as the clean read, one connection in it twice: what
+        # production returned on 2026-10-01, at 39 rows and 29 distinct ids.
+        {"connectionId": "conn-1"},
+        {"connectionId": "conn-1"},
+    )
+    CLEAN = ({"connectionId": "conn-1"}, {"connectionId": "conn-2"})
+
+    @pytest.fixture
+    def listings(self, monkeypatch) -> list[tuple[dict[str, Any], ...]]:
+        """Serve the appended listings in order, repeating the last one."""
+        served: list[tuple[dict[str, Any], ...]] = []
+        self.reads = 0
+
+        def paginated_request(_self, **request):
+            self.request = request
+            self.reads += 1
+            return list(served[min(self.reads, len(served)) - 1])
+
+        monkeypatch.setattr(AirbyteOSSClient, "_paginated_request", paginated_request)
+        return served
+
+    def test_a_stable_listing_is_read_twice(self, client, listings) -> None:
+        listings.append(self.CLEAN)
+        rows = client.list_collection("connections", "connectionId")
+
+        assert self.reads == 2
+        assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
+        assert self.request == {
+            "method": "GET",
+            "url": "https://airbyte.example.invalid/api/public/v1/connections",
+            "params": {"workspaceIds": "workspace-1"},
+        }
+
+    def test_an_overlapping_listing_is_read_again(self, client, listings) -> None:
+        listings.extend([self.OVERLAPPED, self.CLEAN])
+        client.list_collection("connections", "connectionId")
+        assert self.reads == 3
+
+    def test_a_skip_without_a_duplicate_is_caught_by_the_next_read(
+        self, client, listings
+    ) -> None:
+        # A deletion between page fetches shifts the rest back a row, so one
+        # record is skipped and nothing repeats. Only a second read shows it.
+        listings.extend([self.CLEAN[:1], self.CLEAN])
+        assert len(client.list_collection("connections", "connectionId")) == 2
+
+    def test_a_listing_that_keeps_overlapping_is_refused(
+        self, client, listings
+    ) -> None:
+        listings.append(self.OVERLAPPED)
+        with pytest.raises(Failure, match="/connections listing did not return"):
+            client.list_collection("connections", "connectionId")
+        assert self.reads == LISTING_ATTEMPTS
+
+    def test_the_asset_load_lists_connections_the_same_way(
+        self, client, listings
+    ) -> None:
+        # build_airbyte_assets_definitions reads the workspace through
+        # get_connections, so a connection skipped here has no assets.
+        listings.extend([self.OVERLAPPED, self.CLEAN])
+        rows = client.get_connections()
+        assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
