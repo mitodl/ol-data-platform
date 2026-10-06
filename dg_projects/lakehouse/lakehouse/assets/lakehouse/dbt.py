@@ -113,7 +113,9 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
         for key in context.selected_asset_keys
     }
     tests = stale_descendant_test_names(
-        json.loads(dbt_project.manifest_path.read_text()), selected
+        json.loads(dbt_project.manifest_path.read_text()),
+        selected,
+        keep={key.name for key in context.selected_asset_check_keys},
     )
     if not tests:
         return []
