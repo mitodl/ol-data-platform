@@ -207,6 +207,24 @@ def test_posthog_schedule_skips_while_a_run_is_in_flight(
     }
 
 
+@pytest.mark.parametrize(("in_flight", "expected"), [(True, False), (False, True)])
+def test_ocw_content_schedule_skips_while_a_run_is_in_flight(
+    in_flight: bool,  # noqa: FBT001
+    expected: bool,  # noqa: FBT001
+) -> None:
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    instance = _FakeInstance(in_flight)
+    assert (
+        schedules.no_ocw_content_run_in_flight(_FakeScheduleContext(instance))
+        is expected
+    )
+    (runs_filter,) = instance.filters
+    assert runs_filter.tags == {
+        "dagster/schedule_name": schedules.OCW_CONTENT_SCHEDULE_NAME
+    }
+
+
 def test_posthog_schedule_runs_get_the_memory_limit_and_runtime_cap() -> None:
     """The run pod must get the 16Gi limit a single large hour needs.
 
