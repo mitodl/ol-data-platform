@@ -5,6 +5,16 @@
     on_schema_change='append_new_columns'
 ) }}
 
+{#- The first incremental run after is_current is added reads a target without the column.
+    In a unit test `this` is the fixture's name, a string, which always has it. -#}
+{%- set target_has_is_current = false -%}
+{%- if is_incremental() and this is string -%}
+    {%- set target_has_is_current = true -%}
+{%- elif is_incremental() -%}
+    {%- set target_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
+    {%- set target_has_is_current = 'is_current' in target_columns -%}
+{%- endif %}
+
 -- Consolidate certificates from all platforms
 with mitxonline_certificates as (
     select
@@ -263,31 +273,66 @@ with mitxonline_certificates as (
         and combined_certificates.platform = dim_program.platform_code
 )
 
+-- One certificate can enter twice under the same certificate_key (the joins above have
+-- no uniqueness guarantee). Reduce to one row per key before ranking: ranked together, the
+-- second copy would be marked not current and the certificate would lose is_current to
+-- itself.
+, certificates_keyed as (
+    select
+        *
+        , row_number() over (
+            partition by certificate_id, platform, certificate_scope
+            order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last, user_fk
+        ) as _key_row_num
+    from certificates_with_fks
+)
+
 -- MicroMasters course certificates are earned on and issued by edX.org, and both
 -- the edxorg and micromasters sources resolve courserun_fk to the same edxorg
 -- course run (see the dim_course_run join above). Their surrogate certificate_ids
 -- differ (user_id-based vs email-based), so the same physical certificate enters
 -- as two rows and the certificate_key-based defensive dedup further below can't
--- catch it. Collapse to one row per (user_fk, courserun_fk, certificate_scope)
--- when both FKs resolved, preferring the canonical edxorg record.
-, cross_source_deduped as (
+-- catch it. The micromasters copy is dropped when an edxorg record exists for the same
+-- (user_fk, courserun_fk, certificate_scope) and both FKs resolved.
+-- One platform can also hold two certificates for a (user, course run): MITx Online has
+-- a pair issued two days apart, and a revoked certificate can be followed by a new one.
+-- Those are separate certificates and are all kept. is_current marks the one that stands:
+-- unrevoked first, then the latest issued. A consumer joining on (user_fk, courserun_fk)
+-- filters on is_current to get one row.
+, certificates_grouped as (
     select
         *
+        , case
+            when user_fk is not null and courserun_fk is not null
+                then concat(cast(user_fk as varchar), '|', cast(courserun_fk as varchar), '|', certificate_scope)
+            else concat(certificate_id, '|', platform, '|', certificate_scope)
+        end as _certificate_group
+        , case when platform = 'micromasters' then 1 else 0 end as _platform_rank
+    from certificates_keyed
+    where _key_row_num = 1
+)
+
+, certificates_ranked as (
+    select
+        *
+        , min(_platform_rank) over (partition by _certificate_group) as _best_platform_rank
         , row_number() over (
-            partition by
-                case
-                    when user_fk is not null and courserun_fk is not null
-                        then concat(cast(user_fk as varchar), '|', cast(courserun_fk as varchar), '|', certificate_scope)
-                    else concat(certificate_id, '|', platform, '|', certificate_scope)
-                end
+            partition by _certificate_group
             order by
-                case platform
-                    when 'edxorg' then 0
-                    when 'micromasters' then 1
-                    else 0
-                end
+                _platform_rank
+                , case when certificate_is_revoked then 1 else 0 end
+                , certificate_issued_on desc nulls last
+                -- certificate_id is a string; compare the integer ids as numbers.
+                , try_cast(certificate_id as bigint) desc nulls last
+                , certificate_id desc
         ) as _cross_source_row_num
-    from certificates_with_fks
+    from certificates_grouped
+)
+
+, cross_source_deduped as (
+    select *
+    from certificates_ranked
+    where _platform_rank = _best_platform_rank
 )
 
 {% if is_incremental() %}
@@ -311,6 +356,7 @@ with mitxonline_certificates as (
     select
         certificate_key
         , user_fk as stored_user_fk
+        , {% if target_has_is_current %}is_current{% else %}cast(null as boolean){% endif %} as stored_is_current
     from {{ this }}
 )
 {% endif %}
@@ -336,6 +382,7 @@ with mitxonline_certificates as (
         , certificate_created_on
         , certificate_updated_on
         , certificate_issued_on
+        , cwf._cross_source_row_num = 1 as is_current
     from cross_source_deduped as cwf
 
     {% if is_incremental() %}
@@ -349,22 +396,55 @@ with mitxonline_certificates as (
             "cwf.platform",
             "cwf.certificate_scope"
         ]) }}
-    where cwf._cross_source_row_num = 1
-    and (
+    where (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
         or sufk.stored_user_fk is distinct from cwf.user_fk
+        -- A newer certificate can take is_current from a row whose own timestamps did
+        -- not move, so re-select any row whose flag no longer matches the target.
+        or sufk.stored_is_current is distinct from (cwf._cross_source_row_num = 1)
     )
-    {% else %}
-    where cwf._cross_source_row_num = 1
+
+    -- A certificate that has left the source can never be re-selected above, so it would
+    -- stay current forever. Carry it forward from the target as not current.
+    union all
+
+    select
+        target.certificate_key
+        , target.certificate_id
+        , target.certificate_issued_date_key
+        , target.user_fk
+        , target.courserun_fk
+        , target.program_fk
+        , target.platform_fk
+        , target.certificate_type_fk
+        , target.platform
+        , target.certificate_scope
+        , target.certificate_uuid
+        , target.certificate_is_revoked
+        , target.certificate_created_on
+        , target.certificate_updated_on
+        , target.certificate_issued_on
+        , false as is_current
+    from {{ this }} as target
+    left join cross_source_deduped as source_certificates
+        on target.certificate_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(source_certificates.certificate_id as varchar)",
+            "source_certificates.platform",
+            "source_certificates.certificate_scope"
+        ]) }}
+    where source_certificates.certificate_id is null
+    {% if target_has_is_current %}
+    and target.is_current is distinct from false
+    {% endif %}
     {% endif %}
 )
 
--- Defensive dedup: the UNION ALL across 4 platform CTEs has no upstream uniqueness guarantee.
--- If any intermediate develops grain drift, this guard prevents duplicate certificate_key values
--- from silently entering the fact table and corrupting incremental MERGE operations.
+-- Defensive dedup: certificates_keyed already leaves one row per certificate_key, and a
+-- carried-forward row has no source row by construction. This guard keeps a duplicate key
+-- out of the incremental delete+insert if either stops holding.
 -- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
 , final_deduped as (
     select
@@ -383,6 +463,7 @@ with mitxonline_certificates as (
         , certificate_created_on
         , certificate_updated_on
         , certificate_issued_on
+        , is_current
         , row_number() over (
             partition by certificate_key
             order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last
@@ -406,5 +487,6 @@ select
     , certificate_created_on
     , certificate_updated_on
     , certificate_issued_on
+    , is_current
 from final_deduped
 where _row_num = 1
