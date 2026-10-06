@@ -5,14 +5,14 @@ import hashlib
 import io
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import polars as pl
 import pyarrow as pa
 import pytest
-from dagster import AssetKey, materialize
+from dagster import AssetKey, Failure, materialize
 from openedx.assets import irx_export
 from openedx.assets.irx_export import (
     IRX_EXPORT_FILES,
@@ -320,17 +320,17 @@ def _iceberg_table(tmp_path, data_files: int) -> Table:
     return table
 
 
-def test_read_data_files_reads_one_data_file_per_pull(tmp_path, monkeypatch) -> None:
+def test_read_data_files_opens_one_data_file_per_pull(tmp_path, monkeypatch) -> None:
     table = _iceberg_table(tmp_path, data_files=3)
-    tasks_per_read: list[int] = []
-    to_record_batches = irx_export.ArrowScan.to_record_batches
+    opened: list[str] = []
+    new_input = table.io.new_input
 
-    def spy(scan: Any, tasks: Any) -> Iterator[pa.RecordBatch]:
-        tasks = list(tasks)
-        tasks_per_read.append(len(tasks))
-        return to_record_batches(scan, tasks)
+    def spy(location: str) -> Any:
+        if location.endswith(".parquet"):
+            opened.append(location)
+        return new_input(location)
 
-    monkeypatch.setattr(irx_export.ArrowScan, "to_record_batches", spy)
+    monkeypatch.setattr(table.io, "new_input", spy)
 
     batches = read_data_files(
         table, table.current_snapshot().snapshot_id, ("id", "course_id")
@@ -338,14 +338,85 @@ def test_read_data_files_reads_one_data_file_per_pull(tmp_path, monkeypatch) -> 
     schema_batch = next(batches)
     assert schema_batch.height == 0
     assert schema_batch.columns == ["id", "course_id"]
-    assert tasks_per_read == []
+    assert opened == []
     first = next(batches)
-    # Pulling the first rows reads the first data file and nothing past it.
-    assert tasks_per_read == [1]
+    # Pulling the first rows opens the first data file and nothing past it.
+    assert len(opened) == 1
+    assert first.schema == schema_batch.schema
     rest = list(batches)
 
-    assert tasks_per_read == [1, 1, 1]
+    assert len(opened) == 3
     assert pl.concat([first, *rest])["id"].sort().to_list() == list(range(6))
+
+
+def test_read_data_files_matches_the_pyiceberg_scan(tmp_path, monkeypatch) -> None:
+    schema = pa.schema(
+        [
+            ("id", pa.int64()),
+            ("created", pa.timestamp("us")),
+            ("modified", pa.timestamp("us", tz="UTC")),
+            ("grade", pa.float64()),
+            ("tags", pa.list_(pa.string())),
+        ]
+    )
+    catalog = SqlCatalog(
+        "irx", uri=f"sqlite:///{tmp_path}/catalog.db", warehouse=f"file://{tmp_path}"
+    )
+    catalog.create_namespace("irx")
+    table = catalog.create_table("irx.forum", schema=schema)
+    stamp = datetime(2026, 10, 6, 6, 2, 51, 123456)  # noqa: DTZ001
+    table.append(
+        pa.table(
+            {
+                "id": [1, 2, 3],
+                "created": [stamp, None, stamp],
+                "modified": [stamp.replace(tzinfo=UTC)] * 3,
+                "grade": [0.5, None, 1.0],
+                "tags": [["a", "b"], [], None],
+            },
+            schema=schema,
+        )
+    )
+    monkeypatch.setattr(irx_export, "READ_BATCH_ROWS", 2)
+
+    read = pl.concat(
+        read_data_files(table, table.current_snapshot().snapshot_id, ("*",))
+    )
+
+    scanned = pl.from_arrow(table.scan().to_arrow())
+    assert read.schema == scanned.schema
+    assert read.equals(scanned)
+
+
+def test_read_data_files_never_decodes_more_than_a_batch_of_rows(
+    tmp_path, monkeypatch
+) -> None:
+    # Two rows in the one data file, so a whole-file read would yield them both.
+    table = _iceberg_table(tmp_path, data_files=1)
+    monkeypatch.setattr(irx_export, "READ_BATCH_ROWS", 1)
+
+    batches = list(
+        read_data_files(
+            table, table.current_snapshot().snapshot_id, ("id", "course_id")
+        )
+    )
+
+    assert [batch.height for batch in batches] == [0, 1, 1]
+
+
+def test_read_data_files_refuses_a_snapshot_with_delete_files(tmp_path) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    task = next(iter(table.scan().plan_files()))
+    task.delete_files.add(task.file)
+    scan = SimpleNamespace(
+        projection=table.scan().projection, plan_files=lambda: [task]
+    )
+    stub = SimpleNamespace(scan=lambda **_: scan, io=table.io)
+
+    batches = read_data_files(stub, 0)
+    next(batches)
+    with pytest.raises(Failure, match="delete files"):
+        next(batches)
 
 
 def test_read_data_files_yields_the_schema_for_a_snapshot_with_no_data_files(
