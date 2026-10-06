@@ -1588,9 +1588,11 @@ models:
     description: string, why the enrollment changed (e.g. refunded, deferred). Carried
       from tfact_enrollment.
   - name: is_passing
-    description: boolean, the grade's own passing flag. Null when there is no grade.
-      True for certified learners too, so count this for "passed" totals and use completion_status
-      = 'passed' for passed-and-not-certified.
+    description: boolean, the grade's own passing flag, carried from tfact_grade whatever
+      the certificate status. Null when there is no grade. A certified learner with
+      a passing grade is true here, so count this for "passed" totals and use completion_status
+      = 'passed' for passed-and-not-certified. A certified learner can also be false
+      or null, because an unrevoked certificate is certified without a passing grade.
   - name: grade_value
     description: double, grade between 0.0 and 1.0. Null when there is no grade.
   - name: letter_grade
