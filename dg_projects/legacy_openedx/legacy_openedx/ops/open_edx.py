@@ -24,14 +24,13 @@ from dagster import (
     String,
     op,
 )
-from flatten_dict import flatten
-from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.file_rendering import write_csv
 from ol_orchestrate.lib.openedx import (
     CourseExportOutcome,
     classify_course_export_state,
     un_nest_course_structure,
 )
+from ol_orchestrate.lib.utils import flatten_nested_dict
 from pydantic import Field
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -178,9 +177,8 @@ def fetch_edx_course_structure_from_api(
                 ).hexdigest(),
                 "course_id": course_id,
                 "course_structure": course_structure,
-                "course_structure_flattened": flatten(
-                    course_structure,
-                    reducer=make_reducer(config.flattened_dict_delimiter),
+                "course_structure_flattened": flatten_nested_dict(
+                    course_structure, config.flattened_dict_delimiter
                 ),
                 "retrieved_at": data_retrieval_timestamp,
             }

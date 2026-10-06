@@ -41,11 +41,10 @@ from dagster import (
     sensor,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
-from flatten_dict import flatten
-from flatten_dict.reducers import make_reducer
 from google.cloud import storage
 from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
 from ol_orchestrate.lib.openedx import un_nest_course_structure
+from ol_orchestrate.lib.utils import flatten_nested_dict
 from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 from pydantic import Field
 from upath import UPath
@@ -493,9 +492,8 @@ def flatten_edxorg_course_structure(
             ).hexdigest(),
             "course_id": context.partition_key,
             "course_structure": course_structure_document,
-            "course_structure_flattened": flatten(
-                course_structure_document,
-                reducer=make_reducer("__"),
+            "course_structure_flattened": flatten_nested_dict(
+                course_structure_document, "__"
             ),
             "retrieved_at": data_retrieval_timestamp,
         }
