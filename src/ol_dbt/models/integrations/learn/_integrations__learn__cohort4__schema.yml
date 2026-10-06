@@ -86,3 +86,90 @@ models:
     description: boolean, always true.
   - name: last_modified
     description: str, ISO 8601 time the file's text was extracted.
+
+- name: integrations__learn__ocw_content_files
+  description: >
+    One row per ContentFile of an OCW course run, for MIT Learn's
+    SyncOCWContentFilesTask. A scoped pull filters and prunes on
+    (etl_source, run_readable_id). Built from the data.json files of the OCW live
+    bucket, which is what Learn's OCW ETL reads, and the text Tika extracts from
+    each resource's file. Not applied: Learn's nh3 sanitizing of a resource's
+    description, so description is the HTML OCW published.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [etl_source, run_readable_id, key]
+  columns:
+  - name: etl_source
+    description: str, always ocw. Half of the scoped pull's key.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [ocw]
+  - name: run_readable_id
+    description: str, the course's legacy_uid, or its site_uid when it has none, without
+      dashes; equals ContentFile.run.run_id. Half of the scoped pull's key.
+    tests: [not_null]
+  - name: key
+    description: str, ContentFile.key, the directory of the page or resource in the
+      OCW bucket with its trailing slash, e.g. courses/<course>/resources/<name>/.
+    tests: [not_null]
+  - name: edx_module_id
+    description: str, always null.
+  - name: title
+    description: str, title of the page or resource.
+  - name: description
+    description: str, description of a page, or the HTML body of a resource. Not sanitized.
+  - name: url
+    description: str, https://ocw.mit.edu/ followed by key.
+    tests: [not_null]
+  - name: file_type
+    description: str, MIME type of a resource's file; null for a page.
+  - name: content
+    description: str, a page's HTML, or the text Tika extracted from a resource's
+      file. Null for a resource whose file is not a type Learn reads, has no text,
+      or failed extraction.
+  - name: content_title
+    description: str, same value as title.
+  - name: content_author
+    description: str, always null.
+  - name: content_language
+    description: str, always null.
+  - name: content_type
+    description: str, page, video, pdf or file.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [page, video, pdf, file]
+  - name: image_src
+    description: str, thumbnail of a video resource, else null.
+  - name: uid
+    description: str, always null.
+  - name: source_path
+    description: str, always null.
+  - name: file_extension
+    description: str, extension of a resource's file with its dot, e.g. .pdf; '' for
+      a resource whose file has none and null for a page.
+  - name: checksum
+    description: str, MD5 of content, null when content is null or empty. Equals ContentFile.checksum
+      where the text matches.
+  - name: extraction_status
+    description: str, extracted, empty (the file has no text) or failed (Tika could
+      not read it); null for a page and for a file Learn reads no text from. A failed
+      file keeps its row so a scoped prune does not unpublish it.
+    tests:
+    - accepted_values:
+        arguments:
+          values: [extracted, empty, failed]
+  - name: published
+    description: boolean, always true.
+  - name: last_modified
+    description: str, ISO 8601 time the course was last read from the bucket. It moves
+      for every file of a course when any of them changes.
+  - name: content_tags
+    description: str, JSON array of the learning resource types Learn loads as content
+      tags, e.g. ["Problem Sets"].
+  - name: youtube_id
+    description: str, YouTube id of a video resource, else null.

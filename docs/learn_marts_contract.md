@@ -22,6 +22,7 @@ Examples:
 - `integrations__learn__ocw_courses`
 - `integrations__learn__mitxonline_programs`
 - `integrations__learn__content_files`
+- `integrations__learn__ocw_content_files`
 
 ## Required Columns
 
@@ -96,6 +97,32 @@ pull filters and prunes on; see
 `description`, `file_type`, `content_author`, `content_language`, `image_src` and
 `uid` are present and null, as Learn's Open edX ETL leaves them unset.
 
+`integrations__learn__ocw_content_files` carries the same columns for OCW, read
+from the `data.json` files of the OCW live bucket as Learn's OCW ETL reads them:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `etl_source` | string | Always `ocw` |
+| `run_readable_id` | string | The course's `legacy_uid`, else its `site_uid`, without dashes; equals `ContentFile.run.run_id` |
+| `key` | string | `ContentFile.key`, the page's or resource's directory in the bucket, e.g. `courses/<course>/resources/<name>/` |
+| `title`, `content_title` | string | Title of the page or resource |
+| `description` | string | A page's description, or a resource's HTML body. Not sanitized: Learn passes it through `clean_data` |
+| `url` | string | `https://ocw.mit.edu/` followed by `key` |
+| `file_type` | string | MIME type of a resource's file; null for a page |
+| `content` | string | A page's HTML, or the text Tika extracts from a resource's file |
+| `content_type` | string | `page`, `video`, `pdf` or `file` |
+| `image_src` | string | Thumbnail of a video resource |
+| `file_extension` | string | Extension of a resource's file with its dot |
+| `checksum` | string | MD5 of `content`, null when it is null or empty; equals `ContentFile.checksum` |
+| `extraction_status` | string | `extracted`, `empty` or `failed`; null for a page and for a file Learn reads no text from |
+| `published` | boolean | Always true |
+| `last_modified` | string | ISO 8601 time the course was last read from the bucket |
+| `content_tags` | string | JSON array of learning resource types, loaded as content tags |
+| `youtube_id` | string | YouTube id of a video resource |
+
+`content_author`, `content_language`, `uid`, `edx_module_id` and `source_path` are
+present and null, as Learn's OCW ETL leaves them unset.
+
 ### Media Sources (YouTube, podcasts)
 
 MIT Learn pulls these as sets of flat models and nests them itself: a playlist
@@ -142,13 +169,13 @@ columns are described in
 ## Grain Expectations
 
 - **Catalog models** (`integrations__learn__<source>_courses`, `integrations__learn__<source>_programs`): One row per resource
-- **Content file models** (`integrations__learn__content_files`): One row per content file
+- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`): One row per content file
 - **Media models**: One row per channel, playlist, video, podcast or episode; `integrations__learn__youtube_playlist_videos` is one row per video in a playlist
 
 ## Nullability Rules
 
 1. All required columns must be `NOT NULL` in catalog models
-2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id`, `key`, `source_path` and `extraction_status`
+2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
 4. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
@@ -174,4 +201,5 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-05-27 | Initial draft | Foundation schema contract |
 | 2026-08-19 | Tobias Macey | Drop `micromasters`. MIT Learn unpublished and then deleted its MicroMasters resources (`learning_resources` migrations 0117/0118) and removed `micromasters` from its `ETLSource` enum, so the source has no destination. `integrations__learn__micromasters_programs` retired with it; Cohort 1 is 6 sources, not 7. |
 | 2026-10-02 | Tobias Macey | Content file columns rewritten to what `integrations__learn__content_files` carries, keyed by (`etl_source`, `run_readable_id`) per the scoped-pull contract. The earlier `file_size` column is not part of it. |
+| 2026-10-03 | Tobias Macey | Added `integrations__learn__ocw_content_files`. |
 | 2026-10-05 | Tobias Macey | YouTube and podcasts are pulled from the warehouse, not pushed by webhook. Added the media sources section. `etl_source` for podcasts is `podcast`, as the models and MIT Learn's `ETLSource` have it. |

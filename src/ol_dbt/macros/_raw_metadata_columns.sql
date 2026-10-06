@@ -472,6 +472,7 @@
         'raw__mitxonline__openedx_notes__mysql__auth_user_user_permissions': '_airbyte_extracted_at',
         'raw__mitxonline__openedx_notes__mysql__django_content_type': '_airbyte_extracted_at',
         'raw__mitxonline__openedx_notes__mysql__v1_note': '_airbyte_extracted_at',
+        'raw__ocw__s3__course_content': 'course_retrieved_at',
         'raw__ocw__studio__postgres__auth_group': '_airbyte_extracted_at',
         'raw__ocw__studio__postgres__auth_group_permissions': '_airbyte_extracted_at',
         'raw__ocw__studio__postgres__auth_permission': '_airbyte_extracted_at',

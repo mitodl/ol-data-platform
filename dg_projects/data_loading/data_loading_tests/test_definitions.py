@@ -110,6 +110,7 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_file_exclusions",
+        "ol_warehouse_raw_data/raw__ocw__s3__course_content",
     ):
         assert expected in asset_keys
 
@@ -125,6 +126,7 @@ def test_schedules_and_sensors_load() -> None:
         "news_events_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
+        "ocw_content_ingest_daily_schedule",
     }
     assert "edxorg_upstream_changes_sensor" in {s.name for s in _REPO.sensor_defs}
 
@@ -203,6 +205,24 @@ def test_posthog_schedule_skips_while_a_run_is_in_flight(
     (runs_filter,) = instance.filters
     assert runs_filter.tags == {
         "dagster/schedule_name": schedules.POSTHOG_SCHEDULE_NAME
+    }
+
+
+@pytest.mark.parametrize(("in_flight", "expected"), [(True, False), (False, True)])
+def test_ocw_content_schedule_skips_while_a_run_is_in_flight(
+    in_flight: bool,  # noqa: FBT001
+    expected: bool,  # noqa: FBT001
+) -> None:
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    instance = _FakeInstance(in_flight)
+    assert (
+        schedules.no_ocw_content_run_in_flight(_FakeScheduleContext(instance))
+        is expected
+    )
+    (runs_filter,) = instance.filters
+    assert runs_filter.tags == {
+        "dagster/schedule_name": schedules.OCW_CONTENT_SCHEDULE_NAME
     }
 
 
