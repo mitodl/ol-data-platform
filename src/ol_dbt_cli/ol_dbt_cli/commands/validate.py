@@ -563,7 +563,8 @@ def _check_dimensional_layering(
     New violations (not in *baseline*) are ERRORs that fail the run. Known
     baseline violations are collapsed into a single INFO summary so the #2072
     migration debt stays visible without flooding the report. Baseline entries
-    that no longer occur are surfaced at INFO to prompt shrinking the baseline.
+    that no longer occur are ERRORs too: an entry left behind after its edge is
+    removed would let a later change reintroduce that edge unnoticed.
     """
     violations = _compute_layering_violations(manifest, sql_models_by_name, sql_file_map)
     current_keys = {v.key for v in violations}
@@ -598,10 +599,12 @@ def _check_dimensional_layering(
         child = stale_key.split(" -> ", 1)[0]
         report.add(
             "dimensional_layering",
-            Severity.INFO,
+            Severity.ERROR,
             child,
             f"Resolved baseline entry: {stale_key}",
-            "This violation no longer exists — run `ol-dbt validate --update-baseline` to shrink the baseline.",
+            "This violation no longer exists, and the entry would tolerate it coming back. Run "
+            "`ol-dbt validate --update-baseline` and commit the result (re-run `dbt parse` first "
+            "if target/manifest.json predates the change).",
         )
 
 
@@ -1149,11 +1152,13 @@ def validate(
     7. yaml_integrity        — every YAML model entry has a corresponding .sql file
     8. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
     9. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
-                               (#2072 DoD); new violations error, known ones are baselined
+                               (#2072 DoD); new violations error, known ones are baselined,
+                               and a baseline entry that no longer occurs errors
     10. qa_branch_contract   — models unioning several ingestion units declare config.meta
                                qa_branches or qa_buildable: false, and each declared branch is
                                one QA ingests or mirrors (RFC 12711); declared tables the QA
-                               observation shows empty or stale error unless baselined
+                               observation shows empty or stale error unless baselined, and
+                               a baseline entry that is no longer a gap errors
     11. data_contract        — every column an OpenMetadata contract in <repo>/contracts/ lists
                                for a dbt model or source is still declared, selected, and of a
                                compatible data_type
