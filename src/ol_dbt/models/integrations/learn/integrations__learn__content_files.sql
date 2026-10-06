@@ -6,9 +6,11 @@
 
   Built on int__openedx__content_files. The ContentFile fields Learn's Open edX
   ETL leaves unset (description, file_type, content_author, content_language,
-  image_src, uid) are null here too. content_title is '', which is what Learn
-  stores when Tika reports no title; Tika's metadata title for documents is not
-  available yet. checksum is the MD5 of the extracted text, not of the file
+  image_src, uid) are null here too. content_title is always '', and so is
+  Learn's: its _extract_content_with_tika reads Tika's metadata "title", which
+  Learn's production content files never have, even for PDFs with an embedded
+  /Title (2026-10-02, three sample runs, 64 PDF/PPTX files). Learn's title then
+  falls back to the file name, as title does here. checksum is the MD5 of the extracted text, not of the file
   bytes as Learn's archive_checksum is, so it changes when the text does.
 #}
 

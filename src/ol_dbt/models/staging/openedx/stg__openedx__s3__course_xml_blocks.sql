@@ -58,7 +58,13 @@ with
             max_attempts as problem_max_attempts,
             weight as problem_weight,
             markdown as problem_markdown,
-            {{ cast_timestamp_to_iso8601("retrieved_at") }} as coursestructure_xml_retrieved_at
+            {{ cast_timestamp_to_iso8601("retrieved_at") }} as coursestructure_xml_retrieved_at,
+            -- The file is named for the SHA-256 of the export it was parsed from.
+            replace(
+                {{ element_at_array("split(_source_file, '/')", array_length("split(_source_file, '/')")) }},
+                '.json',
+                ''
+            ) as coursestructure_xml_archive_version
         from most_recent_source
     )
 
