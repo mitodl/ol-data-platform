@@ -142,21 +142,21 @@ def delete(manifest: Path, *, min_age_days: int = 7, execute: bool = False) -> N
     Parameters
     ----------
     manifest: CSV with `bucket,prefix` columns, a reviewed cut of the report.
-    min_age_days: Skip a prefix whose newest object is younger than this.
+    min_age_days: Skip a prefix whose newest object is younger than this. At
+        least 1.
     execute: Without it, print what would be deleted and change nothing.
     """
     # The library logs each prefix before its first delete batch, so a run
     # that dies part way through one still names it.
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     rows = list(csv.DictReader(manifest.open()))
-    referenced = referenced_paths(glue(), include_databases=True)
     now = datetime.now(UTC)
     for row in rows:
         outcome = delete_prefix(
             s3(),
             row["bucket"],
             row["prefix"],
-            referenced,
+            lambda: referenced_paths(glue(), include_databases=True),
             min_age_days=min_age_days,
             now=now,
             execute=execute,

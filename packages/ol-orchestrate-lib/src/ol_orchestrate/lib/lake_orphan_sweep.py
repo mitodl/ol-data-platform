@@ -14,6 +14,7 @@ they are built and the tests pass fakes.
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -175,6 +176,16 @@ def measure(s3: Any, bucket: str, prefix: str) -> dict[str, Any]:
     }
 
 
+def _require_minimum_age(min_age_days: int) -> None:
+    """Raise unless the age floor is at least a day.
+
+    A floor of zero makes a directory a dbt run is still writing eligible.
+    """
+    if min_age_days < 1:
+        msg = f"min_age_days must be at least 1, got {min_age_days}"
+        raise ValueError(msg)
+
+
 @dataclass(frozen=True)
 class PrefixOutcome:
     """What :func:`delete_prefix` decided for one prefix, and what it did."""
@@ -193,7 +204,7 @@ def delete_prefix(  # noqa: PLR0913
     s3: Any,
     bucket: str,
     prefix: str,
-    referenced: set[str],
+    referenced: Callable[[], set[str]],
     *,
     min_age_days: int,
     now: datetime,
@@ -202,20 +213,21 @@ def delete_prefix(  # noqa: PLR0913
 ) -> PrefixOutcome:
     """Delete one prefix if it is still an orphan, re-checking every guard.
 
-    :param referenced: Glue references fetched immediately before the delete
-        pass, database locations included. A reference set from an earlier scan
-        would miss a table registered in between.
-    :param min_age_days: Leave a prefix whose newest object is younger than this.
+    :param referenced: Returns the Glue references as they are now, database
+        locations included. Called once, after every other guard has passed and
+        immediately before the delete, so a table registered while earlier
+        prefixes were being deleted is seen.
+    :param min_age_days: Leave a prefix whose newest object is younger than
+        this. At least 1.
     :param execute: Without it, decide and report but delete nothing.
     :param logger: Where the line naming a prefix about to be deleted goes. A
         Dagster run only captures its own ``context.log``.
     """
+    _require_minimum_age(min_age_days)
     path = f"{bucket}/{prefix}"
     if not DBT_DIR.search(prefix):
         reason = "no dbt uuid suffix" if prefix else "empty prefix"
         return PrefixOutcome(bucket, prefix, "refused", reason)
-    if is_referenced(path, referenced):
-        return PrefixOutcome(bucket, prefix, "skipped", "now referenced by Glue")
     keys: list[str] = []
     size = 0
     newest: datetime | None = None
@@ -236,6 +248,8 @@ def delete_prefix(  # noqa: PLR0913
             "skipped",
             f"newest object {newest.isoformat()} too recent",
         )
+    if is_referenced(path, referenced()):
+        return PrefixOutcome(bucket, prefix, "skipped", "now referenced by Glue")
     if not execute:
         return PrefixOutcome(
             bucket, prefix, "would_delete", objects=len(keys), bytes=size
@@ -274,6 +288,12 @@ def warehouse_scan_targets(
     in those databases. The second part reaches deployed tables that were
     written under ``processed/<database>/``.
 
+    That directory has to stay a target after its last table is dropped, which
+    is when it holds nothing but orphans. So wherever Glue shows a directory in
+    a scanned bucket holding databases by name (a database located at
+    ``<directory>/<its own name>``), ``<directory>/<deployed database>`` is a
+    target too, whether or not a table is left in it.
+
     A table located in a bucket that none of those databases is located in (an
     external table over another team's bucket) contributes nothing, so the sweep
     never lists a bucket the warehouse does not own.
@@ -287,6 +307,11 @@ def warehouse_scan_targets(
             databases.add(name)
             buckets.add(bucket)
     targets = {(bucket, "") for bucket in buckets}
+    for name, uri in database_locations.items():
+        bucket, _, key = normalize(uri).partition("/")
+        directory, _, leaf = key.rpartition("/")
+        if bucket in buckets and directory and leaf == name:
+            targets |= {(bucket, f"{directory}/{database}") for database in databases}
     for table in tables:
         if table["database"] not in databases:
             continue
@@ -364,14 +389,12 @@ def sweep_warehouse(  # noqa: PLR0913
         reported and left alone. A dbt run writes its files before it registers
         the table, so a prefix can be unreferenced and about to become live.
     :param delete: Delete the eligible orphans, each re-checked against Glue
-        references fetched after the scan. Refused when Glue denies this caller
+        references fetched again for that prefix. Refused when Glue denies this caller
         any database. A report run carries on and names them, and its orphan
         list is then an upper bound.
     :param logger: Receives one line per prefix a delete run acts on.
     """
-    if min_age_days < 1:
-        msg = f"min_age_days must be at least 1, got {min_age_days}"
-        raise ValueError(msg)
+    _require_minimum_age(min_age_days)
 
     unreadable: list[str] = []
     tables = glue_tables(glue, unreadable=unreadable)
@@ -401,11 +424,13 @@ def sweep_warehouse(  # noqa: PLR0913
 
     outcomes: list[PrefixOutcome] | None = None
     if delete:
-        fresh_unreadable: list[str] = []
-        fresh_tables = glue_tables(glue, unreadable=fresh_unreadable)
-        fresh_locations = glue_database_locations(glue)
-        _refuse_to_delete_blind(fresh_unreadable)
-        fresh = references(fresh_tables, fresh_locations)
+
+        def fresh_references() -> set[str]:
+            fresh_unreadable: list[str] = []
+            fresh_tables = glue_tables(glue, unreadable=fresh_unreadable)
+            _refuse_to_delete_blind(fresh_unreadable)
+            return references(fresh_tables, glue_database_locations(glue))
+
         outcomes = []
         for row in orphans:
             if not row["eligible"]:
@@ -414,7 +439,7 @@ def sweep_warehouse(  # noqa: PLR0913
                 s3,
                 row["bucket"],
                 row["prefix"],
-                fresh,
+                fresh_references,
                 min_age_days=min_age_days,
                 now=now,
                 execute=True,

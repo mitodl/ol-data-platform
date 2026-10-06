@@ -8,6 +8,7 @@ import pytest
 from botocore.exceptions import ClientError
 from ol_orchestrate.lib import lake_orphan_sweep
 from ol_orchestrate.lib.lake_orphan_sweep import (
+    PrefixOutcome,
     SweepResult,
     delete_prefix,
     glue_database_locations,
@@ -95,6 +96,7 @@ class FakeS3:
         self.listed_prefixes: list[str] = []
         self.delete_batches: list[int] = []
         self.on_measure: Any = None
+        self.on_delete: Any = None
 
     def get_paginator(self, operation: str) -> _Paginator:
         assert operation == "list_objects_v2"
@@ -125,6 +127,8 @@ class FakeS3:
     def delete_objects(self, **kwargs: Any) -> dict[str, Any]:
         errors = []
         self.delete_batches.append(len(kwargs["Delete"]["Objects"]))
+        if self.on_delete:
+            self.on_delete()
         for entry in kwargs["Delete"]["Objects"]:
             if entry["Key"] in self.delete_errors:
                 errors.append(
@@ -264,6 +268,7 @@ def test_scan_targets_are_the_deployed_warehouse_only():
         ("lake-mart-qa", ""),
         ("lake-staging-qa", ""),
         ("lake-staging-qa", "processed/ol_warehouse_qa_mart"),
+        ("lake-staging-qa", "processed/ol_warehouse_qa_staging"),
     ]
 
 
@@ -345,6 +350,55 @@ def test_sweep_skips_a_prefix_registered_between_the_scan_and_the_delete():
     assert result.outcomes is not None
     assert {o.prefix: o.action for o in result.outcomes}[prefix] == "skipped"
     assert f"{prefix}/data/1.parquet" in s3.objects["lake-mart-qa"]
+
+
+def test_sweep_sees_a_table_registered_while_an_earlier_prefix_is_deleted():
+    glue, s3 = _lake()
+    later = f"processed/ol_warehouse_qa_mart/dropped-{UUID_B}"
+
+    def register() -> None:
+        glue.tables["ol_warehouse_qa_mart"].append(
+            {"name": "dropped", "location": f"s3://lake-staging-qa/{later}"}
+        )
+
+    s3.on_delete = register
+
+    result = _sweep(glue, s3, delete=True)
+
+    assert result.outcomes is not None
+    assert {o.prefix: o.action for o in result.outcomes} == {
+        f"gone__dbt_tmp-{UUID_B}": "deleted",
+        later: "skipped",
+    }
+    assert f"{later}/data/1.parquet" in s3.objects["lake-staging-qa"]
+
+
+@pytest.mark.parametrize("min_age_days", [0, -5])
+def test_delete_refuses_a_minimum_age_below_one_day(min_age_days: int):
+    _, s3 = _lake()
+    s3.objects["lake-mart-qa"][f"now-{UUID_B}/data/1.parquet"] = (1, NOW)
+
+    with pytest.raises(ValueError, match="min_age_days"):
+        _delete(s3, f"now-{UUID_B}", set(), min_age_days=min_age_days)
+
+    assert f"now-{UUID_B}/data/1.parquet" in s3.objects["lake-mart-qa"]
+
+
+def test_a_deployed_database_directory_stays_a_target_with_no_table_left_in_it():
+    glue, s3 = _lake()
+    glue.tables["ol_warehouse_qa_mart"] = [
+        table
+        for table in glue.tables["ol_warehouse_qa_mart"]
+        if table["name"] != "nested"
+    ]
+
+    assert ("lake-staging-qa", "processed/ol_warehouse_qa_mart") in _targets(glue)
+    result = _sweep(glue, s3, delete=False)
+    assert {
+        f"processed/ol_warehouse_qa_mart/nested-{UUID_A}",
+        f"processed/ol_warehouse_qa_mart/dropped-{UUID_B}",
+    } <= {row["prefix"] for row in result.orphans}
+    assert not any("ol_warehouse_qa_dev_staging" in r["prefix"] for r in result.orphans)
 
 
 def test_sweep_leaves_a_directory_a_database_claims_for_future_tables():
@@ -466,13 +520,20 @@ def test_delete_batches_keys(monkeypatch: pytest.MonkeyPatch):
     assert (outcome.action, outcome.objects) == ("deleted", 2)
 
 
-def _delete(s3: FakeS3, prefix: str, referenced: set[str], *, execute: bool = True):
+def _delete(
+    s3: FakeS3,
+    prefix: str,
+    referenced: set[str],
+    *,
+    execute: bool = True,
+    min_age_days: int = MIN_AGE_DAYS,
+) -> PrefixOutcome:
     return delete_prefix(
         s3,
         "lake-mart-qa",
         prefix,
-        referenced,
-        min_age_days=MIN_AGE_DAYS,
+        lambda: referenced,
+        min_age_days=min_age_days,
         now=NOW,
         execute=execute,
     )
