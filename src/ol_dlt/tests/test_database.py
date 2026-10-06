@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import NoReturn
 
+import dlt
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
@@ -313,3 +314,67 @@ def test_cursor_column_reads_only_rows_above_the_stored_cursor(
         database.build_database_source(spec, profile="test")
     ).has_failed_jobs
     assert pipeline.last_trace.last_normalize_info.row_counts[table] == 2
+
+
+@pytest.mark.integration
+def test_a_not_null_column_added_upstream_lands_on_a_populated_iceberg_table(
+    sqlite_iceberg_lake: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Django migration that adds a NOT NULL column must not stop the load.
+
+    pyiceberg refuses to add a REQUIRED column to a table that holds rows, so
+    reflecting the source's NOT NULL faithfully fails every load of that table
+    from the migration onwards. The MITx Online QA load failed this way on
+    ``courses_courserun.b2b_only``.
+    """
+    db_path = tmp_path / "example.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE widget (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+        )
+        connection.execute("INSERT INTO widget VALUES (1, 'first')")
+
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+    monkeypatch.setattr(config, "active_table_format", lambda *_a, **_k: "iceberg")
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=(DatabaseTable(name="widget", primary_key="id"),),
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="database_iceberg_evolution_test",
+        destination=dlt.destinations.filesystem(
+            bucket_url=sqlite_iceberg_lake.as_uri()
+        ),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+    table = "raw__example__app__postgres__widget"
+
+    # The tables already in the lake were created from faithful reflection, so
+    # their NOT NULL source columns are REQUIRED. Build the first load that way.
+    with monkeypatch.context() as faithful:
+        faithful.setattr(database, "remove_nullability_adapter", lambda table: table)
+        pipeline.run(database.build_database_source(spec, profile="test"))
+    columns = pipeline.default_schema.get_table_columns(table)
+    assert columns["name"]["nullable"] is False
+    assert "b2b_only" not in columns
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "ALTER TABLE widget ADD COLUMN b2b_only BOOLEAN NOT NULL DEFAULT 0"
+        )
+        connection.execute("INSERT INTO widget VALUES (2, 'second', 1)")
+
+    info = pipeline.run(database.build_database_source(spec, profile="test"))
+    assert not info.has_failed_jobs
+
+    rows = pipeline.dataset()[table].arrow().sort_by("id").to_pylist()
+    assert [(row["id"], row["b2b_only"]) for row in rows] == [(1, False), (2, True)]

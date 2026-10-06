@@ -49,6 +49,7 @@ def test_every_source_package_is_covered() -> None:
         "mit_edx_programs",
         "mitpe",
         "mitxonline_app",
+        "ocw_content",
         "oll",
         "openlearning",
         "podcast_rss",

@@ -33,7 +33,7 @@ from typing import Any
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.sources.sql_database import sql_table
+from dlt.sources.sql_database import remove_nullability_adapter, sql_table
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Engine
 
@@ -245,6 +245,11 @@ def build_table_resource(
         reflection_level="full",
         # No connection until extraction — see the module docstring.
         defer_table_reflect=True,
+        # Reflect every column as nullable. A NOT NULL column added upstream
+        # would otherwise evolve the Iceberg table with a REQUIRED column, which
+        # pyiceberg refuses on a table that holds rows (see
+        # config.DLT_LOAD_ID_COLUMN), failing every later load of that table.
+        table_adapter_callback=remove_nullability_adapter,
         excluded_columns=list(table.excluded_columns) or None,
         write_disposition="merge" if table.cursor_column else "replace",
         primary_key=table.primary_key,

@@ -13,8 +13,8 @@ These run a real dlt pipeline against a local Iceberg table backed by a
 SQLite catalog, so they exercise the same writer path production uses.
 """
 
-import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import dlt
@@ -27,29 +27,11 @@ _TABLE = "raw__edxorg__s3__tables__auth_user"
 
 
 @pytest.fixture
-def pipeline(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> dlt.Pipeline:
-    monkeypatch.setenv("DLT_DATA_DIR", str(tmp_path / "dlt_data"))
-    # The repo's .dlt/config.toml points dlt at the Glue catalog. Override to a
-    # SQLite catalog on disk: dlt's in-memory fallback is rebuilt per client
-    # and loses the table between loads, which is exactly the state this test
-    # needs to survive in order to evolve an existing table rather than
-    # recreate one.
-    monkeypatch.setenv("ICEBERG_CATALOG__ICEBERG_CATALOG_NAME", "evolution_test")
-    monkeypatch.setenv("ICEBERG_CATALOG__ICEBERG_CATALOG_TYPE", "sql")
-    monkeypatch.setenv(
-        "ICEBERG_CATALOG__ICEBERG_CATALOG_CONFIG",
-        json.dumps(
-            {
-                "type": "sql",
-                "uri": f"sqlite:///{tmp_path}/catalog.db",
-                "warehouse": (tmp_path / "lake").as_uri(),
-            }
-        ),
-    )
+def pipeline(sqlite_iceberg_lake: Path, tmp_path: Path) -> dlt.Pipeline:
     return dlt.pipeline(
         pipeline_name="edxorg_iceberg_evolution_test",
         destination=dlt.destinations.filesystem(
-            bucket_url=(tmp_path / "lake").as_uri()
+            bucket_url=sqlite_iceberg_lake.as_uri()
         ),
         dataset_name="raw",
         pipelines_dir=str(tmp_path / "pipelines"),
