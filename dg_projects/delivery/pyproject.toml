@@ -10,7 +10,7 @@ dependencies = [
     "httpx2 >= 2.2.0",
     "jsonlines ~= 4.0.0",
     # Same sanitizer MIT Learn's clean_data() uses, so the webhook path strips
-    # third-party RSS HTML exactly the way the Celery ETL does.
+    # third-party HTML exactly the way the Celery ETL does.
     "nh3 >= 0.2.0",
     "ol-orchestrate-lib",
     "pygithub>=2.8.1",

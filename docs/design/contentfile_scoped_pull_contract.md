@@ -191,8 +191,8 @@ The scoped prune branches on source to match: soft-delete for `RESOURCE_FILE_ETL
 would mean adding it to `RESOURCE_FILE_ETL_SOURCES`, which also gates search indexing
 (`learning_resources_search/tasks.py:669,1098`), so that is out of scope for this migration.
 
-This is the podcast full-sync hazard (`MIN_PODCASTS` / `MIN_EPISODES` in
-`assets/podcasts.py`) at a different granularity, and it deserves the same guard.
+This is the full-sync hazard of any pull that prunes what it did not read, at the
+granularity of one course, and it needs a guard.
 `content_file_count` in the payload is that guard: the platform states how many rows it published
 for this course, and the task compares that against what it actually reads back from the warehouse
 view for the same scope key. Since both numbers come from the same publish event, any gap between
