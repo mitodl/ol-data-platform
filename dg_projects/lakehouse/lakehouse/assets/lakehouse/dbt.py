@@ -24,10 +24,12 @@ from dagster_dbt import (
     DbtProject,
     dbt_assets,
 )
+from dagster_dbt.asset_utils import DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED, DBT_TARGET
+from lakehouse.lib.stale_descendant_tests import stale_descendant_test_names
 from lakehouse.lib.surrogate_key_drift import (
     SURROGATE_KEY_STATE_ARTIFACT,
     SurrogateKeyDrift,
@@ -94,6 +96,36 @@ def _surrogate_key_drift(
         SURROGATE_KEY_STATE_ARTIFACT, context
     )
     return detect_drift(manifest, previous)
+
+
+def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
+    """``--exclude`` the tests this run would hold against tables it is not building.
+
+    Empty for a run of the whole asset: every descendant is rebuilt in the same
+    invocation, so nothing it tests is stale.
+    """
+    if not context.is_subset:
+        return []
+    selected = {
+        context.assets_def.get_asset_spec(key).metadata[
+            DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
+        ]
+        for key in context.selected_asset_keys
+    }
+    tests = stale_descendant_test_names(
+        json.loads(dbt_project.manifest_path.read_text()),
+        selected,
+        keep={key.name for key in context.selected_asset_check_keys},
+    )
+    if not tests:
+        return []
+    context.log.info(
+        "Skipping %d test(s) attached to models downstream of this run's selection "
+        "that it does not rebuild; they run when those models are built: %s",
+        len(tests),
+        ", ".join(tests),
+    )
+    return ["--exclude", " ".join(tests)]
 
 
 def _models_built_by(invocation: DbtCliInvocation) -> set[str]:
@@ -176,7 +208,9 @@ def full_dbt_project(
 
     drift = _surrogate_key_drift(context, dbt_s3_artifacts)
 
-    build_invocation = dbt.cli(["build", *build_vars], context=context)
+    build_invocation = dbt.cli(
+        ["build", *_stale_descendant_test_args(context), *build_vars], context=context
+    )
     yield from (build_invocation.stream().fetch_column_metadata().fetch_row_counts())
 
     if drift is not None and _repair_surrogate_key_drift(

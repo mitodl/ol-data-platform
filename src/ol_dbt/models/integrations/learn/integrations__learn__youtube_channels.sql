@@ -37,5 +37,7 @@ select
     , channel_dlt_load_id                                    as dlt_load_id
 from channels
 where
-    channel_dlt_load_id = (select max(channel_dlt_load_id) from channels)
+    channel_dlt_load_id = (
+        select max(channel_loads.channel_dlt_load_id) from channels as channel_loads
+    )
     and channel_config_file = '{{ var("youtube_learn_config_file", "channels.yaml") }}'

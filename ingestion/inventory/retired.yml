@@ -797,4 +797,4 @@ retired:
     when it deploys; the production deploy time itself was not checked. The
     table's newest data object is from 2025-11-07 (measured 2026-10-06), which
     shows only when a row last changed. dbt never modeled it.
-    b2b_contractprogramitem is not ingested.
+    b2b_contractprogramitem was not ingested when this was recorded.

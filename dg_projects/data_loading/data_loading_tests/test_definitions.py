@@ -14,7 +14,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-import dagster as dg
 import pytest
 from data_loading.definitions import defs
 from data_loading.defs.ingestion.assets import (
@@ -111,6 +110,9 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
+        "ol_warehouse_raw_data/raw__mitx__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__mitxonline__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__xpro__openedx__api__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_file_exclusions",
@@ -153,7 +155,17 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
         assert len(
             [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
         ) == len(mitxonline_app.MITXONLINE_APP_SPEC.tables)
-        assert "mitxonline_app_ingest_schedule" in {s.name for s in repo.schedule_defs}
+        schedule = repo.get_schedule_def("mitxonline_app_ingest_schedule")
+        # The MITx Online structure blocks share the "mitxonline" group and
+        # read the production landing zone, so the app schedule must not
+        # select them.
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == {
+            key for key in asset_keys if "raw__mitxonline__app__postgres__" in key
+        }
 
 
 def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
@@ -174,7 +186,7 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
     with _repository_for("production") as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert asset_keys, "code location exposed no assets under production"
-        assert not [key for key in asset_keys if "mitxonline" in key]
+        assert not [key for key in asset_keys if "raw__mitxonline__app__" in key]
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
@@ -187,17 +199,16 @@ def test_xpro_app_assets_load_where_dlt_owns_the_unit(environment: str) -> None:
         assert len(
             [key for key in asset_keys if "raw__xpro__app__postgres__" in key]
         ) == len(xpro_app.XPRO_APP_SPEC.tables)
-        assert "xpro_app_ingest_schedule" in {s.name for s in repo.schedule_defs}
-
-
-def test_the_xpro_group_holds_only_the_app_database_tables() -> None:
-    """The schedule targets the `xpro` group, so nothing else may join it."""
-    with _repository_for("qa") as repo:
-        selected = dg.AssetSelection.groups("xpro").resolve(repo.asset_graph)
-        assert len(selected) == len(xpro_app.XPRO_APP_SPEC.tables)
-        assert all(
-            key.path[-1].startswith("raw__xpro__app__postgres__") for key in selected
-        )
+        schedule = repo.get_schedule_def("xpro_app_ingest_schedule")
+        # The xPro structure blocks share the "xpro" group, so the app schedule
+        # must not select them.
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == {
+            key for key in asset_keys if "raw__xpro__app__postgres__" in key
+        }
 
 
 def test_xpro_app_dlt_does_not_run_in_production() -> None:

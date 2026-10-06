@@ -3,8 +3,10 @@
 # Each line is a known `child -> parent` reference where a marts/reporting
 # model references a staging/intermediate model directly. These are the
 # violations that existed when the lint was introduced; the #2072 migration
-# shrinks this list over time. The lint fails only on violations NOT listed
+# shrinks this list over time. The lint fails on violations NOT listed
 # here, so new regressions are blocked while existing debt is tolerated.
+# It also fails on a line whose reference is gone, so a removed reference
+# cannot come back unnoticed.
 #
 # Regenerate with: ol-dbt validate --update-baseline
 

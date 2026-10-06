@@ -5,7 +5,8 @@
 # mirror_max_age_days, or a table the observation does not cover yet
 # (unobserved). These are operational lapses, tolerated so QA builds
 # keep running while they are repaired. A gap NOT listed here fails
-# `ol-dbt validate`. Contradictions between qa_branches and the inventory
+# `ol-dbt validate`, and so does a line here that is no longer a gap.
+# Contradictions between qa_branches and the inventory
 # are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.
 #
 # Regenerate with: ol-dbt validate --update-qa-baseline
