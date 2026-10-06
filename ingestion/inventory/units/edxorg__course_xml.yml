@@ -7,6 +7,11 @@
 # edxorg code location parses these blocks out of the course archives, and
 # ol_dlt.sources.course_xml_blocks loads the JSON Lines files it lands. The
 # other course_structure tables have neither.
+#
+# raw__edxorg__s3__course_structure_blocks is the same arrangement for the
+# un-nested course structure documents (edxorg/processed_data/course_blocks/).
+# It loads beside edxorg/s3's Airbyte-loaded raw__edxorg__s3__course_blocks, to
+# replace it, and is unmodeled until staging is repointed at it.
 schema_version: 1
 deployment: edxorg
 scope: singleton
@@ -19,7 +24,7 @@ loader: dlt
 # The load appends one file per course version, so staging picks each block's
 # newest copy by the file it came from. Same reasoning as edxorg/mysql.
 raw_metadata_column: _file_modified_at
-table_prefix: raw__edxorg__s3__course_xml_blocks
+table_prefix: raw__edxorg__s3__course_
 dlt:
   source_module: ol_dlt.sources.course_xml_blocks
   write_disposition: append
@@ -30,3 +35,9 @@ tables:
   cursor_field:
   - _file_modified_at
   modeled: true
+- name: raw__edxorg__s3__course_structure_blocks
+  raw_table: raw__edxorg__s3__course_structure_blocks
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: false
