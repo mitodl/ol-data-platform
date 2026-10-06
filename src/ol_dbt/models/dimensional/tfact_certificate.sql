@@ -1,6 +1,6 @@
--- Rebuilt in full (the dimensional default). As an incremental model it kept every row it
--- had ever inserted: a certificate that lost the one-per-course-run pick below after an
--- earlier run had inserted it was never deleted, and neither was one removed at the source.
+-- Rebuilt in full (the dimensional default), not incremental: an incremental run cannot
+-- delete a certificate that an earlier run inserted and that has since lost the
+-- one-per-course-run pick below, or been removed at the source.
 -- Consolidate certificates from all platforms
 with mitxonline_certificates as (
     select
@@ -288,6 +288,8 @@ with mitxonline_certificates as (
                 end
                 , case when certificate_is_revoked then 1 else 0 end
                 , certificate_issued_on desc nulls last
+                -- certificate_id is a string; compare the integer ids as numbers.
+                , try_cast(certificate_id as bigint) desc nulls last
                 , certificate_id desc
         ) as _cross_source_row_num
     from certificates_with_fks
@@ -318,7 +320,7 @@ with mitxonline_certificates as (
     where cwf._cross_source_row_num = 1
 )
 
--- Defensive dedup: the UNION ALL across 4 platform CTEs has no upstream uniqueness guarantee.
+-- Defensive dedup: the UNION ALL across the platform CTEs has no upstream uniqueness guarantee.
 -- If any intermediate develops grain drift, this guard prevents duplicate certificate_key values
 -- from silently entering the fact table.
 -- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
