@@ -52,6 +52,9 @@ models:
       the archive
     tests:
     - not_null
+  - name: coursestructure_xml_archive_version
+    description: str, SHA-256 of the course export the blocks were parsed from, taken
+      from the landed file's name
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [courserun_readable_id, coursestructure_xml_block_id, coursestructure_xml_block_type,
@@ -128,6 +131,49 @@ models:
         arguments:
           values: [extracted, empty, failed]
   - name: content_file_extracted_at
+    description: timestamp, S3 modification time of the file the row came from
+    data_type: timestamp
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [content_file_source_system, courserun_readable_id, content_file_path]
+
+- name: stg__openedx__s3__course_file_exclusions
+  description: Every file in each Open edX course run's export, from the course's
+    newest landed file only, flagged with whether MIT Learn excludes it from its ContentFiles.
+    A run with rows here has been checked; one without has not.
+  columns:
+  - name: courserun_readable_id
+    description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: content_file_source_system
+    description: str, Open edX deployment (mitxonline, xpro, mitx)
+    tests:
+    - not_null
+  - name: content_file_path
+    description: str, path of the file within the course export, relative to its root,
+      e.g. static/handout.pdf
+    tests:
+    - not_null
+  - name: content_file_course_xml_version
+    description: str, SHA-256 of the course export the exclusion rules ran over
+    tests:
+    - not_null
+  - name: content_file_is_excluded
+    description: boolean, whether Learn leaves the file out of its ContentFiles
+    data_type: boolean
+    tests:
+    - not_null
+  - name: content_file_exclusion_reason
+    description: str, the rule that excluded the file (see the source's exclusion_reason);
+      null when it is kept
+    tests:
+    - accepted_values:
+        arguments:
+          values: [staff_only, non_content, unreachable_tab, about_page, unreferenced_static,
+            course_settings, legacy_announcements]
+  - name: content_file_checked_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp
   tests:

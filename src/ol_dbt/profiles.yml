@@ -2,6 +2,12 @@
 open_learning:
   target: dev_local
   outputs:
+    # For the sqlfluff hooks only (bin/sqlfluff-dbt-hook.py): an empty in-memory
+    # database, so compiling needs no credentials or network.
+    sqlfluff:
+      type: duckdb
+      path: ':memory:'
+      threads: 1
     qa:
       type: trino
       method: ldap

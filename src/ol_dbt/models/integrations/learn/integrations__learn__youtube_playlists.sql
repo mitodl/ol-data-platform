@@ -44,4 +44,6 @@ select
     , playlists.playlist_dlt_load_id                         as dlt_load_id
 from playlists
 inner join channels on playlists.channel_id = channels.channel_id
-where playlists.playlist_dlt_load_id = (select max(playlist_dlt_load_id) from playlists)
+where playlists.playlist_dlt_load_id = (
+    select max(playlist_loads.playlist_dlt_load_id) from playlists as playlist_loads
+)

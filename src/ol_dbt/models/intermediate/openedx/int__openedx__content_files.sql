@@ -12,10 +12,17 @@
   content and extraction_status "failed", so a consumer can tell it apart from a
   removed file.
 
-  Not reproduced yet (tracked separately): Learn's exclusion of staff-only
-  subtrees and of static files nothing in the course references
-  (excluded_olx_paths), Tika's metadata title for documents, and the course root
-  files course.xml and course/<run>.xml, which course_xml_blocks does not carry.
+  Files Learn's excluded_olx_paths drops (staff-only subtrees, unreachable tabs
+  and about pages, course settings, asset manifests, static files nothing
+  learners see references) are dropped here by
+  stg__openedx__s3__course_file_exclusions, which runs a port of those rules over
+  each export. A run whose newest blocks file has not been through it (no
+  exclusion rows, or rows from an older export) has no rows here at all: without
+  the check its files would include ones Learn hides, and a scoped pull would
+  publish them.
+
+  Not reproduced yet: the course root files course.xml and course/<run>.xml,
+  which course_xml_blocks does not carry.
 #}
 
 {% set valid_text_file_types = [
@@ -110,6 +117,48 @@ with blocks as (
     select * from static_files
 )
 
+, file_exclusions as (
+    select * from {{ ref('stg__openedx__s3__course_file_exclusions') }}
+)
+
+, block_versions as (
+    select distinct
+        courserun_readable_id
+        , coursestructure_xml_source_system as source_system
+        , coursestructure_xml_archive_version as course_xml_version
+    from blocks
+)
+
+-- A run is checked when the exclusions ran over the same export its blocks came
+-- from. Exclusions from an older export would miss a block hidden since, and
+-- let it through.
+, checked_runs as (
+    select distinct
+        file_exclusions.courserun_readable_id
+        , file_exclusions.content_file_source_system as source_system
+    from file_exclusions
+    inner join block_versions
+        on file_exclusions.courserun_readable_id = block_versions.courserun_readable_id
+        and file_exclusions.content_file_source_system = block_versions.source_system
+        and file_exclusions.content_file_course_xml_version = block_versions.course_xml_version
+)
+
+-- excluded_olx_paths. The exclusion rows are keyed by the path below the
+-- export's root directory, which block paths still carry.
+, kept_files as (
+    select candidate_files.*
+    from candidate_files
+    inner join checked_runs
+        on candidate_files.courserun_readable_id = checked_runs.courserun_readable_id
+        and candidate_files.source_system = checked_runs.source_system
+    left join file_exclusions
+        on candidate_files.courserun_readable_id = file_exclusions.courserun_readable_id
+        and candidate_files.source_system = file_exclusions.content_file_source_system
+        and regexp_replace(candidate_files.source_path, '^[^/]*/', '') = file_exclusions.content_file_path
+        and file_exclusions.content_file_is_excluded
+    where file_exclusions.content_file_path is null
+)
+
 , keyed_files as (
     select
         *
@@ -122,7 +171,7 @@ with blocks as (
         , {{ element_at_array("split(source_path, '/')", array_length("split(source_path, '/')")) }}
             as original_file_name
         , replace(courserun_readable_id, 'course-v1:', '') as run_key
-    from candidate_files
+    from kept_files
     -- documents_from_olx: Learn's text file types, nothing under a draft
     -- directory, and not the asset manifests or the announcement archive.
     where

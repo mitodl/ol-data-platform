@@ -403,6 +403,7 @@ class TestEnvironmentScoping:
             "ol_warehouse_qa_reporting",
             "ol_warehouse_qa_intermediate",
             "ol_warehouse_qa_intermediate",
+            "ol_warehouse_qa_intermediate",
         ]
 
 

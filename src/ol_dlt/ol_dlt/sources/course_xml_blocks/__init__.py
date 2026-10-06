@@ -17,6 +17,12 @@ static files, for MIT Learn's ContentFiles (Cohort 4), in the same layout:
         {mitx,mitxonline,xpro}/openedx/processed_data/course_transcript_text/
             <deployment>/<course>/<version hash>.jsonl
 
+and, for the same ContentFiles, every file in each course export flagged with
+whether MIT Learn excludes it (staff-only, manifests, unreferenced static files):
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_file_exclusions/
+            <deployment>/<course>/<version hash>.jsonl
+
 Nothing loaded those files into the warehouse, so the raw tables below did not
 exist and their staging models could not build. This source appends every
 file's rows, stamped with the file they came from, and staging keeps the rows
@@ -35,6 +41,19 @@ loads them into raw__edxorg__s3__course_structure_blocks, which is to replace
 it. A re-materialized structure overwrites its file with a new retrieved_at, so
 the landing zone holds only the latest copy of each: the Airbyte table has
 earlier copies of 1,918 files that this source cannot read.
+
+The openedx code location writes the same un-nested structure blocks for its
+three deployments (dg_projects/openedx/.../openedx.py::course_structure):
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_blocks/
+            <course>/<structure hash>.json
+
+One Airbyte source-s3 connection per deployment loads those into
+raw__<deployment>__openedx__api__course_blocks. This source loads them into
+raw__<deployment>__openedx__api__course_structure_blocks, one table per
+deployment because the rows carry no source_system and each deployment has its
+own staging model. On 2026-10-06 the prefixes held 29,953 files (13.2 GB) for
+mitxonline, 3,203 (3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks
@@ -132,6 +151,19 @@ CONTENT_TEXT_FIELDS = (
     "extracted_at",
 )
 
+# The row the file exclusions asset writes
+# (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
+# extracted_at is absent from files written before the asset stamped it.
+FILE_EXCLUSION_FIELDS = (
+    "course_id",
+    "source_system",
+    "course_xml_version",
+    "file_path",
+    "excluded",
+    "exclusion_reason",
+    "extracted_at",
+)
+
 
 @dataclass(frozen=True)
 class XmlBlocksTable:
@@ -195,15 +227,27 @@ EDXORG_STRUCTURE_BLOCKS = XmlBlocksTable(
     integer_fields=frozenset({"block_index"}),
     pipeline_name="course_structure_blocks__edxorg",
 )
+_OPENEDX_DEPLOYMENTS = ("mitx", "mitxonline", "xpro")
 OPENEDX = XmlBlocksTable(
     raw_table="raw__openedx__s3__course_xml_blocks",
     pipeline_prefix="openedx",
     file_globs=tuple(
         f"{deployment}/openedx/processed_data/course_xml_blocks/**/*.json"
-        for deployment in ("mitx", "mitxonline", "xpro")
+        for deployment in _OPENEDX_DEPLOYMENTS
     ),
 )
-_OPENEDX_DEPLOYMENTS = ("mitx", "mitxonline", "xpro")
+OPENEDX_STRUCTURE_BLOCKS = {
+    deployment: XmlBlocksTable(
+        raw_table=f"raw__{deployment}__openedx__api__course_structure_blocks",
+        pipeline_prefix="openedx",
+        file_globs=(f"{deployment}/openedx/processed_data/course_blocks/**/*.json",),
+        fields=STRUCTURE_BLOCK_FIELDS,
+        # bigint in the Airbyte tables, and staging passes it through uncast.
+        integer_fields=frozenset({"block_index"}),
+        pipeline_name=f"course_structure_blocks__{deployment}",
+    )
+    for deployment in _OPENEDX_DEPLOYMENTS
+}
 OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
     raw_table="raw__openedx__s3__course_document_text",
     pipeline_prefix="openedx",
@@ -228,14 +272,27 @@ OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
     pipeline_name="course_transcript_text__openedx",
     marks_empty_files=True,
 )
+OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_file_exclusions",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_file_exclusions/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=FILE_EXCLUSION_FIELDS,
+    optional_fields=frozenset({"extracted_at"}),
+    pipeline_name="course_file_exclusions__openedx",
+)
 TABLES = {
     table.raw_table: table
     for table in (
         EDXORG,
         EDXORG_STRUCTURE_BLOCKS,
         OPENEDX,
+        *OPENEDX_STRUCTURE_BLOCKS.values(),
         OPENEDX_DOCUMENT_TEXT,
         OPENEDX_TRANSCRIPT_TEXT,
+        OPENEDX_FILE_EXCLUSIONS,
     )
 }
 

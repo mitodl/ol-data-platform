@@ -85,7 +85,7 @@ pull filters and prunes on; see
 | `title` | string | Display name, video name for a transcript, or a title made from the file name |
 | `url` | string | Jump URL in the LMS, or the asset URL; null where Learn has none |
 | `content` | string | Extracted text; null when extraction failed |
-| `content_title` | string | Tika's metadata title; `''` until it is carried |
+| `content_title` | string | Always `''`, as in Learn's production content files (Learn's lookup of Tika's metadata title finds none) |
 | `content_type` | string | Always `file` |
 | `source_path` | string | Path within the course export, e.g. `course/static/handout.pdf` |
 | `file_extension` | string | File extension with its dot, e.g. `.pdf` |

@@ -117,15 +117,24 @@ class DataContract:
         return [ContractColumn(name=c["name"].lower(), data_type=c["dataType"]) for c in self.body.get("schema", [])]
 
 
-def _parse_binding(path: Path, raw: Any) -> EntityBinding:
+def parse_binding(path: Path, raw: Any, *, label: str = "`entity`") -> EntityBinding:
+    """Parse a ``{type, dbt_model | dbt_source | fqn}`` mapping into an :class:`EntityBinding`.
+
+    :param label: how error messages name the mapping, for callers whose
+        binding is not a contract's ``entity`` (e.g. a metric's ``implemented_by`` entry).
+    :raises ValueError: when the mapping names no single target or an unsupported entity type.
+    """
     if not isinstance(raw, dict) or "type" not in raw:
-        msg = f"{path}: `entity` needs a `type` and one of {', '.join(_BINDING_KEYS)}"
+        msg = f"{path}: {label} needs a `type` and one of {', '.join(_BINDING_KEYS)}"
         raise ValueError(msg)
     keys = [k for k in _BINDING_KEYS if k in raw]
     if len(keys) != 1:
-        msg = f"{path}: `entity` needs exactly one of {', '.join(_BINDING_KEYS)}, got {keys or 'none'}"
+        msg = f"{path}: {label} needs exactly one of {', '.join(_BINDING_KEYS)}, got {keys or 'none'}"
         raise ValueError(msg)
     kind = keys[0]
+    if not isinstance(raw[kind], str) or not raw[kind]:
+        msg = f"{path}: {label} needs a name for its {kind}, got {raw[kind]!r}"
+        raise ValueError(msg)
     if raw["type"] not in ENTITY_COLLECTIONS:
         msg = f"{path}: entity type {raw['type']!r} is not one of {', '.join(ENTITY_COLLECTIONS)}"
         raise ValueError(msg)
@@ -155,7 +164,7 @@ def load_contracts(contracts_dir: Path) -> list[DataContract]:
         if not isinstance(raw, dict) or not isinstance(raw.get("contract"), dict):
             msg = f"{path}: a contract file needs top-level `entity` and `contract` mappings"
             raise ValueError(msg)
-        binding = _parse_binding(path, raw.get("entity"))
+        binding = parse_binding(path, raw.get("entity"))
         body = raw["contract"]
         if "name" not in body:
             msg = f"{path}: `contract` needs a `name`"
@@ -227,6 +236,18 @@ def types_compatible(contract_type: str, om_type: str) -> bool:
     return contract_type == om_type or any(contract_type in f and om_type in f for f in _TYPE_FAMILIES)
 
 
+def resolved_sql_columns(parsed: ParsedModel | None) -> set[str] | None:
+    """Return the lowercased columns a model's SQL selects, or ``None`` when they did not resolve.
+
+    ``None`` covers a model with no SQL, a parse error, or a ``SELECT *`` that
+    could not be expanded, so a caller skips the SQL half of its check instead
+    of reporting every column as missing.
+    """
+    if parsed is None or parsed.parse_error or parsed.has_star or not parsed.output_columns:
+        return None
+    return {c.lower() for c in parsed.output_columns}
+
+
 def check_data_contracts(
     contracts: list[DataContract],
     manifest: ManifestRegistry,
@@ -253,11 +274,8 @@ def check_data_contracts(
                 "Rename the contract's binding, or delete the contract with the model and retire it in OpenMetadata.",
             )
             continue
-        parsed = sql_models_by_name.get(binding.target) if binding.kind == "dbt_model" else None
         sql_columns = (
-            parsed.output_columns
-            if parsed is not None and not parsed.parse_error and not parsed.has_star and parsed.output_columns
-            else None
+            resolved_sql_columns(sql_models_by_name.get(binding.target)) if binding.kind == "dbt_model" else None
         )
         for column in contract.columns:
             _check_column(contract, column, node, sql_columns, report)
@@ -282,7 +300,7 @@ def _check_column(
             "contract in the same PR so the removal is reviewed as a contract change.",
         )
         return
-    if sql_columns is not None and column.name not in {c.lower() for c in sql_columns}:
+    if sql_columns is not None and column.name not in sql_columns:
         report.add(
             DATA_CONTRACT_CHECK,
             Severity.ERROR,

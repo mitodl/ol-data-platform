@@ -54,6 +54,13 @@ constraint-dependencies = [
 
 [dependency-groups]
 prek = ["prek==0.5.5"]
+# The sqlfluff hooks run in this group (see bin/sqlfluff-dbt-hook.py).
+sqlfluff = [
+    "dbt-core>=1.12",
+    "dbt-duckdb>=1.10.0",
+    "sqlfluff[rs]>=4.4.0,<5",
+    "sqlfluff-templater-dbt>=4.4.0,<5",
+]
 dev = [
     {include-group = "prek"},
     "dagster-dg-cli>=1.12.10",
@@ -65,7 +72,7 @@ dev = [
     "pytest-cov>=7.1,<8",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
-    "sqlfluff[rs]>=4.0.0",
+    {include-group = "sqlfluff"},
     "types-boto3>=1.42.65",
 ]
 
@@ -85,41 +92,39 @@ line_length = 120
 exclude=["target/**/*", "dbt_packages/**/*"]
 
 [tool.sqlfluff.core]
-templater = "jinja"
-dialect = "trino"
+templater = "dbt"
+# The dbt templater compiles with DuckDB (the sqlfluff target), so the dialect matches.
+dialect = "duckdb"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 max_line_length = 120
-ignore = "templating"
-exclude_rules = [
-  "layout.indent",
-  "layout.cte_bracket",
-  "layout.keyword_newline",
-  "layout.cte_newline",
-  "layout.select_targets",
-  "layout.spacing",
-  "convention.quoted_literals"
+# Lint files of any size (by default sqlfluff skips files over 20KB).
+large_file_skip_byte_limit = 0
+# Only rules that catch likely bugs; sqlfmt handles formatting.
+rules = [
+  "aliasing.expression",
+  "aliasing.unique.table",
+  "ambiguous.union",
+  "ambiguous.order_by",
+  "ambiguous.column_references",
+  "ambiguous.order_by_limit",
+  "references.from",
+  "references.qualification",
+  "references.consistent",
+  "structure.unused_cte",
 ]
-warn_unused_ignores = true
-
-[tool.sqlfluff.rules]
-capitalisation_policy = "lower"
-extended_capitalisation_policy = "lower"
-
-[tool.sqlfluff.rules.convention.terminator]
-multiline_newline = true
+# Off because many models have noqa comments for rules no longer enabled.
+# Removing those comments would edit the models, which rebuilds them in production.
+warn_unused_ignores = false
 
 [tool.sqlfluff.templater]
 unwrap_wrapped_queries = true
 
-[tool.sqlfluff.templater.jinja]
-apply_dbt_builtins = true
-load_macros_from_path = "src/ol_dbt/macros/"
-
 [tool.sqlfluff.templater.dbt]
 project_dir = "src/ol_dbt/"
 profiles_dir = "src/ol_dbt/"
-profile ="open_learning"
-target = "qa"
+profile = "open_learning"
+# An in-memory DuckDB target, defined in src/ol_dbt/profiles.yml.
+target = "sqlfluff"
 
 [tool.mypy]
 python_version = "3.12"

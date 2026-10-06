@@ -308,8 +308,8 @@ parent/child/resource_type + directory), not string-matching SQL:
 ### 5.3 Baseline / migration-in-flight handling
 Because ~100+ violations exist today, a hard ERROR would red-wall every PR. Ship with an
 **allowlist baseline** (checked-in `dimensional_layering_baseline.txt` of known
-`child -> parent` pairs). The lint fails only on **new** violations not in the baseline; the
-#2072 migration shrinks the baseline over time. Provide `ol-dbt validate --update-baseline` (or
+`child -> parent` pairs). The lint fails on **new** violations not in the baseline, and on
+baseline entries whose violation is gone; the #2072 migration shrinks the baseline over time. Provide `ol-dbt validate --update-baseline` (or
 document the regeneration command).
 
 ### 5.4 Acceptance criteria

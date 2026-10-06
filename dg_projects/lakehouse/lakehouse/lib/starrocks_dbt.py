@@ -11,6 +11,7 @@ import logging
 import re
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 # Retries are of the whole `dbt build`, since dbt-starrocks has no adapter-level
@@ -156,7 +157,8 @@ class MaterializedViewRefreshError(Exception):
         self.failures = dict(failures)
         detail = "\n".join(f"{name}: {exc}" for name, exc in self.failures.items())
         super().__init__(
-            f"{len(self.failures)} materialized view(s) failed to refresh:\n{detail}"
+            f"{len(self.failures)} materialized view(s) failed to refresh "
+            f"or in the step after it:\n{detail}"
         )
 
 
@@ -166,6 +168,7 @@ def refresh_materialized_views(
     *,
     log: logging.Logger,
     sleep: Callable[[float], None] = time.sleep,
+    after_refresh: Callable[[str], None] | None = None,
 ) -> None:
     """Refresh every MV in *relations*, retrying base-table-rebuild failures.
 
@@ -180,7 +183,11 @@ def refresh_materialized_views(
         asset.
     :param log: Where progress goes. `context.log` in the asset.
     :param sleep: Injected so tests don't wait out the retry delay.
-    :raises MaterializedViewRefreshError: if any MV still failed.
+    :param after_refresh: Called with a relation straight after its REFRESH
+        succeeds, and never for one that failed. If it raises, that relation is
+        reported as failed, and its REFRESH is not retried.
+    :raises MaterializedViewRefreshError: if any MV still failed, or its
+        `after_refresh` did.
     """
     failures: dict[str, Exception] = {}
     for relation in relations:
@@ -208,6 +215,14 @@ def refresh_materialized_views(
                 sleep(MV_REFRESH_RETRY_DELAY_SECONDS)
             else:
                 log.info("Refreshed %s", relation)
+                if after_refresh:
+                    # Outside the retried block: the REFRESH succeeded, so an
+                    # error here must not run it again, whatever its text.
+                    try:
+                        after_refresh(relation)
+                    except Exception as exc:
+                        log.exception("Follow-up to refreshing %s failed", relation)
+                        failures[relation] = exc
                 break
     if failures:
         raise MaterializedViewRefreshError(failures)
@@ -310,3 +325,210 @@ def drifted_relations(
         for relation, columns in documented.items()
         if relation in live and columns != live[relation]
     )
+
+
+# Model `meta` key that opts a materialized view into a change log.
+CHANGE_TRACKING_META_KEY = "change_tracking"
+CHANGE_LOG_SUFFIX = "_changes"
+
+# ASCII unit and record separators. A value is cast to varchar before hashing,
+# so a separator that can appear in an email or a title would let two different
+# rows hash alike ("a|b", "c" against "a", "b|c"). The record separator stands
+# in for null, which concat_ws would otherwise skip, hashing (null, 'x') and
+# ('x', null) alike.
+_FIELD_SEPARATOR = "char(31)"
+_NULL_MARKER = "char(30)"
+
+
+@dataclass(frozen=True)
+class ChangeTrackedView:
+    """A materialized view whose rows get a change time after each refresh.
+
+    :param relation: Schema-qualified MV name.
+    :param key: Columns that identify one row of the MV, its grain.
+    :param identity: Columns copied to the change log so a row that has left
+        the MV can still be named to a consumer. The key columns are warehouse
+        surrogates the consumer never sees.
+    :param tracked: Every other column. A change in any of them, or in an
+        identity column, is a change to the row.
+    """
+
+    relation: str
+    key: tuple[str, ...]
+    identity: tuple[str, ...]
+    tracked: tuple[str, ...]
+
+    @property
+    def change_log(self) -> str:
+        return f"{self.relation}{CHANGE_LOG_SUFFIX}"
+
+
+def change_tracked_views(manifest: Mapping[str, Any]) -> list[ChangeTrackedView]:
+    """Return the StarRocks MVs whose schema YAML sets `meta.change_tracking`.
+
+    The hashed columns are the model's documented columns in YAML order, which
+    `documented_columns` explains is the full output schema. Adding a column to
+    the MV therefore changes every row's hash, and every row is stamped once.
+    That is correct: each record gained a field.
+
+    :raises ValueError: if a `key` or `identity` column is not documented on
+        the model. The statements would otherwise fail in StarRocks on an
+        unknown column with nothing pointing at the YAML.
+    """
+    views = []
+    for node in _materialized_view_nodes(manifest):
+        tracking = node["config"]["meta"].get(CHANGE_TRACKING_META_KEY)
+        if tracking is None:
+            continue
+        relation = f"{node['schema']}.{node['alias']}"
+        key = tuple(tracking["key"])
+        identity = tuple(tracking["identity"])
+        columns = list(node["columns"])
+        undocumented = sorted(set(key + identity) - set(columns))
+        if not key or undocumented:
+            msg = (
+                f"{relation}: meta.{CHANGE_TRACKING_META_KEY} needs a non-empty "
+                f"key of documented columns; not documented: {undocumented}"
+            )
+            raise ValueError(msg)
+        views.append(
+            ChangeTrackedView(
+                relation=relation,
+                key=key,
+                identity=identity,
+                tracked=tuple(c for c in columns if c not in key + identity),
+            )
+        )
+    return sorted(views, key=lambda view: view.relation)
+
+
+def _current_rows_sql(view: ChangeTrackedView) -> str:
+    """One row per key of the MV, with a hash of everything else.
+
+    Grouped by the key so the change log stays unique on it whatever the MV
+    holds. The grain tests on these models are severity: warn, and the stamp
+    joins the MV to the log on the key: a key duplicated in the MV would be
+    written to the log twice, and each later stamp would multiply it again.
+
+    A duplicated key is hashed as a group, over the sorted hashes of all its
+    rows, so a change to any one of them moves the hash. Its identity columns
+    all come from the one row with the greatest hash; taking each column's own
+    maximum could pair values from different rows.
+    """
+    hashed = ", ".join(
+        f"coalesce(cast(`{column}` as varchar), {_NULL_MARKER})"
+        for column in view.identity + view.tracked
+    )
+    key = ", ".join(f"`{column}`" for column in view.key)
+    rows = ", ".join(
+        [
+            *(f"`{column}`" for column in view.key + view.identity),
+            f"md5(concat_ws({_FIELD_SEPARATOR}, {hashed})) as content_hash",
+        ]
+    )
+    select = ", ".join(
+        [
+            key,
+            *(
+                f"max_by(`{column}`, content_hash) as `{column}`"
+                for column in view.identity
+            ),
+            "md5(array_join(array_sort(array_agg(content_hash)), ',')) as row_hash",
+        ]
+    )
+    return (
+        f"select {select} "  # noqa: S608
+        f"from (select {rows} from {view.relation}) r group by {key}"
+    )
+
+
+def seed_change_log_sql(view: ChangeTrackedView) -> str:
+    """Create the change log from the MV's current rows, if it doesn't exist.
+
+    Every row is stamped with the creation time, so the first incremental read
+    after the log is created returns every record once.
+    """
+    return (
+        f"create table if not exists {view.change_log} as "  # noqa: S608
+        f"select m.*, utc_timestamp() as changed_on, false as is_deleted "
+        f"from ({_current_rows_sql(view)}) m"
+    )
+
+
+def stamp_change_log_sql(view: ChangeTrackedView) -> str:
+    """Rewrite the change log against the MV's current rows.
+
+    A row keeps its `changed_on` unless it is new, its hash differs, or it left
+    or re-entered the MV; those take the statement's time. A row that left stays
+    in the log with `is_deleted` set and its last identity columns, which is
+    the only record that it was ever there.
+
+    INSERT OVERWRITE replaces the table's contents atomically, so a reader
+    never sees a half-written log, and the statement can be re-run: a second
+    run finds nothing changed and keeps every `changed_on`.
+
+    The target columns are named so that a log created under a different `key`
+    or `identity` list fails on an unknown column instead of taking values in
+    the wrong positions.
+
+    The join is null-safe (`<=>`) so a null key column matches itself rather
+    than being read as one row leaving and another arriving on every run.
+    """
+    join = " and ".join(f"m.`{column}` <=> c.`{column}`" for column in view.key)
+    select = [f"coalesce(m.`{column}`, c.`{column}`)" for column in view.key]
+    select += [
+        f"if(m.row_hash is null, c.`{column}`, m.`{column}`)"
+        for column in view.identity
+    ]
+    select += [
+        "coalesce(m.row_hash, c.row_hash)",
+        (
+            "case when c.row_hash is null or (m.row_hash is null) != c.is_deleted "
+            "or m.row_hash != c.row_hash then utc_timestamp() else c.changed_on end"
+        ),
+        "m.row_hash is null",
+    ]
+    columns = ", ".join(
+        f"`{column}`"
+        for column in (
+            *view.key,
+            *view.identity,
+            "row_hash",
+            "changed_on",
+            "is_deleted",
+        )
+    )
+    return (
+        f"insert overwrite {view.change_log} ({columns}) "  # noqa: S608
+        f"select {', '.join(select)} "
+        f"from ({_current_rows_sql(view)}) m "
+        f"full outer join {view.change_log} c on {join}"
+    )
+
+
+def stamp_change_log(
+    view: ChangeTrackedView, execute: Callable[[str], None], *, log: logging.Logger
+) -> None:
+    """Bring *view*'s change log up to date with the refresh that just ran.
+
+    Call this only straight after the view's REFRESH succeeds, which is what
+    `refresh_materialized_views`' `after_refresh` does. `changed_on` is the
+    cursor ol-analytics-api compares to a client's `updated_since`, and the
+    client passes the `as_of` of its previous read, which is the MV's last
+    refresh time. Stamping after the refresh that first exposes a change puts
+    `changed_on` at or after that refresh's finish time, and so at or after
+    every `as_of` the client could hold from before it saw the change. The
+    comparison has to stay inclusive (`>=`) for that to mean the change is
+    never skipped. A source timestamp can't give this: the change reaches the
+    MV some time after it was made.
+
+    A view that was not refreshed must not be stamped. `dbt build
+    --full-refresh` recreates an MV empty, and an MV whose refresh then fails
+    stays empty; stamping it would mark every record deleted. The stamp reads
+    the MV as it is when the statement runs, so a second run of the build
+    overlapping this one can still do that; the next stamp reverses it and
+    restamps every row.
+    """
+    log.info("Stamping %s", view.change_log)
+    execute(seed_change_log_sql(view))
+    execute(stamp_change_log_sql(view))

@@ -243,6 +243,16 @@ def non_dbt_singleton_tables(warehouse_env: str) -> list[TableMaintenanceConfig]
             optimize_after_every_n_runs=1,
             analyze_after_every_n_runs=7,
         ),
+        TableMaintenanceConfig(
+            model_name="feedback_redacted",
+            schema_name=f"ol_warehouse_{warehouse_env}_intermediate",
+            materialized="table",
+            # Same per-chunk write pattern as feedback_summaries.
+            asset_key=["intermediate", "feedback_redacted"],
+            snapshot_retention_days=7,
+            optimize_after_every_n_runs=1,
+            analyze_after_every_n_runs=7,
+        ),
     ]
 
 

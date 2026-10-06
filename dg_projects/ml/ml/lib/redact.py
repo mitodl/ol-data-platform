@@ -1,12 +1,34 @@
 """Presidio-based PII redaction for feedback title/text."""
 
+import os
 import re
 
 import polars as pl
+from dagster import get_dagster_logger
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
+from pyiceberg.catalog import Catalog
+from pyiceberg.expressions import And, BooleanExpression, EqualTo, In, Or
 
 JOIN_COLS = ["source_slug", "source_record_ref"]
+
+# Bump when the masking rules change. A full refresh re-redacts only rows stored
+# with another version, so a run that dies partway resumes where it stopped.
+REDACTION_VERSION = "v2"
+
+# Rows redacted and written together. A crash loses at most one batch. Each write
+# scans the table once (~10s at 600k rows), so larger batches are cheaper.
+REDACT_CHECKPOINT_BATCH_SIZE = int(
+    os.environ.get("REDACT_CHECKPOINT_BATCH_SIZE", "20000")
+)
+
+REDACTED_SCHEMA = {
+    "source_slug": pl.String,
+    "source_record_ref": pl.String,
+    "title_redacted": pl.String,
+    "text_redacted": pl.String,
+    "redaction_version": pl.String,
+}
 
 EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 
@@ -131,9 +153,8 @@ _anonymizer: AnonymizerEngine | None = None
 
 
 def _get_analyzer() -> AnalyzerEngine:
-    # Built lazily, not at import time: constructing it loads the spaCy model,
-    # which is only present once the Dockerfile's `spacy download` step has run
-    # (it is not a pip dependency), so importing this module must not require it.
+    # Built lazily, not at import time: constructing it loads the large spaCy
+    # model, so loading Dagster definitions or tests stays fast.
     global _analyzer  # noqa: PLW0603
     if _analyzer is None:
         _analyzer = AnalyzerEngine()
@@ -206,8 +227,9 @@ def redact_titles_and_text(df: pl.DataFrame) -> pl.DataFrame:
             columns, e.g. int__feedback__unioned.
 
     Returns:
-        pl.DataFrame: source_slug, source_record_ref, title_redacted, text_redacted -
-            keyed the same way feedback_pk is minted, for tfact_feedback to left-join.
+        pl.DataFrame: source_slug, source_record_ref, title_redacted, text_redacted,
+            redaction_version - keyed the same way feedback_pk is minted, for
+            tfact_feedback to left-join.
     """
     return df.select(
         pl.col("source_slug"),
@@ -218,4 +240,63 @@ def redact_titles_and_text(df: pl.DataFrame) -> pl.DataFrame:
         pl.col("text")
         .map_elements(_redact_text, return_dtype=pl.String)
         .alias("text_redacted"),
+        pl.lit(REDACTION_VERSION).alias("redaction_version"),
     )
+
+
+def _key_filter(chunk_df: pl.DataFrame) -> BooleanExpression:
+    # Not pyiceberg's upsert: it ORs one (slug AND ref) pair per row, and at 5,000
+    # rows its scan ran for over 19 minutes. One IN list per source takes ~10s.
+    parts: list[BooleanExpression] = [
+        And(EqualTo("source_slug", slug), In("source_record_ref", refs))
+        for slug, refs in chunk_df.group_by("source_slug")
+        .agg(pl.col("source_record_ref"))
+        .iter_rows()
+    ]
+    return parts[0] if len(parts) == 1 else Or(*parts)
+
+
+def checkpoint_redacted_chunk(
+    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
+) -> None:
+    """Replace one redacted chunk's rows in the feedback_redacted table."""
+    if chunk_df.height == 0:
+        return
+    if chunk_df.select(JOIN_COLS).is_duplicated().any():
+        msg = f"Duplicate {JOIN_COLS} in a redacted chunk; overwrite would keep both"
+        raise ValueError(msg)
+    table = catalog.create_table_if_not_exists(
+        table_identifier, schema=chunk_df.to_arrow().schema
+    )
+    # Adds redaction_version to a table created before it existed.
+    with table.update_schema() as update:
+        update.union_by_name(chunk_df.to_arrow().schema)
+    # The write casts by position, so match the table's column order.
+    ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
+    table.overwrite(
+        df=ordered_chunk_df.to_arrow(), overwrite_filter=_key_filter(chunk_df)
+    )
+
+
+def redact_and_checkpoint(
+    df: pl.DataFrame,
+    checkpoint_target: tuple[Catalog, str],
+    batch_size: int = REDACT_CHECKPOINT_BATCH_SIZE,
+) -> int:
+    """Redact df in chunks, writing each as it completes. Returns rows written."""
+    log = get_dagster_logger()
+    catalog, table_identifier = checkpoint_target
+    chunk_starts = range(0, df.height, batch_size)
+    written = 0
+    for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
+        chunk_df = redact_titles_and_text(df.slice(chunk_start, batch_size))
+        checkpoint_redacted_chunk(catalog, table_identifier, chunk_df)
+        written += chunk_df.height
+        log.info(
+            "Wrote chunk %d/%d (%d rows) to %s",
+            chunk_index,
+            len(chunk_starts),
+            chunk_df.height,
+            table_identifier,
+        )
+    return written

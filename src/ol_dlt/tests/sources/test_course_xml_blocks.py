@@ -139,6 +139,28 @@ def test_content_text_row_still_requires_content() -> None:
         )
 
 
+def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
+    """Staging compares excluded to 'true', so the bool must arrive JSON-encoded."""
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(
+            {
+                "course_id": "course-v1:MITxT+7.05x+2T2026",
+                "source_system": "mitxonline",
+                "course_xml_version": "ee211fd8",
+                "file_path": "static/unused.pdf",
+                "excluded": True,
+                "exclusion_reason": "unreferenced_static",
+            }
+        ),
+        course_xml_blocks.OPENEDX_FILE_EXCLUSIONS,
+    )
+    assert row["excluded"] == "true"
+    assert row["exclusion_reason"] == "unreferenced_static"
+    assert list(row) == list(course_xml_blocks.FILE_EXCLUSION_FIELDS)
+    # Files written before the asset stamped its rows have no extracted_at.
+    assert row["extracted_at"] is None
+
+
 def test_every_table_has_its_own_pipeline() -> None:
     """Two tables on one pipeline name would share, and fight over, one cursor."""
     names = [table.pipeline_name for table in course_xml_blocks.TABLES.values()]
@@ -150,6 +172,14 @@ def test_every_table_has_its_own_pipeline() -> None:
         course_xml_blocks.EDXORG_STRUCTURE_BLOCKS.pipeline_name
         == "course_structure_blocks__edxorg"
     )
+    assert {
+        deployment: table.pipeline_name
+        for deployment, table in course_xml_blocks.OPENEDX_STRUCTURE_BLOCKS.items()
+    } == {
+        "mitx": "course_structure_blocks__mitx",
+        "mitxonline": "course_structure_blocks__mitxonline",
+        "xpro": "course_structure_blocks__xpro",
+    }
 
 
 @pytest.mark.integration
@@ -315,3 +345,40 @@ def test_structure_blocks_load_from_their_own_prefix(
         )
     )
     assert pipeline.dataset()[raw_table].arrow().num_rows == 2
+
+
+@pytest.mark.integration
+def test_openedx_structure_blocks_load_one_deployment_each(
+    test_profile: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    landing = tmp_path / "landing"
+    for deployment in course_xml_blocks.OPENEDX_STRUCTURE_BLOCKS:
+        _write_version(
+            landing,
+            f"{deployment}/openedx/processed_data/course_blocks/"
+            "course-v1:MITx+RES+1T2027/v1.json",
+            [{**_STRUCTURE_BLOCK, "course_title": deployment}],
+        )
+    # The XML blocks sit beside them and belong to raw__openedx__s3__course_xml_blocks.
+    _write_version(
+        landing,
+        "xpro/openedx/processed_data/course_xml_blocks/xpro/course-v1:X+Y+Z/v1.json",
+        [_BLOCK],
+    )
+    monkeypatch.setattr(
+        course_xml_blocks.s3fs, "S3FileSystem", lambda: fsspec.filesystem("file")
+    )
+    raw_table = course_xml_blocks.OPENEDX_STRUCTURE_BLOCKS["xpro"].raw_table
+    assert raw_table == "raw__xpro__openedx__api__course_structure_blocks"
+
+    pipeline = course_xml_blocks.course_xml_blocks_pipeline_for(raw_table)
+    info = pipeline.run(
+        course_xml_blocks.course_xml_blocks_source(
+            raw_table=raw_table, bucket_url=landing.as_uri()
+        )
+    )
+    assert not info.has_failed_jobs
+
+    table = pipeline.dataset()[raw_table].arrow()
+    assert table.column("course_title").to_pylist() == ["xpro"]
+    assert table.column("block_index").to_pylist() == [_STRUCTURE_BLOCK["block_index"]]
