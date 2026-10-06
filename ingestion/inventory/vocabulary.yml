@@ -95,7 +95,10 @@ layers:
 - rss                   # A published RSS feed, read as the source of record
 - course_structure      # Open edX course archives (course.xml bundles), parsed
                         # into tables by a Dagster asset pipeline rather than
-                        # pulled by a loader. edxorg's are the only ones today.
+                        # pulled by a loader (edxorg), and the un-nested blocks
+                        # of each course's structure document, which dlt loads
+                        # from the files the openedx code location lands (mitx,
+                        # mitxonline, xpro).
 - course_xml            # every block of a course's XML, one row per block, parsed
                         # out of the same archives as course_structure but loaded
                         # into raw by dlt, so it fails independently of it

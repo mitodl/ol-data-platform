@@ -6,7 +6,7 @@ import dagster as dg
 from ol_dlt.sources import course_xml_blocks, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
+from data_loading.defs.ingestion.assets import mitxonline_app_assets
 from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
 
 oll_ingest_schedule = dg.ScheduleDefinition(
@@ -123,9 +123,11 @@ keycloak_ingest_schedule = dg.ScheduleDefinition(
 mitxonline_app_ingest_schedule = (
     dg.ScheduleDefinition(
         name="mitxonline_app_ingest_schedule",
-        # Selected by group rather than by key so adding a table to
-        # MITXONLINE_APP_SPEC does not also require editing this schedule.
-        target=dg.AssetSelection.groups("mitxonline"),
+        # Selected by definition rather than by key so adding a table to
+        # MITXONLINE_APP_SPEC does not also require editing this schedule, and
+        # not by the "mitxonline" group, which the MITx Online course structure
+        # blocks share.
+        target=dg.AssetSelection.assets(mitxonline_app_assets),
         # Every six hours, matching the cadence of the Airbyte connection this
         # replaces (inventory unit mitxonline/app_postgres,
         # sync_interval_hours: 6). Offset off the hour so it does not start
@@ -133,7 +135,7 @@ mitxonline_app_ingest_schedule = (
         cron_schedule="20 */6 * * *",
         execution_timezone="Etc/UTC",
     )
-    if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    if mitxonline_app_assets
     else None
 )
 # PostHog writes an hour's export object after that hour closes. Across the 168
@@ -199,10 +201,11 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
 
 # Loads the course XML blocks the edxorg and openedx archive assets land, the
 # document and transcript text the openedx location extracts from them, and the
-# edxorg course structure blocks, ahead of the lakehouse's
+# edxorg and openedx course structure blocks, ahead of the lakehouse's
 # non_airbyte_staging_daily at 06:00. The first run walks the whole backlog
-# (~63 GB of blocks, ~22 GB of text on 2026-10-01, 10 GB of structure blocks on
-# 2026-10-05) a budget at a time; later runs read only new course versions.
+# (~63 GB of blocks, ~22 GB of text on 2026-10-01, 10 GB of edxorg structure
+# blocks on 2026-10-05, 18 GB of openedx structure blocks on 2026-10-06) a
+# budget at a time; later runs read only new course versions.
 #
 # RUNNING by default in production, unlike the schedules above. A schedule
 # without default_status starts STOPPED, which is how the PostHog ingest never
