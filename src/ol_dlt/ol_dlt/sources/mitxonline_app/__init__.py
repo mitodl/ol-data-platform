@@ -1,7 +1,7 @@
 """MITx Online application-database ingestion via dlt.
 
 Replaces the Airbyte connection ``MITx Online Production App DB → S3 Data Lake``
-(RFC 12319 §6.5, RFC 12711 step 8). Scope is the 65 tables that connection
+(RFC 12319 §6.5, RFC 12711 step 8). Scope is the tables that connection
 declares, which is also what the inventory unit ``mitxonline/app_postgres``
 records.
 

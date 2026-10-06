@@ -2144,7 +2144,7 @@ sources:
       data_type: bigint
       description: primary key for this table
     - name: sort_order
-      data_type: integer
+      data_type: bigint
       description: position of the program within the contract's list, starting at
         0. Null when the row was never ordered.
     - name: contract_id

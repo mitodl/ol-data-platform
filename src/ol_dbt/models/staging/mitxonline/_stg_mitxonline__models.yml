@@ -2310,7 +2310,7 @@ models:
     data_tests:
     - not_null
   - name: contractprogramitem_sort_order
-    data_type: integer
+    data_type: bigint
     description: position of the program within the contract's list. Null when the
       row was never ordered.
   tests:
