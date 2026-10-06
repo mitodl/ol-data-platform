@@ -106,6 +106,12 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # tidiness here.
     "iceberg_dbt_maintenance_nightly": frozenset({"production"}),
     "iceberg_raw_maintenance_nightly": frozenset({"production"}),
+    # Deletes table directories no Glue table references, or only reports them
+    # where the asset's LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS leaves the
+    # environment out, which today is everywhere. QA only until a QA deletion
+    # list has been reviewed and QA deletes have run clean; production follows.
+    # Never dev: it resolves to the production warehouse.
+    "lake_orphan_sweep_weekly": frozenset({"qa"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
     # ran from QA against production -- by hand, not on this cron (see above).
     # Production-only here, but note that leaves the path that actually fired

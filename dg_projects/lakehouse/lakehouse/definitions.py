@@ -13,6 +13,7 @@ from dagster import (
     DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    RunConfig,
     ScheduleDefinition,
     build_last_update_freshness_checks,
     build_sensor_for_freshness_checks,
@@ -40,6 +41,12 @@ from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
+)
+from lakehouse.assets.lake_orphan_sweep import (
+    LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
+    LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
+    LakeOrphanSweepConfig,
+    lake_orphan_sweep,
 )
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
@@ -370,6 +377,32 @@ iceberg_raw_maintenance_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Weekly, not nightly: an orphan has to be LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS old
+# before the sweep will touch it, and the buckets keep a deleted object as a
+# noncurrent version for weeks afterwards, so a daily run reclaims nothing
+# sooner. Sunday 05:00 UTC is after the 02:00 and 03:00 maintenance runs.
+#
+# RUNNING where it is registered. The asset decides what a tick may do: it
+# deletes only in LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS and reports elsewhere.
+lake_orphan_sweep_schedule = ScheduleDefinition(
+    name="lake_orphan_sweep_weekly",
+    job=define_asset_job(
+        name="lake_orphan_sweep_job",
+        selection=AssetSelection.assets(lake_orphan_sweep),
+        config=RunConfig(
+            ops={
+                "lake_orphan_sweep": LakeOrphanSweepConfig(
+                    min_age_days=LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV in LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 5 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
 # Regenerate dbt docs artifacts (manifest.json + catalog.json) for OpenMetadata
 # once daily. Decoupled from model materialization because catalog generation
 # recompiles the whole project and queries every relation. Default STOPPED; enable
@@ -619,6 +652,7 @@ defs = Definitions(
             *superset_starrocks_assets,
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
+            lake_orphan_sweep,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
@@ -684,6 +718,7 @@ defs = Definitions(
             *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
+            ("lake_orphan_sweep_weekly", lake_orphan_sweep_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),

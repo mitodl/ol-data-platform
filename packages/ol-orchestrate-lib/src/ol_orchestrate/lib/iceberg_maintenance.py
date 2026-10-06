@@ -8,10 +8,10 @@ This module provides the building blocks for the two nightly maintenance assets:
   Airbyte-ingested tables in ``ol_warehouse_production_raw``.
 
 Orphan-file cleanup is not done here. pyiceberg has no per-table orphan removal,
-and orphans are instead handled by ``bin/lake-orphan-sweep.py``, which deletes
-S3 prefixes that no Glue table references (e.g. data left behind by dropped
-tables).
-It is a manual CLI today; scheduling it is planned.
+and orphans are instead handled by ``ol_orchestrate.lib.lake_orphan_sweep``,
+which deletes S3 prefixes that no Glue table references (e.g. data left behind
+by dropped tables). The lakehouse ``lake_orphan_sweep`` asset runs it on a
+schedule, and ``bin/lake-orphan-sweep.py`` runs it by hand from a manifest.
 
 Three sources of truth are used deliberately — each layer of the lakehouse has
 a natural authoritative registry, and we use each one directly:
