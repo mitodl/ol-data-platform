@@ -366,12 +366,14 @@ with mitxonline_certificates as (
 )
 
 -- If a platform's source model is empty for a run, nothing below treats its certificates
--- as gone: only a (platform, scope) the source still produces can lose rows.
+-- as gone: only a (platform, scope) the source still produces can lose rows. Read before
+-- the micromasters copies are dropped, or micromasters would look empty once every one of
+-- its certificates has an edxorg record, and its leftover copies would stay current.
 , source_platforms as (
     select distinct
         platform
         , certificate_scope
-    from cross_source_deduped
+    from certificates_with_fks
 )
 {% endif %}
 
