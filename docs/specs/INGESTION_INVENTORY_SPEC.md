@@ -257,7 +257,8 @@ explicit cursor column, or CDC. Two open questions read straight off it once the
 populated:
 
 - `tk-determine-per-source-incremental-cursor-viabilit-51f299` — which connections use xmin,
-  and therefore which need a replacement cursor column chosen before dlt can take over. Today
+  and therefore which need a replacement cursor column, or a decision to re-read the table
+  whole, before dlt can take over. Today
   that answer requires crawling the Airbyte UI; after this lands it is `rg replication_method: xmin`.
 
   Choosing the replacement is `ol-dbt inventory cursors`, which reads the LANDED column list
@@ -269,9 +270,9 @@ populated:
   on *every* mutation path. A write-once column yields a load that captures inserts and silently
   never reflects an edit, so a `cursor_available` finding is a shortlist entry, not an approval.
   The replacement is declared on the dlt source, as `DatabaseTable.cursor_column` in
-  `ol_dlt.sources.<app>`, and not as `cursor_field` on the Airbyte unit: `ol-dbt inventory
-  drift` compares `cursor_field` with the live stream (rule 5), so writing one there fails the
-  daily check for as long as Airbyte still loads the unit.
+  `ol_dlt.sources.<app>`, and not as `cursor_field` on the Airbyte unit (rule 5): `ol-dbt
+  inventory drift` compares `cursor_field` with the live stream, so writing one there fails
+  the daily check for as long as Airbyte still loads the unit.
 
   The two units with a dlt source, `mitxonline/app_postgres` and `xpro/app_postgres`, chose
   no cursor at all. Each replaces every table it loads (MITx Online all 66 the unit declares,
@@ -297,10 +298,11 @@ populated:
   One table needs a decision before its unit moves. `ai_chatbots_djangocheckpoint` is 2.75 GB
   of Parquet (`mitlearn`'s `users_user` is 92 MB), and a replace re-reads all of it on every
   load. Its only timestamp is `created_on` (`auto_now_add`), which
-  is not a safe cursor: learn-ai upserts checkpoints in place (`AsyncDjangoSaver.aput` calls
-  `aupdate_or_create`), `repair_checkpoints` bulk-updates `metadata`, and deleting a stale
-  `UserChatSession` cascades to its checkpoints. An append keyed on `created_on` or `id` misses
-  all three.
+  is not a safe cursor: learn-ai writes checkpoints with `aupdate_or_create`
+  (`AsyncDjangoSaver.aput`), so an existing row can change, the `repair_checkpoints` command
+  bulk-updates `metadata`, and the scheduled `delete_stale_sessions` task deletes sessions,
+  which cascades to their checkpoints. An append keyed on `created_on` or `id` misses all
+  three. How often the first two happen was not measured.
 - The Airbyte-side deadline: source-postgres 3.8+ refuses xmin mode outright on any database
   that has ever exceeded 2^32 lifetime transactions
   (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent

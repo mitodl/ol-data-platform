@@ -1318,8 +1318,8 @@ def _compare_source(  # noqa: PLR0913
 
     `replication_method` is recorded deliberately and is not decorative (§3.4):
     it is what `tk-determine-per-source-incremental-cursor-viabilit-51f299`
-    reads to decide which connections need a replacement cursor before dlt can
-    take over. A source flipped from xmin to a cursor column changes nothing
+    reads to decide which connections need a replacement cursor, or a full
+    re-read, before dlt can take over. A source flipped from xmin to a cursor column changes nothing
     about the streams, so comparing streams alone would report no drift while
     that answer silently went wrong.
     """
@@ -1349,7 +1349,8 @@ def _compare_source(  # noqa: PLR0913
             key,
             f"connection {name!r} replicates by {live_method!r}, unit declares {declared_method!r}",
             "§3.4 records this so `rg replication_method: xmin` answers which "
-            "connections need a replacement cursor before dlt can take them. A "
+            "connections need a replacement cursor or a full re-read before dlt "
+            "can take them. A "
             "stale value makes that answer wrong without changing any stream.",
         )
 
