@@ -364,7 +364,7 @@ However, incremental models require explicit `unique_key` and `incremental_strat
 | `dim_product.sql` | `incremental` (SCD2) | `product_pk` |
 | `tfact_enrollment.sql` | `incremental` | `enrollment_key` |
 | `tfact_order.sql` | `incremental` | `order_key` |
-| `tfact_certificate.sql` | `table` | — |
+| `tfact_certificate.sql` | `incremental` | `certificate_key` |
 | `tfact_payment.sql` | `incremental` | `payment_key` |
 | `dim_user.sql` | `table` | — |
 | `dim_program.sql` | `table` | — |

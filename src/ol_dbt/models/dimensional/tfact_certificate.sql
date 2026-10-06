@@ -1,6 +1,10 @@
--- Rebuilt in full (the dimensional default). As an incremental model it kept every row it
--- had ever inserted: a certificate that lost the one-per-course-run pick below after an
--- earlier run had inserted it was never deleted, and neither was one removed at the source.
+{{ config(
+    materialized='incremental',
+    unique_key='certificate_key',
+    incremental_strategy='delete+insert',
+    on_schema_change='append_new_columns'
+) }}
+
 -- Consolidate certificates from all platforms
 with mitxonline_certificates as (
     select
@@ -266,10 +270,6 @@ with mitxonline_certificates as (
 -- as two rows and the certificate_key-based defensive dedup further below can't
 -- catch it. Collapse to one row per (user_fk, courserun_fk, certificate_scope)
 -- when both FKs resolved, preferring the canonical edxorg record.
--- One platform can also hold two certificates for a (user, course run): MITx Online has
--- a pair issued two days apart, and a revoked certificate can be followed by a new one.
--- The unrevoked one is kept, then the latest issued, so a consumer joining on
--- (user_fk, courserun_fk) gets one row and sees the certificate that currently stands.
 , cross_source_deduped as (
     select
         *
@@ -286,12 +286,34 @@ with mitxonline_certificates as (
                     when 'micromasters' then 1
                     else 0
                 end
-                , case when certificate_is_revoked then 1 else 0 end
-                , certificate_issued_on desc nulls last
-                , certificate_id desc
         ) as _cross_source_row_num
     from certificates_with_fks
 )
+
+{% if is_incremental() %}
+-- Pre-compute per-platform watermarks in a single scan of {{ this }}.
+-- The correlated subquery pattern (WHERE platform = outer.platform) causes
+-- Trino to execute AssignUniqueId + LeftJoin(all target rows on platform) +
+-- StreamingAggregate, producing a 25B-row intermediate at 7TB.
+-- A pre-computed CTE + regular equijoin eliminates that fan-out entirely.
+, incremental_watermarks as (
+    select
+        platform as watermark_platform
+         , certificate_scope as watermark_certificate_type
+         , max(coalesce(certificate_updated_on, certificate_created_on)) as max_activity_on
+    from {{ this }}
+    group by platform, certificate_scope)
+
+-- Snapshot of the target's current (certificate_key, user_fk) pairs, used to re-select rows
+-- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
+-- change, so the activity-timestamp watermark alone would never catch it).
+, stale_user_fk_lookup as (
+    select
+        certificate_key
+        , user_fk as stored_user_fk
+    from {{ this }}
+)
+{% endif %}
 
 , final as (
     select
@@ -315,12 +337,34 @@ with mitxonline_certificates as (
         , certificate_updated_on
         , certificate_issued_on
     from cross_source_deduped as cwf
+
+    {% if is_incremental() %}
+    -- left join preserves certificates from platforms not yet in the target table
+    left join incremental_watermarks w
+        on w.watermark_platform = cwf.platform
+        and w.watermark_certificate_type = cwf.certificate_scope
+    left join stale_user_fk_lookup as sufk
+        on sufk.certificate_key = {{ dbt_utils.generate_surrogate_key([
+            "cast(cwf.certificate_id as varchar)",
+            "cwf.platform",
+            "cwf.certificate_scope"
+        ]) }}
     where cwf._cross_source_row_num = 1
+    and (
+        w.max_activity_on is null  -- platform/type not yet in target, include all
+        or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
+        or cwf.certificate_created_on is null
+        -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
+        or sufk.stored_user_fk is distinct from cwf.user_fk
+    )
+    {% else %}
+    where cwf._cross_source_row_num = 1
+    {% endif %}
 )
 
 -- Defensive dedup: the UNION ALL across 4 platform CTEs has no upstream uniqueness guarantee.
 -- If any intermediate develops grain drift, this guard prevents duplicate certificate_key values
--- from silently entering the fact table.
+-- from silently entering the fact table and corrupting incremental MERGE operations.
 -- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
 , final_deduped as (
     select
