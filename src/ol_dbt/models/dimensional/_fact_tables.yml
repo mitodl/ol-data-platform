@@ -816,6 +816,12 @@ unit_tests:
     rows: []
   - input: ref('int__bootcamps__courserunenrollments')
     rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
   - input: ref('int__micromasters__course_enrollments')
     rows: []
       # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
@@ -872,6 +878,121 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
+  description: >
+    Emeritus learners match dim_user by student id, falling back to email; Global
+    Alumni learners match by email, falling back to student id. Both platforms resolve
+    their course run through the xPro run that carries the same external run code.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - courserun_external_readable_id: "RUN-A"
+      courserun_readable_id: "course-v1:xPRO+A+R1"
+    - courserun_external_readable_id: ""
+      courserun_readable_id: "course-v1:xPRO+NOCODE+R1"
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+      # matched by student id
+    - user_id: "E-1"
+      user_email: "e1@example.com"
+      user_full_name: "Emma One"
+      courserun_external_readable_id: "RUN-A"
+      enrollment_created_on: "2024-03-01T00:00:00"
+      enrollment_updated_on: "2024-03-02T00:00:00"
+      is_enrolled: true
+      # no student id: matched by email, case-insensitively
+    - user_id:
+      user_email: "E2@Example.com"
+      user_full_name: "Eli Two"
+      courserun_external_readable_id: "RUN-A"
+      enrollment_created_on: "2024-03-01T00:00:00"
+      enrollment_updated_on: "2024-03-02T00:00:00"
+      is_enrolled: true
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows:
+      # matched by email
+    - user_id: "G-1"
+      user_email: "g1@example.com"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # no email: matched by student id
+    - user_id: "G-2"
+      user_email:
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: false
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_E1"
+      emeritus_user_id: "E-1"
+      email: "e1@example.com"
+    - user_pk: "USER_E2"
+      email: "e2@example.com"
+    - user_pk: "USER_G1"
+      global_alumni_user_id: "G-1-OTHER"
+      email: "g1@example.com"
+    - user_pk: "USER_G2"
+      global_alumni_user_id: "G-2"
+      email: "g2@example.com"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "RUN_A_XPRO"
+      courserun_readable_id: "course-v1:xPRO+A+R1"
+      platform: "mitxpro"
+      is_current: true
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_EMERITUS"
+      platform_readable_id: "emeritus"
+    - platform_pk: "PLATFORM_GLOBAL_ALUMNI"
+      platform_readable_id: "global_alumni"
+  expect:
+    rows:
+    - platform: "emeritus"
+      user_fk: "USER_E1"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "emeritus"
+      user_fk: "USER_E2"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G1"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G2"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: false
 - name: test_tfact_grade_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes

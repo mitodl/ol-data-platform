@@ -184,12 +184,13 @@ with mitxonline_enrollments as (
 
 , emeritus_enrollments as (
     select
-        -- Source has no native enrollment_id. Keyed on the learner (student id, else email,
-        -- else full name) so enrollments sent without a student id don't collapse into one
-        -- row per course run.
+        -- Source has no native enrollment_id. Keyed on the staging model's unique grain, not
+        -- the student id: an id that arrives on a later load would change the key and leave
+        -- the old row behind.
         {{ dbt_utils.generate_surrogate_key([
-            'coalesce(cast(emeritus_enrollments.user_id as varchar), emeritus_enrollments.user_email, emeritus_enrollments.user_full_name)',
-            'emeritus_enrollments.courserun_external_readable_id'
+            'emeritus_enrollments.courserun_external_readable_id',
+            'emeritus_enrollments.user_email',
+            'emeritus_enrollments.user_full_name'
         ]) }} as enrollment_id
         , cast(null as bigint) as user_id
         , emeritus_enrollments.user_id as external_user_id
