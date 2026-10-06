@@ -22,7 +22,7 @@ NAME = "learner_completion_status"
 MODEL = "afact_learner_courserun_progress"
 
 
-def _metric(body: dict[str, Any] | None = None, **top_level: Any) -> dict[str, Any]:
+def _metric(body: dict[Any, Any] | None = None, **top_level: Any) -> dict[str, Any]:
     return {
         "metric": {"name": NAME, "metricType": "OTHER", **(body or {})},
         "status": "Approved",
@@ -155,6 +155,13 @@ def test_openmetadata_enum_values_pass(tmp_path: Path) -> None:
 @pytest.mark.parametrize("field", ["id", "fullyQualifiedName", "glossaryTerms"])
 def test_field_the_file_may_not_set_errors(tmp_path: Path, field: str) -> None:
     assert _run(tmp_path, _metric({field: "x"})) == [f"`metric.{field}` is not a field the file may set"]
+
+
+def test_non_string_metric_keys_are_reported(tmp_path: Path) -> None:
+    assert _run(tmp_path, _metric({1: "x", "zz": "y"})) == [
+        "`metric.1` is not a field the file may set",
+        "`metric.zz` is not a field the file may set",
+    ]
 
 
 def test_unknown_status_errors(tmp_path: Path) -> None:

@@ -236,7 +236,7 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
             f"File {metric.path.name} declares metric '{metric.name}'",
             f"Name the file after the metric: {metric.name}.yaml.",
         )
-    for key in sorted(set(metric.body) - CREATE_METRIC_FIELDS):
+    for key in sorted(str(k) for k in set(metric.body) - CREATE_METRIC_FIELDS):
         report.add(
             METRIC_REGISTRY_CHECK,
             Severity.ERROR,
