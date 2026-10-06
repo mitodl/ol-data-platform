@@ -69,6 +69,8 @@ select
 from learner_months lm
 join contract_courseruns cc
     on lm.courserun_fk = cc.courserun_pk
+-- A row with no month is not a month the API can publish.
+where lm.activity_year_and_month is not null
 group by
     cc.organization_key,
     cc.sso_organization_id,

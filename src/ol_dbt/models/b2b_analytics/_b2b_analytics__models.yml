@@ -141,7 +141,10 @@ models:
       Certificates earned in the month, an EVENT count (learner x course run).
       Floor it via certified_learners.
   - name: certified_learners
-    description: Distinct learners who earned a certificate in the month.
+    description: >
+      Distinct learners who earned a certificate in the month. Earning a
+      certificate is not activity, so this is not a subset of
+      monthly_active_learners.
   - name: total_videos_watched
     description: >
       Videos played in the month (distinct videos per learner per day,
@@ -283,8 +286,8 @@ models:
     description: chatbot_users / total_enrolled_learners * 100.
   - name: certificates_earned
     description: >
-      Certificates earned, all-time. This is an EVENT count (learner x course
-      run), so it is not a learner cohort and cannot floor itself.
+      Enrolled learners holding an unrevoked certificate for this course run.
+      One per learner, so it is its own cohort.
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -400,7 +403,10 @@ models:
       Certificates earned in the month, an EVENT count (learner x course run).
       Floor it via certified_learners.
   - name: certified_learners
-    description: Distinct learners who earned a certificate in the month.
+    description: >
+      Distinct learners who earned a certificate in the month. Earning a
+      certificate is not activity, so this is not a subset of
+      monthly_active_learners.
   - name: total_videos_watched
     description: >
       Videos played in the month (distinct videos per learner per day,
@@ -512,6 +518,6 @@ models:
     description: chatbot_users as a percentage of total_enrolled_learners.
   - name: certificates_earned
     description: >
-      Certificates earned in this course run, an EVENT count. This view emits
-      no certified-learner cohort, so ol-analytics-api floors it as a count of
-      itself, which is weaker than flooring a cohort.
+      Enrolled learners holding an unrevoked certificate for this course run.
+      One per learner, so ol-analytics-api flooring it as a count of itself
+      floors a learner cohort.

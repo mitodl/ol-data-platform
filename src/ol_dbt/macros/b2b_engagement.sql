@@ -63,7 +63,7 @@
         0, 1, 0, 0, 0, 0
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
-      and enrollment_is_active
+      and enrollment_is_active = true
       and enrollment_created_on is not null
 
     union all
@@ -75,7 +75,7 @@
         0, 0, 1, 0, 0, 0
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
-      and is_certified
+      and is_certified = true
 {% endmacro %}
 
 {# One row per (learner, course run) enrollment with its all-time activity totals. The
