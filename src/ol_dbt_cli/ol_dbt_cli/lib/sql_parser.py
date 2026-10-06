@@ -8,6 +8,7 @@ sqlglot to analyse the SQL structure. This is an offline fallback; when
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -131,11 +132,72 @@ def _make_jinja_env(
     return env
 
 
-def _render_jinja(sql: str) -> tuple[str, list[str], list[str], dict[str, str], dict[str, str]]:
+MacroSources = Mapping[str, str]
+"""A dbt project's macro files, as ``{path: file content}``."""
+
+
+def read_macro_sources(dbt_dir: Path) -> dict[str, str]:
+    """Return the macro files under ``<dbt_dir>/macros`` as ``{relative path: content}``."""
+    macros_dir = dbt_dir / "macros"
+    return {path.relative_to(dbt_dir).as_posix(): path.read_text() for path in sorted(macros_dir.rglob("*.sql"))}
+
+
+class _DispatchingAdapter:
+    """Stand-in for dbt's ``adapter`` whose ``dispatch()`` result can be called.
+
+    A dispatching macro calls ``adapter.dispatch(name, package)(*args)``. The
+    plain undefined ``adapter`` returns a string from ``dispatch()``, and calling
+    a string raises.
+    """
+
+    def dispatch(self, *_args: object, **_kwargs: object) -> _SqlSafeUndefined:
+        return _SqlSafeUndefined(name="dispatch")
+
+
+def _return(value: object = "") -> object:
+    """Stand in for dbt's ``return()``: emit the value where the macro was called."""
+    return value
+
+
+def _register_project_macros(env: jinja2.Environment, macro_sources: MacroSources) -> None:
+    """Make the macros defined in *macro_sources* callable from templates of *env*.
+
+    A file plain Jinja2 cannot load (a ``{% test %}`` or ``{% materialization %}``
+    block is dbt syntax) is skipped, and its macros keep rendering as ``__macro__``.
+    The project's own ``ref``/``source`` overrides never replace the globals that
+    collect lineage.
+    """
+    reserved = set(env.globals)
+    env.globals["adapter"] = _DispatchingAdapter()
+    env.globals["return"] = _return
+    for source in macro_sources.values():
+        try:
+            module = env.from_string(source).module
+        except Exception:  # noqa: BLE001, S112 — dbt-only syntax, or top-level code needing a dbt context
+            continue
+        for name, value in vars(module).items():
+            if isinstance(value, jinja2.runtime.Macro) and name not in reserved:
+                env.globals[name] = value
+
+
+_ONLY_MACRO_CALLS_RE = re.compile(r"/\* __jinja_macro__ \*/|__macro__|__undefined__|[\s;]")
+
+
+def _is_only_macro_calls(rendered: str) -> bool:
+    """Return True if *rendered* holds nothing but macro placeholders."""
+    return not _ONLY_MACRO_CALLS_RE.sub("", rendered)
+
+
+def _render_jinja(
+    sql: str, macro_sources: MacroSources | None = None
+) -> tuple[str, list[str], list[str], dict[str, str], dict[str, str]]:
     """Render a dbt SQL template using Jinja2.
 
     Returns ``(rendered_sql, ref_names, source_names, ref_placeholder_map, source_placeholder_map)``.
     Raises ``jinja2.TemplateError`` if rendering fails.
+
+    With *macro_sources*, calls to the project's macros expand to the SQL they
+    produce instead of the ``__macro__`` placeholder.
 
     Unlike the regex-based :func:`strip_jinja`, this function properly evaluates
     ``{% if %}`` / ``{% for %}`` control blocks rather than simply stripping them,
@@ -147,6 +209,8 @@ def _render_jinja(sql: str) -> tuple[str, list[str], list[str], dict[str, str], 
     source_placeholder_map: dict[str, str] = {}
 
     env = _make_jinja_env(ref_names, source_names, ref_placeholder_map, source_placeholder_map)
+    if macro_sources is not None:
+        _register_project_macros(env, macro_sources)
     template = env.from_string(sql)
     rendered = template.render()
 
@@ -338,8 +402,13 @@ def _parses_cleanly(sql: str) -> bool:
     return True
 
 
-def strip_jinja(sql: str) -> JinjaStripResult:
+def strip_jinja(sql: str, macro_sources: MacroSources | None = None) -> JinjaStripResult:
     """Process Jinja in *sql* and return a :class:`JinjaStripResult`.
+
+    A model whose whole body is macro calls renders to placeholders alone, which
+    leaves nothing to parse. When *macro_sources* is given, such a model is
+    rendered again with the project's macros expanded. Every other model keeps
+    the placeholder rendering, so the expansion cannot change how it parses.
 
     **Primary path**: Jinja2 rendering with :class:`_SqlSafeUndefined`.  This
     properly evaluates ``{% if %}`` / ``{% for %}`` control blocks rather than
@@ -357,6 +426,13 @@ def strip_jinja(sql: str) -> JinjaStripResult:
     """
     try:
         rendered, ref_names, source_names, ref_placeholder_map, source_placeholder_map = _render_jinja(sql)
+        if macro_sources is not None and _is_only_macro_calls(rendered):
+            try:
+                rendered, ref_names, source_names, ref_placeholder_map, source_placeholder_map = _render_jinja(
+                    sql, macro_sources
+                )
+            except Exception:  # noqa: BLE001, S110 — a macro needing a real dbt context; keep the placeholders
+                pass
         return JinjaStripResult(
             clean_sql=rendered,
             ref_names=ref_names,
@@ -456,6 +532,9 @@ class ParsedModel:
     compiled_stale: bool = False
     """True if a compiled counterpart existed but was older than the raw source,
     so raw parsing was used instead (the compiled SQL would have been out of date)."""
+    macro_sources: MacroSources | None = field(default=None, repr=False, compare=False)
+    """The project macros the model was parsed with, so a later re-read of its raw
+    SQL renders the same way."""
 
 
 def _extract_select_columns(select: exp.Select) -> tuple[set[str], bool]:
@@ -785,7 +864,7 @@ def resolve_star_columns(parsed: ParsedModel, upstream_columns: dict[str, set[st
     sql_path = parsed.source_path
     if sql_path is None or not sql_path.exists():
         return None
-    stripped = strip_jinja(sql_path.read_text())
+    stripped = strip_jinja(sql_path.read_text(), parsed.macro_sources)
     return expand_star_with_schema(
         stripped.clean_sql,
         stripped.ref_placeholder_map,
@@ -794,11 +873,12 @@ def resolve_star_columns(parsed: ParsedModel, upstream_columns: dict[str, set[st
     )
 
 
-def parse_model_sql(name: str, sql: str) -> ParsedModel:
+def parse_model_sql(name: str, sql: str, macro_sources: MacroSources | None = None) -> ParsedModel:
     """Parse *sql* content for model *name* and extract column metadata."""
-    stripped = strip_jinja(sql)
+    stripped = strip_jinja(sql, macro_sources)
     result = ParsedModel(
         name=name,
+        macro_sources=macro_sources,
         refs=stripped.ref_names,
         source_refs=stripped.source_names,
         ref_placeholder_map=stripped.ref_placeholder_map,
@@ -849,7 +929,9 @@ def parse_model_sql(name: str, sql: str) -> ParsedModel:
     return result
 
 
-def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedModel:
+def parse_model_file(
+    path: Path, compiled_dir: Path | None = None, macro_sources: MacroSources | None = None
+) -> ParsedModel:
     """Parse a dbt model `.sql` file.
 
     When *compiled_dir* is provided and a compiled counterpart exists, uses the
@@ -877,21 +959,22 @@ def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedMode
             # Lineage (refs/sources) must come from the raw SQL because compiled
             # SQL replaces {{ ref('x') }} with physical relation names that have no
             # reliable 'ref_' prefix convention.
-            jinja_result = strip_jinja(raw_sql)
+            jinja_result = strip_jinja(raw_sql, macro_sources)
+            result.macro_sources = macro_sources
             result.refs = jinja_result.ref_names
             result.source_refs = jinja_result.source_names
             result.ref_placeholder_map = jinja_result.ref_placeholder_map
             result.source_placeholder_map = jinja_result.source_placeholder_map
             return result
 
-        result = parse_model_sql(path.stem, raw_sql)
+        result = parse_model_sql(path.stem, raw_sql, macro_sources)
         result.source_path = path
         # A compiled file existed but was older than the raw source — record that
         # we fell back to raw so callers can prompt for a recompile.
         result.compiled_stale = compiled_sql is not None
         return result
 
-    result = parse_model_sql(path.stem, raw_sql)
+    result = parse_model_sql(path.stem, raw_sql, macro_sources)
     result.source_path = path
     return result
 
@@ -977,9 +1060,12 @@ def find_compiled_dir(dbt_dir: Path) -> Path | None:
     return None
 
 
-def parse_model_sql_at_content(name: str, sql_content: str) -> ParsedModel:
-    """Parse SQL content (e.g., from git show) for the named model."""
-    return parse_model_sql(name, sql_content)
+def parse_model_sql_at_content(name: str, sql_content: str, macro_sources: MacroSources | None = None) -> ParsedModel:
+    """Parse SQL content (e.g., from git show) for the named model.
+
+    *macro_sources* must be the macros of the same revision as *sql_content*.
+    """
+    return parse_model_sql(name, sql_content, macro_sources)
 
 
 def get_columns_read_from_ref(
@@ -1022,7 +1108,7 @@ def get_columns_read_from_ref(
 
     try:
         raw_sql = sql_path.read_text()
-        clean_sql = strip_jinja(raw_sql).clean_sql
+        clean_sql = strip_jinja(raw_sql, downstream_parsed.macro_sources).clean_sql
 
         stmts = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
         parsed_sql = next((s for s in reversed(stmts) if s is not None), None)
@@ -1233,7 +1319,7 @@ def consumed_columns_by_ref_via_scope(
         return {}
 
     try:
-        clean_sql = strip_jinja(sql_path.read_text()).clean_sql
+        clean_sql = strip_jinja(sql_path.read_text(), downstream_parsed.macro_sources).clean_sql
     except Exception:  # noqa: BLE001
         return {}
 
