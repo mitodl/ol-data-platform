@@ -1545,6 +1545,9 @@ models:
         combination_of_columns:
         - user_fk
         - courserun_fk
+      config:
+        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
+        error_if: ">0"
   config:
     meta:
       qa_branches:
