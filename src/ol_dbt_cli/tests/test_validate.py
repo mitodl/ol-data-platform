@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import textwrap
 from pathlib import Path
 
@@ -1094,6 +1095,23 @@ class TestChangedOnlyWithNoChangedModel:
             self._validate(repo, skip_checks="qa_branch_contract")
         assert exc.value.code == 1
         assert "names a dbt_model that does not exist" in capsys.readouterr().out
+
+    def test_ci_skip_list_still_runs_yaml_integrity_as_json(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The changed-models step in dbt PR CI skips four global checks and leaves yaml_integrity on."""
+        (repo / "src" / "ol_dbt" / "models" / "_models.yml").write_text(
+            yaml.safe_dump({"version": 2, "models": [{"name": "model_without_sql"}]})
+        )
+        with pytest.raises(SystemExit) as exc:
+            self._validate(
+                repo,
+                skip_checks="dimensional_layering,qa_branch_contract,data_contract,metric_registry",
+                output_format="json",
+            )
+        assert exc.value.code == 1
+        issues = json.loads(capsys.readouterr().out)
+        assert [(i["check"], i["model"]) for i in issues] == [("yaml_integrity", "model_without_sql")]
 
     def test_returns_early_when_every_global_check_is_skipped(
         self, repo: Path, capsys: pytest.CaptureFixture[str]
