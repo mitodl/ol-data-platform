@@ -35,7 +35,7 @@ from dagster import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import load_dbt_model_table
-from pyiceberg.io.pyarrow import ArrowScan, schema_to_pyarrow
+from pyiceberg.io.pyarrow import schema_to_pyarrow
 from pyiceberg.table import Table
 from upath import UPath
 
@@ -60,6 +60,10 @@ MANIFEST_NAME = "_MANIFEST.json"
 MANIFEST_FILE_FIELDS = ("row_count", "size_bytes", "sha256")
 
 FORUM_CONTENTS_MODEL = "forum_contents"
+
+# Rows decoded per pull from a data file. studentmodule's state column averages
+# 2 KB a row, so a batch is about 35 MB of text.
+READ_BATCH_ROWS = 16_384
 
 
 @dataclass(frozen=True)
@@ -277,7 +281,7 @@ def write_parquet(
 def read_data_files(
     table: Table, snapshot_id: int, columns: Sequence[str] = ("*",)
 ) -> Iterator[pl.DataFrame]:
-    """Read an Iceberg snapshot one data file at a time, after an empty batch.
+    """Read an Iceberg snapshot READ_BATCH_ROWS rows at a time, after an empty batch.
 
     Not pl.scan_iceberg: with the pyiceberg reader glue_helper forces, it reads
     through pyiceberg's to_arrow_batch_reader, which hands every data file to a
@@ -287,20 +291,38 @@ def read_data_files(
     mitx's is twice the size). Polars' streaming sinks also read ahead of a slow
     Python sink, so the writers take plain batches instead of a LazyFrame.
 
+    Not pyiceberg's ArrowScan either, even one data file at a time: its Arrow
+    dataset scanner decodes several row groups ahead of the consumer. That is
+    harmless on the 30 MB files a dbt build writes, but the nightly OPTIMIZE
+    rewrites studentmodule into 580 MB files of 1.9 GB row groups, and one of
+    those passes the worker's 8Gi limit within 30 seconds. ParquetFile decodes
+    only the batch being pulled and holds one compressed column chunk beside
+    it, so memory follows a row group's size on disk, not its decoded size.
+
     The leading empty batch carries the schema, so a table with no data files
     still gets a CSV header or a Parquet schema.
     """
     scan = table.scan(snapshot_id=snapshot_id, selected_fields=tuple(columns))
-    projection = scan.projection()
-    reader = ArrowScan(
-        table.metadata, table.io, projection, scan.row_filter, scan.case_sensitive
-    )
-    yield cast(
-        "pl.DataFrame", pl.from_arrow(schema_to_pyarrow(projection).empty_table())
-    )
+    schema = schema_to_pyarrow(scan.projection())
+    yield cast("pl.DataFrame", pl.from_arrow(schema.empty_table()))
     for task in scan.plan_files():
-        for batch in reader.to_record_batches([task]):
-            yield cast("pl.DataFrame", pl.from_arrow(batch))
+        # Reading the Parquet file directly skips what ArrowScan would apply.
+        # The irx tables are rebuilt whole by dbt, so they never carry deletes.
+        if task.delete_files:
+            raise Failure(
+                description=(
+                    f"{task.file.file_path} has delete files, which this reader "
+                    "does not apply; the export would deliver deleted rows."
+                )
+            )
+        with table.io.new_input(task.file.file_path).open() as source:
+            for batch in pq.ParquetFile(source).iter_batches(
+                batch_size=READ_BATCH_ROWS, columns=schema.names
+            ):
+                yield cast(
+                    "pl.DataFrame",
+                    pl.from_arrow(batch.select(schema.names).cast(schema)),
+                )
 
 
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
