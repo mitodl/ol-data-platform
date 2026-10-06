@@ -285,3 +285,106 @@ models:
       updated
     tests:
     - not_null
+
+- name: stg__ocw__s3__course_content
+  description: The current data.json of every OCW course, course page and course resource
+    in the OCW live bucket, with the text extracted from each resource's file. One
+    row per data.json, from each course's newest load.
+  columns:
+  - name: course_slug
+    description: str, the course's directory under courses/ in the bucket, which is
+      also its URL path on ocw.mit.edu
+    tests:
+    - not_null
+  - name: coursecontent_kind
+    description: str, course, page or resource
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [course, page, resource]
+  - name: coursecontent_s3_key
+    description: str, key of the data.json in the bucket
+    tests:
+    - not_null
+    - unique
+  - name: coursecontent_title
+    description: str, title of the page or resource
+  - name: coursecontent_description
+    description: str, description of the page or resource
+  - name: coursecontent_body
+    description: str, the rendered HTML body of the page or resource
+  - name: coursecontent_resource_type
+    description: str, resourcetype of a resource, e.g. Document, Image, Video, Other
+  - name: coursecontent_legacy_resource_type
+    description: str, resource_type, which data.json written before resourcetype existed
+      carries instead
+  - name: coursecontent_file
+    description: str, path or URL of the resource's file
+  - name: coursecontent_file_type
+    description: str, MIME type of the resource's file
+  - name: coursecontent_learning_resource_types
+    description: str, JSON array of the learning resource types, e.g. ["Problem Sets"]
+  - name: coursecontent_video_youtube_id
+    description: str, YouTube id of a video resource
+  - name: coursecontent_video_archive_url
+    description: str, archive.org URL of a video resource
+  - name: coursecontent_video_transcript_file
+    description: str, video_files.video_transcript_file of a video resource
+  - name: coursecontent_legacy_transcript_file
+    description: str, transcript_file of a video resource in the earlier format
+  - name: coursecontent_legacy_thumbnail_file
+    description: str, thumbnail_file of a video resource in the earlier format
+  - name: course_site_uid
+    description: str, site_uid of the course; set on the course row only
+  - name: course_legacy_uid
+    description: str, legacy_uid of the course; set on the course row only
+  - name: coursecontent_text_file_key
+    description: str, key of the file text was extracted from; null where MIT Learn
+      would extract none
+  - name: coursecontent_text
+    description: str, the text Tika extracted from that file
+  - name: coursecontent_text_extraction_status
+    description: str, extracted, empty, failed or missing; null where there is no
+      file to extract
+  - name: coursecontent_retrieved_on
+    description: timestamp, when the load that read the course started
+
+unit_tests:
+- name: test_stg__ocw__s3__course_content_keeps_the_newest_set_and_earlier_text
+  description: >
+    Each course's newest read is the course, an unpublished marker empties it,
+    and a file that failed on a retry keeps the text of an earlier read of the
+    same ETag.
+  model: stg__ocw__s3__course_content
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__ocw__s3__course_content')
+    rows:
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/notes/data.json,
+      data_json: '{"title": "Notes"}', file_key: courses/a-course/abc_notes.pdf, file_etag: e1,
+      content: Lecture notes, extraction_status: extracted, course_retrieved_at: "2026-10-01\
+        \ 00:00:00+00"}
+    - {course_slug: a-course, content_kind: page, s3_key: courses/a-course/pages/removed/data.json,
+      data_json: '{"title": "Removed"}', course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/notes/data.json,
+      data_json: '{"title": "Notes"}', file_key: courses/a-course/abc_notes.pdf, file_etag: e1,
+      content: null, extraction_status: failed, course_retrieved_at: "2026-10-02 00:00:00+00"}
+    # A changed file has no earlier text to fall back on.
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/slides/data.json,
+      data_json: '{"title": "Slides"}', file_key: courses/a-course/abc_slides.pdf,
+      file_etag: e3, content: null, extraction_status: failed, course_retrieved_at: "2026-10-02\
+        \ 00:00:00+00"}
+    - {course_slug: a-course, content_kind: resource, s3_key: courses/a-course/resources/slides/data.json,
+      data_json: '{"title": "Slides"}', file_key: courses/a-course/abc_slides.pdf,
+      file_etag: e2, content: Old slides, extraction_status: extracted, course_retrieved_at: "2026-10-01\
+        \ 00:00:00+00"}
+    - {course_slug: gone-course, content_kind: page, s3_key: courses/gone-course/pages/a/data.json,
+      data_json: '{"title": "A"}', course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_slug: gone-course, content_kind: unpublished, course_retrieved_at: "2026-10-02\
+        \ 00:00:00+00"}
+  expect:
+    rows:
+    - {course_slug: a-course, coursecontent_s3_key: courses/a-course/resources/notes/data.json,
+      coursecontent_title: Notes, coursecontent_text: Lecture notes, coursecontent_text_extraction_status: extracted}
+    - {course_slug: a-course, coursecontent_s3_key: courses/a-course/resources/slides/data.json,
+      coursecontent_title: Slides, coursecontent_text: null, coursecontent_text_extraction_status: failed}
