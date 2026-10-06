@@ -55,6 +55,7 @@ def test_every_source_package_is_covered() -> None:
         "podcast_rss",
         "posthog_events",
         "see",
+        "xpro_app",
         "youtube",
     }
     assert set(_source_modules()) == known, (

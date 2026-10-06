@@ -33,6 +33,7 @@ from ol_dlt.sources import (
     podcast_rss,
     posthog_events,
     see,
+    xpro_app,
     youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
@@ -122,6 +123,30 @@ mitxonline_app_assets = (
         pipeline=mitxonline_app.mitxonline_app_pipeline,
     )
     if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    else None
+)
+# Environments where dlt owns the xPro app-database load. Production is absent
+# for the reason MITXONLINE_APP_DLT_ENVIRONMENTS gives: the Airbyte connection
+# "xPro Production App DB → S3 Data Lake" still loads the unit there under the
+# same asset keys.
+#
+# QA is different from MITx Online in one respect. Its raw__xpro__app__postgres__*
+# tables were last written by an Airbyte Iceberg destination (2026-06), so a QA
+# connection that the lakehouse selector (endswith "s3 data lake") matches may
+# still exist. That connection has to be deleted in QA Airbyte before this
+# deploys there, or the lakehouse code location claims the same keys.
+#
+# Add "production" in the SAME change that disables the Airbyte connection and
+# flips the inventory unit to `loader: dlt`.
+XPRO_APP_DLT_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+
+xpro_app_assets = (
+    build_ingest_assets(
+        name="xpro_app_ingest",
+        source=xpro_app.build_source(),
+        pipeline=xpro_app.xpro_app_pipeline,
+    )
+    if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
     else None
 )
 see_assets = build_ingest_assets(
@@ -366,6 +391,7 @@ defs = Definitions(
             podcast_rss_assets,
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            *([xpro_app_assets] if xpro_app_assets else []),
             youtube_assets,
             see_assets,
             openlearning_assets,

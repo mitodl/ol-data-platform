@@ -14,10 +14,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+import dagster as dg
 import pytest
 from data_loading.definitions import defs
-from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
-from ol_dlt.sources import mitxonline_app
+from data_loading.defs.ingestion.assets import (
+    MITXONLINE_APP_DLT_ENVIRONMENTS,
+    XPRO_APP_DLT_ENVIRONMENTS,
+)
+from ol_dlt.sources import mitxonline_app, xpro_app
 
 _REPO = defs.get_repository_def()
 
@@ -174,6 +178,35 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+@pytest.mark.parametrize("environment", sorted(XPRO_APP_DLT_ENVIRONMENTS))
+def test_xpro_app_assets_load_where_dlt_owns_the_unit(environment: str) -> None:
+    with _repository_for(environment) as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert len(
+            [key for key in asset_keys if "raw__xpro__app__postgres__" in key]
+        ) == len(xpro_app.XPRO_APP_SPEC.tables)
+        assert "xpro_app_ingest_schedule" in {s.name for s in repo.schedule_defs}
+
+
+def test_the_xpro_group_holds_only_the_app_database_tables() -> None:
+    """The schedule targets the `xpro` group, so nothing else may join it."""
+    with _repository_for("qa") as repo:
+        selected = dg.AssetSelection.groups("xpro").resolve(repo.asset_graph)
+        assert selected
+        assert all(
+            key.path[-1].startswith("raw__xpro__app__postgres__") for key in selected
+        )
+
+
+def test_xpro_app_dlt_does_not_run_in_production() -> None:
+    """Production still loads this unit through Airbyte under the same keys."""
+    with _repository_for("production") as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert asset_keys, "code location exposed no assets under production"
+        assert not [key for key in asset_keys if "raw__xpro__app__postgres__" in key]
+        assert "xpro_app_ingest_schedule" not in {s.name for s in repo.schedule_defs}
 
 
 class _FakeInstance:
