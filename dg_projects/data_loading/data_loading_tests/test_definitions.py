@@ -149,7 +149,17 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
         assert len(
             [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
         ) == len(mitxonline_app.MITXONLINE_APP_SPEC.tables)
-        assert "mitxonline_app_ingest_schedule" in {s.name for s in repo.schedule_defs}
+        schedule = repo.get_schedule_def("mitxonline_app_ingest_schedule")
+        # The MITx Online structure blocks share the "mitxonline" group and
+        # read the production landing zone, so the app schedule must not
+        # select them.
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == {
+            key for key in asset_keys if "raw__mitxonline__app__postgres__" in key
+        }
 
 
 def test_mitxonline_app_dlt_does_not_run_in_production() -> None:

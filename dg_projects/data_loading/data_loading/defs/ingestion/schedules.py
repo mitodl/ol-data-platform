@@ -6,7 +6,7 @@ import dagster as dg
 from ol_dlt.sources import course_xml_blocks
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
+from data_loading.defs.ingestion.assets import mitxonline_app_assets
 from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
 
 oll_ingest_schedule = dg.ScheduleDefinition(
@@ -123,9 +123,11 @@ keycloak_ingest_schedule = dg.ScheduleDefinition(
 mitxonline_app_ingest_schedule = (
     dg.ScheduleDefinition(
         name="mitxonline_app_ingest_schedule",
-        # Selected by group rather than by key so adding a table to
-        # MITXONLINE_APP_SPEC does not also require editing this schedule.
-        target=dg.AssetSelection.groups("mitxonline"),
+        # Selected by definition rather than by key so adding a table to
+        # MITXONLINE_APP_SPEC does not also require editing this schedule, and
+        # not by the "mitxonline" group, which the MITx Online course structure
+        # blocks share.
+        target=dg.AssetSelection.assets(mitxonline_app_assets),
         # Every six hours, matching the cadence of the Airbyte connection this
         # replaces (inventory unit mitxonline/app_postgres,
         # sync_interval_hours: 6). Offset off the hour so it does not start
@@ -133,7 +135,7 @@ mitxonline_app_ingest_schedule = (
         cron_schedule="20 */6 * * *",
         execution_timezone="Etc/UTC",
     )
-    if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    if mitxonline_app_assets
     else None
 )
 # PostHog writes an hour's export object after that hour closes. Across the 168
