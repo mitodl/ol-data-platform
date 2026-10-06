@@ -27,6 +27,11 @@ select
     , catalog_details as cms_coursepage_catalog_details
     , external_marketing_url as cms_coursepage_external_marketing_url
     , search_image_id as cms_coursepage_search_image_id
+    , thumbnail_image_id as cms_coursepage_thumbnail_image_id
+    , min_weeks as cms_coursepage_min_weeks
+    , max_weeks as cms_coursepage_max_weeks
+    , min_weekly_hours as cms_coursepage_min_weekly_hours
+    , max_weekly_hours as cms_coursepage_max_weekly_hours
     , 'cms_coursepage' as cms_coursepage_model
 from most_recent_coursepage
 union all
@@ -41,6 +46,11 @@ select
     , most_recent_externalcoursepage.catalog_details as cms_coursepage_catalog_details
     , most_recent_externalcoursepage.external_marketing_url as cms_coursepage_external_marketing_url
     , most_recent_externalcoursepage.search_image_id as cms_coursepage_search_image_id
+    , most_recent_externalcoursepage.thumbnail_image_id as cms_coursepage_thumbnail_image_id
+    , most_recent_externalcoursepage.min_weeks as cms_coursepage_min_weeks
+    , most_recent_externalcoursepage.max_weeks as cms_coursepage_max_weeks
+    , most_recent_externalcoursepage.min_weekly_hours as cms_coursepage_min_weekly_hours
+    , most_recent_externalcoursepage.max_weekly_hours as cms_coursepage_max_weekly_hours
     , 'cms_externalcoursepage' as cms_coursepage_model
 
 from most_recent_externalcoursepage

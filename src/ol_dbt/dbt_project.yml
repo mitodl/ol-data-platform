@@ -60,6 +60,8 @@ vars:
     mitpe_url: "https://professional.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
+    # xPRO marketing site, no trailing slash. Course and program page URLs are built on it.
+    mitxpro_url: "https://xpro.mit.edu"
     # Base URLs for Wagtail-uploaded media files (prepended to wagtailimages_image.file paths).
     # The image file column contains paths like 'original_images/course.jpg' — these vars
     # supply the scheme+host prefix to form a complete URL. Verify against the Django
