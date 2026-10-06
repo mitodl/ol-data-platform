@@ -101,8 +101,11 @@ pull filters and prunes on; see
 MIT Learn pulls these as sets of flat models and nests them itself: a playlist
 with its videos, a podcast with its episodes. Each pull is a full sync. Learn
 reads every row of every model in the set and unpublishes what the set no longer
-lists, so it never filters on `last_modified`, and it refuses a model that
-returns no rows.
+lists, so it never filters on `last_modified`. Learn fails the pull before
+writing when a model returns no rows, or when the pull would unpublish more than
+10% of what it has published for the source (playlists, videos, podcasts or
+episodes, each counted on its own). A real removal of that size has to be run in
+Learn with the limit lifted.
 
 | Set | Models | Joined on |
 |-----|--------|-----------|
