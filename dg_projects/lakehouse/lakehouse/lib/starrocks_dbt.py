@@ -167,6 +167,7 @@ def refresh_materialized_views(
     *,
     log: logging.Logger,
     sleep: Callable[[float], None] = time.sleep,
+    after_refresh: Callable[[str], None] | None = None,
 ) -> None:
     """Refresh every MV in *relations*, retrying base-table-rebuild failures.
 
@@ -181,6 +182,9 @@ def refresh_materialized_views(
         asset.
     :param log: Where progress goes. `context.log` in the asset.
     :param sleep: Injected so tests don't wait out the retry delay.
+    :param after_refresh: Called with a relation straight after its REFRESH
+        succeeds, and never for one that failed. If it raises, that relation is
+        reported as failed like any other.
     :raises MaterializedViewRefreshError: if any MV still failed.
     """
     failures: dict[str, Exception] = {}
@@ -189,6 +193,8 @@ def refresh_materialized_views(
         for attempt in range(1, MAX_MV_REFRESH_ATTEMPTS + 1):
             try:
                 execute(f"REFRESH MATERIALIZED VIEW {relation} WITH SYNC MODE")
+                if after_refresh:
+                    after_refresh(relation)
             except Exception as exc:
                 if (
                     attempt == MAX_MV_REFRESH_ATTEMPTS
@@ -359,7 +365,7 @@ def change_tracked_views(manifest: Mapping[str, Any]) -> list[ChangeTrackedView]
 
     :raises ValueError: if a `key` or `identity` column is not documented on
         the model. The statements would otherwise fail in StarRocks on an
-        unknown column, after the refresh, with nothing pointing at the YAML.
+        unknown column with nothing pointing at the YAML.
     """
     views = []
     for node in _materialized_view_nodes(manifest):
@@ -432,6 +438,10 @@ def stamp_change_log_sql(view: ChangeTrackedView) -> str:
     never sees a half-written log, and the statement can be re-run: a second
     run finds nothing changed and keeps every `changed_on`.
 
+    The target columns are named so that a log created under a different `key`
+    or `identity` list fails on an unknown column instead of taking values in
+    the wrong positions.
+
     The join is null-safe (`<=>`) so a null key column matches itself rather
     than being read as one row leaving and another arriving on every run.
     """
@@ -449,36 +459,47 @@ def stamp_change_log_sql(view: ChangeTrackedView) -> str:
         ),
         "m.row_hash is null",
     ]
+    columns = ", ".join(
+        f"`{column}`"
+        for column in (
+            *view.key,
+            *view.identity,
+            "row_hash",
+            "changed_on",
+            "is_deleted",
+        )
+    )
     return (
-        f"insert overwrite {view.change_log} "  # noqa: S608
+        f"insert overwrite {view.change_log} ({columns}) "  # noqa: S608
         f"select {', '.join(select)} "
         f"from ({_current_rows_sql(view)}) m "
         f"full outer join {view.change_log} c on {join}"
     )
 
 
-def stamp_change_logs(
-    views: Iterable[ChangeTrackedView],
-    execute: Callable[[str], None],
-    *,
-    log: logging.Logger,
+def stamp_change_log(
+    view: ChangeTrackedView, execute: Callable[[str], None], *, log: logging.Logger
 ) -> None:
-    """Bring each view's change log up to date with the refresh that just ran.
+    """Bring *view*'s change log up to date with the refresh that just ran.
 
-    Run this only for views whose REFRESH succeeded in the same run, and only
-    after it. `changed_on` is the cursor ol-analytics-api compares to a
-    client's `updated_since`, and the client passes the `as_of` of its previous
-    read, which is the MV's last refresh time. Stamping after the refresh that
-    first exposes a change puts `changed_on` later than every `as_of` the
-    client could hold from before it saw the change, so the change is never
-    skipped. A source timestamp can't give that: the change reaches the MV some
-    time after it was made.
+    Call this only straight after the view's REFRESH succeeds, which is what
+    `refresh_materialized_views`' `after_refresh` does. `changed_on` is the
+    cursor ol-analytics-api compares to a client's `updated_since`, and the
+    client passes the `as_of` of its previous read, which is the MV's last
+    refresh time. Stamping after the refresh that first exposes a change puts
+    `changed_on` at or after that refresh's finish time, and so at or after
+    every `as_of` the client could hold from before it saw the change. The
+    comparison has to stay inclusive (`>=`) for that to mean the change is
+    never skipped. A source timestamp can't give this: the change reaches the
+    MV some time after it was made.
 
     A view that was not refreshed must not be stamped. `dbt build
     --full-refresh` recreates an MV empty, and an MV whose refresh then fails
-    stays empty; stamping it would mark every record deleted.
+    stays empty; stamping it would mark every record deleted. The stamp reads
+    the MV as it is when the statement runs, so a second run of the build
+    overlapping this one can still do that; the next stamp reverses it and
+    restamps every row.
     """
-    for view in views:
-        log.info("Stamping %s", view.change_log)
-        execute(seed_change_log_sql(view))
-        execute(stamp_change_log_sql(view))
+    log.info("Stamping %s", view.change_log)
+    execute(seed_change_log_sql(view))
+    execute(stamp_change_log_sql(view))

@@ -14,7 +14,7 @@
 # Change logs. A model that sets config.meta.change_tracking gets a companion
 # table, <model>_changes, in this database. dbt does not build it: the Dagster
 # MV-refresh asset rewrites it after each successful refresh of the model
-# (lakehouse.lib.starrocks_dbt.stamp_change_logs). It has one row per `key`
+# (lakehouse.lib.starrocks_dbt.stamp_change_log). It has one row per `key`
 # the model has ever held, with:
 #   - the `key` columns, the model's grain
 #   - the `identity` columns as last seen, which name the record to an API
@@ -23,9 +23,9 @@
 #   - changed_on, the UTC time of the stamp that first saw the row, saw its
 #     hash change, or saw it leave or return
 #   - is_deleted, true while the key is absent from the model
-# changed_on is later than the finish time of the refresh that exposed the
-# change, which is what makes it usable as the updated_since cursor where
-# record_updated_on is not. A changed `key` or `identity` list needs the table
+# changed_on is at or after the finish time of the refresh that exposed the
+# change, which is what makes it usable as an inclusive updated_since cursor
+# where record_updated_on is not. Removed rows are never pruned. A changed `key` or `identity` list needs the table
 # dropped by hand; the next refresh recreates it and stamps every row.
 version: 2
 models:

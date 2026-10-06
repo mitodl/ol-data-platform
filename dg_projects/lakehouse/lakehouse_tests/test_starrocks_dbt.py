@@ -27,8 +27,8 @@ from lakehouse.lib.starrocks_dbt import (
     refresh_materialized_views,
     retry_delay,
     seed_change_log_sql,
+    stamp_change_log,
     stamp_change_log_sql,
-    stamp_change_logs,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
@@ -718,7 +718,9 @@ class TestChangeLogSql:
     def test_stamp_overwrites_from_a_null_safe_join_on_the_key(self):
         sql = stamp_change_log_sql(LEARNER_VIEW)
         assert sql.startswith(
-            "insert overwrite b2b_learner_records.mv_b2b_learner_changes select"
+            "insert overwrite b2b_learner_records.mv_b2b_learner_changes "
+            "(`organization_key`, `user_pk`, `sso_organization_id`, `user_global_id`, "
+            "`row_hash`, `changed_on`, `is_deleted`) select"
         )
         assert sql.endswith(
             "full outer join b2b_learner_records.mv_b2b_learner_changes c "
@@ -727,13 +729,60 @@ class TestChangeLogSql:
         )
 
 
-class TestStampChangeLogs:
-    def test_seeds_then_stamps_each_view(self):
+class TestStampChangeLog:
+    def test_seeds_then_stamps(self):
         statements: list[str] = []
-        stamp_change_logs(
-            [LEARNER_VIEW], statements.append, log=logging.getLogger("test")
-        )
+        stamp_change_log(LEARNER_VIEW, statements.append, log=logging.getLogger("test"))
         assert statements == [
             seed_change_log_sql(LEARNER_VIEW),
             stamp_change_log_sql(LEARNER_VIEW),
         ]
+
+
+class TestAfterRefresh:
+    def _run(self, starrocks, relations, after_refresh):
+        refresh_materialized_views(
+            relations,
+            starrocks.execute,
+            log=logging.getLogger("test"),
+            sleep=lambda _: None,
+            after_refresh=after_refresh,
+        )
+
+    def test_a_failed_refresh_is_not_followed_up(self):
+        """`dbt build --full-refresh` recreates an MV empty. Stamping a change
+        log from one whose refresh then failed would mark every record deleted.
+        """
+        starrocks = ScriptedStarRocks(
+            {"b2b_analytics.mv_a": [UNRELATED_REFRESH_FAILURE]}
+        )
+        seen: list[str] = []
+        with pytest.raises(MaterializedViewRefreshError):
+            self._run(
+                starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], seen.append
+            )
+        assert seen == ["b2b_analytics.mv_b"]
+
+    def test_runs_once_after_a_retried_refresh(self):
+        starrocks = ScriptedStarRocks(
+            {"b2b_analytics.mv_a": [BASE_TABLE_RECREATED_FAILURE]}
+        )
+        seen: list[str] = []
+        self._run(starrocks, ["b2b_analytics.mv_a"], seen.append)
+        assert seen == ["b2b_analytics.mv_a"]
+
+    def test_a_failing_follow_up_is_reported_and_does_not_stop_the_rest(self):
+        def after_refresh(relation):
+            if relation == "b2b_analytics.mv_a":
+                msg = "stamp failed"
+                raise RuntimeError(msg)
+
+        starrocks = ScriptedStarRocks({})
+        with pytest.raises(MaterializedViewRefreshError) as excinfo:
+            self._run(
+                starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], after_refresh
+            )
+        assert set(excinfo.value.failures) == {"b2b_analytics.mv_a"}
+        assert starrocks.statements[-1] == (
+            "REFRESH MATERIALIZED VIEW b2b_analytics.mv_b WITH SYNC MODE"
+        )
