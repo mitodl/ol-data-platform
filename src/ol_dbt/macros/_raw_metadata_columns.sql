@@ -307,6 +307,7 @@
         'raw__mitx__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
         'raw__mitx__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__mitxonline__app__postgres__b2b_contractpage': none,
+        'raw__mitxonline__app__postgres__b2b_contractprogramitem': none,
         'raw__mitxonline__app__postgres__b2b_discountcontractattachmentredemption': none,
         'raw__mitxonline__app__postgres__b2b_organizationindexpage': none,
         'raw__mitxonline__app__postgres__b2b_organizationpage': none,

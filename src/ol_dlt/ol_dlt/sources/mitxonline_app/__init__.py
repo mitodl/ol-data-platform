@@ -75,6 +75,9 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         # The reason this source exists first. dim_organization and
         # dim_contract read these, and their keys are realm-scoped.
         DatabaseTable(name="b2b_contractpage", primary_key="page_ptr_id"),
+        # The programs a contract covers, in display order. Replaced the
+        # b2b_contractpage_programs many-to-many in MITx Online 0.135.0.
+        DatabaseTable(name="b2b_contractprogramitem", primary_key="id"),
         DatabaseTable(
             name="b2b_discountcontractattachmentredemption", primary_key="id"
         ),
