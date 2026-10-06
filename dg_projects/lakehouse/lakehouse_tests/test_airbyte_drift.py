@@ -12,11 +12,7 @@ from typing import Any
 
 import pytest
 from dagster import Failure, build_asset_context
-from lakehouse.assets.airbyte_drift import (
-    LISTING_ATTEMPTS,
-    _fetch_workspace,
-    airbyte_inventory_drift,
-)
+from lakehouse.assets.airbyte_drift import _fetch_workspace, airbyte_inventory_drift
 
 PREFIX = "raw__mitxonline__openedx__mysql__"
 CONNECTION_NAME = "MITx Online Open edX DB → S3 Data Lake"
@@ -60,24 +56,13 @@ class FakeClient:
         connections: list[dict[str, Any]],
         sources: list[dict[str, Any]],
         detail: dict[str, Any] | None = None,
-        earlier_connection_listings: list[list[dict[str, Any]]] | None = None,
     ) -> None:
-        self._connections = connections
-        self._sources = sources
+        self._collections = {"connections": connections, "sources": sources}
         self._detail = detail
-        # Returned, in order, before `connections` is: what the server handed
-        # back on the attempts that preceded a clean read.
-        self._earlier = list(earlier_connection_listings or [])
         self.detail_calls = 0
-        self.connection_listings = 0
 
-    # Both are called with keyword arguments, so the ones this fake ignores are
-    # absorbed rather than named and silenced.
-    def _paginated_request(self, url: str, **_: Any) -> list[dict[str, Any]]:
-        if url.endswith("/sources"):
-            return self._sources
-        self.connection_listings += 1
-        return self._earlier.pop(0) if self._earlier else self._connections
+    def list_collection(self, path: str, id_key: str) -> list[dict[str, Any]]:  # noqa: ARG002
+        return self._collections[path]
 
     def _single_request(self, **_: Any) -> dict[str, Any]:
         self.detail_calls += 1
@@ -160,64 +145,6 @@ class TestFetchAdaptation:
         client = FakeClient([connection()], [SOURCE])
         _fetch_workspace(FakeWorkspace(client))
         assert client.detail_calls == 0
-
-
-class TestOverlappingPages:
-    """Airbyte's offset paging can repeat one record and skip another."""
-
-    def overlapped(self) -> list[dict[str, Any]]:
-        # Same row count as the clean read, one connection in it twice: what
-        # production returned on 2026-10-01, at 39 rows and 29 distinct ids.
-        return [connection(), connection()]
-
-    def clean(self) -> list[dict[str, Any]]:
-        return [connection(), connection(connectionId="conn-2", name="Other")]
-
-    def test_a_stable_listing_is_read_twice(self) -> None:
-        client = FakeClient(self.clean(), [SOURCE])
-        fetched = _fetch_workspace(FakeWorkspace(client))
-
-        assert client.connection_listings == 2
-        assert [c["connectionId"] for c in fetched["connections"]] == [
-            "conn-1",
-            "conn-2",
-        ]
-
-    def test_an_overlapping_listing_is_read_again(self) -> None:
-        client = FakeClient(
-            self.clean(), [SOURCE], earlier_connection_listings=[self.overlapped()]
-        )
-        _fetch_workspace(FakeWorkspace(client))
-        assert client.connection_listings == 3
-
-    def test_a_skip_without_a_duplicate_is_caught_by_the_next_read(self) -> None:
-        # A deletion between page fetches shifts the rest back a row, so one
-        # record is skipped and nothing repeats. Only a second read shows it.
-        skipped = [connection()]
-        client = FakeClient(
-            self.clean(), [SOURCE], earlier_connection_listings=[skipped]
-        )
-        fetched = _fetch_workspace(FakeWorkspace(client))
-        assert len(fetched["connections"]) == 2
-
-    def test_a_listing_that_keeps_overlapping_is_refused(self) -> None:
-        # Reporting it would name every skipped connection as deleted, which is
-        # the false alarm this exists to prevent.
-        client = FakeClient(
-            self.overlapped(),
-            [SOURCE],
-            earlier_connection_listings=[self.overlapped()] * LISTING_ATTEMPTS,
-        )
-        with pytest.raises(Failure, match="same complete set twice"):
-            _fetch_workspace(FakeWorkspace(client))
-        assert client.connection_listings == LISTING_ATTEMPTS
-
-    def test_an_overlapping_sources_listing_is_refused_too(self) -> None:
-        # A skipped source does not read as a deletion, but it silently drops
-        # that connector from the comparison, so it is refused the same way.
-        client = FakeClient(self.clean(), [SOURCE, {**SOURCE}])
-        with pytest.raises(Failure, match="/sources listing"):
-            _fetch_workspace(FakeWorkspace(client))
 
 
 class TestRefusals:
