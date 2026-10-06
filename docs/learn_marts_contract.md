@@ -51,7 +51,7 @@ These columns are optional but recommended for most marts:
 
 Each source may add additional columns following its needs. Common patterns include:
 
-### Course Sources (OCW, MITxOnline, xPRO, MIT edX)
+### Course Sources (OCW, MITxOnline, MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -61,12 +61,56 @@ Each source may add additional columns following its needs. Common patterns incl
 | `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
 | `published` | boolean | Whether the resource is published/live |
 
-### Program Sources (MITxOnline, xPRO, MIT edX)
+### Program Sources (MITxOnline, MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `courses` | string | Comma-separated list of course `readable_id` values belonging to this program |
 | `departments` | string | Comma-separated department names |
+
+### xPRO
+
+The three xPRO models carry what MIT Learn's xPRO ETL reads from xPRO's catalog API
+(`/api/courses/` and `/api/programs/`), with the API's own rules for what is listed. They
+do not follow the delimited-string columns above.
+
+`integrations__learn__xpro_courses` has one row per live course with a live CMS page,
+published or not. Beyond the required columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `url` | string | Absolute URL of the course page |
+| `image_url` | string | The page's thumbnail, or the xPRO site's default image |
+| `published` | boolean | Whether a run in `integrations__learn__xpro_runs` has a price above zero. MIT Learn publishes an xPRO course on that, not on the course being live |
+| `platform` | string | xPRO platform name (`xPRO`, `Emeritus`, `Global Alumni`, ...) |
+| `topics` | array(string) | xPRO topic names, sorted. A child topic is `Parent:Child` |
+| `format` | string | `Online` or `Hybrid` |
+| `availability` | string | Always `dated` |
+| `continuing_ed_credits` | double | CEUs from the page's certificate page |
+| `duration`, `time_commitment` | string | Free text from the page |
+| `min_weeks`, `max_weeks`, `min_weekly_hours`, `max_weekly_hours` | int | From the page; null when not given |
+
+`integrations__learn__xpro_runs` has one row per run the API lists under a course: live,
+with a start date, not past its end or enrollment end, enrollment open, and with an active
+product. This is evaluated when the model builds, so a run leaves the model when it expires,
+and MIT Learn unpublishes a run that is absent.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `readable_id` | string | The run's course |
+| `run_id` | string | Courseware id; unique |
+| `title` | string | Run title |
+| `start_date`, `end_date`, `enrollment_start`, `enrollment_end` | string | ISO 8601 UTC; all but `start_date` nullable |
+| `price` | decimal | From the latest version of the run's product |
+| `instructors` | array(string) | Names on the course page's faculty page |
+| `published` | boolean | Whether `price` is above zero |
+
+`integrations__learn__xpro_programs` has one row per live program with a live CMS page and an
+active product. It has the course columns above, plus `instructors` (array, the program
+page's faculty), `courses` (comma-separated readable ids of its live courses, in program
+order), and the fields of the single run MIT Learn gives a program: `price`, `start_date` and
+`enrollment_start` (from the earliest open run of the program's first course) and `end_date`
+(the latest end of any live run of its courses).
 
 ### Content File Sources
 
@@ -203,3 +247,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-02 | Tobias Macey | Content file columns rewritten to what `integrations__learn__content_files` carries, keyed by (`etl_source`, `run_readable_id`) per the scoped-pull contract. The earlier `file_size` column is not part of it. |
 | 2026-10-03 | Tobias Macey | Added `integrations__learn__ocw_content_files`. |
 | 2026-10-05 | Tobias Macey | YouTube and podcasts are pulled from the warehouse, not pushed by webhook. Added the media sources section. `etl_source` for podcasts is `podcast`, as the models and MIT Learn's `ETLSource` have it. |
+| 2026-10-06 | Tobias Macey | xPRO models rebuilt on what MIT Learn's xPRO ETL reads from the xPRO catalog API. Added `integrations__learn__xpro_runs` with prices and enrollment dates. `runs`, `page_slug`, `length`, `effort` and the course `instructors` string are gone from the xPRO models; `topics` is an array; `url` is absolute; `published` follows price. |

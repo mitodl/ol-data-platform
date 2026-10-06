@@ -2300,3 +2300,75 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_readable_id", "video_edx_uuid"]
+
+- name: int__mitxpro__catalog_course_runs
+  description: The course runs xPRO's catalog API considers, live runs with a start
+    date, with the product price and expiry state the API derives for each. One row
+    per run.
+  columns:
+  - name: courserun_id
+    description: int, primary key of the course run
+    tests: [unique, not_null]
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests: [not_null]
+  - name: courserun_readable_id
+    description: str, the run's courseware id
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, when the run starts
+  - name: courserun_end_on
+    description: timestamp, when the run ends
+  - name: courserun_enrollment_start_on
+    description: timestamp, when enrollment opens
+  - name: courserun_enrollment_end_on
+    description: timestamp, when enrollment closes
+  - name: product_id
+    description: int, the run's active ecommerce product; null if it has none
+  - name: courserun_current_price
+    description: decimal, price from the product's most recently created version
+  - name: courserun_is_unexpired
+    description: boolean, whether at build time the run has not ended, enrollment
+      has opened and has not closed (CourseRun.is_unexpired in mitxpro)
+
+- name: int__mitxpro__catalog_pages
+  description: The CMS page of each xPRO course and program with what xPRO's catalog
+    API reads off it. One row per course or program page; exactly one of course_id
+    and program_id is set.
+  columns:
+  - name: course_id
+    description: int, the page's course; null for a program page
+  - name: program_id
+    description: int, the page's program; null for a course page
+  - name: wagtail_page_id
+    description: int, primary key of the page in wagtailcore_page
+    tests: [unique, not_null]
+  - name: page_is_live
+    description: boolean, whether the page is published
+  - name: page_first_published_on
+    description: timestamp, when the page was first published
+  - name: page_last_published_on
+    description: timestamp, when the page was last published
+  - name: page_description
+    description: str, the page's description, as HTML
+  - name: page_duration
+    description: str, free-text duration
+  - name: page_format
+    description: str, 'Online' or 'Hybrid'
+  - name: page_time_commitment
+    description: str, free-text weekly effort
+  - name: page_min_weeks
+    description: int, shortest length in weeks
+  - name: page_max_weeks
+    description: int, longest length in weeks
+  - name: page_min_weekly_hours
+    description: int, least weekly hours
+  - name: page_max_weekly_hours
+    description: int, most weekly hours
+  - name: page_thumbnail_url
+    description: str, URL of the page's thumbnail image; null if it has none
+  - name: page_ceus
+    description: double, CEUs from the page's first live certificate child page
+  - name: page_instructors
+    description: array(str), names from the page's first live faculty child page
