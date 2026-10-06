@@ -24,6 +24,15 @@ _SPEC = DatabaseSourceSpec(
 )
 
 
+def _iceberg_pipeline(lake: Path, tmp_path: Path, name: str) -> dlt.Pipeline:
+    return dlt.pipeline(
+        pipeline_name=name,
+        destination=dlt.destinations.filesystem(bucket_url=lake.as_uri()),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+
+
 def test_cursor_column_requires_primary_key() -> None:
     with pytest.raises(ValueError, match="primary_key is required"):
         DatabaseTable(name="thing", cursor_column="updated_at")
@@ -348,13 +357,8 @@ def test_a_not_null_column_added_upstream_lands_on_a_populated_iceberg_table(
         db_schema=None,  # SQLite has no named schema
         tables=(DatabaseTable(name="widget", primary_key="id"),),
     )
-    pipeline = dlt.pipeline(
-        pipeline_name="database_iceberg_evolution_test",
-        destination=dlt.destinations.filesystem(
-            bucket_url=sqlite_iceberg_lake.as_uri()
-        ),
-        dataset_name="raw",
-        pipelines_dir=str(tmp_path / "pipelines"),
+    pipeline = _iceberg_pipeline(
+        sqlite_iceberg_lake, tmp_path, "database_iceberg_evolution_test"
     )
     table = "raw__example__app__postgres__widget"
 
@@ -378,3 +382,98 @@ def test_a_not_null_column_added_upstream_lands_on_a_populated_iceberg_table(
 
     rows = pipeline.dataset()[table].arrow().sort_by("id").to_pylist()
     assert [(row["id"], row["b2b_only"]) for row in rows] == [(1, False), (2, True)]
+
+
+@pytest.mark.integration
+def test_an_empty_source_table_still_lands_as_an_iceberg_table(
+    sqlite_iceberg_lake: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A source table with no rows must still exist in the lake.
+
+    dlt creates no destination table for a resource that yields no data, so the
+    run succeeds while a declared table is missing and its staging model fails
+    on a missing source. The QA xPro load landed 54 of its 55 tables this way.
+
+    The second half covers the transitions either side of that: a populated
+    replace table emptied upstream ends up empty, and the table created empty
+    takes rows on a later load.
+    """
+    db_path = tmp_path / "example.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("CREATE TABLE widget (id INTEGER PRIMARY KEY, name TEXT)")
+        connection.execute("CREATE TABLE gadget (id INTEGER PRIMARY KEY, name TEXT)")
+        connection.execute("INSERT INTO widget VALUES (1, 'first')")
+
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+    monkeypatch.setattr(config, "active_table_format", lambda *_a, **_k: "iceberg")
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=(
+            DatabaseTable(name="widget", primary_key="id"),
+            DatabaseTable(name="gadget", primary_key="id"),
+        ),
+    )
+    pipeline = _iceberg_pipeline(sqlite_iceberg_lake, tmp_path, "database_empty_test")
+    widget = "raw__example__app__postgres__widget"
+    gadget = "raw__example__app__postgres__gadget"
+
+    info = pipeline.run(database.build_database_source(spec, profile="test"))
+    assert not info.has_failed_jobs
+    empty = pipeline.dataset()[gadget].arrow()
+    assert empty.num_rows == 0
+    assert {"id", "name"} <= set(empty.column_names)
+    assert pipeline.dataset()[widget].arrow().num_rows == 1
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("DELETE FROM widget")
+        connection.execute("INSERT INTO gadget VALUES (1, 'gizmo')")
+    info = pipeline.run(database.build_database_source(spec, profile="test"))
+    assert not info.has_failed_jobs
+    assert pipeline.dataset()[widget].arrow().num_rows == 0
+    assert pipeline.dataset()[gadget].arrow().to_pylist()[0]["name"] == "gizmo"
+
+
+@pytest.mark.integration
+def test_an_incremental_read_with_no_new_rows_keeps_the_iceberg_table(
+    sqlite_iceberg_lake: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The zero-row item an idle cursor read yields must merge as a no-op."""
+    db_path = tmp_path / "incremental.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE event (id INTEGER PRIMARY KEY, name TEXT, updated_at INTEGER)"
+        )
+        connection.execute("INSERT INTO event VALUES (1, 'first', 100)")
+
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+    monkeypatch.setattr(config, "active_table_format", lambda *_a, **_k: "iceberg")
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=(
+            DatabaseTable(name="event", primary_key="id", cursor_column="updated_at"),
+        ),
+    )
+    pipeline = _iceberg_pipeline(sqlite_iceberg_lake, tmp_path, "database_idle_test")
+    table = "raw__example__app__postgres__event"
+
+    for _ in range(2):
+        info = pipeline.run(database.build_database_source(spec, profile="test"))
+        assert not info.has_failed_jobs
+        rows = pipeline.dataset()[table].arrow().to_pylist()
+        assert [(row["id"], row["name"]) for row in rows] == [(1, "first")]
