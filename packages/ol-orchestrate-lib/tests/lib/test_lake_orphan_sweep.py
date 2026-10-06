@@ -1,5 +1,6 @@
 """Unit tests for ol_orchestrate.lib.lake_orphan_sweep."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -223,6 +224,8 @@ def test_normalize_accepts_only_s3_uris():
     assert normalize("s3://bucket") == "bucket"
     assert normalize("hdfs://bucket/a") == ""
     assert normalize("") == ""
+    assert normalize(" s3://bucket/a\r\n") == "bucket/a"
+    assert normalize("s3://bucket/a/\n") == "bucket/a"
 
 
 def test_normalize_keeps_the_whole_key():
@@ -377,7 +380,7 @@ def test_sweep_refuses_a_minimum_age_below_one_day(min_age_days: int):
     assert len(s3.objects["lake-mart-qa"]) == MART_QA_OBJECTS
 
 
-def test_sweep_reports_databases_glue_denies_and_carries_on():
+def test_report_names_databases_glue_denies_and_carries_on():
     glue, s3 = _lake()
     glue.denied.add("ol_warehouse_production_mart")
 
@@ -387,14 +390,63 @@ def test_sweep_reports_databases_glue_denies_and_carries_on():
     assert len(result.eligible) == ELIGIBLE_QA_ORPHANS
 
 
-def test_sweep_refuses_to_run_blind_in_a_bucket_it_scans():
+def test_delete_is_refused_when_glue_denies_any_database():
+    """A denied database can hold a table located in any bucket."""
     glue, s3 = _lake()
-    glue.denied.add("ol_warehouse_qa_dev_staging")
+    glue.tables["ol_warehouse_production_mart"].append(
+        {"name": "stray", "location": f"s3://lake-mart-qa/gone__dbt_tmp-{UUID_B}"}
+    )
+    glue.denied.add("ol_warehouse_production_mart")
 
-    with pytest.raises(RuntimeError, match="ol_warehouse_qa_dev_staging"):
+    with pytest.raises(RuntimeError, match="Refusing to delete"):
         _sweep(glue, s3, delete=True)
 
     assert len(s3.objects["lake-mart-qa"]) == MART_QA_OBJECTS
+
+
+def test_delete_is_refused_when_a_database_becomes_unreadable_after_the_scan():
+    glue, s3 = _lake()
+    s3.on_measure = lambda _bucket, _prefix: glue.denied.add(
+        "ol_warehouse_production_mart"
+    )
+
+    with pytest.raises(RuntimeError, match="Refusing to delete"):
+        _sweep(glue, s3, delete=True)
+
+    assert len(s3.objects["lake-mart-qa"]) == MART_QA_OBJECTS
+
+
+def test_delete_logs_each_prefix_to_the_callers_logger():
+    glue, s3 = _lake()
+    lines: list[str] = []
+
+    class Recorder(logging.Logger):
+        def info(self, msg: object, *args: object, **_kwargs: object) -> None:
+            lines.append(str(msg) % args)
+
+    sweep_warehouse(
+        glue,
+        s3,
+        warehouse_env="qa",
+        min_age_days=MIN_AGE_DAYS,
+        now=NOW,
+        delete=True,
+        logger=Recorder("test"),
+    )
+
+    assert any(
+        line.startswith(f"Deleting s3://lake-mart-qa/gone__dbt_tmp-{UUID_B}/")
+        for line in lines
+    )
+
+
+def test_delete_skips_a_prefix_emptied_since_the_scan():
+    _, s3 = _lake()
+    s3.objects["lake-mart-qa"] = {}
+
+    outcome = _delete(s3, f"gone__dbt_tmp-{UUID_B}", set())
+
+    assert (outcome.action, outcome.reason) == ("skipped", "no objects left")
 
 
 def test_a_denied_database_raises_for_a_caller_that_did_not_ask_to_skip():

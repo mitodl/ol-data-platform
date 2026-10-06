@@ -97,6 +97,7 @@ def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
     metadata = _metadata(LakeOrphanSweepConfig(min_age_days=7))
 
     assert calls[0]["delete"] is False
+    assert calls[0]["logger"] is not None
     assert calls[0]["min_age_days"] == 7
     assert metadata["delete_status"] == "not run (report only)"
     assert not [key for key in metadata if key.startswith("deleted_")]

@@ -99,6 +99,7 @@ def lake_orphan_sweep(
         min_age_days=config.min_age_days,
         now=datetime.now(UTC),
         delete=config.delete,
+        logger=context.log,
     )
     # Glue naming no bucket-root database for the environment means the scope
     # resolved to nothing, which is a fault and not a clean lake.
@@ -129,8 +130,8 @@ def lake_orphan_sweep(
             result.unsuffixed[:METADATA_DETAIL_ROWS]
         ),
         # Databases this environment's role may not read. Their tables are not
-        # among the references; the sweep has already refused to run if one of
-        # them is located in a scanned bucket.
+        # among the references, so with any listed here the orphan counts are
+        # an upper bound, and the sweep refuses to delete.
         "unreadable_glue_databases": MetadataValue.json(result.unreadable_databases),
     }
 
@@ -173,8 +174,8 @@ def lake_orphan_sweep(
         "delete_error_count": MetadataValue.int(len(errors)),
     }
     if errors:
-        # Raising drops the metadata above. The library has already logged every
-        # prefix it deleted from, so the run's log is the record.
+        # Raising drops the metadata above. The sweep has already logged every
+        # prefix it deleted from to context.log, so the run's log is the record.
         msg = (
             f"{len(errors)} objects could not be deleted across "
             f"{sum(1 for o in deleted if o.errors)} prefixes. First errors: "

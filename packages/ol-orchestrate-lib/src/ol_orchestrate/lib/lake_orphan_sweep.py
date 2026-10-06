@@ -31,6 +31,7 @@ S3_DELETE_BATCH_SIZE = 1000
 # Matched by hand, not with urlparse: an S3 key may contain "#" or "?", and
 # urlparse would cut the path there and leave a reference to a shorter prefix
 # than the one the table occupies.
+_URI_NOISE = str.maketrans("", "", "\t\r\n")
 _S3_URI = re.compile(r"^s3[an]?://([^/]+)/?(.*)$", re.IGNORECASE | re.DOTALL)
 
 
@@ -87,7 +88,10 @@ def glue_database_locations(glue: Any) -> dict[str, str]:
 
 def normalize(uri: str) -> str:
     """Return ``bucket/key`` for an s3 URI, or "" when it is not one."""
-    match = _S3_URI.match(uri)
+    # urlparse, which this replaced, dropped surrounding whitespace and any
+    # tab, CR or LF. A location stored with a stray newline still has to match
+    # the directory it names.
+    match = _S3_URI.match(uri.strip().translate(_URI_NOISE))
     if match is None:
         return ""
     bucket, key = match.groups()
@@ -194,6 +198,7 @@ def delete_prefix(  # noqa: PLR0913
     min_age_days: int,
     now: datetime,
     execute: bool,
+    logger: logging.Logger = log,
 ) -> PrefixOutcome:
     """Delete one prefix if it is still an orphan, re-checking every guard.
 
@@ -202,12 +207,13 @@ def delete_prefix(  # noqa: PLR0913
         would miss a table registered in between.
     :param min_age_days: Leave a prefix whose newest object is younger than this.
     :param execute: Without it, decide and report but delete nothing.
+    :param logger: Where the line naming a prefix about to be deleted goes. A
+        Dagster run only captures its own ``context.log``.
     """
     path = f"{bucket}/{prefix}"
-    if not prefix:
-        return PrefixOutcome(bucket, prefix, "refused", "empty prefix")
     if not DBT_DIR.search(prefix):
-        return PrefixOutcome(bucket, prefix, "refused", "no dbt uuid suffix")
+        reason = "no dbt uuid suffix" if prefix else "empty prefix"
+        return PrefixOutcome(bucket, prefix, "refused", reason)
     if is_referenced(path, referenced):
         return PrefixOutcome(bucket, prefix, "skipped", "now referenced by Glue")
     keys: list[str] = []
@@ -221,7 +227,9 @@ def delete_prefix(  # noqa: PLR0913
             keys.append(obj["Key"])
             size += obj["Size"]
             newest = max(newest, obj["LastModified"]) if newest else obj["LastModified"]
-    if newest and (now - newest).days < min_age_days:
+    if newest is None:
+        return PrefixOutcome(bucket, prefix, "skipped", "no objects left")
+    if (now - newest).days < min_age_days:
         return PrefixOutcome(
             bucket,
             prefix,
@@ -234,7 +242,7 @@ def delete_prefix(  # noqa: PLR0913
         )
     # Logged before the first batch, so a run that dies part way through a
     # prefix still names it.
-    log.info("Deleting s3://%s/ (%d objects, %d bytes)", path, len(keys), size)
+    logger.info("Deleting s3://%s/ (%d objects, %d bytes)", path, len(keys), size)
     errors: list[str] = []
     for start in range(0, len(keys), S3_DELETE_BATCH_SIZE):
         batch = [{"Key": key} for key in keys[start : start + S3_DELETE_BATCH_SIZE]]
@@ -324,23 +332,18 @@ class SweepResult:
         return [row for row in self.orphans if row["eligible"]]
 
 
-def _refuse_blind_buckets(
-    unreadable: list[str], database_locations: dict[str, str], buckets: set[str]
-) -> None:
-    """Raise when a database Glue denied is located in a bucket being scanned.
+def _refuse_to_delete_blind(unreadable: list[str]) -> None:
+    """Raise when Glue denied any database, before anything is deleted.
 
-    Its tables are missing from the references, so nothing in that bucket can be
-    shown to be an orphan.
+    A table's location is independent of its database's, so a database this
+    caller cannot read may hold a table located in any bucket. Its references
+    are missing, and nothing can then be shown to be an orphan.
     """
-    blind = sorted(
-        name
-        for name in unreadable
-        if normalize(database_locations.get(name, "")).partition("/")[0] in buckets
-    )
-    if blind:
+    if unreadable:
         msg = (
-            f"Glue denied access to {blind}, which are located in buckets this "
-            "sweep scans. Their tables cannot be counted as references."
+            f"Glue denied access to {sorted(unreadable)}. Their tables cannot be "
+            "counted as references, so nothing can be shown to be an orphan. "
+            "Refusing to delete."
         )
         raise RuntimeError(msg)
 
@@ -353,6 +356,7 @@ def sweep_warehouse(  # noqa: PLR0913
     min_age_days: int,
     now: datetime,
     delete: bool,
+    logger: logging.Logger = log,
 ) -> SweepResult:
     """Find one warehouse's orphaned table directories, and optionally delete them.
 
@@ -360,7 +364,10 @@ def sweep_warehouse(  # noqa: PLR0913
         reported and left alone. A dbt run writes its files before it registers
         the table, so a prefix can be unreferenced and about to become live.
     :param delete: Delete the eligible orphans, each re-checked against Glue
-        references fetched after the scan.
+        references fetched after the scan. Refused when Glue denies this caller
+        any database. A report run carries on and names them, and its orphan
+        list is then an upper bound.
+    :param logger: Receives one line per prefix a delete run acts on.
     """
     if min_age_days < 1:
         msg = f"min_age_days must be at least 1, got {min_age_days}"
@@ -369,9 +376,9 @@ def sweep_warehouse(  # noqa: PLR0913
     unreadable: list[str] = []
     tables = glue_tables(glue, unreadable=unreadable)
     locations = glue_database_locations(glue)
+    if delete:
+        _refuse_to_delete_blind(unreadable)
     targets = warehouse_scan_targets(tables, locations, warehouse_env)
-    scanned_buckets = {bucket for bucket, _ in targets}
-    _refuse_blind_buckets(unreadable, locations, scanned_buckets)
     referenced = references(tables)
     scanned = 0
     orphans: list[dict[str, Any]] = []
@@ -397,7 +404,7 @@ def sweep_warehouse(  # noqa: PLR0913
         fresh_unreadable: list[str] = []
         fresh_tables = glue_tables(glue, unreadable=fresh_unreadable)
         fresh_locations = glue_database_locations(glue)
-        _refuse_blind_buckets(fresh_unreadable, fresh_locations, scanned_buckets)
+        _refuse_to_delete_blind(fresh_unreadable)
         fresh = references(fresh_tables, fresh_locations)
         outcomes = []
         for row in orphans:
@@ -411,8 +418,9 @@ def sweep_warehouse(  # noqa: PLR0913
                 min_age_days=min_age_days,
                 now=now,
                 execute=True,
+                logger=logger,
             )
-            log.info(
+            logger.info(
                 "%s s3://%s/%s/ %s",
                 outcome.action,
                 outcome.bucket,
