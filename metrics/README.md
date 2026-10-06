@@ -81,8 +81,9 @@ PR CI parses with the DuckDB target, where the StarRocks views in
 `b2b_analytics` and `b2b_learner_records` are disabled, so the manifest does
 not contain them.
 
-A file with no `metric.name`, no `implemented_by`, or a malformed entry stops
-the command with a message naming the file.
+A file with no `metric.name`, no `implemented_by`, a malformed entry, or a key
+it does not take (e.g. `Status` for `status`) stops the command with a message
+naming the file.
 
 ## Commands
 

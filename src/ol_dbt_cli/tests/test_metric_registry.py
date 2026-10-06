@@ -187,6 +187,14 @@ def test_status_is_optional(tmp_path: Path) -> None:
             "can't be a dbt_source",
         ),
         ({"metric": {"name": NAME}, "implemented_by": [{"dbt_model": None, "columns": ["c"]}]}, "needs a name"),
+        (
+            {"metric": {"name": NAME}, "Status": "Approved", "implemented_by": [{"dbt_model": "m", "columns": ["c"]}]},
+            r"a metric file has unknown key\(s\) Status",
+        ),
+        (
+            {"metric": {"name": NAME}, "implemented_by": [{"dbt_model": "m", "column": ["c"], "columns": ["c"]}]},
+            r"entry has unknown key\(s\) column;",
+        ),
         ({"metric": {"name": NAME}, "implemented_by": [{"fqn": {"a": "b"}, "columns": ["c"]}]}, "needs a name"),
     ],
 )

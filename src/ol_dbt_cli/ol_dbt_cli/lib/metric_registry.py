@@ -103,6 +103,10 @@ METRIC_ENUMS: dict[str, frozenset[str]] = {
 ENTITY_STATUSES = frozenset({"Draft", "In Review", "Approved", "Archived", "Deprecated", "Rejected", "Unprocessed"})
 
 
+_TOP_LEVEL_KEYS = frozenset({"metric", "status", "implemented_by"})
+_IMPLEMENTATION_KEYS = frozenset({"dbt_model", "dbt_source", "fqn", "type", "columns"})
+
+
 @dataclass(frozen=True)
 class MetricImplementation:
     """One place a metric is computed or served from."""
@@ -124,11 +128,19 @@ class MetricDefinition:
         return self.body["name"]
 
 
+def _reject_unknown_keys(path: Path, label: str, raw: dict[str, Any], allowed: frozenset[str]) -> None:
+    unknown = sorted(str(k) for k in set(raw) - allowed)
+    if unknown:
+        msg = f"{path}: {label} has unknown key(s) {', '.join(unknown)}; it takes {', '.join(sorted(allowed))}"
+        raise ValueError(msg)
+
+
 def _parse_implementation(path: Path, raw: Any) -> MetricImplementation:
     label = "an `implemented_by` entry"
     if not isinstance(raw, dict):
         msg = f"{path}: {label} must be a mapping with `dbt_model` or `fqn`, and `columns`"
         raise ValueError(msg)
+    _reject_unknown_keys(path, label, raw, _IMPLEMENTATION_KEYS)
     columns = raw.get("columns")
     if not isinstance(columns, list) or not columns or not all(isinstance(c, str) for c in columns):
         msg = f"{path}: {label} needs a non-empty `columns` list of column names"
@@ -157,6 +169,7 @@ def load_metrics(metrics_dir: Path) -> list[MetricDefinition]:
         if not isinstance(raw, dict) or not isinstance(raw.get("metric"), dict):
             msg = f"{path}: a metric file needs a top-level `metric` mapping and an `implemented_by` list"
             raise ValueError(msg)
+        _reject_unknown_keys(path, "a metric file", raw, _TOP_LEVEL_KEYS)
         body = raw["metric"]
         if not isinstance(body.get("name"), str):
             msg = f"{path}: `metric` needs a `name`"
