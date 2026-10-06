@@ -15,7 +15,9 @@ from lakehouse.lib.starrocks_dbt import (
     MV_REFRESH_RETRY_DELAY_SECONDS,
     RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
+    ChangeTrackedView,
     MaterializedViewRefreshError,
+    change_tracked_views,
     documented_columns,
     drifted_relations,
     live_column_query,
@@ -24,6 +26,9 @@ from lakehouse.lib.starrocks_dbt import (
     materialized_view_relations,
     refresh_materialized_views,
     retry_delay,
+    seed_change_log_sql,
+    stamp_change_log_sql,
+    stamp_change_logs,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
@@ -189,13 +194,15 @@ class TestRetryDelay:
         assert RETRY_BASE_DELAY >= 30
 
 
-def _model_node(name, *, schema="b2b_analytics", materialized, tags, columns=None):
+def _model_node(
+    name, *, schema="b2b_analytics", materialized, tags, columns=None, meta=None
+):
     return {
         "resource_type": "model",
         "schema": schema,
         "alias": name,
         "tags": tags,
-        "config": {"materialized": materialized, "tags": tags},
+        "config": {"materialized": materialized, "tags": tags, "meta": meta or {}},
         # dbt keys `columns` by name and nests the docs under it; only the keys
         # matter here.
         "columns": {name: {"name": name} for name in columns or []},
@@ -606,3 +613,127 @@ class TestRefreshMaterializedViews:
         _refresh(starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], sleeps)
         assert len(starrocks.statements) == 2
         assert sleeps == []
+
+
+LEARNER_VIEW = ChangeTrackedView(
+    relation="b2b_learner_records.mv_b2b_learner",
+    key=("organization_key", "user_pk"),
+    identity=("sso_organization_id", "user_global_id"),
+    tracked=("email", "courses_enrolled"),
+)
+
+
+def _tracked_node(**tracking):
+    return _model_node(
+        "mv_b2b_learner",
+        schema="b2b_learner_records",
+        materialized="materialized_view",
+        tags=["starrocks"],
+        columns=[
+            "organization_key",
+            "sso_organization_id",
+            "user_pk",
+            "user_global_id",
+            "email",
+            "courses_enrolled",
+        ],
+        meta={"change_tracking": tracking},
+    )
+
+
+class TestChangeTrackedViews:
+    def test_tracks_every_column_outside_the_key_and_identity(self):
+        manifest = _manifest(
+            [
+                _tracked_node(
+                    key=["organization_key", "user_pk"],
+                    identity=["sso_organization_id", "user_global_id"],
+                )
+            ]
+        )
+        assert change_tracked_views(manifest) == [LEARNER_VIEW]
+
+    def test_a_view_without_the_meta_key_is_not_tracked(self):
+        manifest = _manifest(
+            [
+                _model_node(
+                    "mv_b2b_program_funnel",
+                    materialized="materialized_view",
+                    tags=["starrocks"],
+                    columns=["organization_key"],
+                )
+            ]
+        )
+        assert change_tracked_views(manifest) == []
+
+    def test_an_undocumented_key_column_is_refused(self):
+        """Otherwise it surfaces as an unknown column in StarRocks, after the
+        refresh, with nothing pointing at the YAML.
+        """
+        manifest = _manifest(
+            [_tracked_node(key=["organization_key", "learner_pk"], identity=[])]
+        )
+        with pytest.raises(ValueError, match="learner_pk"):
+            change_tracked_views(manifest)
+
+    def test_an_empty_key_is_refused(self):
+        manifest = _manifest([_tracked_node(key=[], identity=[])])
+        with pytest.raises(ValueError, match="non-empty key"):
+            change_tracked_views(manifest)
+
+
+class TestChangeLogSql:
+    """The statements' behavior was checked against StarRocks 4.1.6, the
+    deployed version, not only their text: an unchanged row keeps changed_on, a
+    changed, new, removed or returning row takes the stamp's time, a removed
+    row stays with is_deleted set, and a null turning into '' is a change.
+    """
+
+    def test_seed_only_creates_a_missing_log(self):
+        sql = seed_change_log_sql(LEARNER_VIEW)
+        assert sql.startswith(
+            "create table if not exists b2b_learner_records.mv_b2b_learner_changes as"
+        )
+
+    def test_current_rows_are_grouped_by_the_key(self):
+        """A key duplicated in the MV would otherwise be written to the log
+        twice and multiplied again by every later stamp's join.
+        """
+        for sql in (
+            seed_change_log_sql(LEARNER_VIEW),
+            stamp_change_log_sql(LEARNER_VIEW),
+        ):
+            assert "group by `organization_key`, `user_pk`" in sql
+
+    def test_identity_columns_are_hashed_and_key_columns_are_not(self):
+        sql = stamp_change_log_sql(LEARNER_VIEW)
+        hashed = sql[sql.index("md5(") : sql.index(" as row_hash")]
+        assert re.findall(r"cast\(`(\w+)` as varchar\)", hashed) == [
+            "sso_organization_id",
+            "user_global_id",
+            "email",
+            "courses_enrolled",
+        ]
+
+    def test_stamp_overwrites_from_a_null_safe_join_on_the_key(self):
+        sql = stamp_change_log_sql(LEARNER_VIEW)
+        assert sql.startswith(
+            "insert overwrite b2b_learner_records.mv_b2b_learner_changes select"
+        )
+        assert sql.endswith(
+            "full outer join b2b_learner_records.mv_b2b_learner_changes c "
+            "on m.`organization_key` <=> c.`organization_key` "
+            "and m.`user_pk` <=> c.`user_pk`"
+        )
+
+
+class TestStampChangeLogs:
+    def test_seeds_then_stamps_each_view(self):
+        statements: list[str] = []
+        stamp_change_logs(
+            [LEARNER_VIEW], statements.append, log=logging.getLogger("test")
+        )
+        assert statements == [
+            seed_change_log_sql(LEARNER_VIEW),
+            stamp_change_log_sql(LEARNER_VIEW),
+        ]

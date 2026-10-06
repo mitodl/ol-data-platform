@@ -10,6 +10,23 @@
 # which skips the MV refresh for every StarRocks model, and the tests read the
 # previous refresh's rows anyway (a plain build leaves an existing MV untouched).
 # Anything the API contract depends on is enforced in the SQL instead.
+#
+# Change logs. A model that sets config.meta.change_tracking gets a companion
+# table, <model>_changes, in this database. dbt does not build it: the Dagster
+# MV-refresh asset rewrites it after each successful refresh of the model
+# (lakehouse.lib.starrocks_dbt.stamp_change_logs). It has one row per `key`
+# the model has ever held, with:
+#   - the `key` columns, the model's grain
+#   - the `identity` columns as last seen, which name the record to an API
+#     client (the key columns are warehouse surrogates)
+#   - row_hash, an md5 over every non-key column of the model
+#   - changed_on, the UTC time of the stamp that first saw the row, saw its
+#     hash change, or saw it leave or return
+#   - is_deleted, true while the key is absent from the model
+# changed_on is later than the finish time of the refresh that exposed the
+# change, which is what makes it usable as the updated_since cursor where
+# record_updated_on is not. A changed `key` or `identity` list needs the table
+# dropped by hand; the next refresh recreates it and stamps every row.
 version: 2
 models:
 - name: mv_b2b_learner_enrollment
@@ -31,7 +48,20 @@ models:
     bridge_user_contract; the API nulls the grade and certificate columns when
     it resolves to false. The activity columns come from afact_learner_courserun_daily_activity,
     pre-aggregated to (user, course run). This is a manual-refresh materialized
-    view.
+    view. After each refresh the Dagster MV-refresh asset stamps
+    mv_b2b_learner_enrollment_changes; see the header of this file.
+  config:
+    meta:
+      change_tracking:
+        key:
+        - contract_pk
+        - courserun_pk
+        - user_pk
+        identity:
+        - sso_organization_id
+        - contract_id
+        - courserun_readable_id
+        - user_global_id
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -201,7 +231,18 @@ models:
     across every contract of the organization they currently hold a
     membership or have an enrollment under. last_active_on and courses_in_progress
     count
-    active enrollments only. This is a manual-refresh materialized view.
+    active enrollments only. This is a manual-refresh materialized view. After
+    each refresh the Dagster MV-refresh asset stamps mv_b2b_learner_changes;
+    see the header of this file.
+  config:
+    meta:
+      change_tracking:
+        key:
+        - organization_key
+        - user_pk
+        identity:
+        - sso_organization_id
+        - user_global_id
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
