@@ -107,6 +107,9 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
+        "ol_warehouse_raw_data/raw__mitx__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__mitxonline__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__xpro__openedx__api__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
     ):
@@ -167,7 +170,7 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
     with _repository_for("production") as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert asset_keys, "code location exposed no assets under production"
-        assert not [key for key in asset_keys if "mitxonline" in key]
+        assert not [key for key in asset_keys if "raw__mitxonline__app__" in key]
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
