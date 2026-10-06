@@ -12,11 +12,15 @@ Every function takes its boto3 clients as arguments, so the callers decide how
 they are built and the tests pass fakes.
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
-from urllib.parse import urlparse
+
+from botocore.exceptions import ClientError
+
+log = logging.getLogger(__name__)
 
 # dbt-trino suffixes every table directory it creates with a uuid. A bare name is
 # where pyiceberg would recreate a table whose database location is the bucket
@@ -24,15 +28,30 @@ from urllib.parse import urlparse
 DBT_DIR = re.compile(r"-[0-9a-f]{32}$")
 S3_DELETE_BATCH_SIZE = 1000
 
+# Matched by hand, not with urlparse: an S3 key may contain "#" or "?", and
+# urlparse would cut the path there and leave a reference to a shorter prefix
+# than the one the table occupies.
+_S3_URI = re.compile(r"^s3[an]?://([^/]+)/?(.*)$", re.IGNORECASE | re.DOTALL)
 
-def glue_tables(glue: Any) -> list[dict[str, str]]:
-    """Return every Glue table with its location and Iceberg metadata pointer."""
+
+def glue_tables(
+    glue: Any, *, unreadable: list[str] | None = None
+) -> list[dict[str, str]]:
+    """Return every Glue table with its location and Iceberg metadata pointer.
+
+    :param unreadable: When given, a database this caller is denied access to is
+        appended here by name and skipped. Without it the denial raises. An
+        environment's role is denied the other environments' databases, so an
+        unattended run has to expect some.
+    """
     out: list[dict[str, str]] = []
     for dbs in glue.get_paginator("get_databases").paginate():
         for db in dbs["DatabaseList"]:
-            pages = glue.get_paginator("get_tables").paginate(DatabaseName=db["Name"])
-            for page in pages:
-                out.extend(
+            try:
+                pages = glue.get_paginator("get_tables").paginate(
+                    DatabaseName=db["Name"]
+                )
+                rows = [
                     {
                         "database": db["Name"],
                         "table": table["Name"],
@@ -44,8 +63,16 @@ def glue_tables(glue: Any) -> list[dict[str, str]]:
                         ),
                         "updated": str(table.get("UpdateTime", "")),
                     }
+                    for page in pages
                     for table in page["TableList"]
-                )
+                ]
+            except ClientError as error:
+                denied = error.response["Error"]["Code"] == "AccessDeniedException"
+                if unreadable is None or not denied:
+                    raise
+                unreadable.append(db["Name"])
+                continue
+            out.extend(rows)
     return out
 
 
@@ -60,16 +87,19 @@ def glue_database_locations(glue: Any) -> dict[str, str]:
 
 def normalize(uri: str) -> str:
     """Return ``bucket/key`` for an s3 URI, or "" when it is not one."""
-    parsed = urlparse(uri.replace("s3a://", "s3://").replace("s3n://", "s3://"))
-    if parsed.scheme != "s3" or not parsed.netloc:
+    match = _S3_URI.match(uri)
+    if match is None:
         return ""
-    return f"{parsed.netloc}/{parsed.path.strip('/')}".rstrip("/")
+    bucket, key = match.groups()
+    return f"{bucket}/{key.strip('/')}".rstrip("/")
 
 
-def referenced_paths(glue: Any, *, include_databases: bool) -> set[str]:
-    """Return every ``bucket/key`` path Glue points at.
+def references(
+    tables: list[dict[str, str]], database_locations: dict[str, str] | None = None
+) -> set[str]:
+    """Return every ``bucket/key`` path the given Glue entries point at.
 
-    A database location is included for the delete path because a database whose
+    A database location is passed for the delete path because a database whose
     location names a real prefix claims it for tables not yet registered. A
     database located at a bucket ROOT is left out: every deployed warehouse
     database is located at one, and :func:`is_referenced` reads a bare bucket
@@ -77,15 +107,21 @@ def referenced_paths(glue: Any, *, include_databases: bool) -> set[str]:
     TABLE located at a bucket root is kept and does protect the whole bucket.
     """
     out: set[str] = set()
-    for table in glue_tables(glue):
+    for table in tables:
         for uri in (table["location"], table["metadata_location"]):
             if path := normalize(uri):
                 out.add(path)
-    if include_databases:
-        for uri in glue_database_locations(glue).values():
-            if "/" in (path := normalize(uri)):
-                out.add(path)
+    for uri in (database_locations or {}).values():
+        if "/" in (path := normalize(uri)):
+            out.add(path)
     return out
+
+
+def referenced_paths(glue: Any, *, include_databases: bool) -> set[str]:
+    """Return every ``bucket/key`` path Glue points at. See :func:`references`."""
+    return references(
+        glue_tables(glue), glue_database_locations(glue) if include_databases else None
+    )
 
 
 def is_referenced(candidate: str, referenced: set[str]) -> bool:
@@ -145,6 +181,7 @@ class PrefixOutcome:
     reason: str = ""
     objects: int = 0
     bytes: int = 0
+    # Keys S3 refused to delete. A "deleted" outcome with errors is partial.
     errors: list[str] = field(default_factory=list)
 
 
@@ -195,6 +232,9 @@ def delete_prefix(  # noqa: PLR0913
         return PrefixOutcome(
             bucket, prefix, "would_delete", objects=len(keys), bytes=size
         )
+    # Logged before the first batch, so a run that dies part way through a
+    # prefix still names it.
+    log.info("Deleting s3://%s/ (%d objects, %d bytes)", path, len(keys), size)
     errors: list[str] = []
     for start in range(0, len(keys), S3_DELETE_BATCH_SIZE):
         batch = [{"Key": key} for key in keys[start : start + S3_DELETE_BATCH_SIZE]]
@@ -210,7 +250,9 @@ def delete_prefix(  # noqa: PLR0913
     )
 
 
-def warehouse_scan_targets(glue: Any, warehouse_env: str) -> list[tuple[str, str]]:
+def warehouse_scan_targets(
+    tables: list[dict[str, str]], database_locations: dict[str, str], warehouse_env: str
+) -> list[tuple[str, str]]:
     """Return the ``(bucket, prefix)`` directories that hold one warehouse's tables.
 
     Read from Glue instead of a bucket list. The deployed warehouse is the
@@ -231,21 +273,27 @@ def warehouse_scan_targets(glue: Any, warehouse_env: str) -> list[tuple[str, str
     database_prefix = f"ol_warehouse_{warehouse_env}_"
     databases: set[str] = set()
     buckets: set[str] = set()
-    for name, uri in glue_database_locations(glue).items():
+    for name, uri in database_locations.items():
         bucket, _, key = normalize(uri).partition("/")
         if name.startswith(database_prefix) and bucket and not key:
             databases.add(name)
             buckets.add(bucket)
     targets = {(bucket, "") for bucket in buckets}
-    for table in glue_tables(glue):
+    for table in tables:
         if table["database"] not in databases:
             continue
-        # A Trino-created Iceberg entry can carry its location only in
-        # metadata_location, as <table dir>/metadata/<file>.metadata.json.
-        table_dir = (
-            normalize(table["location"])
-            or (normalize(table["metadata_location"]).rsplit("/metadata/", 1)[0])
-        )
+        table_dir = normalize(table["location"])
+        if not table_dir:
+            # A Trino-created Iceberg entry can carry its location only in
+            # metadata_location, as <table dir>/metadata/<file>. A pointer of
+            # any other shape does not say where the table directory is, and a
+            # guess that lands inside it would offer the table's own
+            # subdirectories as candidates.
+            table_dir, found, _ = normalize(table["metadata_location"]).rpartition(
+                "/metadata/"
+            )
+            if not found:
+                continue
         bucket, _, key = table_dir.partition("/")
         if bucket in buckets and key:
             targets.add((bucket, key.rpartition("/")[0]))
@@ -264,6 +312,9 @@ class SweepResult:
     # Unreferenced without the uuid suffix. Never deleted, so never measured:
     # one of these in the raw bucket can hold millions of objects.
     unsuffixed: list[str]
+    # Databases Glue denied this caller, whose tables are therefore not among
+    # the references.
+    unreadable_databases: list[str]
     # None when the sweep only reported.
     outcomes: list[PrefixOutcome] | None
 
@@ -271,6 +322,27 @@ class SweepResult:
     def eligible(self) -> list[dict[str, Any]]:
         """Return the orphans old enough to delete."""
         return [row for row in self.orphans if row["eligible"]]
+
+
+def _refuse_blind_buckets(
+    unreadable: list[str], database_locations: dict[str, str], buckets: set[str]
+) -> None:
+    """Raise when a database Glue denied is located in a bucket being scanned.
+
+    Its tables are missing from the references, so nothing in that bucket can be
+    shown to be an orphan.
+    """
+    blind = sorted(
+        name
+        for name in unreadable
+        if normalize(database_locations.get(name, "")).partition("/")[0] in buckets
+    )
+    if blind:
+        msg = (
+            f"Glue denied access to {blind}, which are located in buckets this "
+            "sweep scans. Their tables cannot be counted as references."
+        )
+        raise RuntimeError(msg)
 
 
 def sweep_warehouse(  # noqa: PLR0913
@@ -290,8 +362,17 @@ def sweep_warehouse(  # noqa: PLR0913
     :param delete: Delete the eligible orphans, each re-checked against Glue
         references fetched after the scan.
     """
-    targets = warehouse_scan_targets(glue, warehouse_env)
-    referenced = referenced_paths(glue, include_databases=False)
+    if min_age_days < 1:
+        msg = f"min_age_days must be at least 1, got {min_age_days}"
+        raise ValueError(msg)
+
+    unreadable: list[str] = []
+    tables = glue_tables(glue, unreadable=unreadable)
+    locations = glue_database_locations(glue)
+    targets = warehouse_scan_targets(tables, locations, warehouse_env)
+    scanned_buckets = {bucket for bucket, _ in targets}
+    _refuse_blind_buckets(unreadable, locations, scanned_buckets)
+    referenced = references(tables)
     scanned = 0
     orphans: list[dict[str, Any]] = []
     unsuffixed: list[str] = []
@@ -313,9 +394,16 @@ def sweep_warehouse(  # noqa: PLR0913
 
     outcomes: list[PrefixOutcome] | None = None
     if delete:
-        fresh = referenced_paths(glue, include_databases=True)
-        outcomes = [
-            delete_prefix(
+        fresh_unreadable: list[str] = []
+        fresh_tables = glue_tables(glue, unreadable=fresh_unreadable)
+        fresh_locations = glue_database_locations(glue)
+        _refuse_blind_buckets(fresh_unreadable, fresh_locations, scanned_buckets)
+        fresh = references(fresh_tables, fresh_locations)
+        outcomes = []
+        for row in orphans:
+            if not row["eligible"]:
+                continue
+            outcome = delete_prefix(
                 s3,
                 row["bucket"],
                 row["prefix"],
@@ -324,13 +412,19 @@ def sweep_warehouse(  # noqa: PLR0913
                 now=now,
                 execute=True,
             )
-            for row in orphans
-            if row["eligible"]
-        ]
+            log.info(
+                "%s s3://%s/%s/ %s",
+                outcome.action,
+                outcome.bucket,
+                outcome.prefix,
+                outcome.reason or f"{len(outcome.errors)} errors",
+            )
+            outcomes.append(outcome)
     return SweepResult(
         targets=targets,
         prefixes_scanned=scanned,
         orphans=orphans,
         unsuffixed=unsuffixed,
+        unreadable_databases=unreadable,
         outcomes=outcomes,
     )

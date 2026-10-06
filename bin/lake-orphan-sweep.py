@@ -28,6 +28,7 @@ Typical use:
 
 import csv
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import cache
@@ -144,6 +145,9 @@ def delete(manifest: Path, *, min_age_days: int = 7, execute: bool = False) -> N
     min_age_days: Skip a prefix whose newest object is younger than this.
     execute: Without it, print what would be deleted and change nothing.
     """
+    # The library logs each prefix before its first delete batch, so a run
+    # that dies part way through one still names it.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     rows = list(csv.DictReader(manifest.open()))
     referenced = referenced_paths(glue(), include_databases=True)
     now = datetime.now(UTC)
@@ -158,7 +162,9 @@ def delete(manifest: Path, *, min_age_days: int = 7, execute: bool = False) -> N
             execute=execute,
         )
         target = f"s3://{outcome.bucket}/{outcome.prefix}/"
-        if outcome.action == "refused":
+        if not outcome.prefix:
+            print(f"REFUSE {outcome.bucket}: {outcome.reason}")
+        elif outcome.action == "refused":
             print(f"REFUSE {target}: {outcome.reason}")
         elif outcome.action == "skipped":
             print(f"SKIP   {target}: {outcome.reason}")

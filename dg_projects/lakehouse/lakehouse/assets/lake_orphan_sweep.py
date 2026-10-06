@@ -47,7 +47,7 @@ class LakeOrphanSweepConfig(Config):
     """Run configuration for :func:`lake_orphan_sweep`."""
 
     # No default on purpose: a floor nobody chose is how a sweep deletes a
-    # table that was about to be registered.
+    # table that was about to be registered. The sweep refuses less than 1.
     min_age_days: int
     delete: bool = False
 
@@ -128,6 +128,10 @@ def lake_orphan_sweep(
         "unsuffixed_unreferenced_details": MetadataValue.json(
             result.unsuffixed[:METADATA_DETAIL_ROWS]
         ),
+        # Databases this environment's role may not read. Their tables are not
+        # among the references; the sweep has already refused to run if one of
+        # them is located in a scanned bucket.
+        "unreadable_glue_databases": MetadataValue.json(result.unreadable_databases),
     }
 
     if result.outcomes is None:
@@ -150,6 +154,17 @@ def lake_orphan_sweep(
         "deleted_prefixes": MetadataValue.int(len(deleted)),
         "deleted_objects": MetadataValue.int(sum(o.objects for o in deleted)),
         "deleted_bytes": MetadataValue.int(sum(o.bytes for o in deleted)),
+        "deleted_details": MetadataValue.json(
+            [
+                {
+                    "path": f"s3://{o.bucket}/{o.prefix}/",
+                    "objects": o.objects,
+                    "bytes": o.bytes,
+                    "errors": len(o.errors),
+                }
+                for o in deleted[:METADATA_DETAIL_ROWS]
+            ]
+        ),
         # Eligible at scan time and left alone at delete time, e.g. registered
         # in Glue in between.
         "kept_at_delete_time": MetadataValue.json(
@@ -158,6 +173,8 @@ def lake_orphan_sweep(
         "delete_error_count": MetadataValue.int(len(errors)),
     }
     if errors:
+        # Raising drops the metadata above. The library has already logged every
+        # prefix it deleted from, so the run's log is the record.
         msg = (
             f"{len(errors)} objects could not be deleted across "
             f"{sum(1 for o in deleted if o.errors)} prefixes. First errors: "

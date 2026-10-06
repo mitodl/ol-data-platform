@@ -46,6 +46,7 @@ def _result(outcomes: list[PrefixOutcome] | None, **overrides: Any) -> SweepResu
         "prefixes_scanned": 40,
         "orphans": ORPHANS,
         "unsuffixed": ["lake-mart-qa/student_risk_probability"],
+        "unreadable_databases": ["ol_warehouse_production_mart"],
         "outcomes": outcomes,
     }
     return SweepResult(**(fields | overrides))
@@ -104,6 +105,7 @@ def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
     assert metadata["eligible_bytes"] == ORPHANS[0]["bytes"]
     assert metadata["orphan_details"][0]["path"] == f"s3://lake-mart-qa/gone-{UUID}/"
     assert metadata["unsuffixed_unreferenced_prefixes"] == 1
+    assert metadata["unreadable_glue_databases"] == ["ol_warehouse_production_mart"]
 
 
 def test_delete_run_reports_what_it_deleted_and_what_it_kept(
@@ -126,6 +128,9 @@ def test_delete_run_reports_what_it_deleted_and_what_it_kept(
     assert metadata["delete_status"] == "ran"
     assert metadata["deleted_prefixes"] == 1
     assert metadata["deleted_bytes"] == ORPHANS[0]["bytes"]
+    assert [row["path"] for row in metadata["deleted_details"]] == [
+        f"s3://lake-mart-qa/gone-{UUID}/"
+    ]
     assert metadata["kept_at_delete_time"] == [
         f"s3://lake-mart-qa/late-{UUID}/: now referenced by Glue"
     ]
