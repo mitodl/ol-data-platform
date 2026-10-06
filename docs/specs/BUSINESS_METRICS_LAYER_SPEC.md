@@ -58,10 +58,12 @@ Why not dbt's metric YAML. Tested on dbt-core 1.12.5 with a one-metric project:
 `dbt parse` fails without a time spine model, fails unless every measure has an
 aggregation time dimension, and rejects metric names containing `__`. A metric YAML
 mistake is a parse error, which stops every dbt command. It cannot describe a metric
-implemented by a StarRocks view column. Read from the OpenMetadata 2.0.2 source, not
-tested: its dbt ingestion writes metrics with a bot PUT and the server keeps an existing
-non-empty description (`EntityRepository.updateDescription`), so a description changed in
-git would not reach OpenMetadata after the first ingest.
+implemented by a StarRocks view column. Read from the OpenMetadata 2.0.3 source (the
+version data.ol.mit.edu reports, tag `2.0.3-release`), not tested: its dbt ingestion sends
+each metric as a single create-or-update PUT (`metadata_rest.py`, `CreateMetricRequest` in
+`write_create_request`) and the server keeps an existing non-empty description on a bot
+PUT (`EntityRepository.updateDescription`), so a description changed in git would not
+reach OpenMetadata after the first ingest.
 
 Why not MetricFlow with a StarRocks renderer. The renderer is a small patch (the Trino one
 in metricflow 0.213.0 is 157 lines) but open-source MetricFlow is a CLI and library. We
@@ -294,7 +296,8 @@ metric:                         # OpenMetadata CreateMetric body
   metricType: OTHER
   owners: [{type: team, name: <team>}]        # names come from the governance decision
   reviewers: [{type: team, name: <team>}]
-  glossaryTerms: [<glossary>.<term>]
+  tags:
+    - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
 status: Approved                # entityStatus; applied by PATCH, not part of CreateMetric
 implemented_by:
   - dbt_model: afact_learner_courserun_progress
@@ -305,6 +308,10 @@ implemented_by:
 
 - `metric` uses OpenMetadata's field names so the file needs no translation layer.
   `metricType`, `unitOfMeasurement` and `granularity` take OpenMetadata's enum values.
+- `owners` and `reviewers` are `{type: team | user, name: ...}`. CreateMetric takes an id,
+  which only exists in the live catalog, so sync resolves the name.
+- CreateMetric has no glossary field. A glossary term is a `tags` entry with
+  `source: Glossary`.
 - `implemented_by` is ours. Each entry is a `dbt_model` (or `fqn` for an entity dbt does
   not build) and the columns that carry the metric. The first entry is the defining
   implementation; later entries are places it is served from.
@@ -319,15 +326,26 @@ file is named after the metric.
 
 ### 5.3 `ol-dbt validate --only metric_registry`
 
-Added to `ol_dbt_cli.lib` beside `data_contracts.py`, reusing its binding parser, and added
-to the global-gates step in `dbt_pr_ci.yaml` and to the `--skip` list of the changed-models
-step. `metrics/**` joins that workflow's path filter. It needs no credentials. Errors:
+Built in ol-data-platform#2851: `ol_dbt_cli/lib/metric_registry.py` beside
+`data_contracts.py`, reusing its binding parser, run in the global-gates step of
+`dbt_pr_ci.yaml` and skipped in the changed-models step. `metrics/**` is in that
+workflow's path filter. It needs no credentials and no network. Errors:
 
 - an `implemented_by` model does not exist in the project, or a listed column is not
   declared in the model's YAML or not selected by its SQL;
-- two files declare the same metric name, or a name breaks the convention;
-- `metricType`, `unitOfMeasurement` or `granularity` is not an OpenMetadata enum value;
-- the file sets a field sync owns (`id`, `fullyQualifiedName`).
+- two files declare the same metric name, a name breaks the convention, or the file is not
+  named after its metric;
+- `metric` sets a field CreateMetric does not have, or one sync owns (`id`,
+  `fullyQualifiedName`);
+- a value in `metric`, or `status`, does not fit the server's schema (a wrong type, a value
+  outside an enum, a nested object missing a required key).
+
+The schema is not hand-written. `lib/openmetadata_metric_schema.json` is a committed
+snapshot of CreateMetric cut from the server's published OpenAPI document, stamped with the
+server version it was read from (2.0.3 today). `ol-dbt metrics refresh-schema --server-url
+<url>` rewrites it after an OpenMetadata upgrade. It is committed instead of fetched in CI
+so a PR check does not depend on the catalog being reachable, and so an upgrade changes
+what a metric file may contain in a reviewed commit.
 
 Bindings are resolved against the project's model YAML and SQL files, not against manifest
 nodes. PR CI parses with the DuckDB target, where `b2b_analytics` and
@@ -351,18 +369,33 @@ Blocked on the governance decision for team and reviewer names
 `ol-dbt metrics sync --service <name> [--dry-run]`, reusing `OpenMetadataClient` from
 `commands/contracts.py` (extracted to `lib/` on this second use). For each file:
 
-1. Resolve owners, reviewers and glossary terms to references.
-2. `PUT /v1/metrics` with the `metric` body. This creates the entity or updates its
-   structural fields.
-3. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status. A bot PUT does
-   not overwrite an existing description, so git wins only through PATCH.
-4. For each `implemented_by` entry, resolve the table from a production manifest and
-   `PUT /v1/lineage` with a table-to-metric edge and column lineage.
+Before the first file, sync compares the server's version (`/v1/system/version`) with the
+one stamped in the schema snapshot and stops when they differ: the files were validated
+against a schema the server no longer publishes, and `refresh-schema` comes first.
 
-Drift: before step 3, read the live entity's `updatedBy`. If the last change was not made
-by the sync's bot and description, reviewers or status differ from the file, report the
-difference and exit non-zero without overwriting, unless `--force`. The edit then becomes
-a pull request. This needs no stored state.
+1. Resolve owner and reviewer names to ids, and check each glossary `tagFQN` exists.
+2. `GET /v1/metrics/name/{name}` and run the drift check below on what comes back. Nothing
+   has been written at this point.
+3. `PUT /v1/metrics` with the `metric` body. This creates the entity or updates its
+   structural fields.
+4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status. A bot PUT does
+   not overwrite an existing description, so git wins only through PATCH.
+5. For each `implemented_by` entry, resolve the table from a production manifest and
+   `PUT /v1/lineage` with a table-to-metric edge, with no column lineage.
+
+Drift: step 2 reads the live entity's `updatedBy`. If the last change was not made by the
+sync's bot and description, reviewers or status differ from the file, report the
+difference and exit non-zero without writing, unless `--force`. The edit then becomes a
+pull request. This needs no stored state. The check has to precede the PUT: a PUT that
+changes a structural field (e.g. `metricType`) records the bot as `updatedBy` while the
+server keeps the human-edited description, and a check made afterwards would see the bot
+and let the PATCH overwrite it.
+
+Column lineage: OpenMetadata 2.0.3 stores none for a Metric. `LineageRepository`
+returns no child names for one ("Metric column level lineage is not supported") and
+`validateLineageDetails` drops every column mapping whose target is not a child name, so
+the request succeeds and the columns are discarded. The column binding stays in the
+registry file, which is where a reader finds which column carries the metric.
 
 Where it runs: `ol-dbt contracts sync` has no scheduled caller in this repo today. Both
 syncs should run from the same place after the production dbt build. Choosing that place
@@ -427,8 +460,6 @@ Nothing here blocks phase 1.
   requests.
 - Materialization: table vs. incremental for the progress model. Start as a table and
   measure the build.
-- Whether the existing `data_contract` check already resolves bindings from project files
-  in a way 5.3 can reuse for target-disabled models. Not checked.
 - Reviewers on re-sync: whether a bot PUT clears reviewers set in the OpenMetadata UI is
   not verified. Test on QA before writing the drift check.
 - Creating a Metric with reviewers may start OpenMetadata's approval workflow and set the
