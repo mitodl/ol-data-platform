@@ -113,8 +113,19 @@ Sources: `tfact_enrollment`, `tfact_grade`, `tfact_certificate`,
 Population: `tfact_enrollment` rows with `enrollment_type = 'course'` and non-null
 `user_fk` and `courserun_fk`. The fact's own grain is one row per enrollment, tested
 unique on (enrollment_id, platform, enrollment_type), and both foreign keys are nullable,
-so the model must pick one enrollment per (user, course run) when more than one exists.
-The pick rule is an open question (§9).
+so the model picks one enrollment per (user, course run): the active one first, then the
+latest `enrollment_created_on`, then the highest `enrollment_id`.
+
+Measured on production `tfact_enrollment` on 2026-10-06: 267 (user, course run) pairs have
+more than one course enrollment, out of about 15.8 million, and all 267 are on xPRO. They
+are refund, deferral and transfer histories (233 are a refunded enrollment followed by a
+new active one). No pair has two active enrollments; 241 have one and 26 have none. The
+active one is the newest in 240 of the 241, which is why "active first" comes before
+"latest". 239 of the pairs have a grade and 220 a certificate, so the pick decides which
+enrollment a real outcome is reported against.
+
+The key filters drop 129,940 of 196,646 residential course enrollments and 7,097 MITx
+Online ones that have no `courserun_fk`, and about 3,100 rows with no `user_fk`.
 
 Certificates: `tfact_certificate` already keeps one row per (user, course run, scope) per
 build when both keys resolve (`cross_source_deduped`). The model joins it on
@@ -170,8 +181,9 @@ consumer-facing model built on this one must carry or apply consent itself.
 
 Tests: `unique_combination_of_columns` on (user_fk, courserun_fk), `not_null` on both,
 `accepted_values` on `completion_status`, and dbt unit tests (run by `ol-dbt unit-test`)
-covering each status branch, a revoked certificate with and without a passing grade, and
-each row of the `needs_attention_since` table.
+covering each status branch, a revoked certificate with and without a passing grade, each
+row of the `needs_attention_since` table, and the enrollment pick (a refunded enrollment
+followed by an active one, an older active one with a newer refunded one, and none active).
 
 ### 4.2 `needs_attention_since`
 
@@ -404,12 +416,7 @@ the API's CI reads it from the manifest.
 
 ## 9. Open questions and unverified points
 
-Blocking for phase 1:
-
-- Which enrollment represents a (user, course run) when `tfact_enrollment` has more than
-  one. Not measured how often that happens.
-
-Non-blocking:
+Nothing here blocks phase 1.
 
 - Order against API PRs #87 and #89, both open: either they merge first and the API change
   in 4.4 replaces the merged rule with the column, or they are rebased onto the column.
