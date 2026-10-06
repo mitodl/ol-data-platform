@@ -44,8 +44,11 @@ jobs:
         path: ~/.cache/prek
         key: prek-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml')
           }}
-      # No toolchain step: there are no local hooks, and sqlfluff uses the jinja
-      # templater, so it needs no dbt project install and no warehouse connection.
+    # The sqlfluff hooks compile the dbt project, so they need its packages, but not
+    # a warehouse connection.
+    - name: Install dbt packages
+      working-directory: src/ol_dbt
+      run: uv run --frozen --only-group sqlfluff dbt deps
     - name: Tree is clean before hooks run
       id: clean-tree
       run: |
