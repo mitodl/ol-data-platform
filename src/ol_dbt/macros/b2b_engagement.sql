@@ -59,8 +59,13 @@
     select
         user_fk,
         courserun_fk,
-        substr(enrollment_created_on, 1, 7),
-        0, 1, 0, 0, 0, 0
+        substr(enrollment_created_on, 1, 7)                 as activity_year_and_month,
+        0                                                   as is_active_day,
+        1                                                   as new_enrollments,
+        0                                                   as certificates_earned,
+        0                                                   as videos_played,
+        0                                                   as problems_attempted,
+        0                                                   as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
       and enrollment_is_active = true
@@ -71,8 +76,13 @@
     select
         user_fk,
         courserun_fk,
-        substr(certificate_issued_on, 1, 7),
-        0, 0, 1, 0, 0, 0
+        substr(certificate_issued_on, 1, 7)                 as activity_year_and_month,
+        0                                                   as is_active_day,
+        0                                                   as new_enrollments,
+        1                                                   as certificates_earned,
+        0                                                   as videos_played,
+        0                                                   as problems_attempted,
+        0                                                   as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
       and is_certified = true
@@ -80,7 +90,10 @@
 
 {# One row per (learner, course run) enrollment with its all-time activity totals. The
    counters sum the fact's per-day distinct counts, so a video played on two days counts
-   twice, as in mv_b2b_learner_enrollment. #}
+   twice, as in mv_b2b_learner_enrollment. Inactive enrollments are included: the depth
+   views report everyone who enrolled in the run and what they did. new_enrollments above
+   counts active enrollments only. Both rules are the ones
+   organization_administration_report applied (enroll_data vs. enroll_activity). #}
 {% macro b2b_learner_courserun_engagement() %}
     select
         p.user_fk,
