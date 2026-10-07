@@ -322,16 +322,21 @@ def stale_branches(
 def expirable_snapshot_ids(
     metadata: TableMetadata, cutoff_ms: int, dropped_refs: Collection[str] = ()
 ) -> set[int]:
-    """Return the snapshots ``older_than(cutoff)`` removes once *dropped_refs* are gone.
+    """Return the snapshots past the cutoff that are safe to expire.
 
-    pyiceberg keeps the head of every branch and every tagged snapshot whatever
-    its age, so an old snapshot only counts if no remaining ref points at it.
+    The head of every branch and every tagged snapshot is kept whatever its
+    age, apart from the refs in *dropped_refs*. So is the current snapshot:
+    pyiceberg protects ref heads only, and on a table whose ``main`` ref and
+    ``current-snapshot-id`` disagree (see ``find_snapshot_pointer_lag``) it
+    would expire the snapshot readers are on.
     """
     protected = {
         ref.snapshot_id
         for name, ref in metadata.refs.items()
         if name not in dropped_refs
     }
+    if metadata.current_snapshot_id is not None:
+        protected.add(metadata.current_snapshot_id)
     return {
         s.snapshot_id
         for s in metadata.snapshots
@@ -351,7 +356,10 @@ def expire_snapshots(  # noqa: PLR0913
     """Expire old Iceberg snapshots for a table via pyiceberg.
 
     Uses the pyiceberg >= 0.10.0 API:
-        ``table.maintenance.expire_snapshots().older_than(cutoff_dt).commit()``
+        ``table.maintenance.expire_snapshots().by_ids(ids).commit()``
+
+    The ids come from ``expirable_snapshot_ids`` instead of ``older_than``,
+    which does not protect a current snapshot that no ref points at.
 
     This removes the snapshots from the table metadata and nothing else.
     pyiceberg deletes none of the data, manifest or manifest-list files the
@@ -406,7 +414,7 @@ def expire_snapshots(  # noqa: PLR0913
             manage.remove_branch(branch)
         manage.commit()
     if eligible:
-        table.maintenance.expire_snapshots().older_than(cutoff_dt).commit()
+        table.maintenance.expire_snapshots().by_ids(sorted(eligible)).commit()
 
     return {**result, "skipped": False}
 

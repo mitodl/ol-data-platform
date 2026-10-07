@@ -12,6 +12,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     AIRBYTE_STAGING_BRANCH,
     RAW_LAYER_GROUP_CONFIGS,
     TableMaintenanceConfig,
+    expirable_snapshot_ids,
     expire_snapshots,
     load_maintenance_configs_from_manifest,
     maintenance_failure_threshold,
@@ -715,6 +716,17 @@ class TestExpireSnapshots:
     def test_only_uuid_suffixed_staging_branches_match(self, name: str) -> None:
         assert AIRBYTE_STAGING_BRANCH.fullmatch(name) is None
         assert AIRBYTE_STAGING_BRANCH.fullmatch(self.STALE)
+
+    def test_a_current_snapshot_no_ref_points_at_is_kept(
+        self, catalog: SqlCatalog
+    ) -> None:
+        metadata = self._table(catalog).metadata
+        third = metadata.snapshots[2].snapshot_id
+        lagging = metadata.model_copy(update={"current_snapshot_id": third})
+        cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
+
+        assert third in expirable_snapshot_ids(metadata, cutoff_ms)
+        assert third not in expirable_snapshot_ids(lagging, cutoff_ms)
 
     def test_a_branch_whose_head_is_missing_is_left_alone(
         self, catalog: SqlCatalog
