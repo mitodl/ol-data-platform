@@ -7,7 +7,11 @@ from typing import Annotated
 import yaml
 from cyclopts import Parameter
 
-from ol_superset.lib.asset_index import AssetIndex, build_asset_index
+from ol_superset.lib.asset_index import (
+    WAREHOUSE_DATABASE_DIALECTS,
+    AssetIndex,
+    build_asset_index,
+)
 from ol_superset.lib.dbt_registry import (
     build_dbt_registry,
     extract_sql_table_refs,
@@ -142,23 +146,29 @@ def validate(
         governance_roles = load_governance_roles(gov_json)
         local_datasets = get_local_datasets(assets_dir)
 
-        # Only check warehouse (Trino) datasets - other DBs (e.g. Superset
+        # Only check warehouse datasets - other DBs (e.g. Superset
         # Metadata DB) are not subject to warehouse schema governance.
-        trino_datasets = [ds for ds in local_datasets if ds.get("database") == "Trino"]
+        warehouse_datasets = [
+            ds
+            for ds in local_datasets
+            if ds.get("database") in WAREHOUSE_DATABASE_DIALECTS
+        ]
 
         covered_schemas: set[str] = set()
         for role in governance_roles:
             covered_schemas.update(role.get("allowed_schemas", []))
 
         dataset_schemas: set[str] = {
-            ds["schema"] for ds in trino_datasets if ds.get("schema")
+            ds["schema"] for ds in warehouse_datasets if ds.get("schema")
         }
         uncovered = dataset_schemas - covered_schemas
 
         if uncovered:
             warnings += len(uncovered)
             for schema in sorted(uncovered):
-                count = sum(1 for ds in trino_datasets if ds.get("schema") == schema)
+                count = sum(
+                    1 for ds in warehouse_datasets if ds.get("schema") == schema
+                )
                 print(
                     f"  ⚠️  Schema not covered by any governance role: "
                     f"{schema} ({count} dataset(s))"
@@ -285,41 +295,41 @@ def _validate_asset_references(
     # 3. Chart → Dataset: column name case consistency
     #
     # Superset does exact-string matching when resolving chart column
-    # references against the dataset column list.  Trino normalises all
-    # column names to lowercase, so any mixed-case reference (e.g.
-    # ``DEDP_Course_Cert_Count``) will fail at query time even if the
-    # column exists in lowercase.  This check runs without a dbt registry
-    # because it only needs the chart and dataset YAML files.
+    # references against the dataset column list, so a reference that
+    # differs only in case (e.g. ``DEDP_Course_Cert_Count`` for a column
+    # the warehouse returns as ``dedp_course_cert_count``) fails at query
+    # time.  This check runs without a dbt registry because it only needs
+    # the chart and dataset YAML files.
     # ------------------------------------------------------------------
     print()
     print(f"  [3/{total_steps}] Chart → Dataset column case consistency...")
     col_case_issues = 0
 
     for dataset in index.datasets.values():
-        if dataset.database != "Trino":
+        if dataset.database not in WAREHOUSE_DATABASE_DIALECTS:
             continue
 
         if dataset.sql:
             # Virtual dataset: compare against sqlglot-parsed SQL output
-            # columns (already lowercase). Skip when columns are
-            # indeterminate (wildcard SELECT or unparseable SQL).
+            # columns. Skip when columns are indeterminate (wildcard SELECT
+            # or unparseable SQL).
             if dataset.virtual_columns is None:
                 continue
-            virtual_cols = dataset.virtual_columns  # already lowercase
+            virtual_cols = dataset.virtual_columns
+            virtual_cols_lower = {c.lower(): c for c in virtual_cols}
             for chart in index.charts.values():
                 if chart.dataset_uuid != dataset.uuid:
                     continue
                 for col_ref in sorted(chart.column_refs):
-                    col_ref_lower = col_ref.lower()
                     if col_ref in virtual_cols:
                         pass  # exact match — correct
-                    elif col_ref_lower in virtual_cols:
+                    elif col_ref.lower() in virtual_cols_lower:
+                        canonical = virtual_cols_lower[col_ref.lower()]
                         print(
                             f"    ❌ Chart '{chart.name}': column '{col_ref}' "
                             f"matches virtual dataset '{dataset.table_name}' "
-                            f"SQL output as '{col_ref_lower}' — "
-                            f"Trino normalises column names to lowercase; "
-                            f"rename to '{col_ref_lower}'"
+                            f"SQL output as '{canonical}' — "
+                            f"rename to '{canonical}'"
                         )
                         errors += 1
                         col_case_issues += 1
@@ -423,7 +433,7 @@ def _validate_dbt_chain(
     virtual_count = sum(
         1
         for d in index.datasets.values()
-        if d.database == "Trino" and d.table_name and d.sql
+        if d.database in WAREHOUSE_DATABASE_DIALECTS and d.table_name and d.sql
     )
     if virtual_count:
         print(
@@ -434,11 +444,11 @@ def _validate_dbt_chain(
     for dataset in index.datasets.values():
         if not dataset.table_name:
             continue
-        # Skip non-Trino datasets (Superset Metadata DB etc.)
-        if dataset.database != "Trino":
+        # Skip non-warehouse datasets (Superset Metadata DB etc.)
+        if dataset.database not in WAREHOUSE_DATABASE_DIALECTS:
             continue
         # Skip virtual datasets — their table_name is a Superset-internal
-        # identifier, not a dbt model name. SQL table refs are validated in [4/4].
+        # identifier, not a dbt model name. SQL table refs are validated in step 5.
         if dataset.sql:
             continue
 
@@ -480,10 +490,11 @@ def _validate_dbt_chain(
         simple_count = sum(
             1
             for d in index.datasets.values()
-            if d.database == "Trino" and d.table_name and not d.sql
+            if d.database in WAREHOUSE_DATABASE_DIALECTS and d.table_name and not d.sql
         )
         print(
-            f"    ✅ All {simple_count} simple Trino dataset(s) map to known dbt models"
+            f"    ✅ All {simple_count} simple warehouse dataset(s) map to known "
+            "dbt models"
         )
 
     # ------------------------------------------------------------------
@@ -498,7 +509,7 @@ def _validate_dbt_chain(
     col_warnings = 0
 
     for dataset in index.datasets.values():
-        if dataset.database != "Trino":
+        if dataset.database not in WAREHOUSE_DATABASE_DIALECTS:
             continue
 
         model = (
@@ -520,9 +531,7 @@ def _validate_dbt_chain(
                         print(
                             f"    ❌ Dataset '{dataset.table_name}': column "
                             f"'{col_name}' has wrong case — dbt model documents "
-                            f"it as '{canonical}' "
-                            f"(Trino normalises column names to lowercase; "
-                            f"update the dataset YAML)"
+                            f"it as '{canonical}' (update the dataset YAML)"
                         )
                         errors += 1
                         col_warnings += 1

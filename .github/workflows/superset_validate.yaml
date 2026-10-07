@@ -3,10 +3,10 @@ name: Superset validate
 
 # Credential-free PR gate for the exported Superset assets (src/ol_superset/assets):
 # YAML syntax, dashboard → chart → dataset UUID chains, chart↔dataset column-case
-# consistency (Trino lowercases identifiers), governance-role schema coverage, and
-# the Dataset → dbt-model chain (--dbt-dir): every physical Trino dataset must map to
-# a real dbt model. Reads only checked-in files (dbt registry is parsed statically
-# from models/_*.yml) — no Superset/warehouse connection.
+# consistency, governance-role schema coverage, and the Dataset → dbt-model chain
+# (--dbt-dir): every physical Trino or StarRocks dataset must map to a real dbt model.
+# Reads only checked-in files (dbt registry is parsed statically from models/_*.yml) —
+# no Superset/warehouse connection.
 
 permissions:
   contents: read
@@ -44,7 +44,7 @@ jobs:
       run: uv sync --all-extras
 
     # Full validation including the Dataset → dbt-model chain. Fails (exit 1) on any
-    # physical Trino dataset whose backing dbt model is missing/renamed — which
+    # physical warehouse dataset whose backing dbt model is missing/renamed — which
     # surfaces datasets pointing at stale, unmaintained warehouse tables.
     - name: Validate Superset assets
       working-directory: src/ol_superset

@@ -291,7 +291,7 @@ Typical production export:
 - **76+ datasets** (physical + virtual)
 - **100+ charts** (all visualization types)
 - **18+ dashboards** (published only)
-- **2 databases** (Trino + Superset Metadata DB)
+- **3 databases** (Trino + StarRocks - Lakehouse + Superset Metadata DB)
 
 ### Error Handling
 
@@ -389,7 +389,7 @@ are derived from each role's `allowed_schemas` in
 `ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`.
 
 Run this after any of the following events:
-- A new Trino dataset is added to the YAML assets
+- A new Trino or StarRocks dataset is added to the YAML assets
 - A dataset is moved to a different schema
 - A new governance role is added or `allowed_schemas` is updated
 
