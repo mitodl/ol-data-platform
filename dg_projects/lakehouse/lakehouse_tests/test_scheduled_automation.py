@@ -77,10 +77,14 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
 
     The orphan sweep builds nothing. It runs in QA first because its deletion
     list is reviewed there before production gets the schedule.
+
+    The raw orphan-file pass builds nothing either, and only reports until an
+    environment is named in the asset's delete set.
     """
     assert schedules_for_environment(ALL_CANDIDATES, environment="qa") == [
         "daily_sync_and_stage",
         "lake_orphan_sweep_weekly",
+        "iceberg_raw_orphan_files_weekly",
         "learn_integrations_qa_daily",
     ]
 
