@@ -264,7 +264,9 @@ models:
   description: One row per learner-authored MITx Online discussion forum post - a
     thread's opening post, a response or a comment - conformed to the common feedback
     event contract. Each thread is one conversation. Posts by course staff and instructors
-    are dropped, because they answer feedback rather than give it.
+    are dropped, because they answer feedback rather than give it. Posts by learners
+    the LMS has retired are dropped too, and a retired learner's thread title is null
+    on the replies that remain.
   config:
     meta:
       qa_branches:
@@ -295,7 +297,7 @@ models:
     - not_null
   - name: is_conversation_opening
     description: boolean, true for the thread's first kept post. That is a response
-      when a staff member opened the thread.
+      when a staff member or a retired learner opened the thread.
     tests:
     - not_null
   - name: occurred_at
@@ -311,12 +313,14 @@ models:
       staff posts included, so a new reply re-enters the whole thread.
   - name: text
     description: str, the post body as plain text, with HTML tags removed and common
-      entities decoded. The first kept turn starts with the thread title. Masking
-      happens downstream, in the feedback_redacted Dagster asset.
+      entities decoded. The first kept turn starts with the thread title, unless a
+      retired learner wrote it. Masking happens downstream, in the feedback_redacted
+      Dagster asset.
     tests:
     - not_null
   - name: title
-    description: str, the thread title, repeated on every turn of the thread.
+    description: str, the thread title, repeated on every turn of the thread. Null
+      when a retired learner opened the thread.
   - name: channel_slug
     description: str, always 'forum_post'.
   - name: subject_user_ref

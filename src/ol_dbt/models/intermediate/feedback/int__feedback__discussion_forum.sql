@@ -26,6 +26,15 @@ with forum_thread as (
     where courseaccess_role in ('staff', 'instructor')
 )
 
+-- A retired learner's posts are not feedback to keep. The forum overwrites them with
+-- '[deleted]' at retirement, but posts copied to MySQL before a retirement that ran
+-- against Mongo still hold the original text, so the LMS rename is what is trusted.
+, retired_users as (
+    select openedx_user_id
+    from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
+    where substr(user_username, 1, 14) = 'retired__user_'
+)
+
 -- An inline discussion's commentable_id is its block's discussion_id. A course run can
 -- reuse one discussion_id across units, so those stay unresolved rather than guessed.
 , discussion_block as (
@@ -134,7 +143,11 @@ with forum_thread as (
         on
             dated_posts.user_id = course_staff.openedx_user_id
             and dated_posts.courserun_readable_id = course_staff.courserun_readable_id
-    where course_staff.openedx_user_id is null
+    left join retired_users
+        on dated_posts.user_id = retired_users.openedx_user_id
+    where
+        course_staff.openedx_user_id is null
+        and retired_users.openedx_user_id is null
 )
 
 , numbered_turns as (
@@ -157,11 +170,16 @@ select
     -- The title often carries the whole question ("images won't load" over a body of
     -- "eom"), and the summarizer reads only text, so it leads the first kept turn.
     , case
-        when numbered_turns.turn_index = 1 and forum_thread.forumthread_title is not null
+        when
+            numbered_turns.turn_index = 1
+            and forum_thread.forumthread_title is not null
+            and thread_author_retired.openedx_user_id is null
             then forum_thread.forumthread_title || chr(10) || chr(10) || numbered_turns.post_body
         else numbered_turns.post_body
     end as text
-    , forum_thread.forumthread_title as title
+    -- Other learners' replies stay, without the retired author's title over them
+    , case when thread_author_retired.openedx_user_id is null then forum_thread.forumthread_title end
+        as title
     , cast(numbered_turns.forumthread_id as varchar) as conversation_ref
     , numbered_turns.turn_index
     , numbered_turns.turn_index = 1 as is_conversation_opening
@@ -194,6 +212,8 @@ inner join forum_thread
     on numbered_turns.forumthread_id = forum_thread.forumthread_id
 left join users
     on numbered_turns.user_id = users.openedx_user_id
+left join retired_users as thread_author_retired
+    on forum_thread.user_id = thread_author_retired.openedx_user_id
 left join discussion_block
     on
         forum_thread.courserun_readable_id = discussion_block.courserun_readable_id
