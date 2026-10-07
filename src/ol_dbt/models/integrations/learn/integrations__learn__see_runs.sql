@@ -17,9 +17,9 @@ select
     , runs.url
     , {{ format_timestamp_as_iso8601('runs.start_on') }} as start_date
     , {{ format_timestamp_as_iso8601('runs.end_on') }} as end_date
-    , array[runs.delivery] as delivery
+    , {{ array_of(['runs.delivery']) }} as delivery
     , runs.availability
-    , array[runs.pace] as pace
+    , {{ array_of(['runs.pace']) }} as pace
     , runs.format
     , runs.location
     , runs.price
