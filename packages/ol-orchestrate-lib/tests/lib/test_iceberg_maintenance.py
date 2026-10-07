@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pytest
+from ol_orchestrate.lib import iceberg_maintenance
 from ol_orchestrate.lib.iceberg_maintenance import (
     AIRBYTE_STAGING_BRANCH,
     RAW_LAYER_GROUP_CONFIGS,
@@ -15,6 +16,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     expirable_snapshot_ids,
     expire_snapshots,
     load_maintenance_configs_from_manifest,
+    load_raw_layer_maintenance_work,
     maintenance_failure_threshold,
     non_dbt_singleton_tables,
     partition_by_catalog_presence,
@@ -748,3 +750,56 @@ class TestExpireSnapshots:
         assert stale_branches(metadata, cutoff_ms, AIRBYTE_STAGING_BRANCH) == [
             self.STALE
         ]
+
+
+class TestLoadRawLayerMaintenanceWork:
+    """The raw scan, against a real pyiceberg catalog and a stubbed Glue listing."""
+
+    DATABASE = "raw"
+    LOADABLE = "raw__mitlearn__app__postgres__users_user"
+    MISSING = "raw__mitlearn__app__postgres__dropped_mid_scan"
+
+    def test_a_table_that_fails_to_load_is_returned_as_a_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        catalog = SqlCatalog(
+            "test",
+            uri=f"sqlite:///{tmp_path}/catalog.db",
+            warehouse=f"file://{tmp_path}/warehouse",
+        )
+        catalog.create_namespace(self.DATABASE)
+        rows = pa.table({"id": pa.array([1], type=pa.int64())})
+        catalog.create_table(f"{self.DATABASE}.{self.LOADABLE}", rows.schema).append(
+            rows
+        )
+
+        class Glue:
+            """Lists one table the catalog holds and one it does not."""
+
+            def get_paginator(self, _operation: str) -> Glue:
+                return self
+
+            def paginate(self, **_kwargs: object) -> list[dict[str, object]]:
+                names = (
+                    TestLoadRawLayerMaintenanceWork.LOADABLE,
+                    TestLoadRawLayerMaintenanceWork.MISSING,
+                )
+                return [
+                    {
+                        "TableList": [
+                            {"Name": name, "Parameters": {"table_type": "ICEBERG"}}
+                            for name in names
+                        ]
+                    }
+                ]
+
+        monkeypatch.setattr("boto3.client", lambda *_a, **_k: Glue())
+        monkeypatch.setattr(
+            iceberg_maintenance, "get_glue_catalog", lambda **_: catalog
+        )
+
+        scan = load_raw_layer_maintenance_work(self.DATABASE)
+
+        assert [t.table_name for t in scan.tables] == [self.LOADABLE]
+        assert len(scan.failures) == 1
+        assert scan.failures[0].startswith(f"{self.MISSING}: ")
