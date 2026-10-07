@@ -520,7 +520,7 @@ that table's `DROP`, leaving the unit partly refreshed and the failed table abse
 any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
 The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
-other 25 what it adds over the declaration check is that the masking expressions themselves
+other 31 what it adds over the declaration check is that the masking expressions themselves
 plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
