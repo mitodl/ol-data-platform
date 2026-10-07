@@ -1000,7 +1000,7 @@ models:
     description: text, the description shown on the home page and product page.
   - name: course_price
     description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
-      available). QA has live course pages with no price block (71 of 161 on 2026-10-07),
+      available). QA has live course pages with no price block (71 of 162 on 2026-10-07),
       so the test below only warns there.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
