@@ -56,6 +56,7 @@ with enrollment_detail as (
         , user_email
         , cast(substring(courseruncertificate_created_on, 1, 10) as date) as certificate_created_date
     from enrollment_detail
+    where courseruncertificate_is_earned = true
 )
 
 , enroll_data as (
@@ -187,7 +188,6 @@ with enrollment_detail as (
         , 0 as discussion_count
         , 0 as enrolled_count
     from certificate_org_data
-    where certificate_created_date is not null
 
     union
 
