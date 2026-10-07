@@ -94,9 +94,11 @@ SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
 RETRYABLE_STATUSES = frozenset({502, 503})
 
 # The forked process was back in 1 to 24 seconds in the restarts read from the
-# 2026-10-02 logs, so the second retry lands after the slowest of them. Kept
-# short because the document that killed the parser is retried too, and each
-# of its retries kills the parser again for every other caller on that pod.
+# 2026-10-02 logs. The second retry is sent 10 to 30 seconds after the first
+# failure and the third 32 to 98 seconds after it, so the third always clears
+# the slowest of them. Kept to three because the document that killed the
+# parser is retried too, and each of its retries kills the parser again for
+# every other caller on that pod.
 RETRY_DELAYS_SECONDS = (5, 15, 45)
 
 
@@ -194,32 +196,36 @@ class TikaResource(ConfigurableResource[None]):
             retryable, or a retryable one that outlasted every retry.
         :raises httpx.TransportError: On a timeout, or a connection failure
             that outlasted every retry.
+
+        Blocks for up to 98 seconds of waits on top of the request timeouts
+        when every attempt fails.
         """
         url = f"{self.base_url}/{endpoint}"
         for delay in RETRY_DELAYS_SECONDS:
             try:
                 response = self._client.put(url, content=file_bytes, headers=headers)
                 response.raise_for_status()
-            except httpx.TimeoutException:
-                raise
-            except (httpx.HTTPStatusError, httpx.TransportError) as error:
-                if (
-                    isinstance(error, httpx.HTTPStatusError)
-                    and error.response.status_code not in RETRYABLE_STATUSES
-                ):
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code not in RETRYABLE_STATUSES:
                     raise
-                # Every caller that lost a request to the same restart would
-                # otherwise come back in the same instant.
-                wait_seconds = delay * random.uniform(0.5, 1.5)  # noqa: S311
-                log.warning(
-                    "Tika /%s failed (%s); retrying in %.0f s",
-                    endpoint,
-                    error,
-                    wait_seconds,
-                )
-                time.sleep(wait_seconds)
+                failure: Exception = error
+            # Not TransportError: that also covers timeouts (one slow
+            # document) and errors raised before anything is sent, such as a
+            # base_url with no scheme, which no wait will fix.
+            except (httpx.NetworkError, httpx.RemoteProtocolError) as error:
+                failure = error
             else:
                 return response
+            # Every caller that lost a request to the same restart would
+            # otherwise come back in the same instant.
+            wait_seconds = delay * random.uniform(0.5, 1.5)  # noqa: S311
+            log.warning(
+                "Tika /%s failed (%s); retrying in %.0f s",
+                endpoint,
+                failure,
+                wait_seconds,
+            )
+            time.sleep(wait_seconds)
         response = self._client.put(url, content=file_bytes, headers=headers)
         response.raise_for_status()
         return response

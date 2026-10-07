@@ -132,6 +132,9 @@ def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     """Record retry waits instead of sleeping through them."""
     waits: list[float] = []
     monkeypatch.setattr("ol_orchestrate.resources.tika.time.sleep", waits.append)
+    monkeypatch.setattr(
+        "ol_orchestrate.resources.tika.random.uniform", lambda _low, high: high
+    )
     return waits
 
 
@@ -154,9 +157,8 @@ def test_extract_text_waits_out_a_parser_restart(
         result = tika.extract_text(b"%PDF...", "application/pdf")
 
     assert result == "recovered"
-    assert len(slept) == len(RETRY_DELAYS_SECONDS)
-    for waited, delay in zip(slept, RETRY_DELAYS_SECONDS, strict=True):
-        assert delay * 0.5 <= waited <= delay * 1.5
+    # The fixture pins the jitter to its upper bound.
+    assert slept == [delay * 1.5 for delay in RETRY_DELAYS_SECONDS]
 
 
 def test_extract_text_gives_up_after_the_last_retry(
@@ -174,6 +176,22 @@ def test_extract_text_gives_up_after_the_last_retry(
     assert len(slept) == len(RETRY_DELAYS_SECONDS)
 
 
+def test_extract_text_raises_a_connection_error_that_outlasts_the_retries(
+    tika: TikaResource, slept: list[float]
+) -> None:
+    """The last attempt's transport error reaches the caller unchanged."""
+    mock_http = MagicMock(spec=httpx.Client)
+    mock_http.put.side_effect = httpx.ConnectError("refused")
+    with (
+        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
+        pytest.raises(httpx.ConnectError),
+    ):
+        tika.extract_text(b"%PDF...", "application/pdf")
+
+    assert mock_http.put.call_count == len(RETRY_DELAYS_SECONDS) + 1
+    assert len(slept) == len(RETRY_DELAYS_SECONDS)
+
+
 @pytest.mark.parametrize(
     "error",
     [
@@ -183,8 +201,11 @@ def test_extract_text_gives_up_after_the_last_retry(
         # One slow document: retrying it costs another full timeout each time.
         _status_error(504),
         httpx.ReadTimeout("slow parse"),
+        httpx.ConnectTimeout("no route"),
+        # Raised before anything is sent, so a wait cannot change it.
+        httpx.UnsupportedProtocol("base_url has no scheme"),
     ],
-    ids=["401", "422", "500", "504", "timeout"],
+    ids=["401", "422", "500", "504", "read-timeout", "connect-timeout", "no-scheme"],
 )
 def test_extract_text_does_not_retry_a_failure_about_the_request(
     tika: TikaResource, slept: list[float], error: Exception
