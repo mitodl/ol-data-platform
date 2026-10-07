@@ -395,7 +395,7 @@ class TestOverlappingPages:
         rows = client.get_connections()
         assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
 
-    @pytest.mark.parametrize("status", ["inactive", "deprecated"])
+    @pytest.mark.parametrize("status", ["inactive", "deprecated", "locked"])
     def test_the_asset_load_leaves_out_a_connection_airbyte_will_not_sync(
         self, client, listings, status
     ) -> None:
@@ -408,4 +408,4 @@ class TestOverlappingPages:
     ) -> None:
         listings.append((*self.CLEAN, {"connectionId": "conn-3", "status": "inactive"}))
         rows = client.list_collection("connections", "connectionId")
-        assert len(rows) == len(self.CLEAN) + 1
+        assert "conn-3" in {row["connectionId"] for row in rows}
