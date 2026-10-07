@@ -61,18 +61,24 @@ with blocks as (
         -- the attributes: Learn has no vertical with inline html unless it also
         -- has text, and titles those it has from the file name. CDATA markers go
         -- first so a script body inside one is not cut at its first ">".
+        -- The two parts are joined as an array because Trino's concat() and ||
+        -- fail with "Concatenated string is too large" past about 1 MB, and
+        -- some blocks carry more XML than that (up to 8.5 MB on 2026-10-07).
         , trim({{ regexp_replace_all(
             html_unescape(
-                "concat("
-                ~ "case when not has_html then "
-                ~ array_join("regexp_extract_all(coursestructure_xml_raw_xml, '=\"([^\"]*)\"', 1)", ' ')
-                ~ " else '' end"
-                ~ ", ' ', "
-                ~ regexp_replace_all(
-                    "replace(replace(coursestructure_xml_raw_xml, '<![CDATA[', ' '), ']]>', ' ')"
-                    , "'<[^>]*>'", "' '"
+                array_join(
+                    "array["
+                    ~ "case when not has_html then "
+                    ~ array_join("regexp_extract_all(coursestructure_xml_raw_xml, '=\"([^\"]*)\"', 1)", ' ')
+                    ~ " else '' end"
+                    ~ ", "
+                    ~ regexp_replace_all(
+                        "replace(replace(coursestructure_xml_raw_xml, '<![CDATA[', ' '), ']]>', ' ')"
+                        , "'<[^>]*>'", "' '"
+                    )
+                    ~ "]"
+                    , ' '
                 )
-                ~ ")"
             )
             , "'\\s+'", "' '"
         ) }}) as content
