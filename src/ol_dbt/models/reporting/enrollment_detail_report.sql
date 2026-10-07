@@ -160,42 +160,42 @@ with enrollment as (
 select
     enrollment.enrollment_key
     , enrollment.platform_display as platform
-    , enrollment_id as courserunenrollment_id
+    , enrollment.enrollment_id as courserunenrollment_id
     , course.course_readable_id
     , course.course_title
     , {{ is_courserun_current('course_run.courserun_start_on', 'course_run.courserun_end_on') }}
         as courserun_is_current
     , course_run.courserun_readable_id
-    , courserun_start_on
-    , courserun_end_on
-    , courserun_title
-    , enrollment_created_on as courserunenrollment_created_on
-    , enrollment_mode as courserunenrollment_enrollment_mode
-    , enrollment_status as courserunenrollment_enrollment_status
-    , enrollment_is_active as courserunenrollment_is_active
+    , course_run.courserun_start_on
+    , course_run.courserun_end_on
+    , course_run.courserun_title
+    , enrollment.enrollment_created_on as courserunenrollment_created_on
+    , enrollment.enrollment_mode as courserunenrollment_enrollment_mode
+    , enrollment.enrollment_status as courserunenrollment_enrollment_status
+    , enrollment.enrollment_is_active as courserunenrollment_is_active
     , enrollment_upgrades.courserunenrollment_upgraded_on
-    , certificate_created_on as courseruncertificate_created_on
-    , certificate_issued_on as courseruncertificate_issued_on
-    , case when certificate_issued_on is not null then true else false end as courseruncertificate_is_earned
+    , f_certificate.certificate_created_on as courseruncertificate_created_on
+    , f_certificate.certificate_issued_on as courseruncertificate_issued_on
+    , case when f_certificate.certificate_issued_on is not null then true else false end as courseruncertificate_is_earned
     , case enrollment.platform
         when 'mitxonline' then
-            case when certificate_uuid is not null
-            then concat('https://mitxonline.mit.edu/certificate/', certificate_uuid)
+            case when f_certificate.certificate_uuid is not null
+            then concat('https://mitxonline.mit.edu/certificate/', f_certificate.certificate_uuid)
             else null end
         when 'mitxpro' then
-            case when certificate_uuid is not null
-            then concat('https://xpro.mit.edu/certificate/', certificate_uuid)
+            case when f_certificate.certificate_uuid is not null
+            then concat('https://xpro.mit.edu/certificate/', f_certificate.certificate_uuid)
             else null end
         when 'bootcamps' then
-            case when certificate_uuid is not null
-            then concat('https://bootcamps.mit.edu/certificate/', certificate_uuid)
+            case when f_certificate.certificate_uuid is not null
+            then concat('https://bootcamps.mit.edu/certificate/', f_certificate.certificate_uuid)
             else null end
         else null
     end as courseruncertificate_url
-    , grade_value as courserungrade_grade
-    , is_passing as courserungrade_is_passing
-    , organization_key
-    , organization_name
+    , grade.grade_value as courserungrade_grade
+    , grade.is_passing as courserungrade_is_passing
+    , organization.organization_key
+    , organization.organization_name
     , d_user.address_country as user_country_code
     , d_user.highest_education as user_highest_education
     , d_user.full_name as user_full_name
@@ -210,18 +210,18 @@ select
     , course_passed_counts.num_of_course_passed
     , discount.discount_code as coupon_code
     , discount_names.discount_name as coupon_name
-    , discount_amount as discount
+    , discount.discount_amount as discount
     , f_order.order_id
     , f_order.order_reference_number
-    , order_state
+    , f_order.order_state
     , f_order.order_updated_on
     , payment.transaction_amount as receipt_payment_amount
-    , payment_method_name as receipt_payment_method
-    , transaction_created_on as receipt_payment_timestamp
+    , payment_method.payment_method_name as receipt_payment_method
+    , payment.transaction_created_on as receipt_payment_timestamp
     , d_user_payer.email as receipt_payer_email
-    , line_price as unit_price
-    , program_name
-    , discount_type_name
+    , f_order.line_price as unit_price
+    , program.program_name
+    , discount_type.discount_type_name
     , order_emails.redeemed_email
     , if(
         enrollment.platform = 'mitxonline'

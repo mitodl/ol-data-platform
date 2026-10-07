@@ -111,22 +111,26 @@ with video_days as (
     union all
     select
         platform, user_fk, courserun_readable_id, activity_date_key
-        , 0, problems_attempted, 0, 0, 0
+        , 0 as videos_played, problems_attempted, 0 as navigation_events
+        , 0 as discussion_events, 0 as chatbot_interactions
     from problem_days
     union all
     select
         platform, user_fk, courserun_readable_id, activity_date_key
-        , 0, 0, navigation_events, 0, 0
+        , 0 as videos_played, 0 as problems_attempted, navigation_events
+        , 0 as discussion_events, 0 as chatbot_interactions
     from navigation_days
     union all
     select
         platform, user_fk, courserun_readable_id, activity_date_key
-        , 0, 0, 0, discussion_events, 0
+        , 0 as videos_played, 0 as problems_attempted, 0 as navigation_events
+        , discussion_events, 0 as chatbot_interactions
     from discussion_days
     union all
     select
         platform, user_fk, courserun_readable_id, activity_date_key
-        , 0, 0, 0, 0, chatbot_interactions
+        , 0 as videos_played, 0 as problems_attempted, 0 as navigation_events
+        , 0 as discussion_events, chatbot_interactions
     from chatbot_days
 )
 
