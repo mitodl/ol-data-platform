@@ -19,6 +19,8 @@ Infrastructure source:
 """
 
 import logging
+import random
+import time
 
 import httpx2 as httpx
 from dagster import ConfigurableResource
@@ -78,6 +80,26 @@ SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
         "text/x-tex",
     ]
 )
+
+
+# What a caller sees while a Tika pod restarts its parser process. Tika runs the
+# parser in a forked JVM that the watchdog kills and restarts on a heap
+# OutOfMemoryError or a task timeout, without the container restarting, so the
+# pod stays Ready and APISIX keeps routing to it. On 2026-10-02 the three
+# production pods did this 327 times against 9 container restarts, and each
+# restart answered every request in flight on that pod with a 502.
+#
+# 504 is absent on purpose: it is the gateway timing out one slow parse, and
+# sending the same document again costs another full timeout.
+RETRYABLE_STATUSES = frozenset({502, 503})
+
+# The forked process was back in 1 to 24 seconds in the restarts read from the
+# 2026-10-02 logs. The second retry is sent 10 to 30 seconds after the first
+# failure and the third 32 to 98 seconds after it, so the third always clears
+# the slowest of them. Kept to three because the document that killed the
+# parser is retried too, and each of its retries kills the parser again for
+# every other caller on that pod.
+RETRY_DELAYS_SECONDS = (5, 15, 45)
 
 
 def _base_content_type(content_type: str) -> str:
@@ -161,6 +183,53 @@ class TikaResource(ConfigurableResource[None]):
         if self._http_client is not None:
             self._http_client.close()
 
+    def _put(
+        self, endpoint: str, file_bytes: bytes, headers: dict[str, str]
+    ) -> httpx.Response:
+        """PUT a document to Tika, waiting out a parser restart.
+
+        :param endpoint: Tika endpoint name, e.g. ``"tika"`` or ``"meta"``.
+        :param file_bytes: Raw bytes of the document.
+        :param headers: Request headers, including the access token.
+        :returns: The successful response.
+        :raises httpx.HTTPStatusError: On a non-2xx status that is not
+            retryable, or a retryable one that outlasted every retry.
+        :raises httpx.TransportError: On a timeout, or a connection failure
+            that outlasted every retry.
+
+        Blocks for up to 98 seconds of waits on top of the request timeouts
+        when every attempt fails.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        for delay in RETRY_DELAYS_SECONDS:
+            try:
+                response = self._client.put(url, content=file_bytes, headers=headers)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code not in RETRYABLE_STATUSES:
+                    raise
+                failure: Exception = error
+            # Not TransportError: that also covers timeouts (one slow
+            # document) and errors raised before anything is sent, such as a
+            # base_url with no scheme, which no wait will fix.
+            except (httpx.NetworkError, httpx.RemoteProtocolError) as error:
+                failure = error
+            else:
+                return response
+            # Every caller that lost a request to the same restart would
+            # otherwise come back in the same instant.
+            wait_seconds = delay * random.uniform(0.5, 1.5)  # noqa: S311
+            log.warning(
+                "Tika /%s failed (%s); retrying in %.0f s",
+                endpoint,
+                failure,
+                wait_seconds,
+            )
+            time.sleep(wait_seconds)
+        response = self._client.put(url, content=file_bytes, headers=headers)
+        response.raise_for_status()
+        return response
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -209,12 +278,7 @@ class TikaResource(ConfigurableResource[None]):
         if ocr_strategy:
             headers["X-Tika-PDFOcrStrategy"] = ocr_strategy
 
-        response = self._client.put(
-            f"{self.base_url}/tika",
-            content=file_bytes,
-            headers=headers,
-        )
-        response.raise_for_status()
+        response = self._put("tika", file_bytes, headers)
 
         text = response.text.strip()
         return text if text else None
@@ -246,12 +310,7 @@ class TikaResource(ConfigurableResource[None]):
             "Accept": "application/json",
             "X-Access-Token": self.access_token,
         }
-        response = self._client.put(
-            f"{self.base_url}/meta",
-            content=file_bytes,
-            headers=headers,
-        )
-        response.raise_for_status()
+        response = self._put("meta", file_bytes, headers)
 
         try:
             return response.json()
