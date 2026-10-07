@@ -142,5 +142,5 @@ production_to_qa_transformations:
 # SECURITY NOTES
 # =============================================================================
 # - Database passwords are NOT included in exports
-# - Must configure Trino credentials manually in each environment
+# - Must configure Trino and StarRocks credentials manually in each environment
 # - OAuth credentials for Superset instances are managed separately via `sup config`

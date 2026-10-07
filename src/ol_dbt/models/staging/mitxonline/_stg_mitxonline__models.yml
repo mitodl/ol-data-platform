@@ -1955,9 +1955,14 @@ models:
     description: str, a short description indicating how much effort is required (e.g.
       1-3 hours per week).
   - name: program_price
-    description: str, product price in plain text. e.g. $250 - $1000.
+    description: str, product price in plain text. e.g. $250 - $1000. NULL when the
+      page's price block is empty, which no production page is and 22 of the 58 QA
+      pages are (2026-10-07).
     tests:
-    - not_null
+    - not_null:
+        config:
+          severity: "{{ 'warn' if target.database == 'ol_data_lake_qa' else 'error'\
+            \ }}"
   - name: program_prerequisites
     description: text, a short description indicating prerequisites of this program.
   - name: program_faq_url

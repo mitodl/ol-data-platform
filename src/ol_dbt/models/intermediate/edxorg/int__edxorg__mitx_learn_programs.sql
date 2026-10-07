@@ -20,7 +20,7 @@
 with programs as (
     select *
     from {{ ref('stg__edxorg__s3__programs') }}
-    where program_retrieved_at = (select max(program_retrieved_at) from {{ ref('stg__edxorg__s3__programs') }})
+    where program_retrieved_at = (select max(latest.program_retrieved_at) from {{ ref('stg__edxorg__s3__programs') }} as latest)
 )
 
 , program_courses as (
@@ -79,7 +79,7 @@ with programs as (
         select
             *
             , row_number() over (
-                partition by program_uuid, course_key order by run_start_on asc, run_key
+                partition by program_uuid, course_key order by run_start_on asc, run_key asc
             ) as run_rank
         from searchable_published_runs
     )

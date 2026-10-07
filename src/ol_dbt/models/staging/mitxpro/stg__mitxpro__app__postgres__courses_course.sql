@@ -17,7 +17,7 @@ with source as (
         ) as short_program_code
         , position_in_program
         , platform_id
-        , replace(replace(readable_id, 'course-v1:', ''), '+', '/') as course_edx_readable_id
+        , {{ format_course_id('readable_id') }} as course_edx_readable_id
         ,{{ cast_timestamp_to_iso8601('created_on') }} as course_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as course_updated_on
         , is_external as course_is_external

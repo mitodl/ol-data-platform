@@ -45,7 +45,9 @@ with emeritus as (
         user_email
         , email
     from global_alumni_all
-    where user_id is null or user_id not in (select user_id from global_alumni_shared_ids)
+    where
+        user_id is null
+        or user_id not in (select global_alumni_shared_ids.user_id from global_alumni_shared_ids)
 )
 
 , missing_emeritus_key as (

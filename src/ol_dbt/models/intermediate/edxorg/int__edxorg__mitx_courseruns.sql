@@ -17,19 +17,21 @@ with runs_from_bigquery as (
 )
 
 , instructors as (
+    {%- set first_name = json_extract_scalar('t.instructor', "'$.first_name'") -%}
+    {%- set last_name = json_extract_scalar('t.instructor', "'$.last_name'") -%}
+    {#- Trino's concat returns NULL when either name is NULL and array_join then skips the
+        entry. DuckDB's concat skips NULL arguments, so the guard keeps both engines alike. -#}
+    {%- set instructor_name -%}
+        case
+            when {{ first_name }} is not null and {{ last_name }} is not null
+                then concat({{ first_name }}, ' ', {{ last_name }})
+        end
+    {%- endset %}
     select
         courseruns.courserun_readable_id
-        , {{ array_join('array_agg(
-                concat(
-                    json_extract_scalar(t.instructor', "$.first_name") }}
-                    , ' '
-                    , json_extract_scalar(t.instructor, '$.last_name')
-                )
-            )
-            , ', '
-        ) as instructor_names
+        , {{ array_join('array_agg(' ~ instructor_name ~ ')', ', ') }} as instructor_names
     from courseruns
-    cross join unnest(cast(json_parse(courseruns.courserun_instructors) as array (json))) as t (instructor) -- noqa
+    cross join {{ unnest_json_array('courseruns.courserun_instructors', 't', 'instructor') }} -- noqa
     group by courseruns.courserun_readable_id
 )
 
@@ -63,7 +65,7 @@ with runs_from_bigquery as (
         , runs_from_api.courserun_availability
         , runs_from_api.courserun_is_published
         , coalesce(
-            replace(replace(runs_from_api.courserun_readable_id, 'course-v1:', ''), '+', '/')
+            {{ format_course_id('runs_from_api.courserun_readable_id') }}
             , runs_from_bigquery.courserun_readable_id
         ) as courserun_readable_id
         , coalesce(
@@ -83,7 +85,7 @@ with runs_from_bigquery as (
     from runs_from_api
     full outer join runs_from_bigquery
         on
-            replace(replace(runs_from_api.courserun_readable_id, 'course-v1:', ''), '+', '/')
+            {{ format_course_id('runs_from_api.courserun_readable_id') }}
             = runs_from_bigquery.courserun_readable_id
 )
 

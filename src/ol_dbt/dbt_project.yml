@@ -70,6 +70,9 @@ vars:
     mitxonline_media_url: "https://mitxonline.mit.edu/media/"
     micromasters_media_url: "https://ol-micromasters-app-production.s3.amazonaws.com/"
     micromasters_production_url: "https://micromasters.mit.edu/"
+    # Days without tracked activity before an in-progress learner needs attention
+    # (afact_learner_courserun_progress.needs_attention_since).
+    needs_attention_quiet_days: 30
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models

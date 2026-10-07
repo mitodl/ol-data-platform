@@ -25,7 +25,7 @@ with events as (
         event_id
         , coalesce(nullif(event_start_date_raw, ''), nullif(event_end_date_raw, '')) as start_date
         , coalesce(nullif(event_end_date_raw, ''), nullif(event_start_date_raw, '')) as end_date
-        , regexp_extract_all(coalesce(event_time_range_raw, ''), '\d{1,2}(:\d{2})?\D*') as time_runs
+        , {{ regexp_extract_all("coalesce(event_time_range_raw, '')", "'\\d{1,2}(:\\d{2})?\\D*'") }} as time_runs
     from events
 )
 
@@ -36,7 +36,7 @@ with events as (
         , end_date
         , {{ array_length('time_runs') }} as run_count
         {% for position in [1, 2] %}
-        , cast(regexp_extract({{ element_at_array('time_runs', position) }}, '^(\d{1,2})', 1) as integer)
+        , cast({{ regexp_extract_or_null(element_at_array('time_runs', position), "'^(\\d{1,2})'", 1) }} as integer)
             as hour_{{ position }}
         , coalesce(
             {{ regexp_extract_or_null(element_at_array('time_runs', position), "'^\\d{1,2}:(\\d{2})'", 1) }}
@@ -151,8 +151,11 @@ with events as (
     from local_times
 )
 
+-- Set to UTC so the value reads the same on every engine: Trino keeps the zone a
+-- timestamp was built in, and a consumer or test that prints it would otherwise
+-- see "12:30-04:00" on Trino and "16:30+00:00" on DuckDB for one instant.
 select
     event_id
-    , start_on
-    , case when end_on < start_on then start_on else end_on end as end_on
+    , {{ timestamptz_at_utc('start_on') }} as start_on
+    , {{ timestamptz_at_utc('case when end_on < start_on then start_on else end_on end') }} as end_on
 from instants

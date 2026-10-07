@@ -42,6 +42,12 @@ from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
 )
+from lakehouse.assets.iceberg_orphan_files import (
+    ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+    ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+    IcebergOrphanFilesConfig,
+    iceberg_raw_orphan_files,
+)
 from lakehouse.assets.lake_orphan_sweep import (
     LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
     LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
@@ -167,6 +173,14 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # The delay doubles per retry (5, 10, 20, 40), so a request that is
+        # refused straight away waits up to 75 seconds for the API to come
+        # back; one that hangs also spends request_timeout on each of its five
+        # attempts. The 502 burst on 2026-10-07 ran
+        # from about 00:03:45Z to 00:04:45Z, longer than the library's three
+        # retries at a quarter second apart.
+        request_max_retries=4,
+        request_retry_delay=5,
         # Attach to a sync that is already in flight rather than raising. The
         # automation condition and Airbyte's own scheduler both launch syncs, so
         # a tick landing on top of a running sync is routine, not exceptional --
@@ -262,10 +276,9 @@ if DAGSTER_ENV == "production":
         msg = f"No sync intervals rendered from the inventory at {INVENTORY_DIR}."
         raise RuntimeError(msg)
     # A single live group the inventory does not cover (a connection created or
-    # renamed in the UI) warns rather than raises. There is one today, the
-    # edx.org course-metadata connection pending deletion, and failing here
-    # would take the whole code location down for it. airbyte_inventory_drift
-    # reports the connection behind it as undeclared.
+    # renamed in the UI) warns rather than raises, because failing here would
+    # take the whole code location down for it. airbyte_inventory_drift reports
+    # the connection behind it as undeclared.
     if uncovered := sorted(group_names - group_name_to_interval.keys()):
         import warnings
 
@@ -399,6 +412,31 @@ lake_orphan_sweep_schedule = ScheduleDefinition(
         ),
     ),
     cron_schedule="0 5 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# Weekly for the same reasons as the sweep above, and an hour after it. Sunday
+# 06:00 UTC is also after that night's 03:00 raw snapshot expiry, which is what
+# turns files into orphans.
+#
+# RUNNING where it is registered. The asset decides what a tick may do: it
+# deletes only in ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS and reports elsewhere.
+iceberg_raw_orphan_files_schedule = ScheduleDefinition(
+    name="iceberg_raw_orphan_files_weekly",
+    job=define_asset_job(
+        name="iceberg_raw_orphan_files_job",
+        selection=AssetSelection.assets(iceberg_raw_orphan_files),
+        config=RunConfig(
+            ops={
+                "iceberg_raw_orphan_files": IcebergOrphanFilesConfig(
+                    min_age_days=ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV in ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 6 * * 0",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
 )
@@ -567,7 +605,8 @@ non_airbyte_staging_schedules = (
 # that reads more than one ingestion unit, so a QA build is complete relative to
 # QA's apps rather than a silently partial union. The rest wait on raw tables QA
 # does not have: program_certificates on the edX program_learner_report and
-# email_opt_in mirrors, and the dlt/API sources (mit_edx_courses and
+# email_opt_in mirrors, ocw_courses on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA), and the dlt/API sources (mit_edx_courses and
 # mit_edx_programs on the edX catalog, mitpe, mit_climate, oll, podcasts) whose
 # loaders run in production only.
 learn_integrations_qa_schedule = ScheduleDefinition(
@@ -653,6 +692,7 @@ defs = Definitions(
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             lake_orphan_sweep,
+            iceberg_raw_orphan_files,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
@@ -719,6 +759,7 @@ defs = Definitions(
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("lake_orphan_sweep_weekly", lake_orphan_sweep_schedule),
+            ("iceberg_raw_orphan_files_weekly", iceberg_raw_orphan_files_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),

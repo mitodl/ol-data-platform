@@ -64,10 +64,12 @@ with combined_enrollments as (
 
 , edx_signatories as (
     select
-        courserun_readable_id
+        edx_signatory.courserun_readable_id
         , array_distinct(
-            array_agg(signatory_normalized_name order by signatory_normalized_name)
-            filter (where signatory_normalized_name <> '')
+            array_agg(
+                edx_signatory.signatory_normalized_name order by edx_signatory.signatory_normalized_name
+            )
+            filter (where edx_signatory.signatory_normalized_name <> '')
           ) as signatory_names
         , array_sort(
             array_distinct(
@@ -78,7 +80,7 @@ with combined_enrollments as (
     from {{ ref('stg__edxorg__s3__course_certificate_signatory') }} edx_signatory
     left join {{ ref('stg__mitxonline__app__postgres__cms_signatorypage') }} as mitxonline_signatory
         on edx_signatory.signatory_normalized_name = mitxonline_signatory.signatorypage_name
-    group by courserun_readable_id
+    group by edx_signatory.courserun_readable_id
 )
 
 , mitxonline_certificate_revision as (
@@ -88,9 +90,9 @@ with combined_enrollments as (
         , array_sort(
             transform(
                 cast(
-                 json_parse({{ json_query_string('wagtailcore_revision_content', "'$.signatories'") }}) as array(json)
+                 json_parse({{ json_query_string('wagtailcore_revision_content', "'$.signatories'") }}) as array(json)  -- noqa: RF02
                 )
-                , x ->  CAST(json_extract_scalar(x, '$.value') as integer)
+                , x ->  CAST({{ json_extract_scalar('x', "'$.value'") }} as integer)
             )
         ) AS signatory_ids
     from {{ ref('stg__mitxonline__app__postgres__cms_wagtailcore_revision') }} as revision
@@ -212,9 +214,9 @@ with combined_enrollments as (
     select version_id, version_object_id
     from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
     where contenttype_id in (
-        select contenttype_id
-        from {{ ref('stg__mitxonline__app__postgres__django_contenttype') }}
-        where contenttype_full_name = 'ecommerce_product'
+        select contenttype.contenttype_id
+        from {{ ref('stg__mitxonline__app__postgres__django_contenttype') }} as contenttype
+        where contenttype.contenttype_full_name = 'ecommerce_product'
     )
 )
 
@@ -234,7 +236,7 @@ with combined_enrollments as (
     select discount_id
     from {{ ref('int__mitxonline__ecommerce_discount') }}
     where discount_code = 'purchased-on-edx'
-    limit 1
+    limit 1  -- noqa: AM09
 )
 
 , mitxonline_enrollment as (

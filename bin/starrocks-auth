@@ -283,6 +283,27 @@ def _decode_jwt_payload(token: str) -> dict[str, Any]:
     return json.loads(base64.urlsafe_b64decode(payload))
 
 
+def _login_name(access_token: str) -> str:
+    """Return the StarRocks login name for a Keycloak user token.
+
+    StarRocks compares the login name with the ``starrocks_username`` claim
+    (``principal_field`` on both security integrations), which Keycloak fills
+    from the short Touchstone uid. ``preferred_username`` is an email address in
+    this realm and is refused: "Login name ... is not matched to user ...".
+    """
+    if not _has_login_name(access_token):
+        sys.exit(
+            "The Keycloak token has no starrocks_username claim, so StarRocks has "
+            "no login name for this user. The claim comes from the saml_uid "
+            "attribute, which is set at Touchstone login."
+        )
+    return _decode_jwt_payload(access_token)["starrocks_username"]
+
+
+def _has_login_name(access_token: str) -> bool:
+    return "starrocks_username" in _decode_jwt_payload(access_token)
+
+
 def _token_request(url: str, data: dict[str, str]) -> dict[str, Any]:
     body = urllib.parse.urlencode(data).encode()
     req = urllib.request.Request(url, data=body, method="POST")  # noqa: S310
@@ -314,7 +335,12 @@ def _try_refresh(
         return None
 
     access_token = token_response["access_token"]
-    username = _decode_jwt_payload(access_token).get("preferred_username", "")
+    if not _has_login_name(access_token):
+        # saml_uid is written at Touchstone login, so a session that predates it
+        # refreshes into a token without the claim. A new browser login can fix
+        # that; exiting here would not let the caller try one.
+        return None
+    username = _login_name(access_token)
     _save_cache(env_name, username, token_response)
     return username, access_token
 
@@ -393,7 +419,7 @@ def _browser_pkce(issuer: str, env_name: str) -> tuple[str, str]:
         },
     )
     access_token = token_response["access_token"]
-    username = _decode_jwt_payload(access_token).get("preferred_username", "")
+    username = _login_name(access_token)
     _save_cache(env_name, username, token_response)
     return username, access_token
 
@@ -406,8 +432,12 @@ def _get_browser_token(
         cached = _load_cache(env_name)
         if cached:
             now = time.time()
-            if cached.get("expires_at", 0) > now:
-                return cached["username"], cached["access_token"]
+            if cached.get("expires_at", 0) > now and _has_login_name(
+                cached["access_token"]
+            ):
+                # Not cached["username"]: caches written before the login name
+                # moved to starrocks_username hold the email address.
+                return _login_name(cached["access_token"]), cached["access_token"]
             refresh_token = cached.get("refresh_token")
             if refresh_token and cached.get("refresh_expires_at", 0) > now:
                 result = _try_refresh(issuer, env_name, refresh_token)
@@ -692,6 +722,14 @@ def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> N
                     f"-h{host}",
                     f"-P{_STARROCKS_PORT}",
                     f"-u{username}",
+                    # The plugin refuses to send the token over a plaintext
+                    # connection.
+                    "--ssl-mode=REQUIRED",
+                    # Without this the client announces caching_sha2_password.
+                    # StarRocks only tries a security integration whose client
+                    # plugin matches the announced one, so it skips keycloak_jwt
+                    # and answers a bare "Access denied" (ERROR 1045).
+                    "--default-auth=authentication_openid_connect_client",
                     f"--authentication-openid-connect-client-id-token-file={tf_path}",
                 ],
                 check=False,

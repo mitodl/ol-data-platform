@@ -2,7 +2,7 @@ with ticket_comment as (  -- noqa: PRS
    select * from {{ ref('stg__zendesk__ticket_comment') }}
 )
 
-, user as (
+, users as (
     select * from {{ ref('stg__zendesk__user') }}
 )
 
@@ -16,8 +16,8 @@ select
     -- stg__zendesk__user must still carry its author id or the requester-vs-agent
     -- comparison silently drops the row
     , ticket_comment.comment_author_user_id
-    , user.user_name as comment_author
-    , user.user_email as comment_author_email
+    , users.user_name as comment_author
+    , users.user_email as comment_author_email
     , ticket_comment.audit_id
     , ticket_comment.comment_html_body
     , ticket_comment.comment_plain_body
@@ -29,4 +29,4 @@ select
     , ticket_comment.comment_unix_timestamp
     , ticket_comment.comment_created_at
 from ticket_comment
-left join user on ticket_comment.comment_author_user_id = user.user_id
+left join users on ticket_comment.comment_author_user_id = users.user_id
