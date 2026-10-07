@@ -172,6 +172,11 @@ models:
     description: >
       Distinct learners who used the chatbot in the month. They are the cohort
       total_chatbot_interactions is attributable to.
+  - name: contributing_learners
+    description: >
+      Distinct learners with any row behind this month: tracked activity, a new
+      enrollment or a certificate. Every other learner count in the row is a
+      subset of it, so ol-analytics-api gates the whole row on it.
 
 - name: mv_b2b_program_funnel
   description: >
@@ -434,6 +439,11 @@ models:
     description: >
       Distinct learners who used the chatbot in the month. They are the cohort
       total_chatbot_interactions is attributable to.
+  - name: contributing_learners
+    description: >
+      Distinct learners with any row behind this month: tracked activity, a new
+      enrollment or a certificate. Every other learner count in the row is a
+      subset of it, so ol-analytics-api gates the whole row on it.
 - name: mv_b2b_contract_content_engagement_depth
   description: >
     All-time content engagement depth per org x contract x course run. This is

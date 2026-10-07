@@ -24,6 +24,12 @@
 -- floor to a cohort this view emits, so each aggregate publishes the distinct
 -- learner count it is attributable to. Do not add an aggregate here without
 -- also emitting its cohort.
+--
+-- contributing_learners counts every learner behind the row: active, enrolling
+-- or certified in the month. It is the cohort the API gates the whole row on,
+-- because enrolling_learners and certified_learners are not subsets of
+-- monthly_active_learners and a month can have enough of either without enough
+-- active learners.
 with contract_courseruns as (
 {{ b2b_contract_courseruns() }}
 )
@@ -47,7 +53,8 @@ select
     sum(lm.problems_attempted)                                                as total_problems_attempted,
     count(distinct case when lm.problems_attempted > 0 then lm.user_fk end)   as problem_attempters,
     sum(lm.chatbot_interactions)                                              as total_chatbot_interactions,
-    count(distinct case when lm.chatbot_interactions > 0 then lm.user_fk end) as chatbot_users
+    count(distinct case when lm.chatbot_interactions > 0 then lm.user_fk end) as chatbot_users,
+    count(distinct lm.user_fk)                                                as contributing_learners
 from learner_months lm
 join contract_courseruns cc
     on lm.courserun_fk = cc.courserun_pk
