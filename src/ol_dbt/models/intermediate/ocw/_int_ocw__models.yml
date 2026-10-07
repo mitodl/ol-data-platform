@@ -366,6 +366,61 @@ models:
       arguments:
         column_list: ["course_uuid", "resource_uuid"]
 
+- name: int__ocw__live_courses
+  description: One row per OCW course published to the OCW live bucket, with the fields
+    of its data.json that MIT Learn's OCW ETL reads.
+  columns:
+  - name: course_slug
+    description: str, the course's directory under courses/ in the bucket
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: str, the course's legacy_uid, or its site_uid when it has none, without
+      dashes. Equals LearningResourceRun.run_id in MIT Learn. Null for a course with
+      neither.
+    tests:
+    - unique
+  - name: course_site_uid
+    description: str, site_uid, the course's uuid in ocw-studio
+  - name: course_legacy_uid
+    description: str, legacy_uid, set on a course migrated from the earlier OCW site
+  - name: course_title
+    description: str, title of the course
+  - name: course_description_html
+    description: str, the course description as rendered HTML
+  - name: course_primary_course_number
+    description: str, primary course number, e.g. 6.1810
+  - name: course_extra_course_numbers
+    description: array, the cross-listed course numbers; empty when there are none
+  - name: course_term
+    description: str, Fall, Spring, Summer or January IAP; null when not given
+  - name: course_year
+    description: str, the year; null when not given
+  - name: course_levels
+    description: array, level labels, e.g. Undergraduate
+  - name: course_department_numbers
+    description: array, MIT department numbers
+  - name: course_learning_resource_types
+    description: array, learning resource types of the course, e.g. Lecture Notes
+  - name: course_topics
+    description: array, every OCW topic, subtopic and speciality of the course, sorted
+  - name: course_learn_topics
+    description: array, the MIT Learn topic names OCW gave the course, sorted
+  - name: course_instructors_json
+    description: str, JSON array of the course's instructors as published, each with
+      first_name, last_name, middle_initial, salutation and title
+  - name: course_image_src
+    description: str, path of the course image on ocw.mit.edu
+  - name: course_image_alt
+    description: str, alt text of the course image
+  - name: course_image_description
+    description: str, description of the course image
+  - name: course_hides_download
+    description: boolean, whether OCW hides the course's download link
+  - name: course_retrieved_on
+    description: timestamp, when the course was last read from the bucket
+
 - name: int__ocw__content_files
   description: One row per page or resource of an OCW course that MIT Learn loads
     as a ContentFile, derived from the OCW live bucket the way Learn's OCW ETL derives
@@ -424,10 +479,13 @@ unit_tests:
     Learn's content files for 18.06SC+fall_2011 on 2026-10-03.
   model: int__ocw__content_files
   given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: a-course, courserun_readable_id: b89637d2d64abf7896f604f5d40d48a9}
+    # A course with neither uid is not a Learn resource.
+    - {course_slug: b-course, courserun_readable_id: null}
   - input: ref('stg__ocw__s3__course_content')
     rows:
-    - {course_slug: a-course, coursecontent_kind: course, coursecontent_s3_key: courses/a-course/data.json,
-      course_site_uid: 23d385b4-4328-4fb0-b398-f5ca46ecae9a, course_legacy_uid: b89637d2-d64a-bf78-96f6-04f5d40d48a9}
     - {course_slug: a-course, coursecontent_kind: page, coursecontent_s3_key: courses/a-course/pages/syllabus/data.json,
       coursecontent_title: Syllabus, coursecontent_description: About, coursecontent_body: <p>Read.</p>}
     - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/notes/data.json,
@@ -455,8 +513,6 @@ unit_tests:
       coursecontent_title: Lecture 2, coursecontent_resource_type: Video, coursecontent_video_youtube_id: def456,
       coursecontent_video_transcript_file: /courses/a-course/abc_lecture2.pdf, coursecontent_video_archive_url: "http://www.archive.org/download/x/2.mp4",
       coursecontent_text: Transcript, coursecontent_text_extraction_status: extracted}
-    # A course with neither uid is not a Learn resource.
-    - {course_slug: b-course, coursecontent_kind: course, coursecontent_s3_key: courses/b-course/data.json}
     - {course_slug: b-course, coursecontent_kind: page, coursecontent_s3_key: courses/b-course/pages/syllabus/data.json,
       coursecontent_title: Syllabus}
   expect:
@@ -474,3 +530,45 @@ unit_tests:
       content_type: video, title: Lecture 2, description: "", url: "https://ocw.mit.edu/courses/a-course/resources/lecture-2/",
       content: Transcript, file_extension: .mp4, image_src: "https://i.ytimg.com/vi/def456/hqdefault.jpg",
       youtube_id: def456}
+- name: test_int__ocw__live_courses_reads_what_learn_reads
+  description: >
+    The run id prefers legacy_uid, cross-listed numbers are split and trimmed,
+    topic paths are flattened, and absent keys give empty values.
+  model: int__ocw__live_courses
+  given:
+  - input: ref('stg__ocw__s3__course_content')
+    rows:
+    - course_slug: a-course
+      coursecontent_kind: course
+      course_site_uid: 23d385b4-4328-4fb0-b398-f5ca46ecae9a
+      course_legacy_uid: b89637d2-d64a-bf78-96f6-04f5d40d48a9
+      course_data_json: >-
+        {"course_title": "A Course", "primary_course_number": "1.401J",
+        "extra_course_numbers": "ESD.018J, 11.380J", "term": "January IAP",
+        "year": "2007", "level": ["Graduate"], "department_numbers": ["1", "11"],
+        "topics": [["Engineering", "Civil Engineering"], ["Engineering"]],
+        "mit_learn_topics": [["Engineering"]], "hide_download": true,
+        "image_src": "/courses/a-course/a.jpg",
+        "course_image_metadata": {"description": "A bridge.",
+        "image_metadata": {"image-alt": "Bridge"}}}
+    - course_slug: b-course
+      coursecontent_kind: course
+      course_site_uid: a062e4e8-db04-4bcd-bb1d-4d6f80c18083
+      course_legacy_uid: ""
+      course_data_json: >-
+        {"course_title": "B Course", "primary_course_number": "6.1810",
+        "extra_course_numbers": "", "term": "", "year": "", "image_src": ""}
+    # Pages and resources are not courses.
+    - {course_slug: a-course, coursecontent_kind: page, course_data_json: null}
+  expect:
+    rows:
+    - {course_slug: a-course, courserun_readable_id: b89637d2d64abf7896f604f5d40d48a9,
+      course_extra_course_numbers: [ESD.018J, 11.380J], course_term: January IAP,
+      course_year: "2007", course_levels: [Graduate], course_department_numbers: [
+        "1", "11"], course_topics: [Civil Engineering, Engineering], course_learn_topics: [
+        Engineering], course_image_src: /courses/a-course/a.jpg, course_image_alt: Bridge,
+      course_image_description: A bridge., course_hides_download: true}
+    - {course_slug: b-course, courserun_readable_id: a062e4e8db044bcdbb1d4d6f80c18083,
+      course_extra_course_numbers: [], course_term: null, course_year: null, course_levels: [],
+      course_department_numbers: [], course_topics: [], course_learn_topics: [], course_image_src: null,
+      course_image_alt: null, course_image_description: null, course_hides_download: false}

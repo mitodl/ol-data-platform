@@ -1,85 +1,55 @@
 {#
   integrations__learn__ocw_courses
-  Exposes OCW courses for MIT Learn's Trino-pull ETL.
+  The OCW courses in the OCW live bucket, with the fields MIT Learn's OCW ETL
+  (learning_resources/etl/ocw.py) builds a course and its one run from.
   Contract: docs/learn_marts_contract.md
+
+  Not reproduced: Learn passes the description through nh3, parses instructors
+  with parse_instructors, and maps ocw_topics to its own topics for a course
+  with no topics of its own. The description, instructors and ocw_topics here
+  are as OCW published them.
 #}
 
 with courses as (
-    select * from {{ ref('int__ocw__courses') }}
-)
-
-, raw_course_topics as (
-    select
-        course_uuid
-        , coalesce(
-            course_speciality,
-            coalesce(course_subtopic, course_topic)
-        ) as topic_label
-    from {{ ref('int__ocw__course_topics') }}
-)
-
-, course_topics as (
-    select
-        course_uuid
-        , {{ array_join('array_agg(topic_label)', ', ') }} as course_topics_flat
-    from raw_course_topics
-    group by course_uuid
-)
-
-, raw_course_instructors as (
-    select
-        course_uuid
-        , concat(
-            coalesce(concat(course_instructor_salutation, ' '), ''),
-            coalesce(concat(course_instructor_first_name, ' '), ''),
-            coalesce(concat(course_instructor_middle_initial, ' '), ''),
-            coalesce(course_instructor_last_name, '')
-        ) as instructor_name
-    from {{ ref('int__ocw__course_instructors') }}
-)
-
-, course_instructors as (
-    select
-        course_uuid
-        , {{ array_join('array_agg(instructor_name)', ', ') }} as course_instructors
-    from raw_course_instructors
-    group by course_uuid
-)
-
-, departments as (
-    select
-        course_uuid
-        , {{ array_join('array_agg(course_department_name)', ', ') }} as course_departments
-    from {{ ref('int__ocw__course_departments') }}
-    group by course_uuid
+    select * from {{ ref('int__ocw__live_courses') }}
 )
 
 select
-    courses.course_readable_id                              as readable_id
-    , courses.course_title                                  as title
-    , coalesce(
-        courses.course_publish_date_updated_on,
-        courses.course_updated_on
-    )                                                       as last_modified
-    , 'ocw'                                                 as etl_source
-    , courses.course_description                            as description
-    , courses.course_live_url                               as url
-    , courses.course_image_url                              as image_url
-    , courses.course_is_live                                as published
-    , 'ocw'                                                 as platform
-    , courses.course_level                                  as level
-    , courses.course_term                                   as term
-    , courses.course_year                                   as year
-    , courses.course_primary_course_number                  as course_number
-    , courses.course_extra_course_numbers                   as extra_course_numbers
-    , course_topics.course_topics_flat                      as topics
-    , course_instructors.course_instructors                 as instructors
-    , departments.course_departments                        as departments
+    -- Django's slugify of the term: "January IAP" -> "january-iap".
+    course_primary_course_number
+    || coalesce(
+        '+' || {{ regexp_replace_all(
+            regexp_replace_all("lower(trim(course_term))", "'[^a-z0-9_\\s-]'", "''"), "'[-\\s]+'", "'-'"
+        ) }}
+        , ''
+    )
+    || coalesce('_' || course_year, '') as readable_id
+    , course_title as title
+    , course_retrieved_on as last_modified
+    , 'ocw' as etl_source
+    , course_description_html as description
+    , '{{ var("ocw_production_url") }}courses/' || course_slug || '/' as url
+    , case
+        when course_image_src is not null
+            then {{ url_join("'" ~ var("ocw_production_url").rstrip("/") ~ "'", 'course_image_src') }}
+    end as image_url
+    , course_image_alt as image_alt
+    , course_image_description as image_description
+    , true as published
+    , 'ocw' as platform
+    , courserun_readable_id as run_id
+    , 'courses/' || course_slug as slug
+    , course_term as term
+    , try_cast(course_year as integer) as year
+    , course_levels as level
+    , course_primary_course_number as course_number
+    , course_extra_course_numbers as extra_course_numbers
+    , course_department_numbers as departments
+    , course_learn_topics as topics
+    , course_topics as ocw_topics
+    , course_learning_resource_types as content_tags
+    , course_instructors_json as instructors
+    , course_hides_download as hide_download
 from courses
-left join course_topics
-    on courses.course_uuid = course_topics.course_uuid
-left join course_instructors
-    on courses.course_uuid = course_instructors.course_uuid
-left join departments
-    on courses.course_uuid = departments.course_uuid
-where courses.course_is_live = true
+-- Learn skips a course with neither uid.
+where courserun_readable_id is not null
