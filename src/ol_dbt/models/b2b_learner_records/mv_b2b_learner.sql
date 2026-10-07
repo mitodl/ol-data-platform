@@ -54,6 +54,9 @@ with contract_enrollments as (
 -- record_updated_on is the max over every enrollment, not just the ones a counter
 -- keeps. Deactivating an enrollment or revoking a certificate is a save() upstream that
 -- moves its updated_on; a max over the filtered set would move backwards instead.
+-- Only the learner's current certificate is read, so when a second certificate for the
+-- same run is revoked and an older one becomes current this can still move backwards.
+-- The change log's changed_on does not: the row's hash changes.
 enrollment_rollup as (
     select
         organization_fk,

@@ -145,9 +145,9 @@ models:
     description: The deactivation reason, where one was recorded.
   - name: is_passing
     description: >
-      tfact_grade.is_passing. It is null where no grade exists. It is true for
-      a certified learner too, so it is not the passed bucket of
-      completion_status.
+      tfact_grade.is_passing. It is null where no grade exists. It is not the
+      passed bucket of completion_status: a certified learner usually has it
+      true as well, and can have it false or null.
   - name: grade_value
     description: >
       tfact_grade.grade_value, on a scale of 0 to 1. The API exposes it as
@@ -176,7 +176,9 @@ models:
       learner holds an unrevoked course certificate, else passed when
       is_passing, else in_progress when grade_value is above zero or
       last_active_on is set, else not_started. Defined in that model and
-      nowhere else.
+      nowhere else. This and the four columns after it disclose the learner's
+      outcome, so a reader has to withhold them on outcomes_shared as it does
+      the grade and certificate columns.
   - name: is_certified
     description: Whether the learner holds an unrevoked course certificate for the
       run. Never null.
