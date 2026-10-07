@@ -21,6 +21,8 @@ with chatbot as (
 , tutorbot_flatten as (
     select
         tutorbot.*
+        -- noqa: disable=RF01
+        -- t is the unnest alias below, which the duckdb parser can't read.
         , t.idx as message_index
         , case
             when json_extract_scalar(t.element, '$.type') = 'HumanMessage'
@@ -30,10 +32,11 @@ with chatbot as (
             when json_extract_scalar(t.element, '$.type') = 'AIMessage'
                 then json_extract_scalar(t.element, '$.content')
         end as agent_message
+        -- noqa: enable=RF01
     from tutorbot
     cross join
-        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))
-    with ordinality as t(element, idx) -- noqa: PRS
+        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))  -- noqa: PRS
+    with ordinality as t(element, idx)
 )
 
 , tutorbot_deduplicated as (

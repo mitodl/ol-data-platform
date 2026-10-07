@@ -199,7 +199,6 @@ marts__mitxpro_ecommerce_productlist -> int__mitxpro__ecommerce_product
 marts__mitxpro_ecommerce_productlist -> int__mitxpro__ecommerce_productversion
 marts__mitxpro_ecommerce_productlist -> int__mitxpro__program_runs
 marts__mitxpro_ecommerce_productlist -> int__mitxpro__programs
-mitxonline_video_engagements_w_video_counts -> int__mitx__courses
 organization_administration_report -> int__combined__user_course_roles
 organization_administration_report -> int__mitxonline__b2b_contract_to_courseruns
 page_engagement_views_report -> int__combined__course_runs

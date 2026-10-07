@@ -13,6 +13,7 @@ from dagster import (
     DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    RunConfig,
     ScheduleDefinition,
     build_last_update_freshness_checks,
     build_sensor_for_freshness_checks,
@@ -40,6 +41,12 @@ from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
+)
+from lakehouse.assets.lake_orphan_sweep import (
+    LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
+    LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
+    LakeOrphanSweepConfig,
+    lake_orphan_sweep,
 )
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
@@ -160,6 +167,14 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # The delay doubles per retry (5, 10, 20, 40), so a request that is
+        # refused straight away waits up to 75 seconds for the API to come
+        # back; one that hangs also spends request_timeout on each of its five
+        # attempts. The 502 burst on 2026-10-07 ran
+        # from about 00:03:45Z to 00:04:45Z, longer than the library's three
+        # retries at a quarter second apart.
+        request_max_retries=4,
+        request_retry_delay=5,
         # Attach to a sync that is already in flight rather than raising. The
         # automation condition and Airbyte's own scheduler both launch syncs, so
         # a tick landing on top of a running sync is routine, not exceptional --
@@ -370,6 +385,32 @@ iceberg_raw_maintenance_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.STOPPED,
 )
 
+# Weekly, not nightly: an orphan has to be LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS old
+# before the sweep will touch it, and the buckets keep a deleted object as a
+# noncurrent version for weeks afterwards, so a daily run reclaims nothing
+# sooner. Sunday 05:00 UTC is after the 02:00 and 03:00 maintenance runs.
+#
+# RUNNING where it is registered. The asset decides what a tick may do: it
+# deletes only in LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS and reports elsewhere.
+lake_orphan_sweep_schedule = ScheduleDefinition(
+    name="lake_orphan_sweep_weekly",
+    job=define_asset_job(
+        name="lake_orphan_sweep_job",
+        selection=AssetSelection.assets(lake_orphan_sweep),
+        config=RunConfig(
+            ops={
+                "lake_orphan_sweep": LakeOrphanSweepConfig(
+                    min_age_days=LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV in LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 5 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
 # Regenerate dbt docs artifacts (manifest.json + catalog.json) for OpenMetadata
 # once daily. Decoupled from model materialization because catalog generation
 # recompiles the whole project and queries every relation. Default STOPPED; enable
@@ -534,7 +575,8 @@ non_airbyte_staging_schedules = (
 # that reads more than one ingestion unit, so a QA build is complete relative to
 # QA's apps rather than a silently partial union. The rest wait on raw tables QA
 # does not have: program_certificates on the edX program_learner_report and
-# email_opt_in mirrors, and the dlt/API sources (mit_edx_courses and
+# email_opt_in mirrors, ocw_courses on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA), and the dlt/API sources (mit_edx_courses and
 # mit_edx_programs on the edX catalog, mitpe, mit_climate, oll, podcasts) whose
 # loaders run in production only.
 learn_integrations_qa_schedule = ScheduleDefinition(
@@ -619,6 +661,7 @@ defs = Definitions(
             *superset_starrocks_assets,
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
+            lake_orphan_sweep,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
@@ -684,6 +727,7 @@ defs = Definitions(
             *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
+            ("lake_orphan_sweep_weekly", lake_orphan_sweep_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),

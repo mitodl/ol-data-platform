@@ -12,6 +12,10 @@ sources:
   schema: '{{ target.schema }}_intermediate'
   tables:
   - name: feedback_redacted
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_redacted]
     description: Presidio-masked title/text for every feedback turn, materialized
       by the feedback_redacted Dagster asset.
     columns:
@@ -37,6 +41,10 @@ sources:
         arguments:
           column_list: ["source_slug", "source_record_ref"]
   - name: feedback_cluster_run
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_cluster_run]
     description: One row per clustering run (params, cluster/noise counts, silhouette,
       run_status='completed'|'failed', is_promoted -- whether feedback_cluster_identity
       may select it), materialized by the feedback_clusters Dagster asset. Consumed
@@ -49,6 +57,10 @@ sources:
     - name: cluster_run_id
       description: str, uuid identifying this clustering run.
   - name: feedback_cluster_candidate
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_cluster_candidate]
     description: One row per (conversation, cluster_run_id) -- every clustered run's
       run-local assignments, the input to feedback_cluster_identity's matching. See
       feedback_cluster_run. No column/table tests here.
@@ -58,6 +70,10 @@ sources:
     - name: feedback_conversation_pk
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
   - name: feedback_cluster
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_cluster]
     description: One row per cluster_key, materialized by the feedback_cluster_identity
       Dagster asset. Carries the same identity across every clustering run in which
       that cluster continues. No column tests here.
@@ -70,6 +86,10 @@ sources:
       description: str, which embedding_input arm ('summary' or 'concatenated_turns')
         this cluster was built from. Null means every arm was clustered together.
   - name: feedback_cluster_lineage
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_cluster_lineage]
     description: One row per continued/merged/split/new/retired edge, materialized
       by the feedback_cluster_identity Dagster asset for every clustering run it processes.
       No column tests here.
@@ -83,6 +103,10 @@ sources:
       description: int, the run-local cluster_id this edge came from. Null for 'retired'
         (no corresponding new cluster).
   - name: feedback_cluster_membership
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_cluster_membership]
     description: One row per conversation (upsert key feedback_conversation_pk), the
       live cluster assignment, materialized by the feedback_cluster_assignment Dagster
       asset. cluster_assignment_method is 'recluster' (rewritten from a completed
@@ -96,6 +120,10 @@ sources:
     - name: assigned_at
       description: timestamp, when this row's placement was computed.
   - name: feedback_category_proposal
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_category_proposal]
     description: One row per cluster_key the feedback_category_proposals Dagster asset
       has labeled -- an LLM-proposed category_label/category_slug for that cluster_key,
       always category_status='proposed' until a human corrects it. Only new/split/merged
@@ -112,6 +140,10 @@ sources:
     - name: proposed_at
       description: timestamp, when this proposal was generated.
   - name: feedback_summaries
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_summaries]
     description: One row per conversation (upsert key feedback_conversation_pk), materialized
       by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version
       for a single-turn/short conversation, which the asset's skip rule never summarizes
@@ -126,6 +158,10 @@ sources:
     - name: summarized_at
       description: timestamp, when this row's summary was generated.
   - name: feedback_embeddings
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_embeddings]
     description: One row per (feedback_conversation_pk, embedding_model_version, embedding_dim),
       not conversation-unique -- see int__feedback__embedding for the one-row-per-conversation
       view. Materialized by the feedback_embeddings Dagster asset. No column tests

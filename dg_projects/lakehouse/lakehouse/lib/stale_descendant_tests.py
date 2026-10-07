@@ -20,6 +20,15 @@ skips every test between two models where neither descends from the other
 (e.g. ``dim_course_run.courserun_start_date_key`` against ``dim_date``) unless
 both are selected together, and those are not reading stale data.
 
+That reasoning assumes something else keeps the unselected model built, which
+only the automation sensor does. Where it does not run (QA), an unselected
+model's table can be months old or absent: the 2026-10-07 QA Learn build failed
+with TABLE_NOT_FOUND on a ``relationships`` test attached to
+``stg__mitxonline__app__postgres__courses_course_to_department``, pulled in
+through the selected ``courses_course`` it references. There
+``unselected_model_test_names`` skips every test held against a model the run
+does not build, descendant or not.
+
 Pure functions only, for the reason ``surrogate_key_drift`` gives.
 """
 
@@ -70,5 +79,39 @@ def stale_descendant_test_names(
         if any(
             candidates & descendants[parent] for parent in parents & selected_unique_ids
         ):
+            names.append(node["name"])
+    return sorted(names)
+
+
+def unselected_model_test_names(
+    manifest: Mapping[str, Any],
+    selected_unique_ids: AbstractSet[str],
+    keep: Collection[str] = (),
+) -> list[str]:
+    """Return the tests a run would hold against a model it does not build.
+
+    A superset of ``stale_descendant_test_names``, for an environment where no
+    automation builds the models outside the selection. Like it, an attached
+    test returned here belongs to an unselected model, so no check of a
+    selected asset loses its result.
+
+    :param manifest: The parsed dbt ``manifest.json``.
+    :param selected_unique_ids: dbt unique ids of the models this run builds.
+    :param keep: Test names the run asked for explicitly, never returned.
+    :returns: Sorted test names, usable as a dbt ``--exclude`` value.
+    :rtype: list[str]
+    """
+    names = []
+    for node in manifest["nodes"].values():
+        if node["resource_type"] != "test" or node["name"] in keep:
+            continue
+        parents = {
+            parent
+            for parent in node["depends_on"]["nodes"]
+            if not parent.startswith("source.")
+        }
+        attached = node.get("attached_node")
+        candidates = ({attached} if attached else parents) - selected_unique_ids
+        if candidates and parents & selected_unique_ids:
             names.append(node["name"])
     return sorted(names)

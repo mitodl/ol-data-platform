@@ -6,7 +6,10 @@ import dagster as dg
 from ol_dlt.sources import course_xml_blocks, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from data_loading.defs.ingestion.assets import mitxonline_app_assets
+from data_loading.defs.ingestion.assets import (
+    mitxonline_app_assets,
+    xpro_app_assets,
+)
 from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
 
 oll_ingest_schedule = dg.ScheduleDefinition(
@@ -136,6 +139,22 @@ mitxonline_app_ingest_schedule = (
         execution_timezone="Etc/UTC",
     )
     if mitxonline_app_assets
+    else None
+)
+# Defined only where the assets are (see XPRO_APP_DLT_ENVIRONMENTS).
+xpro_app_ingest_schedule = (
+    dg.ScheduleDefinition(
+        name="xpro_app_ingest_schedule",
+        # Selected by definition, not by the "xpro" group, which the xPro
+        # course structure blocks share.
+        target=dg.AssetSelection.assets(xpro_app_assets),
+        # Every six hours, matching the Airbyte connection this replaces
+        # (inventory unit xpro/app_postgres, sync_interval_hours: 6). Offset from
+        # the MITx Online load at :20 so the two do not start together.
+        cron_schedule="40 */6 * * *",
+        execution_timezone="Etc/UTC",
+    )
+    if xpro_app_assets
     else None
 )
 # PostHog writes an hour's export object after that hour closes. Across the 168
@@ -276,6 +295,7 @@ defs = dg.Definitions(
         news_events_ingest_schedule,
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
+        *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
         ocw_content_ingest_schedule,

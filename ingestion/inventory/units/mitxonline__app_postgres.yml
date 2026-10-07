@@ -133,7 +133,7 @@ tables:
   modeled: true
 - name: b2b_userb2bcontract
   raw_table: raw__mitxonline__app__postgres__b2b_userb2bcontract
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_deduped_history
   namespace: public
   primary_key:
   - - id

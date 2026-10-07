@@ -74,9 +74,13 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
     The Learn integrations build is the one dbt exception, because none of its
     models unions across sources and MIT Learn needs QA views to rehearse a
     warehouse-pull cutover against.
+
+    The orphan sweep builds nothing. It runs in QA first because its deletion
+    list is reviewed there before production gets the schedule.
     """
     assert schedules_for_environment(ALL_CANDIDATES, environment="qa") == [
         "daily_sync_and_stage",
+        "lake_orphan_sweep_weekly",
         "learn_integrations_qa_daily",
     ]
 
@@ -94,18 +98,19 @@ def test_qa_cannot_run_dbt_docs_generate_on_a_timer():
     assert "qa" not in SCHEDULE_ENVIRONMENTS["dbt_docs_artifacts_daily"]
 
 
-def test_production_registers_every_schedule_but_the_qa_learn_build():
+def test_production_registers_every_schedule_but_the_qa_only_ones():
     """Production's set is what it registered before the map existed.
 
-    The QA Learn integrations build is the one QA-only entry: production builds
-    those models through dbt_automation_sensor, so a schedule there would run
-    them twice.
+    Two entries are QA-only. Production builds the Learn integrations models
+    through dbt_automation_sensor, so a schedule there would run them twice.
+    The orphan sweep reaches production once it has run clean in QA.
     """
     kept = schedules_for_environment(ALL_CANDIDATES, environment="production")
     assert kept == [
         schedule_id
         for schedule_id in SCHEDULE_ENVIRONMENTS
-        if schedule_id != "learn_integrations_qa_daily"
+        if schedule_id
+        not in {"learn_integrations_qa_daily", "lake_orphan_sweep_weekly"}
     ]
 
 

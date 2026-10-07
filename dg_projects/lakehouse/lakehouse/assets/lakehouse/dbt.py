@@ -29,7 +29,10 @@ from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED, DBT_TARGET
-from lakehouse.lib.stale_descendant_tests import stale_descendant_test_names
+from lakehouse.lib.stale_descendant_tests import (
+    stale_descendant_test_names,
+    unselected_model_test_names,
+)
 from lakehouse.lib.surrogate_key_drift import (
     SURROGATE_KEY_STATE_ARTIFACT,
     SurrogateKeyDrift,
@@ -103,6 +106,9 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
 
     Empty for a run of the whole asset: every descendant is rebuilt in the same
     invocation, so nothing it tests is stale.
+
+    Without the automation sensor nothing builds the models outside the
+    selection, so there every test attached to one of them is excluded.
     """
     if not context.is_subset:
         return []
@@ -112,7 +118,12 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
         ]
         for key in context.selected_asset_keys
     }
-    tests = stale_descendant_test_names(
+    test_names = (
+        stale_descendant_test_names
+        if DBT_AUTOMATION_ENABLED
+        else unselected_model_test_names
+    )
+    tests = test_names(
         json.loads(dbt_project.manifest_path.read_text()),
         selected,
         keep={key.name for key in context.selected_asset_check_keys},
@@ -120,8 +131,8 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
     if not tests:
         return []
     context.log.info(
-        "Skipping %d test(s) attached to models downstream of this run's selection "
-        "that it does not rebuild; they run when those models are built: %s",
+        "Skipping %d test(s) attached to models this run does not rebuild; they "
+        "run when those models are built: %s",
         len(tests),
         ", ".join(tests),
     )

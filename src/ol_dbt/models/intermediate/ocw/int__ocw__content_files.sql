@@ -24,10 +24,8 @@ with content as (
 , courses as (
     select
         course_slug
-        , replace(coalesce(nullif(course_legacy_uid, ''), nullif(course_site_uid, '')), '-', '')
-            as courserun_readable_id
-    from content
-    where coursecontent_kind = 'course'
+        , courserun_readable_id
+    from {{ ref('int__ocw__live_courses') }}
 )
 
 , pages as (

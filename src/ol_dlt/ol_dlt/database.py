@@ -27,13 +27,18 @@ database connection is opened until a resource is extracted.
 """
 
 import logging
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.sources.sql_database import remove_nullability_adapter, sql_table
+from dlt.sources.sql_database import (
+    TableLoader,
+    remove_nullability_adapter,
+    sql_table,
+)
+from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Engine
 
@@ -221,6 +226,42 @@ def _vault_credential_injector(spec: DatabaseSourceSpec) -> Any:  # noqa: ANN401
     return adapt
 
 
+class EmptyTableLoader(TableLoader):
+    """Table loader that yields a zero-row Arrow table when a read returns no rows.
+
+    dlt's loader yields nothing for an empty result, and dlt creates no
+    destination table for a resource that produced no data item. The raw table
+    for an empty source table then never exists, while the run still succeeds
+    and Dagster records the asset as materialized, and the dbt staging model
+    that reads it fails on a missing source.
+
+    A zero-row Arrow table counts as a data item, so the table is created with
+    its reflected columns. A column whose source type dlt cannot map has no
+    type until a row supplies one, so it is absent from a table created empty
+    and is added by the first load that reads a row.
+    """
+
+    def _convert_result(
+        self,
+        result: Any,  # noqa: ANN401
+        backend_kwargs: dict[str, Any],
+    ) -> Iterator[Any]:
+        column_names = list(result.keys())
+        yielded = False
+        for item in super()._convert_result(result, backend_kwargs):
+            yielded = True
+            yield item
+        if not yielded:
+            yield row_tuples_to_arrow(
+                [],
+                columns={
+                    name: self.columns.get(name, {"name": name})
+                    for name in column_names
+                },
+                tz=backend_kwargs.get("tz", "UTC"),
+            )
+
+
 def build_table_resource(
     spec: DatabaseSourceSpec,
     table: DatabaseTable,
@@ -242,6 +283,7 @@ def build_table_resource(
         # pyarrow reflects source types faithfully instead of re-inferring them
         # from sampled rows, which keeps the Iceberg schema stable run to run.
         backend="pyarrow",
+        table_loader_class=EmptyTableLoader,
         reflection_level="full",
         # No connection until extraction — see the module docstring.
         defer_table_reflect=True,
