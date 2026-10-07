@@ -285,8 +285,8 @@ with mitxonline_certificates as (
             order by
                 coalesce(certificate_updated_on, certificate_created_on) desc nulls last
                 , user_fk
-                , courserun_fk
-                , program_fk
+                , courserun_fk ASC
+                , program_fk ASC
         ) as _key_row_num
     from certificates_with_fks
 )
@@ -323,7 +323,7 @@ with mitxonline_certificates as (
         , row_number() over (
             partition by _certificate_group
             order by
-                _platform_rank
+                _platform_rank ASC
                 , case when certificate_is_revoked then 1 else 0 end
                 , certificate_issued_on desc nulls last
                 -- certificate_id is a string; compare the integer ids as numbers.
@@ -384,20 +384,20 @@ with mitxonline_certificates as (
             'platform',
             'certificate_scope'
         ]) }} as certificate_key
-        , certificate_id
-        , certificate_issued_date_key
-        , user_fk
-        , courserun_fk
-        , program_fk
-        , platform_fk
-        , certificate_type_fk
+        , cwf.certificate_id
+        , cwf.certificate_issued_date_key
+        , cwf.user_fk
+        , cwf.courserun_fk
+        , cwf.program_fk
+        , cwf.platform_fk
+        , cwf.certificate_type_fk
         , cwf.platform
         , cwf.certificate_scope
-        , certificate_uuid
-        , certificate_is_revoked
-        , certificate_created_on
-        , certificate_updated_on
-        , certificate_issued_on
+        , cwf.certificate_uuid
+        , cwf.certificate_is_revoked
+        , cwf.certificate_created_on
+        , cwf.certificate_updated_on
+        , cwf.certificate_issued_on
         , cwf._cross_source_row_num = 1 as is_current
     from cross_source_deduped as cwf
 

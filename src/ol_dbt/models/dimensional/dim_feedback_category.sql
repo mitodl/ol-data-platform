@@ -45,7 +45,7 @@ with ticket as (
         , cast(null as varchar) as cluster_status
     from ticket
     where ticket.group_name is not null
-    group by 1
+    group by ticket.group_slug
 )
 
 -- One LLM call per cluster_key needing a label (ml.lib.categorize); always

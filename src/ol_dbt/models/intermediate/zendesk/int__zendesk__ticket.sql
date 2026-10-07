@@ -2,7 +2,7 @@ with ticket as (  -- noqa: PRS
    select * from {{ ref('stg__zendesk__ticket') }}
 )
 
-, user as (
+, users as (
     select * from {{ ref('stg__zendesk__user') }}
 )
 
@@ -26,11 +26,11 @@ with ticket as (  -- noqa: PRS
     select
       ticket.ticket_id,
       json_format(
-        cast(array_agg(user.user_name) AS json)
+        cast(array_agg(users.user_name) AS json)
       ) as followers
     from ticket
     cross join unnest(ticket.ticket_follower_user_ids) AS t(user_id)
-    join user on t.user_id = user.user_id
+    join users on t.user_id = users.user_id
     group by ticket.ticket_id
 )
 
@@ -38,11 +38,11 @@ with ticket as (  -- noqa: PRS
     select
       ticket.ticket_id,
       json_format(
-        cast(array_agg(user.user_name) AS json)
+        cast(array_agg(users.user_name) AS json)
       ) as collaborators
     from ticket
     cross join unnest(ticket.ticket_collaborator_user_ids) AS t(user_id)
-    join user on t.user_id = user.user_id
+    join users on t.user_id = users.user_id
     group by ticket.ticket_id
 )
 
@@ -54,7 +54,7 @@ with ticket as (  -- noqa: PRS
           array_agg(
             json_parse(
               json_object(
-                field.field_title : value
+                field.field_title : u.value
               )
             )
           ) as json
@@ -64,11 +64,11 @@ with ticket as (  -- noqa: PRS
     cross join unnest(ticket.ticket_custom_fields) AS t(json_str)
     cross join unnest(
       array[
-        cast(json_parse(json_str) AS row(id bigint, value varchar))
+        cast(json_parse(t.json_str) AS row(id bigint, value varchar))  -- noqa: PRS,RF02
       ]
     ) as u(id, value)
-    join field on id = field.field_id
-    where value is not null
+    join field on u.id = field.field_id
+    where u.value is not null
     group by ticket.ticket_id
 )
 
@@ -117,11 +117,11 @@ left join brand
     on ticket.brand_id = brand.brand_id
 left join groups
     on ticket.group_id = groups.group_id
-left join user as submitter
+left join users as submitter
     on ticket.ticket_submitter_user_id = submitter.user_id
-left join user as requester
+left join users as requester
     on ticket.ticket_requester_user_id = requester.user_id
-left join user as assignee
+left join users as assignee
     on ticket.ticket_assignee_user_id = assignee.user_id
 left join named_custom_fields
     on ticket.ticket_id = named_custom_fields.ticket_id

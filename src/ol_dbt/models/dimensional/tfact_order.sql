@@ -58,8 +58,8 @@ with mitxonline_orders as (
         , orders.order_created_on
         , orders.order_updated_on
         , 'mitxpro' as platform
-        , coupon_id as discount_id
-        , coupon_code as discount_code
+        , orders.coupon_id as discount_id
+        , orders.coupon_code as discount_code
         , case
             when orders.couponpaymentversion_discount_type = 'percent-off' then 'percentage'
             when orders.couponpaymentversion_discount_type = 'dollars-off' then 'fixed_amount'
@@ -245,25 +245,25 @@ with mitxonline_orders as (
             'line_id',
             'platform'
         ]) }} as order_key
-        , order_id
-        , line_id
-        , order_date_key
-        , order_updated_date_key
-        , user_fk
-        , platform_fk
-        , discount_fk
-        , discount_type_fk
-        , product_fk
+        , owf.order_id
+        , owf.line_id
+        , owf.order_date_key
+        , owf.order_updated_date_key
+        , owf.user_fk
+        , owf.platform_fk
+        , owf.discount_fk
+        , owf.discount_type_fk
+        , owf.product_fk
         , owf.platform
-        , order_state
-        , line_price
-        , order_total_price_paid
-        , tax_rate_fk
-        , order_total_price_paid_plus_tax
-        , order_tax_amount
-        , order_tax_rate
-        , order_reference_number
-        , order_updated_on
+        , owf.order_state
+        , owf.line_price
+        , owf.order_total_price_paid
+        , owf.tax_rate_fk
+        , owf.order_total_price_paid_plus_tax
+        , owf.order_tax_amount
+        , owf.order_tax_rate
+        , owf.order_reference_number
+        , owf.order_updated_on
     from orders_with_fks as owf
 
     {% if is_incremental() %}

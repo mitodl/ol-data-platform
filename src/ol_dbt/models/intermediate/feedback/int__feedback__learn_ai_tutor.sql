@@ -50,15 +50,15 @@ with chatbot as (
         , tutorbot.user_global_id
         , tutorbot.chatsession_created_on
         , tutorbot.chatsession_updated_on
-        , t.idx as message_index
+        , t.idx as message_index  -- noqa: RF01
         , case
-            when json_extract_scalar(t.element, '$.type') = 'HumanMessage'
-                then json_extract_scalar(t.element, '$.content')
+            when json_extract_scalar(t.element, '$.type') = 'HumanMessage'  -- noqa: RF01
+                then json_extract_scalar(t.element, '$.content')  -- noqa: RF01
         end as human_message
     from tutorbot
     cross join
-        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))
-        with ordinality as t(element, idx) -- noqa: PRS
+        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))  -- noqa: PRS
+        with ordinality as t(element, idx)
 )
 
 , tutorbot_deduplicated as (
