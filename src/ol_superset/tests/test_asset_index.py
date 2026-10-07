@@ -660,6 +660,12 @@ def test_extract_virtual_columns_case_insensitive() -> None:
     assert result.columns == {"useremail", "coursename"}
 
 
+def test_extract_virtual_columns_starrocks_keeps_case() -> None:
+    sql = "SELECT a.UserEmail, a.cnt AS CourseCount FROM schema.tbl a"
+    result = extract_virtual_dataset_columns(sql, "starrocks")
+    assert result.columns == {"UserEmail", "CourseCount"}
+
+
 def test_extract_virtual_columns_cte() -> None:
     sql = "WITH base AS (SELECT * FROM schema.tbl) SELECT b.col1, b.col2 FROM base b"
     result = extract_virtual_dataset_columns(sql)

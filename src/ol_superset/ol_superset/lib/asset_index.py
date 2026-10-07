@@ -10,6 +10,14 @@ import sqlglot
 import sqlglot.expressions as exp
 import yaml
 
+# Dataset subdirectory (the Superset database name) -> sqlglot dialect, for the
+# databases that serve the dbt warehouse. Datasets under any other directory
+# (e.g. Superset_Metadata_DB) are outside the dbt and governance checks.
+WAREHOUSE_DATABASE_DIALECTS = {
+    "Trino": "trino",
+    "StarRocks_-_Lakehouse": "starrocks",
+}
+
 
 @dataclass
 class DatasetAsset:
@@ -25,7 +33,8 @@ class DatasetAsset:
     # query time and not present as raw columns in the underlying table.
     calculated_columns: set[str] = field(default_factory=set)
     sql: str | None = None  # non-None means virtual dataset
-    # Output column names parsed from the virtual dataset SQL (lowercase).
+    # Output column names parsed from the virtual dataset SQL, in the case the
+    # database returns them (lowercase on Trino, as written on StarRocks).
     # None means the SQL contains a wildcard (SELECT * / table.*) or could
     # not be parsed — column-level chart validation is skipped in that case.
     virtual_columns: set[str] | None = None
@@ -75,18 +84,20 @@ class VirtualColumnsResult(NamedTuple):
     """Result of parsing a virtual dataset SQL query."""
 
     columns: set[str] | None
-    """Lowercase output column names, or None when the set is indeterminate."""
+    """Output column names, or None when the set is indeterminate."""
     has_wildcard: bool
     """True when None is due to a SELECT * or table.* wildcard."""
 
 
-def extract_virtual_dataset_columns(sql: str) -> VirtualColumnsResult:
+def extract_virtual_dataset_columns(
+    sql: str, dialect: str | None = "trino"
+) -> VirtualColumnsResult:
     """
     Parse a virtual dataset SQL query and return its output column names.
 
-    Uses sqlglot (Trino dialect) to parse the outermost SELECT and extract
-    the names of all output columns.  Column names are returned in **lowercase**
-    to allow case-insensitive comparison.
+    Uses sqlglot to parse the outermost SELECT and extract the names of all
+    output columns, in the case the database returns them: Trino lowercases
+    output column names, StarRocks returns them as written.
 
     ``columns`` is ``None`` when the complete set cannot be determined:
 
@@ -100,12 +111,13 @@ def extract_virtual_dataset_columns(sql: str) -> VirtualColumnsResult:
 
     Args:
         sql: Raw SQL string from the Superset dataset YAML ``sql`` field.
+        dialect: sqlglot dialect of the dataset's database.
 
     Returns:
         :class:`VirtualColumnsResult` with ``columns`` and ``has_wildcard``.
     """
     try:
-        tree = sqlglot.parse_one(sql, dialect="trino")
+        tree = sqlglot.parse_one(sql, dialect=dialect)
     except Exception:  # noqa: BLE001
         return VirtualColumnsResult(columns=None, has_wildcard=False)
 
@@ -117,11 +129,13 @@ def extract_virtual_dataset_columns(sql: str) -> VirtualColumnsResult:
             # table.* pattern
             return VirtualColumnsResult(columns=None, has_wildcard=True)
         if isinstance(sel, exp.Alias):
-            cols.add(sel.alias.lower())
+            cols.add(sel.alias)
         elif isinstance(sel, exp.Column):
-            cols.add(sel.name.lower())
+            cols.add(sel.name)
         # else: unnamed expression — skip
 
+    if dialect == "trino":
+        cols = {col.lower() for col in cols}
     return VirtualColumnsResult(columns=cols, has_wildcard=False)
 
 
@@ -145,11 +159,11 @@ _METRIC_KEYS = (
 """Chart param keys: single metric dict, or list of metric dicts/strings."""
 
 
-def _cols_from_sql_expression(sql: str) -> set[str]:
+def _cols_from_sql_expression(sql: str, dialect: str | None = "trino") -> set[str]:
     """
     Extract column name references from a SQL expression fragment.
 
-    Uses sqlglot (Trino dialect) to parse the expression and locate all
+    Uses sqlglot (in the given dialect) to parse the expression and locate all
     ``Column`` nodes.  Column names are returned in their original case
     (callers normalise as needed).
 
@@ -172,7 +186,7 @@ def _cols_from_sql_expression(sql: str) -> set[str]:
     if not sql or not sql.strip():
         return set()
     try:
-        tree = sqlglot.parse_one(sql, dialect="trino")
+        tree = sqlglot.parse_one(sql, dialect=dialect)
     except Exception:  # noqa: BLE001
         return set()
     if tree is None:
@@ -182,7 +196,7 @@ def _cols_from_sql_expression(sql: str) -> set[str]:
     }
 
 
-def _cols_from_adhoc(item: Any) -> set[str]:
+def _cols_from_adhoc(item: Any, dialect: str | None = "trino") -> set[str]:
     """
     Return dataset column names referenced by an adhoc column/filter dict.
 
@@ -208,11 +222,11 @@ def _cols_from_adhoc(item: Any) -> set[str]:
     if expr_type in ("SQL", "CUSTOM"):
         sql_expr = item.get("sqlExpression")
         if isinstance(sql_expr, str):
-            return _cols_from_sql_expression(sql_expr)
+            return _cols_from_sql_expression(sql_expr, dialect)
     return set()
 
 
-def _cols_from_metric(item: Any) -> set[str]:
+def _cols_from_metric(item: Any, dialect: str | None = "trino") -> set[str]:
     """
     Return dataset column names referenced by a metric value.
 
@@ -224,7 +238,7 @@ def _cols_from_metric(item: Any) -> set[str]:
     """
     if isinstance(item, str):
         return set()  # saved metric name — not a raw column
-    return _cols_from_adhoc(item)
+    return _cols_from_adhoc(item, dialect)
 
 
 def _cols_from_order_by_cols(order_by_cols: list[Any]) -> set[str]:
@@ -252,7 +266,9 @@ def _cols_from_order_by_cols(order_by_cols: list[Any]) -> set[str]:
     return refs
 
 
-def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
+def extract_chart_column_refs(
+    params: dict[str, Any], dialect: str | None = "trino"
+) -> set[str]:
     """
     Extract dataset column name references from all chart params locations.
 
@@ -270,7 +286,7 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
 
     For ``SIMPLE`` expression types the column is taken directly from the
     structured ``column.column_name`` field.  For ``SQL``/``CUSTOM`` expression
-    types the ``sqlExpression`` fragment is parsed with sqlglot (Trino dialect)
+    types the ``sqlExpression`` fragment is parsed with sqlglot in ``dialect``
     and all ``Column`` AST nodes are returned — this correctly handles cases
     like ``AVG(percent_problems_attempted)`` or complex CASE expressions.
 
@@ -279,6 +295,7 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
 
     Args:
         params: Parsed chart params dict.
+        dialect: sqlglot dialect of the database behind the chart's dataset.
 
     Returns:
         Set of column name strings as they appear in the params.
@@ -302,14 +319,14 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
             if isinstance(item, str) and item:
                 refs.add(item)
             else:
-                refs.update(_cols_from_adhoc(item))
+                refs.update(_cols_from_adhoc(item, dialect))
 
     # all_columns is a mixed list of str | adhoc-column-dict
     for item in params.get("all_columns") or []:
         if isinstance(item, str) and item:
             refs.add(item)
         else:
-            refs.update(_cols_from_adhoc(item))
+            refs.update(_cols_from_adhoc(item, dialect))
 
     # ── Metric keys ──────────────────────────────────────────────────────────
     for key in _METRIC_KEYS:
@@ -318,9 +335,9 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
             continue
         if isinstance(value, list):
             for item in value:
-                refs.update(_cols_from_metric(item))
+                refs.update(_cols_from_metric(item, dialect))
         else:
-            refs.update(_cols_from_metric(value))
+            refs.update(_cols_from_metric(value, dialect))
 
     # ── adhoc_filters ─────────────────────────────────────────────────────────
     # SIMPLE: column name is in the structured ``subject`` field.
@@ -336,7 +353,7 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
         elif expr_type in ("SQL", "CUSTOM"):
             sql_expr = filt.get("sqlExpression")
             if isinstance(sql_expr, str):
-                refs.update(_cols_from_sql_expression(sql_expr))
+                refs.update(_cols_from_sql_expression(sql_expr, dialect))
 
     # ── order_by_cols: JSON-encoded ["column_name", bool] strings ────────────
     order_by = params.get("order_by_cols")
@@ -384,14 +401,16 @@ def _load_datasets(datasets_dir: Path) -> dict[str, DatasetAsset]:
             raw_sql if isinstance(raw_sql, str) and raw_sql.strip() else None
         )
 
+        database = yaml_file.parent.name  # e.g. "Trino"
+
         virtual_columns: set[str] | None = None
         sql_has_wildcard = False
         if sql:
-            vcr = extract_virtual_dataset_columns(sql)
+            vcr = extract_virtual_dataset_columns(
+                sql, WAREHOUSE_DATABASE_DIALECTS.get(database)
+            )
             virtual_columns = vcr.columns
             sql_has_wildcard = vcr.has_wildcard
-
-        database = yaml_file.parent.name  # e.g. "Trino"
 
         result[uuid] = DatasetAsset(
             uuid=uuid,
@@ -410,8 +429,15 @@ def _load_datasets(datasets_dir: Path) -> dict[str, DatasetAsset]:
     return result
 
 
-def _load_charts(charts_dir: Path) -> dict[str, ChartAsset]:
-    """Parse all chart YAML files and return UUID-keyed dict."""
+def _load_charts(
+    charts_dir: Path, datasets: dict[str, DatasetAsset]
+) -> dict[str, ChartAsset]:
+    """
+    Parse all chart YAML files and return UUID-keyed dict.
+
+    SQL fragments in a chart's params are parsed in the dialect of the database
+    behind the chart's dataset, which is why the datasets are needed here.
+    """
     result: dict[str, ChartAsset] = {}
     if not charts_dir.exists():
         return result
@@ -428,9 +454,13 @@ def _load_charts(charts_dir: Path) -> dict[str, ChartAsset]:
         if not uuid:
             continue
 
+        dataset = datasets.get(data.get("dataset_uuid", ""))
+        dialect = WAREHOUSE_DATABASE_DIALECTS.get(dataset.database) if dataset else None
         params = data.get("params") or {}
         column_refs = (
-            extract_chart_column_refs(params) if isinstance(params, dict) else set()
+            extract_chart_column_refs(params, dialect)
+            if isinstance(params, dict)
+            else set()
         )
 
         result[uuid] = ChartAsset(
@@ -493,8 +523,9 @@ def build_asset_index(assets_dir: Path) -> AssetIndex:
     Returns:
         AssetIndex with populated datasets, charts, and dashboards dicts.
     """
+    datasets = _load_datasets(assets_dir / "datasets")
     return AssetIndex(
-        datasets=_load_datasets(assets_dir / "datasets"),
-        charts=_load_charts(assets_dir / "charts"),
+        datasets=datasets,
+        charts=_load_charts(assets_dir / "charts", datasets),
         dashboards=_load_dashboards(assets_dir / "dashboards"),
     )
