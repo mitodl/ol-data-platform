@@ -8,7 +8,7 @@
 -- Grain: org x contract x course_run. Refreshed by the Dagster b2b_organization
 -- MV-refresh asset. Backs ol-analytics-api's b2b_learner_records /courses collection.
 -- No personal data, but kept in this database so the tenant reads one schema.
--- Not derived from mv_b2b_learner_enrollment: that view inner-joins tfact_enrollment,
+-- Not derived from mv_b2b_learner_enrollment: that view inner-joins the enrollments,
 -- so a contract run nobody has enrolled in yet would be missing from /courses.
 select
     org.organization_key,
