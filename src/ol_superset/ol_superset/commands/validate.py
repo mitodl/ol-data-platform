@@ -448,7 +448,7 @@ def _validate_dbt_chain(
         if dataset.database not in WAREHOUSE_DATABASE_DIALECTS:
             continue
         # Skip virtual datasets — their table_name is a Superset-internal
-        # identifier, not a dbt model name. SQL table refs are validated in [4/4].
+        # identifier, not a dbt model name. SQL table refs are validated in step 5.
         if dataset.sql:
             continue
 

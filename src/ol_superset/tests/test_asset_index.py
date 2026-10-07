@@ -627,6 +627,17 @@ def test_extract_column_refs_comprehensive() -> None:
     assert "cnt" not in refs
 
 
+def test_sql_metric_parsed_in_dataset_dialect() -> None:
+    """Backticks quote an identifier on StarRocks and nothing on Trino."""
+    params = {
+        "metrics": [
+            {"expressionType": "SQL", "sqlExpression": "SUM(`Cnt`)", "label": "total"}
+        ]
+    }
+    assert extract_chart_column_refs(params, "starrocks") == {"Cnt"}
+    assert extract_chart_column_refs(params, "trino") == set()
+
+
 # ---------------------------------------------------------------------------
 # Tests: extract_virtual_dataset_columns
 # ---------------------------------------------------------------------------
