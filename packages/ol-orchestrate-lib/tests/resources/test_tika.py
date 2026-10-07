@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import httpx2 as httpx
 import pytest
 from ol_orchestrate.resources.tika import (
+    RETRY_DELAYS_SECONDS,
     SUPPORTED_CONTENT_TYPES,
     TikaResource,
     _base_content_type,
@@ -109,6 +110,112 @@ def test_extract_text_propagates_http_error(tika: TikaResource) -> None:
         pytest.raises(httpx.HTTPStatusError),
     ):
         tika.extract_text(b"%PDF...", "application/pdf")
+
+
+def _status_error(status_code: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("PUT", "https://tika.example.com/tika")
+    return httpx.HTTPStatusError(
+        str(status_code),
+        request=request,
+        response=httpx.Response(status_code, request=request),
+    )
+
+
+def _failing_response(status_code: int) -> MagicMock:
+    resp = _mock_response(status_code=status_code)
+    resp.raise_for_status.side_effect = _status_error(status_code)
+    return resp
+
+
+@pytest.fixture
+def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Record retry waits instead of sleeping through them."""
+    waits: list[float] = []
+    monkeypatch.setattr("ol_orchestrate.resources.tika.time.sleep", waits.append)
+    return waits
+
+
+def test_extract_text_waits_out_a_parser_restart(
+    tika: TikaResource, slept: list[float]
+) -> None:
+    """A 502, a 503 and a refused connection are a Tika pod restarting.
+
+    Without the retry each of these failed the whole course partition, which
+    is how one day of parser restarts became 3,751 failed runs.
+    """
+    mock_http = MagicMock(spec=httpx.Client)
+    mock_http.put.side_effect = [
+        _failing_response(502),
+        httpx.ConnectError("refused"),
+        _failing_response(503),
+        _mock_response("recovered"),
+    ]
+    with patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http):
+        result = tika.extract_text(b"%PDF...", "application/pdf")
+
+    assert result == "recovered"
+    assert len(slept) == len(RETRY_DELAYS_SECONDS)
+    for waited, delay in zip(slept, RETRY_DELAYS_SECONDS, strict=True):
+        assert delay * 0.5 <= waited <= delay * 1.5
+
+
+def test_extract_text_gives_up_after_the_last_retry(
+    tika: TikaResource, slept: list[float]
+) -> None:
+    """A Tika that stays down still surfaces, as the status it answered with."""
+    mock_http = _make_mock_http_client(_failing_response(502))
+    with (
+        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        tika.extract_text(b"%PDF...", "application/pdf")
+
+    assert mock_http.put.call_count == len(RETRY_DELAYS_SECONDS) + 1
+    assert len(slept) == len(RETRY_DELAYS_SECONDS)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        _status_error(401),
+        _status_error(422),
+        _status_error(500),
+        # One slow document: retrying it costs another full timeout each time.
+        _status_error(504),
+        httpx.ReadTimeout("slow parse"),
+    ],
+    ids=["401", "422", "500", "504", "timeout"],
+)
+def test_extract_text_does_not_retry_a_failure_about_the_request(
+    tika: TikaResource, slept: list[float], error: Exception
+) -> None:
+    """Only a restarting Tika is retried; everything else fails on first answer."""
+    mock_http = MagicMock(spec=httpx.Client)
+    if isinstance(error, httpx.HTTPStatusError):
+        mock_http.put.return_value = _failing_response(error.response.status_code)
+    else:
+        mock_http.put.side_effect = error
+    with (
+        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
+        pytest.raises(type(error)),
+    ):
+        tika.extract_text(b"%PDF...", "application/pdf")
+
+    mock_http.put.assert_called_once()
+    assert slept == []
+
+
+def test_extract_metadata_waits_out_a_parser_restart(
+    tika: TikaResource, slept: list[float]
+) -> None:
+    """/meta goes through the same retry as /tika."""
+    mock_http = MagicMock(spec=httpx.Client)
+    mock_http.put.side_effect = [_failing_response(502), _mock_response()]
+    with patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http):
+        result = tika.extract_metadata(b"%PDF...", "application/pdf")
+
+    assert result == {"Content-Type": "application/pdf", "Author": "Test"}
+    assert len(slept) == 1
 
 
 # ---------------------------------------------------------------------------
