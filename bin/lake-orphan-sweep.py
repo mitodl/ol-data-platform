@@ -28,7 +28,7 @@ Typical use:
 
 import csv
 import json
-import re
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import cache
@@ -38,13 +38,17 @@ from urllib.parse import urlparse
 
 import boto3
 from cyclopts import App
+from ol_orchestrate.lib.lake_orphan_sweep import (
+    delete_prefix,
+    glue_tables,
+    is_referenced,
+    measure,
+    normalize,
+    prefixes_at_depth,
+    referenced_paths,
+)
 
 app = App(name="lake-orphan-sweep")
-
-# dbt-trino suffixes every table directory it creates with a uuid. A bare name is
-# where pyiceberg would recreate a table whose database location is the bucket
-# root, so the delete path refuses one.
-DBT_DIR = re.compile(r"-[0-9a-f]{32}$")
 
 
 @cache
@@ -57,110 +61,6 @@ def glue() -> Any:
 def s3() -> Any:
     """Return a cached S3 client."""
     return boto3.client("s3")
-
-
-def glue_tables() -> list[dict[str, str]]:
-    """Return every Glue table with its location and Iceberg metadata pointer."""
-    out: list[dict[str, str]] = []
-    for dbs in glue().get_paginator("get_databases").paginate():
-        for db in dbs["DatabaseList"]:
-            pages = glue().get_paginator("get_tables").paginate(DatabaseName=db["Name"])
-            for page in pages:
-                out.extend(
-                    {
-                        "database": db["Name"],
-                        "table": table["Name"],
-                        "location": table.get("StorageDescriptor", {}).get(
-                            "Location", ""
-                        ),
-                        "metadata_location": table.get("Parameters", {}).get(
-                            "metadata_location", ""
-                        ),
-                        "updated": str(table.get("UpdateTime", "")),
-                    }
-                    for table in page["TableList"]
-                )
-    return out
-
-
-def normalize(uri: str) -> str:
-    """Return `bucket/key` for an s3 URI, or "" when it is not one."""
-    parsed = urlparse(uri.replace("s3a://", "s3://").replace("s3n://", "s3://"))
-    if parsed.scheme != "s3" or not parsed.netloc:
-        return ""
-    return f"{parsed.netloc}/{parsed.path.strip('/')}".rstrip("/")
-
-
-def referenced_paths(*, include_databases: bool) -> set[str]:
-    """Return every `bucket/key` path Glue points at.
-
-    A database location is included for the delete path because a database whose
-    location names a real prefix claims it for tables not yet registered. A
-    database located at a bucket ROOT claims only that root, never the whole
-    bucket, which is the bug that made an early run skip every candidate.
-    """
-    out: set[str] = set()
-    for table in glue_tables():
-        for uri in (table["location"], table["metadata_location"]):
-            if path := normalize(uri):
-                out.add(path)
-    if include_databases:
-        for dbs in glue().get_paginator("get_databases").paginate():
-            for db in dbs["DatabaseList"]:
-                if path := normalize(db.get("LocationUri", "")):
-                    out.add(path)
-    return out
-
-
-def is_referenced(candidate: str, referenced: set[str]) -> bool:
-    """Return True when `candidate` contains, equals, or sits inside a reference."""
-    if candidate in referenced:
-        return True
-    return any(
-        path.startswith(f"{candidate}/") or candidate.startswith(f"{path}/")
-        for path in referenced
-    )
-
-
-def prefixes_at_depth(bucket: str, under: str, depth: int) -> list[str]:
-    """List prefixes `depth` levels below `under` (a "" base means the bucket root)."""
-    base = f"{under.strip('/')}/" if under.strip("/") else ""
-    current = [base]
-    for _ in range(depth):
-        found: list[str] = []
-        for prefix in current:
-            pages = (
-                s3()
-                .get_paginator("list_objects_v2")
-                .paginate(Bucket=bucket, Prefix=prefix, Delimiter="/")
-            )
-            for page in pages:
-                found += [cp["Prefix"] for cp in page.get("CommonPrefixes", [])]
-        current = found
-    return [prefix.rstrip("/") for prefix in current]
-
-
-def measure(bucket: str, prefix: str) -> dict[str, Any]:
-    """Count objects, bytes and the newest LastModified under one prefix."""
-    count = size = 0
-    newest: datetime | None = None
-    pages = (
-        s3()
-        .get_paginator("list_objects_v2")
-        .paginate(Bucket=bucket, Prefix=f"{prefix}/")
-    )
-    for page in pages:
-        for obj in page.get("Contents", []):
-            count += 1
-            size += obj["Size"]
-            newest = max(newest, obj["LastModified"]) if newest else obj["LastModified"]
-    return {
-        "bucket": bucket,
-        "prefix": prefix,
-        "objects": count,
-        "bytes": size,
-        "newest": newest,
-    }
 
 
 @app.command
@@ -185,23 +85,23 @@ def report(
         so a dbt run whose temp table is not yet registered is never a candidate.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    tables = glue_tables()
+    tables = glue_tables(glue())
     (out_dir / "glue_tables.json").write_text(json.dumps(tables, indent=1))
     stuck = [
         t for t in tables if "__dbt_tmp" in t["table"] or "__dbt_backup" in t["table"]
     ]
     (out_dir / "stuck_glue_tables.json").write_text(json.dumps(stuck, indent=1))
 
-    referenced = referenced_paths(include_databases=False)
+    referenced = referenced_paths(glue(), include_databases=False)
     candidates: list[tuple[str, str]] = []
     for bucket in buckets:
-        found = prefixes_at_depth(bucket, under, depth)
+        found = prefixes_at_depth(s3(), bucket, under, depth)
         orphans = [p for p in found if not is_referenced(f"{bucket}/{p}", referenced)]
         print(f"{bucket}: {len(found)} prefixes scanned, {len(orphans)} unreferenced")
         candidates += [(bucket, p) for p in orphans]
 
     with ThreadPoolExecutor(32) as pool:
-        rows = list(pool.map(lambda bp: measure(*bp), candidates))
+        rows = list(pool.map(lambda bp: measure(s3(), *bp), candidates))
 
     now = datetime.now(UTC)
     for row in rows:
@@ -242,54 +142,37 @@ def delete(manifest: Path, *, min_age_days: int = 7, execute: bool = False) -> N
     Parameters
     ----------
     manifest: CSV with `bucket,prefix` columns, a reviewed cut of the report.
-    min_age_days: Skip a prefix whose newest object is younger than this.
+    min_age_days: Skip a prefix whose newest object is younger than this. At
+        least 1.
     execute: Without it, print what would be deleted and change nothing.
     """
+    # The library logs each prefix before its first delete batch, so a run
+    # that dies part way through one still names it.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     rows = list(csv.DictReader(manifest.open()))
-    referenced = referenced_paths(include_databases=True)
     now = datetime.now(UTC)
     for row in rows:
-        bucket, prefix = row["bucket"], row["prefix"]
-        path = f"{bucket}/{prefix}"
-        if not prefix:
-            print(f"REFUSE {bucket}: empty prefix")
-            continue
-        if not DBT_DIR.search(prefix):
-            print(f"REFUSE s3://{path}/: no dbt uuid suffix")
-            continue
-        if is_referenced(path, referenced):
-            print(f"SKIP   s3://{path}/: now referenced by Glue")
-            continue
-        keys: list[str] = []
-        newest: datetime | None = None
-        pages = (
-            s3()
-            .get_paginator("list_objects_v2")
-            .paginate(Bucket=bucket, Prefix=f"{prefix}/")
+        outcome = delete_prefix(
+            s3(),
+            row["bucket"],
+            row["prefix"],
+            lambda: referenced_paths(glue(), include_databases=True),
+            min_age_days=min_age_days,
+            now=now,
+            execute=execute,
         )
-        for page in pages:
-            for obj in page.get("Contents", []):
-                keys.append(obj["Key"])
-                newest = (
-                    max(newest, obj["LastModified"]) if newest else obj["LastModified"]
-                )
-        if newest and (now - newest).days < min_age_days:
-            print(f"SKIP   s3://{path}/: newest object {newest.isoformat()} too recent")
-            continue
-        print(f"{'DELETE' if execute else 'WOULD '} s3://{path}/: {len(keys)} objects")
-        if execute:
-            _delete_keys(bucket, keys)
-
-
-def _delete_keys(bucket: str, keys: list[str]) -> None:
-    """Delete keys in batches of 1000, reporting any per-key error."""
-    for start in range(0, len(keys), 1000):
-        batch = [{"Key": key} for key in keys[start : start + 1000]]
-        response = s3().delete_objects(
-            Bucket=bucket, Delete={"Objects": batch, "Quiet": True}
-        )
-        for error in response.get("Errors", []):
-            print(f"  ERROR {error['Key']}: {error['Code']} {error['Message']}")
+        target = f"s3://{outcome.bucket}/{outcome.prefix}/"
+        if not outcome.prefix:
+            print(f"REFUSE {outcome.bucket}: {outcome.reason}")
+        elif outcome.action == "refused":
+            print(f"REFUSE {target}: {outcome.reason}")
+        elif outcome.action == "skipped":
+            print(f"SKIP   {target}: {outcome.reason}")
+        else:
+            verb = "DELETE" if outcome.action == "deleted" else "WOULD "
+            print(f"{verb} {target}: {outcome.objects} objects")
+        for error in outcome.errors:
+            print(f"  ERROR {error}")
 
 
 @app.command
@@ -311,7 +194,7 @@ def verify(manifest: Path, buckets: list[str]) -> None:
 
     locations: list[tuple[str, str, str]] = []
     metadata: list[tuple[str, str, str]] = []
-    for table in glue_tables():
+    for table in glue_tables(glue()):
         name = f"{table['database']}.{table['table']}"
         loc = urlparse(table["location"])
         if loc.netloc in buckets:
@@ -363,7 +246,7 @@ def drop_stuck(
     """
     backup_dir.mkdir(parents=True, exist_ok=True)
     owners: dict[str, list[str]] = {}
-    for table in glue_tables():
+    for table in glue_tables(glue()):
         if path := normalize(table["location"]):
             owners.setdefault(path, []).append(f"{table['database']}.{table['table']}")
     now = datetime.now(UTC)
