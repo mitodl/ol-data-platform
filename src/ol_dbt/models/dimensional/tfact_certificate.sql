@@ -285,8 +285,8 @@ with mitxonline_certificates as (
             order by
                 coalesce(certificate_updated_on, certificate_created_on) desc nulls last
                 , user_fk
-                , courserun_fk
-                , program_fk
+                , courserun_fk ASC
+                , program_fk ASC
         ) as _key_row_num
     from certificates_with_fks
 )
@@ -323,7 +323,7 @@ with mitxonline_certificates as (
         , row_number() over (
             partition by _certificate_group
             order by
-                _platform_rank
+                _platform_rank ASC
                 , case when certificate_is_revoked then 1 else 0 end
                 , certificate_issued_on desc nulls last
                 -- certificate_id is a string; compare the integer ids as numbers.
