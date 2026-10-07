@@ -302,6 +302,20 @@ class TestRequestRetries:
         assert self.sent == 1
         assert self.slept == []
 
+    def test_a_long_refusal_body_is_cut(self, client, responses) -> None:
+        responses.append(_Response(404, "x" * 5000))
+        with pytest.raises(Failure) as raised:
+            client._single_request("GET", "https://a/jobs")
+        assert len(raised.value.description or "") < 1000
+
+    def test_a_status_outside_the_standard_set_is_retried(
+        self, client, responses
+    ) -> None:
+        # A load balancer's 561 or a CDN's 520 has no HTTPStatus member.
+        responses.extend([_Response(561), _Response(520), _Response(200)])
+        assert client._single_request("GET", "https://a/jobs") == {"jobId": 1}
+        assert self.sent == 3
+
     def test_a_429_is_retried(self, client, responses) -> None:
         responses.extend([_Response(429), _Response(200)])
         assert client._single_request("GET", "https://a/jobs") == {"jobId": 1}

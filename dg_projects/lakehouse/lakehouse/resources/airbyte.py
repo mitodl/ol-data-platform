@@ -35,6 +35,10 @@ IN_FLIGHT_JOB_STATUSES = (
 # what still hold once the workspace outgrows it.
 LISTING_ATTEMPTS = 4
 
+# How much of a 4xx response body is carried into the Failure. Airbyte's problem
+# responses are a few hundred characters; an ingress error page is not.
+REFUSAL_BODY_MAX_CHARS = 500
+
 
 @beta
 class AirbyteOSSClient(AirbyteClient):
@@ -197,8 +201,7 @@ class AirbyteOSSClient(AirbyteClient):
         retries every error alike. Here the delay doubles on each attempt, so
         the retries span an API outage instead of all landing inside it, and a
         4xx other than 429 raises at once with the response body: the request
-        will be refused again, and the body is where Airbyte says why (a 409 on
-        ``POST /jobs`` is "A sync is already running").
+        will be refused again, and the body is where Airbyte says why.
 
         :raises Failure: On a 4xx, or when the retries are used up.
         """
@@ -226,12 +229,14 @@ class AirbyteOSSClient(AirbyteClient):
                 refused = e.response
                 if (
                     refused is not None
-                    and HTTPStatus(refused.status_code).is_client_error
+                    and HTTPStatus.BAD_REQUEST
+                    <= refused.status_code
+                    < HTTPStatus.INTERNAL_SERVER_ERROR
                     and refused.status_code != HTTPStatus.TOO_MANY_REQUESTS
                 ):
                     msg = (
                         f"Airbyte API answered {refused.status_code} to {method} "
-                        f"{url}: {refused.text}"
+                        f"{url}: {refused.text[:REFUSAL_BODY_MAX_CHARS]}"
                     )
                     raise Failure(description=msg) from e
                 if attempt < self.request_max_retries:
