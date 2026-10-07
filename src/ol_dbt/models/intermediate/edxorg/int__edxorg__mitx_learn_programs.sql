@@ -38,8 +38,8 @@ with programs as (
         program_status = 'active'
         and lower(program_type) not like '%micromasters%'
         and (
-            strpos(concat('|', replace(program_organization, ', ', '|'), '|'), '|MITx|') > 0
-            or strpos(concat('|', replace(program_organization, ', ', '|'), '|'), '|MITx_PRO|') > 0
+            strpos({{ dbt.concat(["'|'", "replace(program_organization, ', ', '|')", "'|'"]) }}, '|MITx|') > 0
+            or strpos({{ dbt.concat(["'|'", "replace(program_organization, ', ', '|')", "'|'"]) }}, '|MITx_PRO|') > 0
         )
         and not (
             lower(trim(program_title)) like '%[delete]%'
