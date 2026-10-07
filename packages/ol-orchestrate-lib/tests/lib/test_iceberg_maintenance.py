@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pyarrow as pa
@@ -22,7 +23,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     warehouse_env_for,
 )
 from pyiceberg.catalog.sql import SqlCatalog
-from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
 from pyiceberg.table import Table
 from pyiceberg.table.refs import SnapshotRef, SnapshotRefType
 
@@ -646,6 +647,59 @@ class TestExpireSnapshots:
     def test_a_table_that_cannot_be_loaded_raises(self, catalog: SqlCatalog) -> None:
         with pytest.raises(NoSuchTableError):
             expire_snapshots(catalog, self.DATABASE, "missing", retention_days=0)
+
+    @pytest.mark.parametrize("pattern", [AIRBYTE_STAGING_BRANCH, None])
+    def test_a_failed_commit_raises(
+        self,
+        catalog: SqlCatalog,
+        monkeypatch: pytest.MonkeyPatch,
+        pattern: re.Pattern[str] | None,
+    ) -> None:
+        """With the pattern the branch removal commits first, without it the expiry."""
+
+        def fail(*_args: object, **_kwargs: object) -> None:
+            msg = "concurrent write"
+            raise CommitFailedException(msg)
+
+        monkeypatch.setattr(SqlCatalog, "commit_table", fail)
+
+        with pytest.raises(CommitFailedException):
+            expire_snapshots(
+                catalog,
+                self.DATABASE,
+                self.TABLE,
+                retention_days=0,
+                stale_branch_pattern=pattern,
+            )
+
+    def test_a_failed_expiry_commit_raises_after_the_branches_are_gone(
+        self, catalog: SqlCatalog, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        commit_table = SqlCatalog.commit_table
+        commits = 0
+
+        def fail_second(*args: object, **kwargs: object) -> object:
+            nonlocal commits
+            commits += 1
+            if commits == 2:
+                msg = "concurrent write"
+                raise CommitFailedException(msg)
+            return commit_table(*args, **kwargs)
+
+        monkeypatch.setattr(SqlCatalog, "commit_table", fail_second)
+
+        with pytest.raises(CommitFailedException):
+            expire_snapshots(
+                catalog,
+                self.DATABASE,
+                self.TABLE,
+                retention_days=0,
+                stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+            )
+
+        table = self._table(catalog)
+        assert self.STALE not in table.metadata.refs
+        assert len(table.snapshots()) == 4
 
     @pytest.mark.parametrize(
         "name",

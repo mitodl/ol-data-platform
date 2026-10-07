@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any
 
 import boto3
+from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.glue import GlueCatalog
 from pyiceberg.table.metadata import TableMetadata
 from pyiceberg.table.refs import SnapshotRefType
@@ -339,7 +340,7 @@ def expirable_snapshot_ids(
 
 
 def expire_snapshots(  # noqa: PLR0913
-    catalog: GlueCatalog,
+    catalog: Catalog,
     database: str,
     table_name: str,
     retention_days: int,
