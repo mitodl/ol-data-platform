@@ -167,6 +167,14 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # The delay doubles per retry (5, 10, 20, 40), so a request that is
+        # refused straight away waits up to 75 seconds for the API to come
+        # back; one that hangs also spends request_timeout on each of its five
+        # attempts. The 502 burst on 2026-10-07 ran
+        # from about 00:03:45Z to 00:04:45Z, longer than the library's three
+        # retries at a quarter second apart.
+        request_max_retries=4,
+        request_retry_delay=5,
         # Attach to a sync that is already in flight rather than raising. The
         # automation condition and Airbyte's own scheduler both launch syncs, so
         # a tick landing on top of a running sync is routine, not exceptional --
