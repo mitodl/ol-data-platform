@@ -1,7 +1,8 @@
+import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from http import HTTPStatus
 from typing import Any, Self
-from urllib.parse import urlparse, urlunparse
 
 from dagster import Failure
 from dagster._annotations import beta
@@ -10,6 +11,7 @@ from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
 from dagster_shared.utils.cached_method import cached_method
 from pydantic.fields import Field, PrivateAttr
 from pydantic.functional_validators import model_validator
+from requests.exceptions import RequestException
 
 AIRBYTE_REST_API_VERSION = "v1"
 AIRBYTE_CONFIGURATION_API_VERSION = "v1"
@@ -118,8 +120,15 @@ class AirbyteOSSClient(AirbyteClient):
         large to fork safely, and this is its only caller in dagster-airbyte
         0.29.
         """
-        jobs = super().get_jobs_for_connection(
-            connection_id=connection_id, created_after=created_after
+        # Offset pages can overlap (see LISTING_ATTEMPTS), and one in-flight job
+        # returned twice would survive the collapse below as two.
+        jobs = list(
+            {
+                job.id: job
+                for job in super().get_jobs_for_connection(
+                    connection_id=connection_id, created_after=created_after
+                )
+            }.values()
         )
         in_flight = [job for job in jobs if job.status in IN_FLIGHT_JOB_STATUSES]
         if len(in_flight) <= 1:
@@ -174,43 +183,62 @@ class AirbyteOSSClient(AirbyteClient):
         """
         return self.list_collection("connections", "connectionId")
 
-    def _paginated_request(
+    def _single_request(
         self,
         method: str,
         url: str,
-        params: Mapping[str, Any],
         data: Mapping[str, Any] | None = None,
-        include_additional_request_params: bool = True,  # noqa: FBT001, FBT002
-    ) -> Sequence[Mapping[str, Any]]:
-        """Execute paginated requests and yield all items."""
-        result_data = []
-        _url_parsed = urlparse(url)
-        # Without a limit the server pages at its own default.
-        params = {"limit": self.max_items_per_page, **params}
-        while url != "":
-            response = self._single_request(
-                method=method,
-                url=url,
-                data=data,
-                params=params,
-                include_additional_request_headers=include_additional_request_params,
-            )
+        params: Mapping[str, Any] | None = None,
+        include_additional_request_headers: bool = True,  # noqa: FBT001, FBT002
+    ) -> Mapping[str, Any]:
+        """Execute a request, backing off between retries and failing fast on 4xx.
 
-            # Handle different response structures
-            result_data.extend(response.get("data", []))
-            # The `next` parameter in a self-hosted environment defaults to using
-            # `localhost` in the host portion of the path, resulting in errors when
-            # trying to fetch paginated data. (TMM 2025-09-22)
-            if next_url := response.get("next", ""):
-                next_parsed = urlparse(next_url)
-                url = urlunparse(
-                    (_url_parsed.scheme, _url_parsed.netloc, *next_parsed[2:])
+        The library sleeps a fixed ``request_retry_delay`` between attempts and
+        retries every error alike. Here the delay doubles on each attempt, so
+        the retries span an API outage instead of all landing inside it, and a
+        4xx other than 429 raises at once with the response body: the request
+        will be refused again, and the body is where Airbyte says why (a 409 on
+        ``POST /jobs`` is "A sync is already running").
+
+        :raises Failure: On a 4xx, or when the retries are used up.
+        """
+        for attempt in range(self.request_max_retries + 1):
+            try:
+                session = self._get_session(
+                    include_additional_request_headers=include_additional_request_headers
                 )
-            else:
-                url = ""
-            params = {}
+                response = session.request(
+                    method=method,
+                    url=url,
+                    json=data,
+                    params=params,
+                    timeout=self.request_timeout,
+                )
+                response.raise_for_status()
+                return response.json()
+            except RequestException as e:
+                self._log.error(
+                    "Request to Airbyte API failed for url %s with method %s : %s",
+                    url,
+                    method,
+                    e,
+                )
+                refused = e.response
+                if (
+                    refused is not None
+                    and HTTPStatus(refused.status_code).is_client_error
+                    and refused.status_code != HTTPStatus.TOO_MANY_REQUESTS
+                ):
+                    msg = (
+                        f"Airbyte API answered {refused.status_code} to {method} "
+                        f"{url}: {refused.text}"
+                    )
+                    raise Failure(description=msg) from e
+                if attempt < self.request_max_retries:
+                    time.sleep(self.request_retry_delay * 2**attempt)
 
-        return result_data
+        msg = f"Max retries ({self.request_max_retries}) exceeded with url: {url}."
+        raise Failure(description=msg)
 
 
 @beta

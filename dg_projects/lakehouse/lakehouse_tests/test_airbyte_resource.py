@@ -7,17 +7,22 @@ is not hypothetical: the four polling settings were missing, so configuring
 poll_previous_running_sync on the workspace set a field the client never read.
 """
 
+from datetime import datetime
+from http import HTTPStatus
 from typing import Any
 
 import pytest
 from dagster import Failure
 from dagster_airbyte.resources import AirbyteClient
 from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
+from lakehouse.resources import airbyte as airbyte_resource
 from lakehouse.resources.airbyte import (
     LISTING_ATTEMPTS,
     AirbyteOSSClient,
     AirbyteOSSWorkspace,
 )
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import HTTPError
 
 # Non-default values throughout, so a setting that fails to propagate shows up
 # as the library default rather than coincidentally matching.
@@ -177,43 +182,130 @@ class TestConcurrentInFlightJobsAreCollapsed:
         assert client.get_jobs_for_connection(connection_id="c") == jobs
 
 
-class TestPaginatedRequest:
-    def test_the_first_request_sets_the_page_size_and_next_keeps_our_host(
-        self, client, monkeypatch
-    ) -> None:
-        # The server pages at its own default when no limit is sent, and its
-        # `next` URL names localhost in a self-hosted deployment.
-        requests: list[tuple[str, dict[str, Any]]] = []
+class TestJobListing:
+    """get_jobs_for_connection over HTTP pages, as sync_and_poll calls it."""
+
+    CREATED_AFTER = datetime(2026, 10, 5, 0, 0, 0)  # noqa: DTZ001
+
+    @pytest.fixture
+    def requests_made(self, monkeypatch) -> list[tuple[str, dict[str, Any]]]:
+        """Serve two pages that both hold in-flight job 8."""
+        made: list[tuple[str, dict[str, Any]]] = []
         pages = [
             {
-                "data": [{"connectionId": "conn-1"}],
-                "next": "http://localhost:8006/api/public/v1/connections?limit=50&offset=50",
+                "data": [
+                    {"jobId": 8, "status": "running", "jobType": "sync"},
+                    {"jobId": 7, "status": "succeeded", "jobType": "sync"},
+                ],
+                # A self-hosted server names localhost here and keeps only the
+                # connection and the paging of the query it was sent.
+                "next": "http://localhost:8006/api/public/v1/jobs?connectionId=c&limit=50&offset=50",
             },
-            {"data": [{"connectionId": "conn-2"}]},
+            {
+                "data": [
+                    {"jobId": 8, "status": "running", "jobType": "sync"},
+                    {"jobId": 6, "status": "succeeded", "jobType": "sync"},
+                ]
+            },
         ]
 
         def single_request(self, url, params, **_):  # noqa: ARG001
-            requests.append((url, dict(params)))
-            return pages[len(requests) - 1]
+            made.append((url, dict(params)))
+            return pages[len(made) - 1]
 
         monkeypatch.setattr(AirbyteOSSClient, "_single_request", single_request)
-        rows = client._paginated_request(
-            method="GET",
-            url=f"{client.rest_api_base_url}/connections",
-            params={"workspaceIds": "workspace-1"},
-        )
+        return made
 
-        assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
-        assert requests == [
-            (
-                "https://airbyte.example.invalid/api/public/v1/connections",
-                {"limit": 50, "workspaceIds": "workspace-1"},
-            ),
-            (
-                "https://airbyte.example.invalid/api/public/v1/connections?limit=50&offset=50",
-                {},
-            ),
+    def test_every_page_keeps_the_filter_and_our_host(
+        self, client, requests_made
+    ) -> None:
+        """Following `next` verbatim dropped createdAtStart after page 1.
+
+        Every sync start then read the connection's whole job history, 100 jobs
+        a request, instead of the two days sync_and_poll asks for.
+        """
+        client.get_jobs_for_connection("c", created_after=self.CREATED_AFTER)
+
+        url = "https://airbyte.example.invalid/api/public/v1/jobs"
+        query = {
+            "workspaceIds": "workspace-1",
+            "connectionId": "c",
+            "createdAtStart": "2026-10-05T00:00:00Z",
+        }
+        assert requests_made == [
+            (url, {"limit": 50, **query}),
+            (url, {"limit": "50", "offset": "50", **query}),
         ]
+
+    @pytest.mark.usefixtures("requests_made")
+    def test_a_job_repeated_across_pages_is_counted_once(self, client) -> None:
+        """Two copies of one in-flight id read as "Found multiple running jobs"."""
+        jobs = client.get_jobs_for_connection("c", created_after=self.CREATED_AFTER)
+        assert [job.id for job in jobs] == [8, 7, 6]
+
+
+class _Response:
+    def __init__(self, status_code: int, text: str = "") -> None:
+        self.status_code = status_code
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= HTTPStatus.BAD_REQUEST:
+            msg = f"{self.status_code} Error"
+            raise HTTPError(msg, response=self)  # type: ignore[arg-type]
+
+    def json(self) -> dict[str, Any]:
+        return {"jobId": 1}
+
+
+class TestRequestRetries:
+    @pytest.fixture
+    def responses(self, monkeypatch) -> list[_Response | Exception]:
+        """Answer each request with the next queued response, recording sleeps."""
+        queued: list[_Response | Exception] = []
+        self.slept: list[float] = []
+        self.sent = 0
+
+        class Session:
+            def request(_self, **_):  # noqa: N805
+                self.sent += 1
+                answer = queued.pop(0)
+                if isinstance(answer, Exception):
+                    raise answer
+                return answer
+
+        monkeypatch.setattr(
+            AirbyteOSSClient, "_get_session", lambda *_, **__: Session()
+        )
+        monkeypatch.setattr(airbyte_resource.time, "sleep", self.slept.append)
+        return queued
+
+    def test_a_502_is_retried_with_a_doubling_delay(self, client, responses) -> None:
+        responses.extend(
+            [_Response(502), RequestsConnectionError(), _Response(503), _Response(200)]
+        )
+        assert client._single_request("POST", "https://a/jobs") == {"jobId": 1}
+        assert self.slept == [1.5, 3.0, 6.0]
+
+    def test_retries_stop_at_the_configured_count(self, client, responses) -> None:
+        responses.extend([_Response(502)] * 8)
+        with pytest.raises(Failure, match=r"Max retries \(7\) exceeded"):
+            client._single_request("GET", "https://a/jobs")
+        assert self.sent == 8
+        assert len(self.slept) == 7
+
+    def test_a_409_fails_at_once_with_airbytes_reason(self, client, responses) -> None:
+        """Retrying a conflict cannot clear it, and the body names the cause."""
+        responses.append(_Response(409, "A sync is already running for: c"))
+        with pytest.raises(Failure, match=r"409 .* A sync is already running"):
+            client._single_request("POST", "https://a/jobs")
+        assert self.sent == 1
+        assert self.slept == []
+
+    def test_a_429_is_retried(self, client, responses) -> None:
+        responses.extend([_Response(429), _Response(200)])
+        assert client._single_request("GET", "https://a/jobs") == {"jobId": 1}
+        assert self.sent == 2
 
 
 class TestOverlappingPages:
