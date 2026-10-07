@@ -28,14 +28,19 @@ models:
     description: str, learning format, e.g. Online, On Campus, Blended
   - name: course_resource_type
     description: str, the feed's own Course/Program label, may be empty. Anything
-      other than Program is read as a course by int__mitpe__learning_resources, so
-      a new label would turn programs into courses and the MIT Learn delivery would
-      unpublish every MIT PE program. The test fails the build before those models
-      are rebuilt.
+      other than Program (in any case) is read as a course by int__mitpe__learning_resources,
+      so a renamed label would turn those programs into courses, and the MIT Learn
+      delivery would unpublish every program left out of the batch. The test fails
+      the build on the first unknown label, before those models are rebuilt. It is
+      stricter than the model about case on purpose.
     tests:
     - accepted_values:
         arguments:
           values: ["Course", "Program", ""]
+        # The project default only errors above 10 failing rows, and this test
+        # returns one row per unknown label.
+        config:
+          error_if: "!=0"
   - name: course_certificates_raw
     description: str, pipe-separated certificate and category labels
   - name: program_course_titles_raw
