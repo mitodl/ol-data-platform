@@ -295,8 +295,8 @@ def _login_name(access_token: str) -> str:
     if "starrocks_username" not in claims:
         sys.exit(
             "The Keycloak token has no starrocks_username claim, so StarRocks has "
-            f"no login name for {claims['preferred_username']}. The claim comes from "
-            "the saml_uid attribute, which is set at Touchstone login."
+            "no login name for this user. The claim comes from the saml_uid "
+            "attribute, which is set at Touchstone login."
         )
     return claims["starrocks_username"]
 
