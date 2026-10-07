@@ -108,7 +108,7 @@ def unselected_model_test_names(
         parents = {
             parent
             for parent in node["depends_on"]["nodes"]
-            if parent.startswith("model.")
+            if not parent.startswith("source.")
         }
         attached = node.get("attached_node")
         candidates = ({attached} if attached else parents) - selected_unique_ids
