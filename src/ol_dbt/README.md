@@ -224,9 +224,9 @@ dbt run --select my_model --target dev_qa --vars '{"schema_suffix": "myname"}'
 
 > **Note**: `--vars 'schema_suffix: <value>'` namespaces your dev schemas on Trino
 > targets so they don't collide with other developers' schemas. Use lowercase
-> letters, digits and underscores only (e.g. `tmacey`, not `my-branch`). Any
-> other character fails the run, because Glue would create a database that
-> Iceberg cannot load.
+> letters, digits and underscores only (e.g. `tmacey`, not `my-branch`). Anything
+> else fails the run: with a hyphen or other punctuation, Glue would create a
+> database that Iceberg cannot load.
 
 ### Other dbt Commands
 
