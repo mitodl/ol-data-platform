@@ -567,7 +567,8 @@ non_airbyte_staging_schedules = (
 # that reads more than one ingestion unit, so a QA build is complete relative to
 # QA's apps rather than a silently partial union. The rest wait on raw tables QA
 # does not have: program_certificates on the edX program_learner_report and
-# email_opt_in mirrors, and the dlt/API sources (mit_edx_courses and
+# email_opt_in mirrors, ocw_courses on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA), and the dlt/API sources (mit_edx_courses and
 # mit_edx_programs on the edX catalog, mitpe, mit_climate, oll, podcasts) whose
 # loaders run in production only.
 learn_integrations_qa_schedule = ScheduleDefinition(

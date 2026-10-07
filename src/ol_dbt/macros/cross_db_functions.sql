@@ -970,3 +970,26 @@
 {% macro duckdb__json_array_string(json_col, json_path) -%}
     cast(json_extract({{ json_col }}, {{ json_path }}) as varchar)
 {%- endmacro %}
+
+
+{#
+    json_nested_array_distinct_values: the distinct strings in a JSON array of arrays
+    at `json_path`, sorted. '[["b", "a"], ["a"]]' -> ['a', 'b']. An absent path gives
+    an empty array.
+#}
+{% macro json_nested_array_distinct_values(json_col, json_path) -%}
+    coalesce(
+        array_sort(array_distinct(flatten(
+            {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
+        )))
+        , {{ empty_varchar_array() }}
+    )
+{%- endmacro %}
+
+{% macro default__json_extract_nested_varchar_array(json_col, json_path) -%}
+    cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as array(array(varchar)))
+{%- endmacro %}
+
+{% macro duckdb__json_extract_nested_varchar_array(json_col, json_path) -%}
+    cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[][])
+{%- endmacro %}

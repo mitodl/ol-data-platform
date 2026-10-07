@@ -51,7 +51,7 @@ These columns are optional but recommended for most marts:
 
 Each source may add additional columns following its needs. Common patterns include:
 
-### Course Sources (OCW, MITxOnline, MIT edX)
+### Course Sources (MITxOnline, MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -67,6 +67,45 @@ Each source may add additional columns following its needs. Common patterns incl
 |--------|------|-------------|
 | `courses` | string | Comma-separated list of course `readable_id` values belonging to this program |
 | `departments` | string | Comma-separated department names |
+
+### OCW
+
+`integrations__learn__ocw_courses` has one row per course in the OCW live bucket, read from
+the course's published `data.json`, which is what MIT Learn's OCW ETL reads. It does not
+follow the delimited-string columns above. A course has one run, so the run's fields are
+columns of the course. A course that leaves the bucket leaves the model.
+
+MIT Learn matches an OCW course on `url`, not `readable_id`; both are unique here.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `readable_id` | string | Primary course number, `+` slugified term, `_` year, e.g. `6.1810+fall_2023` |
+| `last_modified` | string | When the platform last read the course from the bucket. A course is read again when one of its objects changes, or to retry a file Tika failed on. MIT Learn's ETL stores the S3 modification time of `data.json` |
+| `description` | string | Rendered HTML (`course_description_html`) |
+| `url` | string | Course URL on ocw.mit.edu, with a trailing slash |
+| `image_url`, `image_alt`, `image_description` | string | The course image; `image_url` is absolute |
+| `published` | boolean | Always true |
+| `platform` | string | Always `ocw` |
+| `run_id` | string | `legacy_uid`, else `site_uid`, without dashes. Equals `run_readable_id` in `integrations__learn__ocw_content_files` |
+| `slug` | string | `courses/<slug>` |
+| `term` | string | `Fall`, `Spring`, `Summer`, `January IAP`, or null |
+| `year` | int | Null when not given |
+| `level` | array(string) | Level labels, e.g. `Undergraduate` |
+| `course_number` | string | Primary course number |
+| `extra_course_numbers` | array(string) | Cross-listed course numbers |
+| `departments` | array(string) | MIT department numbers |
+| `topics` | array(string) | The course's MIT Learn topic names, sorted |
+| `ocw_topics` | array(string) | Every OCW topic, subtopic and speciality, sorted |
+| `content_tags` | array(string) | Learning resource types, e.g. `Lecture Notes` |
+| `instructors` | string | JSON array as published, each with `first_name`, `last_name`, `middle_initial`, `salutation`, `title` |
+| `hide_download` | boolean | Whether OCW hides the course's download link |
+
+Three steps of MIT Learn's OCW ETL are left to the consumer, each one function in mit-learn:
+`clean_data` on `description` (nh3 with Learn's tag allowlist), `parse_instructors` on
+`instructors`, and `transform_topics` on `ocw_topics` for a course whose `topics` is empty
+(one course on 2026-10-07), which needs Learn's topic mappings. `transform_levels` maps
+`level` labels to Learn's codes. With those applied, the model matched every field MIT Learn
+stores for all 2,587 OCW courses on 2026-10-07.
 
 ### xPRO
 
@@ -248,3 +287,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-03 | Tobias Macey | Added `integrations__learn__ocw_content_files`. |
 | 2026-10-05 | Tobias Macey | YouTube and podcasts are pulled from the warehouse, not pushed by webhook. Added the media sources section. `etl_source` for podcasts is `podcast`, as the models and MIT Learn's `ETLSource` have it. |
 | 2026-10-06 | Tobias Macey | xPRO models rebuilt on what MIT Learn's xPRO ETL reads from the xPRO catalog API. Added `integrations__learn__xpro_runs` with prices and enrollment dates. `runs`, `page_slug`, `length`, `effort` and the course `instructors` string are gone from the xPRO models; `topics` is an array; `url` is absolute; `published` follows price. |
+| 2026-10-07 | Tobias Macey | `integrations__learn__ocw_courses` rebuilt on each course's published `data.json`, which MIT Learn's OCW ETL reads, in place of ocw-studio's database. `readable_id` takes Learn's form; added `run_id`, `slug`, `image_alt`, `image_description`, `ocw_topics`, `content_tags`, `hide_download`; `level`, `extra_course_numbers`, `departments` and `topics` are arrays; `departments` holds numbers; `instructors` is JSON; `description` is HTML; `url` ends in a slash. |

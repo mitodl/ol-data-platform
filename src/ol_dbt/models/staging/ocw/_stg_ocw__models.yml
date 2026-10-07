@@ -339,6 +339,8 @@ models:
     description: str, site_uid of the course; set on the course row only
   - name: course_legacy_uid
     description: str, legacy_uid of the course; set on the course row only
+  - name: course_data_json
+    description: str, the course's data.json as published; set on the course row only
   - name: coursecontent_text_file_key
     description: str, key of the file text was extracted from; null where MIT Learn
       would extract none
