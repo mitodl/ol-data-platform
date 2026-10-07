@@ -576,7 +576,7 @@ Two tables are filtered:
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
   drops `edx.user.settings.changed` events.
 
-edxorg/mysql's other six tables are copied whole. The load appends every export, so raw holds
+edxorg/mysql's six declared tables are copied whole. The load appends every export, so raw holds
 each row once per export it appeared in, and the staging models keep the newest by
 `_file_modified_at`. A filter on that column would drop rows rather than duplicates: 312M of
 `auth_user`'s 379M rows sit in data files whose newest `_file_modified_at` falls between
@@ -585,6 +585,17 @@ only the courses exported in it. The six total 74 GB (2026-10-07): `auth_user` 3
 in 23 GB, `student_courseenrollment` 342M in 17 GB, `grades_persistentcoursegrade` 55M in 3 GB,
 `certificates_generatedcertificate` 4.8M in 0.3 GB and `student_courseaccessrole` 103K rows.
 Their masking follows `mitx_user_info_combo`, which carries the same fields.
+
+Hashing `auth_user.email` changes two joins in QA, and neither fails a test:
+
+- `int__combined__user_course_roles` hashes the edxorg email again and joins it to the
+  `user_course_roles` seed's `hashed_user_email`, which is a hash of the real address. A digest
+  of a digest matches nothing, so no edxorg user picks up a seed row in QA, and each seed row
+  for an edxorg user is appended without its username, email and name.
+- `bridge_user_courserun_role` joins on `lower(email)`. `dim_user`'s edxorg email comes from
+  `mitx_user_info_combo`, hashed the same way, so the digests match only when the two raw
+  addresses are identical byte for byte. Addresses that differ in case join in production and
+  not in QA.
 
 Tracking-log `event` and `context` payloads are copied as they are, because the staging model
 parses them. `edx.user.settings.changed` is excluded because edx-platform logs the old and new
