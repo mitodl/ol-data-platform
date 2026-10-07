@@ -40,7 +40,6 @@
 {% endmacro %}
 
 {% macro starrocks__regexp_extract_or_null(subject, pattern, group=none) %}
-  {# StarRocks requires the group index and, like DuckDB, returns '' on no match.
-     Not exercised by any current caller against a live StarRocks target -- verify before relying on it. #}
+  {# StarRocks requires the group index and, like DuckDB, returns '' on no match. #}
   nullif(regexp_extract({{ subject }}, {{ starrocks_string_literal(pattern) }}, {{ group if group is not none else 0 }}), '')
 {% endmacro %}
