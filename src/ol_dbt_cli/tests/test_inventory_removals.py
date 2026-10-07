@@ -322,9 +322,8 @@ class TestRenderDagsterIntervals:
         assert render_dagster_intervals([_unit(hidden)]) == {}
 
     def test_a_paused_connection_keeps_its_interval(self) -> None:
-        # Dagster selects on the connection name alone, so a paused connection
-        # still produces a group; dropping its entry hands it the silent
-        # 24-hour default the moment somebody re-enables it.
+        # Dagster drops a paused connection's group until it is re-enabled;
+        # without its entry it would come back on the silent 24-hour default.
         paused = copy.deepcopy(UNIT)
         paused["airbyte"]["connections"][0]["status"] = "inactive"
         assert render_dagster_intervals([_unit(paused)]) == {"mitx_online_open_edx_db__s3_data_lake": 12}
