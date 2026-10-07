@@ -558,7 +558,8 @@ unit_tests:
       course_data_json: >-
         {"course_title": "B Course", "primary_course_number": "6.1810",
         "extra_course_numbers": "", "term": "", "year": "", "image_src": "",
-        "course_image_metadata": {"image_metadata": {"image-alt": null}}}
+        "instructors": null, "course_image_metadata": {"image_metadata": {"image-alt":
+        null}}}
     # Pages and resources are not courses.
     - {course_slug: a-course, coursecontent_kind: page, course_data_json: null}
   expect:
