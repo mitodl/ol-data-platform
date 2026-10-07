@@ -62,8 +62,8 @@ with blocks as (
         -- has text, and titles those it has from the file name. CDATA markers go
         -- first so a script body inside one is not cut at its first ">".
         -- The two parts are joined as an array because Trino's concat() and ||
-        -- fail with "Concatenated string is too large" past about 1 MB, and
-        -- some blocks carry more XML than that (up to 8.5 MB on 2026-10-07).
+        -- fail with "Concatenated string is too large" past about 1 million characters, and
+        -- some blocks carry more XML than that (up to 8.5 million characters on 2026-10-07).
         , trim({{ regexp_replace_all(
             html_unescape(
                 array_join(
