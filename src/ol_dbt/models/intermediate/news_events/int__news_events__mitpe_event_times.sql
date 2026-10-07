@@ -143,11 +143,13 @@ with events as (
     from clock
 )
 
+-- Set to UTC so the value does not carry each row's parse zone on Trino. The
+-- instant is the same either way, but Trino returns the zone with it.
 , instants as (
     select
         event_id
-        , {{ local_timestamp_to_timestamptz('start_local', 'start_zone') }} as start_on
-        , {{ local_timestamp_to_timestamptz('end_local', 'end_zone') }} as end_on
+        , {{ timestamptz_at_utc(local_timestamp_to_timestamptz('start_local', 'start_zone')) }} as start_on
+        , {{ timestamptz_at_utc(local_timestamp_to_timestamptz('end_local', 'end_zone')) }} as end_on
     from local_times
 )
 
