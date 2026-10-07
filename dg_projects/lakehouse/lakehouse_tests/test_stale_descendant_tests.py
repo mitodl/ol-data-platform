@@ -9,7 +9,10 @@ import ast
 from pathlib import Path
 
 import lakehouse
-from lakehouse.lib.stale_descendant_tests import stale_descendant_test_names
+from lakehouse.lib.stale_descendant_tests import (
+    stale_descendant_test_names,
+    unselected_model_test_names,
+)
 
 DIM_USER = "model.pkg.dim_user"
 BRIDGE = "model.pkg.bridge_user_role"
@@ -105,6 +108,25 @@ def test_a_test_the_run_selected_by_name_is_kept():
     assert stale_descendant_test_names(MANIFEST, {DIM_USER}, keep={FK}) == [SINGULAR]
 
 
+def test_without_automation_a_test_on_an_unselected_sibling_is_skipped():
+    """The QA case: dim_course_run is not built, so its table may not exist."""
+    assert unselected_model_test_names(MANIFEST, {DIM_DATE}) == [
+        "relationships_course_run_date"
+    ]
+    assert unselected_model_test_names(MANIFEST, {DIM_COURSE_RUN}) == []
+
+
+def test_without_automation_the_stale_descendant_tests_are_still_skipped():
+    assert unselected_model_test_names(MANIFEST, {DIM_USER}) == [SINGULAR, FK]
+    assert unselected_model_test_names(MANIFEST, {DIM_USER}, keep={FK}) == [SINGULAR]
+    assert unselected_model_test_names(MANIFEST, {DIM_USER, BRIDGE}) == []
+
+
+def test_without_automation_a_test_with_no_selected_parent_is_not_named():
+    """Excluding a test dbt would not select only lengthens the command."""
+    assert unselected_model_test_names(MANIFEST, {STG_COURSES}) == []
+
+
 def test_the_exclusion_reaches_the_build_only_for_a_subset_run():
     source = Path(lakehouse.__file__).parent / "assets" / "lakehouse" / "dbt.py"
     functions = {
@@ -118,4 +140,6 @@ def test_the_exclusion_reaches_the_build_only_for_a_subset_run():
         if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "cli"
     ]
     assert "_stale_descendant_test_args" in ast.unparse(build_calls[0])
-    assert "context.is_subset" in ast.unparse(functions["_stale_descendant_test_args"])
+    exclusion = ast.unparse(functions["_stale_descendant_test_args"])
+    assert "context.is_subset" in exclusion
+    assert "if DBT_AUTOMATION_ENABLED else unselected_model_test_names" in exclusion
