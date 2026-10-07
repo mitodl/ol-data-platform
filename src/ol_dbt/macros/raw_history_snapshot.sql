@@ -39,6 +39,13 @@
                 {%- do kept.append(adapter.quote(column.name)) -%}
             {%- endif -%}
         {%- endfor -%}
+        {#- `select *` would bring the loader's columns in and version every
+            row on every load, so an empty column list must stop the run. -#}
+        {%- if not kept -%}
+            {{ exceptions.raise_compiler_error(
+                "raw_history_snapshot: no columns found for " ~ relation
+            ) }}
+        {%- endif -%}
     {%- endif %}
     select {{ kept | join(', ') if kept else '*' }}
     from {{ relation }}
