@@ -28,7 +28,9 @@ from pydantic import Field, PrivateAttr
 
 log = logging.getLogger(__name__)
 
-# MIME types Tika handles well via the /tika endpoint.
+TIKA_CONTENT_KEY = "X-TIKA:content"
+
+# MIME types Tika handles well via the /rmeta/text endpoint.
 # Anything outside this set is likely to return empty text or garbage.
 #
 # The last four were added to close a gap against MIT Learn, which filters by
@@ -188,7 +190,7 @@ class TikaResource(ConfigurableResource[None]):
     ) -> httpx.Response:
         """PUT a document to Tika, waiting out a parser restart.
 
-        :param endpoint: Tika endpoint name, e.g. ``"tika"`` or ``"meta"``.
+        :param endpoint: Tika endpoint name, e.g. ``"rmeta/text"`` or ``"meta"``.
         :param file_bytes: Raw bytes of the document.
         :param headers: Request headers, including the access token.
         :returns: The successful response.
@@ -241,11 +243,18 @@ class TikaResource(ConfigurableResource[None]):
         *,
         ocr_strategy: str | None = None,
     ) -> str | None:
-        """Extract plain text from a document using the Tika ``/tika`` endpoint.
+        """Extract plain text from a document using Tika's ``/rmeta/text`` endpoint.
 
-        Sends the file bytes via HTTP PUT and returns the response body as a
-        stripped string, or ``None`` if Tika returns an empty response or the
-        content type is not in :data:`SUPPORTED_CONTENT_TYPES`.
+        Sends the file bytes via HTTP PUT and returns the text of the document
+        and of everything embedded in it as one stripped string, or ``None`` if
+        Tika finds no text or the content type is not in
+        :data:`SUPPORTED_CONTENT_TYPES`.
+
+        ``/rmeta/text`` and not ``/tika``: this is the endpoint MIT Learn's
+        client reads (``tika.parser.from_buffer``), and the two disagree.
+        ``/tika`` writes ``[image: <alt>]`` for every ``<img>``, so an HTML
+        file holding only an icon has text there and none here, and Learn
+        loads no ContentFile for a file with no text.
 
         Args:
             file_bytes: Raw bytes of the document to process.
@@ -272,15 +281,19 @@ class TikaResource(ConfigurableResource[None]):
 
         headers = {
             "Content-Type": content_type,
-            "Accept": "text/plain",
+            "Accept": "application/json",
             "X-Access-Token": self.access_token,
         }
         if ocr_strategy:
             headers["X-Tika-PDFOcrStrategy"] = ocr_strategy
 
-        response = self._put("tika", file_bytes, headers)
+        response = self._put("rmeta/text", file_bytes, headers)
 
-        text = response.text.strip()
+        # One entry for the document and one per embedded file. An entry with
+        # no text has no content key.
+        text = "".join(
+            part.get(TIKA_CONTENT_KEY) or "" for part in response.json()
+        ).strip()
         return text if text else None
 
     def extract_metadata(
