@@ -58,10 +58,13 @@ select
     ) as course_learning_resource_types
     , {{ json_nested_array_distinct_values('course_data_json', "'$.topics'") }} as course_topics
     , {{ json_nested_array_distinct_values('course_data_json', "'$.mit_learn_topics'") }} as course_learn_topics
-    , {{ json_array_string('course_data_json', "'$.instructors'") }} as course_instructors_json
+    , coalesce({{ json_array_string('course_data_json', "'$.instructors'") }}, '[]') as course_instructors_json
     , course_image_src
-    , {{ json_query_string('course_data_json', "'$.course_image_metadata.image_metadata.\"image-alt\"'") }}
-        as course_image_alt
+    -- Trino reads a JSON null here as the text 'null'.
+    , nullif(
+        {{ json_query_string('course_data_json', "'$.course_image_metadata.image_metadata.\"image-alt\"'") }}
+        , 'null'
+    ) as course_image_alt
     , {{ json_extract_scalar('course_data_json', "'$.course_image_metadata.description'") }}
         as course_image_description
     , coalesce({{ json_extract_scalar('course_data_json', "'$.hide_download'") }} = 'true', false)

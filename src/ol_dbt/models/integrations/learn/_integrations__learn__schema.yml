@@ -24,8 +24,8 @@ models:
     tests: [not_null]
   - name: last_modified
     description: >
-      When the platform read the course's current objects from the bucket. It
-      changes only when an object of the course does.
+      When the platform last read the course from the bucket. A course is read
+      again when one of its objects changes, or to retry a file Tika failed on.
     tests: [not_null]
   - name: etl_source
     description: Always 'ocw'.

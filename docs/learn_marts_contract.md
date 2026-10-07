@@ -80,7 +80,7 @@ MIT Learn matches an OCW course on `url`, not `readable_id`; both are unique her
 | Column | Type | Description |
 |--------|------|-------------|
 | `readable_id` | string | Primary course number, `+` slugified term, `_` year, e.g. `6.1810+fall_2023` |
-| `last_modified` | string | When the platform read the course's current objects. It changes only when an object of the course does. MIT Learn's ETL stores the S3 modification time of `data.json` |
+| `last_modified` | string | When the platform last read the course from the bucket. A course is read again when one of its objects changes, or to retry a file Tika failed on. MIT Learn's ETL stores the S3 modification time of `data.json` |
 | `description` | string | Rendered HTML (`course_description_html`) |
 | `url` | string | Course URL on ocw.mit.edu, with a trailing slash |
 | `image_url`, `image_alt`, `image_description` | string | The course image; `image_url` is absolute |

@@ -557,7 +557,8 @@ unit_tests:
       course_legacy_uid: ""
       course_data_json: >-
         {"course_title": "B Course", "primary_course_number": "6.1810",
-        "extra_course_numbers": "", "term": "", "year": "", "image_src": ""}
+        "extra_course_numbers": "", "term": "", "year": "", "image_src": "",
+        "course_image_metadata": {"image_metadata": {"image-alt": null}}}
     # Pages and resources are not courses.
     - {course_slug: a-course, coursecontent_kind: page, course_data_json: null}
   expect:
@@ -567,8 +568,9 @@ unit_tests:
       course_year: "2007", course_levels: [Graduate], course_department_numbers: [
         "1", "11"], course_topics: [Civil Engineering, Engineering], course_learn_topics: [
         Engineering], course_image_src: /courses/a-course/a.jpg, course_image_alt: Bridge,
-      course_image_description: A bridge., course_hides_download: true}
+      course_instructors_json: '[]', course_image_description: A bridge., course_hides_download: true}
     - {course_slug: b-course, courserun_readable_id: a062e4e8db044bcdbb1d4d6f80c18083,
       course_extra_course_numbers: [], course_term: null, course_year: null, course_levels: [],
       course_department_numbers: [], course_topics: [], course_learn_topics: [], course_image_src: null,
-      course_image_alt: null, course_image_description: null, course_hides_download: false}
+      course_image_alt: null, course_instructors_json: '[]', course_image_description: null,
+      course_hides_download: false}
