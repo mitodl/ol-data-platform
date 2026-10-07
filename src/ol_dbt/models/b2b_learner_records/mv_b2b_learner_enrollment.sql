@@ -14,10 +14,13 @@
 -- Not filtered to the organization's current roster: a learner removed from the
 -- organization keeps their enrollment in its contract runs. Roster history is kept in
 -- snapshot_mitxonline_b2b_userorganization.
+-- The enrollment, grade, certificate, last_active_on, completion_status and
+-- needs_attention_since come from afact_learner_courserun_progress, which holds one row
+-- per (user, course run) and is where those rules are defined. needs_attention_since is
+-- a threshold date: the reader compares it against the current UTC date.
 -- Activity is pre-aggregated to the (user, course run) join key so it cannot fan out.
--- activity_date_key is YYYYMMDD, so its max is the latest day; it is read as a date
--- through dim_date. The counters sum the fact's per-day distinct counts, so a video
--- played on two days counts twice, as in b2b_analytics' total_videos_watched.
+-- The counters sum the fact's per-day distinct counts, so a video played on two days
+-- counts twice, as in b2b_analytics' total_videos_watched.
 -- Activity does not move record_updated_on; see the column's description.
 -- Consent is recorded per (learner, contract), which is this view's grain, so it is
 -- joined directly. outcomes_shared is null when the learner has no recorded decision;
@@ -27,7 +30,6 @@ with activity as (
     select
         user_fk,
         courserun_fk,
-        max(activity_date_key)                                                          as last_active_date_key,
         count(distinct activity_date_key)                                               as days_active,
         sum(videos_played)                                                              as videos_played,
         sum(problems_attempted)                                                         as problems_attempted,
@@ -53,16 +55,21 @@ select
     u.user_global_id,
     u.email,
     u.full_name,
-    e.enrollment_created_on,
-    e.enrollment_is_active,
-    e.enrollment_mode,
-    e.enrollment_status,
-    g.is_passing,
-    g.grade_value,
-    g.letter_grade,
-    cert.certificate_issued_on,
-    cert.certificate_is_revoked,
-    cast(d.date as date)                                                                as last_active_on,
+    p.enrollment_created_on,
+    p.enrollment_is_active,
+    p.enrollment_mode,
+    p.enrollment_status,
+    p.is_passing,
+    p.grade_value,
+    p.letter_grade,
+    p.certificate_issued_on,
+    p.certificate_is_revoked,
+    p.last_active_on,
+    p.completion_status,
+    p.is_certified,
+    p.is_in_progress,
+    p.is_not_started,
+    p.needs_attention_since,
     coalesce(a.days_active, 0)                                                          as days_active,
     coalesce(a.videos_played, 0)                                                        as videos_played,
     coalesce(a.problems_attempted, 0)                                                   as problems_attempted,
@@ -73,10 +80,10 @@ select
     -- greatest() compares them correctly. StarRocks' greatest() returns null if any
     -- argument is null, so each is coalesced to '', which sorts below any real date.
     nullif(greatest(
-        coalesce(e.enrollment_updated_on, ''),
-        coalesce(e.enrollment_created_on, ''),
-        coalesce(g.grade_updated_on, ''),
-        coalesce(cert.certificate_updated_on, ''),
+        coalesce(p.enrollment_updated_on, ''),
+        coalesce(p.enrollment_created_on, ''),
+        coalesce(p.grade_updated_on, ''),
+        coalesce(p.certificate_updated_on, ''),
         coalesce(uc.consent_modified_at, '')
     ), '')                                                                              as record_updated_on
 from {{ source('dimensional', 'bridge_organization_courserun') }} boc
@@ -86,20 +93,14 @@ join {{ source('dimensional', 'dim_organization') }} org
     on c.organization_fk = org.organization_pk
 join {{ source('dimensional', 'dim_course_run') }} cr
     on boc.courserun_fk = cr.courserun_pk
-join {{ source('dimensional', 'tfact_enrollment') }} e
-    on boc.courserun_fk = e.courserun_fk
+join {{ source('dimensional', 'afact_learner_courserun_progress') }} p
+    on boc.courserun_fk = p.courserun_fk
 join {{ source('dimensional', 'dim_user') }} u
-    on e.user_fk = u.user_pk
-left join {{ source('dimensional', 'tfact_grade') }} g
-    on e.user_fk = g.user_fk and e.courserun_fk = g.courserun_fk
-left join {{ source('dimensional', 'tfact_certificate') }} cert
-    on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
+    on p.user_fk = u.user_pk
 left join activity a
-    on e.user_fk = a.user_fk and e.courserun_fk = a.courserun_fk
+    on p.user_fk = a.user_fk and p.courserun_fk = a.courserun_fk
 left join {{ source('dimensional', 'bridge_user_contract') }} uc
-    on e.user_fk = uc.user_fk and boc.contract_fk = uc.contract_fk
-left join {{ source('dimensional', 'dim_date') }} d
-    on a.last_active_date_key = d.date_key
+    on p.user_fk = uc.user_fk and boc.contract_fk = uc.contract_fk
 where org.platform = 'mitxonline'
   and cr.is_current = true
   -- The API's learner_id is required. Filtered here rather than asserted by a dbt

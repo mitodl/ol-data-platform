@@ -56,8 +56,7 @@ select
     count(distinct e.user_fk)                                                     as enrolled_in_contract_courses,
     -- Learners who explicitly enrolled via the program pathway
     count(distinct case when e.program_fk = p.program_pk then e.user_fk end)      as enrolled_via_program,
-    count(distinct case when cert.certificate_is_revoked = false
-        then cert.user_fk end)                                                    as program_course_completers
+    count(distinct case when prog.is_certified then prog.user_fk end)             as program_course_completers
 from org_program_runs opr
 join {{ source('dimensional', 'dim_program') }} p
     on opr.program_fk = p.program_pk
@@ -65,8 +64,9 @@ join program_course_counts pcc
     on opr.contract_pk = pcc.contract_pk and opr.program_fk = pcc.program_fk
 left join {{ source('dimensional', 'tfact_enrollment') }} e
     on opr.courserun_fk = e.courserun_fk
-left join {{ source('dimensional', 'tfact_certificate') }} cert
-    on e.user_fk = cert.user_fk and opr.courserun_fk = cert.courserun_fk
+-- tfact_enrollment stays for program_fk, which the progress fact does not carry.
+left join {{ source('dimensional', 'afact_learner_courserun_progress') }} prog
+    on e.user_fk = prog.user_fk and opr.courserun_fk = prog.courserun_fk
 group by
     opr.organization_key, opr.sso_organization_id, opr.organization_name,
     opr.contract_pk, opr.contract_id, opr.b2b_contract_name,

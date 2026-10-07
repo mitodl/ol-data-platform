@@ -46,8 +46,12 @@ models:
     records membership history. outcomes_shared carries the learner's
     data-sharing decision for the enrollment's contract from
     bridge_user_contract; the API nulls the grade and certificate columns when
-    it resolves to false. The activity columns come from afact_learner_courserun_daily_activity,
-    pre-aggregated to (user, course run). This is a manual-refresh materialized
+    it resolves to false. The enrollment, grade, certificate, status and
+    needs-attention columns come from afact_learner_courserun_progress, which
+    holds one row per (user, course run), so a learner with two certificates
+    for a run has one row here. The activity counters come from
+    afact_learner_courserun_daily_activity, pre-aggregated to (user, course
+    run). This is a manual-refresh materialized
     view. After each refresh the Dagster MV-refresh asset stamps
     mv_b2b_learner_enrollment_changes; see the header of this file.
   config:
@@ -141,9 +145,9 @@ models:
     description: The deactivation reason, where one was recorded.
   - name: is_passing
     description: >
-      tfact_grade.is_passing. It is null where no grade exists. It is emitted
-      separately from the certificate columns, because the API derives
-      completion_status from both.
+      tfact_grade.is_passing. It is null where no grade exists. It is true for
+      a certified learner too, so it is not the passed bucket of
+      completion_status.
   - name: grade_value
     description: >
       tfact_grade.grade_value, on a scale of 0 to 1. The API exposes it as
@@ -152,13 +156,13 @@ models:
     description: tfact_grade.letter_grade. It is frequently null.
   - name: certificate_issued_on
     description: >
-      When the course certificate was issued, in ISO-8601. It is null where no
-      certificate exists.
+      When the learner's current course certificate (tfact_certificate.is_current)
+      was issued, in ISO-8601. It is null where no certificate exists.
   - name: certificate_is_revoked
     description: >
-      Whether the course certificate was revoked. It is null where no
-      certificate exists. Revoked certificates are kept so the API can report a
-      revoked run as passed rather than certified.
+      Whether the learner's current course certificate was revoked. It is null
+      where no certificate exists. Revoked certificates are kept so a revoked
+      run reads as passed rather than certified.
   - name: last_active_on
     description: >
       The date of the learner's most recent day of tracked activity in this
@@ -166,6 +170,28 @@ models:
       navigation event, a discussion post or an Open edX chatbot submit. The
       date is the day the event happened in the source system's local time,
       not in UTC. It is null when the learner has no activity in the run.
+  - name: completion_status
+    description: >
+      afact_learner_courserun_progress.completion_status: certified when the
+      learner holds an unrevoked course certificate, else passed when
+      is_passing, else in_progress when grade_value is above zero or
+      last_active_on is set, else not_started. Defined in that model and
+      nowhere else.
+  - name: is_certified
+    description: Whether the learner holds an unrevoked course certificate for the
+      run. Never null.
+  - name: is_in_progress
+    description: Whether completion_status is in_progress. Never null.
+  - name: is_not_started
+    description: Whether completion_status is not_started. Never null.
+  - name: needs_attention_since
+    description: >
+      The date from which the learner needs attention in this run, to be
+      compared against the current UTC date by the reader
+      (needs_attention_since <= today). It is the enrollment date when
+      not_started, last_active_on plus the needs_attention_quiet_days dbt var
+      (30) when in_progress with tracked activity, and null when passed,
+      certified, or in_progress on a grade alone.
   - name: days_active
     description: >
       The number of distinct days on which the learner had tracked activity in
@@ -329,10 +355,10 @@ models:
   - name: courses_in_progress
     description: >
       The number of distinct course runs where the learner has an active
-      enrollment under the organization's contracts, holds no unrevoked
-      certificate, is not passing, and has either a nonzero grade or some
-      tracked activity. This matches the API's completion_status of
-      in_progress on those enrollments.
+      enrollment under the organization's contracts and
+      afact_learner_courserun_progress.is_in_progress is true: no unrevoked
+      certificate, not passing, and either a nonzero grade or some tracked
+      activity.
   - name: outcomes_shared
     description: >
       The learner's data-sharing decision for the organization, resolved across
