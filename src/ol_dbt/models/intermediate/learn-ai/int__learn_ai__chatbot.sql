@@ -36,12 +36,12 @@ with chatsession as (
     from chatsession
     inner join video
         on
-            chatsession.chatsession_object_id like '%' || video.transcript_id
-            and video.courserun_readable_id like '%'
-            || substring(
-                replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1
-                , strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1
-            )
+            chatsession.chatsession_object_id like {{ dbt.concat(["'%'", "video.transcript_id"]) }}
+            and video.courserun_readable_id like {{ dbt.concat([
+                "'%'"
+                , "substring(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1"
+                ~ ", strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1)"
+            ]) }}
 )
 
 , problem as (

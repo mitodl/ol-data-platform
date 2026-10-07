@@ -62,7 +62,7 @@ with forum_thread as (
 
 , posts as (
     select
-        'commentthread-' || cast(forumthread_id as varchar) as source_record_ref
+        {{ dbt.concat(["'commentthread-'", "cast(forumthread_id as varchar)"]) }} as source_record_ref
         , 'commentthread' as content_model
         , forumthread_id as object_id
         , forumthread_id
@@ -80,7 +80,7 @@ with forum_thread as (
     union all
 
     select
-        'comment-' || cast(forumcomment_id as varchar) as source_record_ref
+        {{ dbt.concat(["'comment-'", "cast(forumcomment_id as varchar)"]) }} as source_record_ref
         , 'comment' as content_model
         , forumcomment_id as object_id
         , forumthread_id
@@ -158,7 +158,7 @@ select
     -- "eom"), and the summarizer reads only text, so it leads the first kept turn.
     , case
         when numbered_turns.turn_index = 1 and forum_thread.forumthread_title is not null
-            then forum_thread.forumthread_title || chr(10) || chr(10) || numbered_turns.post_body
+            then {{ dbt.concat(["forum_thread.forumthread_title", "chr(10)", "chr(10)", "numbered_turns.post_body"]) }}
         else numbered_turns.post_body
     end as text
     , forum_thread.forumthread_title as title

@@ -74,7 +74,7 @@ with coupon as (
         , null as coupon_id
         , 'percent-off' as discount_type
         , b2bcoupon_discount_percent as discount_amount_numeric
-        , cast(cast((b2bcoupon_discount_percent * 100) as integer) as varchar) || '% off' as discount_amount
+        , {{ dbt.concat(["cast(cast((b2bcoupon_discount_percent * 100) as integer) as varchar)", "'% off'"]) }} as discount_amount
     from b2becommerce_b2bcoupon
 )
 

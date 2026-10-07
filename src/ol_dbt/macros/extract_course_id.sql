@@ -61,6 +61,6 @@
            replace(replace({{ column_name }}, 'course-v1:', ''), '+', '/')
      {% else %}
            -- format as course-v1:{org}+{course}+{run}
-           'course-v1:' || replace({{ column_name }}, '/', '+')
+           {{ dbt.concat(["'course-v1:'", "replace(" ~ column_name ~ ", '/', '+')"]) }}
      {% endif %}
 {% endmacro %}

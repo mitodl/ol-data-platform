@@ -262,9 +262,9 @@ select
     , user_job_title
     , case
         when is_mitxonline_user = true
-            then {{ generate_hash_id("cast(user_mitxonline_id as varchar) || 'MITx Online'") }}
+            then {{ generate_hash_id(dbt.concat(["cast(user_mitxonline_id as varchar)", "'MITx Online'"])) }}
         when is_edxorg_user = true
-            then {{ generate_hash_id("cast(user_edxorg_id as varchar) || 'edX.org'") }}
+            then {{ generate_hash_id(dbt.concat(["cast(user_edxorg_id as varchar)", "'edX.org'"])) }}
     end as user_hashed_id
 from mitxonline_edxorg_users
 
@@ -302,7 +302,7 @@ select
     , micromasters_users.user_company_name as user_company
     , micromasters_users.user_company_industry as user_industry
     , micromasters_users.user_job_position as user_job_title
-    , {{ generate_hash_id("cast(user_micromasters_id as varchar) || 'MicroMasters'") }} as user_hashed_id
+    , {{ generate_hash_id(dbt.concat(["cast(user_micromasters_id as varchar)", "'MicroMasters'"])) }} as user_hashed_id
 -- A person can hold two MicroMasters accounts, one reached from the edX.org side and one
 -- from MITx Online, but a collapsed row above keeps only one user_micromasters_id (MITx
 -- Online wins the coalesce). The other account is appended here and legitimately repeats

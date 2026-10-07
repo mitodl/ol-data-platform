@@ -16,19 +16,19 @@ with courses as (
 
 select
     -- Django's slugify of the term: "January IAP" -> "january-iap".
-    course_primary_course_number
-    || coalesce(
-        '+' || {{ regexp_replace_all(
-            regexp_replace_all("lower(trim(course_term))", "'[^a-z0-9_\\s-]'", "''"), "'[-\\s]+'", "'-'"
-        ) }}
-        , ''
-    )
-    || coalesce('_' || course_year, '') as readable_id
+    {% set term_slug = regexp_replace_all(
+        regexp_replace_all("lower(trim(course_term))", "'[^a-z0-9_\\s-]'", "''"), "'[-\\s]+'", "'-'"
+    ) -%}
+    {{ dbt.concat([
+        "course_primary_course_number"
+        , "coalesce(" ~ dbt.concat(["'+'", term_slug]) ~ ", '')"
+        , "coalesce(" ~ dbt.concat(["'_'", "course_year"]) ~ ", '')"
+    ]) }} as readable_id
     , course_title as title
     , course_retrieved_on as last_modified
     , 'ocw' as etl_source
     , course_description_html as description
-    , '{{ var("ocw_production_url") }}courses/' || course_slug || '/' as url
+    , {{ dbt.concat(["'" ~ var("ocw_production_url") ~ "courses/'", "course_slug", "'/'"]) }} as url
     , case
         when course_image_src is not null
             then {{ url_join("'" ~ var("ocw_production_url").rstrip("/") ~ "'", 'course_image_src') }}
@@ -38,7 +38,7 @@ select
     , true as published
     , 'ocw' as platform
     , courserun_readable_id as run_id
-    , 'courses/' || course_slug as slug
+    , {{ dbt.concat(["'courses/'", "course_slug"]) }} as slug
     , course_term as term
     , {{ try_cast('course_year', 'integer') }} as year
     , course_levels as level

@@ -89,7 +89,7 @@ left join wagtail_page
 left join platform
     on programs.platform_id = platform.platform_id
 left join certificate_page_path
-    on wagtail_page.wagtail_page_path like certificate_page_path.wagtail_page_path || '%'
+    on wagtail_page.wagtail_page_path like {{ dbt.concat(["certificate_page_path.wagtail_page_path", "'%'"]) }}
 left join program_topics on programs.program_id = program_topics.program_id
 left join program_instructors on programs.program_id = program_instructors.program_id
 left join program_images on cms_programs.cms_programpage_search_image_id = program_images.image_id

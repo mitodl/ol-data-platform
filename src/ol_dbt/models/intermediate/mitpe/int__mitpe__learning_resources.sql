@@ -18,7 +18,7 @@ with source as (
         , case
             when course_resource_type is not null and course_resource_type != ''
                 then case when lower(course_resource_type) = 'program' then 'program' else 'course' end
-            when '|' || course_certificates_raw || '|' like '%|Certificate of Completion|%'
+            when {{ dbt.concat(["'|'", "course_certificates_raw", "'|'"]) }} like '%|Certificate of Completion|%'
                 then 'course'
             else 'program'
         end as resource_type

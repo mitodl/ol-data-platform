@@ -24,7 +24,7 @@ inner join programs
     on program_courses.program_uuid = programs.program_uuid
 left join micromasters_programs
     on (
-        programs.program_title like micromasters_programs.program_title || '%'
-        or programs.program_title like '%' || micromasters_programs.program_title
+        programs.program_title like {{ dbt.concat(["micromasters_programs.program_title", "'%'"]) }}
+        or programs.program_title like {{ dbt.concat(["'%'", "micromasters_programs.program_title"]) }}
     )
 where programs.program_organization = 'MITx'
