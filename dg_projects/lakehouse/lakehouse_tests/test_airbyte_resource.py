@@ -316,8 +316,11 @@ class TestRequestRetries:
         assert client._single_request("GET", "https://a/jobs") == {"jobId": 1}
         assert self.sent == 3
 
-    def test_a_429_is_retried(self, client, responses) -> None:
-        responses.extend([_Response(429), _Response(200)])
+    @pytest.mark.parametrize("status", [408, 429])
+    def test_a_4xx_that_invites_a_retry_gets_one(
+        self, client, responses, status
+    ) -> None:
+        responses.extend([_Response(status), _Response(200)])
         assert client._single_request("GET", "https://a/jobs") == {"jobId": 1}
         assert self.sent == 2
 

@@ -9,6 +9,7 @@ from dagster._annotations import beta
 from dagster_airbyte.resources import AirbyteClient, AirbyteWorkspace
 from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
 from dagster_shared.utils.cached_method import cached_method
+from ol_orchestrate.lib.http_errors import RETRYABLE_CLIENT_ERRORS
 from pydantic.fields import Field, PrivateAttr
 from pydantic.functional_validators import model_validator
 from requests.exceptions import RequestException
@@ -200,7 +201,7 @@ class AirbyteOSSClient(AirbyteClient):
         The library sleeps a fixed ``request_retry_delay`` between attempts and
         retries every error alike. Here the delay doubles on each attempt, so
         the retries span an API outage instead of all landing inside it, and a
-        4xx other than 429 raises at once with the response body: the request
+        4xx other than 408 or 429 raises at once with the response body: the request
         will be refused again, and the body is where Airbyte says why.
 
         :raises Failure: On a 4xx, or when the retries are used up.
@@ -232,7 +233,7 @@ class AirbyteOSSClient(AirbyteClient):
                     and HTTPStatus.BAD_REQUEST
                     <= refused.status_code
                     < HTTPStatus.INTERNAL_SERVER_ERROR
-                    and refused.status_code != HTTPStatus.TOO_MANY_REQUESTS
+                    and refused.status_code not in RETRYABLE_CLIENT_ERRORS
                 ):
                     msg = (
                         f"Airbyte API answered {refused.status_code} to {method} "
