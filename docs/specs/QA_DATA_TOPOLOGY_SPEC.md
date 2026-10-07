@@ -520,7 +520,7 @@ that table's `DROP`, leaving the unit partly refreshed and the failed table abse
 any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
 The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
-other 25 what it adds over the declaration check is that the masking expressions themselves
+other 31 what it adds over the declaration check is that the masking expressions themselves
 plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
@@ -534,7 +534,7 @@ build of that staging model with the column's name, which is loud and in the rig
 
 ### The allowlists
 
-27 tables across 9 units. Each allowlist is the columns the reading models name, found by
+33 tables across 11 units. Each allowlist is the columns the reading models name, found by
 text-matching the production column list against each model and the macros it calls, plus the
 raw metadata column. Unread columns are dropped, which is how `mitx_person_course`'s `ip`,
 `city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
@@ -576,6 +576,27 @@ Two tables are filtered:
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
   drops `edx.user.settings.changed` events.
 
+edxorg/mysql's six declared tables are copied whole. The load appends every export, so raw holds
+each row once per export it appeared in, and the staging models keep the newest by
+`_file_modified_at`. A filter on that column would drop rows rather than duplicates: 312M of
+`auth_user`'s 379M rows sit in data files whose newest `_file_modified_at` falls between
+2026-02-21 and 2026-03-07, and most export dates since carry 1M to 4M, so a recent window holds
+only the courses exported in it. The six total 74 GB (2026-10-07): `auth_user` 379M rows in 31 GB, `auth_userprofile` 333M
+in 23 GB, `student_courseenrollment` 342M in 17 GB, `grades_persistentcoursegrade` 55M in 3 GB,
+`certificates_generatedcertificate` 4.8M in 0.3 GB and `student_courseaccessrole` 103K rows.
+Their masking follows `mitx_user_info_combo`, which carries the same fields.
+
+Hashing `auth_user.email` changes two joins in QA, and neither fails a test:
+
+- `int__combined__user_course_roles` hashes the edxorg email again and joins it to the
+  `user_course_roles` seed's `hashed_user_email`, which is a hash of the real address. A digest
+  of a digest matches nothing, so no edxorg user picks up a seed row in QA, and each seed row
+  for an edxorg user is appended without its username, email and name.
+- `bridge_user_courserun_role` joins on `lower(email)`. `dim_user`'s edxorg email comes from
+  `mitx_user_info_combo`, hashed the same way, so the digests match only when the two raw
+  addresses are identical byte for byte. Addresses that differ in case join in production and
+  not in QA.
+
 Tracking-log `event` and `context` payloads are copied as they are, because the staging model
 parses them. `edx.user.settings.changed` is excluded because edx-platform logs the old and new
 email, name and address in its payload, and no model reads it. Forum events carry post bodies
@@ -584,12 +605,12 @@ and are kept, because `tfact_discussion_events` reads them. That text is copied 
 
 Not declared, so not mirrored:
 
-- edxorg/mysql's `auth_user`, `certificates_generatedcertificate` and
-  `grades_persistentcoursegrade`. They resolve to `_file_modified_at`, which production does
-  not have yet (ol-data-platform#2443).
-- Tables absent from production raw: `raw__edxorg__discovery__api__programs`,
-  `raw__edxorg__s3__course_xml_blocks`, and edxorg/mysql's `auth_userprofile`,
-  `courseware_studentmodule`, `student_courseenrollment` and `student_courseaccessrole`.
+- edxorg/mysql's `courseware_studentmodule`: 13.8B rows in 1,124 GB (current snapshot,
+  2026-10-07). Its `state` column is the learner's saved answer, which
+  `stg__edxorg__s3__courseware_studentmodule` reads and no column mode masks, and no model
+  reads that staging model.
+- Tables absent from production raw: `raw__edxorg__discovery__api__programs` and
+  `raw__edxorg__s3__course_xml_blocks`.
 - Unmodeled tables (most of zendesk, salesforce `Account`), which nothing reads.
 
 The salesforce `Opportunity` and `OpportunityLineItem` tables declared `_airbyte_emitted_at`
@@ -618,7 +639,7 @@ tables and a shared one would queue a small unit behind the 760 GB `program_lear
 
 Naming the pool only makes the limit settable. The instance config sets no
 `concurrency.pools.default_limit` (ol-infrastructure `dagster_instance.yaml`), so until each of
-the nine pools is given a slot limit of 1 under Deployment -> Concurrency, concurrent runs of one
+the eleven pools is given a slot limit of 1 under Deployment -> Concurrency, concurrent runs of one
 unit are still unbounded. Setting those limits is a deploy-time step, not something this repo can
 assert.
 
