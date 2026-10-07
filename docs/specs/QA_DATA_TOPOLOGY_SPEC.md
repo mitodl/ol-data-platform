@@ -410,15 +410,16 @@ edxorg/s3 (2/6, non-empty) and irx/bigquery (4/4, legacy JSON) are pre-existing 
 A mirror copies production, so `mirror_max_age_days` measures time since the copy, not source
 freshness. global_alumni and salesforce are already months stale in production.
 
-### `omit` (14)
+### `omit` (15)
 
-bootcamps/hubspot, mailgun/api, mit_climate/api, mitpe/api, mitx/mongodb, mitxonline/mongodb,
-xpro/mongodb, mitxonline/hubspot, xpro/hubspot, mitxonline/openedx_notes, oll/google_sheets,
-open_discussions/app_postgres, podcast/rss, posthog/s3.
+mailgun/api, medium/rss, mit_climate/api, mitpe/api, mitxonline/hubspot, mitxonline/openedx_notes,
+ocw/s3, oll/google_sheets, open_discussions/app_postgres, openlearning/api, podcast/rss,
+posthog/s3, see/api, xpro/hubspot, youtube/api.
 
-QA holds converted forum data for the three mongodb units (3 non-empty tables each). Nothing
-reads it. Scope for mailgun, posthog, podcast, oll, mit_climate, mitpe and bootcamps/hubspot is
-still unaudited. It doesn't affect anything until a model declares one of them.
+The three mongodb forum units moved to `retired.yml` on 2026-10-07. QA still holds converted
+forum data for them (3 non-empty tables each). Nothing reads it. Scope for mailgun, posthog,
+podcast, oll, mit_climate and mitpe is still unaudited. It doesn't affect
+anything until a model declares one of them.
 
 ### QA raw cleanup (§5)
 
