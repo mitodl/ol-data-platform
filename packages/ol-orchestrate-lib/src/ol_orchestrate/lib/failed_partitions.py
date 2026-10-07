@@ -32,9 +32,13 @@ Wire them into a code location alongside the assets they watch::
 An asset check rather than a bespoke sensor, for three reasons: the Dagster UI
 renders it against the asset it concerns, ``asset_check_failure_sensor``
 (ol_orchestrate.sensors.failure_notification) already announces ERROR-severity
-check failures to Slack, and a check is evaluated on a schedule independent of
-materialization -- which is what makes it a standing signal rather than another
-event.
+check failures to Slack, and a check can be evaluated on a schedule of its own
+-- which is what makes it a standing signal rather than another event.
+
+Dagster also evaluates these with every automation-requested materialization of
+the asset, because a check with no automation condition rides along with its
+asset. Those evaluations keep the UI current; ``asset_check_failure_sensor``
+announces only the ones from the scheduled job, so Slack hears once a day.
 
 The Slack half of that is a notification, not a report: the existing formatter
 carries the asset, the check and a run link, so the failed keys live in the
@@ -202,11 +206,21 @@ def failed_partition_check_job(
 def failed_partition_check_schedule(
     checks: Sequence[AssetChecksDefinition],
     cron_schedule: str = FAILED_PARTITION_CRON,
+    default_status: DefaultScheduleStatus = DefaultScheduleStatus.STOPPED,
 ) -> ScheduleDefinition:
-    """Evaluate the inventory once a day."""
+    """Evaluate the inventory once a day.
+
+    :param checks: The inventory checks the schedule's job evaluates.
+    :param cron_schedule: When to evaluate them.
+    :param default_status: Whether the schedule runs without being switched on
+        by hand. A stopped inventory reports nothing, which reads the same as
+        an inventory with nothing to report.
+    :returns: The schedule, with its job attached.
+    :rtype: ScheduleDefinition
+    """
     return ScheduleDefinition(
         name=f"{FAILED_PARTITION_JOB_NAME}_schedule",
         job=failed_partition_check_job(checks),
         cron_schedule=cron_schedule,
-        default_status=DefaultScheduleStatus.STOPPED,
+        default_status=default_status,
     )
