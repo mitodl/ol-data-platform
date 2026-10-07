@@ -18,11 +18,13 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     partition_by_catalog_presence,
     raw_config_for_table,
     scope_schema_to_env,
+    stale_branches,
     warehouse_env_for,
 )
 from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.table import Table
+from pyiceberg.table.refs import SnapshotRef, SnapshotRefType
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -647,7 +649,36 @@ class TestExpireSnapshots:
 
     @pytest.mark.parametrize(
         "name",
-        ["main", "airbyte_staging", "airbyte_staging_backup", "audit_2026"],
+        [
+            "main",
+            "airbyte_staging",
+            "airbyte_staging_backup",
+            "audit_2026",
+            f"{STALE}_extra",
+            f"{STALE}\n",
+        ],
     )
     def test_only_uuid_suffixed_staging_branches_match(self, name: str) -> None:
-        assert AIRBYTE_STAGING_BRANCH.match(name) is None
+        assert AIRBYTE_STAGING_BRANCH.fullmatch(name) is None
+        assert AIRBYTE_STAGING_BRANCH.fullmatch(self.STALE)
+
+    def test_a_branch_whose_head_is_missing_is_left_alone(
+        self, catalog: SqlCatalog
+    ) -> None:
+        metadata = self._table(catalog).metadata
+        dangling = "airbyte_staging_00000000_0000_0000_0000_000000000000"
+        metadata = metadata.model_copy(
+            update={
+                "refs": {
+                    **metadata.refs,
+                    dangling: SnapshotRef(
+                        snapshot_id=123, snapshot_ref_type=SnapshotRefType.BRANCH
+                    ),
+                }
+            }
+        )
+        cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
+
+        assert stale_branches(metadata, cutoff_ms, AIRBYTE_STAGING_BRANCH) == [
+            self.STALE
+        ]

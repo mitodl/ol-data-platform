@@ -143,7 +143,7 @@ RAW_LAYER_GROUP_CONFIGS: dict[str, RawLayerGroupConfig] = {
 # ``airbyte_staging`` branch is not matched: whether the connector writes to it
 # again after creating it has not been checked.
 AIRBYTE_STAGING_BRANCH = re.compile(
-    r"^airbyte_staging_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12}$"
+    r"airbyte_staging_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12}"
 )
 MAIN_BRANCH = "main"
 
@@ -303,7 +303,8 @@ def stale_branches(
 ) -> list[str]:
     """Return the branches matching *pattern* whose head is older than the cutoff.
 
-    ``main`` is never returned, whatever the pattern.
+    ``main`` is never returned, whatever the pattern. Neither is a branch whose
+    head is missing from the metadata: pyiceberg refuses to remove such a ref.
     """
     timestamps = {s.snapshot_id: s.timestamp_ms for s in metadata.snapshots}
     return sorted(
@@ -311,7 +312,8 @@ def stale_branches(
         for name, ref in metadata.refs.items()
         if name != MAIN_BRANCH
         and ref.snapshot_ref_type == SnapshotRefType.BRANCH
-        and pattern.match(name)
+        and pattern.fullmatch(name)
+        and ref.snapshot_id in timestamps
         and timestamps[ref.snapshot_id] < cutoff_ms
     )
 
