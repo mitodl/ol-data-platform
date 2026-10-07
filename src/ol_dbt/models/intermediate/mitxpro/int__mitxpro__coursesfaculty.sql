@@ -38,9 +38,9 @@ with coursepages as (
 
 select
     coursepageswithpath.course_id
-    , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.name')
+    , {{ json_extract_value('unnestedfacultymemberspage.cms_facultymemberspage_facultymember', "'$.value.name'") }}
         as cms_facultymemberspage_facultymember_name
-    , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.description')
+    , {{ json_extract_value('unnestedfacultymemberspage.cms_facultymemberspage_facultymember', "'$.value.description'") }}
         as cms_facultymemberspage_facultymember_description
 from unnestedfacultymemberspage
 inner join wagtailpages

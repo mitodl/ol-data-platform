@@ -35,7 +35,7 @@ with chatbot as (
 , tutorbot as (
     select
         *
-        , json_parse(json_extract_scalar(tutorbot_chat_json, '$')) as chat_json
+        , json_parse({{ json_extract_scalar('tutorbot_chat_json', "'$'") }}) as chat_json
     from {{ ref('int__learn_ai__tutorbot') }}
 )
 
@@ -52,8 +52,8 @@ with chatbot as (
         , tutorbot.chatsession_updated_on
         , t.idx as message_index  -- noqa: RF01
         , case
-            when json_extract_scalar(t.element, '$.type') = 'HumanMessage'  -- noqa: RF01
-                then json_extract_scalar(t.element, '$.content')  -- noqa: RF01
+            when {{ json_extract_scalar('t.element', "'$.type'") }} = 'HumanMessage'  -- noqa: RF01
+                then {{ json_extract_scalar('t.element', "'$.content'") }}  -- noqa: RF01
         end as human_message
     from tutorbot
     cross join

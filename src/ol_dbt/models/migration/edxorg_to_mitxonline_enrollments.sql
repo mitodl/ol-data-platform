@@ -92,7 +92,7 @@ with combined_enrollments as (
                 cast(
                  json_parse({{ json_query_string('wagtailcore_revision_content', "'$.signatories'") }}) as array(json)  -- noqa: RF02
                 )
-                , x ->  CAST(json_extract_scalar(x, '$.value') as integer)
+                , x ->  CAST({{ json_extract_scalar('x', "'$.value'") }} as integer)
             )
         ) AS signatory_ids
     from {{ ref('stg__mitxonline__app__postgres__cms_wagtailcore_revision') }} as revision
