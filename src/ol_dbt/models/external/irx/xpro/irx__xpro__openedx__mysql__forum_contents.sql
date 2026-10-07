@@ -12,11 +12,12 @@
 -- Kept for historical continuity with the legacy ObjectIds, not manufactured.
 --
 -- Retiring a learner makes the forum overwrite their posts in place (body and title
--- become '[deleted]', author_username the retired name), but only in the backend that
--- is live at the time. Learners retired after their posts were copied to MySQL and
--- before the forum switched to it were redacted in Mongo alone, so MySQL still holds
--- what they wrote. The LMS did rename them in auth_user, so that is what identifies
--- them here, and the same overwrite is applied to their rows.
+-- become '[deleted]', author_username the retired name). While the forum had both a
+-- Mongo and a MySQL backend it did that in one of them, whichever the course's flag
+-- selected. Learners retired after their posts were copied to MySQL and before the
+-- forum switched to it were redacted in Mongo alone, so MySQL still holds what they
+-- wrote. The LMS did rename them in auth_user, so that is what identifies them here,
+-- and the same overwrite is applied to their rows.
 
 with content_types as (
     select

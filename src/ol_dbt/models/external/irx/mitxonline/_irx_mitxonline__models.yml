@@ -799,7 +799,8 @@ unit_tests:
     rows:
     - {id: 10, comment_thread_id: 10, author_id: 1, author_username: learner, body: kept
         comment}
-    - {id: 11, comment_thread_id: 10, author_id: 2, body: old comment}
+    - {id: 11, comment_thread_id: 10, author_id: 2, author_username: before-retirement,
+      body: old comment}
   - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__django_content_type')
     rows: []
   - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_mongocontent')
