@@ -292,6 +292,20 @@ class TestRemoveTableOrphanFiles:
 
         assert result.refused == ""
 
+    def test_a_recheck_that_objects_before_the_delete_leaves_every_file(
+        self, catalog: SqlCatalog
+    ) -> None:
+        table = _expired_table(catalog)
+        before = _files(table)
+        store = LocalStore()
+
+        result = _run(catalog, store, delete=True, recheck=lambda: "scope moved")
+
+        assert result.refused == "changed during the scan, nothing deleted: scope moved"
+        assert result.deleted_objects is None
+        assert store.deleted == []
+        assert _files(table) == before
+
     def test_refused_deletes_are_reported_and_not_counted(
         self, catalog: SqlCatalog
     ) -> None:
@@ -451,13 +465,21 @@ class FakeGlue:
     def __init__(self, tables: dict[str, list[dict[str, Any]]]) -> None:
         self.tables = tables
         self.denied: set[str] = set()
+        self.fetches = 0
+        # Runs once, before the second listing, to change Glue mid-pass.
+        self.after_first_fetch: Any = None
 
     def get_paginator(self, operation: str) -> _Paginator:
         if operation == "get_databases":
-            return _Paginator(
-                lambda: [{"DatabaseList": [{"Name": name} for name in self.tables]}]
-            )
+            return _Paginator(self._databases)
         return _Paginator(self._tables)
+
+    def _databases(self) -> list[dict[str, Any]]:
+        self.fetches += 1
+        if self.fetches > 1 and self.after_first_fetch is not None:
+            self.after_first_fetch()
+            self.after_first_fetch = None
+        return [{"DatabaseList": [{"Name": name} for name in self.tables]}]
 
     def _tables(self, **kwargs: str) -> list[dict[str, Any]]:
         if kwargs["DatabaseName"] in self.denied:
@@ -587,6 +609,58 @@ class TestRemoveDatabaseOrphanFiles:
 
         assert result.examined == []
         assert result.refused[0].refused == "Glue names no directory for the table"
+
+    def test_a_table_registered_inside_the_directory_during_the_scan_stops_the_delete(
+        self, catalog: SqlCatalog
+    ) -> None:
+        table = _expired_table(catalog)
+        before = _files(table)
+        glue = FakeGlue({DATABASE: [_glue_table(table, TABLE)], "mart": []})
+        glue.after_first_fetch = lambda: glue.tables["mart"].append(
+            {
+                "Name": "late",
+                "StorageDescriptor": {"Location": f"{table.location()}/data/late"},
+            }
+        )
+
+        result = self._run(glue, catalog, delete=True, claims_max_age_seconds=-1)
+
+        assert result.examined == []
+        assert result.refused[0].refused == (
+            "changed during the scan, nothing deleted: directory now overlaps "
+            "with mart.late"
+        )
+        assert result.refused[0].deleted_objects is None
+        assert _files(table) == before
+
+    def test_a_table_glue_moved_during_the_scan_is_not_deleted_from(
+        self, catalog: SqlCatalog
+    ) -> None:
+        table = _expired_table(catalog)
+        before = _files(table)
+        row = _glue_table(table, TABLE)
+        glue = FakeGlue({DATABASE: [row]})
+        glue.after_first_fetch = lambda: row["StorageDescriptor"].update(
+            Location="s3://lake/moved"
+        )
+
+        result = self._run(glue, catalog, delete=True, claims_max_age_seconds=-1)
+
+        assert "Glue now names 'lake/moved'" in result.refused[0].refused
+        assert _files(table) == before
+
+    def test_a_fresh_enough_glue_listing_is_reused_and_the_delete_goes_ahead(
+        self, catalog: SqlCatalog
+    ) -> None:
+        table = _expired_table(catalog)
+        glue = FakeGlue({DATABASE: [_glue_table(table, TABLE)]})
+
+        result = self._run(glue, catalog, delete=True)
+
+        assert glue.fetches == 1
+        assert result.examined[0].deleted_objects == (
+            result.examined[0].eligible_objects
+        )
 
     def test_a_denied_database_stops_a_delete_and_is_named_by_a_report(
         self, catalog: SqlCatalog

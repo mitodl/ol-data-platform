@@ -25,6 +25,7 @@ are built and the tests pass fakes.
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -243,6 +244,7 @@ def remove_table_orphan_files(  # noqa: PLR0913
     now: datetime,
     delete: bool,
     expected_location: str | None = None,
+    recheck: Callable[[], str] | None = None,
     logger: logging.Logger = log,
 ) -> TableOrphanFiles:
     """Report, and optionally delete, one table's orphan files.
@@ -256,6 +258,10 @@ def remove_table_orphan_files(  # noqa: PLR0913
         other tables. The table is refused when its Iceberg location is a
         different one, because that check then says nothing about what is
         about to be listed.
+    :param recheck: Called after the scan and immediately before the delete.
+        Returns why the table must now be left alone, or "". The scan of a
+        large table takes minutes, and what the caller knew about other
+        tables' directories when it started may no longer hold.
     """
     require_minimum_age(min_age_days)
     result = TableOrphanFiles(database=database, table=table_name)
@@ -308,7 +314,14 @@ def remove_table_orphan_files(  # noqa: PLR0913
     if not delete:
         return result
 
-    for path in reachable_files(catalog.load_table(identifier), manifest_cache).all:
+    fresh = catalog.load_table(identifier)
+    refusal = _location_refusal(fresh.location(), result.location)
+    if not refusal and recheck is not None:
+        refusal = recheck()
+    if refusal:
+        result.refused = f"changed during the scan, nothing deleted: {refusal}"
+        return result
+    for path in reachable_files(fresh, manifest_cache).all:
         eligible.pop(path, None)
     doomed = list(eligible.values())
     size = sum(obj.size for obj in doomed)
@@ -358,6 +371,56 @@ def overlapping_tables(tables: Iterable[dict[str, str]]) -> dict[tuple[str, str]
     return overlaps
 
 
+# How old the Glue listing a delete is checked against may be. One listing took
+# 47 seconds for 9,248 tables on 2026-10-06, so fetching it per table would
+# cost more than the scan. Workers share one and refetch it past this age.
+GLUE_CLAIMS_MAX_AGE_SECONDS = 300.0
+
+
+class _GlueClaims:
+    """Every Glue table and the overlaps among them, refetched when stale."""
+
+    def __init__(self, glue: Any, *, delete: bool) -> None:
+        self._glue = glue
+        self._delete = delete
+        self._lock = threading.Lock()
+        self.unreadable: list[str] = []
+        self.tables: list[dict[str, str]] = []
+        self.overlaps: dict[tuple[str, str], str] = {}
+        self._fetch()
+
+    def _fetch(self) -> None:
+        unreadable: list[str] = []
+        tables = glue_tables(self._glue, unreadable=unreadable)
+        if self._delete:
+            refuse_to_delete_blind(unreadable)
+        self.unreadable = unreadable
+        self.tables = tables
+        self.overlaps = overlapping_tables(tables)
+        self._directories = {
+            (row["database"], row["table"]): glue_directory(row) for row in tables
+        }
+        self._fetched = time.monotonic()
+
+    def refusal(self, owner: tuple[str, str], directory: str, max_age: float) -> str:
+        """Return why ``owner`` must not be deleted from now, or "".
+
+        :param directory: The directory Glue named for it when the pass began.
+        :param max_age: Refetch Glue first when the listing is older, in seconds.
+        """
+        with self._lock:
+            if time.monotonic() - self._fetched > max_age:
+                self._fetch()
+            if other := self.overlaps.get(owner):
+                return f"directory now overlaps with {other}"
+            if self._directories.get(owner) != directory:
+                return (
+                    f"Glue now names {self._directories.get(owner)!r} for the "
+                    f"table, not {directory!r}"
+                )
+            return ""
+
+
 @dataclass(frozen=True)
 class DatabaseOrphanFiles:
     """One pass over every Iceberg table in a Glue database."""
@@ -391,6 +454,7 @@ def remove_database_orphan_files(  # noqa: PLR0913
     now: datetime,
     delete: bool,
     workers: int,
+    claims_max_age_seconds: float = GLUE_CLAIMS_MAX_AGE_SECONDS,
     logger: logging.Logger = log,
 ) -> DatabaseOrphanFiles:
     """Run :func:`remove_table_orphan_files` over a Glue database's Iceberg tables.
@@ -399,16 +463,18 @@ def remove_database_orphan_files(  # noqa: PLR0913
         and its FileIO must not be shared between threads.
     :param delete: Refused when Glue denies this caller any database: a table
         in one of them could be located inside a directory this pass lists.
+    :param claims_max_age_seconds: Before a table's delete, its directory is
+        checked again against a Glue listing no older than this. A table
+        registered or moved into the directory since the pass began, or the
+        table itself moving, leaves it undeleted.
     """
     require_minimum_age(min_age_days)
-    unreadable: list[str] = []
-    every_table = glue_tables(glue, unreadable=unreadable)
-    if delete:
-        refuse_to_delete_blind(unreadable)
-    overlaps = overlapping_tables(every_table)
+    claims = _GlueClaims(glue, delete=delete)
+    unreadable = claims.unreadable
+    overlaps = claims.overlaps
     work = [
         row
-        for row in every_table
+        for row in claims.tables
         if row["database"] == database and row["metadata_location"]
     ]
     local = threading.local()
@@ -441,6 +507,9 @@ def remove_database_orphan_files(  # noqa: PLR0913
             now=now,
             delete=delete,
             expected_location=directory,
+            recheck=lambda: claims.refusal(
+                (database, name), directory, claims_max_age_seconds
+            ),
             logger=logger,
         )
 
