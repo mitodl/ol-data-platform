@@ -151,8 +151,11 @@ with events as (
     from local_times
 )
 
+-- Set to UTC so the value reads the same on every engine: Trino keeps the zone a
+-- timestamp was built in, and a consumer or test that prints it would otherwise
+-- see "12:30-04:00" on Trino and "16:30+00:00" on DuckDB for one instant.
 select
     event_id
-    , start_on
-    , case when end_on < start_on then start_on else end_on end as end_on
+    , {{ timestamptz_at_utc('start_on') }} as start_on
+    , {{ timestamptz_at_utc('case when end_on < start_on then start_on else end_on end') }} as end_on
 from instants
