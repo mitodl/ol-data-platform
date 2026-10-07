@@ -719,11 +719,13 @@ models:
   - name: author_id
     description: int, foreign key to auth_user
   - name: author_username
-    description: string, username of the author
+    description: string, username of the author. The retired username from auth_user
+      when the author has been retired
   - name: title
     description: string, thread title. Null for responses and comments
   - name: body
-    description: string, text of the post as written by its author
+    description: string, text of the post as written by its author. '[deleted]' when
+      the author has been retired, as is the title of their threads
   - name: thread_type
     description: string, 'discussion' or 'question'. Null for responses and comments
   - name: context
@@ -775,3 +777,53 @@ models:
   - name: historical_abuse_flaggers
     description: array of strings, ids of the users whose abuse flags on the post
       were cleared. Null if none
+
+unit_tests:
+- name: test_irx__mitxonline__forum_contents_redacts_retired_authors
+  description: >
+    Posts by an author the LMS has retired carry '[deleted]' and the retired
+    username, whatever the forum tables still hold. Other posts pass through.
+  model: irx__mitxonline__openedx__mysql__forum_contents
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__auth_user')
+    rows:
+    - {id: 1, username: learner}
+    - {id: 2, username: retired__user_0123abcd}
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_commentthread')
+    rows:
+    - {id: 10, author_id: 1, author_username: learner, title: kept title, body: kept
+        thread}
+    - {id: 11, author_id: 2, author_username: before-retirement, title: old title,
+      body: old thread}
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_comment')
+    rows:
+    - {id: 10, comment_thread_id: 10, author_id: 1, author_username: learner, body: kept
+        comment}
+    - {id: 11, comment_thread_id: 10, author_id: 2, body: old comment}
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__django_content_type')
+    rows: []
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_mongocontent')
+    rows: []
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_uservote')
+    format: sql
+    rows: |
+      select
+        cast(null as bigint) as id
+        , cast(null as bigint) as content_type_id
+        , cast(null as bigint) as content_object_id
+        , cast(null as bigint) as user_id
+        , cast(null as integer) as vote
+      where false
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_abuseflagger')
+    rows: []
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_historicalabuseflagger')
+    rows: []
+  expect:
+    rows:
+    - {_type: CommentThread, id: 10, author_username: learner, title: kept title,
+      body: kept thread}
+    - {_type: CommentThread, id: 11, author_username: retired__user_0123abcd, title: '[deleted]',
+      body: '[deleted]'}
+    - {_type: Comment, id: 10, author_username: learner, title: null, body: kept comment}
+    - {_type: Comment, id: 11, author_username: retired__user_0123abcd, title: null,
+      body: '[deleted]'}

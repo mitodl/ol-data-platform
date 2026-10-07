@@ -10,6 +10,13 @@
 -- mongoid and the *_mongoid references come from forum_mongocontent, which only has rows
 -- for content migrated out of Mongo; they are null for content created after the cutover.
 -- Kept for historical continuity with the legacy ObjectIds, not manufactured.
+--
+-- Retiring a learner makes the forum overwrite their posts in place (body and title
+-- become '[deleted]', author_username the retired name), but only in the backend that
+-- is live at the time. Learners retired after their posts were copied to MySQL and
+-- before the forum switched to it were redacted in Mongo alone, so MySQL still holds
+-- what they wrote. The LMS did rename them in auth_user, so that is what identifies
+-- them here, and the same overwrite is applied to their rows.
 
 with content_types as (
     select
@@ -61,6 +68,14 @@ with content_types as (
     group by content_types.model, flagger.content_object_id
 )
 
+, retired_authors as (
+    select
+        id as author_id
+        , username as retired_username
+    from {{ source('ol_warehouse_raw_data', 'raw__mitx__openedx__mysql__auth_user') }}
+    where substr(username, 1, 14) = 'retired__user_'
+)
+
 , comments as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitx__openedx__mysql__forum_comment') }}
 )
@@ -84,9 +99,9 @@ with content_types as (
         , cast(null as varchar) as parent_mongoid
         , thread.course_id
         , thread.author_id
-        , thread.author_username
-        , thread.title
-        , thread.body
+        , coalesce(retired_authors.retired_username, thread.author_username) as author_username
+        , case when retired_authors.author_id is not null then '[deleted]' else thread.title end as title
+        , case when retired_authors.author_id is not null then '[deleted]' else thread.body end as body
         , thread.thread_type
         , thread.context
         , thread.commentable_id
@@ -112,6 +127,7 @@ with content_types as (
     left join bridge
         on bridge.model = 'commentthread' and thread.id = bridge.content_object_id
     left join comment_counts on thread.id = comment_counts.comment_thread_id
+    left join retired_authors on thread.author_id = retired_authors.author_id
     left join votes
         on votes.model = 'commentthread' and thread.id = votes.content_object_id
     left join abuse_flaggers
@@ -133,9 +149,9 @@ with content_types as (
         , parent_bridge.mongo_id as parent_mongoid
         , comments.course_id
         , comments.author_id
-        , comments.author_username
+        , coalesce(retired_authors.retired_username, comments.author_username) as author_username
         , cast(null as varchar) as title
-        , comments.body
+        , case when retired_authors.author_id is not null then '[deleted]' else comments.body end as body
         , cast(null as varchar) as thread_type
         , cast(null as varchar) as context
         , cast(null as varchar) as commentable_id
@@ -164,6 +180,7 @@ with content_types as (
         on thread_bridge.model = 'commentthread' and comments.comment_thread_id = thread_bridge.content_object_id
     left join bridge as parent_bridge
         on parent_bridge.model = 'comment' and comments.parent_id = parent_bridge.content_object_id
+    left join retired_authors on comments.author_id = retired_authors.author_id
     left join votes
         on votes.model = 'comment' and comments.id = votes.content_object_id
     left join abuse_flaggers
