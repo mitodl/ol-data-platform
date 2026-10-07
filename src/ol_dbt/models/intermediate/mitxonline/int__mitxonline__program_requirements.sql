@@ -117,7 +117,7 @@ with program_requirements as (
         group by
             combined_requirements.program_id
             , combined_requirements.programrequirement_requirement_id
-    )
+    ) as elective_sets
     group by program_id
 
 )

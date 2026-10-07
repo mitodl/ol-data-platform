@@ -22,7 +22,7 @@ with source as (
                 then 'course'
             else 'program'
         end as resource_type
-        , {{ html_unescape(regexp_replace_all('course_title', "'^\\s+|\\s+$'", "''")) }} as title
+        , {{ html_unescape(strip_whitespace('course_title')) }} as title
         , {{ url_join("'" ~ var("mitpe_url") ~ "'", 'course_url') }} as url
         , case
             when course_image_src is not null and course_image_src != ''
@@ -45,7 +45,7 @@ with source as (
         , {{ learn_duration_weeks('course_duration', 'max') }} as max_weeks
         -- A price without a usable number (e.g. "Contact us") is no price rather than
         -- a failed build.
-        , try_cast({{ regexp_replace_all('course_price_raw', "'[^0-9.]'", "''") }} as decimal(12, 2)) as price
+        , {{ try_cast(regexp_replace_all('course_price_raw', "'[^0-9.]'", "''"), 'decimal(12, 2)') }} as price
         -- lead instructors first, then the rest
         , {{ array_filter_nonempty(
             "split(" ~ html_unescape(

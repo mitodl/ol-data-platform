@@ -16,7 +16,7 @@ with users as (
                 order by openedx_user_id asc nulls last, user_joined_on desc
             ) as row_num
         from users
-    )
+    ) as ranked_users
     where row_num = 1
 )
 

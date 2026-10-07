@@ -40,7 +40,7 @@ select
     , courserun_readable_id as run_id
     , 'courses/' || course_slug as slug
     , course_term as term
-    , try_cast(course_year as integer) as year
+    , {{ try_cast('course_year', 'integer') }} as year
     , course_levels as level
     , course_primary_course_number as course_number
     , course_extra_course_numbers as extra_course_numbers
