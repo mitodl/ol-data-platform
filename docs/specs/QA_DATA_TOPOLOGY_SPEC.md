@@ -478,9 +478,15 @@ Each mirrored table carries a `mirror:` block in its unit file:
 - `nullify` keeps the column with every value NULL, typed through a dead `CASE` branch so QA
   gets production's type. For non-string and JSON-shaped columns, where a literal would break a
   cast or a JSON parse.
+- `{json_keys: [...]}` rebuilds a JSON string from the named top-level keys and nothing else,
+  for a column whose JSON holds PII beside a value a model needs. Each key keeps its whole
+  value, so a key holding an object brings everything under it. A key the row lacks, and a
+  value that is not JSON, become a JSON null, which a staging model reads back as NULL just as
+  it reads the missing key in production. NULL stays NULL. Key names are restricted to
+  `[A-Za-z_][A-Za-z0-9_]*`, because they are spliced into a string literal and a JSON path.
 
-`hash` and `redact` take string columns only, so a cast in a staging model never meets a hex
-digest or the word `redacted`. Staging models select PII columns by name, so a dropped column
+`hash`, `redact` and `json_keys` take string columns only, so a cast in a staging model never
+meets a hex digest or the word `redacted`. Staging models select PII columns by name, so a dropped column
 fails the QA build. A nullified column builds, but fails any `not_null` test on it, which is
 why string PII uses `redact`.
 
@@ -496,8 +502,8 @@ SQL sees the read.
 
 The asset checks every table's declaration in the unit against `DESCRIBE` of the production
 table, then `EXPLAIN`s each rendered query, before it drops any QA copy. An allowlisted column
-that production lacks, and `hash` or `redact` on a non-string column, fail in the declaration
-check. That check also rejects a `mirror.where` that is a statement rather than a predicate,
+that production lacks, and `hash`, `redact` or `json_keys` on a non-string column, fail in the
+declaration check. That check also rejects a `mirror.where` that is a statement rather than a predicate,
 but it never resolves the predicate's own columns. The `EXPLAIN` is what covers those: a column
 the `where` names, or that its `{source}` subquery names, is resolved against production here
 rather than reaching StarRocks for the first time in the CTAS.
@@ -513,7 +519,7 @@ that table's `DROP`, leaving the unit partly refreshed and the failed table abse
 any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
 The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
-other 23 what it adds over the declaration check is that the masking expressions themselves
+other 25 what it adds over the declaration check is that the masking expressions themselves
 plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
@@ -527,7 +533,7 @@ build of that staging model with the column's name, which is loud and in the rig
 
 ### The allowlists
 
-25 tables across 9 units. Each allowlist is the columns the reading models name, found by
+27 tables across 9 units. Each allowlist is the columns the reading models name, found by
 text-matching the production column list against each model and the macros it calls, plus the
 raw metadata column. Unread columns are dropped, which is how `mitx_person_course`'s `ip`,
 `city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
@@ -544,7 +550,20 @@ masked:
   signature and zendesk user `details`, profile goals and mailing address, certificate name,
   zendesk organization and user notes, salesforce `nextstep` and line-item `description`.
 - `nullify`: IP, year of birth, certificate download URLs, and the JSON-shaped `profile_meta`,
-  zendesk user `photo` and `user_fields`.
+  zendesk user `photo` and `user_fields`, ticket `custom_fields`, and comment `uploads` and
+  `attachments`.
+- `json_keys`: zendesk `via` on tickets and ticket comments keeps `channel`, and ticket
+  `satisfaction_rating` keeps `score` and `reason`. `via` also holds the requester's email at
+  `$.source.from.address`, and the staging models parse `$.channel` into a column with a
+  `not_null` test, so `copy` would leak the email and `redact` or `nullify` would fail the
+  test. `satisfaction_rating` also holds the requester's free-text comment. Measured in
+  production raw on 2026-10-06 (Athena): `channel` takes 6 values across 618,227 tickets and 9
+  across 1,511,587 comments, `score` takes 4, `reason` takes 6 (Zendesk's fixed list) or is
+  absent, `channel` is never an object, and `via` and `satisfaction_rating` are never NULL.
+  Ticket subjects, descriptions and comment bodies are redacted, and the ticket `recipient`
+  address is hashed. Ticket `tags` are copied: 2,447 distinct tags over the same tickets, none
+  containing `@`, and the only ones with a run of seven or more digits are 24
+  `content_cue_<uuid>` labels.
 
 Two tables are filtered:
 
@@ -560,7 +579,7 @@ Tracking-log `event` and `context` payloads are copied as they are, because the 
 parses them. `edx.user.settings.changed` is excluded because edx-platform logs the old and new
 email, name and address in its payload, and no model reads it. Forum events carry post bodies
 and are kept, because `tfact_discussion_events` reads them. That text is copied into QA. The
-30-day filter bounds how much lands, but no column mode can mask inside a JSON payload.
+30-day filter bounds how much lands, but no column mode masks a value the model itself reads.
 
 Not declared, so not mirrored:
 
@@ -571,10 +590,6 @@ Not declared, so not mirrored:
   `raw__edxorg__s3__course_xml_blocks`, and edxorg/mysql's `auth_userprofile`,
   `courseware_studentmodule`, `student_courseenrollment` and `student_courseaccessrole`.
 - Unmodeled tables (most of zendesk, salesforce `Account`), which nothing reads.
-- zendesk `tickets` and `ticket_comments`. Their `via` JSON holds the requester's email at
-  `$.source.from.address`, and the staging models parse `$.channel` from it into a column with
-  a `not_null` test. `copy` leaks the email, and `redact` or `nullify` fail the test. A mode that
-  keeps named JSON keys would fix both, and is left as a follow-up.
 
 The salesforce `Opportunity` and `OpportunityLineItem` tables declared `_airbyte_emitted_at`
 as their raw metadata column, as if they were still on Airbyte's v1 destination. Production
@@ -630,6 +645,25 @@ through the `admin` Vault role the production resource uses:
   `data/load_spill/` marker, and because `ol-data-lake-raw-qa` is versioned the dropped files
   remain as noncurrent versions until the bucket's 90-day `expire-noncurrent-versions` rule
   removes them. So each refresh keeps the previous copy billed for up to 90 days.
+
+### Checked on QA StarRocks (2026-10-06)
+
+The `json_keys` expression, on StarRocks 4.1.6 through the `readonly` Vault role, over rows
+built from `generate_series` so the backend evaluates it rather than the planner folding it:
+
+- `CAST(json_object('channel', json_query(parse_json(v), '$.channel')) AS VARCHAR)` returns
+  `{"channel": "email"}` and drops the sibling `source` object. `get_json_string(..., '$.channel')`
+  on the result equals `get_json_string(v, '$.channel')` on the original in every case below.
+- A missing key, a blank string and a string that is not JSON all return `{"channel": null}`
+  rather than an error, and read back as NULL.
+- A number stays a number (`{"n": 5}`). `get_json_string` in place of `json_query` would have
+  written `"5"`.
+- A key holding an object keeps the whole object.
+- `EXPLAIN` plans the expression over a `BIGINT` column, casting it to `VARCHAR` for
+  `parse_json`. So the string-column rule has to be the renderer's, as it is for `hash`.
+
+Not checked: the two zendesk statements against production StarRocks. The asset `EXPLAIN`s
+them before it runs either, and neither table has a QA copy for a failed refresh to remove.
 
 ### Checked on QA StarRocks (2026-09-21)
 

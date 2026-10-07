@@ -173,103 +173,180 @@ models:
   config:
     tags: [qa_scheduled]
   description: >
-    xPRO courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
-    Sourced from int__mitxpro__courses and int__mitxpro__course_runs.
+    The courses xPRO's catalog API lists: live courses with a live CMS page, published
+    or not. One row per course, with the fields MIT Learn's xPRO ETL reads from the
+    API. Runs are in integrations__learn__xpro_runs.
   columns:
   - name: readable_id
-    description: xPRO course readable ID. Used for upsert matching.
+    description: str, the xPRO course readable id. Used for upsert matching.
     tests: [not_null, unique]
   - name: title
-    description: Course title.
+    description: str, course title.
     tests: [not_null]
   - name: last_modified
-    description: >
-      Last CMS page publish date. Falls back to current_timestamp for courses
-      without a Wagtail CMS page.
+    description: str, ISO 8601 time the CMS page was last published.
     tests: [not_null]
   - name: etl_source
-    description: Always 'xpro'.
+    description: str, always 'xpro'.
     tests: [not_null]
   - name: description
-    description: Course description displayed on the xPRO course page.
+    description: str, the page's description, as HTML. Not sanitized; MIT Learn passes
+      it through clean_data.
   - name: url
-    description: xPRO course page URL path (relative).
+    description: str, absolute URL of the course page on the xPRO site.
+    tests: [not_null]
   - name: image_url
-    description: Course image URL.
+    description: str, the page's thumbnail image, or the xPRO site's default image
+      when the page has none.
+    tests: [not_null]
   - name: published
-    description: Whether the course is live on xpro.mit.edu.
+    description: boolean, whether a run in integrations__learn__xpro_runs has a price
+      above zero, which is when MIT Learn publishes an xPRO course.
+    tests: [not_null]
   - name: platform
-    description: >
-      Platform name for the course, sourced from xPRO's platform dimension
-      table (e.g. 'xPRO'). Unlike etl_source, this is not a fixed literal.
-  - name: page_slug
-    description: xPRO CMS page slug, used for constructing the course page's URL.
+    description: str, the xPRO platform name (xPRO, Emeritus, Global Alumni, Simplilearn,
+      Susskind, WHU). MIT Learn maps it to a platform code.
   - name: topics
-    description: Comma-separated topic names for the course.
-  - name: instructors
-    description: Comma-separated instructor names for the course.
-  - name: length
-    description: >
-      Short description of how long the course takes to complete, e.g.
-      '4 weeks'.
-  - name: effort
-    description: Short description of expected weekly time commitment.
+    description: array(str), names of the page's xPRO topics, sorted; null when it
+      has none. A child topic is named 'Parent:Child'. MIT Learn keeps the part after
+      the colon and maps it to its own topics.
   - name: format
-    description: Course format, e.g. 'Online', 'Other'.
-  - name: runs
-    description: >
-      Pipe-delimited run metadata strings joined with semicolons.
-      Format per run: readable_id|start_on|end_on|is_live
+    description: str, the page's format, 'Online' or 'Hybrid'. MIT Learn maps it to
+      a delivery code.
+  - name: availability
+    description: str, always 'dated', as the xPRO API reports.
+  - name: continuing_ed_credits
+    description: double, CEUs from the page's certificate page; null without one.
+  - name: duration
+    description: str, free-text duration from the page, e.g. '3 Weeks'.
+  - name: min_weeks
+    description: int, shortest length in weeks; null if the page does not give one.
+  - name: max_weeks
+    description: int, longest length in weeks; null if the page does not give one.
+  - name: time_commitment
+    description: str, free-text weekly effort from the page, e.g. '5 Hours per Week'.
+  - name: min_weekly_hours
+    description: int, least weekly hours; null if the page does not give one.
+  - name: max_weekly_hours
+    description: int, most weekly hours; null if the page does not give one.
+
+- name: integrations__learn__xpro_runs
+  config:
+    tags: [qa_scheduled]
+  description: >
+    Runs of the courses in integrations__learn__xpro_courses, as xPRO's catalog API
+    lists them under a course: live, with a start date, not past their end date or
+    enrollment end, enrollment open, and with an active product. Evaluated when the
+    model builds. A run that leaves this set is one MIT Learn unpublishes.
+  columns:
+  - name: readable_id
+    description: str, the run's course.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('integrations__learn__xpro_courses')
+          field: readable_id
+  - name: run_id
+    description: str, the run's courseware id, MIT Learn's run id.
+    tests: [not_null, unique]
+  - name: title
+    description: str, the run's title.
+  - name: start_date
+    description: str, ISO 8601 UTC start.
+    tests: [not_null]
+  - name: end_date
+    description: str, ISO 8601 UTC end; null if none.
+  - name: enrollment_start
+    description: str, ISO 8601 UTC start of enrollment; null if none.
+  - name: enrollment_end
+    description: str, ISO 8601 UTC end of enrollment; null if none.
+  - name: price
+    description: decimal, price in USD from the latest version of the run's product;
+      null if the product has no version.
+  - name: instructors
+    description: array(str), names on the course page's faculty page; null without
+      one.
+  - name: published
+    description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
+      it.
+    tests: [not_null]
 
 - name: integrations__learn__xpro_programs
   config:
     tags: [qa_scheduled]
   description: >
-    xPRO programs exposed for MIT Learn's Trino-pull ETL. One row per live program.
-    Sourced from int__mitxpro__programs and int__mitxpro__courses.
+    The programs xPRO's catalog API lists: live programs with a live CMS page and
+    a product. One row per program, with the fields MIT Learn's xPRO ETL reads
+    from the API, including the price and dates of the one run MIT Learn gives a
+    program.
   columns:
   - name: readable_id
-    description: xPRO program readable ID. Used for upsert matching.
+    description: str, the xPRO program readable id. Used for upsert matching.
     tests: [not_null, unique]
   - name: title
-    description: Program title.
+    description: str, program title.
     tests: [not_null]
   - name: last_modified
-    description: >
-      Last CMS page publish date. Falls back to current_timestamp for programs
-      without a Wagtail CMS page.
+    description: str, ISO 8601 time the CMS page was last published.
     tests: [not_null]
   - name: etl_source
-    description: Always 'xpro'.
+    description: str, always 'xpro'.
     tests: [not_null]
   - name: description
-    description: Program description displayed on the xPRO program page.
+    description: str, the page's description, as HTML. Not sanitized; MIT Learn passes
+      it through clean_data.
   - name: url
-    description: xPRO program page URL path (relative).
+    description: str, absolute URL of the program page on the xPRO site.
+    tests: [not_null]
   - name: image_url
-    description: Program image URL.
+    description: str, the page's thumbnail image, or the xPRO site's default image
+      when the page has none.
+    tests: [not_null]
   - name: published
-    description: Whether the program is live on xpro.mit.edu.
+    description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
+      it.
+    tests: [not_null]
   - name: platform
-    description: >
-      Platform name for the program, sourced from xPRO's platform dimension
-      table (e.g. 'xPRO'). Unlike etl_source, this is not a fixed literal.
-  - name: page_slug
-    description: xPRO CMS page slug, used for constructing the program page's URL.
+    description: str, the xPRO platform name. MIT Learn maps it to a platform code.
   - name: topics
-    description: Comma-separated topic names for the program.
+    description: array(str), names of the xPRO topics of every course in the program,
+      sorted; null when there are none.
   - name: instructors
-    description: Comma-separated instructor names for the program.
-  - name: length
-    description: >
-      Short description of how long the program takes to complete, e.g.
-      '4 weeks'.
-  - name: effort
-    description: Short description of expected weekly time commitment.
-  - name: format
-    description: Program format, e.g. 'Online', 'Other'.
+    description: array(str), names on the program page's faculty page; null without
+      one.
   - name: courses
-    description: Comma-separated list of course readable_ids belonging to this program.
+    description: str, comma-separated readable ids of the program's live courses,
+      in program order.
+  - name: price
+    description: decimal, price in USD from the latest version of the program's active
+      product; null if it has none.
+  - name: start_date
+    description: str, ISO 8601 UTC start of the earliest open run of the program's
+      first course; null if it has none.
+  - name: end_date
+    description: str, ISO 8601 UTC end of the last live run of any course in the program.
+  - name: enrollment_start
+    description: str, ISO 8601 UTC enrollment start of the run start_date comes from.
+  - name: format
+    description: str, the page's format, 'Online' or 'Hybrid'. MIT Learn maps it to
+      a delivery code.
+  - name: availability
+    description: str, always 'dated', as the xPRO API reports.
+  - name: continuing_ed_credits
+    description: double, CEUs from the page's certificate page; null without one.
+  - name: duration
+    description: str, free-text duration from the page, e.g. '3 Weeks'.
+  - name: min_weeks
+    description: int, shortest length in weeks; null if the page does not give one.
+  - name: max_weeks
+    description: int, longest length in weeks; null if the page does not give one.
+  - name: time_commitment
+    description: str, free-text weekly effort from the page, e.g. '5 Hours per Week'.
+  - name: min_weekly_hours
+    description: int, least weekly hours; null if the page does not give one.
+  - name: max_weekly_hours
+    description: int, most weekly hours; null if the page does not give one.
 
 - name: integrations__learn__mit_edx_courses
   description: >
