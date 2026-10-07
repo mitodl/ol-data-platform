@@ -78,7 +78,7 @@ News and updates from MIT Professional Education.
                 then {{ array_filter_nonempty(regexp_split('trim(news_author_raw)', "'\\s*and\\s*'")) }}
             when strpos(news_author_raw, '|') > 0
                 then {{ array_filter_nonempty(regexp_split('trim(news_author_raw)', "'\\s*\\|\\s*'")) }}
-            else array[trim(news_author_raw)]
+            else {{ array_of(['trim(news_author_raw)']) }}
         end as authors
         , {{ empty_varchar_array() }} as topics
         , {{ format_timestamp_as_iso8601(timestamptz_at_utc(

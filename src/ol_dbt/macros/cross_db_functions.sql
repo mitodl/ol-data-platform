@@ -206,7 +206,7 @@
 
 {% macro starrocks__regexp_like(string_expr, pattern) -%}
     {# StarRocks: regexp #}
-    {{ string_expr }} regexp {{ pattern }}
+    {{ string_expr }} regexp {{ starrocks_string_literal(pattern) }}
 {%- endmacro %}
 
 
@@ -580,7 +580,7 @@
     unnest(regexp_extract_all(s, p, 1)), so it has no per-adapter bodies.
 #}
 {% macro unnest_regexp_matches(string_expr, pattern, alias, col_name) -%}
-    unnest(regexp_extract_all({{ string_expr }}, {{ pattern }}, 1)) as {{ alias }} ({{ col_name }})
+    unnest({{ regexp_extract_all(string_expr, pattern, 1) }}) as {{ alias }} ({{ col_name }})
 {%- endmacro %}
 
 
@@ -730,6 +730,23 @@
 {% macro starrocks__empty_varchar_array() -%}cast([] as array<varchar>){%- endmacro %}
 
 
+{#
+    array_of: an array of the given SQL expressions. StarRocks has no array[...]
+    constructor, only the bare bracket form.
+#}
+{% macro array_of(elements) -%}
+    {{ adapter.dispatch('array_of', 'open_learning')(elements) }}
+{%- endmacro %}
+
+{% macro default__array_of(elements) -%}
+    array[{{ elements | join(', ') }}]
+{%- endmacro %}
+
+{% macro starrocks__array_of(elements) -%}
+    [{{ elements | join(', ') }}]
+{%- endmacro %}
+
+
 {% macro array_length(array_expr) -%}
     {{ adapter.dispatch('array_length', 'open_learning')(array_expr) }}
 {%- endmacro %}
@@ -762,6 +779,10 @@
 
 {% macro duckdb__array_filter_nonempty(array_expr) -%}
     list_filter({{ array_expr }}, x -> x is not null and x != '')
+{%- endmacro %}
+
+{% macro starrocks__array_filter_nonempty(array_expr) -%}
+    array_filter({{ array_expr }}, x -> x is not null and x != '')
 {%- endmacro %}
 
 
@@ -803,6 +824,10 @@
     string_split_regex({{ subject }}, {{ pattern }})
 {%- endmacro %}
 
+{% macro starrocks__regexp_split(subject, pattern) -%}
+    regexp_split({{ subject }}, {{ starrocks_string_literal(pattern) }})
+{%- endmacro %}
+
 
 {% macro default__regexp_replace_all(subject, pattern, replacement) -%}
     regexp_replace({{ subject }}, {{ pattern }}, {{ replacement }})
@@ -810,6 +835,38 @@
 
 {% macro duckdb__regexp_replace_all(subject, pattern, replacement) -%}
     regexp_replace({{ subject }}, {{ pattern }}, {{ replacement }}, 'g')
+{%- endmacro %}
+
+{% macro starrocks__regexp_replace_all(subject, pattern, replacement) -%}
+    regexp_replace({{ subject }}, {{ starrocks_string_literal(pattern) }}, {{ replacement }})
+{%- endmacro %}
+
+
+{#
+    starrocks_string_literal: a quoted SQL literal written for Trino or DuckDB, as
+    StarRocks reads it. StarRocks treats a backslash in a string literal as an escape
+    character, so '\d' reaches its regex engine as 'd'. Every starrocks__ macro that
+    takes a pattern passes it through here.
+#}
+{% macro starrocks_string_literal(literal) -%}
+    {{ literal | replace('\\', '\\\\') }}
+{%- endmacro %}
+
+
+{#
+    regexp_extract_all: every match of `pattern` in `subject` (or of its capture group
+    `group`), as an array of varchar.
+#}
+{% macro regexp_extract_all(subject, pattern, group=none) -%}
+    {{ adapter.dispatch('regexp_extract_all', 'open_learning')(subject, pattern, group) }}
+{%- endmacro %}
+
+{% macro default__regexp_extract_all(subject, pattern, group=none) -%}
+    regexp_extract_all({{ subject }}, {{ pattern }}{% if group is not none %}, {{ group }}{% endif %})
+{%- endmacro %}
+
+{% macro starrocks__regexp_extract_all(subject, pattern, group=none) -%}
+    regexp_extract_all({{ subject }}, {{ starrocks_string_literal(pattern) }}, {{ group if group is not none else 0 }})
 {%- endmacro %}
 
 
@@ -830,6 +887,11 @@
     timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp))
 {%- endmacro %}
 
+{# StarRocks has no zone-aware type. An instant is a DATETIME holding UTC wall-clock time. #}
+{% macro starrocks__local_date_to_timestamptz(date_expr, time_zone) -%}
+    convert_tz(cast(cast({{ date_expr }} as date) as datetime), '{{ time_zone }}', 'UTC')
+{%- endmacro %}
+
 
 {#
     timestamptz_at_utc: the same instant with its zone set to UTC, so that
@@ -845,6 +907,10 @@
 {%- endmacro %}
 
 {% macro duckdb__timestamptz_at_utc(timestamp_expr) -%}
+    {{ timestamp_expr }}
+{%- endmacro %}
+
+{% macro starrocks__timestamptz_at_utc(timestamp_expr) -%}
     {{ timestamp_expr }}
 {%- endmacro %}
 
@@ -866,6 +932,33 @@
     timezone({{ zone_expr }}, cast({{ timestamp_expr }} as timestamp))
 {%- endmacro %}
 
+{% macro starrocks__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
+    convert_tz(cast({{ timestamp_expr }} as datetime), {{ zone_expr }}, 'UTC')
+{%- endmacro %}
+
+
+{#
+    null_timestamptz / current_timestamptz: a NULL and the current instant, of the
+    type the *_to_timestamptz macros return, so they union and compare with those
+    values on every engine. StarRocks' current_timestamp is session-local wall-clock
+    time, which is not comparable with its UTC DATETIME instants.
+#}
+{% macro null_timestamptz() -%}
+    {{ adapter.dispatch('null_timestamptz', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__null_timestamptz() -%}cast(null as timestamp with time zone){%- endmacro %}
+
+{% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
+
+{% macro current_timestamptz() -%}
+    {{ adapter.dispatch('current_timestamptz', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__current_timestamptz() -%}current_timestamp{%- endmacro %}
+
+{% macro starrocks__current_timestamptz() -%}utc_timestamp(){%- endmacro %}
+
 
 {#
     md5_hex: lowercase hex MD5 of a string's UTF-8 bytes, as Python's
@@ -880,6 +973,10 @@
 {%- endmacro %}
 
 {% macro duckdb__md5_hex(string_expr) -%}
+    md5({{ string_expr }})
+{%- endmacro %}
+
+{% macro starrocks__md5_hex(string_expr) -%}
     md5({{ string_expr }})
 {%- endmacro %}
 
@@ -918,6 +1015,21 @@
                     then upper(substr({{ string_expr }}, i, 1))
                 else lower(substr({{ string_expr }}, i, 1))
             end
+        )
+        , ''
+    ) end
+{%- endmacro %}
+
+{# StarRocks' length() counts bytes; substr() counts characters, as char_length() does. #}
+{% macro starrocks__title_case(string_expr) -%}
+    case when {{ string_expr }} = '' then '' else array_join(
+        array_map(
+            i -> case
+                when i = 1 or not (substr({{ string_expr }}, i - 1, 1) regexp '\\p{L}')
+                    then upper(substr({{ string_expr }}, i, 1))
+                else lower(substr({{ string_expr }}, i, 1))
+            end
+            , array_generate(1, char_length({{ string_expr }}))
         )
         , ''
     ) end

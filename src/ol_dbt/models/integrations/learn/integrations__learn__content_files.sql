@@ -21,7 +21,7 @@ with content_files as (
 select
     source_system as etl_source
     , courserun_readable_id as run_readable_id
-    , edx_module_id as key
+    , edx_module_id as {{ adapter.quote('key') }}
     , edx_module_id
     , title
     , cast(null as varchar) as description

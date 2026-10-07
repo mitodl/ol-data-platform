@@ -67,16 +67,15 @@ with blocks as (
         , trim({{ regexp_replace_all(
             html_unescape(
                 array_join(
-                    "array["
-                    ~ "case when not has_html then "
-                    ~ array_join("regexp_extract_all(coursestructure_xml_raw_xml, '=\"([^\"]*)\"', 1)", ' ')
-                    ~ " else '' end"
-                    ~ ", "
-                    ~ regexp_replace_all(
-                        "replace(replace(coursestructure_xml_raw_xml, '<![CDATA[', ' '), ']]>', ' ')"
-                        , "'<[^>]*>'", "' '"
-                    )
-                    ~ "]"
+                    array_of([
+                        "case when not has_html then "
+                        ~ array_join(regexp_extract_all('coursestructure_xml_raw_xml', "'=\"([^\"]*)\"'", 1), ' ')
+                        ~ " else '' end"
+                        , regexp_replace_all(
+                            "replace(replace(coursestructure_xml_raw_xml, '<![CDATA[', ' '), ']]>', ' ')"
+                            , "'<[^>]*>'", "' '"
+                        )
+                    ])
                     , ' '
                 )
             )
@@ -194,10 +193,10 @@ with blocks as (
                 then concat('asset-v1:', run_key, '+type@asset+block@', file_name)
             else concat(
                 'block-v1:', run_key, '+type@', folder, '+block@'
-                , regexp_replace(file_name, '\.[^.]*$', '')
+                , {{ regexp_replace_all('file_name', "'\\.[^.]*$'", "''") }}
             )
         end as edx_module_id
-        , regexp_replace(original_file_name, '\.[^.]*$', '') as original_stem
+        , {{ regexp_replace_all('original_file_name', "'\\.[^.]*$'", "''") }} as original_stem
     from keyed_files
 )
 
@@ -212,11 +211,13 @@ with blocks as (
             , '+type@asset+block@'
             , replace({{ html_unescape('transcript.src') }}, ' ', '_')
         ) as transcript_module_id
-        , regexp_replace(
-            {{ element_at_array("split(blocks.coursestructure_xml_block_path, '/')",
-                array_length("split(blocks.coursestructure_xml_block_path, '/')")) }}
-            , '\.[^.]*$', ''
-        ) as video_id
+        , {{ regexp_replace_all(
+            element_at_array(
+                "split(blocks.coursestructure_xml_block_path, '/')"
+                , array_length("split(blocks.coursestructure_xml_block_path, '/')")
+            )
+            , "'\\.[^.]*$'", "''"
+        ) }} as video_id
         , blocks.coursestructure_xml_block_display_name as video_title
     from blocks
     cross join {{ unnest_regexp_matches(
