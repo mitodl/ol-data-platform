@@ -140,8 +140,8 @@ RAW_LAYER_GROUP_CONFIGS: dict[str, RawLayerGroupConfig] = {
 # ``airbyte_staging_<uuid>`` and leaves the branch behind once ``main`` has been
 # moved. pyiceberg never expires the head of a branch, so each leftover branch
 # keeps one snapshot (and every file it references) for good. The bare
-# ``airbyte_staging`` branch is not matched: older connector versions reuse it
-# across syncs.
+# ``airbyte_staging`` branch is not matched: whether the connector writes to it
+# again after creating it has not been checked.
 AIRBYTE_STAGING_BRANCH = re.compile(
     r"^airbyte_staging_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12}$"
 )
