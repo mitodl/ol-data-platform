@@ -30,10 +30,18 @@ def module() -> Iterator[types.ModuleType]:
     The module imports `dbt_project`, which reads target/manifest.json at
     import, and the pytest job has none. The raw asset never touches it.
     """
+    import lakehouse.assets  # noqa: PLC0415
+
     with pytest.MonkeyPatch.context() as patch:
         patch.setitem(sys.modules, DBT_MODULE, types.SimpleNamespace(dbt_project=None))
         patch.delitem(sys.modules, ASSET_MODULE, raising=False)
-        yield importlib.import_module(ASSET_MODULE)
+        try:
+            yield importlib.import_module(ASSET_MODULE)
+        finally:
+            # The copy imported under the stub must not outlive the test.
+            sys.modules.pop(ASSET_MODULE, None)
+            if hasattr(lakehouse.assets, "iceberg_maintenance"):
+                del lakehouse.assets.iceberg_maintenance
 
 
 def _tables(database: str, count: int = HEALTHY_TABLES) -> list[RawLayerTableInfo]:
@@ -63,7 +71,8 @@ def _run(
     monkeypatch.setattr(module, "load_raw_layer_maintenance_work", lambda **_: scan)
     monkeypatch.setattr(module, "get_glue_catalog", lambda: None)
     monkeypatch.setattr(module, "expire_snapshots", fake_expire)
-    output = module.iceberg_raw_layer_maintenance(build_asset_context())
+    with build_asset_context() as context:
+        output = module.iceberg_raw_layer_maintenance(context)
     return {key: value.value for key, value in output.metadata.items()}
 
 
