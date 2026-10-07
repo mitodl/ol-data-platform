@@ -334,7 +334,10 @@ class TestOverlappingPages:
         {"connectionId": "conn-1"},
         {"connectionId": "conn-1"},
     )
-    CLEAN = ({"connectionId": "conn-1"}, {"connectionId": "conn-2"})
+    CLEAN = (
+        {"connectionId": "conn-1", "status": "active"},
+        {"connectionId": "conn-2", "status": "active"},
+    )
 
     @pytest.fixture
     def listings(self, monkeypatch) -> list[tuple[dict[str, Any], ...]]:
@@ -391,3 +394,18 @@ class TestOverlappingPages:
         listings.extend([self.OVERLAPPED, self.CLEAN])
         rows = client.get_connections()
         assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
+
+    @pytest.mark.parametrize("status", ["inactive", "deprecated"])
+    def test_the_asset_load_leaves_out_a_connection_airbyte_will_not_sync(
+        self, client, listings, status
+    ) -> None:
+        listings.append((*self.CLEAN, {"connectionId": "conn-3", "status": status}))
+        rows = client.get_connections()
+        assert [row["connectionId"] for row in rows] == ["conn-1", "conn-2"]
+
+    def test_the_drift_check_listing_keeps_inactive_connections(
+        self, client, listings
+    ) -> None:
+        listings.append((*self.CLEAN, {"connectionId": "conn-3", "status": "inactive"}))
+        rows = client.list_collection("connections", "connectionId")
+        assert len(rows) == len(self.CLEAN) + 1

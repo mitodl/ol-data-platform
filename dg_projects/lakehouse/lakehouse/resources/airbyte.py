@@ -26,6 +26,10 @@ IN_FLIGHT_JOB_STATUSES = (
     AirbyteJobStatusType.INCOMPLETE,
 )
 
+# The only connection status Airbyte will start a sync for. The others are
+# ``inactive`` (paused), ``deprecated`` and ``locked``.
+ACTIVE_CONNECTION_STATUS = "active"
+
 # Airbyte pages its list endpoints by offset over an ordering that is not stable
 # between requests, so consecutive pages can overlap: a row shifts back onto the
 # next page and appears twice while another is never returned. Probed against
@@ -185,8 +189,19 @@ class AirbyteOSSClient(AirbyteClient):
 
         The asset graph is built from this, so a connection skipped at a page
         boundary would leave the graph without its assets and raise nothing.
+
+        Connections that are not ``active`` are left out. Airbyte refuses to
+        sync one (``Can only sync an active connection``, answered as a 409
+        state-conflict), so its assets could only ever fail, nightly, once per
+        run retry. The drift check reads ``list_collection`` directly and still
+        sees them.
         """
-        return self.list_collection("connections", "connectionId")
+        connections = self.list_collection("connections", "connectionId")
+        return [
+            connection
+            for connection in connections
+            if connection["status"] == ACTIVE_CONNECTION_STATUS
+        ]
 
     def _single_request(
         self,
