@@ -45,8 +45,7 @@ ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset()
 # The floor has to exceed the longest time a writer holds a file before the
 # commit that references it. Not measured for the raw writers (an Airbyte sync
 # writes data files for as long as it runs and commits at the end, dlt
-# likewise). Seven days is the sweep's floor and more than twice Spark's
-# three-day default for the same operation.
+# likewise). Seven days is the floor the sweep uses.
 ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS = 7
 
 # Each worker holds one table's reachable-file set and its eligible orphans in
