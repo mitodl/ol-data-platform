@@ -2,10 +2,12 @@ import json
 import os
 import threading
 import time
+from typing import Any
 
 from dagster import AssetExecutionContext
 from dagster_dbt import (
     DagsterDbtTranslatorSettings,
+    DbtCliInvocation,
     DbtCliResource,
     DbtProject,
     dbt_assets,
@@ -19,11 +21,16 @@ from lakehouse.assets.lakehouse.dbt import (
 from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    built_relations,
+    definition_hashes,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
+    record_built_definitions,
+    recorded_definitions,
+    redefined_relations,
     retry_delay,
 )
 from lakehouse.resources.starrocks import StarRocksResource
@@ -83,9 +90,14 @@ _ENV_LOCK = threading.Lock()
 
 
 def _stale_materialized_views(
-    context: AssetExecutionContext, starrocks: StarRocksResource
-) -> list[str]:
-    """MVs whose columns in StarRocks disagree with the dbt manifest.
+    context: AssetExecutionContext,
+    starrocks: StarRocksResource,
+    manifest: dict[str, Any],
+) -> tuple[list[str], dict[str, str]]:
+    """MVs in StarRocks that were not built from what the dbt manifest now says.
+
+    Returns them with the definition hashes read from StarRocks, which
+    `_record_definitions` needs after the build.
 
     dbt cannot find these itself. dbt-core only replaces an existing
     materialized view under --full-refresh, and asks the adapter for
@@ -99,21 +111,69 @@ def _stale_materialized_views(
     but memory enforcing the order -- while ol-analytics-api's `build_select`
     projects each model's own field list, so deploying the consumer first turns
     the miss into an unknown-column error at request time.
+
+    Two checks, because the column comparison alone misses an edit that keeps
+    the columns (a filter, a join, a macro body): the live columns against the
+    documented ones, and the definition hash recorded at the last build against
+    the manifest's. See `definition_hashes`.
     """
-    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    definitions = definition_hashes(manifest)
+    if not definitions:
+        # No materialized views to check, and `live_column_query` would build
+        # an empty `IN ()`, a syntax error.
+        return [], {}
     documented = documented_columns(manifest)
     if not documented:
-        # Nothing to compare against, and `live_column_query` would build an
-        # empty `IN ()` -- a syntax error. Logged rather than passed over in
-        # silence: it means the schema YAML lost its `columns:`, which also
-        # disables the rebuild these models depend on.
+        # Logged rather than passed over in silence: it means the schema YAML
+        # lost its `columns:`.
         context.log.warning(
             "No StarRocks materialized view documents any columns -- skipping "
-            "the column-drift check. An edited MV SELECT will not be rebuilt."
+            "the column-drift check."
         )
-        return []
-    query, params = live_column_query(documented)
-    return drifted_relations(documented, live_columns(starrocks.fetch(query, params)))
+    query, params = live_column_query(definitions)
+    live = live_columns(starrocks.fetch(query, params))
+    recorded = recorded_definitions(definitions, live, starrocks.fetch)
+    drifted = drifted_relations(documented, live)
+    redefined = redefined_relations(definitions, recorded, live)
+    if drifted:
+        context.log.info(
+            "Materialized views whose columns differ from the dbt manifest: %s",
+            ", ".join(drifted),
+        )
+    if redefined:
+        context.log.info(
+            "Materialized views not built from their current definition: %s",
+            ", ".join(redefined),
+        )
+    return sorted({*drifted, *redefined}), recorded
+
+
+def _record_definitions(
+    context: AssetExecutionContext,
+    starrocks: StarRocksResource,
+    manifest: dict[str, Any],
+    recorded: dict[str, str],
+    invocation: DbtCliInvocation,
+) -> None:
+    """Record the definition each MV this build produced was built from.
+
+    A failure here is logged and not raised. The build itself succeeded, and
+    failing the asset would skip the refresh that follows it, leaving every MV
+    a --full-refresh just recreated empty. The cost of not recording is that
+    the next build full-refreshes again.
+    """
+    try:
+        record_built_definitions(
+            definition_hashes(manifest),
+            recorded,
+            built_relations(manifest, invocation.get_artifact("run_results.json")),
+            starrocks.execute,
+        )
+    except Exception:
+        context.log.exception(
+            "Could not record the materialized view definitions. The next build "
+            "will run with --full-refresh."
+        )
 
 
 @dbt_assets(
@@ -139,19 +199,19 @@ def starrocks_dbt_assets(
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
 
-    Escalates to --full-refresh when a materialized view's columns in StarRocks
-    have fallen out of step with the manifest, since a plain build would not
-    notice -- see `_stale_materialized_views`.
+    Escalates to --full-refresh when a materialized view in StarRocks was not
+    built from the manifest's columns or definition, since a plain build would
+    not notice -- see `_stale_materialized_views`.
     """
+    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
     build_args = ["build"]
-    stale = _stale_materialized_views(context, starrocks)
+    stale, recorded = _stale_materialized_views(context, starrocks, manifest)
     if stale:
         # --full-refresh drops and recreates every selected MV, not just the
         # stale ones, which is why it is conditional: each recreated view is
         # briefly absent, and ol-analytics-api queries these live.
         context.log.info(
-            "Materialized views whose columns differ from the dbt manifest -- "
-            "building with --full-refresh so the new SELECT actually lands: %s",
+            "Building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )
         build_args.append("--full-refresh")
@@ -190,5 +250,6 @@ def starrocks_dbt_assets(
             last_exc = exc
             continue
 
+        _record_definitions(context, starrocks, manifest, recorded, invocation)
         yield from events
         return

@@ -17,13 +17,19 @@ from lakehouse.lib.starrocks_dbt import (
     RETRY_BASE_DELAY,
     ChangeTrackedView,
     MaterializedViewRefreshError,
+    built_relations,
     change_tracked_views,
+    definition_hashes,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
     materialized_view_relations,
+    record_built_definitions,
+    record_definitions_sql,
+    recorded_definitions,
+    redefined_relations,
     refresh_materialized_views,
     retry_delay,
     seed_change_log_sql,
@@ -195,10 +201,20 @@ class TestRetryDelay:
 
 
 def _model_node(
-    name, *, schema="b2b_analytics", materialized, tags, columns=None, meta=None
+    name,
+    *,
+    schema="b2b_analytics",
+    materialized,
+    tags,
+    columns=None,
+    meta=None,
+    raw_code="select 1",
+    macros=(),
+    unrendered_config=None,
 ):
     return {
         "resource_type": "model",
+        "package_name": "open_learning",
         "schema": schema,
         "alias": name,
         "tags": tags,
@@ -206,11 +222,25 @@ def _model_node(
         # dbt keys `columns` by name and nests the docs under it; only the keys
         # matter here.
         "columns": {name: {"name": name} for name in columns or []},
+        "raw_code": raw_code,
+        "depends_on": {"macros": list(macros)},
+        "unrendered_config": unrendered_config or {},
     }
 
 
-def _manifest(nodes):
-    return {"nodes": {f"model.open_learning.{n['alias']}": n for n in nodes}}
+def _macro(sql, *, package="open_learning", macros=()):
+    return {
+        "package_name": package,
+        "macro_sql": sql,
+        "depends_on": {"macros": list(macros)},
+    }
+
+
+def _manifest(nodes, macros=None):
+    return {
+        "nodes": {f"model.open_learning.{n['alias']}": n for n in nodes},
+        "macros": macros or {},
+    }
 
 
 class TestMaterializedViewRelations:
@@ -487,6 +517,276 @@ class TestDriftedRelations:
             "b2b_analytics.mv_a",
             "b2b_analytics.mv_b",
         ]
+
+
+def _mv(name="mv_a", **kwargs):
+    return _model_node(
+        name, materialized="materialized_view", tags=["starrocks"], **kwargs
+    )
+
+
+def _hash(node, macros=None, name="b2b_analytics.mv_a"):
+    return definition_hashes(_manifest([node], macros))[name]
+
+
+class TestDefinitionHashes:
+    def test_same_definition_same_hash(self):
+        assert _hash(_mv(raw_code="select 1")) == _hash(_mv(raw_code="select 1"))
+
+    def test_edited_select_with_the_same_columns_changes_the_hash(self):
+        """PR #2913: a filter moved and no column did, so the column comparison
+        saw nothing and the deployed MV would have kept the old SELECT.
+        """
+        before = _mv(raw_code="select user_fk from t where is_active")
+        after = _mv(raw_code="select user_fk from t where is_active or is_certified")
+        assert _hash(before) != _hash(after)
+
+    def test_edited_macro_changes_only_the_models_that_call_it(self):
+        """The same PR's edit was in a macro body. The model files that call it
+        did not change at all.
+        """
+        nodes = [
+            _mv("mv_caller", macros=["macro.open_learning.rows"]),
+            _mv("mv_other"),
+        ]
+        before = definition_hashes(
+            _manifest(nodes, {"macro.open_learning.rows": _macro("select 1")})
+        )
+        after = definition_hashes(
+            _manifest(nodes, {"macro.open_learning.rows": _macro("select 2")})
+        )
+        assert before["b2b_analytics.mv_caller"] != after["b2b_analytics.mv_caller"]
+        assert before["b2b_analytics.mv_other"] == after["b2b_analytics.mv_other"]
+
+    def test_follows_a_macro_called_by_a_macro(self):
+        def macros(inner_sql):
+            return {
+                "macro.open_learning.outer": _macro(
+                    "{{ inner() }}", macros=["macro.open_learning.inner"]
+                ),
+                "macro.open_learning.inner": _macro(inner_sql),
+            }
+
+        node = _mv(macros=["macro.open_learning.outer"])
+        assert _hash(node, macros("select 1")) != _hash(node, macros("select 2"))
+
+    def test_survives_macros_that_call_each_other(self):
+        macros = {
+            "macro.open_learning.a": _macro("a", macros=["macro.open_learning.b"]),
+            "macro.open_learning.b": _macro("b", macros=["macro.open_learning.a"]),
+        }
+        assert _hash(_mv(macros=["macro.open_learning.a"]), macros)
+
+    def test_package_macro_change_is_not_a_change(self):
+        """Otherwise a dbt or dbt-starrocks upgrade would drop and recreate
+        every view ol-analytics-api is serving from.
+        """
+        node = _mv(macros=["macro.dbt.dateadd"])
+
+        def macros(sql):
+            return {"macro.dbt.dateadd": _macro(sql, package="dbt")}
+
+        assert _hash(node, macros("v1")) == _hash(node, macros("v2"))
+
+    def test_project_macro_reached_through_a_package_macro_counts(self):
+        def macros(sql):
+            return {
+                "macro.dbt.dispatching": _macro(
+                    "x", package="dbt", macros=["macro.open_learning.impl"]
+                ),
+                "macro.open_learning.impl": _macro(sql),
+            }
+
+        node = _mv(macros=["macro.dbt.dispatching"])
+        assert _hash(node, macros("v1")) != _hash(node, macros("v2"))
+
+    def test_comment_only_edits_are_not_a_change(self):
+        """A full refresh leaves each view briefly absent. Rewording a comment
+        should not cost that.
+        """
+        before = _mv(raw_code="-- Grain: org\n{# why #}\nselect 1\n")
+        after = _mv(raw_code="-- Grain: org x month\n\n{# why,\nat length #}\nselect 1")
+        assert _hash(before) == _hash(after)
+
+    def test_whitespace_inside_a_line_is_a_change(self):
+        """It could be inside a string literal, and a missed change is the bug
+        this exists to prevent.
+        """
+        assert _hash(_mv(raw_code="select 'a b'")) != _hash(
+            _mv(raw_code="select 'a  b'")
+        )
+
+    def test_a_trailing_comment_is_a_change(self):
+        """Only whole-line comments are dropped: `--` after code could be inside
+        a string literal.
+        """
+        assert _hash(_mv(raw_code="select 1 -- one")) != _hash(
+            _mv(raw_code="select 1 -- uno")
+        )
+
+    def test_build_config_is_part_of_the_definition(self):
+        before = _mv(unrendered_config={"buckets": "8"})
+        after = _mv(unrendered_config={"buckets": "16"})
+        assert _hash(before) != _hash(after)
+
+    def test_config_dbt_applies_without_a_rebuild_is_not(self):
+        before = _mv(unrendered_config={"buckets": "8"})
+        after = _mv(
+            unrendered_config={
+                "buckets": "8",
+                "meta": {"change_tracking": {"key": ["org_key"]}},
+                "tags": ["starrocks", "pii"],
+                "grants": {"select": ["reader"]},
+            }
+        )
+        assert _hash(before) == _hash(after)
+
+    def test_only_starrocks_materialized_views(self):
+        manifest = _manifest(
+            [
+                _mv("mv_a"),
+                _model_node("a_table", materialized="table", tags=["starrocks"]),
+                _model_node("trino_mv", materialized="materialized_view", tags=[]),
+            ]
+        )
+        assert list(definition_hashes(manifest)) == ["b2b_analytics.mv_a"]
+
+
+class TestRedefinedRelations:
+    LIVE = {"b2b_analytics.mv_a": {"org_key"}}  # noqa: RUF012
+
+    def test_recorded_hash_matches(self):
+        """The common case, and like matching columns it must not force a full
+        refresh.
+        """
+        definitions = {"b2b_analytics.mv_a": "abc"}
+        assert redefined_relations(definitions, definitions, self.LIVE) == []
+
+    def test_recorded_hash_differs(self):
+        assert redefined_relations(
+            {"b2b_analytics.mv_a": "new"}, {"b2b_analytics.mv_a": "old"}, self.LIVE
+        ) == ["b2b_analytics.mv_a"]
+
+    def test_a_live_view_with_no_record_is_rebuilt(self):
+        """Nothing says which definition it was built from. This is every view
+        on the first build after the check ships.
+        """
+        assert redefined_relations({"b2b_analytics.mv_a": "new"}, {}, self.LIVE) == [
+            "b2b_analytics.mv_a"
+        ]
+
+    def test_a_view_that_does_not_exist_yet_is_not_rebuilt(self):
+        assert redefined_relations({"b2b_analytics.mv_new": "new"}, {}, self.LIVE) == []
+
+
+class TestRecordedDefinitions:
+    RELATIONS = ("b2b_analytics.mv_a", "b2b_learner_records.mv_b")
+
+    def test_a_schema_with_no_table_is_not_queried(self):
+        """Before the first recording the table does not exist, and selecting
+        from it would fail the build.
+        """
+        queries: list[str] = []
+        live = {"b2b_analytics.mv_a": {"org_key"}}
+        assert recorded_definitions(self.RELATIONS, live, queries.append) == {}
+        assert queries == []
+
+    def test_reads_each_schema_that_has_one(self):
+        rows = {
+            "b2b_analytics.dbt_mv_definitions": [
+                {"relation_name": "b2b_analytics.mv_a", "definition_hash": "abc"}
+            ],
+            "b2b_learner_records.dbt_mv_definitions": [
+                {"relation_name": "b2b_learner_records.mv_b", "definition_hash": "def"}
+            ],
+        }
+        live = {table: {"relation_name", "definition_hash"} for table in rows}
+        assert recorded_definitions(
+            self.RELATIONS, live, lambda sql: rows[sql.rsplit(" ", 1)[1]]
+        ) == {"b2b_analytics.mv_a": "abc", "b2b_learner_records.mv_b": "def"}
+
+
+class TestBuiltRelations:
+    def test_successful_materialized_views_only(self):
+        manifest = _manifest(
+            [
+                _mv("mv_ok"),
+                _mv("mv_failed"),
+                _mv("mv_not_selected"),
+                _model_node("a_table", materialized="table", tags=["starrocks"]),
+            ]
+        )
+        run_results = {
+            "results": [
+                {"unique_id": "model.open_learning.mv_ok", "status": "success"},
+                {"unique_id": "model.open_learning.mv_failed", "status": "error"},
+                {"unique_id": "model.open_learning.a_table", "status": "success"},
+                {"unique_id": "test.open_learning.not_null_x", "status": "pass"},
+            ]
+        }
+        assert built_relations(manifest, run_results) == {"b2b_analytics.mv_ok"}
+
+
+class TestRecordDefinitionsSql:
+    def test_one_create_and_one_overwrite_per_schema(self):
+        statements = record_definitions_sql(
+            {
+                "b2b_analytics.mv_b": "h2",
+                "b2b_analytics.mv_a": "h1",
+                "b2b_learner_records.mv_c": "h3",
+            }
+        )
+        rows = (
+            "select cast('b2b_analytics.mv_a' as varchar(255)) as relation_name, "
+            "cast('h1' as varchar(64)) as definition_hash union all "
+            "select cast('b2b_analytics.mv_b' as varchar(255)) as relation_name, "
+            "cast('h2' as varchar(64)) as definition_hash"
+        )
+        table = "b2b_analytics.dbt_mv_definitions"
+        columns = "relation_name, definition_hash"
+        assert statements[:2] == [
+            f"create table if not exists {table} as {rows}",
+            f"insert overwrite {table} ({columns}) select {columns} from ({rows}) d",  # noqa: S608
+        ]
+        assert [s.split(" as ")[0].split(" (")[0] for s in statements[2:]] == [
+            "create table if not exists b2b_learner_records.dbt_mv_definitions",
+            "insert overwrite b2b_learner_records.dbt_mv_definitions",
+        ]
+
+    def test_refuses_a_name_it_cannot_write_as_a_literal(self):
+        with pytest.raises(ValueError, match="schema-qualified"):
+            record_definitions_sql({"b2b_analytics.mv'; drop table x": "h"})
+
+
+class TestRecordBuiltDefinitions:
+    def test_keeps_what_was_not_built_and_forgets_what_left_the_manifest(self):
+        """The overwrite replaces the whole table, so a view this run did not
+        build has to be written back with the hash it already had, not its
+        current one: it still has its old SELECT.
+        """
+        definitions = {
+            "b2b_analytics.mv_built": "new",
+            "b2b_analytics.mv_not_built": "new",
+        }
+        recorded = {
+            "b2b_analytics.mv_built": "old",
+            "b2b_analytics.mv_not_built": "old",
+            "b2b_analytics.mv_removed": "old",
+        }
+        statements: list[str] = []
+        record_built_definitions(
+            definitions, recorded, ["b2b_analytics.mv_built"], statements.append
+        )
+        assert statements == record_definitions_sql(
+            {"b2b_analytics.mv_built": "new", "b2b_analytics.mv_not_built": "old"}
+        )
+
+    def test_nothing_built_and_nothing_recorded_writes_nothing(self):
+        statements: list[str] = []
+        record_built_definitions(
+            {"b2b_analytics.mv_a": "new"}, {}, [], statements.append
+        )
+        assert statements == []
 
 
 # Verbatim (stack traces trimmed) from the 2026-09-25 b2b_analytics_starrocks_job
