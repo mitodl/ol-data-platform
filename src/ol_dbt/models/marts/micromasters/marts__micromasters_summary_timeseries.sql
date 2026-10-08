@@ -16,8 +16,10 @@ with enrollments as (
 , timeseries as (
     select end_date
     from unnest(
-        sequence(date '2014-01-01', current_date, interval '1' month) || current_date
+        sequence(date '2014-01-01', current_date, interval '1' month)
     ) as t(end_date) -- noqa
+    union all
+    select current_date as end_date
 )
 
 , enrollments_by_program as (
