@@ -461,8 +461,9 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
             try:
                 res = future.result()
                 if res["ok"]:
-                    tables_cleaned += 1
                     exp = res.get("expire", {})
+                    # A table with nothing past its retention is not cleaned.
+                    tables_cleaned += int(not exp.get("skipped"))
                     snapshots_expired += exp.get("eligible_count", 0)
                     staging_branches_removed += exp.get("stale_branch_count", 0)
                 else:
