@@ -4,9 +4,11 @@
 -- A block counts when Open edX records completion on it: every block that is not a
 -- container, and not a discussion, which Open edX excludes from completion. The container
 -- list is a deny list so a newly installed XBlock type counts without a change here.
--- Blocks under a staff-only chapter, sequential or vertical are left out. Other per-learner
--- visibility (content groups, release dates, A/B split_test branches) is not modelled, so
--- the total can exceed what one learner is shown.
+-- Blocks under a staff-only chapter, sequential or vertical are left out. Staff-only is
+-- checked on the block, its parent and its nearest vertical, sequential and chapter, so it
+-- is not followed through a vertical nested in a split_test or conditional. Other
+-- per-learner visibility (content groups, release dates, A/B split_test branches) is not
+-- modelled, so the total can exceed what one learner is shown.
 -- A randomized pool (library_content, itembank) shows each learner max_count of its
 -- children, so the pool is one progress unit worth max_count and its children share it.
 -- Every other block is its own unit worth 1.
@@ -76,8 +78,9 @@ with content as (
         , courserun_readable_id
         , block_id
         -- The structure records max_count only when it differs from the Open edX default of 1.
+        -- Trino reads a JSON null as the string 'null'.
         , coalesce(
-            cast({{ json_query_string('block_metadata', "'$.max_count'") }} as integer), 1
+            cast(nullif({{ json_query_string('block_metadata', "'$.max_count'") }}, 'null') as integer), 1
         ) as max_count
     from content
     where block_category in ('{{ pool_categories | join("', '") }}')

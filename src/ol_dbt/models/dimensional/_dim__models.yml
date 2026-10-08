@@ -1647,8 +1647,9 @@ models:
   - name: content_units_completed
     description: int, progress units of the run's current course structure the learner
       has completed, from afact_learner_courserun_content_progress. 0 when the learner
-      has completed none. Null when the run has no units to count, which is every
-      edxorg and bootcamps run.
+      has no completion matched to them, which includes a learner whose Open edX user
+      id is not on their dim_user row. Null when the run has no units to count, which
+      is every edxorg and bootcamps run.
   - name: content_units_total
     description: int, progress units in the run's current course structure, from dim_course_content_progress_block.
       The same for every learner in the run, so it can exceed what one learner is
@@ -1656,8 +1657,8 @@ models:
       run.
   - name: content_progress
     description: double, content_units_completed / content_units_total, between 0.0
-      and 1.0 like grade_value. Null when content_units_total is. Not an input to
-      completion_status; a certified learner can be below 1.0.
+      and 1.0 like grade_value. Null when content_units_total is null or 0. Not an
+      input to completion_status; a certified learner can be below 1.0.
     tests:
     - dbt_utils.accepted_range:
         arguments:
@@ -1671,7 +1672,8 @@ models:
     where is_latest). A block counts when Open edX records completion on it:
     every block that is not a container (course, chapter, sequential, vertical,
     library_content, itembank, split_test, conditional) and not a discussion.
-    Blocks under a staff-only chapter, sequential or vertical are left out.
+    Blocks under a staff-only chapter, sequential or vertical are left out,
+    except through a vertical nested in a split_test or conditional.
     MITx Online, xPRO and residential only, the platforms with block completion
     data; edX.org has a course structure and is left out.
 
