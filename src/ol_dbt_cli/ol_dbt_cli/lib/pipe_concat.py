@@ -40,11 +40,18 @@ _DETAIL = (
 # Comments and quoted text are consumed whole so a `||` inside them is not
 # reported. A Jinja expression or statement is consumed too, and the strings in
 # it are then read as SQL, because that is how SQL is handed to a macro:
-# `{{ from_iso8601_timestamp("created_on || 'Z'") }}`.
+# `{{ from_iso8601_timestamp("created_on || 'Z'") }}`. A Jinja block ends only at
+# a closing delimiter outside its strings, so a hook such as
+# `post_hook="update t set v = a || {{ this }}"` is consumed whole.
+_JINJA_QUOTED = r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*\""""
+_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
 _TOKEN = re.compile(
-    r"""
-      \{\#.*?\#\}              # Jinja comment
-    | (?P<jinja>\{\{.*?\}\}|\{%.*?%\})
+    rf"""
+      \{{\#.*?\#\}}              # Jinja comment
+    | (?P<jinja>
+          \{{\{{(?:{_JINJA_QUOTED}|[^'"}}]|\}}(?!\}}))*\}}\}}
+        | \{{%(?:{_JINJA_QUOTED}|[^'"%]|%(?!\}}))*%\}}
+      )
     | /\*.*?\*/                # SQL block comment
     | --[^\n]*                 # SQL line comment
     | '(?:[^'\\]|\\.|'')*'     # single-quoted string
@@ -72,10 +79,19 @@ def _pipe_offsets(sql: str, base: int = 0) -> Iterator[int]:
                 yield from _pipe_offsets(string.group(group), base + match.start() + string.start(group))
 
 
+def _macro_declarations(source: str) -> Iterator[re.Match[str]]:
+    """Find the macros *source* defines. A macro inside a Jinja comment defines nothing.
+
+    The comments are blanked rather than removed so offsets still index *source*.
+    """
+    blanked = _JINJA_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), source)
+    return _MACRO.finditer(blanked)
+
+
 def _other_engine_spans(source: str, starrocks_macros: frozenset[str]) -> list[tuple[int, int]]:
     """Spans of the macro bodies in *source* that StarRocks never renders."""
     spans = []
-    for match in _MACRO.finditer(source):
+    for match in _macro_declarations(source):
         name = match.group("name")
         other_engine = name.startswith(_OTHER_ENGINE_PREFIXES) or (
             name.startswith("default__") and name.removeprefix("default__") in starrocks_macros
@@ -117,7 +133,7 @@ def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
     starrocks_macros = frozenset(
         match.group("name").removeprefix("starrocks__")
         for source in sources.values()
-        for match in _MACRO.finditer(source)
+        for match in _macro_declarations(source)
         if match.group("name").startswith("starrocks__")
     )
 

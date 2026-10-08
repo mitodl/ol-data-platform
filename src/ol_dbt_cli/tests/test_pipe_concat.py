@@ -56,6 +56,7 @@ def test_ignores_the_operator_in_comments_and_quoted_text(dbt_dir: Path, sql: st
         "select {{ dbt.safe_cast('a || b', api.Column.translate_type('string')) }}",
         """{% set key = "first_name || last_name" %}\nselect 1""",
         """{{ config(post_hook="update {{ this }} set k = a || b") }}\nselect 1""",
+        """{{ config(post_hook="update t set value = a || {{ this }}") }}\nselect 1""",
     ],
 )
 def test_reports_the_operator_in_sql_passed_as_a_jinja_string(dbt_dir: Path, sql: str) -> None:
@@ -90,6 +91,14 @@ def test_exempts_macro_bodies_written_for_another_engine(dbt_dir: Path) -> None:
         "{% macro starrocks__g(a) %}concat({{ a }}, 'z'){% endmacro %}\n"
     )
     assert _messages(dbt_dir) == []
+
+
+def test_a_commented_out_starrocks_macro_does_not_exempt_the_default(dbt_dir: Path) -> None:
+    (dbt_dir / "macros" / "x.sql").write_text(
+        "{# {% macro starrocks__f(a) %}concat({{ a }}, 'z'){% endmacro %} #}\n"
+        "{% macro default__f(a) %}{{ a }} || 'z'{% endmacro %}\n"
+    )
+    assert _messages(dbt_dir) == ["macros/x.sql:2 uses the || operator"]
 
 
 def test_reports_macro_bodies_starrocks_renders(dbt_dir: Path) -> None:
