@@ -29,8 +29,14 @@ from pydantic import Field, PrivateAttr
 log = logging.getLogger(__name__)
 
 TIKA_CONTENT_KEY = "X-TIKA:content"
+TIKA_CONTAINER_EXCEPTION_KEY = "X-TIKA:EXCEPTION:container_exception"
 
-# MIME types Tika handles well via the /rmeta/text endpoint.
+
+class TikaParseError(Exception):
+    """Tika could not parse the document it was sent."""
+
+
+# MIME types Tika handles well.
 # Anything outside this set is likely to return empty text or garbage.
 #
 # The last four were added to close a gap against MIT Learn, which filters by
@@ -271,6 +277,7 @@ class TikaResource(ConfigurableResource[None]):
         Raises:
             httpx.HTTPStatusError: If Tika responds with a non-2xx status.
             httpx.TimeoutException: If the request exceeds :attr:`timeout` seconds.
+            TikaParseError: If Tika could not parse the document.
         """
         if _base_content_type(content_type) not in SUPPORTED_CONTENT_TYPES:
             log.debug(
@@ -291,9 +298,16 @@ class TikaResource(ConfigurableResource[None]):
 
         # One entry for the document and one per embedded file. An entry with
         # no text has no content key.
-        text = "".join(
-            part.get(TIKA_CONTENT_KEY) or "" for part in response.json()
-        ).strip()
+        parts = response.json()
+
+        # /rmeta answers 200 for a document it cannot parse, where /tika
+        # answered 422. Without this an unparseable document reads as an empty
+        # one, and the caller's health check counts empty as a success.
+        parse_error = parts[0].get(TIKA_CONTAINER_EXCEPTION_KEY)
+        if parse_error:
+            raise TikaParseError(parse_error.splitlines()[0])
+
+        text = "".join(part.get(TIKA_CONTENT_KEY) or "" for part in parts).strip()
         return text if text else None
 
     def extract_metadata(

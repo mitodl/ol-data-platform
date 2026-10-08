@@ -7,6 +7,7 @@ import pytest
 from ol_orchestrate.resources.tika import (
     RETRY_DELAYS_SECONDS,
     SUPPORTED_CONTENT_TYPES,
+    TikaParseError,
     TikaResource,
     _base_content_type,
 )
@@ -96,6 +97,26 @@ def test_extract_text_joins_the_embedded_parts(tika: TikaResource) -> None:
         result = tika.extract_text(b"PK...", "application/pdf")
 
     assert result == "body\nattached"
+
+
+def test_extract_text_raises_when_tika_could_not_parse(tika: TikaResource) -> None:
+    """/rmeta answers 200 for a corrupt document; it must not read as empty."""
+    resp = _mock_response()
+    resp.json.return_value = [
+        {
+            "Content-Type": "application/pdf",
+            "X-TIKA:EXCEPTION:container_exception": (
+                "java.io.IOException: Missing root object specification in trailer."
+                "\n\tat org.apache.pdfbox.pdfparser.PDFParser.initialParse"
+            ),
+        }
+    ]
+    mock_http = _make_mock_http_client(resp)
+    with (
+        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
+        pytest.raises(TikaParseError, match="Missing root object"),
+    ):
+        tika.extract_text(b"%PDF-1.4 not a pdf", "application/pdf")
 
 
 def test_extract_text_skips_unsupported_content_type(tika: TikaResource) -> None:
