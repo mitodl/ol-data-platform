@@ -26,6 +26,17 @@ with forum_thread as (
     where courseaccess_role in ('staff', 'instructor')
 )
 
+-- A retired learner's posts are not feedback to keep. The forum overwrites them with
+-- '[deleted]' at retirement, but posts copied to MySQL before a retirement that ran
+-- against Mongo still hold the original text, so the LMS rename is what is trusted.
+-- A row the forum did overwrite carries user_retired_username, which also covers a
+-- retirement that stopped before the LMS rename.
+, retired_users as (
+    select openedx_user_id
+    from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
+    where substr(user_username, 1, 14) = 'retired__user_'
+)
+
 -- An inline discussion's commentable_id is its block's discussion_id. A course run can
 -- reuse one discussion_id across units, so those stay unresolved rather than guessed.
 , discussion_block as (
@@ -75,6 +86,7 @@ with forum_thread as (
         , forumthread_is_visible as is_visible
         , forumthread_created_on as post_created_on
         , forumthread_updated_on as post_updated_on
+        , user_retired_username is not null as is_forum_retired
     from forum_thread
 
     union all
@@ -93,6 +105,7 @@ with forum_thread as (
         , forumcomment_is_visible as is_visible
         , forumcomment_created_on as post_created_on
         , forumcomment_updated_on as post_updated_on
+        , user_retired_username is not null as is_forum_retired
     from forum_comment
 )
 
@@ -107,6 +120,7 @@ with forum_thread as (
         , posts.post_type_order
         , posts.is_anonymous
         , posts.is_visible
+        , posts.is_forum_retired
         , coalesce(mongo_created.created_on, posts.post_created_on) as post_created_on
         -- Bodies are HTML; the LLM and Presidio should see plain text
         , trim({{ regexp_replace_all(
@@ -134,7 +148,12 @@ with forum_thread as (
         on
             dated_posts.user_id = course_staff.openedx_user_id
             and dated_posts.courserun_readable_id = course_staff.courserun_readable_id
-    where course_staff.openedx_user_id is null
+    left join retired_users
+        on dated_posts.user_id = retired_users.openedx_user_id
+    where
+        course_staff.openedx_user_id is null
+        and retired_users.openedx_user_id is null
+        and not dated_posts.is_forum_retired
 )
 
 , numbered_turns as (
@@ -157,11 +176,21 @@ select
     -- The title often carries the whole question ("images won't load" over a body of
     -- "eom"), and the summarizer reads only text, so it leads the first kept turn.
     , case
-        when numbered_turns.turn_index = 1 and forum_thread.forumthread_title is not null
+        when
+            numbered_turns.turn_index = 1
+            and forum_thread.forumthread_title is not null
+            and thread_author_retired.openedx_user_id is null
+            and forum_thread.user_retired_username is null
             then forum_thread.forumthread_title || chr(10) || chr(10) || numbered_turns.post_body
         else numbered_turns.post_body
     end as text
-    , forum_thread.forumthread_title as title
+    -- Other learners' replies stay, without the retired author's title over them
+    , case
+        when
+            thread_author_retired.openedx_user_id is null
+            and forum_thread.user_retired_username is null
+            then forum_thread.forumthread_title
+    end as title
     , cast(numbered_turns.forumthread_id as varchar) as conversation_ref
     , numbered_turns.turn_index
     , numbered_turns.turn_index = 1 as is_conversation_opening
@@ -194,6 +223,8 @@ inner join forum_thread
     on numbered_turns.forumthread_id = forum_thread.forumthread_id
 left join users
     on numbered_turns.user_id = users.openedx_user_id
+left join retired_users as thread_author_retired
+    on forum_thread.user_id = thread_author_retired.openedx_user_id
 left join discussion_block
     on
         forum_thread.courserun_readable_id = discussion_block.courserun_readable_id
