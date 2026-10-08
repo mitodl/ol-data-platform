@@ -1,0 +1,14 @@
+# marimo runs as the server that marimo-jupyter-extension proxies to, and its
+# AI assistant runs in that server process, so the Bedrock model client is
+# installed alongside it. The pydantic-ai-slim range is the one marimo's own
+# `recommended` extra declares.
+#
+# uv is pinned here rather than copied in from the uv image: marimo[sandbox]
+# depends on the `uv` wheel, which lands in /opt/conda/bin ahead of
+# /usr/local/bin on PATH, so a copied binary is never the one that runs.
+#
+# No data-science packages here: each notebook declares its own via /// script.
+marimo[sandbox]==0.25.1
+marimo-jupyter-extension==0.5.0
+pydantic-ai-slim[bedrock]>=1.107.0,<3.0.0
+uv==0.12.23
