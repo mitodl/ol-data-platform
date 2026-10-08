@@ -105,54 +105,62 @@ models:
 - name: mv_b2b_monthly_engagement_trend
   description: >
     Monthly engagement, enrollment, and content-interaction totals per org.
-    Manual-refresh materialized view. Source: organization_administration_report,
-    filtered to rows with a non-null organization_key (which still includes
-    free-text fallback values; those resolve to a null sso_organization_id).
-    Consumers: L&D manager engagement trend chart.
+    Manual-refresh materialized view. Source: afact_learner_courserun_progress
+    (enrollments, certificates) and afact_learner_courserun_daily_activity
+    (activity), for learners with an active enrollment in a course run owned
+    by one of the organization's contracts. A learner who unenrolled is left
+    out, along with their activity and certificate. Consumers: L&D manager
+    engagement trend chart.
   columns:
   - name: organization_key
-    description: >
-      Org identifier from organization_administration_report. Includes free-text
-      fallback values that resolve to no mitxonline org.
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
-      is the identifier the ol-analytics-api filters organizations on. Null for
-      organization_keys that don't resolve to a mitxonline org.
+      is the identifier the ol-analytics-api filters organizations on.
   - name: organization_name
     description: Display name of the organization.
   - name: activity_year_and_month
-    description: The month this row aggregates, from the source report.
+    description: The month this row aggregates, as YYYY-MM.
   - name: monthly_active_learners
-    description: Distinct learners with any activity in the month.
+    description: >
+      Distinct learners with tracked course activity in the month (a video
+      play, problem check, navigation, discussion event or chatbot submit).
+      Enrolling or being issued a certificate does not count as activity.
   - name: new_enrollments
     description: >
-      Sum of the daily enrolled_count flag within the month, an EVENT count
+      Active enrollments created in the month, an EVENT count
       (learner x course run), not a learner count. Floor it via
       enrolling_learners, not via its own value.
   - name: enrolling_learners
     description: >
       Distinct learners who newly enrolled in the month. They are the cohort
-      new_enrollments is attributable to. Note enrolling does not by itself set
-      active_count, so this is not a subset of monthly_active_learners.
+      new_enrollments is attributable to. Enrolling is not activity, so
+      this is not a subset of monthly_active_learners.
   - name: certificates_earned
     description: >
       Certificates earned in the month, an EVENT count (learner x course run).
       Floor it via certified_learners.
   - name: certified_learners
-    description: Distinct learners who earned a certificate in the month.
+    description: >
+      Distinct learners who earned a certificate in the month. Earning a
+      certificate is not activity, so this is not a subset of
+      monthly_active_learners.
   - name: total_videos_watched
     description: >
-      Videos watched in the month, an EVENT count. Floor it via
+      Videos played in the month (distinct videos per learner per day,
+      summed), an EVENT count. Floor it via
       video_watchers.
   - name: video_watchers
     description: >
       Distinct learners who watched a video in the month. They are the cohort
-      total_videos_watched is attributable to, and a strict subset of
+      total_videos_watched is attributable to, and a subset of
       monthly_active_learners.
   - name: total_problems_attempted
     description: >
-      Problems attempted in the month, an EVENT count. Floor it via
+      Problems checked in the month (distinct problems per learner per day,
+      summed; viewing an answer is not an attempt), an EVENT count. Floor it via
       problem_attempters.
   - name: problem_attempters
     description: >
@@ -166,6 +174,11 @@ models:
     description: >
       Distinct learners who used the chatbot in the month. They are the cohort
       total_chatbot_interactions is attributable to.
+  - name: contributing_learners
+    description: >
+      Distinct learners with any row behind this month: tracked activity, a new
+      enrollment or a certificate. Every other learner count in the row is a
+      subset of it, so ol-analytics-api gates the whole row on it.
 
 - name: mv_b2b_program_funnel
   description: >
@@ -215,20 +228,19 @@ models:
 - name: mv_b2b_content_engagement_depth
   description: >
     All-time content engagement depth per org x course_run. Manual-refresh
-    materialized view. Source: organization_administration_report, filtered to rows
-    with a non-null organization_key (which still includes free-text fallback
-    values; those resolve to a null sso_organization_id). Consumers: L&D manager
-    course detail panel.
+    materialized view. Source: afact_learner_courserun_progress (enrollments,
+    certificates) and afact_learner_courserun_daily_activity (activity), for
+    learners with an active enrollment in a course run owned by one of the
+    organization's contracts. A learner who unenrolled is left out, along with
+    their activity and certificate. Consumers: L&D manager course detail panel.
   columns:
   - name: organization_key
-    description: >
-      Org identifier from organization_administration_report. Includes free-text
-      fallback values that resolve to no mitxonline org.
+    description: Org identifier, joined via dim_organization (platform='mitxonline'
+      only).
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
-      is the identifier the ol-analytics-api filters organizations on. Null for
-      organization_keys that don't resolve to a mitxonline org.
+      is the identifier the ol-analytics-api filters organizations on.
   - name: organization_name
     description: Display name of the organization.
   - name: courserun_readable_id
@@ -236,10 +248,11 @@ models:
   - name: courserun_title
     description: Course run title.
   - name: total_enrolled_learners
-    description: Distinct learners appearing for this org x course run.
+    description: Distinct learners with an active enrollment in this course run.
   - name: engaged_learners
     description: >
-      Distinct learners with any activity (active_count > 0). They are the
+      Distinct enrolled learners with at least one day of tracked course
+      activity in the run. A certificate alone does not count. They are the
       denominator of both avg_* columns and of engagement_rate_pct.
   - name: engagement_rate_pct
     description: engaged_learners / total_enrolled_learners * 100.
@@ -249,7 +262,7 @@ models:
   - name: video_watchers
     description: >
       Distinct learners who watched at least one video. They are the cohort
-      total_videos_watched is attributable to, and a strict subset of
+      total_videos_watched is attributable to, and a subset of
       engaged_learners.
   - name: avg_videos_per_engaged_learner
     description: >
@@ -257,7 +270,9 @@ models:
       learner, so learners who watched nothing count as 0.
   - name: total_problems_attempted
     description: >
-      Problems attempted, all-time. This is an EVENT count. Floor it via
+      Problems checked, all-time (distinct problems per learner per day,
+      summed; viewing an answer is not an attempt). This is an EVENT count. Floor
+      it via
       problem_attempters.
   - name: problem_attempters
     description: >
@@ -279,8 +294,8 @@ models:
     description: chatbot_users / total_enrolled_learners * 100.
   - name: certificates_earned
     description: >
-      Certificates earned, all-time. This is an EVENT count (learner x course
-      run), so it is not a learner cohort and cannot floor itself.
+      Enrolled learners holding an unrevoked certificate for this course run.
+      One per learner, so it is its own cohort.
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -348,11 +363,9 @@ models:
     exist because the MIT Learn dashboard mirrors mitxonline's manager
     dashboard, which is nested under
     manager/organizations/{org}/contracts/{contract}, while the org-level
-    panels remain in service. Manual-refresh materialized view. Source:
-    organization_administration_report inner-joined to the dimensional
-    contract/course-run bridge, so free-text organization_key rows (which
-    resolve to no contract) are excluded here even though the org-level view
-    keeps them. Publishing both grains makes a suppressed contract recoverable
+    panels remain in service. Manual-refresh materialized view. Source: the
+    same facts as the org-level view, grouped by the contract that owns the
+    course run. Publishing both grains makes a suppressed contract recoverable
     by subtraction from the org row once an org holds more than one contract;
     see the complement-disclosure work in ol-analytics-api. Consumers: L&D
     manager engagement trend chart, contract-scoped.
@@ -376,40 +389,46 @@ models:
   - name: b2b_contract_name
     description: Display name of the contract.
   - name: activity_year_and_month
-    description: The month this row aggregates, from the source report.
+    description: The month this row aggregates, as YYYY-MM.
   - name: monthly_active_learners
     description: >
-      Distinct learners with any activity in the month, under course runs
+      Distinct learners with tracked course activity in the month (enrolling
+      or being issued a certificate does not count), under course runs
       belonging to this contract. A learner active under two contracts counts
       in both rows, so contract rows do not partition the org's learner count.
   - name: new_enrollments
     description: >
-      Sum of the daily enrolled_count flag within the month, an EVENT count
+      Active enrollments created in the month, an EVENT count
       (learner x course run), not a learner count. Floor it via
       enrolling_learners, not via its own value.
   - name: enrolling_learners
     description: >
       Distinct learners who newly enrolled in the month. They are the cohort
-      new_enrollments is attributable to. Note enrolling does not by itself set
-      active_count, so this is not a subset of monthly_active_learners.
+      new_enrollments is attributable to. Enrolling is not activity, so
+      this is not a subset of monthly_active_learners.
   - name: certificates_earned
     description: >
       Certificates earned in the month, an EVENT count (learner x course run).
       Floor it via certified_learners.
   - name: certified_learners
-    description: Distinct learners who earned a certificate in the month.
+    description: >
+      Distinct learners who earned a certificate in the month. Earning a
+      certificate is not activity, so this is not a subset of
+      monthly_active_learners.
   - name: total_videos_watched
     description: >
-      Videos watched in the month, an EVENT count. Floor it via
+      Videos played in the month (distinct videos per learner per day,
+      summed), an EVENT count. Floor it via
       video_watchers.
   - name: video_watchers
     description: >
       Distinct learners who watched a video in the month. They are the cohort
-      total_videos_watched is attributable to, and a strict subset of
+      total_videos_watched is attributable to, and a subset of
       monthly_active_learners.
   - name: total_problems_attempted
     description: >
-      Problems attempted in the month, an EVENT count. Floor it via
+      Problems checked in the month (distinct problems per learner per day,
+      summed; viewing an answer is not an attempt), an EVENT count. Floor it via
       problem_attempters.
   - name: problem_attempters
     description: >
@@ -423,6 +442,11 @@ models:
     description: >
       Distinct learners who used the chatbot in the month. They are the cohort
       total_chatbot_interactions is attributable to.
+  - name: contributing_learners
+    description: >
+      Distinct learners with any row behind this month: tracked activity, a new
+      enrollment or a certificate. Every other learner count in the row is a
+      subset of it, so ol-analytics-api gates the whole row on it.
 - name: mv_b2b_contract_content_engagement_depth
   description: >
     All-time content engagement depth per org x contract x course run. This is
@@ -431,9 +455,9 @@ models:
     adding the contract labels rows rather than splitting them: every count
     here equals its org-level counterpart for the same course run, which is
     what makes the complement recoverable when only some contracts are
-    suppressed. Manual-refresh materialized view. Source:
-    organization_administration_report inner-joined to the dimensional
-    contract/course-run bridge. Consumers: L&D manager content-engagement
+    suppressed. Manual-refresh materialized view. Source: the same facts as
+    the org-level view, grouped by the contract that owns the course run.
+    Consumers: L&D manager content-engagement
     panel, contract-scoped.
   columns:
   - name: organization_key
@@ -459,10 +483,12 @@ models:
   - name: courserun_title
     description: Display title of the course run.
   - name: total_enrolled_learners
-    description: Distinct learners enrolled in this course run under this contract.
+    description: Distinct learners with an active enrollment in this course run under
+      this contract.
   - name: engaged_learners
     description: >
-      Distinct learners with any activity (active_count > 0) in this course run.
+      Distinct enrolled learners with at least one day of tracked course
+      activity in this course run. A certificate alone does not count.
   - name: engagement_rate_pct
     description: engaged_learners as a percentage of total_enrolled_learners.
   - name: total_videos_watched
@@ -472,7 +498,7 @@ models:
   - name: video_watchers
     description: >
       Distinct learners who watched a video. They are the cohort
-      total_videos_watched is attributable to, and a strict subset of
+      total_videos_watched is attributable to, and a subset of
       engaged_learners.
   - name: avg_videos_per_engaged_learner
     description: >
@@ -482,7 +508,9 @@ models:
       published engaged_learners recovers the total.
   - name: total_problems_attempted
     description: >
-      Problems attempted in this course run, an EVENT count. Floor it via
+      Problems checked in this course run (distinct problems per learner per
+      day, summed; viewing an answer is not an attempt), an EVENT count. Floor it
+      via
       problem_attempters.
   - name: problem_attempters
     description: >
@@ -504,6 +532,6 @@ models:
     description: chatbot_users as a percentage of total_enrolled_learners.
   - name: certificates_earned
     description: >
-      Certificates earned in this course run, an EVENT count. This view emits
-      no certified-learner cohort, so ol-analytics-api floors it as a count of
-      itself, which is weaker than flooring a cohort.
+      Enrolled learners holding an unrevoked certificate for this course run.
+      One per learner, so ol-analytics-api flooring it as a count of itself
+      floors a learner cohort.

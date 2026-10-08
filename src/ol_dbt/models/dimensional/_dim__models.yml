@@ -1436,6 +1436,13 @@ models:
     count(distinct activity_date) over this table. Certificates and
     enrollments don't count as activity here.
 
+    This is the source for learner engagement measures and for "active" in
+    the behavioural sense: a learner is active on a day, in a month or in a
+    course run when a row exists for it. That is a different thing from an
+    active enrollment (tfact_enrollment.enrollment_is_active). The
+    b2b_analytics engagement views and the b2b_learner_records views both
+    aggregate this table.
+
     Keyed on user_fk instead of email, unlike organization_administration_report,
     so a learner's rows don't split or drop when their account email changes.
     Rebuilt in full every run, since a learner's user_fk can still be
@@ -1511,9 +1518,11 @@ models:
     description: int, distinct problem blocks with a problem_check event that day.
       Excludes showanswer, which the report's problems_count includes.
   - name: navigation_events
-    description: int, course navigation events that day.
+    description: int, course navigation events that day (a count of events, not of
+      distinct pages), including events with no block.
   - name: discussion_events
-    description: int, discussion forum events that day.
+    description: int, discussion forum events that day (every edx.forum.% event, so
+      viewing a thread counts as well as posting).
   - name: chatbot_interactions
     description: int, distinct (session, block) pairs with an ol_openedx_chat.drawer.submit
       event that day, Open edX chatbot only. Unlike the report, submits with no block_id
