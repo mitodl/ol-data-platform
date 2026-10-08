@@ -11,6 +11,21 @@ from pydantic import Field
 from ol_orchestrate.resources.api_client import BaseApiClient
 
 
+def webhook_status(response: dict[str, Any]) -> str:
+    """Name what MIT Learn did with a learning_resources webhook batch.
+
+    MIT Learn runs the batch as a shadow when its ETLSourceOwnership rows name
+    the webhook as the shadow of the batch's (etl_source, resource_type) pairs:
+    it loads the batch, rolls the load back and answers with what would have
+    changed under ``shadow``. Nothing was delivered in that case.
+
+    :param response: the decoded webhook response
+    :returns: ``shadow`` if the batch was a shadow run, else ``success``
+    :rtype: str
+    """
+    return "shadow" if "shadow" in response else "success"
+
+
 class MITLearnApiClient(BaseApiClient):
     """HTTP client for MIT Learn's signed webhook API.
 
