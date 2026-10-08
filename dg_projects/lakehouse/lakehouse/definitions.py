@@ -283,15 +283,25 @@ if DAGSTER_ENV == "production":
             stacklevel=2,
         )
 
+# The dbt schema, and so the Dagster group, of the raw history snapshots
+# (`snapshots: raw_history: +schema` in dbt_project.yml).
+RAW_HISTORY_GROUP = "history"
+
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
 group_count = len(group_names)
 for group_name in group_names:
     job = define_asset_job(
         name=f"sync_and_stage_{group_name}",
-        selection=AssetSelection.groups(group_name)
-        .downstream(depth=1, include_self=True)
-        .required_multi_asset_neighbors(),
+        # The raw history snapshots read the raw tables directly, so depth 1
+        # reaches them as it does staging. They are left to dbt_automation_sensor
+        # instead: it runs them once per change to raw whichever loader made it,
+        # and a run from this job would not clear the sensor's pending upstream
+        # change, so each sync would snapshot twice.
+        selection=(
+            AssetSelection.groups(group_name).downstream(depth=1, include_self=True)
+            - AssetSelection.groups(RAW_HISTORY_GROUP)
+        ).required_multi_asset_neighbors(),
     )
     interval = group_name_to_interval.get(group_name, 24)  # default to 24 hours
     # No offset needed - K8s autoscaling handles concurrent syncs
