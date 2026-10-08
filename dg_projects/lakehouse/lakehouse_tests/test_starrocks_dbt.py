@@ -210,6 +210,7 @@ def _model_node(
     meta=None,
     raw_code="select 1",
     macros=(),
+    relations=(),
     unrendered_config=None,
 ):
     return {
@@ -222,8 +223,9 @@ def _model_node(
         # dbt keys `columns` by name and nests the docs under it; only the keys
         # matter here.
         "columns": {name: {"name": name} for name in columns or []},
+        "relation_name": f"`{schema}`.`{name}`",
         "raw_code": raw_code,
-        "depends_on": {"macros": list(macros)},
+        "depends_on": {"macros": list(macros), "nodes": list(relations)},
         "unrendered_config": unrendered_config or {},
     }
 
@@ -236,10 +238,11 @@ def _macro(sql, *, package="open_learning", macros=()):
     }
 
 
-def _manifest(nodes, macros=None):
+def _manifest(nodes, macros=None, sources=None):
     return {
         "nodes": {f"model.open_learning.{n['alias']}": n for n in nodes},
         "macros": macros or {},
+        "sources": sources or {},
     }
 
 
@@ -525,8 +528,14 @@ def _mv(name="mv_a", **kwargs):
     )
 
 
-def _hash(node, macros=None, name="b2b_analytics.mv_a"):
-    return definition_hashes(_manifest([node], macros))[name]
+def _hash(node, macros=None, name="b2b_analytics.mv_a", sources=None):
+    return definition_hashes(_manifest([node], macros, sources))[name]
+
+
+# Stand-ins for sha256 hex digests, which is the only shape a recorded hash may
+# have.
+OLD = "0" * 64
+NEW = "1" * 64
 
 
 class TestDefinitionHashes:
@@ -624,6 +633,21 @@ class TestDefinitionHashes:
             _mv(raw_code="select 1 -- uno")
         )
 
+    def test_renamed_source_is_a_change(self):
+        """The model's SQL says `source('dimensional', 'x')` either way; the
+        relation it resolves to is in the sources YAML.
+        """
+        node = _mv(relations=["source.open_learning.dimensional.x"])
+
+        def sources(relation_name):
+            return {
+                "source.open_learning.dimensional.x": {"relation_name": relation_name}
+            }
+
+        assert _hash(node, sources=sources("`lake`.`dim`.`x`")) != _hash(
+            node, sources=sources("`lake`.`dim`.`x_v2`")
+        )
+
     def test_build_config_is_part_of_the_definition(self):
         before = _mv(unrendered_config={"buckets": "8"})
         after = _mv(unrendered_config={"buckets": "16"})
@@ -694,16 +718,32 @@ class TestRecordedDefinitions:
     def test_reads_each_schema_that_has_one(self):
         rows = {
             "b2b_analytics.dbt_mv_definitions": [
-                {"relation_name": "b2b_analytics.mv_a", "definition_hash": "abc"}
+                {"relation_name": "b2b_analytics.mv_a", "definition_hash": OLD}
             ],
             "b2b_learner_records.dbt_mv_definitions": [
-                {"relation_name": "b2b_learner_records.mv_b", "definition_hash": "def"}
+                {"relation_name": "b2b_learner_records.mv_b", "definition_hash": NEW}
             ],
         }
         live = {table: {"relation_name", "definition_hash"} for table in rows}
         assert recorded_definitions(
             self.RELATIONS, live, lambda sql: rows[sql.rsplit(" ", 1)[1]]
-        ) == {"b2b_analytics.mv_a": "abc", "b2b_learner_records.mv_b": "def"}
+        ) == {"b2b_analytics.mv_a": OLD, "b2b_learner_records.mv_b": NEW}
+
+    def test_drops_a_row_that_could_not_be_written_back_as_a_literal(self):
+        """The table is plain data in StarRocks, and its values go back into a
+        statement on the next recording. A view with no usable record is
+        rebuilt, which replaces the row.
+        """
+        table = "b2b_analytics.dbt_mv_definitions"
+        rows = [
+            {"relation_name": "b2b_analytics.mv_a", "definition_hash": "x' or '1"},
+            {"relation_name": "b2b_analytics.mv'--", "definition_hash": OLD},
+            {"relation_name": "b2b_analytics.mv_ok", "definition_hash": OLD},
+        ]
+        live = {table: {"relation_name", "definition_hash"}}
+        assert recorded_definitions(self.RELATIONS, live, lambda _sql: rows) == {
+            "b2b_analytics.mv_ok": OLD
+        }
 
 
 class TestBuiltRelations:
@@ -731,16 +771,16 @@ class TestRecordDefinitionsSql:
     def test_one_create_and_one_overwrite_per_schema(self):
         statements = record_definitions_sql(
             {
-                "b2b_analytics.mv_b": "h2",
-                "b2b_analytics.mv_a": "h1",
-                "b2b_learner_records.mv_c": "h3",
+                "b2b_analytics.mv_b": NEW,
+                "b2b_analytics.mv_a": OLD,
+                "b2b_learner_records.mv_c": NEW,
             }
         )
         rows = (
             "select cast('b2b_analytics.mv_a' as varchar(255)) as relation_name, "
-            "cast('h1' as varchar(64)) as definition_hash union all "
+            f"cast('{OLD}' as varchar(64)) as definition_hash union all "
             "select cast('b2b_analytics.mv_b' as varchar(255)) as relation_name, "
-            "cast('h2' as varchar(64)) as definition_hash"
+            f"cast('{NEW}' as varchar(64)) as definition_hash"
         )
         table = "b2b_analytics.dbt_mv_definitions"
         columns = "relation_name, definition_hash"
@@ -755,7 +795,11 @@ class TestRecordDefinitionsSql:
 
     def test_refuses_a_name_it_cannot_write_as_a_literal(self):
         with pytest.raises(ValueError, match="schema-qualified"):
-            record_definitions_sql({"b2b_analytics.mv'; drop table x": "h"})
+            record_definitions_sql({"b2b_analytics.mv'; drop table x": NEW})
+
+    def test_refuses_a_hash_it_cannot_write_as_a_literal(self):
+        with pytest.raises(ValueError, match="sha256"):
+            record_definitions_sql({"b2b_analytics.mv_a": "x' or '1"})
 
 
 class TestRecordBuiltDefinitions:
@@ -765,27 +809,57 @@ class TestRecordBuiltDefinitions:
         current one: it still has its old SELECT.
         """
         definitions = {
-            "b2b_analytics.mv_built": "new",
-            "b2b_analytics.mv_not_built": "new",
+            "b2b_analytics.mv_built": NEW,
+            "b2b_analytics.mv_not_built": NEW,
         }
         recorded = {
-            "b2b_analytics.mv_built": "old",
-            "b2b_analytics.mv_not_built": "old",
-            "b2b_analytics.mv_removed": "old",
+            "b2b_analytics.mv_built": OLD,
+            "b2b_analytics.mv_not_built": OLD,
+            "b2b_analytics.mv_removed": OLD,
         }
         statements: list[str] = []
         record_built_definitions(
             definitions, recorded, ["b2b_analytics.mv_built"], statements.append
         )
         assert statements == record_definitions_sql(
-            {"b2b_analytics.mv_built": "new", "b2b_analytics.mv_not_built": "old"}
+            {"b2b_analytics.mv_built": NEW, "b2b_analytics.mv_not_built": OLD}
         )
+
+    def test_a_build_that_changed_no_definition_writes_nothing(self):
+        """Every ordinary nightly build. Each statement costs a Vault credential
+        and a connection.
+        """
+        definitions = {"b2b_analytics.mv_a": NEW, "b2b_analytics.mv_b": NEW}
+        statements: list[str] = []
+        record_built_definitions(
+            definitions, dict(definitions), list(definitions), statements.append
+        )
+        assert statements == []
+
+    def test_a_new_view_is_recorded_beside_the_existing_ones(self):
+        definitions = {"b2b_analytics.mv_a": NEW, "b2b_analytics.mv_new": NEW}
+        statements: list[str] = []
+        record_built_definitions(
+            definitions,
+            {"b2b_analytics.mv_a": NEW},
+            list(definitions),
+            statements.append,
+        )
+        assert statements == record_definitions_sql(definitions)
+
+    def test_ignores_a_built_relation_the_manifest_does_not_define(self):
+        statements: list[str] = []
+        record_built_definitions(
+            {"b2b_analytics.mv_a": NEW},
+            {"b2b_analytics.mv_a": NEW},
+            ["b2b_analytics.mv_a", "b2b_analytics.mv_elsewhere"],
+            statements.append,
+        )
+        assert statements == []
 
     def test_nothing_built_and_nothing_recorded_writes_nothing(self):
         statements: list[str] = []
-        record_built_definitions(
-            {"b2b_analytics.mv_a": "new"}, {}, [], statements.append
-        )
+        record_built_definitions({"b2b_analytics.mv_a": NEW}, {}, [], statements.append)
         assert statements == []
 
 

@@ -342,8 +342,9 @@ _CONFIG_NOT_IN_DEFINITION = frozenset(
 )
 _JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
 _SQL_COMMENT_LINE = re.compile(r"^\s*--.*$", re.MULTILINE)
-# Relation names are formatted into SQL as literals below.
+# Relation names and hashes are formatted into SQL as literals below.
 _RELATION_NAME = re.compile(r"\w+\.\w+")
+_DEFINITION_HASH = re.compile(r"[0-9a-f]{64}")
 _DEFINITION_COLUMNS = "relation_name, definition_hash"
 
 
@@ -386,17 +387,28 @@ def _project_macros(manifest: Mapping[str, Any], node: Mapping[str, Any]) -> lis
 def definition_hashes(manifest: Mapping[str, Any]) -> dict[str, str]:
     """Map each StarRocks MV to a hash of what dbt would build it from.
 
-    The hash covers the model's SQL, the project macros it calls and the config
-    it sets. `drifted_relations` only sees a change to the column set, so an
-    edited SELECT that keeps its columns (a filter, a join, a macro body) was a
-    silent no-op until someone ran --full-refresh by hand.
+    The hash covers the model's SQL, the project macros it calls, the relations
+    it reads and the config it sets. `drifted_relations` only sees a change to
+    the column set, so an edited SELECT that keeps its columns (a filter, a
+    join, a macro body) was a silent no-op until someone ran --full-refresh by
+    hand.
 
     Taken from the parsed manifest, which has no compiled SQL: the image builds
     this manifest with `dbt parse` because compiling needs a StarRocks
-    connection. dbt finds macro calls statically, and it does not record the
-    project's `source` override as a dependency of a macro that calls it, so a
-    change there is caught only through the models that call it directly.
+    connection. Two things follow. dbt finds macro calls statically, and it
+    does not record the project's `source` override as a dependency of a macro
+    that calls it, so a change there is caught only through the models that
+    call it directly. And a relation name is the one rendered when the image
+    was built, so renaming a source is caught but pointing DBT_DATA_LAKE_ENV at
+    another catalog at run time is not.
     """
+    relation_names = {
+        unique_id: node["relation_name"]
+        for unique_id, node in (
+            *manifest["nodes"].items(),
+            *manifest["sources"].items(),
+        )
+    }
     hashes = {}
     for node in _materialized_view_nodes(manifest):
         definition = {
@@ -405,6 +417,9 @@ def definition_hashes(manifest: Mapping[str, Any]) -> dict[str, str]:
                 macro_id: _without_comments(manifest["macros"][macro_id]["macro_sql"])
                 for macro_id in _project_macros(manifest, node)
             },
+            "relations": sorted(
+                relation_names[unique_id] for unique_id in node["depends_on"]["nodes"]
+            ),
             "config": {
                 key: value
                 for key, value in node["unrendered_config"].items()
@@ -429,7 +444,9 @@ def recorded_definitions(
     """Read the definition hash each MV in *relations* was last built from.
 
     A schema whose table is not in *live* has never been recorded, and
-    contributes nothing.
+    contributes nothing. Neither does a row that is not a relation name and a
+    sha256 digest: the values are written back as SQL literals, and a view with
+    no usable record is rebuilt, which replaces the row.
 
     :param live: Relations that exist in StarRocks, as `live_columns` returns.
     :param fetch: Runs one query and returns its rows. `StarRocksResource.fetch`
@@ -442,7 +459,11 @@ def recorded_definitions(
             continue
         # S608: the table name comes from the dbt manifest's schema.
         for row in fetch(f"select {_DEFINITION_COLUMNS} from {table}"):  # noqa: S608
-            recorded[row["relation_name"]] = row["definition_hash"]
+            relation, definition = row["relation_name"], row["definition_hash"]
+            if _RELATION_NAME.fullmatch(relation) and _DEFINITION_HASH.fullmatch(
+                definition
+            ):
+                recorded[relation] = definition
     return recorded
 
 
@@ -454,7 +475,7 @@ def redefined_relations(
     """MVs that exist in StarRocks but were not built from their current definition.
 
     An MV with no recorded hash counts: nothing shows which definition it was
-    built from. That makes the first build after this check ships a full
+    built from. The first build after this check ships is therefore a full
     refresh.
 
     Like `drifted_relations`, a relation missing from *live* is left out,
@@ -493,12 +514,16 @@ def record_definitions_sql(definitions: Mapping[str, str]) -> list[str]:
     :param definitions: Every hash to keep, not only the ones that changed. A
         relation left out is forgotten, and rebuilt next time.
     :raises ValueError: if a relation name is not `schema.name` in word
-        characters. The names are written into the statements as literals.
+        characters, or a hash is not a sha256 hex digest. Both are written into
+        the statements as literals.
     """
     rows_by_schema: dict[str, list[str]] = {}
     for relation, definition in sorted(definitions.items()):
         if not _RELATION_NAME.fullmatch(relation):
             msg = f"Not a schema-qualified relation name: {relation!r}"
+            raise ValueError(msg)
+        if not _DEFINITION_HASH.fullmatch(definition):
+            msg = f"Not a sha256 hex digest for {relation}: {definition!r}"
             raise ValueError(msg)
         rows_by_schema.setdefault(relation.split(".", 1)[0], []).append(
             f"select cast('{relation}' as varchar(255)) as relation_name, "
@@ -510,8 +535,8 @@ def record_definitions_sql(definitions: Mapping[str, str]) -> list[str]:
         select = " union all ".join(rows)
         statements += [
             f"create table if not exists {table} as {select}",
-            # S608: every interpolated value is a manifest relation name checked
-            # against _RELATION_NAME, or a sha256 hex digest.
+            # S608: every interpolated value was checked above against
+            # _RELATION_NAME or _DEFINITION_HASH.
             (
                 f"insert overwrite {table} ({_DEFINITION_COLUMNS}) "  # noqa: S608
                 f"select {_DEFINITION_COLUMNS} from ({select}) d"
@@ -528,12 +553,15 @@ def record_built_definitions(
 ) -> None:
     """Record that the MVs in *built* now match their current definition.
 
-    Call this only after a build that would have replaced a stale view: a plain
-    build of an MV that `redefined_relations` named leaves its old SELECT in
-    place, and recording it would hide that for good.
+    *built* must come from a build that ran with --full-refresh whenever
+    `redefined_relations` named anything, as the asset's does. A plain build
+    leaves a stale view's old SELECT in place, and recording it then would hide
+    that for good. Under that rule every MV a plain build reports is either new
+    or already recorded with its current hash.
 
     An MV that was not built keeps the hash already recorded for it. One that
-    has left the manifest is dropped.
+    has left the manifest is dropped. Nothing is written when that leaves the
+    record as it was, which is every build that changed no definition.
     """
     built = set(built)
     kept = {
@@ -544,6 +572,8 @@ def record_built_definitions(
     current = {
         relation: definitions[relation] for relation in built if relation in definitions
     }
+    if kept | current == recorded:
+        return
     for statement in record_definitions_sql(kept | current):
         execute(statement)
 

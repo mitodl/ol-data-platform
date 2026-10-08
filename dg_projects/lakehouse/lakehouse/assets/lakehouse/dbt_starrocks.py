@@ -159,8 +159,11 @@ def _record_definitions(
 
     A failure here is logged and not raised. The build itself succeeded, and
     failing the asset would skip the refresh that follows it, leaving every MV
-    a --full-refresh just recreated empty. The cost of not recording is that
-    the next build full-refreshes again.
+    a --full-refresh just recreated empty. A view whose new definition was not
+    recorded is rebuilt by the next build, with every other view.
+
+    Not called for a build that failed. The view that failed is still stale, so
+    the next build full-refreshes whatever was recorded for the rest.
     """
     try:
         record_built_definitions(
@@ -171,8 +174,8 @@ def _record_definitions(
         )
     except Exception:
         context.log.exception(
-            "Could not record the materialized view definitions. The next build "
-            "will run with --full-refresh."
+            "Could not record the materialized view definitions. If this build "
+            "redefined a view, the next one runs with --full-refresh again."
         )
 
 
