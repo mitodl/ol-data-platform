@@ -108,8 +108,10 @@ models:
     Monthly engagement, enrollment, and content-interaction totals per org.
     Manual-refresh materialized view. Source: afact_learner_courserun_progress
     (enrollments, certificates) and afact_learner_courserun_daily_activity
-    (activity), for learners enrolled in a course run owned by one of the
-    organization's contracts. Consumers: L&D manager engagement trend chart.
+    (activity), for learners with an active enrollment in a course run owned
+    by one of the organization's contracts. A learner who unenrolled is left
+    out, along with their activity and certificate. Consumers: L&D manager
+    engagement trend chart.
   columns:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
@@ -229,8 +231,9 @@ models:
     All-time content engagement depth per org x course_run. Manual-refresh
     materialized view. Source: afact_learner_courserun_progress (enrollments,
     certificates) and afact_learner_courserun_daily_activity (activity), for
-    learners enrolled in a course run owned by one of the organization's
-    contracts. Consumers: L&D manager course detail panel.
+    learners with an active enrollment in a course run owned by one of the
+    organization's contracts. A learner who unenrolled is left out, along with
+    their activity and certificate. Consumers: L&D manager course detail panel.
   columns:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
@@ -246,7 +249,7 @@ models:
   - name: courserun_title
     description: Course run title.
   - name: total_enrolled_learners
-    description: Distinct learners enrolled in this course run, active or not.
+    description: Distinct learners with an active enrollment in this course run.
   - name: engaged_learners
     description: >
       Distinct enrolled learners with at least one day of tracked course
@@ -481,7 +484,8 @@ models:
   - name: courserun_title
     description: Display title of the course run.
   - name: total_enrolled_learners
-    description: Distinct learners enrolled in this course run under this contract.
+    description: Distinct learners with an active enrollment in this course run under
+      this contract.
   - name: engaged_learners
     description: >
       Distinct enrolled learners with at least one day of tracked course
