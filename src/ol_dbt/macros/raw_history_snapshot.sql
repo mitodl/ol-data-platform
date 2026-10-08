@@ -40,8 +40,11 @@
             {%- endif -%}
         {%- endfor -%}
         {#- `select *` would bring the loader's columns in and version every
-            row on every load, so an empty column list must stop the run. -#}
-        {%- if not kept -%}
+            row on every load, so an empty column list must stop a run that
+            writes. `compile` and `docs generate` also execute this, on targets
+            that hold no raw tables (the docs workflow and the image build use
+            DuckDB), so they keep the placeholder. -#}
+        {%- if not kept and flags.WHICH in ['snapshot', 'build'] -%}
             {{ exceptions.raise_compiler_error(
                 "raw_history_snapshot: no columns found for " ~ relation
             ) }}
