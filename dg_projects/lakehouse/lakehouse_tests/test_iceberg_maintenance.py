@@ -1,12 +1,13 @@
-"""Tests for what the iceberg_raw_layer_maintenance asset counts as a failure.
+"""Tests for what the Iceberg maintenance assets count and log as a failure.
 
 Expiry is tested in
 `packages/ol-orchestrate-lib/tests/lib/test_iceberg_maintenance.py`. What is
 left here is the accounting: a table the scan could not load and a table whose
-expiry raised are both failed tables.
+expiry raised are both failed tables, and each is named in the run's log.
 """
 
 import importlib
+import logging
 import sys
 import types
 from collections.abc import Iterator
@@ -14,7 +15,11 @@ from typing import Any
 
 import pytest
 from dagster import build_asset_context
-from ol_orchestrate.lib.iceberg_maintenance import RawLayerScan, RawLayerTableInfo
+from ol_orchestrate.lib.iceberg_maintenance import (
+    RawLayerScan,
+    RawLayerTableInfo,
+    TableMaintenanceConfig,
+)
 
 DBT_MODULE = "lakehouse.assets.lakehouse.dbt"
 ASSET_MODULE = "lakehouse.assets.iceberg_maintenance"
@@ -22,6 +27,8 @@ BROKEN = "raw__mitxonline__app__postgres__broken"
 # With the unloadable table that is 42 scanned, so the third failure is the
 # first one over 5%.
 HEALTHY_TABLES = 41
+# The metadata keeps this many failures; past it the log is the only record.
+FAILURE_DETAILS_KEPT = 20
 
 
 @pytest.fixture
@@ -144,3 +151,88 @@ def test_a_scan_that_loads_nothing_fails_the_asset(
 
     with pytest.raises(RuntimeError, match="failed for 1/1"):
         _run(module, monkeypatch, scan)
+
+
+def test_a_glue_listing_with_no_iceberg_tables_fails_the_asset(
+    module: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(RuntimeError, match="lists no Iceberg tables"):
+        _run(module, monkeypatch, RawLayerScan())
+
+
+def test_every_failed_raw_table_is_logged_past_the_metadata_cap(
+    module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    # 21 expiry failures of 500 tables stay under the 5% threshold.
+    tables = _tables(module.RAW_GLUE_DATABASE, count=500)
+    failing = frozenset(t.table_name for t in tables[: FAILURE_DETAILS_KEPT + 1])
+    scan = RawLayerScan(tables=tables, failures=[f"{BROKEN}: metadata.json not found"])
+
+    metadata = _run(module, monkeypatch, scan, failing=failing)
+
+    assert len(metadata["failure_details"]) == FAILURE_DETAILS_KEPT
+    # context.log does not propagate to the root logger, so caplog sees none of
+    # it. Its console handler writes to stderr.
+    logged = capfd.readouterr().err
+    for table_name in [BROKEN, *failing]:
+        assert logged.count(f"{table_name}:") == 1
+
+
+class _NoMaterializations:
+    def get_event_records(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+        return []
+
+
+class _FailingTrino:
+    def optimize(self, **_kwargs: Any) -> None:
+        msg = "OPTIMIZE rejected"
+        raise RuntimeError(msg)
+
+    def analyze(self, **_kwargs: Any) -> None:
+        msg = "ANALYZE rejected"
+        raise RuntimeError(msg)
+
+
+def test_dbt_layer_operation_failures_go_to_the_run_log(
+    module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def failing_expire(**_kwargs: Any) -> dict[str, Any]:
+        msg = "commit lost to a concurrent write"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(module, "expire_snapshots", failing_expire)
+    cfg = TableMaintenanceConfig(
+        model_name="dim_user",
+        schema_name="ol_warehouse_production_dimensional",
+        materialized="table",
+        asset_key=["dimensional", "dim_user"],
+    )
+    run_log = logging.getLogger("the_run_log")
+
+    with caplog.at_level(logging.WARNING, logger=run_log.name):
+        context = types.SimpleNamespace(instance=_NoMaterializations(), log=run_log)
+        summary = module._run_table_maintenance(
+            cfg, context, None, _FailingTrino(), None
+        )
+
+    assert [error.split(":")[0] for error in summary["errors"]] == [
+        "expire_snapshots",
+        "optimize",
+        "analyze",
+    ]
+    messages = [
+        record.getMessage() for record in caplog.records if record.name == run_log.name
+    ]
+    assert [message.split(" failed for ")[0] for message in messages] == [
+        "EXPIRE SNAPSHOTS",
+        "OPTIMIZE",
+        "ANALYZE",
+    ]
+    assert all(
+        "ol_warehouse_production_dimensional.dim_user" in message
+        for message in messages
+    )
