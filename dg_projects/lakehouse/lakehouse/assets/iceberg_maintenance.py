@@ -30,6 +30,11 @@ Two assets run on staggered nightly schedules:
     tables since they are not Trino analytics targets and Airbyte writes
     complete files per sync (no small-file accumulation).
 
+    Airbyte leaves one ``airbyte_staging_<uuid>`` branch behind per sync, and a
+    branch head never expires, so branches whose head is past the retention
+    window are removed first. Expiry only rewrites table metadata: the files
+    the expired snapshots referenced stay in S3.
+
     Tables are processed in a ThreadPoolExecutor(max_workers=8) to handle the
     volume without overwhelming the Glue API rate limits.
 """
@@ -50,6 +55,7 @@ from dagster import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
+    AIRBYTE_STAGING_BRANCH,
     TableMaintenanceConfig,
     expire_snapshots,
     get_glue_catalog,
@@ -411,6 +417,7 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
 
     tables_cleaned = 0
     snapshots_expired = 0
+    staging_branches_removed = 0
     failures: list[str] = []
 
     # A GlueCatalog (and its underlying S3 FileIO / boto3 client) must not be
@@ -439,6 +446,7 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
                 database=table_info.database,
                 table_name=table_info.table_name,
                 retention_days=cfg.snapshot_retention_days,
+                stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
             )
             result["expire"] = exp
         except Exception as exc:  # noqa: BLE001
@@ -453,9 +461,11 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
             try:
                 res = future.result()
                 if res["ok"]:
-                    tables_cleaned += 1
                     exp = res.get("expire", {})
+                    # A table with nothing past its retention is not cleaned.
+                    tables_cleaned += int(not exp.get("skipped"))
                     snapshots_expired += exp.get("eligible_count", 0)
+                    staging_branches_removed += exp.get("stale_branch_count", 0)
                 else:
                     failures.extend(
                         f"{table_info.table_name}: {err}" for err in res["errors"]
@@ -497,6 +507,7 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
             "tables_scanned": MetadataValue.int(len(tables)),
             "tables_cleaned": MetadataValue.int(tables_cleaned),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
+            "staging_branches_removed": MetadataValue.int(staging_branches_removed),
             "failure_count": MetadataValue.int(len(failures)),
             "failure_details": MetadataValue.json(failures[:20]),
         },

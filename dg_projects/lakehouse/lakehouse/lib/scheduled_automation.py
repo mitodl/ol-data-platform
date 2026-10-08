@@ -99,13 +99,16 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Both rewrite Iceberg metadata -- expire snapshots, compact manifests.
     # They resolve through trino_host_map/trino_catalog_map, which have always
     # been environment-correct, so unlike the dbt schedules these were never
-    # misrouted. Production-only for two different reasons: expiring snapshots
-    # under a QA lake being rebuilt would fight step 8 rather than help it, and
-    # `dev` maps to the PRODUCTION catalog, so a tick on a laptop would expire
-    # production's snapshots. That second one is why "off in dev" is not merely
-    # tidiness here.
+    # misrouted. Never dev: it maps to the PRODUCTION catalog, so a tick on a
+    # laptop would expire production's snapshots. That is why "off in dev" is
+    # not merely tidiness here.
+    #
+    # The dbt layer stays production-only: expiring snapshots under QA dbt
+    # layers that step 8 is still rebuilding would fight it rather than help.
+    # The raw layer runs in QA too: nothing else trims the snapshots QA's own
+    # raw loads leave behind.
     "iceberg_dbt_maintenance_nightly": frozenset({"production"}),
-    "iceberg_raw_maintenance_nightly": frozenset({"production"}),
+    "iceberg_raw_maintenance_nightly": frozenset({"qa", "production"}),
     # Deletes table directories no Glue table references, or only reports them
     # where the asset's LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS leaves the
     # environment out, which today is everywhere. QA only until a QA deletion
