@@ -251,6 +251,9 @@ snapshots:
       format: "'PARQUET'"
     +meta:
       required_docs: true
+    # History of raw tables, one snapshot per table (macro raw_history_snapshot).
+    raw_history:
+      +schema: history
 
 # Test severity config
 # default for error_if and warn_if are !=0
