@@ -27,7 +27,7 @@ with enrollment_detail as (
         ) as verified_courses_taken_in_program
         , count(
             distinct case
-                when 
+                when
                     course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
                     and course_enrollment_detail.courserungrade_is_passing = true
                 then courses_in_program.course_readable_id
