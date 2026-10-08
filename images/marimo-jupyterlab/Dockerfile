@@ -9,8 +9,8 @@ FROM quay.io/jupyter/minimal-notebook:latest@sha256:5db1deaf4236d9f4356a210046c6
 # the proxy server that forwards requests to per-notebook marimo processes.
 # The extension runs this marimo as the server; --sandbox then gives each
 # notebook its own uv environment built from its /// script header.
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
+    pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Seed notebooks and the environment README. The JupyterHub singleuser
 # postStart hook copies these into ~/notebooks/ with `cp -n`, so a user's

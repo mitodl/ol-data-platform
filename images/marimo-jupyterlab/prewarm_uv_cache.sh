@@ -16,14 +16,15 @@ mkdir -p "${notebooks}"
 cp /usr/local/share/marimo/templates/*.py "${notebooks}/"
 
 for notebook in "${notebooks}"/*.py; do
-    # The same command marimo runs when a notebook is opened with --sandbox.
+    # The same sync marimo runs when a notebook is opened with --sandbox.
     python_path="$(
         cd "${notebooks}" &&
             uv sync --script "${notebook}" --compile-bytecode --output-format json |
             python -c 'import json, sys; print(json.load(sys.stdin)["sync"]["environment"]["python"]["path"])'
     )"
-    # marimo layers itself over the notebook's environment at kernel start.
-    # Running that once caches the marimo wheel and its compiled bytecode.
+    # marimo layers itself over the notebook's environment at kernel start,
+    # with `uv run --active --with`. The flags differ here because there is
+    # no kernel to attach to; what carries over is the cached marimo wheel.
     uv run --isolated --no-project --compile-bytecode --python "${python_path}" \
         --with "marimo==${marimo_version}" -- python -c 'import marimo'
 done
