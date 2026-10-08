@@ -151,11 +151,12 @@ models:
       # Editing an MV's SELECT is a silent no-op on a plain `dbt build`: dbt only
       # replaces an existing materialized view on --full-refresh, and
       # dbt-starrocks reports no configuration changes otherwise. The Dagster
-      # asset compares each MV's live columns against this project's manifest
-      # and escalates to --full-refresh on a mismatch (see
-      # lakehouse/assets/lakehouse/dbt_starrocks.py), so a column add, rename or
-      # removal lands on the next scheduled build. It reads the `columns:` in
-      # the schema YAML, which ol-dbt validate holds to the SQL in both
+      # asset compares each MV's live columns against this project's manifest,
+      # and the definition hash in the MV's COMMENT against the manifest's, and
+      # escalates to --full-refresh on a mismatch (see
+      # lakehouse/assets/lakehouse/dbt_starrocks.py), so a column change or an
+      # edited SELECT lands on the next scheduled build. It reads the `columns:`
+      # in the schema YAML, which ol-dbt validate holds to the SQL in both
       # directions. Consumers that project the column (ol-analytics-api's
       # build_select) must still deploy AFTER that build, or their SELECT errors
       # on an unknown column.

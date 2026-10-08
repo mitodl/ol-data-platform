@@ -5,11 +5,14 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import json
 import logging
 import re
+from pathlib import Path
 
 import pytest
 from lakehouse.lib.starrocks_dbt import (
+    DEFINITIONS_VAR,
     MAX_BUILD_ATTEMPTS,
     MAX_MV_REFRESH_ATTEMPTS,
     MV_REFRESH_RETRY_DELAY_SECONDS,
@@ -17,17 +20,16 @@ from lakehouse.lib.starrocks_dbt import (
     RETRY_BASE_DELAY,
     ChangeTrackedView,
     MaterializedViewRefreshError,
-    built_relations,
     change_tracked_views,
     definition_hashes,
+    definitions_var,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
+    live_comment_query,
     looks_retriable,
     materialized_view_relations,
-    record_built_definitions,
-    record_definitions_sql,
     recorded_definitions,
     redefined_relations,
     refresh_materialized_views,
@@ -712,164 +714,66 @@ class TestRedefinedRelations:
         assert redefined_relations({"b2b_analytics.mv_new": "new"}, {}, self.LIVE) == []
 
 
+def _comment_row(relation, comment):
+    schema, name = relation.split(".")
+    return {"table_schema": schema, "table_name": name, "table_comment": comment}
+
+
+class TestLiveCommentQuery:
+    def test_reads_table_comments_for_each_schema_bound(self):
+        query, params = live_comment_query(
+            {"b2b_analytics.mv_a": OLD, "b2b_learner_records.mv_b": OLD}
+        )
+        assert "information_schema.tables" in query
+        assert "table_comment" in query
+        assert params == ("b2b_analytics", "b2b_learner_records")
+        assert query.count("%s") == len(params)
+
+
 class TestRecordedDefinitions:
-    RELATIONS = ("b2b_analytics.mv_a", "b2b_learner_records.mv_b")
-
-    def test_a_schema_with_no_table_is_not_queried(self):
-        """Before the first recording the table does not exist, and selecting
-        from it would fail the build.
-        """
-        queries: list[str] = []
-        live = {"b2b_analytics.mv_a": {"org_key"}}
-        assert recorded_definitions(self.RELATIONS, live, queries.append) == {}
-        assert queries == []
-
-    def test_reads_each_schema_that_has_one(self):
-        rows = {
-            "b2b_analytics.dbt_mv_definitions": [
-                {"relation_name": "b2b_analytics.mv_a", "definition_hash": OLD}
-            ],
-            "b2b_learner_records.dbt_mv_definitions": [
-                {"relation_name": "b2b_learner_records.mv_b", "definition_hash": NEW}
-            ],
-        }
-        live = {table: {"relation_name", "definition_hash"} for table in rows}
-        assert recorded_definitions(
-            self.RELATIONS, live, lambda sql: rows[sql.rsplit(" ", 1)[1]]
-        ) == {"b2b_analytics.mv_a": OLD, "b2b_learner_records.mv_b": NEW}
-
-    def test_drops_a_row_that_could_not_be_written_back_as_a_literal(self):
-        """The table is plain data in StarRocks, and its values go back into a
-        statement on the next recording. A view with no usable record is
-        rebuilt, which replaces the row.
-        """
-        table = "b2b_analytics.dbt_mv_definitions"
+    def test_reads_the_hash_out_of_the_comment(self):
         rows = [
-            {"relation_name": "b2b_analytics.mv_a", "definition_hash": "x' or '1"},
-            {"relation_name": "b2b_analytics.mv'--", "definition_hash": OLD},
-            {"relation_name": "b2b_analytics.mv_ok", "definition_hash": OLD},
+            _comment_row("b2b_analytics.mv_a", f"dbt-definition:{OLD}"),
+            _comment_row("b2b_learner_records.mv_b", f"dbt-definition:{NEW}"),
         ]
-        live = {table: {"relation_name", "definition_hash"}}
-        assert recorded_definitions(self.RELATIONS, live, lambda _sql: rows) == {
-            "b2b_analytics.mv_ok": OLD
+        assert recorded_definitions(rows) == {
+            "b2b_analytics.mv_a": OLD,
+            "b2b_learner_records.mv_b": NEW,
         }
 
-
-class TestBuiltRelations:
-    def test_successful_materialized_views_only(self):
-        manifest = _manifest(
-            [
-                _mv("mv_ok"),
-                _mv("mv_failed"),
-                _mv("mv_not_selected"),
-                _model_node("a_table", materialized="table", tags=["starrocks"]),
-            ]
-        )
-        run_results = {
-            "results": [
-                {"unique_id": "model.open_learning.mv_ok", "status": "success"},
-                {"unique_id": "model.open_learning.mv_failed", "status": "error"},
-                {"unique_id": "model.open_learning.a_table", "status": "success"},
-                {"unique_id": "test.open_learning.not_null_x", "status": "pass"},
-            ]
-        }
-        assert built_relations(manifest, run_results) == {"b2b_analytics.mv_ok"}
-
-
-class TestRecordDefinitionsSql:
-    def test_one_create_and_one_overwrite_per_schema(self):
-        statements = record_definitions_sql(
-            {
-                "b2b_analytics.mv_b": NEW,
-                "b2b_analytics.mv_a": OLD,
-                "b2b_learner_records.mv_c": NEW,
-            }
-        )
-        rows = (
-            "select cast('b2b_analytics.mv_a' as varchar(255)) as relation_name, "
-            f"cast('{OLD}' as varchar(64)) as definition_hash union all "
-            "select cast('b2b_analytics.mv_b' as varchar(255)) as relation_name, "
-            f"cast('{NEW}' as varchar(64)) as definition_hash"
-        )
-        table = "b2b_analytics.dbt_mv_definitions"
-        columns = "relation_name, definition_hash"
-        assert statements[:2] == [
-            f"create table if not exists {table} as {rows}",
-            f"insert overwrite {table} ({columns}) select {columns} from ({rows}) d",  # noqa: S608
-        ]
-        assert [s.split(" as ")[0].split(" (")[0] for s in statements[2:]] == [
-            "create table if not exists b2b_learner_records.dbt_mv_definitions",
-            "insert overwrite b2b_learner_records.dbt_mv_definitions",
-        ]
-
-    def test_refuses_a_name_it_cannot_write_as_a_literal(self):
-        with pytest.raises(ValueError, match="schema-qualified"):
-            record_definitions_sql({"b2b_analytics.mv'; drop table x": NEW})
-
-    def test_refuses_a_hash_it_cannot_write_as_a_literal(self):
-        with pytest.raises(ValueError, match="sha256"):
-            record_definitions_sql({"b2b_analytics.mv_a": "x' or '1"})
-
-
-class TestRecordBuiltDefinitions:
-    def test_keeps_what_was_not_built_and_forgets_what_left_the_manifest(self):
-        """The overwrite replaces the whole table, so a view this run did not
-        build has to be written back with the hash it already had, not its
-        current one: it still has its old SELECT.
+    def test_a_view_without_one_has_no_record(self):
+        """Built before this check, or by a hand-run build that did not pass
+        the var. Either way it is rebuilt, which writes the comment.
         """
-        definitions = {
-            "b2b_analytics.mv_built": NEW,
-            "b2b_analytics.mv_not_built": NEW,
-        }
-        recorded = {
-            "b2b_analytics.mv_built": OLD,
-            "b2b_analytics.mv_not_built": OLD,
-            "b2b_analytics.mv_removed": OLD,
-        }
-        statements: list[str] = []
-        record_built_definitions(
-            definitions, recorded, ["b2b_analytics.mv_built"], statements.append
-        )
-        assert statements == record_definitions_sql(
-            {"b2b_analytics.mv_built": NEW, "b2b_analytics.mv_not_built": OLD}
-        )
+        rows = [
+            _comment_row("b2b_analytics.mv_empty", ""),
+            _comment_row("b2b_analytics.mv_null", None),
+            _comment_row("b2b_analytics.mv_prose", "Contract utilization per org"),
+            _comment_row("b2b_analytics.mv_short", "dbt-definition:abc"),
+            _comment_row("b2b_analytics.mv_suffixed", f"dbt-definition:{OLD} x"),
+        ]
+        assert recorded_definitions(rows) == {}
 
-    def test_a_build_that_changed_no_definition_writes_nothing(self):
-        """Every ordinary nightly build. Each statement costs a Vault credential
-        and a connection.
+
+class TestDefinitionsVar:
+    def test_is_the_var_the_create_macro_reads(self):
+        """The macro looks a view up by `schema.alias` under this var name; a
+        mismatch would leave every view without a comment and rebuild them all
+        on every run.
         """
-        definitions = {"b2b_analytics.mv_a": NEW, "b2b_analytics.mv_b": NEW}
-        statements: list[str] = []
-        record_built_definitions(
-            definitions, dict(definitions), list(definitions), statements.append
-        )
-        assert statements == []
+        macro = (
+            Path(__file__).parents[3]
+            / "src/ol_dbt/macros/starrocks_relation_helpers_override.sql"
+        ).read_text()
+        lookup = "get(model['schema'] ~ '.' ~ model['alias'])"
+        assert f"var('{DEFINITIONS_VAR}', {{}}).{lookup}" in macro
+        assert 'comment "dbt-definition:{{ definition }}"' in macro
 
-    def test_a_new_view_is_recorded_beside_the_existing_ones(self):
-        definitions = {"b2b_analytics.mv_a": NEW, "b2b_analytics.mv_new": NEW}
-        statements: list[str] = []
-        record_built_definitions(
-            definitions,
-            {"b2b_analytics.mv_a": NEW},
-            list(definitions),
-            statements.append,
-        )
-        assert statements == record_definitions_sql(definitions)
-
-    def test_ignores_a_built_relation_the_manifest_does_not_define(self):
-        statements: list[str] = []
-        record_built_definitions(
-            {"b2b_analytics.mv_a": NEW},
-            {"b2b_analytics.mv_a": NEW},
-            ["b2b_analytics.mv_a", "b2b_analytics.mv_elsewhere"],
-            statements.append,
-        )
-        assert statements == []
-
-    def test_nothing_built_and_nothing_recorded_writes_nothing(self):
-        statements: list[str] = []
-        record_built_definitions({"b2b_analytics.mv_a": NEW}, {}, [], statements.append)
-        assert statements == []
+    def test_round_trips_through_json(self):
+        definitions = {"b2b_analytics.mv_b": NEW, "b2b_analytics.mv_a": OLD}
+        assert json.loads(definitions_var(definitions)) == {
+            DEFINITIONS_VAR: definitions
+        }
 
 
 # Verbatim (stack traces trimmed) from the 2026-09-25 b2b_analytics_starrocks_job

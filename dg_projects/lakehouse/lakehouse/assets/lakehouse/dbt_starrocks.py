@@ -2,12 +2,12 @@ import json
 import os
 import threading
 import time
+from collections.abc import Mapping
 from typing import Any
 
 from dagster import AssetExecutionContext
 from dagster_dbt import (
     DagsterDbtTranslatorSettings,
-    DbtCliInvocation,
     DbtCliResource,
     DbtProject,
     dbt_assets,
@@ -21,14 +21,14 @@ from lakehouse.assets.lakehouse.dbt import (
 from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
-    built_relations,
     definition_hashes,
+    definitions_var,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
+    live_comment_query,
     looks_retriable,
-    record_built_definitions,
     recorded_definitions,
     redefined_relations,
     retry_delay,
@@ -89,15 +89,20 @@ _ENV_LOCK = threading.Lock()
 # which needs one).
 
 
+def _recorded_definitions(
+    starrocks: StarRocksResource, definitions: Mapping[str, str]
+) -> dict[str, str]:
+    query, params = live_comment_query(definitions)
+    return recorded_definitions(starrocks.fetch(query, params))
+
+
 def _stale_materialized_views(
     context: AssetExecutionContext,
     starrocks: StarRocksResource,
-    manifest: dict[str, Any],
-) -> tuple[list[str], dict[str, str]]:
+    manifest: Mapping[str, Any],
+    definitions: Mapping[str, str],
+) -> list[str]:
     """MVs in StarRocks that were not built from what the dbt manifest now says.
-
-    Returns them with the definition hashes read from StarRocks, which
-    `_record_definitions` needs after the build.
 
     dbt cannot find these itself. dbt-core only replaces an existing
     materialized view under --full-refresh, and asks the adapter for
@@ -114,14 +119,13 @@ def _stale_materialized_views(
 
     Two checks, because the column comparison alone misses an edit that keeps
     the columns (a filter, a join, a macro body): the live columns against the
-    documented ones, and the definition hash recorded at the last build against
-    the manifest's. See `definition_hashes`.
+    documented ones, and the definition hash in each view's COMMENT against the
+    manifest's. See `definition_hashes` and `recorded_definitions`.
     """
-    definitions = definition_hashes(manifest)
     if not definitions:
-        # No materialized views to check, and `live_column_query` would build
-        # an empty `IN ()`, a syntax error.
-        return [], {}
+        # No materialized views to check, and the information_schema queries
+        # would build an empty `IN ()`, a syntax error.
+        return []
     documented = documented_columns(manifest)
     if not documented:
         # Logged rather than passed over in silence: it means the schema YAML
@@ -132,9 +136,10 @@ def _stale_materialized_views(
         )
     query, params = live_column_query(definitions)
     live = live_columns(starrocks.fetch(query, params))
-    recorded = recorded_definitions(definitions, live, starrocks.fetch)
     drifted = drifted_relations(documented, live)
-    redefined = redefined_relations(definitions, recorded, live)
+    redefined = redefined_relations(
+        definitions, _recorded_definitions(starrocks, definitions), live
+    )
     if drifted:
         context.log.info(
             "Materialized views whose columns differ from the dbt manifest: %s",
@@ -145,37 +150,36 @@ def _stale_materialized_views(
             "Materialized views not built from their current definition: %s",
             ", ".join(redefined),
         )
-    return sorted({*drifted, *redefined}), recorded
+    return sorted({*drifted, *redefined})
 
 
-def _record_definitions(
+def _check_definitions_recorded(
     context: AssetExecutionContext,
     starrocks: StarRocksResource,
-    manifest: dict[str, Any],
-    recorded: dict[str, str],
-    invocation: DbtCliInvocation,
+    definitions: Mapping[str, str],
 ) -> None:
-    """Record the definition each MV this build produced was built from.
+    """Log an error if a view does not carry its definition after a good build.
 
-    A failure here is logged and not raised. The build itself succeeded, and
-    failing the asset would skip the refresh that follows it, leaving every MV
-    a --full-refresh just recreated empty. A view whose new definition was not
-    recorded is rebuilt by the next build, with every other view.
-
-    Not called for a build that failed. The view that failed is still stale, so
-    the next build full-refreshes whatever was recorded for the rest.
+    After a build that succeeded, every view either was just created with the
+    current hash in its COMMENT or already had it. One that does not means the
+    create macro is not writing the comment, and every later build will
+    full-refresh. Logged rather than raised: failing the asset would skip the
+    refresh that follows it and leave the views the build recreated empty.
     """
-    try:
-        record_built_definitions(
-            definition_hashes(manifest),
-            recorded,
-            built_relations(manifest, invocation.get_artifact("run_results.json")),
-            starrocks.execute,
-        )
-    except Exception:
-        context.log.exception(
-            "Could not record the materialized view definitions. If this build "
-            "redefined a view, the next one runs with --full-refresh again."
+    if not definitions:
+        return
+    recorded = _recorded_definitions(starrocks, definitions)
+    missing = sorted(
+        relation
+        for relation, definition in definitions.items()
+        if recorded.get(relation) != definition
+    )
+    if missing:
+        context.log.error(
+            "Materialized views without their definition hash in their COMMENT "
+            "after this build, so the next build will --full-refresh again. Check "
+            "starrocks__get_create_materialized_view_as_sql: %s",
+            ", ".join(missing),
         )
 
 
@@ -207,8 +211,11 @@ def starrocks_dbt_assets(
     not notice -- see `_stale_materialized_views`.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
-    build_args = ["build"]
-    stale, recorded = _stale_materialized_views(context, starrocks, manifest)
+    definitions = definition_hashes(manifest)
+    # Every build passes the hashes, so a view this build creates, new or
+    # replaced, is created carrying its own.
+    build_args = ["build", "--vars", definitions_var(definitions)]
+    stale = _stale_materialized_views(context, starrocks, manifest, definitions)
     if stale:
         # --full-refresh drops and recreates every selected MV, not just the
         # stale ones, which is why it is conditional: each recreated view is
@@ -253,6 +260,6 @@ def starrocks_dbt_assets(
             last_exc = exc
             continue
 
-        _record_definitions(context, starrocks, manifest, recorded, invocation)
+        _check_definitions_recorded(context, starrocks, definitions)
         yield from events
         return

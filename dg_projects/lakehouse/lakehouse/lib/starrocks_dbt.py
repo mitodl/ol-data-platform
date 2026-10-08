@@ -272,6 +272,22 @@ def documented_columns(manifest: Mapping[str, Any]) -> dict[str, set[str]]:
     }
 
 
+def _schema_query(
+    select: str, view: str, relations: Iterable[str]
+) -> tuple[str, tuple[str, ...]]:
+    schemas = sorted({relation.split(".", 1)[0] for relation in relations})
+    placeholders = ", ".join(["%s"] * len(schemas))
+    # S608: the only thing interpolated besides the two literals is a run of `%s`
+    # placeholders -- the schema names themselves are bound by the driver, never
+    # formatted in.
+    query = (
+        f"select {select} "  # noqa: S608
+        f"from information_schema.{view} "
+        f"where table_schema in ({placeholders})"
+    )
+    return query, tuple(schemas)
+
+
 def live_column_query(relations: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     """Build a parameterized information_schema query for *relations*' schemas.
 
@@ -280,16 +296,16 @@ def live_column_query(relations: Mapping[str, Any]) -> tuple[str, tuple[str, ...
     dbt doesn't own come back too and are dropped by the relation lookup in
     `drifted_relations`.
     """
-    schemas = sorted({relation.split(".", 1)[0] for relation in relations})
-    placeholders = ", ".join(["%s"] * len(schemas))
-    # S608: the only thing interpolated is a run of `%s` placeholders -- the
-    # schema names themselves are bound by the driver, never formatted in.
-    query = (
-        "select table_schema, table_name, column_name "  # noqa: S608
-        "from information_schema.columns "
-        f"where table_schema in ({placeholders})"
-    )
-    return query, tuple(schemas)
+    return _schema_query("table_schema, table_name, column_name", "columns", relations)
+
+
+def live_comment_query(relations: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
+    """Build the query `recorded_definitions` reads, as `live_column_query` does.
+
+    A materialized view is listed in information_schema.tables (as a VIEW),
+    and its TABLE_COMMENT is the COMMENT it was created with.
+    """
+    return _schema_query("table_schema, table_name, table_comment", "tables", relations)
 
 
 def live_columns(rows: list[Mapping[str, Any]]) -> dict[str, set[str]]:
@@ -331,10 +347,15 @@ def drifted_relations(
     )
 
 
-# One of these per MV schema, next to the views it describes, so a schema built
-# under a suffix keeps its own record. It holds the definition hash each MV was
-# last built from.
-DEFINITION_TABLE = "dbt_mv_definitions"
+# `definition_hashes` reaches the build as this dbt var, and the project's
+# create-MV macro (src/ol_dbt/macros/starrocks_relation_helpers_override.sql)
+# writes each view's hash into its COMMENT after this prefix. The two sides have
+# to agree on both names.
+DEFINITIONS_VAR = "starrocks_mv_definitions"
+DEFINITION_COMMENT_PREFIX = "dbt-definition:"
+_DEFINITION_COMMENT = re.compile(
+    rf"{re.escape(DEFINITION_COMMENT_PREFIX)}([0-9a-f]{{64}})"
+)
 
 # Config that dbt applies without replacing the view, or that only describes it.
 _CONFIG_NOT_IN_DEFINITION = frozenset(
@@ -344,10 +365,6 @@ _CONFIG_NOT_IN_DEFINITION = frozenset(
 # the rendered SQL looks like around the comment and so are kept.
 _JINJA_COMMENT = re.compile(r"\{#([-+]?).*?([-+]?)#\}", re.DOTALL)
 _SQL_COMMENT_LINE = re.compile(r"^\s*--.*$", re.MULTILINE)
-# Relation names and hashes are formatted into SQL as literals below.
-_RELATION_NAME = re.compile(r"\w+\.\w+")
-_DEFINITION_HASH = re.compile(r"[0-9a-f]{64}")
-_DEFINITION_COLUMNS = "relation_name, definition_hash"
 
 
 def _without_comments(sql: str) -> str:
@@ -437,38 +454,29 @@ def definition_hashes(manifest: Mapping[str, Any]) -> dict[str, str]:
     return hashes
 
 
-def _definition_table(schema: str) -> str:
-    return f"{schema}.{DEFINITION_TABLE}"
+def definitions_var(definitions: Mapping[str, str]) -> str:
+    """Return the `dbt build --vars` value that hands *definitions* to the build.
+
+    The create-MV macro looks a view up by the same `schema.alias` key the
+    manifest gives it here.
+    """
+    return json.dumps({DEFINITIONS_VAR: dict(sorted(definitions.items()))})
 
 
-def recorded_definitions(
-    relations: Iterable[str],
-    live: Mapping[str, Any],
-    fetch: Callable[[str], list[Mapping[str, Any]]],
-) -> dict[str, str]:
-    """Read the definition hash each MV in *relations* was last built from.
+def recorded_definitions(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """Read the definition hash each view was built from out of its COMMENT.
 
-    A schema whose table is not in *live* has never been recorded, and
-    contributes nothing. Neither does a row that is not a relation name and a
-    sha256 digest: the values are written back as SQL literals, and a view with
-    no usable record is rebuilt, which replaces the row.
-
-    :param live: Relations that exist in StarRocks, as `live_columns` returns.
-    :param fetch: Runs one query and returns its rows. `StarRocksResource.fetch`
-        in the asset.
+    *rows* are `live_comment_query`'s. The create-MV macro writes the comment in
+    the statement that creates the view, so it always describes the SELECT
+    StarRocks holds, whichever of two overlapping builds ran last. A view with
+    any other comment, or none, has no record: one built before this check
+    shipped, or by a hand-run `dbt build` that did not pass the var.
     """
     recorded = {}
-    for schema in sorted({relation.split(".", 1)[0] for relation in relations}):
-        table = _definition_table(schema)
-        if table not in live:
-            continue
-        # S608: the table name comes from the dbt manifest's schema.
-        for row in fetch(f"select {_DEFINITION_COLUMNS} from {table}"):  # noqa: S608
-            relation, definition = row["relation_name"], row["definition_hash"]
-            if _RELATION_NAME.fullmatch(relation) and _DEFINITION_HASH.fullmatch(
-                definition
-            ):
-                recorded[relation] = definition
+    for row in rows:
+        match = _DEFINITION_COMMENT.fullmatch(row["table_comment"] or "")
+        if match:
+            recorded[f"{row['table_schema']}.{row['table_name']}"] = match.group(1)
     return recorded
 
 
@@ -481,7 +489,7 @@ def redefined_relations(
 
     An MV with no recorded hash counts: nothing shows which definition it was
     built from. The first build after this check ships is therefore a full
-    refresh.
+    refresh, and so is the first Dagster build after a hand-run one.
 
     Like `drifted_relations`, a relation missing from *live* is left out,
     because this build creates it from the current definition.
@@ -491,96 +499,6 @@ def redefined_relations(
         for relation, definition in definitions.items()
         if relation in live and recorded.get(relation) != definition
     )
-
-
-def built_relations(
-    manifest: Mapping[str, Any], run_results: Mapping[str, Any]
-) -> set[str]:
-    """Return the MVs a `dbt build` reported as built, from its run_results.json."""
-    succeeded = {
-        result["unique_id"]
-        for result in run_results["results"]
-        if result["status"] == "success"
-    }
-    return {
-        f"{node['schema']}.{node['alias']}"
-        for unique_id, node in manifest["nodes"].items()
-        if unique_id in succeeded and _is_materialized_view(node)
-    }
-
-
-def record_definitions_sql(definitions: Mapping[str, str]) -> list[str]:
-    """Statements that make each schema's definition table hold *definitions*.
-
-    Two per schema, the same pair the change log uses: create the table from
-    the rows if it is missing, then INSERT OVERWRITE them, which replaces the
-    contents atomically and can be re-run.
-
-    :param definitions: Every hash to keep, not only the ones that changed. A
-        relation left out is forgotten, and rebuilt next time.
-    :raises ValueError: if a relation name is not `schema.name` in word
-        characters, or a hash is not a sha256 hex digest. Both are written into
-        the statements as literals.
-    """
-    rows_by_schema: dict[str, list[str]] = {}
-    for relation, definition in sorted(definitions.items()):
-        if not _RELATION_NAME.fullmatch(relation):
-            msg = f"Not a schema-qualified relation name: {relation!r}"
-            raise ValueError(msg)
-        if not _DEFINITION_HASH.fullmatch(definition):
-            msg = f"Not a sha256 hex digest for {relation}: {definition!r}"
-            raise ValueError(msg)
-        rows_by_schema.setdefault(relation.split(".", 1)[0], []).append(
-            f"select cast('{relation}' as varchar(255)) as relation_name, "
-            f"cast('{definition}' as varchar(64)) as definition_hash"
-        )
-    statements = []
-    for schema, rows in rows_by_schema.items():
-        table = _definition_table(schema)
-        select = " union all ".join(rows)
-        statements += [
-            f"create table if not exists {table} as {select}",
-            # S608: every interpolated value was checked above against
-            # _RELATION_NAME or _DEFINITION_HASH.
-            (
-                f"insert overwrite {table} ({_DEFINITION_COLUMNS}) "  # noqa: S608
-                f"select {_DEFINITION_COLUMNS} from ({select}) d"
-            ),
-        ]
-    return statements
-
-
-def record_built_definitions(
-    definitions: Mapping[str, str],
-    recorded: Mapping[str, str],
-    built: Iterable[str],
-    execute: Callable[[str], None],
-) -> None:
-    """Record that the MVs in *built* now match their current definition.
-
-    *built* must come from a build that ran with --full-refresh whenever
-    `redefined_relations` named anything, as the asset's does. A plain build
-    leaves a stale view's old SELECT in place, and recording it then would hide
-    that for good. Under that rule every MV a plain build reports is either new
-    or already recorded with its current hash.
-
-    An MV that was not built keeps the hash already recorded for it. One that
-    has left the manifest is dropped. Nothing is written when that leaves the
-    record as it was, which is every build that changed no definition.
-    """
-    built = set(built)
-    kept = {
-        relation: definition
-        for relation, definition in recorded.items()
-        if relation in definitions and relation not in built
-    }
-    current = {
-        relation: definitions[relation] for relation in built if relation in definitions
-    }
-    if kept | current == recorded:
-        return
-    for statement in record_definitions_sql(kept | current):
-        execute(statement)
 
 
 # Model `meta` key that opts a materialized view into a change log.

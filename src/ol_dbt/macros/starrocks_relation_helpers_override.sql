@@ -1,6 +1,7 @@
 /*
  * Override for starrocks__olap_table and starrocks__get_create_materialized_view_as_sql
- * to guard against empty PROPERTIES dicts.
+ * to guard against empty PROPERTIES dicts. The second also writes the view's
+ * definition hash into its COMMENT; see the note inside it.
  *
  * The upstream adapter checks `properties is not none`, but an empty dict {}
  * (set via +properties: {} in dbt_project.yml to clear inherited Iceberg/Trino
@@ -124,8 +125,19 @@
     {%- set distributed_by = config.get('distributed_by') -%}
     {%- set properties = config.get('properties') -%}
     {%- set refresh_method = config.get('refresh_method', 'manual') -%}
+    {#- The Dagster build passes each view's definition hash in this var (see
+        definition_hashes in dg_projects/lakehouse/lakehouse/lib/starrocks_dbt.py),
+        and reads it back from the comment to tell whether the view was built from
+        its current definition. Written here, in the statement that creates the
+        view, so it cannot describe some other build's SELECT. StarRocks requires
+        COMMENT directly after the name. A build without the var writes none, and
+        the next Dagster build rebuilds the view. -#}
+    {%- set definition = var('starrocks_mv_definitions', {}).get(model['schema'] ~ '.' ~ model['alias']) -%}
 
     create materialized view {{ relation }}
+    {%- if definition %}
+    comment "dbt-definition:{{ definition }}"
+    {%- endif %}
 
     {%- if partition_by is not none -%}
         PARTITION BY (
