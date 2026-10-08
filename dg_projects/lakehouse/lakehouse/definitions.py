@@ -187,6 +187,15 @@ airbyte_workspace = (
         # left at the library default of False it raised "Found sync job for
         # connection_id=... already running" across ten connections.
         poll_previous_running_sync=True,
+        # Leave the Airbyte job running when the run worker is terminated. Run
+        # pods are preempted and the monitoring daemon resumes them, so the
+        # library default of True cancels a healthy sync that the resumed
+        # worker would have attached to: it then finds nothing in flight, POSTs
+        # a new job while the cancelled one winds down and gets a 409, and any
+        # other run attached to the same job fails with "Job was cancelled".
+        # The cost is that terminating a run in Dagster no longer stops the
+        # sync; cancel it in Airbyte.
+        cancel_on_termination=False,
     )
     if not SKIP_AIRBYTE
     else None
