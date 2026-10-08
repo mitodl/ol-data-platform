@@ -38,31 +38,36 @@ with completions as (
     where block_completed >= 1
 )
 
+-- One user per Open edX id, as tfact_studentmodule_problems does: the same id can sit on
+-- more than one dim_user row, and joining both would credit one completion to two learners.
 , users as (
     select
         'mitxonline' as platform
         , mitxonline_openedx_user_id as openedx_user_id
-        , user_pk
+        , min(user_pk) as user_pk
     from {{ ref('dim_user') }}
     where mitxonline_openedx_user_id is not null
+    group by mitxonline_openedx_user_id
 
     union all
 
     select
         'mitxpro' as platform
         , mitxpro_openedx_user_id as openedx_user_id
-        , user_pk
+        , min(user_pk) as user_pk
     from {{ ref('dim_user') }}
     where mitxpro_openedx_user_id is not null
+    group by mitxpro_openedx_user_id
 
     union all
 
     select
         'residential' as platform
         , residential_openedx_user_id as openedx_user_id
-        , user_pk
+        , min(user_pk) as user_pk
     from {{ ref('dim_user') }}
     where residential_openedx_user_id is not null
+    group by residential_openedx_user_id
 )
 
 , unit_completions as (

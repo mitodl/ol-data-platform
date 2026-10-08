@@ -2393,7 +2393,8 @@ unit_tests:
     the unit's weight, so two completed blocks of a pool worth 1 count once. A
     completion of a block that is no longer in the structure, a completion
     value below 1, and a learner with no dim_user row do not count. Open edX
-    user ids are matched per platform.
+    user ids are matched per platform. An id on two dim_user rows credits one
+    of them.
   model: afact_learner_courserun_content_progress
   given:
   - input: ref('dim_course_content_progress_block')
@@ -2415,6 +2416,9 @@ unit_tests:
     - {user_pk: ada, mitxonline_openedx_user_id: 1, mitxpro_openedx_user_id: 77, residential_openedx_user_id: null}
     - {user_pk: grace, mitxonline_openedx_user_id: 2, mitxpro_openedx_user_id: null,
       residential_openedx_user_id: 5}
+    # A second dim_user row with grace's MITx Online id. The lowest user_pk gets the completions.
+    - {user_pk: zed, mitxonline_openedx_user_id: 2, mitxpro_openedx_user_id: null,
+      residential_openedx_user_id: null}
   - input: ref('stg__mitxonline__openedx__blockcompletion')
     rows:
     - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: html-1, block_completed: 1.0}
