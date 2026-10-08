@@ -34,7 +34,10 @@
    tracked activity, the enrollment, or the certificate. is_active_day is set on activity
    rows only, so enrolling or being issued a certificate does not make a learner active
    in a month. The month of an activity day is sliced from activity_date_key (YYYYMMDD);
-   the enrollment and certificate months are sliced from their ISO-8601 strings. #}
+   the enrollment and certificate months are sliced from their ISO-8601 strings. Every
+   branch keeps active enrollments only, the same rule as
+   b2b_learner_courserun_engagement, so a learner who unenrolled is in none of the
+   engagement views. #}
 {% macro b2b_learner_courserun_months() %}
     select
         a.user_fk,
@@ -53,6 +56,7 @@
     join {{ source('dimensional', 'afact_learner_courserun_progress') }} p
         on a.user_fk = p.user_fk and a.courserun_fk = p.courserun_fk
     where a.platform = 'mitxonline'
+      and p.enrollment_is_active = true
 
     union all
 
@@ -85,15 +89,15 @@
         0                                                   as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
+      and enrollment_is_active = true
       and is_certified = true
 {% endmacro %}
 
-{# One row per (learner, course run) enrollment with its all-time activity totals. The
-   counters sum the fact's per-day distinct counts, so a video played on two days counts
-   twice, as in mv_b2b_learner_enrollment. Inactive enrollments are included: the depth
-   views report everyone who enrolled in the run and what they did. new_enrollments above
-   counts active enrollments only. Both rules are the ones
-   organization_administration_report applied (enroll_data vs. enroll_activity). #}
+{# One row per (learner, course run) active enrollment with its all-time activity
+   totals. The counters sum the fact's per-day distinct counts, so a video played on two
+   days counts twice, as in mv_b2b_learner_enrollment. A learner who unenrolled is left
+   out along with their activity. organization_administration_report kept them
+   (enroll_data has no active filter), so these totals are lower than that report's. #}
 {% macro b2b_learner_courserun_engagement() %}
     select
         p.user_fk,
@@ -118,4 +122,5 @@
     ) a
         on p.user_fk = a.user_fk and p.courserun_fk = a.courserun_fk
     where p.platform = 'mitxonline'
+      and p.enrollment_is_active = true
 {% endmacro %}
