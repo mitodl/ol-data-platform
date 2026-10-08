@@ -42,7 +42,7 @@ import datetime
 import logging
 import re
 from collections.abc import Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -101,6 +101,16 @@ class RawLayerTableInfo:
     snapshot_count: int
     eligible_snapshot_count: int
     latest_snapshot_timestamp_ms: int | None = None
+
+
+@dataclass
+class RawLayerScan:
+    """What the raw-layer catalog scan found, and what it could not read."""
+
+    tables: list[RawLayerTableInfo] = field(default_factory=list)
+    # "<table>: <error>" for each table whose metadata failed to load. These
+    # never reach expire_snapshots, so the caller has to count them as failed.
+    failures: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -574,11 +584,14 @@ def raw_config_for_table(table_name: str) -> RawLayerGroupConfig:
 def load_raw_layer_maintenance_work(
     glue_database: str,
     region: str = AWS_REGION,
-) -> list[RawLayerTableInfo]:
+) -> RawLayerScan:
     """Scan the Glue catalog and return RawLayerTableInfo sorted by eligible snapshots.
 
     This is a read-only inspection — it does not run any maintenance.  Pass the
-    returned list to the maintenance asset for parallel processing.
+    returned tables to the maintenance asset for parallel processing.
+
+    A table whose metadata cannot be loaded is returned in ``failures`` instead
+    of ``tables``.
 
     Tables are sorted descending by ``eligible_snapshot_count`` so the worst
     offenders are processed first (fail-fast semantics for long-running jobs).
@@ -603,6 +616,7 @@ def load_raw_layer_maintenance_work(
     # ── 2. Load each table's snapshot metadata ────────────────────────────
     now_ms = int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1000)
     results: list[RawLayerTableInfo] = []
+    failures: list[str] = []
 
     for table_name in iceberg_table_names:
         group_cfg = raw_config_for_table(table_name)
@@ -629,15 +643,18 @@ def load_raw_layer_maintenance_work(
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("Could not inspect %s.%s: %s", glue_database, table_name, exc)
+            failures.append(f"{table_name}: {exc}")
 
     # Worst offenders first so they are processed before a potential timeout
     results.sort(key=lambda t: t.eligible_snapshot_count, reverse=True)
     log.info(
-        "Snapshot scan complete: %d tables inspected, %d total snapshots eligible",
+        "Snapshot scan complete: %d tables inspected, %d could not be loaded, "
+        "%d total snapshots eligible",
         len(results),
+        len(failures),
         sum(t.eligible_snapshot_count for t in results),
     )
-    return results
+    return RawLayerScan(tables=results, failures=failures)
 
 
 def find_snapshot_pointer_lag(  # noqa: C901

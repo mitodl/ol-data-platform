@@ -189,6 +189,12 @@ def _run_table_maintenance(
         if not exp.get("skipped"):
             summary["snapshots_expired"] = exp.get("eligible_count", 0)
     except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "EXPIRE SNAPSHOTS failed for %s.%s: %s",
+            cfg.schema_name,
+            cfg.model_name,
+            exc,
+        )
         summary["errors"].append(f"expire_snapshots: {exc}")
 
     # OPTIMIZE — only if enough materializations have accumulated
@@ -408,17 +414,25 @@ def iceberg_dbt_layer_maintenance(
 def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None]:
     """Run EXPIRE SNAPSHOTS for all raw layer Iceberg tables."""
     context.log.info("Scanning Glue catalog for raw layer Iceberg tables...")
-    tables = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
+    scan = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
+    tables = scan.tables
+    tables_scanned = len(tables) + len(scan.failures)
     context.log.info(
         "Found %d Iceberg tables; processing with %d workers.",
-        len(tables),
+        tables_scanned,
         RAW_LAYER_WORKERS,
     )
 
     tables_cleaned = 0
     snapshots_expired = 0
     staging_branches_removed = 0
-    failures: list[str] = []
+    # A table the scan could not load is never handed to expire_snapshots. It
+    # is a failed table all the same.
+    failures: list[str] = list(scan.failures)
+    # The metadata keeps the first 20 failures, so the log is the only place
+    # the rest are recorded.
+    for failure in failures:
+        context.log.warning("Raw layer scan failed for %s", failure)
 
     # A GlueCatalog (and its underlying S3 FileIO / boto3 client) must not be
     # shared across worker threads: concurrent commits mutate catalog state and
@@ -434,58 +448,44 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
 
     def _process_one(table_info) -> dict[str, Any]:
         cfg = raw_config_for_table(table_info.table_name)
-        catalog = _worker_catalog()
-        result: dict[str, Any] = {
-            "table": table_info.table_name,
-            "ok": True,
-            "errors": [],
-        }
-        try:
-            exp = expire_snapshots(
-                catalog=catalog,
-                database=table_info.database,
-                table_name=table_info.table_name,
-                retention_days=cfg.snapshot_retention_days,
-                stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
-            )
-            result["expire"] = exp
-        except Exception as exc:  # noqa: BLE001
-            result["ok"] = False
-            result["errors"].append(str(exc))
-        return result
+        return expire_snapshots(
+            catalog=_worker_catalog(),
+            database=table_info.database,
+            table_name=table_info.table_name,
+            retention_days=cfg.snapshot_retention_days,
+            stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+        )
 
     with ThreadPoolExecutor(max_workers=RAW_LAYER_WORKERS) as executor:
         future_to_table = {executor.submit(_process_one, t): t for t in tables}
         for future in as_completed(future_to_table):
             table_info = future_to_table[future]
             try:
-                res = future.result()
-                if res["ok"]:
-                    exp = res.get("expire", {})
-                    # A table with nothing past its retention is not cleaned.
-                    tables_cleaned += int(not exp.get("skipped"))
-                    snapshots_expired += exp.get("eligible_count", 0)
-                    staging_branches_removed += exp.get("stale_branch_count", 0)
-                else:
-                    failures.extend(
-                        f"{table_info.table_name}: {err}" for err in res["errors"]
-                    )
+                exp = future.result()
             except Exception as exc:  # noqa: BLE001
+                context.log.warning(
+                    "EXPIRE SNAPSHOTS failed for %s: %s", table_info.table_name, exc
+                )
                 failures.append(f"{table_info.table_name}: {exc}")
+                continue
+            # A table with nothing past its retention is not cleaned.
+            tables_cleaned += int(not exp.get("skipped"))
+            snapshots_expired += exp.get("eligible_count", 0)
+            staging_branches_removed += exp.get("stale_branch_count", 0)
 
     context.log.info(
         "Raw layer maintenance complete: %d/%d tables cleaned, %d failures.",
         tables_cleaned,
-        len(tables),
+        tables_scanned,
         len(failures),
     )
 
     # Fail the asset if maintenance failures exceed 5% of tables scanned.
     # Prevents silent SUCCESS when Glue/S3 is unavailable for a large fraction
     # of tables, which would advance the snapshot timestamp cursor.
-    tables_processed = len(tables)
+    tables_processed = tables_scanned
     if failures:
-        failure_threshold = max(1, int(tables_processed * 0.05))
+        failure_threshold = maintenance_failure_threshold(tables_processed)
         if len(failures) >= failure_threshold:
             context.log.error(
                 "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",
@@ -504,7 +504,7 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
     return Output(
         value=None,
         metadata={
-            "tables_scanned": MetadataValue.int(len(tables)),
+            "tables_scanned": MetadataValue.int(tables_scanned),
             "tables_cleaned": MetadataValue.int(tables_cleaned),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
             "staging_branches_removed": MetadataValue.int(staging_branches_removed),
