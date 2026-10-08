@@ -19,7 +19,8 @@ from ol_orchestrate.lib.iceberg_maintenance import RawLayerScan, RawLayerTableIn
 DBT_MODULE = "lakehouse.assets.lakehouse.dbt"
 ASSET_MODULE = "lakehouse.assets.iceberg_maintenance"
 BROKEN = "raw__mitxonline__app__postgres__broken"
-# Enough tables that one failure stays under the 5% threshold.
+# With the unloadable table that is 42 scanned, so the third failure is the
+# first one over 5%.
 HEALTHY_TABLES = 41
 
 
@@ -61,11 +62,14 @@ def _run(
     monkeypatch: pytest.MonkeyPatch,
     scan: RawLayerScan,
     failing: frozenset[str] = frozenset(),
+    nothing_to_expire: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     def fake_expire(*, table_name: str, **_kwargs: Any) -> dict[str, Any]:
         if table_name in failing:
             msg = "commit lost to a concurrent write"
             raise RuntimeError(msg)
+        if table_name in nothing_to_expire:
+            return {"skipped": True, "eligible_count": 0, "stale_branch_count": 0}
         return {"skipped": False, "eligible_count": 2, "stale_branch_count": 1}
 
     monkeypatch.setattr(module, "load_raw_layer_maintenance_work", lambda **_: scan)
@@ -98,8 +102,39 @@ def test_scan_and_expiry_failures_count_toward_the_same_threshold(
     tables = _tables(module.RAW_GLUE_DATABASE)
     scan = RawLayerScan(tables=tables, failures=[f"{BROKEN}: metadata.json not found"])
 
-    with pytest.raises(RuntimeError, match=rf"failed for 2/{HEALTHY_TABLES + 1}"):
-        _run(module, monkeypatch, scan, failing=frozenset({tables[0].table_name}))
+    failing = frozenset(table.table_name for table in tables[:2])
+
+    with pytest.raises(RuntimeError, match=rf"failed for 3/{HEALTHY_TABLES + 1}"):
+        _run(module, monkeypatch, scan, failing=failing)
+
+
+def test_failures_at_five_percent_or_under_do_not_fail_the_asset(
+    module: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tables = _tables(module.RAW_GLUE_DATABASE)
+    scan = RawLayerScan(tables=tables, failures=[f"{BROKEN}: metadata.json not found"])
+
+    metadata = _run(
+        module, monkeypatch, scan, failing=frozenset({tables[0].table_name})
+    )
+
+    assert metadata["failure_count"] == 2
+
+
+def test_a_table_with_nothing_to_expire_is_not_counted_as_cleaned(
+    module: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tables = _tables(module.RAW_GLUE_DATABASE)
+
+    metadata = _run(
+        module,
+        monkeypatch,
+        RawLayerScan(tables=tables),
+        nothing_to_expire=frozenset({tables[0].table_name}),
+    )
+
+    assert metadata["tables_scanned"] == HEALTHY_TABLES
+    assert metadata["tables_cleaned"] == HEALTHY_TABLES - 1
 
 
 def test_a_scan_that_loads_nothing_fails_the_asset(

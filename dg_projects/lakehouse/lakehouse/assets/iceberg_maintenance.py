@@ -485,7 +485,7 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
     # of tables, which would advance the snapshot timestamp cursor.
     tables_processed = tables_scanned
     if failures:
-        failure_threshold = max(1, int(tables_processed * 0.05))
+        failure_threshold = maintenance_failure_threshold(tables_processed)
         if len(failures) >= failure_threshold:
             context.log.error(
                 "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",
