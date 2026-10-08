@@ -617,6 +617,15 @@ class TestDefinitionHashes:
         after = _mv(raw_code="-- Grain: org x month\n\n{# why,\nat length #}\nselect 1")
         assert _hash(before) == _hash(after)
 
+    def test_whitespace_control_on_a_jinja_comment_is_a_change(self):
+        """`1 - {# c #} -1` renders as a subtraction. With `{#- c -#}` the
+        whitespace on both sides goes and it renders `1 --1`, a comment.
+        """
+        plain = _mv(raw_code="select 1 - {# c #} -1")
+        assert _hash(plain) != _hash(_mv(raw_code="select 1 - {#- c -#} -1"))
+        assert _hash(plain) != _hash(_mv(raw_code="select 1 - {# c -#} -1"))
+        assert _hash(plain) == _hash(_mv(raw_code="select 1 - {# reworded #} -1"))
+
     def test_whitespace_inside_a_line_is_a_change(self):
         """It could be inside a string literal, and a missed change is the bug
         this exists to prevent.

@@ -340,7 +340,9 @@ DEFINITION_TABLE = "dbt_mv_definitions"
 _CONFIG_NOT_IN_DEFINITION = frozenset(
     {"access", "docs", "enabled", "grants", "group", "meta", "persist_docs", "tags"}
 )
-_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
+# The groups are the whitespace-control markers (`{#-`, `-#}`), which decide what
+# the rendered SQL looks like around the comment and so are kept.
+_JINJA_COMMENT = re.compile(r"\{#([-+]?).*?([-+]?)#\}", re.DOTALL)
 _SQL_COMMENT_LINE = re.compile(r"^\s*--.*$", re.MULTILINE)
 # Relation names and hashes are formatted into SQL as literals below.
 _RELATION_NAME = re.compile(r"\w+\.\w+")
@@ -349,15 +351,18 @@ _DEFINITION_COLUMNS = "relation_name, definition_hash"
 
 
 def _without_comments(sql: str) -> str:
-    """Drop what cannot change the query: Jinja comments, lines that are only a
-    `--` comment, trailing whitespace and blank lines.
+    """Drop what cannot change the query: the text of Jinja comments, lines that
+    are only a `--` comment, trailing whitespace and blank lines.
 
-    Nothing inside a line is touched, so whitespace in a string literal still
-    counts. The cost of a missed change is an edit that never lands; the cost of
-    a false one is a rebuild. A line starting with `--` inside a multi-line
-    string literal would be dropped. None of these models has one.
+    A Jinja comment keeps its delimiters. `{#- c -#}` strips the whitespace on
+    either side of it where `{# c #}` does not, which can join two tokens.
+
+    Nothing else inside a line is touched, so whitespace in a string literal
+    still counts. The cost of a missed change is an edit that never lands; the
+    cost of a false one is a rebuild. A line starting with `--` inside a
+    multi-line string literal would be dropped. None of these models has one.
     """
-    sql = _SQL_COMMENT_LINE.sub("", _JINJA_COMMENT.sub("", sql))
+    sql = _SQL_COMMENT_LINE.sub("", _JINJA_COMMENT.sub(r"{#\1\2#}", sql))
     return "\n".join(line.rstrip() for line in sql.splitlines() if line.strip())
 
 
