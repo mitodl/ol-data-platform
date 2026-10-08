@@ -158,7 +158,7 @@ select
     -- "eom"), and the summarizer reads only text, so it leads the first kept turn.
     , case
         when numbered_turns.turn_index = 1 and forum_thread.forumthread_title is not null
-            then {{ dbt.concat(["forum_thread.forumthread_title", "chr(10)", "chr(10)", "numbered_turns.post_body"]) }}
+            then {{ dbt.concat(["forum_thread.forumthread_title", codepoint_char(10), codepoint_char(10), "numbered_turns.post_body"]) }}
         else numbered_turns.post_body
     end as text
     , forum_thread.forumthread_title as title

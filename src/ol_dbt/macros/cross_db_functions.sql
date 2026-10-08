@@ -856,6 +856,23 @@
 
 
 {#
+    codepoint_char: the one-character string for a code point, e.g. 10 -> a newline.
+    StarRocks has char() and no chr().
+#}
+{% macro codepoint_char(codepoint) -%}
+    {{ adapter.dispatch('codepoint_char', 'open_learning')(codepoint) }}
+{%- endmacro %}
+
+{% macro default__codepoint_char(codepoint) -%}
+    chr({{ codepoint }})
+{%- endmacro %}
+
+{% macro starrocks__codepoint_char(codepoint) -%}
+    char({{ codepoint }})
+{%- endmacro %}
+
+
+{#
     regexp_replace_all: replace every match. DuckDB's regexp_replace replaces only the
     first match unless given the 'g' option; Trino's always replaces all.
 #}
