@@ -37,6 +37,7 @@ jobs:
         images: ghcr.io/mitodl/marimo-jupyterlab
         tags: |
           type=sha,prefix=sha-
+          type=raw,value={{date 'YYYY.MM.DD'}}.${{ github.run_number }},enable={{is_default_branch}}
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Set up Docker Buildx
