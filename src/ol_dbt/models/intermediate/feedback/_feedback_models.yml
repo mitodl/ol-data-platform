@@ -265,8 +265,8 @@ models:
     thread's opening post, a response or a comment - conformed to the common feedback
     event contract. Each thread is one conversation. Posts by course staff and instructors
     are dropped, because they answer feedback rather than give it. Posts by learners
-    the LMS has retired are dropped too, and a retired learner's thread title is null
-    on the replies that remain.
+    the LMS or the forum has retired are dropped too, and a retired learner's thread
+    title is null on the replies that remain.
   config:
     meta:
       qa_branches:
