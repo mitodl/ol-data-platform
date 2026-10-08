@@ -42,6 +42,12 @@ from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
 )
+from lakehouse.assets.iceberg_orphan_files import (
+    ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+    ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+    IcebergOrphanFilesConfig,
+    iceberg_raw_orphan_files,
+)
 from lakehouse.assets.lake_orphan_sweep import (
     LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
     LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
@@ -181,6 +187,15 @@ airbyte_workspace = (
         # left at the library default of False it raised "Found sync job for
         # connection_id=... already running" across ten connections.
         poll_previous_running_sync=True,
+        # Leave the Airbyte job running when the run worker is terminated. Run
+        # pods are preempted and the monitoring daemon resumes them, so the
+        # library default of True cancels a healthy sync that the resumed
+        # worker would have attached to: it then finds nothing in flight, POSTs
+        # a new job while the cancelled one winds down and gets a 409, and any
+        # other run attached to the same job fails with "Job was cancelled".
+        # The cost is that terminating a run in Dagster no longer stops the
+        # sync; cancel it in Airbyte.
+        cancel_on_termination=False,
     )
     if not SKIP_AIRBYTE
     else None
@@ -270,10 +285,9 @@ if DAGSTER_ENV == "production":
         msg = f"No sync intervals rendered from the inventory at {INVENTORY_DIR}."
         raise RuntimeError(msg)
     # A single live group the inventory does not cover (a connection created or
-    # renamed in the UI) warns rather than raises. There is one today, the
-    # edx.org course-metadata connection pending deletion, and failing here
-    # would take the whole code location down for it. airbyte_inventory_drift
-    # reports the connection behind it as undeclared.
+    # renamed in the UI) warns rather than raises, because failing here would
+    # take the whole code location down for it. airbyte_inventory_drift reports
+    # the connection behind it as undeclared.
     if uncovered := sorted(group_names - group_name_to_interval.keys()):
         import warnings
 
@@ -407,6 +421,31 @@ lake_orphan_sweep_schedule = ScheduleDefinition(
         ),
     ),
     cron_schedule="0 5 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# Weekly for the same reasons as the sweep above, and an hour after it. Sunday
+# 06:00 UTC is also after that night's 03:00 raw snapshot expiry, which is what
+# turns files into orphans.
+#
+# RUNNING where it is registered. The asset decides what a tick may do: it
+# deletes only in ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS and reports elsewhere.
+iceberg_raw_orphan_files_schedule = ScheduleDefinition(
+    name="iceberg_raw_orphan_files_weekly",
+    job=define_asset_job(
+        name="iceberg_raw_orphan_files_job",
+        selection=AssetSelection.assets(iceberg_raw_orphan_files),
+        config=RunConfig(
+            ops={
+                "iceberg_raw_orphan_files": IcebergOrphanFilesConfig(
+                    min_age_days=ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV in ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 6 * * 0",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
 )
@@ -662,6 +701,7 @@ defs = Definitions(
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             lake_orphan_sweep,
+            iceberg_raw_orphan_files,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
@@ -728,6 +768,7 @@ defs = Definitions(
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
             ("lake_orphan_sweep_weekly", lake_orphan_sweep_schedule),
+            ("iceberg_raw_orphan_files_weekly", iceberg_raw_orphan_files_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),

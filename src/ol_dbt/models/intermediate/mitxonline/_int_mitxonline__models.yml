@@ -541,6 +541,8 @@ models:
     - not_null
   - name: order_total_price_paid
     description: number, total order amount
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: user_id
     description: int, unique ID for each user on the MITx Online platform
     tests:

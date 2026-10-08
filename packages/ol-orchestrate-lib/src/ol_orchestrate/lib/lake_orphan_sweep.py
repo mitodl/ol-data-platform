@@ -176,7 +176,7 @@ def measure(s3: Any, bucket: str, prefix: str) -> dict[str, Any]:
     }
 
 
-def _require_minimum_age(min_age_days: int) -> None:
+def require_minimum_age(min_age_days: int) -> None:
     """Raise unless the age floor is at least a day.
 
     A floor of zero makes a directory a dbt run is still writing eligible.
@@ -223,7 +223,7 @@ def delete_prefix(  # noqa: PLR0913
     :param logger: Where the line naming a prefix about to be deleted goes. A
         Dagster run only captures its own ``context.log``.
     """
-    _require_minimum_age(min_age_days)
+    require_minimum_age(min_age_days)
     path = f"{bucket}/{prefix}"
     if not DBT_DIR.search(prefix):
         reason = "no dbt uuid suffix" if prefix else "empty prefix"
@@ -357,7 +357,7 @@ class SweepResult:
         return [row for row in self.orphans if row["eligible"]]
 
 
-def _refuse_to_delete_blind(unreadable: list[str]) -> None:
+def refuse_to_delete_blind(unreadable: list[str]) -> None:
     """Raise when Glue denied any database, before anything is deleted.
 
     A table's location is independent of its database's, so a database this
@@ -394,13 +394,13 @@ def sweep_warehouse(  # noqa: PLR0913
         list is then an upper bound.
     :param logger: Receives one line per prefix a delete run acts on.
     """
-    _require_minimum_age(min_age_days)
+    require_minimum_age(min_age_days)
 
     unreadable: list[str] = []
     tables = glue_tables(glue, unreadable=unreadable)
     locations = glue_database_locations(glue)
     if delete:
-        _refuse_to_delete_blind(unreadable)
+        refuse_to_delete_blind(unreadable)
     targets = warehouse_scan_targets(tables, locations, warehouse_env)
     referenced = references(tables)
     scanned = 0
@@ -428,7 +428,7 @@ def sweep_warehouse(  # noqa: PLR0913
         def fresh_references() -> set[str]:
             fresh_unreadable: list[str] = []
             fresh_tables = glue_tables(glue, unreadable=fresh_unreadable)
-            _refuse_to_delete_blind(fresh_unreadable)
+            refuse_to_delete_blind(fresh_unreadable)
             return references(fresh_tables, glue_database_locations(glue))
 
         outcomes = []

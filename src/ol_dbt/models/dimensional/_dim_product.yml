@@ -80,3 +80,48 @@ models:
     description: Boolean indicating current version
     tests:
     - not_null
+
+unit_tests:
+- name: test_dim_product_merge_collapses_duplicate_current_rows
+  description: >
+    Product 3190 had three identical current rows in production after the
+    2026-09-01 duplicate upstream copies. With an unchanged price upstream, the merge
+    must still rewrite the key so that delete+insert collapses it to one current row
+    (plus one expired copy of the old version).
+  model: dim_product
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__ecommerce_product')
+    rows:
+    - product_id: 3190
+      product_type: "course run"
+      product_price: 100.0
+      product_is_active: true
+  - input: ref('int__mitxpro__ecommerce_product')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - &current_product
+      source_product_id: 3190
+      platform: "mitxonline"
+      product_price: 100.0
+      effective_date: "2026-08-11 00:46:01"
+      is_current: true
+    - *current_product
+    - *current_product
+  expect:
+    rows:
+    - source_product_id: 3190
+      product_price: 100.0
+      is_current: true
+    - source_product_id: 3190
+      product_price: 100.0
+      is_current: false

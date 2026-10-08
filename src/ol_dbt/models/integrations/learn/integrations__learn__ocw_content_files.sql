@@ -18,7 +18,7 @@ with content_files as (
 select
     'ocw' as etl_source
     , courserun_readable_id as run_readable_id
-    , content_file_key as key
+    , content_file_key as "key"
     , cast(null as varchar) as edx_module_id
     , title
     , description

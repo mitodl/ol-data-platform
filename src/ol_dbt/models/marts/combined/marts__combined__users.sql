@@ -96,56 +96,56 @@ with mitx__users as (
 
 , combined_users as (
     select
-        user_hashed_id
-        , user_mitxonline_id
-        , user_edxorg_id
+        mitx__users.user_hashed_id
+        , mitx__users.user_mitxonline_id
+        , mitx__users.user_edxorg_id
         , null as user_mitxpro_id
         , null as user_bootcamps_id
         , mitlearn_users.mitlearn_user_id as user_mitlearn_id
-        , user_mitxonline_username
-        , user_edxorg_username
+        , mitx__users.user_mitxonline_username
+        , mitx__users.user_edxorg_username
         , null as user_mitxpro_username
         , null as user_bootcamps_username
         , case
-            when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
-                then user_mitxonline_email
-            else coalesce(user_edxorg_email, user_mitxonline_email, user_micromasters_email)
+            when mitx__users.user_is_active_on_mitxonline and mitx__users.user_joined_on_mitxonline > mitx__users.user_joined_on_edxorg
+                then mitx__users.user_mitxonline_email
+            else coalesce(mitx__users.user_edxorg_email, mitx__users.user_mitxonline_email, mitx__users.user_micromasters_email)
         end as user_email
         , case
-            when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
-                then user_joined_on_mitxonline
-            else coalesce(user_joined_on_edxorg, user_joined_on_mitxonline)
+            when mitx__users.user_is_active_on_mitxonline and mitx__users.user_joined_on_mitxonline > mitx__users.user_joined_on_edxorg
+                then mitx__users.user_joined_on_mitxonline
+            else coalesce(mitx__users.user_joined_on_edxorg, mitx__users.user_joined_on_mitxonline)
         end as user_joined_on
         , case
-            when user_is_active_on_mitxonline and user_last_login_on_mitxonline > user_last_login_on_edxorg
-                then user_last_login_on_mitxonline
-            else coalesce(user_last_login_on_edxorg, user_last_login_on_mitxonline)
+            when mitx__users.user_is_active_on_mitxonline and mitx__users.user_last_login_on_mitxonline > mitx__users.user_last_login_on_edxorg
+                then mitx__users.user_last_login_on_mitxonline
+            else coalesce(mitx__users.user_last_login_on_edxorg, mitx__users.user_last_login_on_mitxonline)
         end as user_last_login
         , case
-            when user_is_active_on_mitxonline
-                then user_is_active_on_mitxonline
-            else user_is_active_on_edxorg
+            when mitx__users.user_is_active_on_mitxonline
+                then mitx__users.user_is_active_on_mitxonline
+            else mitx__users.user_is_active_on_edxorg
         end as user_is_active
         , case
-            when is_mitxonline_user = true and is_edxorg_user = true
+            when mitx__users.is_mitxonline_user = true and mitx__users.is_edxorg_user = true
                 then concat('{{ var("mitxonline") }}', ' and ', '{{ var("edxorg") }}')
-            when is_mitxonline_user = true
+            when mitx__users.is_mitxonline_user = true
                 then '{{ var("mitxonline") }}'
-            when is_edxorg_user = true
+            when mitx__users.is_edxorg_user = true
                 then '{{ var("edxorg") }}'
         end as platforms
-        , user_full_name
-        , user_address_country
-        , user_highest_education
-        , user_gender
-        , user_birth_year
-        , user_company
-        , user_job_title
-        , user_industry
-        , user_street_address
-        , user_address_city
-        , user_address_state as user_address_state_or_territory
-        , user_address_postal_code
+        , mitx__users.user_full_name
+        , mitx__users.user_address_country
+        , mitx__users.user_highest_education
+        , mitx__users.user_gender
+        , mitx__users.user_birth_year
+        , mitx__users.user_company
+        , mitx__users.user_job_title
+        , mitx__users.user_industry
+        , mitx__users.user_street_address
+        , mitx__users.user_address_city
+        , mitx__users.user_address_state as user_address_state_or_territory
+        , mitx__users.user_address_postal_code
     from mitx__users
     left join mitlearn_users on lower(mitlearn_users.email) = lower(mitx__users.user_mitxonline_email)
     where mitx__users.is_mitxonline_user = true or mitx__users.is_edxorg_user = true
@@ -281,9 +281,9 @@ with mitx__users as (
         , null as user_address_postal_code
     from mitlearn_users
     where lower(email) not in (
-        select lower(user_mitxonline_email)
+        select lower(mitx__users.user_mitxonline_email)
         from mitx__users
-        where user_mitxonline_email is not null
+        where mitx__users.user_mitxonline_email is not null
     )
 
 )

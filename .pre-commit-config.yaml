@@ -82,42 +82,7 @@ repos:
     files: ^src/ol_dbt/(models|tests)/
     # Models with findings from before these hooks worked. Remove a file
     # from this list once its findings are fixed.
-    exclude: &sqlfluff_baseline |
-      (?x)^src/ol_dbt/models/(
-      dimensional/dim_certificate_type|
-      dimensional/dim_contract|
-      dimensional/dim_discount_type|
-      dimensional/dim_feedback_category|
-      dimensional/dim_payment_method|
-      dimensional/dim_user|
-      dimensional/tfact_certificate|
-      dimensional/tfact_discussion_events|
-      dimensional/tfact_enrollment|
-      dimensional/tfact_enrollment_order|
-      dimensional/tfact_grade|
-      dimensional/tfact_order|
-      dimensional/tfact_payment|
-      intermediate/combined/int__combined__user_course_roles|
-      intermediate/edxorg/int__edxorg__mitx_learn_course_best_runs|
-      intermediate/edxorg/int__edxorg__mitx_learn_programs|
-      intermediate/feedback/int__feedback__learn_ai_tutor|
-      intermediate/learn-ai/int__learn_ai__chatbot|
-      intermediate/mitxonline/int__mitxonline__program_requirements|
-      intermediate/zendesk/int__zendesk__ticket|
-      intermediate/zendesk/int__zendesk__ticket_comment|
-      marts/combined/marts__combined__products|
-      marts/combined/marts__combined__users|
-      migration/edxorg_to_mitxonline_enrollments|
-      reporting/chatbot_usage_report|
-      reporting/combined_enrollments_with_gender_and_date|
-      reporting/edxorg_mitlearn_user_mapping|
-      reporting/enrollment_detail_report|
-      reporting/instructor_module_report|
-      reporting/mitxonline_video_engagements_w_video_counts|
-      reporting/organization_administration_report|
-      staging/zendesk/stg__zendesk__brand|
-      staging/zendesk/stg__zendesk__group
-      )\.sql$
+    exclude: &sqlfluff_baseline ^$
     require_serial: true
   - id: sqlfluff-lint
     name: sqlfluff-lint

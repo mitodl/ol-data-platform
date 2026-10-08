@@ -7,6 +7,7 @@ from typing import Annotated
 import cyclopts
 from cyclopts import Parameter
 
+from ol_superset.lib.asset_index import WAREHOUSE_DATABASE_DIALECTS
 from ol_superset.lib.role_management import (
     compute_desired_dataset_ids,
     find_governance_roles_json,
@@ -132,25 +133,32 @@ def roles_check(
         ),
     ] = None,
     database: Annotated[
-        str,
+        str | None,
         Parameter(
             name=["--database", "-db"],
-            help="Only check datasets from this database subdirectory (default: Trino)",
+            help=(
+                "Only check datasets from this database subdirectory "
+                "(default: every warehouse database)"
+            ),
         ),
-    ] = "Trino",
+    ] = None,
 ) -> None:
     """
     Check that all local dataset schemas are covered by at least one role.
 
     Validates consistency between local dataset assets and the governance
-    policy. By default, only checks datasets in the Trino database directory
-    since those are subject to warehouse schema governance.
+    policy. By default, only checks datasets in the warehouse database
+    directories (Trino and StarRocks) since those are subject to warehouse
+    schema governance.
 
     Exits with a non-zero status if uncovered schemas exist.
 
     Examples:
-        Check dataset schema coverage (Trino only by default):
+        Check dataset schema coverage (warehouse databases by default):
             ol-superset roles check
+
+        Check one database:
+            ol-superset roles check --database Trino
 
         Check all databases:
             ol-superset roles check --database ""
@@ -166,8 +174,13 @@ def roles_check(
 
     local_datasets = get_local_datasets(assets_dir)
 
-    # Filter to the target database directory (default: Trino)
-    if database:
+    if database is None:
+        local_datasets = [
+            ds
+            for ds in local_datasets
+            if ds.get("database") in WAREHOUSE_DATABASE_DIALECTS
+        ]
+    elif database:
         local_datasets = [ds for ds in local_datasets if ds.get("database") == database]
 
     # Collect all schemas covered by at least one role
@@ -186,7 +199,9 @@ def roles_check(
     print("Governance Role Schema Coverage Check")
     print("=" * 60)
     print(f"Governance policy: {gov_json}")
-    if database:
+    if database is None:
+        print(f"Database filter:   {sorted(WAREHOUSE_DATABASE_DIALECTS)}")
+    elif database:
         print(f"Database filter:   {database}")
     print(f"Dataset schemas found:    {sorted(dataset_schemas)}")
     print(f"Schemas covered by roles: {sorted(covered_schemas)}")

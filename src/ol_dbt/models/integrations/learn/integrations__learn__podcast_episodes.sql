@@ -36,7 +36,7 @@ with episodes as (
     select
         episode_dlt_load_id
         , row_number() over (order by episode_dlt_load_id desc) as loads_ago
-    from (select distinct episode_dlt_load_id from episodes)
+    from (select distinct episode_dlt_load_id from episodes) as episode_loads
 )
 
 , current_episodes as (

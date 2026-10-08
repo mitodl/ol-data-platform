@@ -30,3 +30,4 @@ src/ol_dbt/.user.yml
 # worth committing.
 airbyte-snapshot*.json
 airbyte-findings.md
+.worktrees

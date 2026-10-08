@@ -9,7 +9,7 @@ with source as (
         , url as group_api_url
         , name as group_name
         , description as group_description
-        , default as group_is_default
+        , "default" as group_is_default
         , deleted as group_is_deleted
         , is_public as group_is_public
         , {{ cast_timestamp_to_iso8601('created_at') }} as group_created_at

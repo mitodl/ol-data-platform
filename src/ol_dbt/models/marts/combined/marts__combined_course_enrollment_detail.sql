@@ -222,7 +222,7 @@ with combined_enrollments as (
             or micromasters_users.user_email = mitxonline_certificates.user_email
         )
         and combined_enrollments.courserun_readable_id
-        = replace(replace(mitxonline_certificates.courserun_readable_id, 'course-v1:', ''), '+', '/')
+        = {{ format_course_id('mitxonline_certificates.courserun_readable_id') }}
     where combined_enrollments.platform = '{{ var("edxorg") }}'
 
     union all

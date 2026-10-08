@@ -143,15 +143,15 @@ with mitxonline_courseroles as (
 )
 
 select
-    platform
-    , platform_code
+    combined_courseroles.platform
+    , combined_courseroles.platform_code
     , combined_courseroles.user_username
     , combined_courseroles.user_email
     , combined_courseroles.user_full_name
     , combined_courseroles.courserun_readable_id
-    , organization
-    , courseaccess_role
-    , hashed_user_email
+    , combined_courseroles.organization
+    , combined_courseroles.courseaccess_role
+    , combined_courseroles.hashed_user_email
 from combined_courseroles
 
 union all

@@ -10,7 +10,7 @@ with source as (
         , brand_url
         , name as brand_name
         , active as brand_is_active
-        , default as brand_is_default
+        , "default" as brand_is_default
         , subdomain as brand_subdomain
         , is_deleted as brand_is_deleted
         , has_help_center as brand_has_help_center

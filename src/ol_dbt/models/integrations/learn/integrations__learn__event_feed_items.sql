@@ -63,7 +63,7 @@ Explore upcoming events below, including webinars, workshops, and more.
             "replace(substr(event_start_on_raw, 1, 19), 'T', ' ')", "'America/New_York'"
         ) }} as event_start_on
         -- The site gives an end time, which Learn does not load.
-        , cast(null as timestamp with time zone) as event_end_on
+        , {{ null_timestamptz() }} as event_end_on
     from ol_events
     where event_is_published and event_start_on_raw is not null
 )
@@ -93,7 +93,7 @@ MIT Professional Education events.
             when mitpe_events.event_image_src is not null and mitpe_events.event_image_src != ''
                 then mitpe_events.event_title
         end as image_description
-        , array['Faculty', 'MIT Community', 'Public', 'Students'] as audience
+        , {{ array_of(["'Faculty'", "'MIT Community'", "'Public'", "'Students'"]) }} as audience
         , {{ empty_varchar_array() }} as location
         , {{ empty_varchar_array() }} as event_type
         , mitpe_event_times.start_on as event_start_on
@@ -130,4 +130,4 @@ select
     , {{ format_timestamp_as_iso8601(timestamptz_at_utc('event_start_on')) }} as event_datetime
     , {{ format_timestamp_as_iso8601(timestamptz_at_utc('event_end_on')) }} as event_end_datetime
 from items
-where event_start_on >= current_timestamp
+where event_start_on >= {{ current_timestamptz() }}

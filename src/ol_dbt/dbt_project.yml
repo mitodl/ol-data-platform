@@ -35,6 +35,11 @@ dispatch:
 
 vars:
   schema_suffix: dev
+  # Where starrocks__create_schema places a schema dbt has to create in a
+  # Glue-backed Iceberg catalog: <root>/<schema name>, keyed by catalog.
+  iceberg_schema_location_roots:
+    ol_data_lake_qa: "s3://ol-data-lake-staging-qa/processed"
+    ol_data_lake_production: "s3://ol-data-lake-staging-production/processed"
 
   open_learning:
     platforms: ["Bootcamps", "xPro", "xPRO Emeritus", "xPRO Global Alumni", "MITx\

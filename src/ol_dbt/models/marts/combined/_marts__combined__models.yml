@@ -234,6 +234,8 @@ models:
       "review".
     tests:
     - not_null
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: order_tax_amount
     description: numeric, the amount of tax paid. Only applicable for xPro for now.
   - name: order_tax_country_code
