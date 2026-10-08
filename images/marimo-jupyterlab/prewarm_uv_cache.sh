@@ -7,8 +7,8 @@ set -eu
 notebooks="${HOME}/notebooks"
 marimo_version="$(python -c 'import marimo; print(marimo.__version__)')"
 
-# The server marimo-jupyter-extension starts re-launches itself under uv with
-# its language-server extra layered over this interpreter.
+# marimo-jupyter-extension starts the marimo server, which then relaunches
+# itself under uv with its language-server extra layered over this interpreter.
 uv run --isolated --no-project --compile-bytecode --python "$(command -v python)" \
     --with "marimo[lsp]==${marimo_version}" -- python -c 'import marimo'
 
