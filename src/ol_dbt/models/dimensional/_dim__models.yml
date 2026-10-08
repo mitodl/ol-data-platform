@@ -1645,20 +1645,25 @@ models:
       last_active_on plus var needs_attention_quiet_days (30); null for in_progress
       with a grade but no tracked activity, and for passed and certified.
   - name: content_units_completed
-    description: int, progress units of the run's current course structure the learner
-      has completed, from afact_learner_courserun_content_progress. 0 when the learner
+    description: int, units (Open edX verticals) of the run's current course structure
+      the learner has completed, from afact_learner_courserun_content_progress. A
+      unit is complete when every block in it that counts toward progress is complete,
+      as on the Open edX progress page. 0 when the learner has finished no unit or
       has no completion matched to them, which includes a learner whose Open edX user
       id is not on their dim_user row. Null when the run has no units to count, which
       is every edxorg and bootcamps run.
   - name: content_units_total
-    description: int, progress units in the run's current course structure, from dim_course_content_progress_block.
+    description: int, units (Open edX verticals) in the run's current course structure
+      that hold at least one block counting toward progress, from dim_course_content_progress_block.
       The same for every learner in the run, so it can exceed what one learner is
       shown. Null when the run has no course structure, and for every edxorg and bootcamps
       run.
   - name: content_progress
     description: double, content_units_completed / content_units_total, between 0.0
-      and 1.0 like grade_value. Null when content_units_total is null or 0. Not an
-      input to completion_status; a certified learner can be below 1.0.
+      and 1.0 like grade_value. Times 100 it is the completion percent the Open edX
+      progress page shows, apart from the per-learner visibility this model does not
+      follow. Null when content_units_total is null or 0. Not an input to completion_status;
+      a certified learner can be below 1.0.
     tests:
     - dbt_utils.accepted_range:
         arguments:
@@ -1672,19 +1677,24 @@ models:
     where is_latest). A block counts when Open edX records completion on it:
     every block that is not a container (course, chapter, sequential, vertical,
     library_content, itembank, split_test, conditional) and not a discussion.
-    Blocks under a staff-only chapter, sequential or vertical are left out,
-    except through a vertical nested in a split_test or conditional.
+    Blocks under a staff-only chapter, sequential or vertical are left out.
     MITx Online, xPRO and residential only, the platforms with block completion
     data; edX.org has a course structure and is left out.
 
-    Blocks are grouped into progress units. A randomized pool (library_content,
-    itembank) shows each learner max_count of its children, so the pool is one
-    unit weighing max_count. Every other block is its own unit weighing 1. A
-    run's total is the sum of progress_unit_weight over its distinct
-    progress_unit_block_id, not a row count.
+    Progress is counted in units, as the Open edX progress page does. A unit is
+    a vertical directly under a sequential (vertical_block_id), and a run's
+    total is its count of distinct vertical_block_id, not a row count.
+
+    Within a unit, blocks are grouped into progress items. A randomized pool
+    (library_content, itembank) shows each learner max_count of its children,
+    so the pool is one item weighing max_count. Every other block is its own
+    item weighing 1. A unit is complete when the learner's completed weight
+    reaches the sum of progress_item_weight over the unit's distinct
+    progress_item_block_id.
 
     Content groups, release dates and split_test branches are not modelled, so
-    a run's total can exceed what one learner is shown.
+    a unit can hold blocks one learner is never shown, and that learner cannot
+    complete it here.
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -1728,16 +1738,22 @@ models:
     description: string, block id of the chapter the block is in.
   - name: sequential_block_id
     description: string, block id of the sequential the block is in.
-  - name: progress_unit_block_id
-    description: string, the unit the block counts in. The parent block id for a child
-      of a randomized pool, else block_id.
+  - name: vertical_block_id
+    description: string, block id of the unit the block is in, the vertical directly
+      under its sequential. A block in a vertical nested in a split_test or conditional
+      carries the outer vertical.
     tests:
     - not_null
-  - name: progress_unit_weight
-    description: int, how many completed blocks the unit is worth. 1 for a block that
-      is its own unit. For a pool, max_count (1 when unset), capped at the number
+  - name: progress_item_block_id
+    description: string, the progress item the block counts in. The parent block id
+      for a child of a randomized pool, else block_id.
+    tests:
+    - not_null
+  - name: progress_item_weight
+    description: int, how many completed blocks the item is worth. 1 for a block that
+      is its own item. For a pool, max_count (1 when unset), capped at the number
       of children, or the number of children when max_count is negative. Repeated
-      on every block of the unit.
+      on every block of the item.
     tests:
     - not_null
 
@@ -1799,9 +1815,10 @@ models:
     tests:
     - not_null
   - name: content_units_completed
-    description: int, progress units the learner has completed. A randomized pool
-      counts up to its progress_unit_weight, however many of its blocks the learner
-      completed.
+    description: int, units (Open edX verticals) the learner has completed. A unit
+      is complete when the learner's completed weight reaches the unit's. A randomized
+      pool counts up to its progress_item_weight, however many of its blocks the learner
+      completed. 0 when the learner has completed blocks and finished no unit.
     tests:
     - not_null
 
@@ -2276,9 +2293,9 @@ unit_tests:
       enrollment_created_on: "2024-01-01T00:00:00"
 - name: test_afact_learner_courserun_progress_content_progress
   description: >
-    content_progress is the learner's completed units over the run's total. A
-    pool's weight is counted once however many blocks carry it, a learner with
-    nothing completed reads 0 rather than null, and a run with no course
+    content_progress is the learner's completed units over the run's total. The
+    total counts each vertical once however many blocks it holds, a learner
+    with nothing completed reads 0 rather than null, and a run with no course
     structure reads null.
   model: afact_learner_courserun_progress
   given:
@@ -2298,33 +2315,34 @@ unit_tests:
     rows: []
   - input: ref('dim_date')
     rows: []
-  # Two single blocks and a pool of three worth 2: a total of 4.
+  # Five blocks in two verticals: a total of 2.
   - input: ref('dim_course_content_progress_block')
     rows:
-    - {courserun_fk: run-1, block_id: html-1, progress_unit_block_id: html-1, progress_unit_weight: 1}
-    - {courserun_fk: run-1, block_id: video-1, progress_unit_block_id: video-1, progress_unit_weight: 1}
-    - {courserun_fk: run-1, block_id: problem-1, progress_unit_block_id: pool-1, progress_unit_weight: 2}
-    - {courserun_fk: run-1, block_id: problem-2, progress_unit_block_id: pool-1, progress_unit_weight: 2}
-    - {courserun_fk: run-1, block_id: problem-3, progress_unit_block_id: pool-1, progress_unit_weight: 2}
-    - {courserun_fk: null, block_id: html-9, progress_unit_block_id: html-9, progress_unit_weight: 1}
+    - {courserun_fk: run-1, block_id: html-1, vertical_block_id: vert-1}
+    - {courserun_fk: run-1, block_id: video-1, vertical_block_id: vert-1}
+    - {courserun_fk: run-1, block_id: problem-1, vertical_block_id: vert-2}
+    - {courserun_fk: run-1, block_id: problem-2, vertical_block_id: vert-2}
+    - {courserun_fk: run-1, block_id: problem-3, vertical_block_id: vert-2}
+    - {courserun_fk: null, block_id: html-9, vertical_block_id: vert-9}
   - input: ref('afact_learner_courserun_content_progress')
     rows:
-    - {user_fk: halfway, courserun_fk: run-1, content_units_completed: 2}
+    - {user_fk: halfway, courserun_fk: run-1, content_units_completed: 1}
   expect:
     rows:
-    - {user_fk: halfway, content_units_completed: 2, content_units_total: 4, content_progress: 0.5}
-    - {user_fk: nothing_done, content_units_completed: 0, content_units_total: 4,
+    - {user_fk: halfway, content_units_completed: 1, content_units_total: 2, content_progress: 0.5}
+    - {user_fk: nothing_done, content_units_completed: 0, content_units_total: 2,
       content_progress: 0.0}
     - {user_fk: no_structure, content_units_completed: null, content_units_total: null,
       content_progress: null}
 - name: test_dim_course_content_progress_block_units
   description: >
-    Pins which blocks count toward progress and what each unit weighs.
-    Containers and discussions do not count. A block under a staff-only
-    chapter, sequential or vertical does not count, including through a pool. A
-    pool's children share one unit weighing max_count: 1 when unset, capped at
-    the number of children, and every child when negative. Superseded
-    structure versions and edX.org structures are ignored.
+    Pins which blocks count toward progress, the unit each is in and what each
+    item weighs. Containers and discussions do not count. A block under a
+    staff-only chapter, sequential or vertical does not count, including
+    through a pool. A pool's children share one item weighing max_count: 1 when
+    unset, capped at the number of children, and every child when negative. A
+    block in a vertical nested in a split_test belongs to the outer vertical.
+    Superseded structure versions and edX.org structures are ignored.
   model: dim_course_content_progress_block
   given:
   - input: ref('dim_course_run')
@@ -2368,6 +2386,9 @@ unit_tests:
         , ('mitxonline', 'course-v1:A+B+C', 28, 'seq-4', 'ch-2', 'sequential', '{}', 'ch-2', 'seq-4', true)
         , ('mitxonline', 'course-v1:A+B+C', 29, 'vert-4', 'seq-4', 'vertical', '{}', 'ch-2', 'seq-4', true)
         , ('mitxonline', 'course-v1:A+B+C', 30, 'video-1', 'vert-4', 'video', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 31, 'split-1', 'vert-4', 'split_test', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 32, 'vert-inner', 'split-1', 'vertical', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 33, 'problem-inner', 'vert-inner', 'problem', '{}', 'ch-2', 'seq-4', true)
         , ('mitxonline', 'course-v1:A+B+C', 4, 'html-removed', 'vert-1', 'html', '{}', 'ch-1', 'seq-1', false)
         , ('edxorg', 'course-v1:E+D+X', 4, 'html-edx', 'vert-edx', 'html', '{}', 'ch-edx', 'seq-edx', true)
       ) as t (
@@ -2376,44 +2397,68 @@ unit_tests:
       )
   expect:
     rows:
-    - {courserun_fk: run-1, block_id: html-1, progress_unit_block_id: html-1, progress_unit_weight: 1}
-    - {courserun_fk: run-1, block_id: pd-1, progress_unit_block_id: pool-default,
-      progress_unit_weight: 1}
-    - {courserun_fk: run-1, block_id: pd-2, progress_unit_block_id: pool-default,
-      progress_unit_weight: 1}
-    - {courserun_fk: run-1, block_id: po-1, progress_unit_block_id: pool-over, progress_unit_weight: 2}
-    - {courserun_fk: run-1, block_id: po-2, progress_unit_block_id: pool-over, progress_unit_weight: 2}
-    - {courserun_fk: run-1, block_id: pa-1, progress_unit_block_id: pool-all, progress_unit_weight: 3}
-    - {courserun_fk: run-1, block_id: pa-2, progress_unit_block_id: pool-all, progress_unit_weight: 3}
-    - {courserun_fk: run-1, block_id: pa-3, progress_unit_block_id: pool-all, progress_unit_weight: 3}
-    - {courserun_fk: run-1, block_id: video-1, progress_unit_block_id: video-1, progress_unit_weight: 1}
+    - {courserun_fk: run-1, block_id: html-1, vertical_block_id: vert-1, progress_item_block_id: html-1,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, block_id: pd-1, vertical_block_id: vert-1, progress_item_block_id: pool-default,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, block_id: pd-2, vertical_block_id: vert-1, progress_item_block_id: pool-default,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, block_id: po-1, vertical_block_id: vert-1, progress_item_block_id: pool-over,
+      progress_item_weight: 2}
+    - {courserun_fk: run-1, block_id: po-2, vertical_block_id: vert-1, progress_item_block_id: pool-over,
+      progress_item_weight: 2}
+    - {courserun_fk: run-1, block_id: pa-1, vertical_block_id: vert-1, progress_item_block_id: pool-all,
+      progress_item_weight: 3}
+    - {courserun_fk: run-1, block_id: pa-2, vertical_block_id: vert-1, progress_item_block_id: pool-all,
+      progress_item_weight: 3}
+    - {courserun_fk: run-1, block_id: pa-3, vertical_block_id: vert-1, progress_item_block_id: pool-all,
+      progress_item_weight: 3}
+    - {courserun_fk: run-1, block_id: video-1, vertical_block_id: vert-4, progress_item_block_id: video-1,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, block_id: problem-inner, vertical_block_id: vert-4, progress_item_block_id: problem-inner,
+      progress_item_weight: 1}
 - name: test_afact_learner_courserun_content_progress_counts_units
   description: >
-    A learner's completed blocks are counted per progress unit and capped at
-    the unit's weight, so two completed blocks of a pool worth 1 count once. A
-    completion of a block that is no longer in the structure, a completion
-    value below 1, and a learner with no dim_user row do not count. Open edX
-    user ids are matched per platform. An id on two dim_user rows credits one
-    of them.
+    A unit counts when every item in it is complete. A pool worth 1 is
+    complete with one of its blocks done, and two done still count once, so
+    vert-1 is complete for ada. A unit with one of two blocks done does not
+    count, and a learner with only such a unit reads 0. A completion of a block
+    that is no longer in the structure, a completion value below 1, and a
+    learner with no dim_user row do not count. Open edX user ids are matched
+    per platform. An id on two dim_user rows credits one of them.
   model: afact_learner_courserun_content_progress
   given:
   - input: ref('dim_course_content_progress_block')
     rows:
     - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
-      block_id: html-1, progress_unit_block_id: html-1, progress_unit_weight: 1}
+      block_id: html-1, vertical_block_id: vert-1, progress_item_block_id: html-1,
+      progress_item_weight: 1}
     - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
-      block_id: video-1, progress_unit_block_id: video-1, progress_unit_weight: 1}
+      block_id: pd-1, vertical_block_id: vert-1, progress_item_block_id: pool-default,
+      progress_item_weight: 1}
     - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
-      block_id: pd-1, progress_unit_block_id: pool-default, progress_unit_weight: 1}
+      block_id: pd-2, vertical_block_id: vert-1, progress_item_block_id: pool-default,
+      progress_item_weight: 1}
     - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
-      block_id: pd-2, progress_unit_block_id: pool-default, progress_unit_weight: 1}
+      block_id: video-1, vertical_block_id: vert-4, progress_item_block_id: video-1,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      block_id: html-2, vertical_block_id: vert-5, progress_item_block_id: html-2,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      block_id: problem-2, vertical_block_id: vert-5, progress_item_block_id: problem-2,
+      progress_item_weight: 1}
     - {courserun_fk: run-9, platform: mitxpro, courserun_readable_id: "course-v1:X+Y+Z",
-      block_id: html-9, progress_unit_block_id: html-9, progress_unit_weight: 1}
+      block_id: html-9, vertical_block_id: vert-9, progress_item_block_id: html-9,
+      progress_item_weight: 1}
     - {courserun_fk: run-5, platform: residential, courserun_readable_id: "course-v1:R+E+S",
-      block_id: html-5, progress_unit_block_id: html-5, progress_unit_weight: 1}
+      block_id: html-5, vertical_block_id: vert-5, progress_item_block_id: html-5,
+      progress_item_weight: 1}
   - input: ref('dim_user')
     rows:
     - {user_pk: ada, mitxonline_openedx_user_id: 1, mitxpro_openedx_user_id: 77, residential_openedx_user_id: null}
+    - {user_pk: linus, mitxonline_openedx_user_id: 3, mitxpro_openedx_user_id: null,
+      residential_openedx_user_id: null}
     - {user_pk: grace, mitxonline_openedx_user_id: 2, mitxpro_openedx_user_id: null,
       residential_openedx_user_id: 5}
     # A second dim_user row with grace's MITx Online id. The lowest user_pk gets the completions.
@@ -2427,7 +2472,9 @@ unit_tests:
     - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: html-removed,
       block_completed: 1.0}
     - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: video-1, block_completed: 0.0}
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: html-2, block_completed: 1.0}
     - {user_id: 2, courserun_readable_id: "course-v1:A+B+C", block_fk: video-1, block_completed: 1.0}
+    - {user_id: 3, courserun_readable_id: "course-v1:A+B+C", block_fk: html-2, block_completed: 1.0}
     # MITx Online user 77 is nobody; xPRO user 77 is ada.
     - {user_id: 77, courserun_readable_id: "course-v1:A+B+C", block_fk: html-1, block_completed: 1.0}
   - input: ref('stg__mitxpro__openedx__blockcompletion')
@@ -2438,8 +2485,9 @@ unit_tests:
     - {user_id: 5, courserun_readable_id: "course-v1:R+E+S", block_fk: html-5, block_completed: 1.0}
   expect:
     rows:
-    - {user_fk: ada, courserun_fk: run-1, platform: mitxonline, content_units_completed: 2}
+    - {user_fk: ada, courserun_fk: run-1, platform: mitxonline, content_units_completed: 1}
     - {user_fk: grace, courserun_fk: run-1, platform: mitxonline, content_units_completed: 1}
+    - {user_fk: linus, courserun_fk: run-1, platform: mitxonline, content_units_completed: 0}
     - {user_fk: ada, courserun_fk: run-9, platform: mitxpro, content_units_completed: 1}
     - {user_fk: grace, courserun_fk: run-5, platform: residential, content_units_completed: 1}
 - name: test_tfact_problem_events_rekey_keeps_stored_event_id

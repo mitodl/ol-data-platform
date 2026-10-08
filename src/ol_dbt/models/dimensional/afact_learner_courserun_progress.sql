@@ -64,22 +64,13 @@ with enrollments_ranked as (
     group by user_fk, courserun_fk
 )
 
--- A randomized pool is one unit however many of its blocks dim_course_content_progress_block
--- lists, so the units are deduplicated before their weights are summed.
-, content_units as (
-    select distinct
-        courserun_fk
-        , progress_unit_block_id
-        , progress_unit_weight
-    from {{ ref('dim_course_content_progress_block') }}
-    where courserun_fk is not null
-)
-
+-- A unit is an Open edX vertical with at least one block that counts toward progress.
 , content_totals as (
     select
         courserun_fk
-        , sum(progress_unit_weight) as content_units_total
-    from content_units
+        , count(distinct vertical_block_id) as content_units_total
+    from {{ ref('dim_course_content_progress_block') }}
+    where courserun_fk is not null
     group by courserun_fk
 )
 
