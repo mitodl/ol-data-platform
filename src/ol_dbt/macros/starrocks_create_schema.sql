@@ -17,6 +17,13 @@
     The adapter leaves a node's database unset and creates schemas in the
     session's catalog, so target.catalog is the catalog being written to. A
     model-level config(catalog=...) is not visible here and gets no schema.
+
+    This does not cover the profile's own schema. If the adapter cannot connect
+    to <catalog>.<schema> it runs a bare `CREATE DATABASE` for it from
+    connections.py `open()`, before any macro runs, and this macro's
+    `if not exists` then leaves that database without a location. For an
+    external-catalog target the profile schema has to exist already, or be one
+    no model is built into.
 #}
 {% macro starrocks__create_schema(relation) -%}
   {%- set catalog = target.catalog -%}
