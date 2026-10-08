@@ -64,6 +64,25 @@ with enrollments_ranked as (
     group by user_fk, courserun_fk
 )
 
+-- A randomized pool is one unit however many of its blocks dim_course_content_progress_block
+-- lists, so the units are deduplicated before their weights are summed.
+, content_units as (
+    select distinct
+        courserun_fk
+        , progress_unit_block_id
+        , progress_unit_weight
+    from {{ ref('dim_course_content_progress_block') }}
+    where courserun_fk is not null
+)
+
+, content_totals as (
+    select
+        courserun_fk
+        , sum(progress_unit_weight) as content_units_total
+    from content_units
+    group by courserun_fk
+)
+
 , joined as (
     select
         enrollments.user_fk
@@ -84,6 +103,12 @@ with enrollments_ranked as (
         , coalesce(certificates.certificate_is_revoked = false, false) as is_certified
         , cast(enrollment_dates.date as date) as enrolled_on
         , cast(activity_dates.date as date) as last_active_on
+        , content_totals.content_units_total
+        -- Null only when the run has no course structure to count against.
+        , case
+            when content_totals.content_units_total is not null
+                then coalesce(content_progress.content_units_completed, 0)
+        end as content_units_completed
     from enrollments
     left join {{ ref('tfact_grade') }} as grades
         on enrollments.user_fk = grades.user_fk
@@ -94,6 +119,11 @@ with enrollments_ranked as (
     left join activity
         on enrollments.user_fk = activity.user_fk
         and enrollments.courserun_fk = activity.courserun_fk
+    left join content_totals
+        on enrollments.courserun_fk = content_totals.courserun_fk
+    left join {{ ref('afact_learner_courserun_content_progress') }} as content_progress
+        on enrollments.user_fk = content_progress.user_fk
+        and enrollments.courserun_fk = content_progress.courserun_fk
     left join {{ ref('dim_date') }} as enrollment_dates
         on enrollments.enrollment_date_key = enrollment_dates.date_key
     left join {{ ref('dim_date') }} as activity_dates
@@ -135,6 +165,11 @@ select
     , completion_status
     , completion_status = 'in_progress' as is_in_progress
     , completion_status = 'not_started' as is_not_started
+    , content_units_completed
+    , content_units_total
+    -- 0 to 1, like grade_value. Independent of completion_status: a learner can be
+    -- certified without opening every block.
+    , cast(content_units_completed as double) / nullif(content_units_total, 0) as content_progress
     -- A threshold date, not a flag: the consumer compares it against the current UTC date,
     -- so the answer does not freeze at this build. A learner who never started needs
     -- attention from the day they enrolled; the fallback keeps that true when the
