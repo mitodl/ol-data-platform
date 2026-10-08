@@ -418,8 +418,8 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
     scan = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
     tables = scan.tables
     tables_scanned = len(tables) + len(scan.failures)
-    # A wrong database name or a role that can list nothing looks the same as
-    # an empty database.
+    # A missing database raises in the scan. A listing that succeeds and holds
+    # no Iceberg table is the wrong database or an emptied one.
     if not tables_scanned:
         msg = (
             f"Glue lists no Iceberg tables in {RAW_GLUE_DATABASE}. Refusing to "
