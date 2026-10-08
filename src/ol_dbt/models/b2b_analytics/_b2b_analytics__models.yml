@@ -109,8 +109,8 @@ models:
     (enrollments, certificates) and afact_learner_courserun_daily_activity
     (activity), for learners with an active enrollment in a course run owned
     by one of the organization's contracts. A learner who unenrolled is left
-    out, along with their activity and certificate. Consumers: L&D manager
-    engagement trend chart.
+    out of the enrollment and activity counts. Their unrevoked certificate
+    still counts. Consumers: L&D manager engagement trend chart.
   columns:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
@@ -140,8 +140,9 @@ models:
       this is not a subset of monthly_active_learners.
   - name: certificates_earned
     description: >
-      Certificates earned in the month, an EVENT count (learner x course run).
-      Floor it via certified_learners.
+      Unrevoked certificates earned in the month, an EVENT count (learner x
+      course run), whether or not the enrollment is still active. Floor it via
+      certified_learners.
   - name: certified_learners
     description: >
       Distinct learners who earned a certificate in the month. Earning a
@@ -231,8 +232,9 @@ models:
     materialized view. Source: afact_learner_courserun_progress (enrollments,
     certificates) and afact_learner_courserun_daily_activity (activity), for
     learners with an active enrollment in a course run owned by one of the
-    organization's contracts. A learner who unenrolled is left out, along with
-    their activity and certificate. Consumers: L&D manager course detail panel.
+    organization's contracts. A learner who unenrolled is left out of the
+    enrollment and activity counts. Their unrevoked certificate still counts.
+    Consumers: L&D manager course detail panel.
   columns:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
@@ -294,8 +296,9 @@ models:
     description: chatbot_users / total_enrolled_learners * 100.
   - name: certificates_earned
     description: >
-      Enrolled learners holding an unrevoked certificate for this course run.
-      One per learner, so it is its own cohort.
+      Learners holding an unrevoked certificate for this course run, whether
+      or not their enrollment is still active, so it is not a subset of
+      total_enrolled_learners. One per learner, so it is its own cohort.
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -408,8 +411,9 @@ models:
       this is not a subset of monthly_active_learners.
   - name: certificates_earned
     description: >
-      Certificates earned in the month, an EVENT count (learner x course run).
-      Floor it via certified_learners.
+      Unrevoked certificates earned in the month, an EVENT count (learner x
+      course run), whether or not the enrollment is still active. Floor it via
+      certified_learners.
   - name: certified_learners
     description: >
       Distinct learners who earned a certificate in the month. Earning a
@@ -532,6 +536,8 @@ models:
     description: chatbot_users as a percentage of total_enrolled_learners.
   - name: certificates_earned
     description: >
-      Enrolled learners holding an unrevoked certificate for this course run.
-      One per learner, so ol-analytics-api flooring it as a count of itself
+      Learners holding an unrevoked certificate for this course run, whether
+      or not their enrollment is still active, so it is not a subset of
+      total_enrolled_learners. One per learner, so ol-analytics-api flooring it as
+      a count of itself
       floors a learner cohort.
