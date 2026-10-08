@@ -1,7 +1,7 @@
 {#
   Shared bodies of the b2b_analytics engagement views (StarRocks only). The org-grain and
   contract-grain views differ only in what they group by, so the rows they aggregate are
-  defined once here. Every row is a learner enrolled in a course run
+  defined once here. Every row is a learner with an enrollment row for a course run
   (afact_learner_courserun_progress), keyed on user_fk, with activity read from
   afact_learner_courserun_daily_activity as the learner-records views read it.
 #}
