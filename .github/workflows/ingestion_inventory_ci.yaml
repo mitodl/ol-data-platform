@@ -27,6 +27,7 @@ on:
     paths:
     - "ingestion/inventory/**"
     - "src/ol_dbt/models/**/*.yml"
+    - "src/ol_dbt/models/**/*.yaml"
     - "src/ol_dbt_cli/**"
     - ".github/workflows/ingestion_inventory_ci.yaml"
   workflow_dispatch:
