@@ -27,18 +27,24 @@ if TYPE_CHECKING:
 
 PIPE_CONCAT_CHECK = "pipe_concat"
 
-# Directories of the dbt project whose SQL reaches the warehouse.
+# Directories of the dbt project whose SQL reaches the warehouse. Seeds carry
+# no SQL files, but their YAML can hold test expressions.
 _SQL_DIRS = ("models", "macros", "tests", "snapshots", "analyses")
+_YAML_DIRS = (*_SQL_DIRS, "seeds")
 _OTHER_ENGINE_PREFIXES = ("trino__", "duckdb__")
 _DETAIL = (
     "StarRocks evaluates || as a logical OR and returns NULL or 1 without an error. "
     "Concatenate strings with {{ dbt.concat([a, b]) }}; append to an array with a dispatched macro."
 )
 
-# Comments and quoted text are consumed whole so a `||` inside them is not reported.
+# Comments and quoted text are consumed whole so a `||` inside them is not
+# reported. A Jinja expression or statement is consumed too, and the strings in
+# it are then read as SQL, because that is how SQL is handed to a macro:
+# `{{ from_iso8601_timestamp("created_on || 'Z'") }}`.
 _TOKEN = re.compile(
     r"""
       \{\#.*?\#\}              # Jinja comment
+    | (?P<jinja>\{\{.*?\}\}|\{%.*?%\})
     | /\*.*?\*/                # SQL block comment
     | --[^\n]*                 # SQL line comment
     | '(?:[^'\\]|\\.|'')*'     # single-quoted string
@@ -47,18 +53,23 @@ _TOKEN = re.compile(
     """,
     re.DOTALL | re.VERBOSE,
 )
+_JINJA_STRING = re.compile(r"""'(?P<single>(?:[^'\\]|\\.)*)'|"(?P<double>(?:[^"\\]|\\.)*)\"""")
 _MACRO = re.compile(
-    r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\s*-?%\}",
+    r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\b[^%]*%\}",
     re.DOTALL,
 )
 # YAML keys whose values are prose or fixture data, never SQL.
 _NON_SQL_KEYS = frozenset({"description", "rows", "meta", "tags"})
 
 
-def _pipe_offsets(sql: str) -> Iterator[int]:
+def _pipe_offsets(sql: str, base: int = 0) -> Iterator[int]:
     for match in _TOKEN.finditer(sql):
         if match.group("pipes"):
-            yield match.start()
+            yield base + match.start()
+        elif match.group("jinja"):
+            for string in _JINJA_STRING.finditer(match.group("jinja")):
+                group = "single" if string.group("single") is not None else "double"
+                yield from _pipe_offsets(string.group(group), base + match.start() + string.start(group))
 
 
 def _other_engine_spans(source: str, starrocks_macros: frozenset[str]) -> list[tuple[int, int]]:
@@ -96,9 +107,12 @@ def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
     :param report: The report to add an ERROR to for each occurrence.
     """
     sql_files = sorted(path for name in _SQL_DIRS for path in (dbt_dir / name).rglob("*.sql"))
-    yaml_files = sorted(
-        path for name in _SQL_DIRS for pattern in ("*.yml", "*.yaml") for path in (dbt_dir / name).rglob(pattern)
-    )
+    yaml_files = [
+        dbt_dir / "dbt_project.yml",
+        *sorted(
+            path for name in _YAML_DIRS for pattern in ("*.yml", "*.yaml") for path in (dbt_dir / name).rglob(pattern)
+        ),
+    ]
     sources = {path: path.read_text() for path in sql_files}
     starrocks_macros = frozenset(
         match.group("name").removeprefix("starrocks__")
@@ -123,7 +137,7 @@ def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
 
     for path in yaml_files:
         for key_path, value in _yaml_sql_strings(yaml.safe_load(path.read_text())):
-            if any(_pipe_offsets(value)):
+            if next(_pipe_offsets(value), None) is not None:
                 report.add(
                     PIPE_CONCAT_CHECK,
                     Severity.ERROR,

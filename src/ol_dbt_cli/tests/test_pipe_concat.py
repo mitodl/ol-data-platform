@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 def dbt_dir(tmp_path: Path) -> Path:
     for name in ("models", "macros"):
         (tmp_path / name).mkdir()
+    (tmp_path / "dbt_project.yml").write_text("name: p\n")
     return tmp_path
 
 
@@ -46,6 +47,34 @@ def test_reports_the_operator_in_a_model_with_its_line(dbt_dir: Path) -> None:
 def test_ignores_the_operator_in_comments_and_quoted_text(dbt_dir: Path, sql: str) -> None:
     (dbt_dir / "models" / "m.sql").write_text(sql)
     assert _messages(dbt_dir) == []
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        """select {{ from_iso8601_timestamp("created_on || 'Z'") }}""",
+        "select {{ dbt.safe_cast('a || b', api.Column.translate_type('string')) }}",
+        """{% set key = "first_name || last_name" %}\nselect 1""",
+        """{{ config(post_hook="update {{ this }} set k = a || b") }}\nselect 1""",
+    ],
+)
+def test_reports_the_operator_in_sql_passed_as_a_jinja_string(dbt_dir: Path, sql: str) -> None:
+    (dbt_dir / "models" / "m.sql").write_text(sql)
+    assert _messages(dbt_dir) == ["models/m.sql:1 uses the || operator"]
+
+
+def test_a_named_endmacro_ends_the_exempt_body(dbt_dir: Path) -> None:
+    (dbt_dir / "macros" / "x.sql").write_text(
+        "{% macro trino__f(a) %}x{% endmacro trino__f %}\n{% macro g(a) %}a || b{% endmacro %}\n"
+    )
+    assert _messages(dbt_dir) == ["macros/x.sql:2 uses the || operator"]
+
+
+def test_reads_dbt_project_and_seed_yaml(dbt_dir: Path) -> None:
+    (dbt_dir / "dbt_project.yml").write_text("on-run-end: ['insert into t select a || b']\n")
+    (dbt_dir / "seeds").mkdir()
+    (dbt_dir / "seeds" / "_s.yml").write_text("seeds: [{name: s, data_tests: [{t: {expression: \"|| b = 'x'\"}}]}]\n")
+    assert len(_messages(dbt_dir)) == 2
 
 
 def test_a_comment_apostrophe_does_not_hide_a_later_operator(dbt_dir: Path) -> None:
