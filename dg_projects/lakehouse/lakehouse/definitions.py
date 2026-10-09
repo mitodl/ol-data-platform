@@ -382,11 +382,16 @@ superset_starrocks_assets = [
     if key.path[0] in dbt_models_for_superset_datasets
 ]
 
-# Iceberg maintenance schedules — both default STOPPED; enable in production via
-# the Dagster UI or Terraform after verifying the first manual run succeeds.
+# Iceberg maintenance schedules.
 #
 # 02:00 UTC: dbt layer (after nightly Airbyte syncs complete, before business hours)
 # 03:00 UTC: raw layer (staggered to avoid concurrent Glue/S3 load with dbt layer)
+#
+# The dbt-layer schedule defaults to STOPPED and is started in the Dagster UI.
+# The raw-layer schedule is RUNNING where it is registered: left STOPPED it was
+# registered in QA and never ticked, so nothing expired the snapshots QA's own
+# raw loads leave behind. An instance that already stores a state for it keeps
+# that state.
 iceberg_dbt_maintenance_schedule = ScheduleDefinition(
     name="iceberg_dbt_maintenance_nightly",
     job=define_asset_job(
@@ -406,7 +411,7 @@ iceberg_raw_maintenance_schedule = ScheduleDefinition(
     ),
     cron_schedule="0 3 * * *",
     execution_timezone="UTC",
-    default_status=DefaultScheduleStatus.STOPPED,
+    default_status=DefaultScheduleStatus.RUNNING,
 )
 
 # Weekly, not nightly: an orphan has to be LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS old
