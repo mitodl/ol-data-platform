@@ -19,12 +19,15 @@ from lakehouse.assets.lakehouse.dbt import (
 from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    MissingBaseTablesError,
+    base_table_relations,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
     retry_delay,
+    unreadable_base_tables,
 )
 from lakehouse.resources.starrocks import StarRocksResource
 
@@ -116,6 +119,26 @@ def _stale_materialized_views(
     return drifted_relations(documented, live_columns(starrocks.fetch(query, params)))
 
 
+def _require_base_tables(
+    context: AssetExecutionContext, starrocks: StarRocksResource
+) -> None:
+    """Refuse a --full-refresh while a base table of the MVs can't be read.
+
+    The run fails with every view still in place. They keep the previous
+    SELECT and the previous refresh's rows until a later run succeeds; the
+    alternative is a dropped view and a 500 in ol-analytics-api.
+    """
+    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    relations = base_table_relations(manifest, os.environ)
+    context.log.info(
+        "Checking the %d base tables of the materialized views before --full-refresh",
+        len(relations),
+    )
+    unreadable = unreadable_base_tables(relations, starrocks.fetch, log=context.log)
+    if unreadable:
+        raise MissingBaseTablesError(unreadable)
+
+
 @dbt_assets(
     manifest=starrocks_dbt_project.manifest_path,
     project=starrocks_dbt_project,
@@ -141,7 +164,8 @@ def starrocks_dbt_assets(
 
     Escalates to --full-refresh when a materialized view's columns in StarRocks
     have fallen out of step with the manifest, since a plain build would not
-    notice -- see `_stale_materialized_views`.
+    notice -- see `_stale_materialized_views`. It checks first that the
+    views' base tables can be read, see `_require_base_tables`.
     """
     build_args = ["build"]
     stale = _stale_materialized_views(context, starrocks)
@@ -154,6 +178,7 @@ def starrocks_dbt_assets(
             "building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )
+        _require_base_tables(context, starrocks)
         build_args.append("--full-refresh")
 
     last_exc: DagsterDbtCliRuntimeError | None = None

@@ -17,6 +17,8 @@ from lakehouse.lib.starrocks_dbt import (
     RETRY_BASE_DELAY,
     ChangeTrackedView,
     MaterializedViewRefreshError,
+    MissingBaseTablesError,
+    base_table_relations,
     change_tracked_views,
     documented_columns,
     drifted_relations,
@@ -29,6 +31,7 @@ from lakehouse.lib.starrocks_dbt import (
     seed_change_log_sql,
     stamp_change_log,
     stamp_change_log_sql,
+    unreadable_base_tables,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
@@ -613,6 +616,227 @@ class TestRefreshMaterializedViews:
         _refresh(starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], sleeps)
         assert len(starrocks.statements) == 2
         assert sleeps == []
+
+
+# Verbatim from production run 9031a9df, 2026-10-09 06:03 UTC. #2881 pointed
+# four views at a fact table that production had never built.
+UNKNOWN_BASE_TABLE_FAILURE = (
+    "5502 (42602): Getting analyzing error. Detail message: Unknown table "
+    "'ol_warehouse_production_dimensional.afact_learner_courserun_progress'."
+)
+# Verbatim from the same run, on a fifth view. It had cleared by the retry 30s
+# later.
+BASE_TABLE_DROPPED_PROBE_FAILURE = (
+    "1064 (HY000): Getting analyzing error. Detail message: base-table dropped: "
+    "afact_learner_courserun_daily_activity."
+)
+
+QA_DIMENSIONAL = "`ol_data_lake_qa`.`ol_warehouse_qa_dimensional`"
+QA_LAKE = {"DBT_DATA_LAKE_ENV": "qa"}
+
+
+def _source(table):
+    """Build a `dimensional` source as the image's manifest holds it.
+
+    It is rendered for production at build time, whatever environment the
+    image runs in.
+    """
+    return {
+        "database": "ol_data_lake_production",
+        "schema": "ol_warehouse_production_dimensional",
+        "identifier": table,
+        "unrendered_database": (
+            "ol_data_lake_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}"
+        ),
+        "unrendered_schema": (
+            "ol_warehouse_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}_dimensional"
+        ),
+    }
+
+
+def _reading(node, *unique_ids):
+    return {**node, "depends_on": {"nodes": list(unique_ids)}}
+
+
+def _manifest_reading(sources, nodes):
+    return {
+        **_manifest(nodes),
+        "sources": {
+            f"source.open_learning.dimensional.{table}": _source(table)
+            for table in sources
+        },
+    }
+
+
+class TestBaseTableRelations:
+    def test_lists_each_source_the_views_read_once(self):
+        manifest = _manifest_reading(
+            ["tfact_enrollment", "dim_program", "dim_user"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_program_funnel", ["organization_key"]),
+                    "source.open_learning.dimensional.tfact_enrollment",
+                    "source.open_learning.dimensional.dim_program",
+                ),
+                _reading(
+                    _mv_node("mv_b2b_contract_utilization", ["contract_pk"]),
+                    "source.open_learning.dimensional.tfact_enrollment",
+                    # Another view, which dbt builds itself.
+                    "model.open_learning.mv_b2b_program_funnel",
+                ),
+            ],
+        )
+        assert base_table_relations(manifest, QA_LAKE) == [
+            f"{QA_DIMENSIONAL}.`dim_program`",
+            f"{QA_DIMENSIONAL}.`tfact_enrollment`",
+        ]
+
+    def test_names_the_lake_the_build_reads_not_the_one_the_image_was_parsed_for(
+        self,
+    ):
+        manifest = _manifest_reading(
+            ["dim_user"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.dimensional.dim_user",
+                )
+            ],
+        )
+        assert base_table_relations(manifest, QA_LAKE) == [
+            f"{QA_DIMENSIONAL}.`dim_user`"
+        ]
+        assert base_table_relations(manifest, {"DBT_DATA_LAKE_ENV": "production"}) == [
+            "`ol_data_lake_production`.`ol_warehouse_production_dimensional`.`dim_user`"
+        ]
+
+    def test_a_source_with_no_template_keeps_its_rendered_name(self):
+        manifest = _manifest_reading(
+            [],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.fixed.roster",
+                )
+            ],
+        )
+        manifest["sources"]["source.open_learning.fixed.roster"] = {
+            "database": "default_catalog",
+            "schema": "b2b_learner_records",
+            "identifier": "roster",
+            "unrendered_database": None,
+            "unrendered_schema": None,
+        }
+        assert base_table_relations(manifest, {}) == [
+            "`default_catalog`.`b2b_learner_records`.`roster`"
+        ]
+
+    def test_ignores_sources_of_models_on_other_engines(self):
+        manifest = _manifest_reading(
+            ["dim_user"],
+            [
+                _reading(
+                    _model_node(
+                        "marts__combined__users",
+                        schema="mart",
+                        materialized="table",
+                        tags=[],
+                    ),
+                    "source.open_learning.dimensional.dim_user",
+                )
+            ],
+        )
+        assert base_table_relations(manifest, QA_LAKE) == []
+
+
+def _probe(relations, failing):
+    """Probe *relations*; *failing* maps a relation to the errors it raises
+    in turn before it reads cleanly.
+    """
+    pending = {relation: list(messages) for relation, messages in failing.items()}
+    statements: list[str] = []
+    sleeps: list[float] = []
+
+    def fetch(sql):
+        statements.append(sql)
+        for relation, messages in pending.items():
+            if relation in sql and messages:
+                raise RuntimeError(messages.pop(0))
+        return []
+
+    failures = unreadable_base_tables(
+        relations, fetch, log=logging.getLogger("test"), sleep=sleeps.append
+    )
+    return failures, statements, sleeps
+
+
+CONNECT_FAILURE = "(2003, \"Can't connect to MySQL server on 'starrocks-fe'\")"
+
+
+class TestUnreadableBaseTables:
+    def test_reports_the_table_starrocks_cannot_resolve(self):
+        missing = f"{QA_DIMENSIONAL}.`afact_learner_courserun_progress`"
+        present = f"{QA_DIMENSIONAL}.`tfact_enrollment`"
+        failures, statements, sleeps = _probe(
+            [missing, present], {missing: [UNKNOWN_BASE_TABLE_FAILURE]}
+        )
+        assert list(failures) == [missing]
+        assert str(failures[missing]) == UNKNOWN_BASE_TABLE_FAILURE
+        # One table failing doesn't hide a second missing one, and a missing
+        # table is not worth waiting on.
+        assert [sql.split()[3] for sql in statements] == [missing, present]
+        assert all(sql.endswith(" limit 0") for sql in statements)
+        assert sleeps == []
+
+    @pytest.mark.parametrize(
+        "message", [BASE_TABLE_DROPPED_PROBE_FAILURE, CONNECT_FAILURE]
+    )
+    def test_an_error_the_build_retries_is_probed_again(self, message):
+        rebuilt = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        present = f"{QA_DIMENSIONAL}.`tfact_enrollment`"
+        failures, statements, sleeps = _probe([rebuilt, present], {rebuilt: [message]})
+        assert failures == {}
+        # Only the table that failed is probed a second time.
+        assert [sql.split()[3] for sql in statements] == [rebuilt, present, rebuilt]
+        assert sleeps == [RETRY_BASE_DELAY]
+
+    def test_a_retriable_error_that_never_clears_stops_the_refresh(self):
+        """The build would drop the views on its first attempt and then meet
+        the same error.
+        """
+        rebuilt = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        failures, statements, sleeps = _probe(
+            [rebuilt],
+            {rebuilt: [BASE_TABLE_DROPPED_PROBE_FAILURE] * MAX_BUILD_ATTEMPTS},
+        )
+        assert list(failures) == [rebuilt]
+        assert len(statements) == MAX_BUILD_ATTEMPTS
+        assert sleeps == [retry_delay(n) for n in range(1, MAX_BUILD_ATTEMPTS)]
+
+    def test_a_table_that_goes_missing_on_a_retry_is_reported(self):
+        rebuilt = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        failures, _, sleeps = _probe(
+            [rebuilt],
+            {rebuilt: [BASE_TABLE_DROPPED_PROBE_FAILURE, UNKNOWN_BASE_TABLE_FAILURE]},
+        )
+        assert str(failures[rebuilt]) == UNKNOWN_BASE_TABLE_FAILURE
+        assert sleeps == [RETRY_BASE_DELAY]
+
+    def test_readable_tables_report_nothing(self):
+        failures, _, sleeps = _probe([f"{QA_DIMENSIONAL}.`dim_user`"], {})
+        assert failures == {}
+        assert sleeps == []
+
+    def test_the_error_names_every_table_and_says_the_views_are_intact(self):
+        error = MissingBaseTablesError(
+            {
+                f"{QA_DIMENSIONAL}.`afact_learner_courserun_progress`": RuntimeError(
+                    UNKNOWN_BASE_TABLE_FAILURE
+                )
+            }
+        )
+        assert "afact_learner_courserun_progress" in str(error)
+        assert "still hold their previous definition" in str(error)
 
 
 LEARNER_VIEW = ChangeTrackedView(
