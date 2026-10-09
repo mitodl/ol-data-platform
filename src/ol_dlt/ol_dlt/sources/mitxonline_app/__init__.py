@@ -169,8 +169,9 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="users_user_b2b_contracts", primary_key="id"),
         DatabaseTable(name="users_userprofile", primary_key="id"),
         # --- variants --------------------------------------------------------------
-        # Generic FK (content_type_id + object_id) onto a run or program. Learn
-        # unpublishes a run that matches a non-default supported variant.
+        # Generic FK (content_type_id + object_id) onto a course or B2B contract
+        # page. Learn unpublishes a run that matches a non-default supported
+        # variant of its course.
         DatabaseTable(name="variants_supportedvariant", primary_key="id"),
         # --- Wagtail core ----------------------------------------------------------
         DatabaseTable(name="wagtailcore_page", primary_key="id"),
