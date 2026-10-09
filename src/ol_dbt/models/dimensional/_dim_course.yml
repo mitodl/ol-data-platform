@@ -10,7 +10,9 @@ models:
     Note: edxorg has no native course-level table. edxorg courses are derived from
     courserun records, with one row per course_readable_id using the most-recent course
     run (by courserun_start_date desc nulls last) to supply attributes (title,
-    course_number, is_live). source_id is null for edxorg and OCW courses.
+    course_number, is_live). emeritus and global_alumni courses are derived the same
+    way from Wrike run codes, one per course code with no external xPro course. source_id
+    is null for edxorg, OCW, emeritus and global_alumni courses.
     The most-recent-run collapse uses a ROW_NUMBER subquery (WHERE _row_num = 1) rather
     than a QUALIFY clause because Trino does not support QUALIFY; the semantics are
     identical — exactly one row is retained per course_readable_id.
@@ -41,7 +43,8 @@ models:
       Integer source system ID for this course. Null for edxorg courses — edxorg
       exposes no native integer course ID; course records are synthesized from the
       most-recent course run sharing the same course_readable_id. Null for OCW
-      courses because OCW exposes a string UUID, not an integer source ID.
+      courses because OCW exposes a string UUID, not an integer source ID. Null for
+      emeritus and global_alumni courses, which have no course table.
   - name: course_number
     description: Course number (e.g., 6.00.1x)
   - name: course_title
@@ -57,7 +60,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential', 'bootcamps']
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential', 'bootcamps',
+          'emeritus', 'global_alumni']
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Populated as
