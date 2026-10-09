@@ -304,8 +304,8 @@ with micromasters_courseruns as (
 )
 
 -- Join to dim_course to get course_fk
-, external_mitxpro_course_links as (
-    {{ wrike_course_codes_of_external_mitxpro_courses() }}
+, mitxpro_course_links as (
+    {{ wrike_course_codes_of_mitxpro_courses() }}
 )
 
 , dim_course as (
@@ -322,29 +322,18 @@ with micromasters_courseruns as (
         combined_courseruns_resolved.*
         , dim_course.course_pk as course_fk
     from combined_courseruns_resolved
-    -- An Emeritus or Global Alumni run of an external xPro course belongs to that xPro course:
-    -- the partner's own course for the code if there is one, else the other partner's
-    left join external_mitxpro_course_links as same_partner_links
+    -- An Emeritus or Global Alumni run whose Wrike course code has an xPro course belongs to
+    -- that course; otherwise it belongs to the emeritus or global_alumni course for the code
+    left join mitxpro_course_links
         on combined_courseruns_resolved.platform in ('emeritus', 'global_alumni')
-        and combined_courseruns_resolved.course_readable_id = same_partner_links.wrike_course_code
-    left join (
-        select distinct wrike_course_code_without_partner, mitxpro_course_readable_id
-        from external_mitxpro_course_links
-    ) as other_partner_links
-        on combined_courseruns_resolved.platform in ('emeritus', 'global_alumni')
-        and same_partner_links.wrike_course_code is null
-        and {{ wrike_course_code('combined_courseruns_resolved.courserun_readable_id', include_partner=false) }}
-        = other_partner_links.wrike_course_code_without_partner
+        and combined_courseruns_resolved.course_readable_id = mitxpro_course_links.wrike_course_code
     left join dim_course
         on dim_course.primary_platform = case
-            when coalesce(
-                same_partner_links.mitxpro_course_readable_id, other_partner_links.mitxpro_course_readable_id
-            ) is not null then 'mitxpro'
+            when mitxpro_course_links.mitxpro_course_readable_id is not null then 'mitxpro'
             else combined_courseruns_resolved.platform
         end
         and dim_course.course_readable_id = coalesce(
-            same_partner_links.mitxpro_course_readable_id
-            , other_partner_links.mitxpro_course_readable_id
+            mitxpro_course_links.mitxpro_course_readable_id
             , combined_courseruns_resolved.course_readable_id
         )
 )
@@ -418,6 +407,11 @@ with micromasters_courseruns as (
             = coalesce(courseruns_with_all_fks.courserun_upgrade_deadline, '')
             and coalesce(existing.semester, '') = coalesce(courseruns_with_all_fks.semester, '')
             and coalesce(existing.passing_grade, -1.0) = coalesce(courseruns_with_all_fks.passing_grade, -1.0)
+            -- An Emeritus or Global Alumni run moves to an xPro course when xPro adds one for its code
+            and (
+                existing.platform not in ('emeritus', 'global_alumni')
+                or coalesce(existing.course_fk, '') = coalesce(courseruns_with_all_fks.course_fk, '')
+            )
     )
     {% endif %}
 )
@@ -450,10 +444,29 @@ with micromasters_courseruns as (
         , false as is_current
         , existing.courserun_upgrade_deadline
     from {{ this }} as existing
-    inner join final as new_records
-        on existing.courserun_readable_id = new_records.courserun_readable_id
-        and existing.platform = new_records.platform
-    where existing.is_current = true
+    where
+        existing.is_current = true
+        and (
+            exists (
+                select 1
+                from final as new_records
+                where
+                    existing.courserun_readable_id = new_records.courserun_readable_id
+                    and existing.platform = new_records.platform
+            )
+            -- An Emeritus or Global Alumni run is dropped from the source once xPro holds a run
+            -- with its code, so it has no replacement row to trigger the expiry above
+            or (
+                existing.platform in ('emeritus', 'global_alumni')
+                and not exists (
+                    select 1
+                    from courseruns_with_all_fks
+                    where
+                        existing.courserun_readable_id = courseruns_with_all_fks.courserun_readable_id
+                        and existing.platform = courseruns_with_all_fks.platform
+                )
+            )
+        )
 )
 
 , combined as (

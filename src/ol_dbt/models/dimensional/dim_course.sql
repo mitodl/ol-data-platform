@@ -113,13 +113,12 @@ with mitxonline_courses as (
     left join bootcamps_course_numbers as course_numbers on courses.course_id = course_numbers.course_id
 )
 
--- Emeritus and Global Alumni have no course table. Most of their courses are external xPro
--- courses, already in mitxpro_courses, and their runs link to those in dim_course_run. The
--- rest are added here, one per course code parsed from the Wrike run codes, with the title of
--- the most recent run. source_id is null because these platforms expose no course ID.
-, external_mitxpro_course_codes as (
-    select distinct wrike_course_code_without_partner
-    from ({{ wrike_course_codes_of_external_mitxpro_courses() }}) as course_links
+-- Emeritus and Global Alumni have no course table. Courses that xPro already holds for a
+-- partner's code are in mitxpro_courses, and their runs link to those in dim_course_run. The
+-- rest are added here, one per prefixed course code parsed from the Wrike run codes, with the
+-- title of the most recent run. source_id is null because these platforms expose no course ID.
+, mitxpro_course_codes as (
+    {{ wrike_course_codes_of_mitxpro_courses() }}
 )
 
 , emeritus_global_alumni_runs as (
@@ -163,11 +162,11 @@ with mitxonline_courses as (
                 order by runs.courserun_start_on desc, runs.courserun_end_on desc, runs.courserun_title asc
             ) as _row_num
         from emeritus_global_alumni_runs as runs
-        left join external_mitxpro_course_codes
-            on runs.course_number = external_mitxpro_course_codes.wrike_course_code_without_partner
+        left join mitxpro_course_codes
+            on runs.course_readable_id = mitxpro_course_codes.wrike_course_code
         where
             runs.course_readable_id is not null
-            and external_mitxpro_course_codes.wrike_course_code_without_partner is null
+            and mitxpro_course_codes.wrike_course_code is null
     ) as runs
     where _row_num = 1
 )
@@ -245,10 +244,29 @@ with mitxonline_courses as (
         , current_timestamp as end_date
         , false as is_current
     from {{ this }} as existing
-    inner join new_and_changed_courses as new_records
-        on existing.course_readable_id = new_records.course_readable_id
-        and existing.primary_platform = new_records.primary_platform
-    where existing.is_current = true
+    where
+        existing.is_current = true
+        and (
+            exists (
+                select 1
+                from new_and_changed_courses as new_records
+                where
+                    existing.course_readable_id = new_records.course_readable_id
+                    and existing.primary_platform = new_records.primary_platform
+            )
+            -- A synthesized course is dropped from the source once xPro holds a course for its
+            -- code, so it has no replacement row to trigger the expiry above
+            or (
+                existing.primary_platform in ('emeritus', 'global_alumni')
+                and not exists (
+                    select 1
+                    from current_courses
+                    where
+                        existing.course_readable_id = current_courses.course_readable_id
+                        and existing.primary_platform = current_courses.platform
+                )
+            )
+        )
 )
 
 , combined as (
