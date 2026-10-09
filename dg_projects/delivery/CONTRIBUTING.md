@@ -49,7 +49,7 @@ values and avoid Vault auth failures:
 ```bash
 export DAGSTER_ENVIRONMENT=dev
 export VAULT_ADDR=http://localhost:8200   # not contacted unless authenticated
-export SKIP_VAULT=1                        # prevents blocking on Vault auth
+export VAULT_OIDC_NONINTERACTIVE=1         # fail on a missing token, do not open a browser
 ```
 
 If you need to test actual API calls, authenticate to Vault with the OIDC
@@ -59,6 +59,71 @@ browser flow — no token to request from the platform team:
 export VAULT_ADDR=https://vault-qa.odl.mit.edu
 bin/vault-login
 ```
+
+### Delivering to a local MIT Learn
+
+A webhook asset can run from your laptop against a MIT Learn that also runs on
+your laptop, with no Vault token, VPN or AWS credentials. Two things stand in
+for the deployed inputs, and both apply only when `DAGSTER_ENVIRONMENT` is `dev`
+(the default):
+
+- `MIT_LEARN_BASE_URL` and `MIT_LEARN_WEBHOOK_SECRET`, set together, configure
+  `learn_api` without reading Vault. With only one of them set the secret is
+  still read from Vault and that one value overrides it.
+- `DBT_MODEL_FIXTURE_DIR` makes `get_dbt_model_as_dataframe` read
+  `<dir>/<table_name>.jsonl` (one JSON row per line) and not the Glue table.
+  `fixtures/` holds a canned batch for `mit_climate_webhook`. To run another
+  asset, add a file named for the integrations table it reads.
+
+```bash
+cd dg_projects/delivery
+export VAULT_OIDC_NONINTERACTIVE=1
+export DBT_MODEL_FIXTURE_DIR="$PWD/fixtures"
+
+# MIT Learn from ol-infrastructure/local-dev (k3d + Tilt). The secret is the
+# WEBHOOK_SECRET in local-dev/apps/mit-learn/secrets.yaml.
+export MIT_LEARN_BASE_URL=https://api.learn.mit.dev
+export MIT_LEARN_WEBHOOK_SECRET=local-dev-mitlearn-insecure-webhook-secret  # pragma: allowlist secret
+
+uv run dagster asset materialize -m delivery.definitions \
+  --select "mit_learn_delivery/mit_climate_webhook"
+```
+
+For a MIT Learn started with its own `docker compose`, the base URL is
+`http://localhost:8061`, the secret is the `WEBHOOK_SECRET` in its
+`env/backend.env`. The same variables work with `uv run dagster dev`, where the
+asset is materialized from the UI.
+
+The HTTP client verifies TLS against the OS trust store, which is where
+local-dev's `setup.sh` installs the mkcert root, so the local-dev certificate
+needs no extra configuration.
+
+MIT Learn answers `409` until the webhook owns the batch's
+`(etl_source, resource_type)` pairs. A local database has no ownership rows, so
+create one per pair first, in Django admin under "ETL source ownerships" or from
+a shell in the MIT Learn web container:
+
+```bash
+python manage.py shell -c "
+from learning_resources.models import ETLSourceOwnership
+ETLSourceOwnership.objects.update_or_create(
+    etl_source='mit_climate', resource_type='document',
+    defaults={'owner': ETLSourceOwnership.Pipeline.WEBHOOK},
+)"
+```
+
+Then confirm the delivery:
+
+```bash
+curl -s "$MIT_LEARN_BASE_URL/api/v1/learning_resources/?resource_type=document&platform=climate" \
+  | jq '.results[] | {readable_id, title}'
+```
+
+A batch is a full sync. MIT Learn unpublishes every resource of the same
+`etl_source` and `resource_type` that the batch leaves out, so a canned batch
+should be for a source nothing else in your local database loads. Delivering
+two rows of `mitxonline` courses would unpublish every other MITx Online course
+you have.
 
 ### Running tests
 

@@ -354,6 +354,11 @@ incremental until `--full-refresh` is used.
   `~/.cache/vault`); compose points the containers at the read-only mount
 - `VAULT_OIDC_NONINTERACTIVE`: set in the containers so a cache miss fails with
   "run `bin/vault-login`" instead of hanging on a browser that cannot open
+- `MIT_LEARN_BASE_URL` + `MIT_LEARN_WEBHOOK_SECRET`: in dev, set together they
+  configure `learn_api` without Vault (a local MIT Learn)
+- `DBT_MODEL_FIXTURE_DIR`: in dev, `get_dbt_model_as_dataframe` reads
+  `<dir>/<table_name>.jsonl` and not Glue. See
+  `dg_projects/delivery/CONTRIBUTING.md`, "Delivering to a local MIT Learn"
 
 ## Trust These Instructions
 

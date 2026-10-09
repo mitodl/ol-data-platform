@@ -5,6 +5,7 @@ from typing import ClassVar, Self
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from pydantic import Field, PrivateAttr
 
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.api_client import BaseApiClient
 from ol_orchestrate.resources.canvas_api import CanvasApiClient
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
@@ -42,11 +43,15 @@ class ApiClientFactory(ConfigurableResource[BaseApiClient]):
 
     def _initialize_client(self) -> BaseApiClient:
         client_class = self.supported_client_class[self.client_class]
-        client_secrets = self._read_vault_secret(
-            mount_point=self.mount_point,
-            path=self.config_path,
-            version=self.kv_version,  # e.g., "1" or "2"
-        )
+        # A deployed environment always reads Vault: a stray variable there must
+        # not be able to redirect a delivery.
+        client_secrets = client_class.local_secret() if DAGSTER_ENV == "dev" else None
+        if client_secrets is None:
+            client_secrets = self._read_vault_secret(
+                mount_point=self.mount_point,
+                path=self.config_path,
+                version=self.kv_version,  # e.g., "1" or "2"
+            )
 
         return client_class.from_secret(client_secrets)
 

@@ -50,6 +50,19 @@ class MITLearnApiClient(BaseApiClient):
             learn["token"] = token_override
         return cls(**learn)
 
+    @classmethod
+    def local_secret(cls) -> dict[str, Any] | None:
+        """Return the secret for a local MIT Learn, when the environment names one.
+
+        Both variables are needed. With only one set the rest still has to come
+        from Vault, where ``from_secret`` applies it as an override.
+        """
+        base_url = os.environ.get("MIT_LEARN_BASE_URL")
+        token = os.environ.get("MIT_LEARN_WEBHOOK_SECRET")
+        if base_url and token:
+            return {"learn": {"base_url": base_url, "token": token}}
+        return None
+
     def _post_signed_webhook(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
         payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
         signature = hmac.new(
