@@ -38,6 +38,8 @@ from ol_dbt_cli.lib.surrogate_keys import (
     surrogate_key_state,
 )
 
+from lakehouse.lib.dbt_environment import SKIP_UNIT_TESTS_ARGS
+
 SURROGATE_KEY_STATE_ARTIFACT = "surrogate-key-state.json"
 """S3 object (under DbtS3ArtifactsResource's prefix) holding the last build's
 surrogate-key hash inputs. Written only after the repair build succeeds, so a
@@ -121,17 +123,6 @@ def detect_drift(
         current_state=current_state,
         findings=detect_key_regen(changed, registry_from_manifest(dict(manifest))),
     )
-
-
-# dbt reads the columns a unit test fixture may name from the physical relation,
-# and for an incremental model's `this` fixture that relation is the deployed
-# table. A fixture naming a column the model has just gained therefore fails to
-# compile, dbt skips the model, and the model is the only thing that would add
-# the column: the build cannot recover on its own. It kept tfact_certificate and
-# everything downstream of it from building in production from 2026-10-07.
-# Unit tests check the SQL against fixed rows, so they run in PR CI
-# (`ol-dbt unit-test`) and are left out of the builds that write a warehouse.
-SKIP_UNIT_TESTS_ARGS = ["--exclude-resource-type", "unit_test"]
 
 
 def full_refresh_build_args(

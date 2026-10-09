@@ -28,13 +28,16 @@ from dagster_dbt.asset_utils import DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED, DBT_TARGET
+from lakehouse.lib.dbt_environment import (
+    DBT_AUTOMATION_ENABLED,
+    DBT_TARGET,
+    SKIP_UNIT_TESTS_ARGS,
+)
 from lakehouse.lib.stale_descendant_tests import (
     stale_descendant_test_names,
     unselected_model_test_names,
 )
 from lakehouse.lib.surrogate_key_drift import (
-    SKIP_UNIT_TESTS_ARGS,
     SURROGATE_KEY_STATE_ARTIFACT,
     SurrogateKeyDrift,
     detect_drift,
