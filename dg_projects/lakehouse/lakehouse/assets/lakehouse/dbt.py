@@ -34,6 +34,7 @@ from lakehouse.lib.stale_descendant_tests import (
     unselected_model_test_names,
 )
 from lakehouse.lib.surrogate_key_drift import (
+    SKIP_UNIT_TESTS_ARGS,
     SURROGATE_KEY_STATE_ARTIFACT,
     SurrogateKeyDrift,
     detect_drift,
@@ -220,7 +221,13 @@ def full_dbt_project(
     drift = _surrogate_key_drift(context, dbt_s3_artifacts)
 
     build_invocation = dbt.cli(
-        ["build", *_stale_descendant_test_args(context), *build_vars], context=context
+        [
+            "build",
+            *SKIP_UNIT_TESTS_ARGS,
+            *_stale_descendant_test_args(context),
+            *build_vars,
+        ],
+        context=context,
     )
     yield from (build_invocation.stream().fetch_column_metadata().fetch_row_counts())
 

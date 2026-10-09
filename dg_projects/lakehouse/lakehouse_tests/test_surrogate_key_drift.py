@@ -146,6 +146,8 @@ def test_full_refresh_selector_is_one_space_separated_argument():
     assert full_refresh_build_args(["fact_a", "fact_b"]) == [
         "build",
         "--full-refresh",
+        "--exclude-resource-type",
+        "unit_test",
         "--select",
         "fact_a fact_b",
     ]
@@ -232,6 +234,28 @@ def test_state_is_written_only_after_a_complete_repair(dbt_asset_module):
         "the full-refresh build must stay conditional on the resolved models"
     )
     assert "full_refresh_build_args" in {name for _, name in _called_names(guarded[0])}
+
+
+def test_the_warehouse_build_leaves_unit_tests_out(dbt_asset_module):
+    """A `this` fixture naming a new column stops the model that would add it."""
+    asset = _function(dbt_asset_module, "full_dbt_project")
+    builds = [
+        node.args[0]
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "attr", "") == "cli"
+        and isinstance(node.args[0], ast.List)
+        and isinstance(node.args[0].elts[0], ast.Constant)
+        and node.args[0].elts[0].value == "build"
+    ]
+    assert builds, "full_dbt_project no longer calls dbt build with a literal list"
+    for build in builds:
+        starred = {
+            elt.value.id
+            for elt in build.elts
+            if isinstance(elt, ast.Starred) and isinstance(elt.value, ast.Name)
+        }
+        assert "SKIP_UNIT_TESTS_ARGS" in starred
 
 
 def test_the_repair_is_scoped_to_what_this_run_actually_built(dbt_asset_module):
