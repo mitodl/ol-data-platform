@@ -750,47 +750,82 @@ class TestBaseTableRelations:
 
 
 def _probe(relations, failing):
+    """Probe *relations*; *failing* maps a relation to the errors it raises
+    in turn before it reads cleanly.
+    """
+    pending = {relation: list(messages) for relation, messages in failing.items()}
     statements: list[str] = []
+    sleeps: list[float] = []
 
     def fetch(sql):
         statements.append(sql)
-        for relation, message in failing.items():
-            if relation in sql:
-                raise RuntimeError(message)
+        for relation, messages in pending.items():
+            if relation in sql and messages:
+                raise RuntimeError(messages.pop(0))
         return []
 
-    failures = unreadable_base_tables(relations, fetch, log=logging.getLogger("test"))
-    return failures, statements
+    failures = unreadable_base_tables(
+        relations, fetch, log=logging.getLogger("test"), sleep=sleeps.append
+    )
+    return failures, statements, sleeps
+
+
+CONNECT_FAILURE = "(2003, \"Can't connect to MySQL server on 'starrocks-fe'\")"
 
 
 class TestUnreadableBaseTables:
     def test_reports_the_table_starrocks_cannot_resolve(self):
         missing = f"{QA_DIMENSIONAL}.`afact_learner_courserun_progress`"
         present = f"{QA_DIMENSIONAL}.`tfact_enrollment`"
-        failures, statements = _probe(
-            [missing, present], {missing: UNKNOWN_BASE_TABLE_FAILURE}
+        failures, statements, sleeps = _probe(
+            [missing, present], {missing: [UNKNOWN_BASE_TABLE_FAILURE]}
         )
         assert list(failures) == [missing]
         assert str(failures[missing]) == UNKNOWN_BASE_TABLE_FAILURE
-        # One table failing doesn't hide a second missing one.
+        # One table failing doesn't hide a second missing one, and a missing
+        # table is not worth waiting on.
         assert [sql.split()[3] for sql in statements] == [missing, present]
         assert all(sql.endswith(" limit 0") for sql in statements)
+        assert sleeps == []
 
     @pytest.mark.parametrize(
-        "message",
-        [
-            BASE_TABLE_DROPPED_PROBE_FAILURE,
-            "(2003, \"Can't connect to MySQL server on 'starrocks-fe'\")",
-        ],
+        "message", [BASE_TABLE_DROPPED_PROBE_FAILURE, CONNECT_FAILURE]
     )
-    def test_an_error_the_build_retries_is_not_a_missing_table(self, message):
-        relation = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
-        failures, _ = _probe([relation], {relation: message})
+    def test_an_error_the_build_retries_is_probed_again(self, message):
+        rebuilt = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        present = f"{QA_DIMENSIONAL}.`tfact_enrollment`"
+        failures, statements, sleeps = _probe([rebuilt, present], {rebuilt: [message]})
         assert failures == {}
+        # Only the table that failed is probed a second time.
+        assert [sql.split()[3] for sql in statements] == [rebuilt, present, rebuilt]
+        assert sleeps == [RETRY_BASE_DELAY]
+
+    def test_a_retriable_error_that_never_clears_stops_the_refresh(self):
+        """The build would drop the views on its first attempt and then meet
+        the same error.
+        """
+        rebuilt = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        failures, statements, sleeps = _probe(
+            [rebuilt],
+            {rebuilt: [BASE_TABLE_DROPPED_PROBE_FAILURE] * MAX_BUILD_ATTEMPTS},
+        )
+        assert list(failures) == [rebuilt]
+        assert len(statements) == MAX_BUILD_ATTEMPTS
+        assert sleeps == [retry_delay(n) for n in range(1, MAX_BUILD_ATTEMPTS)]
+
+    def test_a_table_that_goes_missing_on_a_retry_is_reported(self):
+        rebuilt = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        failures, _, sleeps = _probe(
+            [rebuilt],
+            {rebuilt: [BASE_TABLE_DROPPED_PROBE_FAILURE, UNKNOWN_BASE_TABLE_FAILURE]},
+        )
+        assert str(failures[rebuilt]) == UNKNOWN_BASE_TABLE_FAILURE
+        assert sleeps == [RETRY_BASE_DELAY]
 
     def test_readable_tables_report_nothing(self):
-        failures, _ = _probe([f"{QA_DIMENSIONAL}.`dim_user`"], {})
+        failures, _, sleeps = _probe([f"{QA_DIMENSIONAL}.`dim_user`"], {})
         assert failures == {}
+        assert sleeps == []
 
     def test_the_error_names_every_table_and_says_the_views_are_intact(self):
         error = MissingBaseTablesError(

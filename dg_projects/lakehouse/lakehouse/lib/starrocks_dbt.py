@@ -399,7 +399,11 @@ def base_table_relations(
 
 
 def unreadable_base_tables(
-    relations: Iterable[str], fetch: Callable[[str], Any], *, log: logging.Logger
+    relations: Iterable[str],
+    fetch: Callable[[str], Any],
+    *,
+    log: logging.Logger,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Exception]:
     """Probe each of *relations* and return the ones StarRocks can't resolve.
 
@@ -414,31 +418,47 @@ def unreadable_base_tables(
     which is where a missing table is reported. It does not check that the
     table has the columns the view selects.
 
-    A probe that fails on one of the build's own retriable signatures (a
-    dropped connection, an FE restart, a base table Trino has just rebuilt) is
-    not a finding. Those clear on their own and the build retries them.
+    A probe that fails on one of the build's retriable signatures (a dropped
+    connection, an FE restart, a base table Trino has just rebuilt) is tried
+    again on the build's schedule. Those clear on their own, but the build
+    must not start while one stands: its first attempt would drop the views
+    and then meet the same error. One that outlasts the attempts is reported
+    like any other.
 
     :param relations: Catalog-qualified names, as `base_table_relations`
         returns them.
     :param fetch: Runs one SELECT. `StarRocksResource.fetch` in the asset.
     :param log: Where progress goes. `context.log` in the asset.
+    :param sleep: Injected so tests don't wait out the retry delay.
     :returns: The error for each relation that could not be read.
     """
     failures: dict[str, Exception] = {}
-    for relation in relations:
-        try:
-            fetch(f"select 1 from {relation} limit 0")  # noqa: S608
-        except Exception as exc:
-            if looks_retriable(exc):
-                log.warning(
-                    "Probe of %s failed on a retriable error, leaving it to "
-                    "the build: %s",
-                    relation,
-                    exc,
-                )
-                continue
-            log.exception("Base table %s can't be read", relation)
-            failures[relation] = exc
+    pending = list(relations)
+    for attempt in range(MAX_BUILD_ATTEMPTS):
+        if attempt:
+            sleep(retry_delay(attempt))
+        retry: list[str] = []
+        for relation in pending:
+            try:
+                fetch(f"select 1 from {relation} limit 0")  # noqa: S608
+            except Exception as exc:
+                if looks_retriable(exc) and attempt < MAX_BUILD_ATTEMPTS - 1:
+                    log.warning(
+                        "Probe of %s failed on a retriable error (attempt "
+                        "%d/%d), retrying in %ds: %s",
+                        relation,
+                        attempt + 1,
+                        MAX_BUILD_ATTEMPTS,
+                        retry_delay(attempt + 1),
+                        exc,
+                    )
+                    retry.append(relation)
+                    continue
+                log.exception("Base table %s can't be read", relation)
+                failures[relation] = exc
+        if not retry:
+            break
+        pending = retry
     return failures
 
 
