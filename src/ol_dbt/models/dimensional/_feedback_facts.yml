@@ -584,6 +584,65 @@ unit_tests:
     - feedback_pk: "9df5bc9092464addd8a04dab4cd3b22d"  # pragma: allowlist secret
       courserun_fk: "COURSERUN_PK"
       content_block_fk: "CONTENT_BLOCK_PK"
+- name: test_tfact_feedback_refreshes_subject_type_after_agent_is_mapped
+  description: >
+    A stored turn from an agent that had no subject_type mapping is re-selected and
+    gets the new subject_type once the agent is mapped, even though its updated_at
+    did not move.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-1"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      platform: "mitlearn"
+      subject_type: "resource"
+      source_metadata: '{"chatsession_agent": "SearchSummaryBot"}'
+      occurred_at: "2025-01-10T00:00:00"
+      created_at: "2025-01-10T00:00:00"
+      updated_at: "2025-01-10T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "someone@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-1"
+      text_redacted: "Give me courses about quantum mechanics"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Fails the `>` watermark with current keys and text, so only the subject_type
+    # check can select it. Null, as rows stored before the agent was mapped are.
+    rows:
+    - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      subject_type:
+      feedback_text: "Give me courses about quantum mechanics"
+      feedback_updated_at: "2025-01-10T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
+      subject_type: "resource"
 - name: test_tfact_feedback_reselects_renumbered_turns
   description: >
     A turn that reaches upstream late (CP-B) renumbers the turns after it without

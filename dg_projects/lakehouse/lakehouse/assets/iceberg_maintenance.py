@@ -39,7 +39,6 @@ Two assets run on staggered nightly schedules:
     volume without overwhelming the Glue API rate limits.
 """
 
-import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -71,8 +70,6 @@ from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 from pyiceberg.catalog.glue import GlueCatalog
 
 from lakehouse.assets.lakehouse.dbt import dbt_project
-
-log = logging.getLogger(__name__)
 
 # Each environment runs maintenance only against its own catalog and schema set.
 # The mapping lives in ol_orchestrate.lib.iceberg_maintenance so the raw layer
@@ -143,7 +140,7 @@ def _count_materializations_since(
 
 def _run_table_maintenance(
     cfg: TableMaintenanceConfig,
-    instance,
+    context: AssetExecutionContext,
     last_cursor: int | None,
     trino_maintenance: TrinoMaintenanceResource,
     catalog: GlueCatalog,
@@ -153,6 +150,10 @@ def _run_table_maintenance(
     The shared ``catalog`` is created once by the asset and reused across all
     tables: constructing a fresh GlueCatalog (and its S3 FileIO) per table is
     both wasteful and a known trigger for native-client hangs.
+
+    Failures are logged through ``context.log``. The deployed instance manages
+    no Python loggers, so a module logger's lines never reach the run's event
+    log, and the metadata keeps only the first 20 failures.
 
     Returns a summary dict used to aggregate the asset's output metadata.
     """
@@ -165,7 +166,7 @@ def _run_table_maintenance(
     }
 
     model_key = AssetKey(cfg.asset_key)
-    mat_count = _count_materializations_since(instance, model_key, last_cursor)
+    mat_count = _count_materializations_since(context.instance, model_key, last_cursor)
 
     # On the first maintenance run (last_cursor is None) treat effective count
     # as the maximum threshold so every operation runs regardless of history.
@@ -189,7 +190,7 @@ def _run_table_maintenance(
         if not exp.get("skipped"):
             summary["snapshots_expired"] = exp.get("eligible_count", 0)
     except Exception as exc:  # noqa: BLE001
-        log.warning(
+        context.log.warning(
             "EXPIRE SNAPSHOTS failed for %s.%s: %s",
             cfg.schema_name,
             cfg.model_name,
@@ -203,7 +204,7 @@ def _run_table_maintenance(
             trino_maintenance.optimize(schema=cfg.schema_name, table=cfg.model_name)
             summary["optimized"] = True
         except Exception as exc:  # noqa: BLE001
-            log.warning(
+            context.log.warning(
                 "OPTIMIZE failed for %s.%s: %s", cfg.schema_name, cfg.model_name, exc
             )
             summary["errors"].append(f"optimize: {exc}")
@@ -214,7 +215,7 @@ def _run_table_maintenance(
             trino_maintenance.analyze(schema=cfg.schema_name, table=cfg.model_name)
             summary["analyzed"] = True
         except Exception as exc:  # noqa: BLE001
-            log.warning(
+            context.log.warning(
                 "ANALYZE failed for %s.%s: %s", cfg.schema_name, cfg.model_name, exc
             )
             summary["errors"].append(f"analyze: {exc}")
@@ -327,7 +328,7 @@ def iceberg_dbt_layer_maintenance(
         tables_attempted += 1
         try:
             result = _run_table_maintenance(
-                cfg, context.instance, last_cursor, trino_maintenance, catalog
+                cfg, context, last_cursor, trino_maintenance, catalog
             )
             tables_processed += 1
             if result["optimized"]:
@@ -339,7 +340,7 @@ def iceberg_dbt_layer_maintenance(
                 failed_tables.add(table)
             failures.extend(f"{table}: {err}" for err in result["errors"])
         except Exception as exc:  # noqa: BLE001
-            log.warning("Maintenance failed for %s: %s", table, exc)
+            context.log.warning("Maintenance failed for %s: %s", table, exc)
             failed_tables.add(table)
             failures.append(f"{table}: {exc}")
 
@@ -417,6 +418,14 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
     scan = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
     tables = scan.tables
     tables_scanned = len(tables) + len(scan.failures)
+    # A missing database raises in the scan. A listing that succeeds and holds
+    # no Iceberg table is the wrong database or an emptied one.
+    if not tables_scanned:
+        msg = (
+            f"Glue lists no Iceberg tables in {RAW_GLUE_DATABASE}. Refusing to "
+            "report success for zero work."
+        )
+        raise RuntimeError(msg)
     context.log.info(
         "Found %d Iceberg tables; processing with %d workers.",
         tables_scanned,

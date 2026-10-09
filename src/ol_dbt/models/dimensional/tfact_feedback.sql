@@ -161,7 +161,8 @@ left join {{ this }} as existing
     -- updated_at to trigger the watermark. user_fk changes on a dim_user re-key;
     -- courserun_fk when a course run lands in dim_course_run after the turn;
     -- content_block_fk on a new course structure snapshot, since content_block_pk
-    -- hashes retrieved_at. existing.feedback_pk is null for a turn not stored yet.
+    -- hashes retrieved_at; subject_type when a new agent is mapped. existing.feedback_pk
+    -- is null for a turn not stored yet.
     or (
         existing.feedback_pk is not null
         and (
@@ -169,6 +170,7 @@ left join {{ this }} as existing
                 is distinct from coalesce(users_by_global_id.user_pk, users_by_email.user_pk)
             or existing.courserun_fk is distinct from dim_course_run.courserun_pk
             or existing.content_block_fk is distinct from dim_course_content.content_block_pk
+            or existing.subject_type is distinct from unioned.subject_type
         )
     )
     -- A turn not stored yet, or renumbered upstream: neither moves updated_at.
