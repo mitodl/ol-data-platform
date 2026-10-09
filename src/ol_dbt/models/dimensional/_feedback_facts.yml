@@ -632,11 +632,11 @@ unit_tests:
       is_latest: true
   - input: this
     # Fails the `>` watermark with current keys and text, so only the subject_type
-    # check can select it.
+    # check can select it. Null, as rows stored before the agent was mapped are.
     rows:
     - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
       feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
-      subject_type: "unspecified"
+      subject_type:
       feedback_text: "Give me courses about quantum mechanics"
       feedback_updated_at: "2025-01-10T00:00:00"
   expect:
