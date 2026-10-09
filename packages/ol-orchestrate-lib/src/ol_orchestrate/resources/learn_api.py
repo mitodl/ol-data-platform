@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import Field
 
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.api_client import BaseApiClient
 
 
@@ -43,11 +44,13 @@ class MITLearnApiClient(BaseApiClient):
         learn = raw_secret.get("learn") or {}
         learn["base_url"] = learn.get("base_url") or learn.pop("url", None)
         # Allow local development to point the client at a non-prod MIT Learn
-        # without rewriting Vault.
-        if override := os.environ.get("MIT_LEARN_BASE_URL"):
-            learn["base_url"] = override
-        if token_override := os.environ.get("MIT_LEARN_WEBHOOK_SECRET"):
-            learn["token"] = token_override
+        # without rewriting Vault. Dev only: a stray variable in a deployed
+        # environment must not be able to redirect a delivery.
+        if DAGSTER_ENV == "dev":
+            if override := os.environ.get("MIT_LEARN_BASE_URL"):
+                learn["base_url"] = override
+            if token_override := os.environ.get("MIT_LEARN_WEBHOOK_SECRET"):
+                learn["token"] = token_override
         return cls(**learn)
 
     @classmethod

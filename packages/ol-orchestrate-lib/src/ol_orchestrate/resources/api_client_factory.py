@@ -43,8 +43,7 @@ class ApiClientFactory(ConfigurableResource[BaseApiClient]):
 
     def _initialize_client(self) -> BaseApiClient:
         client_class = self.supported_client_class[self.client_class]
-        # A deployed environment always reads Vault: a stray variable there must
-        # not be able to redirect a delivery.
+        # A deployed environment always reads Vault.
         client_secrets = client_class.local_secret() if DAGSTER_ENV == "dev" else None
         if client_secrets is None:
             client_secrets = self._read_vault_secret(

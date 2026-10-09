@@ -23,6 +23,7 @@ def test_a_fixture_directory_replaces_the_glue_read(
         "\n".join(json.dumps(row) for row in ROWS)
     )
     monkeypatch.setenv("DBT_MODEL_FIXTURE_DIR", str(tmp_path))
+    monkeypatch.setattr(glue_helper, "DAGSTER_ENV", "dev")
     monkeypatch.setattr(glue_helper, "load_dbt_model_table", _refuse_glue)
 
     df = get_dbt_model_as_dataframe("any_database", "some_model").collect()

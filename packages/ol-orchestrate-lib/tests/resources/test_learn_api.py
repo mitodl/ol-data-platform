@@ -1,11 +1,12 @@
 """Tests for the MIT Learn API client."""
 
+import copy
 import json
 from typing import Any, cast
 
 import httpx2 as httpx
 import pytest
-from ol_orchestrate.resources import api_client_factory
+from ol_orchestrate.resources import api_client_factory, learn_api
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -81,14 +82,17 @@ VAULT_SECRET = {"learn": {"url": "https://learn.example.com", "token": "from-vau
 
 
 def _learn_api_factory(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, dagster_env: str = "dev"
 ) -> tuple[ApiClientFactory, list[str]]:
     """Build the delivery location's learn_api, recording each Vault read."""
+    monkeypatch.setattr(api_client_factory, "DAGSTER_ENV", dagster_env)
+    monkeypatch.setattr(learn_api, "DAGSTER_ENV", dagster_env)
     vault_reads: list[str] = []
 
     def read_vault_secret(_self: ApiClientFactory, **kwargs: str) -> dict[str, Any]:
         vault_reads.append(kwargs["path"])
-        return VAULT_SECRET
+        # from_secret rewrites the dict it is given
+        return copy.deepcopy(VAULT_SECRET)
 
     monkeypatch.setattr(ApiClientFactory, "_read_vault_secret", read_vault_secret)
     factory = ApiClientFactory(
@@ -132,11 +136,14 @@ def test_a_deployed_environment_reads_vault_whatever_is_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Outside dev the environment cannot stand in for the Vault secret."""
-    monkeypatch.setattr(api_client_factory, "DAGSTER_ENV", "production")
     monkeypatch.setenv("MIT_LEARN_BASE_URL", LOCAL_LEARN)
     monkeypatch.setenv("MIT_LEARN_WEBHOOK_SECRET", "local-secret")
-    factory, vault_reads = _learn_api_factory(monkeypatch)
+    factory, vault_reads = _learn_api_factory(monkeypatch, "production")
 
-    _ = factory.client
+    client = cast(MITLearnApiClient, factory.client)
 
+    assert (client.base_url, client.token) == (
+        "https://learn.example.com",
+        "from-vault",
+    )
     assert vault_reads == ["shared_hmac"]

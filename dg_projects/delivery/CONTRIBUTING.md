@@ -73,7 +73,9 @@ for the deployed inputs, and both apply only when `DAGSTER_ENVIRONMENT` is `dev`
 - `DBT_MODEL_FIXTURE_DIR` makes `get_dbt_model_as_dataframe` read
   `<dir>/<table_name>.jsonl` (one JSON row per line) and not the Glue table.
   `fixtures/` holds a canned batch for `mit_climate_webhook`. To run another
-  asset, add a file named for the integrations table it reads.
+  asset, add a file named for the integrations table it reads. The variable
+  is read by every caller of that helper, in every code location, so set it for
+  the run and do not leave it exported in a shell you use for other assets.
 
 ```bash
 cd dg_projects/delivery
