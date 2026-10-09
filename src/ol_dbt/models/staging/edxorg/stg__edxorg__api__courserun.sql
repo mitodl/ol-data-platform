@@ -34,16 +34,16 @@ with source as (
             when pacing_type = 'instructor_paced' then false
         end as courserun_is_self_paced
         , case
-            when weeks_to_complete = 1 then cast(weeks_to_complete as varchar) || ' week'
-            when weeks_to_complete > 1 then cast(weeks_to_complete as varchar) || ' weeks'
+            when weeks_to_complete = 1 then {{ dbt.concat(["cast(weeks_to_complete as varchar)", "' week'"]) }}
+            when weeks_to_complete > 1 then {{ dbt.concat(["cast(weeks_to_complete as varchar)", "' weeks'"]) }}
         end as courserun_duration
         , case
             when min_effort is not null and max_effort is not null
-                then cast(min_effort as varchar) || '-' || cast(max_effort as varchar) || ' hours per week'
+                then {{ dbt.concat(["cast(min_effort as varchar)", "'-'", "cast(max_effort as varchar)", "' hours per week'"]) }}
             when min_effort is not null and max_effort is null
-                then cast(min_effort as varchar) || ' hours per week'
+                then {{ dbt.concat(["cast(min_effort as varchar)", "' hours per week'"]) }}
             when min_effort is null and max_effort is not null
-                then cast(max_effort as varchar) || ' hours per week'
+                then {{ dbt.concat(["cast(max_effort as varchar)", "' hours per week'"]) }}
         end as courserun_time_commitment
         , {{ cast_timestamp_to_iso8601('start_on') }} as courserun_start_on
         , {{ cast_timestamp_to_iso8601('end_on') }} as courserun_end_on

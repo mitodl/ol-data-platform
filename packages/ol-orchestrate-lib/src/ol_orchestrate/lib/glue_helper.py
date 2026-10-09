@@ -1,12 +1,17 @@
 """Helper functions for AWS Glue operations and dbt model data retrieval."""
 
+import os
 import types
+from pathlib import Path
 
 import boto3
 import polars as pl
 from pyiceberg.table import Table
 
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
+
+FIXTURE_DIR_VARIABLE = "DBT_MODEL_FIXTURE_DIR"
 
 TYPE_RENAME = types.MappingProxyType(
     {
@@ -135,5 +140,13 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
     Raises:
         KeyError: If the table metadata doesn't contain the expected fields
         boto3 exceptions: If the AWS Glue API call fails
+
+    In the dev environment, ``DBT_MODEL_FIXTURE_DIR`` replaces the Glue read with
+    ``<dir>/<table_name>.jsonl`` (newline-delimited JSON, one row per line), so
+    an asset can run on a laptop with no AWS credentials. The database name is
+    not part of the path, because it differs by environment and the fixture
+    does not.
     """
+    if DAGSTER_ENV == "dev" and (fixture_dir := os.environ.get(FIXTURE_DIR_VARIABLE)):
+        return pl.scan_ndjson(Path(fixture_dir) / f"{table_name}.jsonl")
     return scan_dbt_model_table(load_dbt_model_table(database_name, table_name))

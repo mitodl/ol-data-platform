@@ -461,7 +461,7 @@ models:
   - name: ai_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
       values - TutorBot, CanvasSyllabusBot, ResourceRecommendationBot, VideoGPTBot,
-      SyllabusBot
+      SyllabusBot, SearchSummaryBot
     tests:
     - not_null
   - name: courserun_readable_id
@@ -473,7 +473,7 @@ models:
     - not_null
   - name: resource_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
-      on the ai_agent. May be blank for ResourceRecommendationBot.
+      on the ai_agent. May be blank for ResourceRecommendationBot and SearchSummaryBot.
   - name: human_message
     description: str, the human message
   - name: ai_message
@@ -1120,9 +1120,16 @@ models:
   - name: user_address_country
     description: string, country of the user. Coalesced from edX.org and hashed ID
       user matches.
-  - name: courses_taken_in_program
+  - name: verified_courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
       the program
+  - name: courses_taken_in_program
+    description: int, compatibility alias for verified_courses_taken_in_program
+  - name: verified_courses_passed_in_program
+    description: int, count of distinct verified courses the user has passed within
+      the program
+  - name: all_courses_passed_in_program
+    description: int, count of distinct courses the user has passed within the program
   - name: user_street_address
     description: string, street address of the user. Coalesced from edX.org and hashed
       ID user matches.

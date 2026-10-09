@@ -591,7 +591,7 @@ def load_raw_layer_maintenance_work(
     returned tables to the maintenance asset for parallel processing.
 
     A table whose metadata cannot be loaded is returned in ``failures`` instead
-    of ``tables``.
+    of ``tables``.  The caller logs them.
 
     Tables are sorted descending by ``eligible_snapshot_count`` so the worst
     offenders are processed first (fail-fast semantics for long-running jobs).
@@ -642,7 +642,6 @@ def load_raw_layer_maintenance_work(
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("Could not inspect %s.%s: %s", glue_database, table_name, exc)
             failures.append(f"{table_name}: {exc}")
 
     # Worst offenders first so they are processed before a potential timeout

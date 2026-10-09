@@ -280,7 +280,7 @@ with mitxpro__programenrollments as (
         , combined_programs.program_type
         , combined_programs.program_is_live
         , combined_programs.program_readable_id
-        , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
+        , {{ generate_hash_id(dbt.concat(["cast(combined_programs.user_id as varchar)", "combined_programs.platform_name"])) }}
             as user_hashed_id
         , combined_programs.user_id
         , combined_programs.user_email
@@ -325,7 +325,7 @@ with mitxpro__programenrollments as (
         , combined_programs.program_type
         , combined_programs.program_is_live
         , combined_programs.program_readable_id
-        , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
+        , {{ generate_hash_id(dbt.concat(["cast(combined_programs.user_id as varchar)", "combined_programs.platform_name"])) }}
         , combined_programs.user_id
         , combined_programs.user_email
         , combined_programs.user_username

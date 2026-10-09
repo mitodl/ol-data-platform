@@ -55,7 +55,7 @@ with pages as (
         on product_pages.wagtail_page_id = product_wagtail.wagtail_page_id
     inner join pages as certificate_wagtail
         on
-            certificate_wagtail.wagtail_page_path like product_wagtail.wagtail_page_path || '%'
+            certificate_wagtail.wagtail_page_path like {{ dbt.concat(["product_wagtail.wagtail_page_path", "'%'"]) }}
             and certificate_wagtail.wagtail_page_depth = product_wagtail.wagtail_page_depth + 1
             and certificate_wagtail.wagtail_page_is_live
     inner join {{ ref('stg__mitxpro__app__postgres__cms_certificatepage') }} as certificates
@@ -78,7 +78,7 @@ with pages as (
         on product_pages.wagtail_page_id = product_wagtail.wagtail_page_id
     inner join pages as faculty_wagtail
         on
-            faculty_wagtail.wagtail_page_path like product_wagtail.wagtail_page_path || '%'
+            faculty_wagtail.wagtail_page_path like {{ dbt.concat(["product_wagtail.wagtail_page_path", "'%'"]) }}
             and faculty_wagtail.wagtail_page_depth = product_wagtail.wagtail_page_depth + 1
             and faculty_wagtail.wagtail_page_is_live
     inner join {{ ref('stg__mitxpro__app__postgres__cms_facultymemberspage') }} as faculty

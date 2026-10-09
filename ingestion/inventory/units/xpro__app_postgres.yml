@@ -320,7 +320,7 @@ tables:
   modeled: false
 - name: cms_certificatepage
   raw_table: raw__xpro__app__postgres__cms_certificatepage
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - page_ptr_id
@@ -383,14 +383,14 @@ tables:
   modeled: false
 - name: cms_externalcoursepage
   raw_table: raw__xpro__app__postgres__cms_externalcoursepage
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - page_ptr_id
   modeled: true
 - name: cms_externalcoursepage_topics
   raw_table: raw__xpro__app__postgres__cms_externalcoursepage_topics
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -614,7 +614,7 @@ tables:
   modeled: false
 - name: courses_courserun
   raw_table: raw__xpro__app__postgres__courses_courserun
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -656,7 +656,7 @@ tables:
   modeled: false
 - name: courses_coursetopic
   raw_table: raw__xpro__app__postgres__courses_coursetopic
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -915,7 +915,7 @@ tables:
   modeled: true
 - name: ecommerce_product
   raw_table: raw__xpro__app__postgres__ecommerce_product
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -929,7 +929,7 @@ tables:
   modeled: true
 - name: ecommerce_productversion
   raw_table: raw__xpro__app__postgres__ecommerce_productversion
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -1300,7 +1300,7 @@ tables:
   modeled: false
 - name: wagtailcore_page
   raw_table: raw__xpro__app__postgres__wagtailcore_page
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id

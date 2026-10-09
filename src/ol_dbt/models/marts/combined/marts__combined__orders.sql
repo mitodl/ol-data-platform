@@ -473,9 +473,7 @@ with bootcamps__ecommerce_order as (
 )
 
 select
-    {{ generate_hash_id('cast(order_id as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || platform') }} as combined_orders_hash_id
+    {{ generate_hash_id(dbt.concat(["cast(order_id as varchar)", "cast(coalesce(line_id, 9) as varchar)", "platform"])) }} as combined_orders_hash_id
     , platform
     , order_id
     , line_id
@@ -524,5 +522,5 @@ select
     , unit_price
     , user_email
     , user_id
-    , {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
+    , {{ generate_hash_id(dbt.concat(["cast(user_id as varchar)", "platform"])) }} as user_hashed_id
 from combined_orders

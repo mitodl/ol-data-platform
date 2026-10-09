@@ -50,4 +50,4 @@ left join coursepages
 left join wagtailpages
     on unnestedcoursesinprogram.coursesinprogrampage_wagtail_page_id = wagtailpages.wagtail_page_id
 inner join programpageswithpath
-    on wagtailpages.wagtail_page_path like programpageswithpath.wagtail_page_path || '%'
+    on wagtailpages.wagtail_page_path like {{ dbt.concat(["programpageswithpath.wagtail_page_path", "'%'"]) }}

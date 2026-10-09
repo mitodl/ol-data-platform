@@ -89,9 +89,11 @@ with chatbot as (
 
 , tutorbot_turns as (
     select
-        cast(tutorbot_deduplicated.tutorbotoutput_id as varchar)
-            || '-' || cast(tutorbot_deduplicated.message_index as varchar)
-            as source_record_ref
+        {{ dbt.concat([
+            "cast(tutorbot_deduplicated.tutorbotoutput_id as varchar)"
+            , "'-'"
+            , "cast(tutorbot_deduplicated.message_index as varchar)"
+        ]) }} as source_record_ref
         , tutorbot_deduplicated.chatsession_thread_id
         , tutorbot_deduplicated.chatsession_agent
         , tutorbot_deduplicated.chatsession_title
@@ -159,18 +161,21 @@ select
         when 'SyllabusBot' then 'course'
         when 'CanvasSyllabusBot' then 'course'
         when 'ResourceRecommendationBot' then 'resource'
+        when 'SearchSummaryBot' then 'resource'
+        -- A warn test on int__learn_ai__chatbot.chatsession_agent flags a new agent
+        else 'unspecified'
     end as subject_type
     , human_turns.chatsession_object_id as subject_ref
     , cast(null as varchar) as subject_url
     , human_turns.explicit_rating
     , human_turns.occurred_at as created_at
     , human_turns.chatsession_updated_on as updated_at
-    , json_object(
-        'chatsession_agent': human_turns.chatsession_agent
-        , 'checkpoint_source': human_turns.checkpoint_source
-        , 'checkpoint_type': human_turns.checkpoint_type
-        , 'courserun_platform': course_run.platform
-    ) as source_metadata
+    , {{ json_object_from_pairs([
+        ['chatsession_agent', "human_turns.chatsession_agent"]
+        , ['checkpoint_source', "human_turns.checkpoint_source"]
+        , ['checkpoint_type', "human_turns.checkpoint_type"]
+        , ['courserun_platform', "course_run.platform"]
+    ]) }} as source_metadata
 from human_turns
 left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id

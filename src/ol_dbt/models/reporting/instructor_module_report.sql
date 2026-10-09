@@ -182,7 +182,7 @@ with chatbot_events as (
         users.email as user_email
         , cast(chatbot_events.event_timestamp as date) as activity_date
         , chatbot_events.courserun_readable_id
-        , count(distinct chatbot_events.session_id || chatbot_events.block_id) as chatbot_used_count
+        , count(distinct {{ dbt.concat(["chatbot_events.session_id", "chatbot_events.block_id"]) }}) as chatbot_used_count
         , c.block_category
         , c.block_title
         , section.block_title as section_title

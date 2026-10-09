@@ -14,6 +14,19 @@ with chatsession as (
     select * from {{ ref('stg__learn_ai__app__postgres__users_user') }}
 )
 
+-- Joined per session, not per checkpoint: the per-checkpoint join lost rows, which
+-- assert_learn_ai_chatbot_keeps_every_checkpoint catches.
+, chatsession_with_user as (
+    select
+        chatsession.*
+        , users.user_email
+        , users.user_full_name
+        , users.user_username
+        , users.user_global_id
+    from chatsession
+    left join users on chatsession.user_id = users.user_id
+)
+
 , video as (
     select distinct
         courserun_readable_id
@@ -36,12 +49,12 @@ with chatsession as (
     from chatsession
     inner join video
         on
-            chatsession.chatsession_object_id like '%' || video.transcript_id
-            and video.courserun_readable_id like '%'
-            || substring(
-                replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1
-                , strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1
-            )
+            chatsession.chatsession_object_id like {{ dbt.concat(["'%'", "video.transcript_id"]) }}
+            and video.courserun_readable_id like {{ dbt.concat([
+                "'%'"
+                , "substring(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1"
+                ~ ", strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1)"
+            ]) }}
 )
 
 , problem as (
@@ -56,10 +69,10 @@ select
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id
     , chatsession.user_id
-    , users.user_email
-    , users.user_full_name
-    , users.user_username
-    , users.user_global_id
+    , chatsession.user_email
+    , chatsession.user_full_name
+    , chatsession.user_username
+    , chatsession.user_global_id
     , djangocheckpoint.checkpoint_source
     , djangocheckpoint.checkpoint_step
     , djangocheckpoint.human_message
@@ -81,9 +94,9 @@ select
     ) as courserun_readable_id
     , videos_with_ranking.block_id as video_block_id
 from djangocheckpoint
-inner join chatsession on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
+inner join chatsession_with_user as chatsession
+    on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
 left join responserating on djangocheckpoint.djangocheckpoint_id = responserating.djangocheckpoint_id
-left join users on chatsession.user_id = users.user_id
 left join videos_with_ranking
     on
         chatsession.chatsession_object_id = videos_with_ranking.chatsession_object_id

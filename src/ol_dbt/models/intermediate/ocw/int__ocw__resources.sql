@@ -67,14 +67,16 @@ select
     , coalesce(sitemetadata.sitemetadata_course_term, websites.metadata_course_term) as course_term
     , coalesce(sitemetadata.sitemetadata_course_title, websites.metadata_course_title) as course_title
     , coalesce(sitemetadata.sitemetadata_course_year, websites.metadata_course_year) as course_year
-    , websites.website_live_url || '/resources/' || websitecontents.websitecontent_filename as resource_live_url
-    , 'https://ocw-studio.odl.mit.edu/sites/'
-    || websites.website_name
-    || '/type/'
-    || websitecontents.websitecontent_type
-    || '/edit/'
-    || websitecontents.websitecontent_text_id
-    || '/' as studio_url
+    , {{ dbt.concat(["websites.website_live_url", "'/resources/'", "websitecontents.websitecontent_filename"]) }} as resource_live_url
+    , {{ dbt.concat([
+        "'https://ocw-studio.odl.mit.edu/sites/'"
+        , "websites.website_name"
+        , "'/type/'"
+        , "websitecontents.websitecontent_type"
+        , "'/edit/'"
+        , "websitecontents.websitecontent_text_id"
+        , "'/'"
+    ]) }} as studio_url
     , nullif(nullif(
         {{ json_query_string('websitecontents.websitecontent_metadata', "'$.backup_url'") }}, ''
     ), 'null') as external_resource_backup_url

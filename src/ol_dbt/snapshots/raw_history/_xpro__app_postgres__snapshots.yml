@@ -1,0 +1,197 @@
+---
+version: 2
+snapshots:
+- name: snapshot_raw__xpro__app__postgres__cms_certificatepage
+  description: >
+    History of xPRO certificate pages (the CEUs a course or program awards): one row
+    per version of each
+    raw__xpro__app__postgres__cms_certificatepage record, with every source column
+    and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: page_ptr_id
+    description: primary key of the xPRO cms_certificatepage row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__cms_externalcoursepage
+  description: >
+    History of xPRO CMS pages of externally delivered courses: one row per version
+    of each
+    raw__xpro__app__postgres__cms_externalcoursepage record, with every source column
+    and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: page_ptr_id
+    description: primary key of the xPRO cms_externalcoursepage row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__cms_externalcoursepage_topics
+  description: >
+    History of xPRO topic assignments of external course pages: one row per version
+    of each
+    raw__xpro__app__postgres__cms_externalcoursepage_topics record, with every source
+    column and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: id
+    description: primary key of the xPRO cms_externalcoursepage_topics row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__courses_courserun
+  description: >
+    History of xPRO course runs: one row per version of each
+    raw__xpro__app__postgres__courses_courserun record, with every source column and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: id
+    description: primary key of the xPRO courses_courserun row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__courses_coursetopic
+  description: >
+    History of xPRO course topics: one row per version of each
+    raw__xpro__app__postgres__courses_coursetopic record, with every source column
+    and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: id
+    description: primary key of the xPRO courses_coursetopic row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__ecommerce_product
+  description: >
+    History of xPRO products: one row per version of each
+    raw__xpro__app__postgres__ecommerce_product record, with every source column and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: id
+    description: primary key of the xPRO ecommerce_product row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__ecommerce_productversion
+  description: >
+    History of xPRO product versions (price and description): one row per version
+    of each
+    raw__xpro__app__postgres__ecommerce_productversion record, with every source column
+    and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: id
+    description: primary key of the xPRO ecommerce_productversion row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.
+- name: snapshot_raw__xpro__app__postgres__wagtailcore_page
+  description: >
+    History of xPRO Wagtail pages (title, slug, live flag and tree position of every
+    CMS page): one row per version of each
+    raw__xpro__app__postgres__wagtailcore_page record, with every source column and
+    none of the loader's. Resolution is one run, and history starts at the
+    first run. A record deleted in xPRO gets a final row with dbt_is_deleted
+    'True', but only once the table is loaded by a full read.
+  columns:
+  - name: id
+    description: primary key of the xPRO wagtailcore_page row.
+  - name: dbt_scd_id
+    description: key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: time of the snapshot run that saw it replaced or deleted; null for
+      the current version.
+  - name: dbt_is_deleted
+    description: >
+      'True' on the row written when the record was no longer in the source,
+      'False' otherwise.

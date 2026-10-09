@@ -62,7 +62,7 @@ with edxorg_program_certificates_raw as (
     join wagtail_page
         on program_pages.wagtail_page_id = wagtail_page.wagtail_page_id
     join wagtail_page as certificate_page
-        on certificate_page.wagtail_page_path like wagtail_page.wagtail_page_path || '%'
+        on certificate_page.wagtail_page_path like {{ dbt.concat(["wagtail_page.wagtail_page_path", "'%'"]) }}
         and certificate_page.wagtail_page_path <> wagtail_page.wagtail_page_path
         and certificate_page.wagtail_page_slug like 'certificate%'
     group by program_pages.program_id

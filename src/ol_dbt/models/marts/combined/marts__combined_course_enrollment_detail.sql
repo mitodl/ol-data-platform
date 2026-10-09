@@ -80,8 +80,11 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
+-- A revoked certificate is not earned, so it must not supply the certificate columns of the
+-- edX.org enrollment it matches.
 , mitxonline_certificates as (
     select * from {{ ref('int__mitxonline__courserun_certificates') }}
+    where courseruncertificate_is_revoked = false
 )
 
 , combined_enrollment_detail as (
@@ -168,7 +171,7 @@ with combined_enrollments as (
         , combined_users.user_company
         , combined_users.user_gender
         , case
-            when mitxonline_certificates.courseruncertificate_is_revoked = false then true
+            when mitxonline_certificates.courseruncertificate_created_on is not null then true
             when combined_enrollments.courseruncertificate_created_on is not null then true
             else false
         end as courseruncertificate_is_earned
@@ -447,9 +450,7 @@ with combined_enrollments as (
 select
     platform
     , courserunenrollment_id
-    , {{ generate_hash_id('cast(order_id as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || platform') }} as combined_orders_hash_id
+    , {{ generate_hash_id(dbt.concat(["cast(order_id as varchar)", "cast(coalesce(line_id, 9) as varchar)", "platform"])) }} as combined_orders_hash_id
     , course_readable_id
     , course_title
     , courserun_id
@@ -485,12 +486,12 @@ select
     -- identity ordering must match int__combined__users: global_alumni's user_id
     --  (their student_id) is not reliably unique per person, so user_email is
     --  preferred there; every other platform uses the default user_id-first order.
-    , {{ generate_hash_id('
+    , {{ generate_hash_id(dbt.concat(['
         case
             when platform = \'' ~ var("global_alumni") ~ '\'
                 then coalesce(user_email, user_id, user_full_name)
             else coalesce(user_id, user_email, user_full_name)
-        end || platform') }} as user_hashed_id
+        end', 'platform'])) }} as user_hashed_id
     , user_id
     , user_username
 from combined_enrollment_detail

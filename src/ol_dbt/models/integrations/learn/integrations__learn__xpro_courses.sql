@@ -46,7 +46,7 @@ select
     ) as last_modified
     , 'xpro' as etl_source
     , pages.page_description as description
-    , '{{ var("mitxpro_url") }}/courses/' || courses.course_readable_id || '/' as url
+    , {{ dbt.concat(["'" ~ var("mitxpro_url") ~ "/courses/'", "courses.course_readable_id", "'/'"]) }} as url
     , coalesce(pages.page_thumbnail_url, '{{ var("mitxpro_url") }}/static/images/mit-dome.png') as image_url
     , priced_runs.course_id is not null as published
     , courses.platform_name as platform

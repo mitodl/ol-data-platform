@@ -1,7 +1,7 @@
 {#
   Shared bodies of the b2b_analytics engagement views (StarRocks only). The org-grain and
   contract-grain views differ only in what they group by, so the rows they aggregate are
-  defined once here. Every row is a learner enrolled in a course run
+  defined once here. Every row is a learner with an enrollment row for a course run
   (afact_learner_courserun_progress), keyed on user_fk, with activity read from
   afact_learner_courserun_daily_activity as the learner-records views read it.
 #}
@@ -34,10 +34,9 @@
    tracked activity, the enrollment, or the certificate. is_active_day is set on activity
    rows only, so enrolling or being issued a certificate does not make a learner active
    in a month. The month of an activity day is sliced from activity_date_key (YYYYMMDD);
-   the enrollment and certificate months are sliced from their ISO-8601 strings. Every
-   branch keeps active enrollments only, the same rule as
-   b2b_learner_courserun_engagement, so a learner who unenrolled is in none of the
-   engagement views. #}
+   the enrollment and certificate months are sliced from their ISO-8601 strings. The
+   activity and enrollment branches keep active enrollments only. The certificate branch
+   does not: an unrevoked certificate counts whatever became of the enrollment. #}
 {% macro b2b_learner_courserun_months() %}
     select
         a.user_fk,
@@ -89,24 +88,31 @@
         0                                                   as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
-      and enrollment_is_active = true
       and is_certified = true
 {% endmacro %}
 
-{# One row per (learner, course run) active enrollment with its all-time activity
-   totals. The counters sum the fact's per-day distinct counts, so a video played on two
-   days counts twice, as in mv_b2b_learner_enrollment. A learner who unenrolled is left
-   out along with their activity. organization_administration_report kept them
-   (enroll_data has no active filter), so these totals are lower than that report's. #}
+{# One row per (learner, course run) with an active enrollment or an unrevoked
+   certificate, and its all-time activity totals. The counters sum the fact's per-day
+   distinct counts, so a video played on two days counts twice, as in
+   mv_b2b_learner_enrollment. A learner who unenrolled counts for their certificate only:
+   the row carries enrollment_is_active = false and zero activity, and the views count
+   enrolled learners on enrollment_is_active. organization_administration_report kept
+   unenrolled learners' activity (enroll_data has no active filter), so the enrollment
+   and activity totals are lower than that report's. #}
 {% macro b2b_learner_courserun_engagement() %}
     select
         p.user_fk,
         p.courserun_fk,
+        p.enrollment_is_active,
         p.is_certified,
-        coalesce(a.days_active, 0)                          as days_active,
-        coalesce(a.videos_played, 0)                        as videos_played,
-        coalesce(a.problems_attempted, 0)                   as problems_attempted,
-        coalesce(a.chatbot_interactions, 0)                 as chatbot_interactions
+        case when p.enrollment_is_active then coalesce(a.days_active, 0) else 0 end
+                                                            as days_active,
+        case when p.enrollment_is_active then coalesce(a.videos_played, 0) else 0 end
+                                                            as videos_played,
+        case when p.enrollment_is_active then coalesce(a.problems_attempted, 0) else 0 end
+                                                            as problems_attempted,
+        case when p.enrollment_is_active then coalesce(a.chatbot_interactions, 0) else 0 end
+                                                            as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }} p
     left join (
         select
@@ -122,5 +128,5 @@
     ) a
         on p.user_fk = a.user_fk and p.courserun_fk = a.courserun_fk
     where p.platform = 'mitxonline'
-      and p.enrollment_is_active = true
+      and (p.enrollment_is_active = true or p.is_certified = true)
 {% endmacro %}

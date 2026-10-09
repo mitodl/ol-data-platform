@@ -251,6 +251,15 @@ snapshots:
       format: "'PARQUET'"
     +meta:
       required_docs: true
+    # History of raw tables, one snapshot per table (macro raw_history_snapshot).
+    raw_history:
+      +schema: history
+      # Read like raw, which carries no grants: history keeps every raw column,
+      # including ones staging drops. Only `select` is cleared (grants merge by
+      # dict_key_append, see b2b_analytics above), so accountadmin and
+      # ol_platform_admin keep `all privileges` as on every other snapshot.
+      +grants:
+        select: []
 
 # Test severity config
 # default for error_if and warn_if are !=0
