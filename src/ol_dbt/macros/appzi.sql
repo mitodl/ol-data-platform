@@ -33,7 +33,10 @@
   {%- set excerpt = regexp_extract_or_null(body, excerpt_pattern, 1) -%}
   case
       when {{ answer }} is not null
-          then coalesce({{ feedback_type }} || ': ', '') || {{ html_unescape(answer) }}
+          then {{ dbt.concat([
+              "coalesce(" ~ dbt.concat([feedback_type, "': '"]) ~ ", '')"
+              , html_unescape(answer)
+          ]) }}
       when {{ excerpt }} is not null then {{ html_unescape(excerpt) }}
       when {{ regexp_like(body, no_answer_pattern) }} then {{ feedback_type }}
       else {{ body }}
