@@ -244,6 +244,25 @@ def test_the_repair_is_scoped_to_what_this_run_actually_built(dbt_asset_module):
     assert "_models_built_by" in {name for _, name in _called_names(asset)}
 
 
+def test_run_results_are_uploaded_when_the_build_fails(dbt_asset_module):
+    """stream() raises on a failing test, the build OpenMetadata most needs.
+
+    An upload placed after the stream is skipped by exactly those builds, which
+    leaves OpenMetadata able to show a dbt test as passed or stale, never failed.
+    """
+    asset = _function(dbt_asset_module, "full_dbt_project")
+    guarded = [
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try)
+        and "stream" in {name for _, name in _called_names(ast.Module(node.body, []))}
+    ]
+    assert guarded, "the build's stream must stay inside a try"
+    assert "_upload_run_results" in {
+        name for _, name in _called_names(ast.Module(guarded[0].finalbody, []))
+    }
+
+
 def test_the_state_artifact_name_is_stable():
     """Renaming it silently orphans the baseline and re-fires every escalation."""
     assert SURROGATE_KEY_STATE_ARTIFACT == "surrogate-key-state.json"
