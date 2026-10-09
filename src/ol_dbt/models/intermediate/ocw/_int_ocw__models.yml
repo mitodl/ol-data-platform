@@ -370,6 +370,10 @@ models:
   description: One row per OCW course published to the OCW live bucket, with the fields
     of its data.json that MIT Learn's OCW ETL reads. A directory left in the bucket
     by a site that ocw-studio has since published under another path is not a course.
+  config:
+    meta:
+      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
+      qa_buildable: false
   columns:
   - name: course_slug
     description: str, the course's directory under courses/ in the bucket
@@ -426,6 +430,10 @@ models:
   description: One row per page or resource of an OCW course that MIT Learn loads
     as a ContentFile, derived from the OCW live bucket the way Learn's OCW ETL derives
     it.
+  config:
+    meta:
+      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
+      qa_buildable: false
   columns:
   - name: courserun_readable_id
     description: str, the course's legacy_uid, or its site_uid when it has none, without
