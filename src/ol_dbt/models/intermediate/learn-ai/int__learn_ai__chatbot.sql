@@ -14,7 +14,8 @@ with chatsession as (
     select * from {{ ref('stg__learn_ai__app__postgres__users_user') }}
 )
 
--- Keep users joined per session, not per checkpoint; assert_learn_ai_chatbot_keeps_every_checkpoint checks why.
+-- Joined per session, not per checkpoint: the per-checkpoint join lost rows, which
+-- assert_learn_ai_chatbot_keeps_every_checkpoint catches.
 , chatsession_with_user as (
     select
         chatsession.*
