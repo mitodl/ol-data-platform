@@ -450,9 +450,7 @@ with combined_enrollments as (
 select
     platform
     , courserunenrollment_id
-    , {{ generate_hash_id('cast(order_id as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || platform') }} as combined_orders_hash_id
+    , {{ generate_hash_id(dbt.concat(["cast(order_id as varchar)", "cast(coalesce(line_id, 9) as varchar)", "platform"])) }} as combined_orders_hash_id
     , course_readable_id
     , course_title
     , courserun_id
@@ -488,12 +486,12 @@ select
     -- identity ordering must match int__combined__users: global_alumni's user_id
     --  (their student_id) is not reliably unique per person, so user_email is
     --  preferred there; every other platform uses the default user_id-first order.
-    , {{ generate_hash_id('
+    , {{ generate_hash_id(dbt.concat(['
         case
             when platform = \'' ~ var("global_alumni") ~ '\'
                 then coalesce(user_email, user_id, user_full_name)
             else coalesce(user_id, user_email, user_full_name)
-        end || platform') }} as user_hashed_id
+        end', 'platform'])) }} as user_hashed_id
     , user_id
     , user_username
 from combined_enrollment_detail

@@ -814,6 +814,63 @@
     unnest(generate_series(1, {{ length_expr }})) as {{ alias }} ({{ col_name }})
 {%- endmacro %}
 
+{% macro starrocks__unnest_sequence(length_expr, alias, col_name) -%}
+    {# array_generate needs its step spelled out when the bound is a column. #}
+    unnest(array_generate(1, {{ length_expr }}, 1)) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+
+{#
+    try_cast: `expr` as `type`, or NULL where the value does not convert. StarRocks
+    has no try_cast; its cast already returns NULL for a string that does not convert.
+#}
+{% macro try_cast(expr, type) -%}
+    {{ adapter.dispatch('try_cast', 'open_learning')(expr, type) }}
+{%- endmacro %}
+
+{% macro default__try_cast(expr, type) -%}
+    try_cast({{ expr }} as {{ type }})
+{%- endmacro %}
+
+{% macro starrocks__try_cast(expr, type) -%}
+    cast({{ expr }} as {{ type }})
+{%- endmacro %}
+
+
+{#
+    try_or_null: `expr`, or NULL where evaluating it raises. StarRocks has no try();
+    only wrap expressions whose StarRocks form already returns NULL on bad input
+    (date_parse, which is str_to_date there).
+#}
+{% macro try_or_null(expr) -%}
+    {{ adapter.dispatch('try_or_null', 'open_learning')(expr) }}
+{%- endmacro %}
+
+{% macro default__try_or_null(expr) -%}
+    try({{ expr }})
+{%- endmacro %}
+
+{% macro starrocks__try_or_null(expr) -%}
+    {{ expr }}
+{%- endmacro %}
+
+
+{#
+    codepoint_char: the one-character string for a code point, e.g. 10 -> a newline.
+    StarRocks has char() and no chr().
+#}
+{% macro codepoint_char(codepoint) -%}
+    {{ adapter.dispatch('codepoint_char', 'open_learning')(codepoint) }}
+{%- endmacro %}
+
+{% macro default__codepoint_char(codepoint) -%}
+    chr({{ codepoint }})
+{%- endmacro %}
+
+{% macro starrocks__codepoint_char(codepoint) -%}
+    char({{ codepoint }})
+{%- endmacro %}
+
 
 {#
     regexp_replace_all: replace every match. DuckDB's regexp_replace replaces only the
@@ -850,6 +907,16 @@
 
 {% macro starrocks__regexp_replace_all(subject, pattern, replacement) -%}
     regexp_replace({{ subject }}, {{ starrocks_string_literal(pattern) }}, {{ replacement }})
+{%- endmacro %}
+
+
+{#
+    strip_whitespace: `string_expr` without its leading and trailing whitespace of any
+    kind (Trino's trim() removes only spaces). Two passes, because StarRocks 4.1.6
+    applies only the first branch of '^\s+|\s+$'.
+#}
+{% macro strip_whitespace(string_expr) -%}
+    {{ regexp_replace_all(regexp_replace_all(string_expr, "'^\\s+'", "''"), "'\\s+$'", "''") }}
 {%- endmacro %}
 
 
@@ -1063,18 +1130,22 @@
 
 {#
     json_array_field_values: the values of `field` in each object of a JSON array
-    string, as an array of varchar. '[{"name": "a"}, {"name": "b"}]' -> ['a', 'b'].
+    string, as an array of `element_type`. '[{"name": "a"}, {"name": "b"}]' -> ['a', 'b'].
 #}
-{% macro json_array_field_values(json_col, field) -%}
-    {{ adapter.dispatch('json_array_field_values', 'open_learning')(json_col, field) }}
+{% macro json_array_field_values(json_col, field, element_type='varchar') -%}
+    {{ adapter.dispatch('json_array_field_values', 'open_learning')(json_col, field, element_type) }}
 {%- endmacro %}
 
-{% macro default__json_array_field_values(json_col, field) -%}
-    cast(json_parse(json_query({{ json_col }}, 'lax $.{{ field }}' with array wrapper)) as array(varchar))  --noqa
+{% macro default__json_array_field_values(json_col, field, element_type='varchar') -%}
+    cast(json_parse(json_query({{ json_col }}, 'lax $.{{ field }}' with array wrapper)) as array({{ element_type }}))  --noqa
 {%- endmacro %}
 
-{% macro duckdb__json_array_field_values(json_col, field) -%}
-    cast(json_extract_string({{ json_col }}, '$[*].{{ field }}') as varchar[])
+{% macro duckdb__json_array_field_values(json_col, field, element_type='varchar') -%}
+    cast(json_extract_string({{ json_col }}, '$[*].{{ field }}') as {{ element_type }}[])
+{%- endmacro %}
+
+{% macro starrocks__json_array_field_values(json_col, field, element_type='varchar') -%}
+    cast(json_query(parse_json({{ json_col }}), '$[*].{{ field }}') as array<{{ element_type }}>)
 {%- endmacro %}
 
 
@@ -1094,6 +1165,12 @@
     cast(json_extract({{ json_col }}, {{ json_path }}) as varchar)
 {%- endmacro %}
 
+{% macro starrocks__json_array_string(json_col, json_path) -%}
+    {# json_col may be a varchar or a JSON value (an unnest_json_array element); the cast
+       to varchar makes parse_json accept either. #}
+    cast(json_query(parse_json(cast({{ json_col }} as varchar)), {{ json_path }}) as varchar)
+{%- endmacro %}
+
 
 {#
     json_nested_array_distinct_values: the distinct strings in a JSON array of arrays
@@ -1102,7 +1179,7 @@
 #}
 {% macro json_nested_array_distinct_values(json_col, json_path) -%}
     coalesce(
-        array_sort(array_distinct(flatten(
+        array_sort(array_distinct({{ 'array_flatten' if target.type == 'starrocks' else 'flatten' }}(
             {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
         )))
         , {{ empty_varchar_array() }}
@@ -1117,6 +1194,13 @@
     cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[][])
 {%- endmacro %}
 
+{% macro starrocks__json_extract_nested_varchar_array(json_col, json_path) -%}
+    {# StarRocks refuses a cast from JSON straight to array<array<varchar>>. #}
+    array_map(
+        inner_array -> cast(inner_array as array<varchar>)
+        , cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<json>)
+    )
+{%- endmacro %}
 
 {# base64url_decode_or_null: URL-safe base64 to UTF-8 text, NULL when it does not decode. #}
 {% macro base64url_decode_or_null(string_expr) -%}

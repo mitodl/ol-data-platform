@@ -1,7 +1,7 @@
 with completed_program_learners as (
     select
         *
-        , {{ generate_hash_id('cast(user_id as varchar) || program_uuid') }} as program_certificate_hashed_id
+        , {{ generate_hash_id(dbt.concat(["cast(user_id as varchar)", "program_uuid"])) }} as program_certificate_hashed_id
     from {{ ref('stg__edxorg__s3__program_learner_report') }}
     where user_has_completed_program = true
 )
@@ -37,7 +37,7 @@ left join micromasters_programs
 --- Statistics and Data Science is split into Statistics and Data Science (General track)
     -- and Statistics and Data Science
     on (
-        completed_program_learners_sorted.program_title like micromasters_programs.program_title || '%'
-        or completed_program_learners_sorted.program_title like '%' || micromasters_programs.program_title
+        completed_program_learners_sorted.program_title like {{ dbt.concat(["micromasters_programs.program_title", "'%'"]) }}
+        or completed_program_learners_sorted.program_title like {{ dbt.concat(["'%'", "micromasters_programs.program_title"]) }}
     )
 where completed_program_learners_sorted.row_num = 1
