@@ -529,7 +529,7 @@ airbyte_drift_schedules = (
                 ),
                 cron_schedule="0 3 * * *",
                 execution_timezone="UTC",
-                # RUNNING, unlike the maintenance schedules above that someone
+                # RUNNING, unlike the dbt maintenance schedule above that someone
                 # starts by hand: left at Dagster's STOPPED default this never
                 # ticked in production (no SchedulerDaemon evaluation of it in
                 # the 30 days to 2026-09-26). It only reads, and
