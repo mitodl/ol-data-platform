@@ -80,8 +80,11 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
+-- A revoked certificate is not earned, so it must not supply the certificate columns of the
+-- edX.org enrollment it matches.
 , mitxonline_certificates as (
     select * from {{ ref('int__mitxonline__courserun_certificates') }}
+    where courseruncertificate_is_revoked = false
 )
 
 , combined_enrollment_detail as (
@@ -168,7 +171,7 @@ with combined_enrollments as (
         , combined_users.user_company
         , combined_users.user_gender
         , case
-            when mitxonline_certificates.courseruncertificate_is_revoked = false then true
+            when mitxonline_certificates.courseruncertificate_created_on is not null then true
             when combined_enrollments.courseruncertificate_created_on is not null then true
             else false
         end as courseruncertificate_is_earned
@@ -222,7 +225,7 @@ with combined_enrollments as (
             or micromasters_users.user_email = mitxonline_certificates.user_email
         )
         and combined_enrollments.courserun_readable_id
-        = replace(replace(mitxonline_certificates.courserun_readable_id, 'course-v1:', ''), '+', '/')
+        = {{ format_course_id('mitxonline_certificates.courserun_readable_id') }}
     where combined_enrollments.platform = '{{ var("edxorg") }}'
 
     union all

@@ -2,6 +2,12 @@
 open_learning:
   target: dev_local
   outputs:
+    # For the sqlfluff hooks only (bin/sqlfluff-dbt-hook.py): an empty in-memory
+    # database, so compiling needs no credentials or network.
+    sqlfluff:
+      type: duckdb
+      path: ':memory:'
+      threads: 1
     qa:
       type: trino
       method: ldap
@@ -45,6 +51,10 @@ open_learning:
     dev:
       type: duckdb
       path: dev_dbs/dev.duckdb
+    # Used only by `ol-dbt unit-test`, which deletes and refills this file on every run.
+    unit_test:
+      type: duckdb
+      path: dev_dbs/unit_test.duckdb
     dev_local:
       type: duckdb
       path: '{{ env_var("HOME") }}/.ol-dbt/local.duckdb'

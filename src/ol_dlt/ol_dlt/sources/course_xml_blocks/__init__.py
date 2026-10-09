@@ -10,10 +10,50 @@ land one JSON Lines file per course version in the production landing zone:
         {mitx,mitxonline,xpro}/openedx/processed_data/course_xml_blocks/
             <deployment>/<course>/<version hash>.json
 
-Nothing loaded those files into the warehouse, so the two raw tables below did
-not exist and their staging models could not build. This source appends every
-file's rows, stamped with the file they came from, and staging keeps each
-block's newest copy by ``_file_modified_at``.
+The openedx code location also lands the text it extracts from each course's
+static files, for MIT Learn's ContentFiles (Cohort 4), in the same layout:
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_document_text/
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_transcript_text/
+            <deployment>/<course>/<version hash>.jsonl
+
+and, for the same ContentFiles, every file in each course export flagged with
+whether MIT Learn excludes it (staff-only, manifests, unreferenced static files):
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_file_exclusions/
+            <deployment>/<course>/<version hash>.jsonl
+
+Nothing loaded those files into the warehouse, so the raw tables below did not
+exist and their staging models could not build. This source appends every
+file's rows, stamped with the file they came from, and staging keeps the rows
+of each course's newest file.
+
+The edxorg code location also un-nests each course's structure document into
+one JSON Lines file of blocks per structure version
+(dg_projects/edxorg/.../edxorg_archive.py):
+
+        edxorg-raw-data/edxorg/processed_data/course_blocks/
+            <course>|{prod,edge}/<structure hash>.json
+
+An Airbyte source-s3 connection loads those into raw__edxorg__s3__course_blocks,
+and on 2026-10-05 that table held 6,466 of the 9,860 landed files. This source
+loads them into raw__edxorg__s3__course_structure_blocks, which is to replace
+it. A re-materialized structure overwrites its file with a new retrieved_at, so
+the landing zone holds only the latest copy of each: the Airbyte table has
+earlier copies of 1,918 files that this source cannot read.
+
+The openedx code location writes the same un-nested structure blocks for its
+three deployments (dg_projects/openedx/.../openedx.py::course_structure):
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_blocks/
+            <course>/<structure hash>.json
+
+One Airbyte source-s3 connection per deployment loads those into
+raw__<deployment>__openedx__api__course_blocks. This source loads them into
+raw__<deployment>__openedx__api__course_structure_blocks, one table per
+deployment because the rows carry no source_system and each deployment has its
+own staging model. On 2026-10-06 the prefixes held 29,953 files (13.2 GB) for
+mitxonline, 3,203 (3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks
@@ -25,6 +65,7 @@ import logging
 from collections.abc import Generator, Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import unquote
 
 import dlt
 import pyarrow as pa
@@ -56,7 +97,7 @@ BATCH_ROWS = 10_000
 # what it needs. xml_attributes is an object of arbitrary XML attribute names,
 # kept as a JSON string because dlt would otherwise flatten each attribute
 # name it meets into its own column.
-FIELDS = (
+XML_BLOCK_FIELDS = (
     "course_id",
     "source_system",
     "block_id",
@@ -72,7 +113,56 @@ FIELDS = (
     "weight",
     "markdown",
 )
-SCHEMA = pa.schema([pa.field(name, pa.string()) for name in FIELDS])
+# The row ol_orchestrate.lib.openedx.un_nest_course_structure writes, in the
+# order Airbyte landed the columns. block_details is the block's whole structure
+# entry, kept as a JSON string for staging to extract from. course_id is a
+# string in some files and a one-element list in others (138,244 of 428,478
+# rows across 431 files sampled 2026-10-05), and the list becomes its JSON text,
+# which is what Airbyte landed and what staging strips the brackets from.
+STRUCTURE_BLOCK_FIELDS = (
+    "block_id",
+    "block_due",
+    "course_id",
+    "block_type",
+    "block_index",
+    "block_start",
+    "block_title",
+    "block_parent",
+    "course_start",
+    "course_title",
+    "retrieved_at",
+    "block_details",
+    "block_content_hash",
+    "course_content_hash",
+)
+# The row the document and transcript text assets write
+# (dg_projects/openedx/openedx/assets/content_files.py and transcripts.py).
+# size_bytes stays text like everything else here; staging casts it.
+# extracted_at is absent from files written before the assets stamped it.
+CONTENT_TEXT_FIELDS = (
+    "course_id",
+    "source_system",
+    "file_path",
+    "file_extension",
+    "content_type",
+    "size_bytes",
+    "content",
+    "extraction_status",
+    "extracted_at",
+)
+
+# The row the file exclusions asset writes
+# (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
+# extracted_at is absent from files written before the asset stamped it.
+FILE_EXCLUSION_FIELDS = (
+    "course_id",
+    "source_system",
+    "course_xml_version",
+    "file_path",
+    "excluded",
+    "exclusion_reason",
+    "extracted_at",
+)
 
 
 @dataclass(frozen=True)
@@ -82,11 +172,45 @@ class XmlBlocksTable:
     :param raw_table: Raw warehouse table name.
     :param pipeline_prefix: Destination bucket prefix, the table's deployment.
     :param file_globs: Globs relative to ``LANDING_BUCKET``.
+    :param fields: Every field a line carries, in order.
+    :param optional_fields: Fields a line may leave out. A failed extraction
+        row has no file_extension.
+    :param integer_fields: Fields loaded as bigint instead of text.
+    :param pipeline_name: dlt pipeline name, which keys the cursor.
+    :param marks_empty_files: Load a marker row for a file with no lines. The
+        text assets write an empty file when a course has nothing left to
+        extract, and without a row that file never becomes the course's newest
+        in staging, so its last non-empty version would stay current forever.
     """
 
     raw_table: str
     pipeline_prefix: str
     file_globs: tuple[str, ...]
+    fields: tuple[str, ...] = XML_BLOCK_FIELDS
+    optional_fields: frozenset[str] = frozenset()
+    integer_fields: frozenset[str] = frozenset()
+    pipeline_name: str = ""
+    marks_empty_files: bool = False
+
+    def __post_init__(self) -> None:
+        # The two block tables predate the other tables and keep their names:
+        # renaming a pipeline re-reads the landing zone and, under append,
+        # inserts every row again.
+        if not self.pipeline_name:
+            object.__setattr__(
+                self, "pipeline_name", f"course_xml_blocks__{self.pipeline_prefix}"
+            )
+
+    @property
+    def schema(self) -> pa.Schema:
+        return pa.schema(
+            [
+                pa.field(
+                    name, pa.int64() if name in self.integer_fields else pa.string()
+                )
+                for name in self.fields
+            ]
+        )
 
 
 EDXORG = XmlBlocksTable(
@@ -94,15 +218,83 @@ EDXORG = XmlBlocksTable(
     pipeline_prefix="edxorg",
     file_globs=("edxorg-raw-data/edxorg/processed_data/course_xml_blocks/**/*.json",),
 )
+EDXORG_STRUCTURE_BLOCKS = XmlBlocksTable(
+    raw_table="raw__edxorg__s3__course_structure_blocks",
+    pipeline_prefix="edxorg",
+    file_globs=("edxorg-raw-data/edxorg/processed_data/course_blocks/**/*.json",),
+    fields=STRUCTURE_BLOCK_FIELDS,
+    # bigint in the Airbyte table, and staging passes it through uncast.
+    integer_fields=frozenset({"block_index"}),
+    pipeline_name="course_structure_blocks__edxorg",
+)
+_OPENEDX_DEPLOYMENTS = ("mitx", "mitxonline", "xpro")
 OPENEDX = XmlBlocksTable(
     raw_table="raw__openedx__s3__course_xml_blocks",
     pipeline_prefix="openedx",
     file_globs=tuple(
         f"{deployment}/openedx/processed_data/course_xml_blocks/**/*.json"
-        for deployment in ("mitx", "mitxonline", "xpro")
+        for deployment in _OPENEDX_DEPLOYMENTS
     ),
 )
-TABLES = {table.raw_table: table for table in (EDXORG, OPENEDX)}
+OPENEDX_STRUCTURE_BLOCKS = {
+    deployment: XmlBlocksTable(
+        raw_table=f"raw__{deployment}__openedx__api__course_structure_blocks",
+        pipeline_prefix="openedx",
+        file_globs=(f"{deployment}/openedx/processed_data/course_blocks/**/*.json",),
+        fields=STRUCTURE_BLOCK_FIELDS,
+        # bigint in the Airbyte tables, and staging passes it through uncast.
+        integer_fields=frozenset({"block_index"}),
+        pipeline_name=f"course_structure_blocks__{deployment}",
+    )
+    for deployment in _OPENEDX_DEPLOYMENTS
+}
+OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_document_text",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_document_text/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=CONTENT_TEXT_FIELDS,
+    optional_fields=frozenset({"file_extension", "extracted_at"}),
+    pipeline_name="course_document_text__openedx",
+    marks_empty_files=True,
+)
+OPENEDX_TRANSCRIPT_TEXT = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_transcript_text",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_transcript_text/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=CONTENT_TEXT_FIELDS,
+    optional_fields=frozenset({"file_extension", "extracted_at"}),
+    pipeline_name="course_transcript_text__openedx",
+    marks_empty_files=True,
+)
+OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_file_exclusions",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_file_exclusions/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=FILE_EXCLUSION_FIELDS,
+    optional_fields=frozenset({"extracted_at"}),
+    pipeline_name="course_file_exclusions__openedx",
+)
+TABLES = {
+    table.raw_table: table
+    for table in (
+        EDXORG,
+        EDXORG_STRUCTURE_BLOCKS,
+        OPENEDX,
+        *OPENEDX_STRUCTURE_BLOCKS.values(),
+        OPENEDX_DOCUMENT_TEXT,
+        OPENEDX_TRANSCRIPT_TEXT,
+        OPENEDX_FILE_EXCLUSIONS,
+    )
+}
 
 
 def _text(value: Any) -> str | None:  # noqa: ANN401
@@ -112,34 +304,63 @@ def _text(value: Any) -> str | None:  # noqa: ANN401
     return json.dumps(value)
 
 
-def _row(line: str) -> dict[str, str | None]:
-    """Parse one JSON line into a row, failing on a line missing any field."""
+def _row(line: str, table: XmlBlocksTable = OPENEDX) -> dict[str, str | int | None]:
+    """Parse one JSON line into a row, failing on a line missing a required field."""
     record = json.loads(line)
-    return {name: _text(record[name]) for name in FIELDS}
+    row: dict[str, str | int | None] = {}
+    for name in table.fields:
+        value = record.get(name) if name in table.optional_fields else record[name]
+        row[name] = value if name in table.integer_fields else _text(value)
+    return row
 
 
 @dlt.transformer(standalone=True)
 def read_xml_blocks(
-    items: Iterable[FileItemDict], batch_rows: int = BATCH_ROWS
+    items: Iterable[FileItemDict],
+    table: XmlBlocksTable = OPENEDX,
+    batch_rows: int = BATCH_ROWS,
 ) -> Iterator[pa.Table]:
     """Stream each JSON Lines file as Arrow tables stamped with its provenance."""
     for item in items:
-        rows: list[dict[str, str | None]] = []
+        rows: list[dict[str, str | int | None]] = []
+        empty = True
         with item.open() as raw, io.TextIOWrapper(raw, encoding="utf-8") as text:
             for line in text:
                 if not line.strip():
                     continue
-                rows.append(_row(line))
+                empty = False
+                rows.append(_row(line, table))
                 if len(rows) == batch_rows:
-                    yield _stamp(rows, item)
+                    yield _stamp(rows, item, table)
                     rows = []
+        if empty and table.marks_empty_files:
+            rows.append(_empty_file_marker(item["file_url"], table))
         if rows:
-            yield _stamp(rows, item)
+            yield _stamp(rows, item, table)
 
 
-def _stamp(rows: list[dict[str, str | None]], item: FileItemDict) -> pa.Table:
+def _empty_file_marker(
+    file_url: str, table: XmlBlocksTable
+) -> dict[str, str | int | None]:
+    """Build the row standing for an empty file: its course from the path, nothing else.
+
+    The path is .../<deployment>/<course>/<version>.jsonl, percent-encoded as
+    dlt gives it. Staging picks each course's newest file and then drops the
+    marker, whose file_path is null.
+    """
+    *_, source_system, course_id, _version = file_url.split("/")
+    return {
+        **dict.fromkeys(table.fields),
+        "course_id": unquote(course_id),
+        "source_system": unquote(source_system),
+    }
+
+
+def _stamp(
+    rows: list[dict[str, str | int | None]], item: FileItemDict, table: XmlBlocksTable
+) -> pa.Table:
     return add_file_metadata(
-        pa.Table.from_pylist(rows, schema=SCHEMA),
+        pa.Table.from_pylist(rows, schema=table.schema),
         source_file=item["file_url"],
         modified_at=item.get("modification_date"),
     )
@@ -173,7 +394,7 @@ def course_xml_blocks_source(
         budget_bytes=budget_bytes,
     )
     yield (
-        (files | read_xml_blocks())
+        (files | read_xml_blocks(table=table))
         .with_name(table.raw_table)
         .apply_hints(
             table_name=table.raw_table,
@@ -197,7 +418,4 @@ def course_xml_blocks_pipeline_for(raw_table: str) -> dlt.Pipeline:
     every row again.
     """
     table = TABLES[raw_table]
-    return config.pipeline_for(
-        table.pipeline_prefix,
-        pipeline_name=f"course_xml_blocks__{table.pipeline_prefix}",
-    )
+    return config.pipeline_for(table.pipeline_prefix, pipeline_name=table.pipeline_name)

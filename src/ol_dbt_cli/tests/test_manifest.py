@@ -82,10 +82,14 @@ class TestNodeLoadingAndFiltering:
         # and a schema test attached to the model (also under "nodes").
         source_uid = "source.open_learning.raw.users"
         seed_uid = "seed.open_learning.country_codes"
+        snapshot_uid = "snapshot.open_learning.snapshot_users"
         model_uid = "model.open_learning.stg_users"
         test_uid = "test.open_learning.not_null_stg_users_user_id.abc123"
         nodes = {
             seed_uid: _node(seed_uid, "country_codes", "seed", columns={"code": {"data_type": "varchar"}}),
+            snapshot_uid: _node(
+                snapshot_uid, "snapshot_users", "snapshot", columns={"user_id": {"data_type": "integer"}}
+            ),
             model_uid: _node(
                 model_uid,
                 "stg_users",
@@ -115,6 +119,12 @@ class TestNodeLoadingAndFiltering:
         seed = registry.get_model("country_codes")
         assert seed is not None
         assert seed.resource_type == "seed"
+
+    def test_snapshot_indexed_by_name(self, tmp_path: Path) -> None:
+        registry = self._registry(tmp_path)
+        snapshot = registry.get_model("snapshot_users")
+        assert snapshot is not None
+        assert snapshot.resource_type == "snapshot"
 
     def test_source_indexed_by_source_key(self, tmp_path: Path) -> None:
         registry = self._registry(tmp_path)

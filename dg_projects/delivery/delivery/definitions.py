@@ -8,6 +8,9 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - Open Learning Library courses
 - MIT edX programs
 
+It also pushes the instructor onboarding user list, read from the warehouse, to
+the access-forge GitHub repository.
+
 The extraction halves of these pipelines (sloan_course_metadata, video_api,
 video_metadata) still live here and move on to INGEST later.
 
@@ -38,6 +41,10 @@ from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
+from delivery.assets.instructor_onboarding import (
+    generate_instructor_onboarding_user_list,
+    update_access_forge_repo,
+)
 from delivery.assets.mit_climate import mit_climate_webhook
 from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
 from delivery.assets.mitpe import mitpe_webhook
@@ -48,9 +55,10 @@ from delivery.assets.ovs_videos import (
     video_metadata,
     video_webhook,
 )
-from delivery.assets.podcasts import podcast_webhook
 from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
+    NON_AIRBYTE_STAGING_CRON,
+    deliver_after_upstream,
     instigators_for_environment,
 )
 from delivery.sensors.ovs_videos import (
@@ -77,43 +85,31 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault_authenticated = False
 
 
-# Daily schedules for REST API webhook delivery sources.
-# All run after 06:00 UTC to allow upstream APIs to settle overnight.
-mit_climate_schedule = ScheduleDefinition(
-    name="mit_climate_schedule",
-    target=AssetSelection.assets(mit_climate_webhook),
-    cron_schedule="0 6 * * *",
-    execution_timezone="Etc/UTC",
+# Webhook delivery, one sensor per source so each is enabled on its own. Each
+# runs once a day after its integrations models are rebuilt -- see
+# deliver_after_upstream for why this is not a cron schedule.
+mit_climate_webhook, mit_climate_delivery_sensor = deliver_after_upstream(
+    mit_climate_webhook,
+    "mit_climate_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
-
-mitpe_schedule = ScheduleDefinition(
-    name="mitpe_schedule",
-    target=AssetSelection.assets(mitpe_webhook),
-    cron_schedule="15 6 * * *",
-    execution_timezone="Etc/UTC",
+mitpe_webhook, mitpe_delivery_sensor = deliver_after_upstream(
+    mitpe_webhook,
+    "mitpe_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
-
-oll_schedule = ScheduleDefinition(
-    name="oll_schedule",
-    target=AssetSelection.assets(oll_webhook),
-    cron_schedule="30 6 * * *",
-    execution_timezone="Etc/UTC",
+oll_webhook, oll_delivery_sensor = deliver_after_upstream(
+    oll_webhook,
+    "oll_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
-
-mit_edx_programs_schedule = ScheduleDefinition(
-    name="mit_edx_programs_schedule",
-    target=AssetSelection.assets(mit_edx_programs_webhook),
-    cron_schedule="45 6 * * *",
-    execution_timezone="Etc/UTC",
-)
-
-# Cohort 3 media/feed delivery. Podcasts deliver a nested channel+episode
-# payload, so this runs after the Cohort 2 slots rather than sharing one.
-podcast_schedule = ScheduleDefinition(
-    name="podcast_schedule",
-    target=AssetSelection.assets(podcast_webhook),
-    cron_schedule="0 7 * * *",
-    execution_timezone="Etc/UTC",
+mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstream(
+    mit_edx_programs_webhook,
+    "mit_edx_programs_delivery_sensor",
+    # The edX discovery tables are dlt-loaded and staged at 06:00. Its MIT Learn
+    # Postgres inputs are staged by the midnight sync_and_stage job, so a
+    # midnight tick would deliver after that rebuild, on yesterday's edX data.
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 
 # Daily schedule for learning resource API extraction
@@ -125,6 +121,23 @@ extract_api_daily_schedule = ScheduleDefinition(
     # RUNNING in the learning_resources location at the time of the move to
     # delivery. Instigator state is keyed on (location_name, repository_name,
     # name), so the new location starts with none and would default to STOPPED.
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+instructor_onboarding_schedule = ScheduleDefinition(
+    name="instructor_onboarding_daily_schedule",
+    job=define_asset_job(
+        name="instructor_onboarding_daily_job",
+        selection=AssetSelection.assets(
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
+        ),
+    ),
+    cron_schedule="0 5 * * *",
+    execution_timezone="UTC",
+    # RUNNING in the lakehouse location at the time of the move to delivery
+    # (it ticked at 05:00 UTC on 2026-09-28). Instigator state is keyed on
+    # location name, so the new location would otherwise start it STOPPED.
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
@@ -170,7 +183,7 @@ defs = Definitions(
         "s3": S3Resource(),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
         # opens the unpublish-review issues mit_edx_programs_webhook files when edX
-        # lists no program
+        # lists no program, and commits the access-forge instructor user list
         "github_api": GithubApiClientFactory(vault=vault),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
@@ -193,8 +206,9 @@ defs = Definitions(
             mitpe_webhook,
             oll_webhook,
             mit_edx_programs_webhook,
-            # Media/feed webhook delivery
-            podcast_webhook,
+            # Warehouse data pushed to the access-forge repository
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
         ]
     ),
     # Registration, not default_status, is what keeps these out of the
@@ -204,11 +218,7 @@ defs = Definitions(
         [
             extract_api_daily_schedule,
             ovs_videos_api_schedule,
-            mit_climate_schedule,
-            mitpe_schedule,
-            oll_schedule,
-            mit_edx_programs_schedule,
-            podcast_schedule,
+            instructor_onboarding_schedule,
         ]
     ),
     sensors=instigators_for_environment(
@@ -216,6 +226,10 @@ defs = Definitions(
             ovs_videos_discovery_sensor,
             ovs_videos_stale_cleanup_sensor,
             ovs_videos_delete_partition_cleanup_sensor,
+            mit_climate_delivery_sensor,
+            mitpe_delivery_sensor,
+            oll_delivery_sensor,
+            mit_edx_programs_delivery_sensor,
             *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),

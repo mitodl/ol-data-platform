@@ -1,31 +1,90 @@
+{#
+    Open edX profile codes and the labels they are reported as. The transform
+    macros and the accepted_values lists are both generated from these, so a
+    label added here is accepted by the tests without a second edit.
+
+    The same lists also test columns that skip the transform because the app
+    already stores the label (e.g. MITx Online's highest_education), so a label
+    only those apps emit still needs an entry here.
+#}
+{% macro gender_code_labels() %}
+    {% do return({
+        'm': 'Male',
+        'f': 'Female',
+        't': 'Transgender',
+        'b': 'Binary',
+        'nb': 'Non-binary/non-conforming',
+        'o': 'Other/Prefer Not to Say',
+    }) %}
+{% endmacro %}
+
+{# p_se and p_oth are no longer offered, but profiles still carry them. #}
+{% macro education_code_labels() %}
+    {% do return({
+        'p': 'Doctorate',
+        'm': "Master's or professional degree",
+        'b': "Bachelor's degree",
+        'a': 'Associate degree',
+        'hs': 'Secondary/high school',
+        'jhs': 'Junior secondary/junior high/middle school',
+        'el': 'Elementary/primary school',
+        'none': 'No formal education',
+        'other': 'Other education',
+        'o': 'Other education',
+        'p_se': 'Doctorate in science or engineering',
+        'p_oth': 'Doctorate in another field',
+    }) %}
+{% endmacro %}
+
+{% macro code_labels_case(column_name, code_labels) %}
+    case
+        {%- for code, label in code_labels.items() %}
+        when {{ column_name }} = '{{ code }}' then '{{ label | replace("'", "''") }}'
+        {%- endfor %}
+        else null
+    end
+{% endmacro %}
+
+{#
+    Values for an accepted_values test, which quotes each one without escaping
+    it. The empty string is accepted alongside the labels, as it was in the
+    project vars these lists replace.
+
+    Pass `codes` to accept only the labels of the codes an app offers (e.g.
+    xPro's gender field has m, f and o), so the test fails if another mapped
+    code starts arriving from that app. A code missing from the mapping still
+    passes, because the transform turns it into null.
+#}
+{% macro code_labels_accepted_values(code_labels, codes=none) %}
+    {% for code in codes or [] %}
+        {% if code not in code_labels %}
+            {{ exceptions.raise_compiler_error("code_labels_accepted_values: unknown code '" ~ code ~ "'") }}
+        {% endif %}
+    {% endfor %}
+    {% set labels = [] %}
+    {% for code, label in code_labels.items() %}
+        {% set escaped = label | replace("'", "''") %}
+        {% if (codes is none or code in codes) and escaped not in labels %}
+            {% do labels.append(escaped) %}
+        {% endif %}
+    {% endfor %}
+    {% do return(labels + ['']) %}
+{% endmacro %}
+
 {% macro transform_gender_value(column_name) %}
-        case
-            when {{ column_name }} = 'm' then 'Male'
-            when {{ column_name }} = 'f' then 'Female'
-            when {{ column_name }} = 't' then 'Transgender'
-            when {{ column_name }} = 'b' then 'Binary'
-            when {{ column_name }} = 'nb' then 'Non-binary/non-conforming'
-            when {{ column_name }} = 'o' then 'Other/Prefer Not to Say'
-            else null
-        end
+    {{ code_labels_case(column_name, gender_code_labels()) }}
+{% endmacro %}
+
+{% macro gender_values(codes=none) %}
+    {% do return(code_labels_accepted_values(gender_code_labels(), codes)) %}
 {% endmacro %}
 
 {% macro transform_education_value(column_name) %}
-    case
-        when {{ column_name }} = 'p' then 'Doctorate'
-        when {{ column_name }} = 'm' then 'Master''s or professional degree'
-        when {{ column_name }} = 'b' then 'Bachelor''s degree'
-        when {{ column_name }} = 'a' then 'Associate degree'
-        when {{ column_name }} = 'hs' then 'Secondary/high school'
-        when {{ column_name }} = 'jhs' then 'Junior secondary/junior high/middle school'
-        when {{ column_name }} = 'el' then 'Elementary/primary school'
-        when {{ column_name }} = 'none' then 'No formal education'
-        when {{ column_name }} = 'other' or {{ column_name }} = 'o' then 'Other education'
-        --- the following two are no longer used, but there are still users' profiles with these values
-        when {{ column_name }} = 'p_se' then 'Doctorate in science or engineering'
-        when {{ column_name }} = 'p_oth' then 'Doctorate in another field'
-        else null
-    end
+    {{ code_labels_case(column_name, education_code_labels()) }}
+{% endmacro %}
+
+{% macro highest_education_values(codes=none) %}
+    {% do return(code_labels_accepted_values(education_code_labels(), codes)) %}
 {% endmacro %}
 
 {% macro transform_company_size_value(column_name='company_size') %}

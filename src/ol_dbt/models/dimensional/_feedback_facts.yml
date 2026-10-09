@@ -154,8 +154,8 @@ models:
       redaction.
   - name: explicit_rating
     description: str, the source's explicit rating signal. For Zendesk the satisfaction
-      rating score - 'good', 'bad' or 'offered' - which is non-numeric. For MIT Learn
-      content feedback the learner's sentiment - 'positive', 'negative' or 'idea'.
+      rating score - 'good', 'bad' or 'offered' - which is non-numeric. For content
+      feedback the learner's sentiment - 'positive', 'negative' or 'idea'.
   - name: source_metadata
     description: str, JSON of every attribute that has not earned a conformed column
       under the two-or-more-sources rule. This is what makes a new source additive.
@@ -246,14 +246,14 @@ models:
     description: str, current-state snapshot of the conversation's priority.
   - name: explicit_rating
     description: str, the conversation-level explicit rating - Zendesk 'good'/'bad'/'offered',
-      Learn AI tutor 'like'/'dislike', MIT Learn content feedback 'positive'/'negative'/'idea'.
-      Non-numeric, so it does not average.
+      AskTIM 'like'/'dislike', content feedback 'positive'/'negative'/'idea'. Non-numeric,
+      so it does not average.
   - name: sentiment_fk
     description: str, foreign key to dim_sentiment. Populated at MVP from the explicit
       rating alone. Only a verdict ('good'/'bad' for Zendesk, 'like'/'dislike' for
-      Learn AI tutor, 'positive'/'negative' for MIT Learn content feedback) resolves
-      this; an unoffered or unanswered survey leaves it null, because it is an absence
-      of signal, not a neutral one. Content feedback's 'idea' also stays null.
+      AskTIM, 'positive'/'negative' for content feedback) resolves this; an unoffered
+      or unanswered survey leaves it null, because it is an absence of signal, not
+      a neutral one. Content feedback's 'idea' also stays null.
     tests:
     - relationships:
         arguments:
@@ -296,6 +296,9 @@ models:
     description: str, foreign key to dim_feedback_category. A cluster-derived category
       wins over the tag-seed guess (the tag with the highest corpus frequency, tie-broken
       on tag_slug) when both exist. Null for a conversation with neither.
+  - name: dominant_tag_label
+    description: str, the conversation's support tag (the tag-seed guess above), before
+      any cluster-derived category replaces it. Null for a conversation with no tags.
   - name: cluster_key
     description: str, the stable cluster this conversation belongs to (survives re-clustering).
       Null if the conversation isn't near any active cluster (noise or unplaced).
@@ -430,6 +433,66 @@ unit_tests:
       feedback_occurred_at: "2024-01-15T00:00:00"
       feedback_created_at: "2024-01-15T00:00:00"
       feedback_updated_at: "2024-01-15T00:00:00"
+- name: test_tfact_feedback_refreshes_text_after_redaction_changes
+  description: >
+    A stored turn whose redacted text has since changed (a feedback_redacted full
+    refresh under a new masking policy) is re-selected and gets the new text, even
+    though the source ticket's updated_at did not move.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "zendesk"
+      source_record_ref: "TICKET-1"
+      channel_slug: "support"
+      conversation_ref: "CONV-1"
+      turn_index: 1
+      is_conversation_opening: true
+      subject_type: "ticket"
+      subject_ref: "TICKET-1"
+      subject_user_ref: "learner@example.com"
+      occurred_at: "2024-01-15T00:00:00"
+      created_at: "2024-01-15T00:00:00"
+      updated_at: "2024-01-15T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "learner@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows:
+    - source_slug: "zendesk"
+      source_record_ref: "TICKET-1"
+      title_redacted: "Refund"
+      text_redacted: "Ship it to <STREET_ADDRESS>, Cambridge"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Fails the `>` watermark and has current keys, so only the text check can select it.
+    rows:
+    - feedback_pk: "ff8fd307a4dfe4d8794b3b59332b1e07"  # pragma: allowlist secret
+      feedback_source_fk: "01260647de9803dd69df3ecc34a8d908"  # pragma: allowlist secret
+      user_fk: "USER_PK"
+      feedback_title: "Refund"
+      feedback_text: "Ship it to 77 Massachusetts Ave, <LOCATION>"
+      feedback_updated_at: "2024-01-15T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "ff8fd307a4dfe4d8794b3b59332b1e07"  # pragma: allowlist secret
+      feedback_text: "Ship it to <STREET_ADDRESS>, Cambridge"
 - name: test_tfact_feedback_resolves_course_keys_and_refreshes_stale_ones
   description: >
     A course-scoped chat turn resolves courserun_fk and content_block_fk, and the
@@ -521,3 +584,137 @@ unit_tests:
     - feedback_pk: "9df5bc9092464addd8a04dab4cd3b22d"  # pragma: allowlist secret
       courserun_fk: "COURSERUN_PK"
       content_block_fk: "CONTENT_BLOCK_PK"
+- name: test_tfact_feedback_refreshes_subject_type_after_agent_is_mapped
+  description: >
+    A stored turn from an agent that had no subject_type mapping is re-selected and
+    gets the new subject_type once the agent is mapped, even though its updated_at
+    did not move.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-1"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      platform: "mitlearn"
+      subject_type: "resource"
+      source_metadata: '{"chatsession_agent": "SearchSummaryBot"}'
+      occurred_at: "2025-01-10T00:00:00"
+      created_at: "2025-01-10T00:00:00"
+      updated_at: "2025-01-10T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "someone@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CHECKPOINT-1"
+      text_redacted: "Give me courses about quantum mechanics"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Fails the `>` watermark with current keys and text, so only the subject_type
+    # check can select it. Null, as rows stored before the agent was mapped are.
+    rows:
+    - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      subject_type:
+      feedback_text: "Give me courses about quantum mechanics"
+      feedback_updated_at: "2025-01-10T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
+      subject_type: "resource"
+- name: test_tfact_feedback_reselects_renumbered_turns
+  description: >
+    A turn that reaches upstream late (CP-B) renumbers the turns after it without
+    moving updated_at. The new turn and every renumbered turn are re-selected with
+    their current turn_index; CP-A kept its index and is left alone.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CP-A"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      updated_at: "2025-01-10T00:00:00"
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CP-B"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 2
+      is_conversation_opening: false
+      updated_at: "2025-01-10T00:00:00"
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CP-C"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 3
+      is_conversation_opening: false
+      updated_at: "2025-01-10T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "someone@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows: []
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Stored before CP-B arrived: CP-C was turn 2. Nothing passes the `>` watermark.
+    rows:
+    - feedback_pk: "347dbf449cfeb09638e80fbe09a06a32"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      feedback_updated_at: "2025-01-10T00:00:00"
+    - feedback_pk: "a7f3374b548391c6aba1c1e541af6ab1"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 2
+      is_conversation_opening: false
+      feedback_updated_at: "2025-01-10T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "c6c28725a0ac147d104ffadf217ef954"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 2
+    - feedback_pk: "a7f3374b548391c6aba1c1e541af6ab1"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 3

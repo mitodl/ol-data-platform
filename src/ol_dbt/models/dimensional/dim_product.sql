@@ -89,8 +89,8 @@ with mitxonline_products as (
         on combined_products.platform = dim_platform_lookup.platform_readable_id
 )
 
-, final as (
-    select
+, incoming as (
+    select distinct
         {{ dbt_utils.generate_surrogate_key([
             'cast(product_id as varchar)',
             'platform'
@@ -109,25 +109,30 @@ with mitxonline_products as (
         , cast(null as timestamp) as end_date
         , true as is_current
     from products_with_fks
-
-    {% if is_incremental() %}
-    -- Track price changes with SCD Type 2
-    where not exists (
-        select 1
-        from {{ this }} as existing
-        where
-            existing.source_product_id = products_with_fks.product_id
-            and existing.platform = products_with_fks.platform
-            and existing.is_current = true
-            and coalesce(existing.product_price, -1) = coalesce(products_with_fks.product_price, -1)
-    )
-    {% endif %}
 )
 
 {% if is_incremental() %}
--- Expire prior current rows when price changes
+-- Track price changes with SCD Type 2
+, unchanged_keys as (
+    {{ scd2_unchanged_keys('incoming', this, ['source_product_id', 'platform'], ['product_price']) }}
+)
+
+, final as (
+    select incoming.*
+    from incoming
+    where not exists (
+        select 1
+        from unchanged_keys
+        where
+            unchanged_keys.source_product_id = incoming.source_product_id
+            and unchanged_keys.platform = incoming.platform
+    )
+)
+
+-- Expire every current row of a changed key, including extra current rows left by
+-- conflicting upstream copies
 , records_to_expire as (
-    select
+    select distinct
         existing.product_pk
         , existing.source_product_id
         , existing.product_type
@@ -157,5 +162,5 @@ with mitxonline_products as (
 
 select * from combined
 {% else %}
-select * from final
+select * from incoming
 {% endif %}

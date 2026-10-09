@@ -136,7 +136,9 @@ defs = Definitions(
 )
 ```
 
-### 3. Add a schedule
+### 3. Trigger it
+
+An asset that fetches from an external API runs on a schedule:
 
 ```python
 ScheduleDefinition(
@@ -146,6 +148,29 @@ ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 ```
+
+An asset that reads an `integrations__learn__*` model and POSTs it to MIT Learn
+must not. A cron tick fires whether or not the model has been rebuilt that day,
+and a full-sync batch built from stale data unpublishes whatever changed
+upstream since. Declare its deps with the key lakehouse emits,
+`AssetKey(["integrations", "<model name>"])`, and wrap it with
+`deliver_after_upstream`, which runs it once a day after every dep has
+materialized since the tick of the lakehouse job that stages the source's
+inputs (`NON_AIRBYTE_STAGING_CRON` for dlt/Dagster-loaded sources; the
+latest tick when inputs come from more than one job). Too late a tick and the
+delivery never fires, because the models were rebuilt before it. Too early and
+it fires after the first job's rebuild, on the other inputs' old data:
+
+```python
+my_source_webhook, my_source_delivery_sensor = deliver_after_upstream(
+    my_source_webhook,
+    "my_source_delivery_sensor",
+    staging_cron=NON_AIRBYTE_STAGING_CRON,
+)
+```
+
+Register the sensor in `Definitions(sensors=instigators_for_environment([...]))`
+and give it an entry in `INSTIGATOR_ENVIRONMENTS`.
 
 ### 4. Vault credentials (production)
 
@@ -217,7 +242,7 @@ data (courses, programs, content files) over the webhook API.
 | Asset group name matches source | `group_name="sloan_executive_education"` |
 | `io_manager_key` for large files | `"s3file_io_manager"` |
 | `io_manager_key` for media/binary | `"yt_s3file_io_manager"` |
-| Sensor names | `<source>_discovery_sensor`, `<source>_stale_cleanup_sensor` |
+| Sensor names | `<source>_discovery_sensor`, `<source>_stale_cleanup_sensor`, `<source>_delivery_sensor` |
 | Schedule names | `<source>_daily_schedule`, `<source>_api_schedule` |
 | Asset file name | One file per source, snake_case matching the source name |
 

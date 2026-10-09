@@ -1,5 +1,7 @@
 """Tests for ml.lib.categorize."""
 
+from collections.abc import Sequence
+
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
@@ -179,6 +181,7 @@ class _FakeCategoryClient:
         samples: list[str],
         *,
         trace_metadata: dict[str, object],
+        taken_labels: Sequence[str] = (),  # noqa: ARG002
     ) -> dict[str, str]:
         # Keyed by sample count so each test cluster gets a distinct canned reply.
         self.trace_metadata_calls.append(trace_metadata)
@@ -216,6 +219,41 @@ def test_propose_categories_builds_one_row_per_cluster() -> None:
     )
 
 
+def test_propose_categories_joins_the_category_when_a_label_is_in_use() -> None:
+    """Reusing an in-use label joins that category, with its exact spelling."""
+
+    class _JoiningClient:
+        model_version = "test-model"
+
+        def __init__(self) -> None:
+            self.taken_label_calls: list[list[str]] = []
+
+        def propose(
+            self,
+            dominant_tags: list[str],  # noqa: ARG002
+            samples: list[str],  # noqa: ARG002
+            *,
+            trace_metadata: dict[str, object],  # noqa: ARG002
+            taken_labels: Sequence[str] = (),
+        ) -> dict[str, str]:
+            self.taken_label_calls.append(list(taken_labels))
+            return {
+                "category_label": "seeks course recommendations",
+                "category_description": "d",
+            }
+
+    client = _JoiningClient()
+    result = categorize.propose_categories(
+        {"key-a": {"samples": ["x"], "dominant_tags": [], "total_conversations": 1}},
+        client,
+        "run-1",
+        existing_labels=["Seeks course recommendations"],
+    )
+
+    assert result["category_label"].to_list() == ["Seeks course recommendations"]
+    assert client.taken_label_calls == [["Seeks course recommendations"]]
+
+
 def test_propose_categories_skips_a_cluster_with_no_samples() -> None:
     cluster_prompt_inputs = {
         "key-a": {"samples": [], "dominant_tags": [], "total_conversations": 0},
@@ -237,6 +275,7 @@ def test_propose_categories_skips_a_cluster_whose_call_fails() -> None:
             samples: list[str],  # noqa: ARG002
             *,
             trace_metadata: dict[str, object],  # noqa: ARG002
+            taken_labels: Sequence[str] = (),  # noqa: ARG002
         ) -> dict[str, str]:
             msg = "boom"
             raise ValueError(msg)

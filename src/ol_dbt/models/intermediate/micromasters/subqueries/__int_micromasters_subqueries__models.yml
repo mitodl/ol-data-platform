@@ -71,7 +71,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say']
+          values: '{{ gender_values(["m", "f", "o"]) }}'
   - name: user_has_agreed_to_terms_of_service
     description: boolean, whether the user has agreed to term of service
   - name: user_highest_education
@@ -79,11 +79,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-            "Associate degree", "Secondary/high school", "Junior secondary/junior\
-              \ high/middle school", "Elementary/primary school", "No formal education",
-            "Other education", "Doctorate in science or engineering", "Doctorate in\
-              \ another field"]
+          values: '{{ highest_education_values() }}'
   - name: user_is_verified
     description: boolean, whether the user is a verified MicroMasters user (currently
       false to all users on production)

@@ -11,6 +11,8 @@ Checks:
   8. SELECT *: models using SELECT * that hides column-level lineage
   9. Dimensional layering: marts/reporting must not reference staging/intermediate (#2072 DoD)
  10. QA branch contract: union models must declare their expected QA branches (RFC 12711)
+ 11. Data contract: models and sources must keep the columns and types their OpenMetadata contract lists
+ 12. Metric registry: every metric in metrics/ is well formed and names columns its models still have
 """
 
 from __future__ import annotations
@@ -25,6 +27,12 @@ from typing import Annotated, cast
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.data_contracts import (
+    DATA_CONTRACT_CHECK,
+    DEFAULT_CONTRACTS_DIR,
+    check_data_contracts,
+    load_contracts,
+)
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
 from ol_dbt_cli.lib.dimensional_layering import (
     LayeringViolation,
@@ -43,6 +51,12 @@ from ol_dbt_cli.lib.git_utils import (
 )
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
+from ol_dbt_cli.lib.metric_registry import (
+    DEFAULT_METRICS_DIR,
+    METRIC_REGISTRY_CHECK,
+    check_metric_registry,
+    load_metrics,
+)
 from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
 from ol_dbt_cli.lib.qa_contract import (
     QA_CONTRACT_CHECK,
@@ -58,6 +72,7 @@ from ol_dbt_cli.lib.sql_parser import (
     find_compiled_dir,
     get_columns_read_from_ref,
     parse_model_file,
+    read_macro_sources,
     resolve_star_columns,
 )
 from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
@@ -549,7 +564,8 @@ def _check_dimensional_layering(
     New violations (not in *baseline*) are ERRORs that fail the run. Known
     baseline violations are collapsed into a single INFO summary so the #2072
     migration debt stays visible without flooding the report. Baseline entries
-    that no longer occur are surfaced at INFO to prompt shrinking the baseline.
+    that no longer occur are ERRORs too: an entry left behind after its edge is
+    removed would let a later change reintroduce that edge unnoticed.
     """
     violations = _compute_layering_violations(manifest, sql_models_by_name, sql_file_map)
     current_keys = {v.key for v in violations}
@@ -584,10 +600,12 @@ def _check_dimensional_layering(
         child = stale_key.split(" -> ", 1)[0]
         report.add(
             "dimensional_layering",
-            Severity.INFO,
+            Severity.ERROR,
             child,
             f"Resolved baseline entry: {stale_key}",
-            "This violation no longer exists — run `ol-dbt validate --update-baseline` to shrink the baseline.",
+            "This violation no longer exists, and the entry would tolerate it coming back. Run "
+            "`ol-dbt validate --update-baseline` and commit the result (re-run `dbt parse` first "
+            "if target/manifest.json predates the change).",
         )
 
 
@@ -644,6 +662,32 @@ def _check_qa_branch_contract(
         return
     baseline = load_baseline(inventory_dir / QA_BASELINE_FILENAME)
     check_qa_gaps(manifest, units, observation, baseline, now or datetime.now(tz=UTC), report)
+
+
+# ---------------------------------------------------------------------------
+# Check 11: OpenMetadata data contracts
+# ---------------------------------------------------------------------------
+
+
+def _check_data_contract(
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+    contracts_dir: Path,
+    report: ValidationReport,
+) -> None:
+    contracts = load_contracts(contracts_dir)
+    if not contracts:
+        return
+    if manifest is None:
+        report.add(
+            DATA_CONTRACT_CHECK,
+            Severity.WARNING,
+            "(all models)",
+            f"Skipped: {len(contracts)} data contract(s) need manifest column types",
+            "Run `dbt parse` (or pass --auto-compile) so manifest.json exists.",
+        )
+        return
+    check_data_contracts(contracts, manifest, sql_models_by_name, report)
 
 
 def _update_qa_baseline(manifest: ManifestRegistry | None, inventory_dir: Path) -> None:
@@ -974,7 +1018,7 @@ def validate(
             help=(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
-                "dimensional_layering."
+                "dimensional_layering, qa_branch_contract, data_contract, metric_registry."
             ),
         ),
     ] = None,
@@ -985,7 +1029,8 @@ def validate(
             help=(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
-                "pk_test_coverage, yaml_integrity, select_star, dimensional_layering. "
+                "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
+                "data_contract, metric_registry. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1052,6 +1097,26 @@ def validate(
             ),
         ),
     ] = None,
+    contracts_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--contracts-dir"],
+            help=(
+                "OpenMetadata data contracts directory for the data_contract check. "
+                "Defaults to <repo>/contracts, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
+    metrics_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--metrics-dir"],
+            help=(
+                "Business metric definitions directory for the metric_registry check. "
+                "Defaults to <repo>/metrics, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     update_baseline: Annotated[
         bool,
         Parameter(
@@ -1077,7 +1142,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs ten checks:
+    Runs eleven checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -1088,11 +1153,19 @@ def validate(
     7. yaml_integrity        — every YAML model entry has a corresponding .sql file
     8. select_star           — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
     9. dimensional_layering  — marts/reporting models must not reference staging/intermediate directly
-                               (#2072 DoD); new violations error, known ones are baselined
+                               (#2072 DoD); new violations error, known ones are baselined,
+                               and a baseline entry that no longer occurs errors
     10. qa_branch_contract   — models unioning several ingestion units declare config.meta
                                qa_branches or qa_buildable: false, and each declared branch is
                                one QA ingests or mirrors (RFC 12711); declared tables the QA
-                               observation shows empty or stale error unless baselined
+                               observation shows empty or stale error unless baselined, and
+                               a baseline entry that is no longer a gap errors
+    11. data_contract        — every column an OpenMetadata contract in <repo>/contracts/ lists
+                               for a dbt model or source is still declared, selected, and of a
+                               compatible data_type
+    12. metric_registry      — every metric in <repo>/metrics/ has a conventional, unique name,
+                               sets only fields and enum values OpenMetadata accepts, and names
+                               columns its implemented_by models still declare and select
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1159,6 +1232,16 @@ def validate(
         "select_star",
         "dimensional_layering",
         QA_CONTRACT_CHECK,
+        DATA_CONTRACT_CHECK,
+        METRIC_REGISTRY_CHECK,
+    }
+    # Run once over the whole project whatever --model / --changed-only selects.
+    global_checks = {
+        "yaml_integrity",
+        "dimensional_layering",
+        QA_CONTRACT_CHECK,
+        DATA_CONTRACT_CHECK,
+        METRIC_REGISTRY_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1320,17 +1403,23 @@ def validate(
                 target_names.append(name)
 
         if not target_names:
-            if macro_files or yaml_files:
-                # Changes WERE detected, they just didn't resolve to any model to
-                # validate (no manifest for macro mapping, or a YAML file that
-                # declares no models). Say so rather than claiming nothing changed.
-                console.print(
-                    f"[dim]Changed macro/YAML file(s) detected vs {base_ref}, but none mapped to "
-                    "models to validate (see warnings above).[/]"
-                )
-            else:
-                console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
-            return
+            # A diff that touches only metrics/, contracts/ or the ingestion
+            # inventory changes no model, and the global checks are the only
+            # ones that read those files, so they still run.
+            run_global_checks = bool(global_checks - skipped)
+            if output_format == "text" or not run_global_checks:
+                if macro_files or yaml_files:
+                    # Changes WERE detected, they just didn't resolve to any model to
+                    # validate (no manifest for macro mapping, or a YAML file that
+                    # declares no models). Say so rather than claiming nothing changed.
+                    console.print(
+                        f"[dim]Changed macro/YAML file(s) detected vs {base_ref}, but none mapped to "
+                        "models to validate (see warnings above).[/]"
+                    )
+                else:
+                    console.print(f"[dim]No changed models (SQL, macro, or YAML) detected vs {base_ref}.[/]")
+            if not run_global_checks:
+                return
     else:
         target_names = [f.stem for f in all_sql_files]
 
@@ -1341,14 +1430,18 @@ def validate(
             mode = f"changed models vs {base_ref}"
         else:
             mode = "all models"
-        console.print(f"\n[bold]Validating {len(target_names)} {mode}[/]\n")
+        if target_names:
+            console.print(f"\n[bold]Validating {len(target_names)} {mode}[/]\n")
+        else:
+            console.print("\n[bold]Running the project-wide checks only[/]\n")
 
     # Parse all SQL files up-front (needed for cross-model reference resolution)
     sql_file_map_all: dict[str, Path] = {f.stem: f for f in all_sql_files}
     sql_models_by_name: dict[str, ParsedModel] = {}
+    macro_sources = read_macro_sources(dbt_dir)
     for name, path in sql_file_map_all.items():
         try:
-            parsed_m = parse_model_file(path, compiled_dir=compiled_dir)
+            parsed_m = parse_model_file(path, compiled_dir=compiled_dir, macro_sources=macro_sources)
             sql_models_by_name[name] = parsed_m
         except Exception as exc:  # noqa: BLE001
             # Store a minimal ParsedModel so the model still appears in checks
@@ -1461,6 +1554,19 @@ def validate(
     # one of its ancestors, which --changed-only would never select.
     if QA_CONTRACT_CHECK not in skipped:
         _check_qa_branch_contract(manifest, inventory_dir, report)
+
+    # Global like qa_branch_contract: a contract edit alone changes no model, so
+    # --changed-only would never select the model it newly constrains.
+    if DATA_CONTRACT_CHECK not in skipped:
+        contracts_dir = (
+            Path(contracts_dir_path).resolve() if contracts_dir_path else dbt_dir.parents[1] / DEFAULT_CONTRACTS_DIR
+        )
+        _check_data_contract(manifest, sql_models_by_name, contracts_dir, report)
+
+    # Global for the same reason: a metric file edit changes no model.
+    if METRIC_REGISTRY_CHECK not in skipped:
+        metrics_dir = Path(metrics_dir_path).resolve() if metrics_dir_path else dbt_dir.parents[1] / DEFAULT_METRICS_DIR
+        check_metric_registry(load_metrics(metrics_dir), yaml_registry, sql_models_by_name, report)
 
     # Output
     if output_format == "json":

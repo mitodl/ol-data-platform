@@ -1227,18 +1227,6 @@ sources:
     - name: item_type
       description: varchar, the type of student item
 
-  - name: raw__mitxonline__openedx__mysql__assessment_aiclassifier
-    description: MITx Online open edX assessment ai classifier
-    columns:
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: classifier_data
-      description: varchar, the content of the classifier
-    - name: criterion_id
-      description: int, foreign key referencing criterion
-
   - name: raw__mitxonline__openedx__mysql__assessment_assessmentpart
     description: MITx Online open edX assessment part
     columns:
@@ -1252,23 +1240,6 @@ sources:
       description: str, the content of the assessment feedback
     - name: criterion_id
       description: int, foreign key referencing criterion
-
-  - name: raw__mitxonline__openedx__mysql__assessment_aiclassifierset
-    description: MITx Online open edX assessment ai classifier sets
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: rubric_id
-      description: int, foreign key referencing rubric
-    - name: created_at
-      description: timestamp, the datetime the ai classifier set was created
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
 
   - name: raw__mitxonline__openedx__mysql__user_api_usercoursetag
     description: MITx Online open edX user api course tag
@@ -1461,26 +1432,6 @@ sources:
     - name: scored
       description: boolean, whether the peer workflow item has been scored
 
-  - name: raw__mitxonline__openedx__mysql__assessment_aitrainingworkflow
-    description: MITx Online open edX ai training workflows
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: int, foreign key referencing student_item
-    - name: uuid
-      description: str, unique identifier for the ai training workflow
-    - name: scheduled_at
-      description: timestamp, specifying when the ai training workflows were scheduled
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: completed_at
-      description: timestamp, specifying when the ai training workflows were completed
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
-
   - name: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
     description: MITx Online open edX ai training workflow items
     columns:
@@ -1498,36 +1449,6 @@ sources:
     - name: completed_at
       description: timestamp, specifying when the ai training workflows items was
         completed
-
-  - name: raw__mitxonline__openedx__mysql__assessment_aigradingworkflow
-    description: MITx Online open edX ai grading workflows
-    columns:
-    - name: scheduled_at
-      description: timestamp, specifying when the ai training workflows were scheduled
-    - name: submission_uuid
-      description: str, unique identifier for the submission
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
-    - name: student_id
-      description: int, reference user id in auth_user from open edX
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-    - name: assessment_id
-      description: int, foreign key referencing the assessment
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: uuid
-      description: str, unique identifier for the ai training workflow
-    - name: rubric_id
-      description: int, foreign key to the unique identifier for the rubric
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: completed_at
-      description: timestamp, specifying when the peer workflow was completed
-    - name: essay_text
-      description: str, the essay text of the assessment ai grading workflow
 
   - name: raw__mitxonline__openedx__mysql__assessment_rubric
     description: MITx Online open edX assessment rubric
@@ -1550,16 +1471,6 @@ sources:
       description: int, unique identifier for the rubric
     - name: raw_answer
       description: str, the raw text of the training example answer
-
-  - name: raw__mitxonline__openedx__mysql__assessment_aitrainingworkflow_training_examples
-    description: MITx Online open edX assessment ai training workflow training examples
-    columns:
-    - name: trainingexample_id
-      description: int, the foreign key referencing the training example
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: aitrainingworkflow_id
-      description: int, the foreign key referencing the ai training workflow
 
   - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
     description: MITx Online open edX assessment feedback options
@@ -1914,6 +1825,8 @@ sources:
 
   - name: raw__mitxonline__app__postgres__cms_instructorpagelink
     columns:
+    - name: id
+      description: int, primary key for cms_instructorpagelink
     - name: page_id
       description: int, foreign key to wagtail_page referring to the course page
     - name: linked_instructor_page_id
@@ -2132,6 +2045,55 @@ sources:
       data_type: varchar
       description: the method to use to manage membership in the contract. Values
         are 'managed' or 'code'.
+
+  - name: raw__mitxonline__app__postgres__b2b_contractprogramitem
+    description: The programs an MITx Online B2B contract covers, one row per contract
+      and program, in the order the contract lists them. Replaced the b2b_contractpage_programs
+      many-to-many table in MITx Online 0.135.0.
+    columns:
+    - name: id
+      data_type: bigint
+      description: primary key for this table
+    - name: sort_order
+      data_type: bigint
+      description: position of the program within the contract's list, starting at
+        0. Null when the row was never ordered.
+    - name: contract_id
+      data_type: bigint
+      description: foreign key to b2b_contractpage (page_ptr_id)
+    - name: program_id
+      data_type: bigint
+      description: foreign key to courses_program
+
+  - name: raw__mitxonline__app__postgres__b2b_userb2bcontract
+    description: MITx Online B2B learner-to-contract membership, the through table
+      for users_user.b2b_contracts since MITx Online 1.168.2 (it replaced users_user_b2b_contracts).
+      Carries the learner's data-sharing consent for the contract.
+    columns:
+    - name: id
+      data_type: bigint
+      description: primary key for this table
+    - name: user_id
+      data_type: bigint
+      description: foreign key to users_user
+    - name: contract_page_id
+      data_type: bigint
+      description: foreign key to b2b_contractpage (page_ptr_id)
+    - name: consented_to_data_sharing
+      data_type: boolean
+      description: the learner's decision to share their course data with the contract's
+        organization. Null when the learner has not been asked or has not answered,
+        true when they consented, false when they declined or withdrew.
+    - name: consent_modified_at
+      data_type: timestamp(6) with time zone
+      description: when consented_to_data_sharing was last set. Null when it never
+        has been.
+    - name: created_on
+      data_type: timestamp(6) with time zone
+      description: timestamp when the membership was created
+    - name: updated_on
+      data_type: timestamp(6) with time zone
+      description: timestamp when the membership was last saved
 
   - name: raw__mitxonline__app__postgres__b2b_userorganization
     description: MITx Online B2B user-to-organization membership records

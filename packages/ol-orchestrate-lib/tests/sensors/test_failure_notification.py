@@ -9,6 +9,10 @@ import pytest
 import sentry_sdk
 from dagster import AssetCheckSeverity, MetadataValue, RetryPolicy
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.failed_partitions import (
+    FAILED_PARTITION_CHECK_NAME,
+    FAILED_PARTITION_JOB_NAME,
+)
 from ol_orchestrate.lib.sentry import PARTITION_NAME_TAG
 from ol_orchestrate.sensors.failure_notification import (
     FAILURE_NOTIFICATION_SENSORS,
@@ -944,6 +948,72 @@ def test_collect_keeps_only_error_severity_failures() -> None:
     )
 
     assert [e.asset_key.to_user_string() for _, e in failures] == ["a"]
+
+
+def test_collect_announces_the_inventory_only_from_its_own_job() -> None:
+    """A materialization run carries the check along; only the schedule reports."""
+    lookups: list[str] = []
+    job_names = {"inventory": FAILED_PARTITION_JOB_NAME, "ride-along": "__ASSET_JOB"}
+
+    def get_run_by_id(run_id: str) -> Any:
+        lookups.append(run_id)
+        return SimpleNamespace(job_name=job_names[run_id])
+
+    instance = _instance_returning(
+        [
+            _record(
+                storage_id,
+                _evaluation(
+                    asset=asset,
+                    check=FAILED_PARTITION_CHECK_NAME,
+                    passed=False,
+                    severity=ERROR,
+                ),
+                run_id=run_id,
+            )
+            for storage_id, (asset, run_id) in enumerate(
+                [
+                    ("a", "ride-along"),
+                    ("b", "ride-along"),
+                    ("a", "inventory"),
+                ],
+                start=1,
+            )
+        ],
+        {},
+    )
+    instance.get_run_by_id = get_run_by_id
+
+    failures, next_cursor = collect_new_check_failures(instance, None)
+
+    assert [run_id for run_id, _ in failures] == ["inventory"]
+    assert next_cursor == "3"
+    # One read per run, not per evaluation.
+    assert lookups == ["ride-along", "inventory"]
+
+
+def test_collect_drops_an_inventory_evaluation_whose_run_is_gone() -> None:
+    """Without the run there is no saying which job it was, so it is not announced."""
+    instance = _instance_returning(
+        [
+            _record(
+                1,
+                _evaluation(
+                    asset="a",
+                    check=FAILED_PARTITION_CHECK_NAME,
+                    passed=False,
+                    severity=ERROR,
+                ),
+            )
+        ],
+        {},
+    )
+    instance.get_run_by_id = lambda _run_id: None
+
+    failures, next_cursor = collect_new_check_failures(instance, None)
+
+    assert failures == []
+    assert next_cursor == "1"
 
 
 def test_collect_pairs_each_failure_with_its_run_id() -> None:

@@ -308,58 +308,6 @@ models:
   - name: receipt_url
     description: string, URL to the receipt for the order on the MITx Online application
 
-- name: video_engagement_report
-  description: Learners video engagement - play, pause, seek, or stop video actions
-    from MITx Online, xPro, edX.org, Residential MITx with calculated counts for total
-    video events, distinct videos watched, and max video index.
-  config:
-    meta:
-      qa_branches:
-      - micromasters/app_postgres
-      - mitx/api
-      - mitx/mysql
-      - mitx/tracking_logs
-      - mitxonline/api
-      - mitxonline/app_postgres
-      - mitxonline/mysql
-      - mitxonline/tracking_logs
-      - ovs/app_postgres
-      - xpro/api
-      - xpro/app_postgres
-      - xpro/mysql
-      - xpro/tracking_logs
-  columns:
-  - name: user_email
-    description: str, user email on the corresponding platform
-  - name: chapter_title
-    description: str, title of chapter this video belongs to. Null for Residential
-      MITx until we populate the course structure data.
-  - name: courserun_readable_id
-    description: str, the open edX course ID formatted as course-v1:{org}+{course
-      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
-      for edX.org courses.
-    tests:
-    - not_null
-  - name: total_video_count
-    description: int, the total number of distinct videos for a chapter and courserun.
-  - name: platform
-    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
-      MITx.
-    tests:
-    - not_null
-  - name: courserun_is_current
-    description: boolean, indicating if the course run is currently running. True
-      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
-      is in the past and courserun_end_on is in the future.
-  - name: course_readable_id
-    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
-      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
-  - name: user_watched_video_count
-    description: int, The number of distinct videos the user watched in the course
-  - name: max_video_index
-    description: int, The maximum sequence number giving order in which this block
-      content appears within the course.
-
 - name: cheating_detection_report
   description: Problem and grade information that is associated with a particular
     course run, platform, and learner that is used for cheating detection analysis.
@@ -513,7 +461,7 @@ models:
   - name: ai_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
       values - TutorBot, CanvasSyllabusBot, ResourceRecommendationBot, VideoGPTBot,
-      SyllabusBot
+      SyllabusBot, SearchSummaryBot
     tests:
     - not_null
   - name: courserun_readable_id
@@ -525,7 +473,7 @@ models:
     - not_null
   - name: resource_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
-      on the ai_agent. May be blank for ResourceRecommendationBot.
+      on the ai_agent. May be blank for ResourceRecommendationBot and SearchSummaryBot.
   - name: human_message
     description: str, the human message
   - name: ai_message
@@ -560,7 +508,8 @@ models:
   - name: user_email
     description: string, user email that user registered
   - name: enrolled_count
-    description: int, a count of 1 means the learner enrolled otherwise 0
+    description: int, 1 on the date of the learner's earliest currently active enrollment
+      (courserunenrollment_is_active) in the course run, otherwise 0
   - name: organization_key
     description: str, key of the organization that lists the course. e.g. MITx, MITxT,
       null
@@ -639,8 +588,8 @@ models:
   - name: video_watched_count
     description: int, count of videos watched
   - name: enrolled_ind
-    description: boolean, true if courserunenrollment_enrollment_status is null else
-      false
+    description: boolean, true if the learner has a currently active enrollment (courserunenrollment_is_active)
+      in the course run
   - name: ever_active_ind
     description: boolean, true if user had any video, problem, navigation, discussion,
       chatbot , unique_course_certificate_earners otherwise false
@@ -722,11 +671,12 @@ models:
     description: int, count of certificates granted on that particular activity date
       for a user and courserun
   - name: enrollment_count
-    description: int, count of enrollments on that particular activity date for a
-      user and courserun
+    description: int, count of currently active enrollments (courserunenrollment_is_active)
+      created on that particular activity date for a user and courserun
   - name: unenrolled_count
-    description: int, count of unenrollments on that particular activity date for
-      a user and courserun
+    description: int, count of enrollments created on that particular activity date
+      for a user and courserun that are no longer active (courserunenrollment_is_active
+      is false)
   - name: audit_count
     description: int, count of enrollments that have a enrollment mode status of audit
       on that particular activity date for a user and courserun
@@ -949,54 +899,6 @@ models:
       arguments:
         column_list: ["courserunenrollment_id", "user_hashed_id"]
         row_condition: "platform ='Residential MITx'"
-- name: engagement_problem_completion_summary
-  description: A report that contains learner engagement details with problem completion
-    information
-  config:
-    meta:
-      qa_branches:
-      - micromasters/app_postgres
-      - mitlearn/app_postgres
-      - mitx/api
-      - mitx/mysql
-      - mitx/tracking_logs
-      - mitxonline/api
-      - mitxonline/app_postgres
-      - mitxonline/mysql
-      - mitxonline/tracking_logs
-      - xpro/api
-      - xpro/app_postgres
-      - xpro/mysql
-      - xpro/tracking_logs
-  columns:
-  - name: user_email
-    description: string, user email that user registered
-  - name: course_title
-    description: str, title of the course.
-  - name: courserun_readable_id
-    description: string, unique string to identify a course run on the corresponding
-      platform.
-  - name: subsection_title
-    description: str, title of the subsection within the course
-  - name: subsection_block_index
-    description: int, sequence number giving order in which this subsection appears
-      within the course
-  - name: chapter_block_fk
-    description: string, foreign key to dim_course_content, referencing the chapter
-      block ID within which this vertical belongs to.
-  - name: problems_attempted
-    description: int, count of the number of times the user attempted the problems
-  - name: number_of_problems
-    description: int, count of the total number of problems
-  - name: percent_problems_attempted
-    description: decimal, percentage of problems the user attempted out of the total
-      number of problems
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["user_email", "course_title", "courserun_readable_id", "subsection_title",
-          "subsection_block_index", "chapter_block_fk"]
-
 - name: engagement_problem_completion_raw
   description: A report that contains learner engagement info with problem data
   config:
@@ -1218,9 +1120,16 @@ models:
   - name: user_address_country
     description: string, country of the user. Coalesced from edX.org and hashed ID
       user matches.
-  - name: courses_taken_in_program
+  - name: verified_courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
       the program
+  - name: courses_taken_in_program
+    description: int, compatibility alias for verified_courses_taken_in_program
+  - name: verified_courses_passed_in_program
+    description: int, count of distinct verified courses the user has passed within
+      the program
+  - name: all_courses_passed_in_program
+    description: int, count of distinct courses the user has passed within the program
   - name: user_street_address
     description: string, street address of the user. Coalesced from edX.org and hashed
       ID user matches.
@@ -1256,148 +1165,6 @@ models:
       arguments:
         column_list: ["user_username", "user_email"]
         row_condition: "program_id =2 and platform_name ='edX.org'"
-- name: problem_engagement_detail_report
-  description: Problem engagement detail report showing user performance at the problem
-    level across course runs. Includes attempt counts, grade information, and course
-    content hierarchy.
-  config:
-    meta:
-      qa_branches:
-      - micromasters/app_postgres
-      - mitlearn/app_postgres
-      - mitx/api
-      - mitx/mysql
-      - mitx/tracking_logs
-      - mitxonline/api
-      - mitxonline/app_postgres
-      - mitxonline/mysql
-      - mitxonline/tracking_logs
-      - xpro/api
-      - xpro/app_postgres
-      - xpro/mysql
-      - xpro/tracking_logs
-  columns:
-  - name: platform
-    description: string, name of the platform
-    tests:
-    - not_null
-  - name: user_email
-    description: string, email address of the user. Coalesced from mitxonline and
-      edxorg user records.
-  - name: full_name
-    description: string, full name of the user. Coalesced from mitxonline and edxorg
-      user records.
-  - name: courserun_readable_id
-    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
-      code}+{run_tag}
-    tests:
-    - not_null
-  - name: course_title
-    description: string, title of the course run
-  - name: section_title
-    description: string, title of the chapter (section) block within the course
-  - name: section_block_index
-    description: int, sequence number giving the order in which this section appears
-      within the course
-  - name: subsection_title
-    description: string, title of the sequential (subsection) block within the course
-  - name: subsection_block_index
-    description: int, sequence number giving the order in which this subsection appears
-      within the section
-  - name: problem_title
-    description: string, title of the problem block
-  - name: problem_block_index
-    description: int, sequence number giving the order in which this problem appears
-      within the subsection
-  - name: openedx_user_id
-    description: int, the user's numeric ID in the OpenedX platform
-    tests:
-    - not_null
-  - name: problem_block_fk
-    description: string, foreign key to the problem block in dim_course_content
-    tests:
-    - not_null
-  - name: num_of_attempts
-    description: int, total number of attempts the user made on this problem
-  - name: num_of_correct_attempts
-    description: int, total number of correct attempts the user made on this problem
-  - name: max_possible_grade
-    description: decimal, maximum possible grade for this problem
-  - name: learner_lowest_grade
-    description: decimal, lowest grade the learner achieved on this problem
-  - name: learner_highest_grade
-    description: decimal, highest grade the learner achieved on this problem
-  - name: correct_true_cnt
-    description: int, 1 if the user has at least one correct attempt, 0 otherwise
-  - name: attempted_true_cnt
-    description: int, 1 if the user has at least one attempt, 0 otherwise
-  - name: number_of_problems
-    description: int, total number of problems in the chapter
-
-- name: mitxonline_course_engagements_daily_report
-  description: MITx Online daily course engagement report with platform, course status,
-    and course identification fields. Shows user engagement metrics including course
-    events, problem submissions, video plays, and discussion participation aggregated
-    by date, user, and course run.
-  config:
-    meta:
-      qa_branches:
-      - micromasters/app_postgres
-      - mitxonline/app_postgres
-      - mitxonline/mysql
-      - mitxonline/tracking_logs
-  columns:
-  - name: courseactivity_date
-    description: date, the date when the course activity occurred
-    tests:
-    - not_null
-  - name: user_username
-    description: string, username on MITx Online platform
-  - name: user_full_name
-    description: string, full name of the user
-  - name: user_email
-    description: string, email address of the user
-  - name: courserun_readable_id
-    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
-      code}+{run_tag}
-    tests:
-    - not_null
-  - name: courserun_title
-    description: string, title of the course run
-  - name: course_number
-    description: string, course number identifier
-  - name: courserun_start_on
-    description: timestamp, date and time when the course run starts
-  - name: courserun_end_on
-    description: timestamp, date and time when the course run ends. May be null.
-  - name: num_events
-    description: int, total number of course activity events for the user on this
-      date
-  - name: num_problem_submitted
-    description: int, count of problem submissions by the user on this date
-  - name: num_video_played
-    description: int, count of video play events by the user on this date
-  - name: num_discussion_participated
-    description: int, count of discussion participation events (posts, comments, responses
-      created) by the user on this date
-  - name: platform
-    description: string, name of the platform, set to 'MITx Online'
-    tests:
-    - not_null
-  - name: courserun_is_current
-    description: boolean, indicates if the course run is currently active. True if
-      current date is between courserun_start_on and courserun_end_on (or courserun_end_on
-      is null).
-    tests:
-    - not_null
-  - name: course_readable_id
-    description: string, Open edX course ID formatted as course-v1:{org}+{course code}
-      for MITx Online courses
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["courseactivity_date", "user_username", "courserun_readable_id"]
-
 - name: combined_video_engagements_counts_report
   description: Combined video engagement report across all platforms with video counts
     per chapter. Shows user video watching activity including total videos available
@@ -1823,6 +1590,8 @@ models:
       "review".
     tests:
     - not_null
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: order_tax_amount
     description: numeric, the amount of tax paid. Only applicable for xPro for now.
   - name: order_tax_country_code

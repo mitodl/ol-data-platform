@@ -22,13 +22,18 @@ from ol_dlt.sources import (
     course_xml_blocks,
     edxorg_s3,
     keycloak,
+    medium,
     mit_climate,
     mit_edx_programs,
     mitpe,
     mitxonline_app,
+    ocw_content,
     oll,
+    openlearning,
     podcast_rss,
     posthog_events,
+    see,
+    xpro_app,
     youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
@@ -119,6 +124,43 @@ mitxonline_app_assets = (
     )
     if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
     else None
+)
+# Environments where dlt owns the xPro app-database load. Production is absent
+# for the reason MITXONLINE_APP_DLT_ENVIRONMENTS gives: the Airbyte connection
+# "xPro Production App DB → S3 Data Lake" still loads the unit there under the
+# same asset keys.
+#
+# QA is different from MITx Online in one respect. QA_DATA_TOPOLOGY_SPEC.md §7
+# measured the QA xPro connection on 2026-09-17 as active on the Iceberg
+# destination with no jobs, so the lakehouse selector (endswith "s3 data lake")
+# may match it. That connection has to be deleted in QA Airbyte before this
+# deploys there, or the lakehouse code location claims the same keys.
+#
+# Add "production" in the SAME change that disables the Airbyte connection and
+# flips the inventory unit to `loader: dlt`.
+XPRO_APP_DLT_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+
+xpro_app_assets = (
+    build_ingest_assets(
+        name="xpro_app_ingest",
+        source=xpro_app.build_source(),
+        pipeline=xpro_app.xpro_app_pipeline,
+    )
+    if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
+    else None
+)
+see_assets = build_ingest_assets(
+    name="see_ingest", source=see.build_source(), pipeline=see.see_pipeline
+)
+openlearning_assets = build_ingest_assets(
+    name="openlearning_ingest",
+    source=openlearning.build_source(),
+    pipeline=openlearning.openlearning_pipeline,
+)
+medium_assets = build_ingest_assets(
+    name="medium_ingest",
+    source=medium.build_source(),
+    pipeline=medium.medium_pipeline,
 )
 youtube_assets = build_ingest_assets(
     name="youtube_ingest",
@@ -294,11 +336,12 @@ edxorg_s3_table_assets = [
 
 # The course archive assets in the edxorg and openedx code locations land one
 # JSON Lines file of parsed XML blocks per course version; nothing else loads
-# them into raw. One op per table, like edxorg_s3, so the two drain
-# independently.
+# them into raw. The edxorg and openedx structure blocks are the same layout.
+# One op per table, like edxorg_s3, so they drain independently.
 course_xml_blocks_assets = [
     build_batched_assets(
-        name=f"course_xml_blocks_{table.pipeline_prefix}",
+        # course_xml_blocks_openedx etc. for the block tables, as before.
+        name=table.pipeline_name.replace("__", "_"),
         build_source=partial(
             course_xml_blocks.course_xml_blocks_source, raw_table=raw_table
         ),
@@ -326,6 +369,17 @@ posthog_events_assets = build_batched_assets(
     translator=RawDataDltTranslator(),
 )
 
+# One load covers at most ocw_content.BUDGET_BYTES of course files, and each
+# load saves which courses it finished, so a run cut off mid-backlog resumes
+# there. The first run extracts every course (~70,000 files through Tika);
+# later runs read only the courses whose objects changed.
+ocw_content_assets = build_batched_assets(
+    name="ocw_content_ingest",
+    build_source=ocw_content.build_source,
+    pipeline=ocw_content.ocw_content_pipeline,
+    translator=RawDataDltTranslator(),
+)
+
 
 defs = Definitions(
     assets=with_failure_hooks(
@@ -337,8 +391,13 @@ defs = Definitions(
             podcast_rss_assets,
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            *([xpro_app_assets] if xpro_app_assets else []),
             youtube_assets,
+            see_assets,
+            openlearning_assets,
+            medium_assets,
             posthog_events_assets,
+            ocw_content_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
         ]

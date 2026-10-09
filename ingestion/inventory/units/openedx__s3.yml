@@ -10,8 +10,10 @@ strategies:
   local: fixture
 loader: dlt
 # The openedx code location lands one JSON Lines file per course version, and
-# the load appends every file, so staging picks each block's newest copy by
-# the file it came from. Same reasoning as edxorg/mysql.
+# the load appends every file, so staging keeps the rows of each course's
+# newest file. Same reasoning as edxorg/mysql. The document and transcript text
+# tables are the static-file text extracted for MIT Learn's ContentFiles, and
+# course_file_exclusions flags the files Learn leaves out of them.
 raw_metadata_column: _file_modified_at
 table_prefix: raw__openedx__s3__
 dlt:
@@ -20,6 +22,24 @@ dlt:
 tables:
 - name: raw__openedx__s3__course_xml_blocks
   raw_table: raw__openedx__s3__course_xml_blocks
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: true
+- name: raw__openedx__s3__course_document_text
+  raw_table: raw__openedx__s3__course_document_text
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: true
+- name: raw__openedx__s3__course_transcript_text
+  raw_table: raw__openedx__s3__course_transcript_text
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: true
+- name: raw__openedx__s3__course_file_exclusions
+  raw_table: raw__openedx__s3__course_file_exclusions
   sync_mode: incremental_append
   cursor_field:
   - _file_modified_at

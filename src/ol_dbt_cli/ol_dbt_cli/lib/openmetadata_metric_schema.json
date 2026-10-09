@@ -1,0 +1,483 @@
+{
+  "x-openmetadata-version": "2.0.3",
+  "type": "object",
+  "properties": {
+    "metric": {
+      "$ref": "#/components/schemas/CreateMetric"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Draft",
+        "In Review",
+        "Approved",
+        "Archived",
+        "Deprecated",
+        "Rejected",
+        "Unprocessed"
+      ]
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessDetails": {
+        "required": [
+          "timestamp"
+        ],
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accessedBy": {
+            "$ref": "#/components/schemas/EntityReference"
+          },
+          "accessedByAProcess": {
+            "type": "string"
+          }
+        }
+      },
+      "CoverImage": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateMetric": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^((?!::)[^>\"\\x00-\\x1f])*$",
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "metricExpression": {
+            "$ref": "#/components/schemas/MetricExpression"
+          },
+          "metricType": {
+            "type": "string",
+            "enum": [
+              "COUNT",
+              "SUM",
+              "AVERAGE",
+              "RATIO",
+              "PERCENTAGE",
+              "MIN",
+              "MAX",
+              "MEDIAN",
+              "MODE",
+              "STANDARD_DEVIATION",
+              "VARIANCE",
+              "SIMPLE",
+              "CUMULATIVE",
+              "DERIVED",
+              "CONVERSION",
+              "OTHER"
+            ]
+          },
+          "unitOfMeasurement": {
+            "type": "string",
+            "enum": [
+              "COUNT",
+              "DOLLARS",
+              "PERCENTAGE",
+              "TIMESTAMP",
+              "SIZE",
+              "REQUESTS",
+              "EVENTS",
+              "TRANSACTIONS",
+              "OTHER"
+            ]
+          },
+          "customUnitOfMeasurement": {
+            "type": "string"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "SECOND",
+              "MINUTE",
+              "HOUR",
+              "DAY",
+              "WEEK",
+              "MONTH",
+              "QUARTER",
+              "YEAR"
+            ]
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricDimension"
+            }
+          },
+          "measures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricMeasure"
+            }
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricFilter"
+            }
+          },
+          "relatedMetrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityReference"
+            }
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityReference"
+            }
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityReference"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagLabel"
+            }
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dataProducts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extension": {
+            "type": "object"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "automation"
+            ]
+          },
+          "lifeCycle": {
+            "$ref": "#/components/schemas/LifeCycle"
+          }
+        }
+      },
+      "EntityReference": {
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "fullyQualifiedName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "inherited": {
+            "type": "boolean"
+          },
+          "href": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "LifeCycle": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "$ref": "#/components/schemas/AccessDetails"
+          },
+          "updated": {
+            "$ref": "#/components/schemas/AccessDetails"
+          },
+          "accessed": {
+            "$ref": "#/components/schemas/AccessDetails"
+          }
+        }
+      },
+      "MetricDimension": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "fullyQualifiedName": {
+            "maxLength": 3072,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "CATEGORICAL",
+              "TIME"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "expression": {
+            "type": "string"
+          }
+        }
+      },
+      "MetricExpression": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "SQL",
+              "Java",
+              "JavaScript",
+              "Python",
+              "External"
+            ]
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "MetricFilter": {
+        "required": [
+          "where"
+        ],
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          }
+        }
+      },
+      "MetricMeasure": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "fullyQualifiedName": {
+            "maxLength": 3072,
+            "minLength": 1,
+            "type": "string"
+          },
+          "aggregation": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expression": {
+            "type": "string"
+          }
+        }
+      },
+      "PatternMatch": {
+        "required": [
+          "name",
+          "score"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "regex": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "Style": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "iconURL": {
+            "type": "string"
+          },
+          "coverImage": {
+            "$ref": "#/components/schemas/CoverImage"
+          }
+        }
+      },
+      "TagLabel": {
+        "required": [
+          "labelType",
+          "source",
+          "state",
+          "tagFQN"
+        ],
+        "type": "object",
+        "properties": {
+          "tagFQN": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/Style"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "Classification",
+              "Glossary"
+            ]
+          },
+          "labelType": {
+            "type": "string",
+            "enum": [
+              "Manual",
+              "Propagated",
+              "Automated",
+              "Derived",
+              "Generated"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "Suggested",
+              "Confirmed"
+            ]
+          },
+          "href": {
+            "type": "string",
+            "format": "uri"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "appliedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "appliedBy": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/TagLabelMetadata"
+          }
+        }
+      },
+      "TagLabelMetadata": {
+        "type": "object",
+        "properties": {
+          "recognizer": {
+            "$ref": "#/components/schemas/TagLabelRecognizerMetadata"
+          },
+          "expiryDate": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TagLabelRecognizerMetadata": {
+        "required": [
+          "recognizerId",
+          "recognizerName",
+          "score"
+        ],
+        "type": "object",
+        "properties": {
+          "recognizerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recognizerName": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "content",
+              "column_name"
+            ]
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatternMatch"
+            }
+          }
+        }
+      }
+    }
+  }
+}

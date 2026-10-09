@@ -18,13 +18,12 @@ with enroll_dtl as (
         , enroll_dtl.courserun_readable_id
         , substring(enroll_dtl.courserunenrollment_created_on, 1, 10) as activity_date
         , 0 as certificate_count
-        , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 0 else 1 end
+        , case when enroll_dtl.courserunenrollment_is_active then 1 else 0 end
             as enrollment_count
-        , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 1 else 0 end
+        , case when enroll_dtl.courserunenrollment_is_active then 0 else 1 end
             as unenrolled_count
         , max(case when enroll_dtl.courserunenrollment_enrollment_mode = 'audit'
-            and (enroll_dtl.courserunenrollment_enrollment_status is null
-            or enroll_dtl.courserunenrollment_enrollment_status <> 'unenrolled')
+            and enroll_dtl.courserunenrollment_is_active
             then 1 else 0 end) as audit_count
         , 0 as verified_count
     from enroll_dtl
@@ -38,8 +37,8 @@ with enroll_dtl as (
         , enroll_dtl.course_readable_id
         , enroll_dtl.courserun_readable_id
         , substring(enroll_dtl.courserunenrollment_created_on, 1, 10)
-        , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 0 else 1 end
-        , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 1 else 0 end
+        , case when enroll_dtl.courserunenrollment_is_active then 1 else 0 end
+        , case when enroll_dtl.courserunenrollment_is_active then 0 else 1 end
 
     union
 
@@ -53,15 +52,13 @@ with enroll_dtl as (
         , en_dtl.course_readable_id
         , en_dtl.courserun_readable_id
         , substring(en_dtl.courseruncertificate_created_on, 1, 10) as activity_date
-        , max(case when en_dtl.courseruncertificate_created_on is not null then 1 else 0 end) as certificate_count
+        , 1 as certificate_count
         , 0 as enrollment_count
         , 0 as unenrolled_count
         , 0 as audit_count
         , 0 as verified_count
     from enroll_dtl as en_dtl
-    where en_dtl.courseruncertificate_created_on is not null
-        and (en_dtl.courserunenrollment_enrollment_status is null
-        or en_dtl.courserunenrollment_enrollment_status <> 'unenrolled')
+    where en_dtl.courseruncertificate_is_earned = true
     group by
         en_dtl.user_email
         , en_dtl.user_gender
@@ -97,8 +94,7 @@ with enroll_dtl as (
         and a.line_id = combined__orders.line_id
         and a.platform = combined__orders.platform
     where a.courserunenrollment_enrollment_mode = 'verified'
-        and (courserunenrollment_enrollment_status is null
-        or courserunenrollment_enrollment_status <> 'unenrolled')
+        and a.courserunenrollment_is_active
     group by
         a.user_email
         , a.user_gender

@@ -6,15 +6,14 @@ dependencies = [
     "dagster>=1.12.10",
     "dagster-aws ~=0.29.0",
     "httpx2 >= 2.2.0",
-    "dagster-duckdb ~=0.29.0",
+    "duckdb>=1.2,!=1.5.0,!=1.5.1",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
-    "flatten-dict ~=0.5.0",
+    "google-cloud-storage>=3.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
     "polars ~= 1.19",
     "universal-pathlib ~= 0.3.1",
-    "pygithub>=2.8.1",
     "polars-hash>=0.5.6",
 ]
 
@@ -25,6 +24,7 @@ dependencies = [
 dev = [
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver",
+    "pytest>=9.0.1,<10",
 ]
 
 [build-system]

@@ -1,6 +1,6 @@
 {#
   integrations__learn__podcasts
-  Exposes MIT podcast channels for MIT Learn's ETL (webhook delivery).
+  Exposes MIT podcast channels for MIT Learn's ETL (warehouse pull).
   Contract: docs/learn_marts_contract.md
   Episodes live in integrations__learn__podcast_episodes, joined on readable_id.
 
@@ -9,13 +9,13 @@
   -- it is left un-upserted, and its _dlt_load_id stays behind at the last load
   that saw it. A plain full-table read would therefore keep delivering removed
   podcasts forever, and MIT Learn (which unpublishes only what is ABSENT from
-  the batch) could never retire one.
+  the rows it pulls) could never retire one.
 
   Rows are filtered to those seen in the last {{ var('podcast_absence_grace_loads', 3) }}
   loads rather than only the most recent one. The grace period exists because
   the dlt source SKIPS a feed it cannot fetch or parse: with a strict
   most-recent-load filter, one transient RSS outage would drop that podcast
-  from the batch and unpublish a live podcast and all its episodes. At a daily
+  from the model and unpublish a live podcast and all its episodes. At a daily
   ingest cadence a podcast must be missing three consecutive days before it is
   treated as removed.
 #}
@@ -30,7 +30,7 @@ with channels as (
     select
         podcast_dlt_load_id
         , row_number() over (order by podcast_dlt_load_id desc) as loads_ago
-    from (select distinct podcast_dlt_load_id from channels)
+    from (select distinct podcast_dlt_load_id from channels) as channel_loads
 )
 
 , current_channels as (
@@ -45,7 +45,7 @@ select
     -- (learning_resources/etl/podcast.py:parse_readable_id_from_url), which
     -- keeps any trailing slash. The dlt source strips it, so recompute here
     -- from rss_url instead of reusing the raw readable_id -- otherwise the
-    -- webhook would create a second resource alongside the Celery ETL's.
+    -- pull would create a second resource alongside the Celery ETL's.
     regexp_replace(podcast_rss_url, '^.*//', '')             as readable_id
     , podcast_title                                          as title
     , podcast_description                                    as description

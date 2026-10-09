@@ -20,3 +20,96 @@ tables:
   raw_table: raw__edxorg__discovery__api__programs
   sync_mode: full_refresh_overwrite
   modeled: true
+# The flattened catalog tables below replaced edxorg/s3's raw__edxorg__s3__{program,
+# program_course,mitx_course,mitx_course_run}, which an Airbyte connection loaded
+# from files the edxorg code location wrote. One row per record per extraction;
+# the rows sharing the latest retrieved_at are what the API currently lists.
+- name: raw__edxorg__discovery__api__program
+  raw_table: raw__edxorg__discovery__api__program
+  sync_mode: full_refresh_append
+  modeled: true
+  mirror:
+    columns:
+      _dlt_load_id: copy
+      uuid: copy
+      title: copy
+      subtitle: copy
+      type: copy
+      status: copy
+      authoring_organizations: copy
+      data_modified_timestamp: copy
+      marketing_url: copy
+      banner_image_url: copy
+      level_type_override: copy
+      retrieved_at: copy
+- name: raw__edxorg__discovery__api__program_course
+  raw_table: raw__edxorg__discovery__api__program_course
+  sync_mode: full_refresh_append
+  modeled: true
+  mirror:
+    columns:
+      _dlt_load_id: copy
+      program_uuid: copy
+      course_key: copy
+      course_position: copy
+      course_title: copy
+      course_short_description: copy
+      course_type: copy
+      excluded_from_search: copy
+      course_runs: copy
+      retrieved_at: copy
+- name: raw__edxorg__discovery__api__mitx_course
+  raw_table: raw__edxorg__discovery__api__mitx_course
+  sync_mode: full_refresh_append
+  modeled: true
+  mirror:
+    columns:
+      _dlt_load_id: copy
+      course_key: copy
+      title: copy
+      owner: copy
+      short_description: copy
+      full_description: copy
+      level_type: copy
+      marketing_url: copy
+      image: copy
+      course_type: copy
+      subjects: copy
+      prerequisites: copy
+      prerequisites_raw: copy
+      modified: copy
+      retrieved_at: copy
+- name: raw__edxorg__discovery__api__mitx_course_run
+  raw_table: raw__edxorg__discovery__api__mitx_course_run
+  sync_mode: full_refresh_append
+  modeled: true
+  mirror:
+    columns:
+      _dlt_load_id: copy
+      course_key: copy
+      run_key: copy
+      title: copy
+      short_description: copy
+      full_description: copy
+      marketing_url: copy
+      level_type: copy
+      languages: copy
+      start_on: copy
+      end_on: copy
+      enrollment_start: copy
+      enrollment_end: copy
+      announcement: copy
+      pacing_type: copy
+      enrollment_type: copy
+      availability: copy
+      status: copy
+      is_enrollable: copy
+      image: copy
+      seats: copy
+      staff: copy
+      weeks_to_complete: copy
+      min_effort: copy
+      max_effort: copy
+      estimated_hours: copy
+      modified: copy
+      retrieved_at: copy

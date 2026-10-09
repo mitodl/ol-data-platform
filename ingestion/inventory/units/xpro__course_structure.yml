@@ -1,0 +1,33 @@
+---
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+#
+# The openedx code location un-nests each course's structure document into one
+# JSON Lines file of blocks per structure version
+# (xpro/openedx/processed_data/course_blocks/), and
+# ol_dlt.sources.course_xml_blocks loads them. The table loads beside
+# xpro/api's Airbyte-loaded raw__xpro__openedx__api__course_blocks, to replace
+# it, and is unmodeled until staging is repointed at it.
+schema_version: 1
+deployment: xpro
+layer: course_structure
+scope: scoped
+strategies:
+  qa: ingest
+  local: fixture
+loader: dlt
+# The load appends one file per structure version. Same reasoning as
+# edxorg/course_xml.
+raw_metadata_column: _file_modified_at
+table_prefix: raw__xpro__openedx__api__course_structure_blocks
+dlt:
+  source_module: ol_dlt.sources.course_xml_blocks
+  write_disposition: append
+tables:
+- name: raw__xpro__openedx__api__course_structure_blocks
+  raw_table: raw__xpro__openedx__api__course_structure_blocks
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: false

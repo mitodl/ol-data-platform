@@ -36,23 +36,10 @@ def _fetch_workspace(workspace: AirbyteOSSWorkspace) -> dict[str, list[dict[str,
     per-stream sync mode or cursor — which is most of what drift means here.
     """
     client = workspace.get_client()
-    common = {
-        "workspaceIds": workspace.workspace_id,
-        "limit": workspace.request_page_size,
-    }
-
-    connections = list(
-        client._paginated_request(  # noqa: SLF001
-            method="GET",
-            url=f"{client.rest_api_base_url}/connections",
-            params=dict(common),
-        )
-    )
-    sources = list(
-        client._paginated_request(  # noqa: SLF001
-            method="GET", url=f"{client.rest_api_base_url}/sources", params=dict(common)
-        )
-    )
+    connections = [
+        dict(row) for row in client.list_collection("connections", "connectionId")
+    ]
+    sources = [dict(row) for row in client.list_collection("sources", "sourceId")]
 
     # Some server versions omit stream configs from the list response; the same
     # re-fetch `bin/airbyte-inventory.py` does. A connection left without one is

@@ -15,7 +15,7 @@ Schedules: 1
 Sensors:   1
 Resources: 10
 
-Resources: io_manager, s3file_io_manager, gcs_input, vault, edxorg_api,
+Resources: io_manager, s3file_io_manager, gcs_input, vault,
            s3, s3_download, s3_upload, results_dir
 
 ✓ EdxOrg code location is FULLY FUNCTIONAL!
@@ -30,15 +30,12 @@ Resources: io_manager, s3file_io_manager, gcs_input, vault, edxorg_api,
    - Course structure assets (dummy, flattened)
    - Course run metadata extraction
    - Course XML (dummy)
-   - Program metadata
-   - MIT course metadata
 
 2. **Resources**: All 10 resources configured
    - `io_manager`: FileObjectIOManager with Vault/GCS integration
    - `s3file_io_manager`: S3-based file object storage
    - `gcs_input`: GCS file IO manager
    - `vault`: Vault (with resilient auth)
-   - `edxorg_api`: EdX.org API client
    - `s3`, `s3_download`, `s3_upload`: S3 resources for different profiles
    - `results_dir`: Results directory configuration
 
@@ -49,9 +46,6 @@ Resources: io_manager, s3file_io_manager, gcs_input, vault, edxorg_api,
 
 4. **Sensors**: 1 sensor for program reports
    - `edxorg_program_reports_sensor`: Watches S3 for new program reports
-
-5. **Schedules**: 1 daily schedule
-   - `edxorg_api_daily_schedule`: Daily API data refresh at 5am UTC
 
 ## Key Changes Made
 
@@ -87,7 +81,6 @@ edxorg/
 ├── edxorg/
 │   ├── assets/
 │   │   ├── __init__.py
-│   │   ├── edxorg_api.py              # API assets
 │   │   └── edxorg_archive.py          # Archive processing assets
 │   ├── jobs/
 │   │   ├── __init__.py

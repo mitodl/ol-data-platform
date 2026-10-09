@@ -12,7 +12,14 @@ from ol_dbt_cli.commands.validate import _check_qa_branch_contract, _update_qa_b
 from ol_dbt_cli.lib.dimensional_layering import load_baseline
 from ol_dbt_cli.lib.inventory import Unit
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry, registry_from_manifest
-from ol_dbt_cli.lib.qa_contract import check_qa_contracts, check_qa_gaps, qa_gaps, render_qa_baseline, upstream_units
+from ol_dbt_cli.lib.qa_contract import (
+    QA_SCHEDULED_TAG,
+    check_qa_contracts,
+    check_qa_gaps,
+    qa_gaps,
+    render_qa_baseline,
+    upstream_units,
+)
 from ol_dbt_cli.lib.qa_observation import (
     OBSERVATION_FILENAME,
     Observation,
@@ -58,7 +65,13 @@ def _source(name: str, identifier: str = "") -> ManifestModel:
     )
 
 
-def _model(name: str, path: str, depends_on: list[str], meta: dict[str, Any] | None = None) -> ManifestModel:
+def _model(
+    name: str,
+    path: str,
+    depends_on: list[str],
+    meta: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+) -> ManifestModel:
     return ManifestModel(
         unique_id=f"model.pkg.{name}",
         name=name,
@@ -68,6 +81,7 @@ def _model(name: str, path: str, depends_on: list[str], meta: dict[str, Any] | N
         database="",
         depends_on=depends_on,
         meta=meta or {},
+        tags=tags or [],
     )
 
 
@@ -243,6 +257,49 @@ class TestCheckQaContracts:
         assert not any("declares no QA contract" in found for found in dim_user)
 
 
+class TestQaScheduled:
+    def test_tagged_union_is_an_error_even_with_a_contract(self) -> None:
+        # A contract describes what QA should hold; it does not make an
+        # unattended build of a partial union safe.
+        registry = _dag({"qa_buildable": False})
+        registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
+        assert [message for model, message in _findings(registry) if model == "dim_user"] == [
+            f"is tagged {QA_SCHEDULED_TAG} but unions 3 ingestion units",
+        ]
+
+    def test_tagged_single_unit_model_passes(self) -> None:
+        registry = _registry(
+            _source("raw__mitxonline__app__postgres__users_user"),
+            _model(
+                "stg_mitxonline", "models/staging/a.sql", ["source.pkg.raw.raw__mitxonline__app__postgres__users_user"]
+            ),
+            _model(
+                "int_mitxonline",
+                "models/intermediate/a.sql",
+                ["model.pkg.stg_mitxonline"],
+                tags=[QA_SCHEDULED_TAG],
+            ),
+        )
+        assert _findings(registry) == []
+
+
+def test_manifest_reads_tags() -> None:
+    registry = registry_from_manifest(
+        {
+            "nodes": {
+                "model.pkg.int_x": {
+                    "unique_id": "model.pkg.int_x",
+                    "name": "int_x",
+                    "resource_type": "model",
+                    "tags": [QA_SCHEDULED_TAG],
+                }
+            },
+            "sources": {},
+        }
+    )
+    assert registry.nodes["model.pkg.int_x"].tags == [QA_SCHEDULED_TAG]
+
+
 def test_manifest_reads_identifier_and_config_meta() -> None:
     registry = registry_from_manifest(
         {
@@ -389,9 +446,9 @@ class TestQaGaps:
             (Severity.INFO, "(qa baseline)", "1 known QA gap(s) tolerated by baseline")
         ]
 
-    def test_resolved_baseline_entry_is_info(self) -> None:
+    def test_resolved_baseline_entry_errors(self) -> None:
         assert _gap_report(_observation(), {XPRO_GAP}) == [
-            (Severity.INFO, "(qa baseline)", f"Resolved baseline entry: {XPRO_GAP}")
+            (Severity.ERROR, "(qa baseline)", f"Resolved baseline entry: {XPRO_GAP}")
         ]
 
     def test_old_observation_warns(self) -> None:

@@ -27,7 +27,7 @@ from ml.lib.summarize import (
     summarize_and_checkpoint,
 )
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import get_prompt_version
+from ml.resources.opik_auth import LOCAL_PROMPT_VERSION, get_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
@@ -44,6 +44,10 @@ else:
     database_name = "ol_warehouse_production_intermediate"
 
 
+# Summaries only: clusters see just what was summarized, so they keep the shared default
+DEFAULT_SUMMARIES_FEEDBACK_SINCE = DEFAULT_FEEDBACK_SINCE or "2025-01-01"
+
+
 class FeedbackSummariesConfig(Config):
     full_refresh: bool = Field(
         default=False,
@@ -54,13 +58,13 @@ class FeedbackSummariesConfig(Config):
         description="Cap the number of upstream rows read, for fast local testing.",
     )
     feedback_since: str | None = Field(
-        default=DEFAULT_FEEDBACK_SINCE,
+        default=DEFAULT_SUMMARIES_FEEDBACK_SINCE,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description=(
             "Only summarize conversations opened on or after this date (YYYY-MM-DD). "
             "Rows already in feedback_summaries from earlier runs are kept. Defaults "
-            "to feedback_clusters' feedback_since, so both cover the same range. "
-            "Unset or null reads the full history."
+            "to the FEEDBACK_SINCE env var, else 2025-01-01. Null reads the full "
+            "history."
         ),
     )
     platforms: list[str] | None = Field(
@@ -131,7 +135,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v3",
+    code_version="feedback_summaries_v4",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],
@@ -209,11 +213,16 @@ def feedback_summaries(
     client = build_summary_client(
         llm, config.model_version, config.bedrock_model_version
     )
+    prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     unsummarized_df = filter_unsummarized(
         source_df,
         already_summarized_df,
         current_model_version=client.model_version,
-        current_prompt_version=get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT),
+        # "local" means Opik was unreachable, not a prompt edit; comparing it would
+        # re-summarize the whole corpus.
+        current_prompt_version=None
+        if prompt_version == LOCAL_PROMPT_VERSION
+        else prompt_version,
     )
 
     errors: list[str] = []

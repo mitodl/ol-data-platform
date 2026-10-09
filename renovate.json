@@ -9,6 +9,9 @@
     "every weekend"
   ],
   "timezone": "US/Eastern",
+  "pre-commit": {
+    "enabled": true
+  },
   "lockFileMaintenance": {
     "enabled": true
   },
@@ -22,6 +25,13 @@
     {
       "matchDatasources": [
         "python-version"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "prewarm_uv_cache.sh mirrors the uv commands of the pinned marimo, so a bump needs a look at the build and at first-open time.",
+      "matchFileNames": [
+        "images/marimo-jupyterlab/**"
       ],
       "automerge": false
     }

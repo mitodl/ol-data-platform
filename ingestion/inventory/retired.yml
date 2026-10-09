@@ -692,3 +692,159 @@ retired:
     the rest of course_structure is not dlt-loaded. Under course_structure it
     never existed in production raw, because nothing loaded the files the
     archive assets wrote.
+- deployment: edxorg
+  layer: s3
+  raw_tables:
+  - raw__edxorg__s3__mitx_course
+  - raw__edxorg__s3__mitx_course_run
+  - raw__edxorg__s3__program
+  - raw__edxorg__s3__program_course
+  retired_on: '2026-10-01'
+  reason: >-
+    Replaced by edxorg/api's raw__edxorg__discovery__api__{mitx_course,
+    mitx_course_run,program,program_course}, which the mit_edx_programs dlt source
+    loads from the edX discovery API (#2789). The edxorg code location's assets
+    wrote these tables' landing files, the last at 2026-10-01 05:00Z, and the
+    "S3 edX.org course and program" Airbyte connection loaded them. Airbyte
+    inferred the schema from a sample of old files, so it dropped the fields #2721
+    added, and it re-appended files the assets overwrote.
+    bin/backfill-edxorg-catalog-raw.py copies their history into the dlt tables,
+    deduplicated. The tables and landing files stay in place, read-only.
+- deployment: mitlearn
+  layer: app_postgres
+  raw_tables:
+  - raw__mitlearn__app__postgres__learning_resources_learningresource_content_tags
+  retired_on: '2026-02-20'
+  reason: >-
+    mit-learn migration learning_resources/0102 renamed
+    LearningResource.content_tags to resource_tags, which renames the M2M join
+    table, so the source table no longer exists. The last data landed here on
+    2026-02-20. Airbyte's schema refresh later dropped the stream from
+    "MIT Learn Production → S3 Data Lake", and the drift check has reported it
+    since 2026-09-29. The renamed learningresource_resource_tags table was never
+    selected into the connection. dbt never modeled this table.
+- deployment: mitlearn
+  layer: app_postgres
+  raw_tables:
+  - raw__mitlearn__app__postgres__profiles_userwebsite
+  retired_on: '2026-10-01'
+  reason: >-
+    mit-learn#3941 (merged 2026-09-15, first tagged in v0.80.6) dropped the
+    unused UserWebsite model, so the source table no longer exists. Airbyte's
+    schema refresh dropped the stream from "MIT Learn Production → S3 Data
+    Lake", and the drift check has reported it since 2026-09-29. The table's
+    only snapshot is the initial load of 2025-02-13, because no row changed
+    after that, so no data shows when loading stopped. This date is when the
+    retirement was recorded. dbt never modeled this table.
+- deployment: bootcamps
+  layer: hubspot
+  raw_tables:
+  - raw__bootcamps__hubspot__campaigns
+  - raw__bootcamps__hubspot__companies
+  - raw__bootcamps__hubspot__companies_property_history
+  - raw__bootcamps__hubspot__contact_lists
+  - raw__bootcamps__hubspot__contacts
+  - raw__bootcamps__hubspot__contacts_form_submissions
+  - raw__bootcamps__hubspot__contacts_list_memberships
+  - raw__bootcamps__hubspot__contacts_merged_audit
+  - raw__bootcamps__hubspot__contacts_property_history
+  - raw__bootcamps__hubspot__deal_pipelines
+  - raw__bootcamps__hubspot__deal_splits
+  - raw__bootcamps__hubspot__deals
+  - raw__bootcamps__hubspot__deals_archived
+  - raw__bootcamps__hubspot__deals_property_history
+  - raw__bootcamps__hubspot__email_events
+  - raw__bootcamps__hubspot__email_subscriptions
+  - raw__bootcamps__hubspot__engagements
+  - raw__bootcamps__hubspot__engagements_calls
+  - raw__bootcamps__hubspot__engagements_emails
+  - raw__bootcamps__hubspot__engagements_meetings
+  - raw__bootcamps__hubspot__engagements_notes
+  - raw__bootcamps__hubspot__engagements_tasks
+  - raw__bootcamps__hubspot__form_submissions
+  - raw__bootcamps__hubspot__forms
+  - raw__bootcamps__hubspot__goals
+  - raw__bootcamps__hubspot__line_items
+  - raw__bootcamps__hubspot__marketing_emails
+  - raw__bootcamps__hubspot__owners
+  - raw__bootcamps__hubspot__owners_archived
+  - raw__bootcamps__hubspot__products
+  - raw__bootcamps__hubspot__subscription_changes
+  - raw__bootcamps__hubspot__ticket_pipelines
+  - raw__bootcamps__hubspot__tickets
+  - raw__bootcamps__hubspot__workflows
+  retired_on: '2026-10-01'
+  reason: >-
+    The bootcamps application is no longer deployed (see the bootcamps
+    app_postgres entry). The "HubSpot Bootcamps → S3" connection was inactive
+    when the inventory was snapshotted on 2026-08-14 and was deleted from
+    Airbyte before 2026-09-29, when the drift check started reporting it. No
+    data for these tables exists in the current lake: the 7 that are
+    registered in Glue (under raw/, created 2026-09-11) hold metadata only.
+    This date is when the retirement was recorded. dbt modeled none of them.
+- deployment: mitxonline
+  layer: app_postgres
+  raw_tables:
+  - raw__mitxonline__app__postgres__b2b_contractpage_programs
+  retired_on: '2025-11-12'
+  reason: >-
+    MITx Online removed ContractPage.programs, the many-to-many field behind
+    this table, in b2b migration 0016_remove_contractpage_programs
+    (mitodl/mitxonline#3079, merged 2025-11-10), replacing it with the ordered
+    b2b_contractprogramitem. The table was landed in Glue without ever being
+    declared in the unit. This date is the tag date of v0.135.0, the first
+    MITx Online release carrying the migration, which drops the source table
+    when it deploys; the production deploy time itself was not checked. The
+    table's newest data object is from 2025-11-07 (measured 2026-10-06), which
+    shows only when a row last changed. dbt never modeled it.
+    b2b_contractprogramitem was not ingested when this was recorded.
+- deployment: mitx
+  layer: mongodb
+  raw_tables:
+  - raw__mitx__openedx__mongodb__forum_activities
+  - raw__mitx__openedx__mongodb__forum_contents
+  - raw__mitx__openedx__mongodb__forum_contents_tags_aggregation
+  - raw__mitx__openedx__mongodb__forum_delayed_backend_mongoid_jobs
+  - raw__mitx__openedx__mongodb__forum_notifications
+  - raw__mitx__openedx__mongodb__forum_subscriptions
+  - raw__mitx__openedx__mongodb__forum_users
+  retired_on: '2026-01-07'
+  reason: >-
+    Open edX moved the forum from MongoDB to MySQL (forum v2), and MITx
+    Residential cut over on 2025-10-28. The forum_* tables in the mitx/mysql
+    unit carry the whole corpus, migrated content included. The
+    "mitx-forum-production → S3 Data Lake" connection was inactive when the
+    inventory was snapshotted. This date is the tables' only Iceberg snapshot,
+    a full re-sync of the idle database (every row has one
+    _airbyte_extracted_at, 2026-01-07 17:25Z, measured 2026-10-07). dbt modeled
+    none of them.
+- deployment: mitxonline
+  layer: mongodb
+  raw_tables:
+  - raw__mitxonline__openedx__mongodb__forum_contents
+  - raw__mitxonline__openedx__mongodb__forum_subscriptions
+  - raw__mitxonline__openedx__mongodb__forum_users
+  retired_on: '2026-01-07'
+  reason: >-
+    Open edX moved the forum from MongoDB to MySQL (forum v2), and MITx Online
+    cut over on 2026-02-10. The forum_* tables in the mitxonline/mysql unit
+    carry the whole corpus, migrated content included. The
+    "mitxonline-forum-production → S3 Data Lake" connection was inactive when
+    the inventory was snapshotted. This date is the tables' only Iceberg
+    snapshot (2026-01-07 18:34Z, measured 2026-10-07), five weeks before the
+    cutover, so these tables never held the last of the MongoDB content. dbt
+    modeled none of them.
+- deployment: xpro
+  layer: mongodb
+  raw_tables:
+  - raw__xpro__openedx__mongodb__forum_contents
+  - raw__xpro__openedx__mongodb__forum_subscriptions
+  - raw__xpro__openedx__mongodb__forum_users
+  retired_on: '2026-01-07'
+  reason: >-
+    Open edX moved the forum from MongoDB to MySQL (forum v2), and xPRO cut
+    over on 2025-12-17. The forum_* tables in the xpro/mysql unit carry the
+    whole corpus, migrated content included. The
+    "xpro-forum-production → S3 Data Lake" connection was inactive when the
+    inventory was snapshotted. This date is the tables' only Iceberg snapshot
+    (2026-01-07 18:34Z, measured 2026-10-07). dbt modeled none of them.

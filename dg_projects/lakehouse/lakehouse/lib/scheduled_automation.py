@@ -20,11 +20,10 @@ Dagster UI can start it. Dagster synthesizes sensors it was not given
 final in a way that stopping is not.
 
 That difference is also why this is not one boolean shared with the dbt map.
-Only three of these seven schedules run dbt at all; the iceberg maintenance pair
-rewrites Iceberg metadata, instructor onboarding pushes a commit to a GitHub
-repository, and the Airbyte drift check only reads. "May dbt materialize itself
-here" is the wrong question to ask of those, and answering it for them would
-have hidden the more interesting one.
+Not all of these schedules run dbt; the iceberg maintenance pair rewrites
+Iceberg metadata, and the Airbyte drift check only reads. "May dbt
+materialize itself here" is the wrong question to ask of those, and answering it
+for them would have hidden the more interesting one.
 
 What is and is not known to have fired
 -------------------------------------
@@ -53,14 +52,13 @@ single per-environment switch would have to be wrong about one of them.
 
 What omission also takes with it
 --------------------------------
-Five of these seven build their job inline with ``define_asset_job`` inside the
+Most of these build their job inline with ``define_asset_job`` inside the
 ``ScheduleDefinition``, so dropping the schedule drops that job from the code
-location too -- ``iceberg_dbt_maintenance_job``, ``iceberg_raw_maintenance_job``,
-``b2b_analytics_starrocks_job``, ``instructor_onboarding_daily_job`` and
-``airbyte_inventory_drift_daily_job`` are not manually launchable outside
-production. Their ASSETS stay registered everywhere
-and can still be materialized by hand from the asset graph, so nothing becomes
-unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
+location too -- e.g. ``iceberg_dbt_maintenance_job`` and
+``b2b_analytics_starrocks_job`` are not manually launchable outside production,
+and ``learn_integrations_qa_job`` exists only in QA. Their ASSETS stay registered
+everywhere and can still be materialized by hand from the asset graph, so nothing
+becomes unreachable; only the pre-built job disappears. ``dbt_docs_artifacts_daily`` is
 the exception -- its job is registered separately in ``jobs`` and is unaffected.
 
 Adding a schedule
@@ -79,8 +77,8 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # family is generated one-per-Airbyte-connection-group from the LIVE workspace,
 # so its members' names are not knowable from the repo. Its id names the family.
 #
-# Every entry today is the environment set that matches observed intent, so
-# registering this map is not meant to change behaviour anywhere. Its value is
+# The entries this map was introduced with matched observed intent, so
+# registering it was not meant to change behaviour anywhere. Its value is
 # that the answer now lives in the repo: before this, whether any of these ran
 # in QA was instance state nothing here could see, and one of them had been
 # running against the wrong warehouse for months without leaving a trace in the
@@ -101,13 +99,30 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Both rewrite Iceberg metadata -- expire snapshots, compact manifests.
     # They resolve through trino_host_map/trino_catalog_map, which have always
     # been environment-correct, so unlike the dbt schedules these were never
-    # misrouted. Production-only for two different reasons: expiring snapshots
-    # under a QA lake being rebuilt would fight step 8 rather than help it, and
-    # `dev` maps to the PRODUCTION catalog, so a tick on a laptop would expire
-    # production's snapshots. That second one is why "off in dev" is not merely
-    # tidiness here.
+    # misrouted. Never dev: it maps to the PRODUCTION catalog, so a tick on a
+    # laptop would expire production's snapshots. That is why "off in dev" is
+    # not merely tidiness here.
+    #
+    # The dbt layer stays production-only: expiring snapshots under QA dbt
+    # layers that step 8 is still rebuilding would fight it rather than help.
+    # The raw layer runs in QA too: nothing else trims the snapshots QA's own
+    # raw loads leave behind.
     "iceberg_dbt_maintenance_nightly": frozenset({"production"}),
-    "iceberg_raw_maintenance_nightly": frozenset({"production"}),
+    "iceberg_raw_maintenance_nightly": frozenset({"qa", "production"}),
+    # Deletes table directories no Glue table references, or only reports them
+    # where the asset's LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS leaves the
+    # environment out, which today is everywhere. QA only until a QA deletion
+    # list has been reviewed and QA deletes have run clean; production follows.
+    # Never dev: it resolves to the production warehouse.
+    "lake_orphan_sweep_weekly": frozenset({"qa"}),
+    # Lists every raw Iceberg table's directory and compares it with what the
+    # table's metadata still reaches. It only reports until the asset's
+    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names an environment, which
+    # today is nowhere. Production from the start, unlike the sweep: raw
+    # snapshot expiry runs there alone, so that is where the files it strands
+    # are, and a report reads Glue and S3 and writes nothing. Never dev: it
+    # resolves to the production warehouse.
+    "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
     # ran from QA against production -- by hand, not on this cron (see above).
     # Production-only here, but note that leaves the path that actually fired
@@ -115,6 +130,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # and stays one click away, which is also what a deliberate QA run under
     # step 8 needs.
     "dbt_docs_artifacts_daily": frozenset({"production"}),
+    # `dbt source freshness`, publishing sources.json for OpenMetadata.
+    # Production-only for the same reason as the docs schedule above: it reports
+    # on the production sources. Its job is likewise registered in `jobs` in
+    # every environment, so a deliberate run elsewhere stays possible.
+    "dbt_source_freshness_daily": frozenset({"production"}),
     # Builds the tag:starrocks models, then refreshes their downstream MVs.
     # Always target-correct via STARROCKS_DBT_TARGET, but a QA run reads the
     # empty QA lake and publishes a B2B dashboard's worth of silently partial
@@ -132,12 +152,6 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # QA is RFC 12711 step 8's call.
     "non_airbyte_staging_daily": frozenset({"production"}),
     "b2b_analytics_starrocks_nightly": frozenset({"production"}),
-    # Not a data-platform schedule at all: it pushes a commit to the access
-    # forge GitHub repository. There is one of those, not one per environment,
-    # so a QA tick would write the real repo. This one was gated only by
-    # `ScheduleDefinition`'s implicit STOPPED default -- it passed no
-    # default_status at all.
-    "instructor_onboarding_daily_schedule": frozenset({"production"}),
     # Reads the ingestion inventory and compares it to the live Airbyte
     # workspace. Production-only because the comparison is not
     # environment-aware and the inventory describes production.
@@ -160,6 +174,12 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # well as production. That one is ingestion, which RFC 12711 wants running
     # in QA; this is a report, and it can only describe one workspace.
     "airbyte_inventory_drift_daily": frozenset({"production"}),
+    # The dbt models tagged qa_scheduled (MIT Learn integrations views QA has
+    # every raw input for), plus their upstream. QA only: production builds
+    # them through the automation sensor. The one dbt schedule QA runs, and an
+    # exception to "QA does not build" that holds only because none of its
+    # models is a cross-source union, which ol-dbt validate enforces on the tag.
+    "learn_integrations_qa_daily": frozenset({"qa"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {

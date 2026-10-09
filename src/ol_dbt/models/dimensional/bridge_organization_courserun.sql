@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Maps MITx Online B2B organizations to course runs via contracts.
 -- Grain: one row per (organization, contract, course_run).
 -- Note: xPro B2B purchases are tracked via orders (see int__mitxpro__b2becommerce_b2border).

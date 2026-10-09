@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 select
     course_uuid
     , course_name

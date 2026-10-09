@@ -824,6 +824,7 @@ dependencies = [
     { name = "rich" },
     { name = "sqlglot" },
     { name = "superset-sup" },
+    { name = "yarl" },
 ]
 
 [package.dev-dependencies]
@@ -839,6 +840,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0.0" },
     { name = "sqlglot", specifier = ">=20.0" },
     { name = "superset-sup", git = "https://github.com/mitodl/superset-sup?rev=self_hosted_superset_oidc" },
+    { name = "yarl", specifier = ">=1.9" },
 ]
 
 [package.metadata.requires-dev]

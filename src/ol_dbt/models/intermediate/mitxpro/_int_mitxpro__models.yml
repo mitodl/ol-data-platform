@@ -1403,6 +1403,7 @@ models:
     tests:
     - not_null
   - name: courserun_is_live
+    data_type: boolean
     description: boolean, indicating whether the course run is available to users
       on MITxPro website
   - name: courserun_title
@@ -1503,7 +1504,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say', '']
+          values: '{{ gender_values(["m", "f", "o"]) }}'
   - name: user_birth_year
     description: int, user birth year
   - name: user_company
@@ -1537,7 +1538,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       arguments:
@@ -2299,3 +2300,159 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_readable_id", "video_edx_uuid"]
+
+- name: int__mitxpro__catalog_course_runs
+  description: The course runs xPRO's catalog API considers, live runs with a start
+    date, with the product price and expiry state the API derives for each. One row
+    per run.
+  columns:
+  - name: courserun_id
+    description: int, primary key of the course run
+    tests: [unique, not_null]
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests: [not_null]
+  - name: courserun_readable_id
+    description: str, the run's courseware id
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: str, ISO 8601 UTC time when the run starts
+  - name: courserun_end_on
+    description: str, ISO 8601 UTC time when the run ends
+  - name: courserun_enrollment_start_on
+    description: str, ISO 8601 UTC time when enrollment opens
+  - name: courserun_enrollment_end_on
+    description: str, ISO 8601 UTC time when enrollment closes
+  - name: product_id
+    description: int, the run's active ecommerce product; null if it has none
+  - name: courserun_current_price
+    description: decimal, price from the product's most recently created version
+  - name: courserun_is_unexpired
+    description: boolean, whether at build time the run has not ended, enrollment
+      has opened and has not closed (CourseRun.is_unexpired in mitxpro)
+    tests: [not_null]
+
+- name: int__mitxpro__catalog_pages
+  description: The CMS page of each xPRO course and program with what xPRO's catalog
+    API reads off it. One row per course or program page; exactly one of course_id
+    and program_id is set.
+  columns:
+  - name: course_id
+    description: int, the page's course; null for a program page
+  - name: program_id
+    description: int, the page's program; null for a course page
+  - name: wagtail_page_id
+    description: int, primary key of the page in wagtailcore_page
+    tests: [unique, not_null]
+  - name: page_is_live
+    description: boolean, whether the page is published
+  - name: page_first_published_on
+    description: timestamp, when the page was first published
+  - name: page_last_published_on
+    description: timestamp, when the page was last published
+  - name: page_description
+    description: str, the page's description, as HTML
+  - name: page_duration
+    description: str, free-text duration
+  - name: page_format
+    description: str, 'Online' or 'Hybrid'
+  - name: page_time_commitment
+    description: str, free-text weekly effort
+  - name: page_min_weeks
+    description: int, shortest length in weeks
+  - name: page_max_weeks
+    description: int, longest length in weeks
+  - name: page_min_weekly_hours
+    description: int, least weekly hours
+  - name: page_max_weekly_hours
+    description: int, most weekly hours
+  - name: page_thumbnail_url
+    description: str, URL of the page's thumbnail image; null if it has none
+  - name: page_ceus
+    description: double, CEUs from the page's first live certificate child page
+  - name: page_instructors
+    description: array(str), names from the page's first live faculty child page
+
+- name: int__mitxpro__catalog_product_prices
+  description: The current price of each xPRO ecommerce product, as xPRO's catalog
+    API derives it. One row per product.
+  columns:
+  - name: product_id
+    description: int, primary key of the product
+    tests: [unique, not_null]
+  - name: courserun_id
+    description: int, the course run the product sells; null for a program product
+  - name: program_id
+    description: int, the program the product sells; null for a course run product
+  - name: product_is_active
+    description: boolean, whether the product is active. xPRO's default product queries
+      return active products only.
+  - name: product_current_price
+    description: decimal, price of the product's most recently created version; null
+      if it has none
+
+unit_tests:
+- name: test_int__mitxpro__catalog_course_runs_expiry_and_product
+  description: >
+    Only live runs with a start date are kept. A run is unexpired when it has
+    not ended, enrollment has not closed and enrollment has opened; a null date
+    passes each check. The price comes from the run's active product only.
+  model: int__mitxpro__catalog_course_runs
+  given:
+  - input: ref('stg__mitxpro__app__postgres__courses_courserun')
+    rows:
+    - {courserun_id: 1, course_id: 1, courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000",
+      courserun_end_on: "2999-01-01T00:00:00.000"}
+    - {courserun_id: 2, course_id: 1, courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000"}
+    - {courserun_id: 3, course_id: 1, courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000",
+      courserun_end_on: "2000-06-01T00:00:00.000"}
+    - {courserun_id: 4, course_id: 1, courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000",
+      courserun_enrollment_end_on: "2000-06-01T00:00:00.000"}
+    - {courserun_id: 5, course_id: 1, courserun_is_live: true, courserun_start_on: "2999-06-01T00:00:00.000",
+      courserun_enrollment_start_on: "2999-01-01T00:00:00.000"}
+    - {courserun_id: 6, course_id: 1, courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000",
+      courserun_enrollment_start_on: "2000-01-01T00:00:00.000", courserun_enrollment_end_on: "2999-01-01T00:00:00.000"}
+    - {courserun_id: 7, course_id: 1, courserun_is_live: false, courserun_start_on: "2000-01-01T00:00:00.000"}
+    - {courserun_id: 8, course_id: 1, courserun_is_live: true}
+  - input: ref('int__mitxpro__catalog_product_prices')
+    rows:
+    - {product_id: 10, courserun_id: 1, product_is_active: true, product_current_price: 100}
+    - {product_id: 20, courserun_id: 2, product_is_active: false, product_current_price: 200}
+    - {product_id: 60, courserun_id: 6, product_is_active: true}
+    - {product_id: 90, program_id: 1, product_is_active: true, product_current_price: 900}
+  expect:
+    rows:
+    - {courserun_id: 1, product_id: 10, courserun_current_price: 100, courserun_is_unexpired: true}
+    - {courserun_id: 2, product_id: null, courserun_current_price: null, courserun_is_unexpired: true}
+    - {courserun_id: 3, product_id: null, courserun_current_price: null, courserun_is_unexpired: false}
+    - {courserun_id: 4, product_id: null, courserun_current_price: null, courserun_is_unexpired: false}
+    - {courserun_id: 5, product_id: null, courserun_current_price: null, courserun_is_unexpired: false}
+    - {courserun_id: 6, product_id: 60, courserun_current_price: null, courserun_is_unexpired: true}
+
+- name: test_int__mitxpro__catalog_product_prices_takes_the_newest_version
+  description: >
+    A product's price is that of its most recently created version, whatever
+    the version ids are, and null when it has no version. Inactive products
+    are kept and flagged.
+  model: int__mitxpro__catalog_product_prices
+  given:
+  - input: ref('int__mitxpro__ecommerce_product')
+    rows:
+    - {product_id: 1, courserun_id: 5, product_is_active: true}
+    - {product_id: 2, program_id: 7, product_is_active: false}
+    - {product_id: 3, courserun_id: 6, product_is_active: true}
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_productversion')
+    rows:
+    - {productversion_id: 11, product_id: 1, productversion_price: 300, productversion_created_on: "2024-01-01T00:00:00.000"}
+    - {productversion_id: 10, product_id: 1, productversion_price: 500, productversion_created_on: "2025-01-01T00:00:00.000"}
+    - {productversion_id: 12, product_id: 1, productversion_price: 400, productversion_created_on: "2024-06-01T00:00:00.000"}
+    - {productversion_id: 20, product_id: 2, productversion_price: 900, productversion_created_on: "2024-01-01T00:00:00.000"}
+  expect:
+    rows:
+    - {product_id: 1, courserun_id: 5, program_id: null, product_is_active: true,
+      product_current_price: 500}
+    - {product_id: 2, courserun_id: null, program_id: 7, product_is_active: false,
+      product_current_price: 900}
+    - {product_id: 3, courserun_id: 6, program_id: null, product_is_active: true,
+      product_current_price: null}

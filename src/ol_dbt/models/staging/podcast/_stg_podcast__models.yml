@@ -90,12 +90,12 @@ models:
   - name: episode_duration_raw
     description: >
       str, raw itunes:duration text. Free-form -- may be "HH:MM:SS", "MM:SS",
-      or a plain seconds count. Normalized to ISO-8601 by the delivery asset
-      rather than in SQL, to mirror mit-learn's iso8601_duration() exactly.
+      or a plain seconds count. Normalized to ISO-8601 by MIT Learn's
+      iso8601_duration(), not in SQL.
   - name: episode_published_on_raw
     description: >
-      str, RSS <item><pubDate> as an unparsed RFC 2822 timestamp. Parsed by the
-      delivery asset, for the same reason as episode_duration_raw.
+      str, RSS <item><pubDate> as an unparsed RFC 2822 timestamp. Parsed by MIT
+      Learn, like episode_duration_raw.
   - name: episode_image_url
     description: >
       str, episode cover art -- the episode's own itunes:image when present,

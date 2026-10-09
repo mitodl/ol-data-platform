@@ -9,6 +9,21 @@ strategies:
   qa: ingest
   local: fixture
 loader: airbyte
+# Production loads this unit with Airbyte and QA with dlt (the xpro_app source)
+# until the production cutover, so the two environments carry different metadata
+# columns: `_airbyte_extracted_at` vs. `_dlt_load_id`. Neither loader leaves
+# more than one row per primary key. Measured 2026-10-06 through Athena: 0
+# duplicate and 0 null keys on the 55 production tables staging reads (2,493,174
+# rows). With nothing to deduplicate per key, staging passes rows through, which
+# compiles against either loader and stays correct after the cutover.
+#
+# Production raw does hold more than one row per business key on some tables.
+# `Basket.user` is one-to-one in the app, yet raw has up to 37 baskets for one
+# user (16,786 rows, 14,190 users), so it keeps rows the app has since deleted.
+# The staging models that pick one row per business key (basket per user, coupon
+# selection per basket) order by the app's own `updated_on` instead of a loader
+# column.
+raw_metadata_column:
 table_prefix: raw__xpro__app__postgres__
 airbyte:
   source_kind: source-postgres
@@ -305,7 +320,7 @@ tables:
   modeled: false
 - name: cms_certificatepage
   raw_table: raw__xpro__app__postgres__cms_certificatepage
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - page_ptr_id
@@ -368,14 +383,14 @@ tables:
   modeled: false
 - name: cms_externalcoursepage
   raw_table: raw__xpro__app__postgres__cms_externalcoursepage
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - page_ptr_id
   modeled: true
 - name: cms_externalcoursepage_topics
   raw_table: raw__xpro__app__postgres__cms_externalcoursepage_topics
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -599,7 +614,7 @@ tables:
   modeled: false
 - name: courses_courserun
   raw_table: raw__xpro__app__postgres__courses_courserun
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -641,7 +656,7 @@ tables:
   modeled: false
 - name: courses_coursetopic
   raw_table: raw__xpro__app__postgres__courses_coursetopic
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -900,7 +915,7 @@ tables:
   modeled: true
 - name: ecommerce_product
   raw_table: raw__xpro__app__postgres__ecommerce_product
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -914,7 +929,7 @@ tables:
   modeled: true
 - name: ecommerce_productversion
   raw_table: raw__xpro__app__postgres__ecommerce_productversion
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -1285,7 +1300,7 @@ tables:
   modeled: false
 - name: wagtailcore_page
   raw_table: raw__xpro__app__postgres__wagtailcore_page
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id

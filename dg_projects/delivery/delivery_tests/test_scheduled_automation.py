@@ -13,10 +13,11 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
-from dagster import DefaultSensorStatus
+from dagster import AssetKey, DefaultScheduleStatus, DefaultSensorStatus
 from delivery.lib.scheduled_automation import (
     INSTIGATOR_ENVIRONMENTS,
     instigators_for_environment,
@@ -107,6 +108,16 @@ def test_destructive_sensor_is_production_only():
     )
 
 
+def test_instructor_onboarding_is_production_only():
+    """There is one access forge repository, not one per environment.
+
+    A tick anywhere else would commit to the real one's default branch.
+    """
+    assert INSTIGATOR_ENVIRONMENTS["instructor_onboarding_daily_schedule"] == frozenset(
+        {"production"}
+    )
+
+
 def test_every_registered_instigator_is_declared():
     """Guards the pairing between Definitions and this map.
 
@@ -177,3 +188,98 @@ def test_failure_notification_sensors_register_in_production_only(environment):
             )
         else:
             assert registered == set()
+
+
+@pytest.mark.parametrize("environment", VALID_DAGSTER_ENVS)
+def test_instructor_onboarding_schedule_registers_running_in_production_only(
+    environment,
+):
+    """Read off the built repository, so the wiring and status are both pinned.
+
+    It was RUNNING in lakehouse, and instigator state is keyed on location name,
+    so dropping default_status would stop it on the move. Registering it
+    anywhere else would commit to the real access-forge repository.
+    """
+    with _repository_for(environment) as repo:
+        schedules = {schedule.name: schedule for schedule in repo.schedule_defs}
+
+        if environment == "production":
+            assert (
+                schedules["instructor_onboarding_daily_schedule"].default_status
+                == DefaultScheduleStatus.RUNNING
+            )
+        else:
+            assert "instructor_onboarding_daily_schedule" not in schedules
+
+
+WEBHOOK_DELIVERY_SENSOR_NAMES = frozenset(
+    {
+        "mit_climate_delivery_sensor",
+        "mitpe_delivery_sensor",
+        "oll_delivery_sensor",
+        "mit_edx_programs_delivery_sensor",
+    }
+)
+
+DBT_MODELS_DIR = Path(__file__).parents[3] / "src" / "ol_dbt" / "models"
+
+
+def _webhook_nodes(repo: Any) -> dict[AssetKey, Any]:
+    graph = repo.asset_graph
+    return {
+        key: graph.get(key)
+        for key in graph.get_all_asset_keys()
+        if key.path[0] == "mit_learn_delivery"
+    }
+
+
+@pytest.mark.parametrize("environment", VALID_DAGSTER_ENVS)
+def test_webhooks_are_conditioned_only_where_their_sensor_registers(environment):
+    """A conditioned webhook with no declared sensor is not inert.
+
+    Dagster sweeps it into the synthesized default_automation_condition_sensor,
+    which registers in every environment. So outside production the webhooks
+    must carry no condition at all, and in production each must be targeted by
+    its own sensor rather than the default one.
+    """
+    with _repository_for(environment) as repo:
+        webhooks = _webhook_nodes(repo)
+        sensors = {sensor.name: sensor for sensor in repo.sensor_defs}
+        assert len(webhooks) == len(WEBHOOK_DELIVERY_SENSOR_NAMES)
+
+        if environment != "production":
+            assert set(sensors) & WEBHOOK_DELIVERY_SENSOR_NAMES == set()
+            assert all(node.automation_condition is None for node in webhooks.values())
+            return
+
+        targeted = set()
+        for name in WEBHOOK_DELIVERY_SENSOR_NAMES:
+            sensor = sensors[name]
+            assert sensor.default_status == DefaultSensorStatus.STOPPED
+            targeted |= sensor.asset_selection.resolve(repo.asset_graph)
+        assert targeted == set(webhooks)
+        assert all(node.automation_condition is not None for node in webhooks.values())
+
+        default = sensors.get("default_automation_condition_sensor")
+        if default is not None:
+            assert not default.asset_selection.resolve(repo.asset_graph) & targeted
+
+
+def test_webhook_deps_are_keys_lakehouse_emits():
+    """The deps are what on_cron waits on, so a wrong key never fires.
+
+    dagster-dbt keys a model with a configured schema as [schema, model name],
+    and the integrations layer sets ``+schema: integrations``. The deps were
+    written as ["integrations", "learn", model], which no code location
+    defines, so they would have been treated as never updated.
+    """
+    with _repository_for("production") as repo:
+        for key, node in _webhook_nodes(repo).items():
+            assert node.parent_keys, key
+            for parent in node.parent_keys:
+                schema, model = parent.path
+                assert schema == "integrations", (key, parent)
+                assert list(DBT_MODELS_DIR.glob(f"integrations/**/{model}.sql")), (
+                    key,
+                    parent,
+                )

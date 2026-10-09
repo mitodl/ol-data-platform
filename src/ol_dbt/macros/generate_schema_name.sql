@@ -24,11 +24,34 @@
     the StarRocks-scoped one in dbt_starrocks.py), and the Trino/Snowflake
     models already depend on `<target.schema>_<custom>` naming for every mart.
     Guarding on target.type keeps this fix from silently relocating them.
+
+    On Trino the schema is a Glue database, and Glue accepts names that Iceberg's
+    GlueCatalog refuses to load (IcebergToGlueConverter.GLUE_DB_PATTERN,
+    `[a-z0-9_]{1,252}`, enforced unless the catalog sets
+    glue.skip-name-validation, which ours do not). Trino creates such a database
+    without complaint, and then nothing that reads the lake through Iceberg
+    (Gravitino, StarRocks) can open it. Both cases found in the lake came from
+    `schema_suffix`: the literal `<your name>` placeholder and a hyphenated
+    branch name. Fail the run before the database exists.
+
+    Uppercase is refused as well. Trino would most likely fold it to lower case,
+    which makes the database loadable but not the one the suffix names. An empty
+    `schema_suffix` (e.g. a blank DBT_SCHEMA_SUFFIX in Dagster dev) renders as
+    `None` and is refused for the same reason.
 #}
 {% macro generate_schema_name(custom_schema_name, node) -%}
     {%- if target.type == 'starrocks' and custom_schema_name is not none -%}
         {{ custom_schema_name | trim }}
     {%- else -%}
-        {{ default__generate_schema_name(custom_schema_name, node) }}
+        {%- set schema_name = default__generate_schema_name(custom_schema_name, node) | trim -%}
+        {%- if target.type == 'trino' and not modules.re.fullmatch('[a-z0-9_]{1,252}', schema_name) -%}
+            {{ exceptions.raise_compiler_error(
+                "Schema name '" ~ schema_name ~ "' is not one Iceberg can load from Glue. "
+                ~ "It must be 1-252 characters of lowercase letters, digits and underscores. "
+                ~ "Check the schema_suffix var (currently '" ~ var('schema_suffix', '') ~ "'; "
+                ~ "'None' means it is empty, e.g. a blank DBT_SCHEMA_SUFFIX)."
+            ) }}
+        {%- endif -%}
+        {{ schema_name }}
     {%- endif -%}
 {%- endmacro %}

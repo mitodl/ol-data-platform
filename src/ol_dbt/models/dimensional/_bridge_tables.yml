@@ -217,6 +217,70 @@ models:
     description: If true, the user is a manager of this organization and can access
       organization dashboard features.
 
+- name: bridge_user_contract
+  description: >
+    MITx Online B2B user-to-contract membership bridge, with the learner's
+    data-sharing consent for the contract. Grain: one row per (user, contract).
+    Consent is per contract, not per organization. Rows are the current
+    memberships plus removed memberships with a recorded decision: MITx Online
+    hard-deletes a membership when the learner leaves the organization while
+    their enrollments stay, so the decision is kept from
+    snapshot_mitxonline_b2b_userb2bcontract rather than lost with the row.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - user_fk
+      - contract_fk
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: user_fk
+    description: Foreign key to dim_user.user_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: contract_fk
+    description: Foreign key to dim_contract.contract_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_contract')
+        field: contract_pk
+  - name: organization_fk
+    description: Foreign key to dim_organization.organization_pk, from the contract.
+      Null when the contract's organization is not in dim_organization.
+  - name: membership_is_current
+    description: True when MITx Online currently holds the membership. False for a
+      removed membership kept because of a recorded decision.
+  - name: consented_to_data_sharing
+    description: >
+      The learner's decision to share their course data with the contract's
+      organization. Null when the learner has not been asked or has not answered,
+      true when they consented, false when they declined or withdrew. MITx Online
+      stores a single value, so declined and withdrawn are not distinguishable.
+      When the current membership has no decision, or is gone, this is the
+      latest decision the snapshot recorded for the (user, contract), so a
+      decision survives removal and re-adding in either direction.
+  - name: consent_modified_at
+    description: ISO-8601 timestamp when consented_to_data_sharing was last set. Null
+      when it never has been. Moves on withdrawal as well as on consent.
+  - name: membership_created_on
+    description: ISO-8601 timestamp when the membership was created. Null for a removed
+      membership.
+  - name: membership_updated_on
+    description: ISO-8601 timestamp when the membership was last saved. Null for a
+      removed membership.
+
 - name: bridge_user_account_link
   description: >
     User account link bridge across platforms. Links accounts held by the same person,

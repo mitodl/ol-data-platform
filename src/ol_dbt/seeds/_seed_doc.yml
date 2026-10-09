@@ -191,3 +191,23 @@ seeds:
         arguments:
           to: ref('learn_topics')
           field: topic_uuid
+
+- name: iso_4217_currencies
+  description: >
+    ISO 4217 currency codes, as pycountry 24.6.1 (the version MIT Learn pins) lists
+    them. MIT Learn's transform_price keeps a price's currency only when
+    pycountry.currencies knows it and falls back to USD otherwise; the Learn
+    integrations models check against this seed to do the same. Regenerate from the
+    pycountry version mit-learn pins.
+  config:
+    column_types:
+      currency_code: varchar
+      currency_name: varchar
+  columns:
+  - name: currency_code
+    description: str, three-letter ISO 4217 code, e.g. USD
+    tests:
+    - not_null
+    - unique
+  - name: currency_name
+    description: str, the currency's name

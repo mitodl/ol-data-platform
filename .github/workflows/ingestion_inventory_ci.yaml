@@ -4,11 +4,13 @@ name: Ingestion inventory CI
 # Credential-free PR gate for the ingestion inventory — the human source of truth
 # for what we load (docs/specs/INGESTION_INVENTORY_SPEC.md, step 4).
 #
-# Two checks, and the second is the one that matters:
+# Three checks, and the second is the one that matters:
 #   validate         — schema, controlled vocabulary, and the §3.3 cross-unit rules.
 #   check-removals   — §7.2. Every (unit, raw_table) that disappears must be
 #                      acknowledged in retired.yml with a date and a reason, or
 #                      carry `renamed_from:` on the entry that replaced it.
+#   reconcile        — every raw table a dbt source declares maps to a unit, so
+#                      a source nothing loads cannot be added unnoticed.
 #
 # A dropped table entry is the one failure mode with no symptom: the loader simply
 # stops loading, nothing errors, and a dbt model quietly goes stale. Renames are
@@ -24,6 +26,8 @@ on:
   pull_request:
     paths:
     - "ingestion/inventory/**"
+    - "src/ol_dbt/models/**/*.yml"
+    - "src/ol_dbt/models/**/*.yaml"
     - "src/ol_dbt_cli/**"
     - ".github/workflows/ingestion_inventory_ci.yaml"
   workflow_dispatch:
@@ -46,7 +50,7 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
-        version: "0.12.19"
+        version: "0.12.23"
         enable-cache: true
 
     - name: Set up Python
@@ -64,6 +68,9 @@ jobs:
     - name: Check for unacknowledged removals and renames
       if: github.event_name == 'pull_request'
       run: uv run ol-dbt inventory check-removals --base-ref "origin/${GITHUB_BASE_REF}"
+
+    - name: Reconcile dbt sources against the inventory
+      run: uv run ol-dbt inventory reconcile
 
     # The rendered JSON is committed into ol-infrastructure by hand (§4 — there is
     # deliberately no cross-repo pipeline). Rendering here proves the inventory can

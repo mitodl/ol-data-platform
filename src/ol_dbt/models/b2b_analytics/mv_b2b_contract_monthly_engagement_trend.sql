@@ -34,32 +34,20 @@
 -- the distinct learner count it is attributable to. Do not add an aggregate
 -- here without also emitting its cohort.
 --
+-- contributing_learners counts every learner behind the row (active, enrolling
+-- or certified in the month) and is the cohort the API gates the whole row on.
+--
 -- A learner is counted under the contract that owns the course run the
 -- activity happened in, so a learner active under two contracts contributes to
 -- both rows -- the contract rows therefore do not partition the org's learner
 -- count, and summing monthly_active_learners across contracts can exceed the
 -- org row.
 with contract_courseruns as (
-    -- courserun -> contract, resolved through the dimensional bridge. A course
-    -- run belongs to exactly one B2B contract (courses_courserun.b2b_contract_id),
-    -- so this cannot fan out the report rows it is joined to.
-    select
-        cr.courserun_readable_id,
-        c.contract_pk,
-        c.contract_id,
-        c.b2b_contract_name,
-        org.organization_key,
-        org.sso_organization_id,
-        org.organization_name
-    from {{ source('dimensional', 'bridge_organization_courserun') }} boc
-    join {{ source('dimensional', 'dim_contract') }} c
-        on boc.contract_fk = c.contract_pk
-    join {{ source('dimensional', 'dim_organization') }} org
-        on c.organization_fk = org.organization_pk
-    join {{ source('dimensional', 'dim_course_run') }} cr
-        on boc.courserun_fk = cr.courserun_pk
-    where org.platform = 'mitxonline'
-      and cr.is_current = true
+{{ b2b_contract_courseruns() }}
+)
+
+, learner_months as (
+{{ b2b_learner_courserun_months() }}
 )
 
 select
@@ -69,28 +57,24 @@ select
     cc.contract_pk,
     cc.contract_id,
     cc.b2b_contract_name,
-    oar.activity_year_and_month,
-    count(distinct case when oar.active_count > 0 then oar.user_email end)       as monthly_active_learners,
-    sum(oar.enrolled_count)                                                      as new_enrollments,
-    count(distinct case when oar.enrolled_count > 0 then oar.user_email end)     as enrolling_learners,
-    sum(oar.certificate_count)                                                   as certificates_earned,
-    count(distinct case when oar.certificate_count > 0 then oar.user_email end)  as certified_learners,
-    sum(oar.videos_watched)                                                      as total_videos_watched,
-    count(distinct case when oar.videos_watched > 0 then oar.user_email end)     as video_watchers,
-    sum(oar.problems_count)                                                      as total_problems_attempted,
-    count(distinct case when oar.problems_count > 0 then oar.user_email end)     as problem_attempters,
-    sum(oar.chatbot_used_count)                                                  as total_chatbot_interactions,
-    count(distinct case when oar.chatbot_used_count > 0 then oar.user_email end) as chatbot_users
-from {{ source('reporting', 'organization_administration_report') }} oar
--- An inner join, unlike the org-level view's left join to dim_organization:
--- a report row whose course run resolves to no contract has nothing to sit
--- under here. That drops the free-text organization_key fallback rows
--- (coalesce(b2b_contract_to_courseruns.organization_key,
--- user_course_roles.organization) in the source report), which by definition
--- never resolved to a contract-bearing course run.
+    lm.activity_year_and_month,
+    count(distinct case when lm.is_active_day > 0 then lm.user_fk end)        as monthly_active_learners,
+    sum(lm.new_enrollments)                                                   as new_enrollments,
+    count(distinct case when lm.new_enrollments > 0 then lm.user_fk end)      as enrolling_learners,
+    sum(lm.certificates_earned)                                               as certificates_earned,
+    count(distinct case when lm.certificates_earned > 0 then lm.user_fk end)  as certified_learners,
+    sum(lm.videos_played)                                                     as total_videos_watched,
+    count(distinct case when lm.videos_played > 0 then lm.user_fk end)        as video_watchers,
+    sum(lm.problems_attempted)                                                as total_problems_attempted,
+    count(distinct case when lm.problems_attempted > 0 then lm.user_fk end)   as problem_attempters,
+    sum(lm.chatbot_interactions)                                              as total_chatbot_interactions,
+    count(distinct case when lm.chatbot_interactions > 0 then lm.user_fk end) as chatbot_users,
+    count(distinct lm.user_fk)                                                as contributing_learners
+from learner_months lm
 join contract_courseruns cc
-    on oar.courserun_readable_id = cc.courserun_readable_id
-where oar.activity_year_and_month is not null
+    on lm.courserun_fk = cc.courserun_pk
+-- A row with no month is not a month the API can publish.
+where lm.activity_year_and_month is not null
 group by
     cc.organization_key,
     cc.sso_organization_id,
@@ -98,4 +82,4 @@ group by
     cc.contract_pk,
     cc.contract_id,
     cc.b2b_contract_name,
-    oar.activity_year_and_month
+    lm.activity_year_and_month

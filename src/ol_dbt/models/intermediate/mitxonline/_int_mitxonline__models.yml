@@ -541,6 +541,8 @@ models:
     - not_null
   - name: order_total_price_paid
     description: number, total order amount
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: user_id
     description: int, unique ID for each user on the MITx Online platform
     tests:
@@ -1000,11 +1002,15 @@ models:
     description: text, the description shown on the home page and product page.
   - name: course_price
     description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
-      available)
+      available). QA has live course pages with no price block (71 of 162 on 2026-10-07),
+      so the test below only warns there.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
           row_condition: "course_page_is_live=true"
+        config:
+          severity: "{{ 'warn' if target.database == 'ol_data_lake_qa' else 'error'\
+            \ }}"
   - name: course_length
     description: str, a short description indicating how long it takes to complete
       (e.g. '4 weeks').
@@ -1607,7 +1613,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_company_size
     description: str, company size
     tests:
@@ -1629,7 +1635,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   - name: user_type_is_student
     description: boolean, indicating if learner is identified as Student
   - name: user_type_is_professional

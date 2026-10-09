@@ -125,7 +125,7 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , mitxpro_runs.courserun_is_live
         , case
-            when cardinality(split(mitxpro_runs.courserun_readable_id, '+')) >= 2
+            when {{ array_length("split(mitxpro_runs.courserun_readable_id, '+')") }} >= 2
                 then split(mitxpro_runs.courserun_readable_id, '+')[2]
         end as course_number
         , mitxpro_runs.courserun_created_on
@@ -186,7 +186,7 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , false as courserun_is_live
         , case
-            when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
+            when {{ array_length("split(bootcamps_runs.courserun_readable_id, '+')") }} >= 2
                 then split(bootcamps_runs.courserun_readable_id, '+')[2]
         end as course_number
         , null as courserun_created_on
@@ -207,7 +207,7 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , case
-            when cardinality(split(courserun_readable_id, '+')) >= 2
+            when {{ array_length("split(courserun_readable_id, '+')") }} >= 2
                 then split(courserun_readable_id, '+')[2]
         end as course_number
         , courserun_created_on

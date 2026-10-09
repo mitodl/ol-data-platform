@@ -98,14 +98,13 @@ models:
       exam
       run. Null for all other platforms and non-exam MITxOnline course runs.
   - name: passing_grade
+    data_type: double
     description: >
       Passing score threshold (0.0–1.0) set per MicroMasters proctored exam run.
       Populated only for MITxOnline course runs that correspond to a MicroMasters
       exam
-      run. Null for all other platforms and non-exam MITxOnline course runs. Note:
-      a
-      stored value of null and an actual passing grade of 0.0 are distinct; -1.0 is
-      used as the SCD2 change-detection sentinel to distinguish them.
+      run. Null for all other platforms and non-exam MITxOnline course runs. Null
+      and 0.0 are distinct values for SCD2 change detection.
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Always set for
@@ -130,3 +129,316 @@ models:
     description: timestamp, the end of the enrollment window for this course run
   - name: source_id
     description: string, source system identifier for this course run record
+
+unit_tests:
+- name: test_dim_course_run_merge_is_idempotent_under_duplicate_copies
+  description: >
+    Regression test for 2026-09-01, when staging briefly passed duplicate Airbyte
+    copies
+    of mitxonline course runs through. Each copy became its own current row, and the
+    expire join multiplied existing x incoming rows on every later change. With two
+    identical current rows already in the target and two identical copies of a changed
+    upstream row, the batch must hold exactly one new current row and one expired
+    row.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - &changed_run
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+    - *changed_run
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - &current_version
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-08-11 00:46:01"
+      is_current: true
+    - *current_version
+  expect:
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      is_current: false
+- name: test_dim_course_run_merge_expires_stale_conflicting_current_row
+  description: >
+    Two conflicting upstream copies of one run (before and after an end_date edit)
+    both landed as current rows. Once upstream recovers to the newer copy, the merge
+    must expire both current rows and write the recovered copy as the only current
+    version. A per-row change check skips the key here because the recovered row
+    still matches one of the current rows, which leaves the stale row current forever.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+  expect:
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      is_current: false
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: false
+- name: test_dim_course_run_merge_expires_stale_row_behind_untracked_duplicates
+  description: >
+    Upstream carries two copies of a run that differ only on an untracked
+    column (source_id) while the target holds the matching current row plus a
+    stale one. Both incoming copies match the same current row, so matching row
+    for row would call the key unchanged. The stale row must still expire.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - &untracked_copy
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+    - <<: *untracked_copy
+      courserun_id: 2683
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      source_id: 2682
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      source_id: 2682
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+  expect:
+    rows:
+    - source_id: 2682
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - source_id: 2683
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: true
+    - source_id: 2682
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      is_current: false
+    - source_id: 2682
+      courserun_end_on: "2026-12-11T15:00:00.000"
+      is_current: false
+- name: test_dim_course_run_merge_skips_unchanged_untracked_duplicates
+  description: >
+    Upstream still carries two copies of a run that differ only on an untracked
+    column (source_id), and both already landed as current rows. The key is
+    unchanged. Rewriting it here would add two versions on every run for as long
+    as upstream carries the copies.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - &landed_copy
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+    - <<: *landed_copy
+      courserun_id: 2683
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - &landed_current
+      courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      source_id: 2682
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+    - <<: *landed_current
+      source_id: 2683
+  expect:
+    rows: []
+- name: test_dim_course_run_merge_skips_unchanged_run
+  description: >
+    A run whose single current row matches its single upstream row produces no new
+    versions, including when a tracked column is NULL on both sides.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      courserun_id: 2682
+      course_id: 1
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - courserun_readable_id: "course-v1:MITxT+CTL.SC3x+3T2026"
+      platform: "mitxonline"
+      courserun_title: "Supply Chain Dynamics"
+      courserun_start_on: "2026-09-16T15:00:00.000"
+      courserun_end_on: "2026-12-25T15:00:00.000"
+      courserun_is_live: true
+      effective_date: "2026-09-01 12:00:00"
+      is_current: true
+  expect:
+    rows: []

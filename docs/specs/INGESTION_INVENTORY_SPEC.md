@@ -767,8 +767,8 @@ ol-infrastructure; 7 closes the loop.
 |---|---|---|
 | 1 | `ol-dbt inventory` sub-app (§5): JSON Schema, dbt-free loader, `validate` | `ol-dbt inventory validate` passes on a hand-written two-unit fixture; all eight §3.3 rules have a failing test |
 | 2 | Dump the live workspace and derive the findings — **`bin/airbyte-inventory.py` already does this**, and has been run (§8.1); folding it in is a move, not a rewrite | Generated inventory validates; connection names byte-identical to the API's (§1.3); `replication_method` captured per Postgres source |
-| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **Command and data both landed** (§8.2); the acceptance criterion is not yet met — see below | The three buckets of §5 are reported ✅; unmapped tables are explained, not deleted ✅; every one of the 374 dbt-declared raw tables maps to exactly one unit — **348/374**, the remaining 26 explained and tracked, not resolved |
-| 4 | **DONE.** CI: schema validation + §7.2 removal/rename check on every PR touching `ingestion/inventory/` (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI |
+| 3 | `ol-dbt inventory reconcile` — three-way diff of inventory vs warehouse vs dbt sources; land the reconciled inventory as a reviewed PR. **DONE.** Command and data both landed (§8.2), and the acceptance criterion was met on 2026-10-06 — see below | The three buckets of §5 are reported ✅; unmapped tables are explained, not deleted ✅; every dbt-declared raw table maps to exactly one unit or is explained by `retired.yml` ✅ — 348/374 when the inventory was populated; of the other 26, 7 `assessment_ai*` declarations were removed and 19 bootcamps tables are retired, so `reconcile` exits 0 |
+| 4 | **DONE.** CI: schema validation, the §7.2 removal/rename check and `reconcile` on every PR touching `ingestion/inventory/` or a dbt YAML file (`.github/workflows/ingestion_inventory_ci.yaml`) | A PR deleting a table entry fails; the same PR with a `retired.yml` entry passes — verified end-to-end through the CLI. A PR declaring a raw source no unit loads fails `reconcile` |
 | ~~5~~ | ~~Pulumi `applications/airbyte_connections` + `sdks/airbyte`, import every source/destination/connection~~ | **STRUCK 2026-08-25 — §6.0** |
 | ~~6~~ | ~~Commit the rendered JSON into ol-infrastructure, register the stack in `simple_pulumi`~~ | **STRUCK 2026-08-25 — §6.0** |
 | 7 | **DONE.** Flip generation: `ol-dbt generate sources --from-inventory`, generate `group_name_to_interval` (§5). dbt sets `loader` per source block, so `_edxorg_sources.yml` (Airbyte, dlt and Dagster tables) became three `ol_warehouse_raw_data` blocks, one per loader. The generated interval map changes no live group's cadence: two dead keys dropped, seven added at the 24-hour value they already defaulted to | Regenerating dbt sources from the inventory is a no-op diff except the corrected `loader:` values (§1.2). Met: 13 tables change loader (12 edxorg, 1 openedx), nothing else |
@@ -891,15 +891,16 @@ with, each fixed above rather than worked around:
   table; requiring the trailing `__` left only `raw__<dep>__openedx__`, which swallows that
   deployment's mysql, api and mongodb units.
 
-**Step 3's acceptance criterion is not yet met, and `reconcile` exits non-zero saying so.**
-348 of 374 dbt-declared raw tables map to a unit. Of the 26 that do not, 19 bootcamps tables
-are retired in `retired.yml` — reported as a warning, because the graveyard explains them and
-the stale reader is the dbt model, not the inventory. The remaining 7 are `assessment_ai*`
-sources under mitxonline and xpro that those deployments have never synced
-(`tk-7-assessment-ai-dbt-sources-under-mitxonline-and-e489de`); they stay ERROR because
-nothing yet explains them, so a clean checkout exits 1. That is the honest state rather than
-a baseline to be silenced, and it is why `reconcile` is not a CI gate yet: it becomes one
-when that task closes.
+**Step 3's acceptance criterion was met on 2026-10-06, and `reconcile` is a CI gate.** When
+the inventory was populated, 348 of 374 dbt-declared raw tables mapped to a unit. Of the 26
+that did not, 19 bootcamps tables are retired in `retired.yml`, reported as a warning because
+the graveyard explains them and the stale reader is the dbt model, not the inventory. The
+other 7 were `assessment_ai*` sources under mitxonline and xpro
+(`tk-7-assessment-ai-dbt-sources-under-mitxonline-and-e489de`). Those deployments never
+loaded them: the tables are in neither the production nor the QA raw database, and no model
+read the sources, so the declarations were removed rather than retired. `reconcile` now exits
+0 on a clean checkout and runs in `ingestion_inventory_ci.yaml` on any change to the
+inventory or to a dbt YAML file.
 
 **`reconcile` cannot tell you the inventory is incomplete.** The `keycloak` and `podcast`
 units were missing from the first populated draft, and both are actively scheduled daily in

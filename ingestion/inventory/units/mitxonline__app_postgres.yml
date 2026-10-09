@@ -9,6 +9,16 @@ strategies:
   qa: ingest
   local: fixture
 loader: airbyte
+# Production loads this unit with Airbyte and QA with dlt
+# (MITXONLINE_APP_DLT_ENVIRONMENTS) until the production cutover, so the two
+# environments carry different metadata columns: `_airbyte_extracted_at` vs.
+# `_dlt_load_id`. Neither loader leaves more than one row per primary key.
+# Airbyte's Iceberg destination merges the deduped streams with equality deletes
+# and overwrites the rest, and the dlt source replaces every table. Measured
+# 2026-10-01 through Athena: 0 duplicate keys on all 65 production tables and
+# the 64 tables QA holds. With nothing to deduplicate, staging passes rows through,
+# which compiles against either loader and stays correct after the cutover.
+raw_metadata_column:
 table_prefix: raw__mitxonline__app__postgres__
 airbyte:
   source_kind: source-postgres
@@ -20,9 +30,11 @@ airbyte:
     sync_interval_hours: 6
     streams:
     - b2b_contractpage
+    - b2b_contractprogramitem
     - b2b_discountcontractattachmentredemption
     - b2b_organizationindexpage
     - b2b_organizationpage
+    - b2b_userb2bcontract
     - b2b_userorganization
     - cms_certificatepage
     - cms_courseindexpage
@@ -37,6 +49,7 @@ airbyte:
     - courses_course
     - courses_course_departments
     - courses_courserun
+    - courses_courserun_enrollment_modes
     - courses_courseruncertificate
     - courses_courserunenrollment
     - courses_courserunenrollmentaudit
@@ -44,11 +57,13 @@ airbyte:
     - courses_courserungradeaudit
     - courses_coursestopic
     - courses_department
+    - courses_enrollmentmode
     - courses_learnerprogramrecordshare
     - courses_paidcourserun
     - courses_partnerschool
     - courses_program
     - courses_program_departments
+    - courses_program_enrollment_modes
     - courses_programcertificate
     - courses_programenrollment
     - courses_programenrollmentaudit
@@ -79,6 +94,7 @@ airbyte:
     - users_user
     - users_user_b2b_contracts
     - users_userprofile
+    - variants_supportedvariant
     - wagtailcore_page
     - wagtailcore_revision
     - wagtailimages_image
@@ -90,6 +106,13 @@ tables:
   namespace: public
   primary_key:
   - - page_ptr_id
+  modeled: true
+- name: b2b_contractprogramitem
+  raw_table: raw__mitxonline__app__postgres__b2b_contractprogramitem
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
   modeled: true
 - name: b2b_discountcontractattachmentredemption
   raw_table: raw__mitxonline__app__postgres__b2b_discountcontractattachmentredemption
@@ -111,6 +134,13 @@ tables:
   namespace: public
   primary_key:
   - - page_ptr_id
+  modeled: true
+- name: b2b_userb2bcontract
+  raw_table: raw__mitxonline__app__postgres__b2b_userb2bcontract
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
   modeled: true
 - name: b2b_userorganization
   raw_table: raw__mitxonline__app__postgres__b2b_userorganization
@@ -210,6 +240,13 @@ tables:
   primary_key:
   - - id
   modeled: true
+- name: courses_courserun_enrollment_modes
+  raw_table: raw__mitxonline__app__postgres__courses_courserun_enrollment_modes
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
 - name: courses_courseruncertificate
   raw_table: raw__mitxonline__app__postgres__courses_courseruncertificate
   sync_mode: incremental_deduped_history
@@ -259,6 +296,13 @@ tables:
   primary_key:
   - - id
   modeled: true
+- name: courses_enrollmentmode
+  raw_table: raw__mitxonline__app__postgres__courses_enrollmentmode
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
 - name: courses_learnerprogramrecordshare
   raw_table: raw__mitxonline__app__postgres__courses_learnerprogramrecordshare
   sync_mode: incremental_deduped_history
@@ -290,6 +334,13 @@ tables:
 - name: courses_program_departments
   raw_table: raw__mitxonline__app__postgres__courses_program_departments
   sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
+- name: courses_program_enrollment_modes
+  raw_table: raw__mitxonline__app__postgres__courses_program_enrollment_modes
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -504,6 +555,13 @@ tables:
   primary_key:
   - - id
   modeled: true
+- name: variants_supportedvariant
+  raw_table: raw__mitxonline__app__postgres__variants_supportedvariant
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
 - name: wagtailcore_page
   raw_table: raw__mitxonline__app__postgres__wagtailcore_page
   sync_mode: incremental_deduped_history

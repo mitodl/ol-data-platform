@@ -16,6 +16,8 @@ on:
     - "src/ol_dbt/**"
     - "src/ol_dbt_cli/**"
     - "ingestion/inventory/**"
+    - "contracts/**"
+    - "metrics/**"
     - ".github/workflows/dbt_pr_ci.yaml"
   workflow_dispatch:
 
@@ -40,7 +42,7 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
-        version: "0.12.19"
+        version: "0.12.23"
         enable-cache: true
 
     - name: Set up Python
@@ -68,18 +70,29 @@ jobs:
       working-directory: src/ol_dbt
       run: python3 "${{ github.workspace }}/.github/scripts/assert_manifest_has_source_lineage.py"
 
-    # Global gates. Dimensional layering (#2072 DoD) is baselined and fails only
-    # on NEW marts/reporting → staging/intermediate references. The QA branch
+    # dbt reads a unit test input's columns from a real relation, which this job has
+    # none of. ol-dbt unit-test creates empty stand-ins from manifest.json first.
+    - name: dbt unit tests
+      run: uv run ol-dbt unit-test
+
+    # Global gates. Dimensional layering (#2072 DoD) is baselined and fails on
+    # NEW marts/reporting → staging/intermediate references, and on a baseline
+    # entry whose reference is gone (regenerate with --update-baseline). The QA branch
     # contract (RFC 12711) fails when a model unioning several ingestion units
     # declares no qa_branches/qa_buildable, declares a branch it cannot read, or
     # declares one whose unit is strategies.qa: omit; an inventory edit can cause
     # the last two. It also fails on a declared-branch table that the committed
     # ingestion/inventory/qa_observation.json shows empty (or a stale mirror)
-    # unless ingestion/inventory/qa_branch_baseline.txt lists it.
-    - name: Dimensional-layering and QA branch contract lint
+    # unless ingestion/inventory/qa_branch_baseline.txt lists it, and on a
+    # line of that file that is no longer a gap (--update-qa-baseline). The data
+    # contract check fails when a dbt model or source drops or retypes a column
+    # its OpenMetadata contract in contracts/ lists. The metric registry check
+    # fails when a file in metrics/ would not sync to OpenMetadata, or names a
+    # column its model no longer declares or selects.
+    - name: Layering, QA branch contract, data contract and metric registry lint
       run: |
         uv run ol-dbt validate \
-          --only dimensional_layering,qa_branch_contract \
+          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry \
           --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
@@ -91,7 +104,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering,qa_branch_contract \
+          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.

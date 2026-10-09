@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- MITx Online B2B contracts dimension.
 -- Grain: one row per contract.
 with contracts as (
@@ -16,15 +12,15 @@ with contracts as (
 
 select
     {{ dbt_utils.generate_surrogate_key(['b2b_contract_id']) }} as contract_pk
-    , b2b_contract_id as contract_id
-    , b2b_contract_name
-    , b2b_contract_is_active
-    , b2b_contract_description
-    , b2b_contract_start_date
-    , b2b_contract_end_date
-    , b2b_contract_max_learners
-    , b2b_contract_enrollment_fixed_price
-    , b2b_contract_membership_type
+    , contracts.b2b_contract_id as contract_id
+    , contracts.b2b_contract_name
+    , contracts.b2b_contract_is_active
+    , contracts.b2b_contract_description
+    , contracts.b2b_contract_start_date
+    , contracts.b2b_contract_end_date
+    , contracts.b2b_contract_max_learners
+    , contracts.b2b_contract_enrollment_fixed_price
+    , contracts.b2b_contract_membership_type
     , org.organization_pk as organization_fk
 from contracts
 left join dim_organization as org

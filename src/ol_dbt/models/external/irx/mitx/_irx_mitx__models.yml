@@ -870,11 +870,13 @@ models:
   - name: author_id
     description: int, foreign key to auth_user
   - name: author_username
-    description: string, username of the author
+    description: string, username of the author. The retired username from auth_user
+      when the author has been retired
   - name: title
     description: string, thread title. Null for responses and comments
   - name: body
-    description: string, text of the post as written by its author
+    description: string, text of the post as written by its author. '[deleted]' when
+      the author has been retired, as is the title of their threads
   - name: thread_type
     description: string, 'discussion' or 'question'. Null for responses and comments
   - name: context

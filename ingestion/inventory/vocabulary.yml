@@ -29,6 +29,12 @@ deployments:
 - xpro
 - mit_climate
 - mitpe
+  # Sloan Executive Education, read from the Sloan unified-portal API. Named
+  # for MIT Learn's etl_source and offeror code.
+- see
+  # The MIT Open Learning website (openlearning.mit.edu), a Drupal site whose
+  # JSON:API serves the events MIT Learn lists.
+- openlearning
   # Infrastructure we run rather than a learning platform, but the definition
   # above is "a thing we run", and its user/group/role tables are identity
   # facts the warehouse models against. Loaded by ol_dlt.sources.keycloak.
@@ -37,6 +43,10 @@ deployments:
   # data — the channel set is configured per run — so `podcast` names the
   # collection, the same shape as `openedx` below.
 - podcast
+  # The YouTube channels configured in mitodl/open-video-data, read from the
+  # YouTube Data API. A collection like `podcast`, named for MIT Learn's
+  # etl_source.
+- youtube
   # We run three Open edX instances — mitx, mitxonline and xpro, each its own
   # deployment above. `openedx` is not a fourth: it names the shared pipeline
   # that reads all three, whose output lands in one table rather than three.
@@ -58,6 +68,8 @@ deployments:
 - mailgun
 - salesforce
 - zendesk
+  # MIT Open Learning's Medium publication, read from its RSS feed.
+- medium
   # Vendor SaaS that reaches us as a file drop rather than an API: PostHog
   # batch-exports every raw MIT Learn client event to the landing zone hourly,
   # so its unit is (posthog, s3) and there is nothing to call.
@@ -83,7 +95,10 @@ layers:
 - rss                   # A published RSS feed, read as the source of record
 - course_structure      # Open edX course archives (course.xml bundles), parsed
                         # into tables by a Dagster asset pipeline rather than
-                        # pulled by a loader. edxorg's are the only ones today.
+                        # pulled by a loader (edxorg), and the un-nested blocks
+                        # of each course's structure document, which dlt loads
+                        # from the files the openedx code location lands (mitx,
+                        # mitxonline, xpro).
 - course_xml            # every block of a course's XML, one row per block, parsed
                         # out of the same archives as course_structure but loaded
                         # into raw by dlt, so it fails independently of it

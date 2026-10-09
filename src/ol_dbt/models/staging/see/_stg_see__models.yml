@@ -1,0 +1,77 @@
+---
+version: 2
+
+models:
+- name: stg__see__api__courses
+  description: Sloan Executive Education courses from the Sloan unified-portal API,
+    one row per course.
+  columns:
+  - name: course_id
+    description: str, Sloan's Salesforce id for the course; MIT Learn's readable_id
+    tests:
+    - not_null
+    - unique
+  - name: course_title
+    description: str, course title
+  - name: course_description
+    description: str, course description
+  - name: course_url
+    description: str, absolute URL of the course page on executive.mit.edu
+  - name: course_certification_type
+    description: str, Sloan's certificate track, e.g. Management and Leadership
+  - name: course_topic_raw
+    description: 'str, one topic as "Category: Topic", e.g. "Business: Strategy"'
+  - name: course_image_url
+    description: str, absolute URL of the course image
+  - name: course_created_on
+    description: str, ISO 8601 time the course was created in Sloan's system
+  - name: course_updated_on
+    description: str, ISO 8601 time the course was last modified in Sloan's system
+  - name: course_api_position
+    description: bigint, zero-based position of the course in the API response
+  - name: retrieved_at
+    description: str, ISO 8601 time of the extraction
+- name: stg__see__api__course_offerings
+  description: Sloan Executive Education course offerings (runs) from the Sloan unified-portal
+    API, one row per offering.
+  columns:
+  - name: courseoffering_title
+    description: str, offering title, e.g. "FAM 10-18-2026"; MIT Learn's run id
+    tests:
+    - not_null
+  - name: course_id
+    description: str, the offering's course
+    tests:
+    - not_null
+  - name: courseoffering_start_date
+    description: str, YYYY-MM-DD start date, US Eastern
+  - name: courseoffering_end_date
+    description: str, YYYY-MM-DD end date, US Eastern
+  - name: courseoffering_delivery
+    description: str, Online, In Person or Blended
+  - name: courseoffering_format
+    description: str, e.g. "Asynchronous (On-Demand)"
+  - name: courseoffering_duration
+    description: str, free-text duration, e.g. "6 weeks", "2 days"
+  - name: courseoffering_price
+    description: str, decimal price, e.g. "13900.0"
+  - name: courseoffering_continuing_ed_credits
+    description: str, decimal continuing-education credits, e.g. "5.0"
+  - name: courseoffering_time_commitment
+    description: str, free-text commitment, e.g. "6-8 hours/week"
+  - name: courseoffering_location
+    description: str, location for in-person offerings
+  - name: courseoffering_currency
+    description: str, ISO 4217 currency code of the price; null means USD
+  - name: courseoffering_faculty_names_raw
+    description: str, comma-separated faculty names
+  - name: courseoffering_api_position
+    description: bigint, zero-based position of the offering in the API response
+  - name: retrieved_at
+    description: str, ISO 8601 time of the extraction
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - course_id
+        - courseoffering_title

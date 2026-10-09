@@ -35,6 +35,11 @@ dispatch:
 
 vars:
   schema_suffix: dev
+  # Where starrocks__create_schema places a schema dbt has to create in a
+  # Glue-backed Iceberg catalog: <root>/<schema name>, keyed by catalog.
+  iceberg_schema_location_roots:
+    ol_data_lake_qa: "s3://ol-data-lake-staging-qa/processed"
+    ol_data_lake_production: "s3://ol-data-lake-staging-production/processed"
 
   open_learning:
     platforms: ["Bootcamps", "xPro", "xPRO Emeritus", "xPRO Global Alumni", "MITx\
@@ -60,6 +65,8 @@ vars:
     mitpe_url: "https://professional.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
+    # xPRO marketing site, no trailing slash. Course and program page URLs are built on it.
+    mitxpro_url: "https://xpro.mit.edu"
     # Base URLs for Wagtail-uploaded media files (prepended to wagtailimages_image.file paths).
     # The image file column contains paths like 'original_images/course.jpg' — these vars
     # supply the scheme+host prefix to form a complete URL. Verify against the Django
@@ -68,14 +75,9 @@ vars:
     mitxonline_media_url: "https://mitxonline.mit.edu/media/"
     micromasters_media_url: "https://ol-micromasters-app-production.s3.amazonaws.com/"
     micromasters_production_url: "https://micromasters.mit.edu/"
-
-    highest_education_values: ["Doctorate", "Master''s or professional degree", "Bachelor''s\
-        \ degree", "Associate degree", "Secondary/high school", "Junior secondary/junior\
-        \ high/middle school", "Elementary/primary school", "No formal education",
-      "Other education", "Doctorate in science or engineering", "Doctorate in another\
-        \ field", ""]
-    gender_values: ["Male", "Female", "Transgender", "Non-binary/non-conforming",
-      "Binary", "Other/Prefer Not to Say", ""]
+    # Days without tracked activity before an in-progress learner needs attention
+    # (afact_learner_courserun_progress.needs_attention_since).
+    needs_attention_quiet_days: 30
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
@@ -113,7 +115,6 @@ models:
       +meta:
         iceberg_maintenance:
           snapshot_retention_days: 14
-          orphan_retention_days: 14
           optimize_after_every_n_runs: 1
           analyze_after_every_n_runs: 7
     intermediate:
@@ -132,7 +133,6 @@ models:
       +meta:
         iceberg_maintenance:
           snapshot_retention_days: 14
-          orphan_retention_days: 7
           optimize_after_every_n_runs: 1
           analyze_after_every_n_runs: 7
     reporting:
@@ -210,6 +210,13 @@ models:
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
           "ol_business_analyst", "reverse_etl", "mit_irx"]
+      # Every build replaces these tables whole, so a compacted copy lasts only
+      # until the next build, there are no old snapshots to expire, and the
+      # CREATE TABLE AS already writes statistics.
+      +meta:
+        required_docs: true
+        iceberg_maintenance:
+          enabled: false
     +properties:
       format: "'PARQUET'"
     +meta:
@@ -231,7 +238,6 @@ models:
       iceberg_maintenance:
         enabled: true
         snapshot_retention_days: 7
-        orphan_retention_days: 7
         optimize_after_every_n_runs: 1
         analyze_after_every_n_runs: 7
 
@@ -245,6 +251,15 @@ snapshots:
       format: "'PARQUET'"
     +meta:
       required_docs: true
+    # History of raw tables, one snapshot per table (macro raw_history_snapshot).
+    raw_history:
+      +schema: history
+      # Read like raw, which carries no grants: history keeps every raw column,
+      # including ones staging drops. Only `select` is cleared (grants merge by
+      # dict_key_append, see b2b_analytics above), so accountadmin and
+      # ol_platform_admin keep `all privileges` as on every other snapshot.
+      +grants:
+        select: []
 
 # Test severity config
 # default for error_if and warn_if are !=0

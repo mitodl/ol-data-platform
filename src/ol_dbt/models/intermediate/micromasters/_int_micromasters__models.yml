@@ -274,7 +274,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_first_name
     description: str, first name on user's profile from MITx Online or MicroMasters.
   - name: user_last_name
@@ -521,7 +521,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say']
+          values: '{{ gender_values(["m", "f", "o"]) }}'
   - name: user_birth_date
     description: timestamp, user's date of birth
   - name: user_phone_number
@@ -533,11 +533,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-            "Associate degree", "Secondary/high school", "Junior secondary/junior\
-              \ high/middle school", "Elementary/primary school", "No formal education",
-            "Other education", "Doctorate in science or engineering", "Doctorate in\
-              \ another field"]
+          values: '{{ highest_education_values() }}'
   - name: user_company_name
     description: str, this is the most recent company this user works for, pulled
       from users employment history in MicroMasters database
@@ -717,7 +713,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_country
     description: str, Country from user's profile on MITx Online or MicroMasters
   - name: user_address_city

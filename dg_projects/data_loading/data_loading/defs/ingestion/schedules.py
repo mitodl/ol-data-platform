@@ -3,10 +3,13 @@
 import json
 
 import dagster as dg
-from ol_dlt.sources import course_xml_blocks
+from ol_dlt.sources import course_xml_blocks, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
+from data_loading.defs.ingestion.assets import (
+    mitxonline_app_assets,
+    xpro_app_assets,
+)
 from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
 
 oll_ingest_schedule = dg.ScheduleDefinition(
@@ -39,7 +42,11 @@ mit_climate_ingest_schedule = dg.ScheduleDefinition(
 mit_edx_programs_ingest_schedule = dg.ScheduleDefinition(
     name="mit_edx_programs_ingest_daily_schedule",
     target=dg.AssetSelection.keys(
-        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__programs"]
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__programs"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__program"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__program_course"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__mitx_course"],
+        ["ol_warehouse_raw_data", "raw__edxorg__discovery__api__mitx_course_run"],
     ),
     cron_schedule="45 3 * * *",
     execution_timezone="Etc/UTC",
@@ -55,13 +62,54 @@ podcast_rss_ingest_schedule = dg.ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
-# The four raw__youtube__api__* tables are materialized by a single @dlt_assets
+# The raw__youtube__api__* tables are all materialized by a single @dlt_assets
 # run, so schedule the whole youtube source group rather than one table.
 youtube_ingest_schedule = dg.ScheduleDefinition(
     name="youtube_ingest_daily_schedule",
     target=dg.AssetSelection.groups("youtube"),
     cron_schedule="15 4 * * *",
     execution_timezone="Etc/UTC",
+)
+
+# Sloan Executive Education, ahead of the lakehouse's non_airbyte_staging_daily
+# at 06:00. RUNNING by default in production, where the delivery location's
+# sloan_course_metadata extract has run daily against the same API since before
+# this load existed. The API has no QA instance.
+see_ingest_schedule = dg.ScheduleDefinition(
+    name="see_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__see__api__courses"],
+        ["ol_warehouse_raw_data", "raw__see__api__course_offerings"],
+    ),
+    cron_schedule="25 4 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
+# The four feeds MIT Learn's news_events app polls (news_events/etl/), ahead of
+# the lakehouse's non_airbyte_staging_daily at 06:00. Learn polls every three
+# hours, but the integrations models only rebuild daily, so a more frequent load
+# would change nothing downstream. RUNNING by default in production, where the
+# feeds are public and the same in every environment.
+news_events_ingest_schedule = dg.ScheduleDefinition(
+    name="news_events_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", "raw__mitpe__api__news"],
+        ["ol_warehouse_raw_data", "raw__mitpe__api__events"],
+        ["ol_warehouse_raw_data", "raw__openlearning__api__events"],
+        ["ol_warehouse_raw_data", "raw__medium__rss__posts"],
+    ),
+    cron_schedule="50 4 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
 )
 
 keycloak_ingest_schedule = dg.ScheduleDefinition(
@@ -78,9 +126,11 @@ keycloak_ingest_schedule = dg.ScheduleDefinition(
 mitxonline_app_ingest_schedule = (
     dg.ScheduleDefinition(
         name="mitxonline_app_ingest_schedule",
-        # Selected by group rather than by key so adding a table to
-        # MITXONLINE_APP_SPEC does not also require editing this schedule.
-        target=dg.AssetSelection.groups("mitxonline"),
+        # Selected by definition rather than by key so adding a table to
+        # MITXONLINE_APP_SPEC does not also require editing this schedule, and
+        # not by the "mitxonline" group, which the MITx Online course structure
+        # blocks share.
+        target=dg.AssetSelection.assets(mitxonline_app_assets),
         # Every six hours, matching the cadence of the Airbyte connection this
         # replaces (inventory unit mitxonline/app_postgres,
         # sync_interval_hours: 6). Offset off the hour so it does not start
@@ -88,7 +138,23 @@ mitxonline_app_ingest_schedule = (
         cron_schedule="20 */6 * * *",
         execution_timezone="Etc/UTC",
     )
-    if DAGSTER_ENV in MITXONLINE_APP_DLT_ENVIRONMENTS
+    if mitxonline_app_assets
+    else None
+)
+# Defined only where the assets are (see XPRO_APP_DLT_ENVIRONMENTS).
+xpro_app_ingest_schedule = (
+    dg.ScheduleDefinition(
+        name="xpro_app_ingest_schedule",
+        # Selected by definition, not by the "xpro" group, which the xPro
+        # course structure blocks share.
+        target=dg.AssetSelection.assets(xpro_app_assets),
+        # Every six hours, matching the Airbyte connection this replaces
+        # (inventory unit xpro/app_postgres, sync_interval_hours: 6). Offset from
+        # the MITx Online load at :20 so the two do not start together.
+        cron_schedule="40 */6 * * *",
+        execution_timezone="Etc/UTC",
+    )
+    if xpro_app_assets
     else None
 )
 # PostHog writes an hour's export object after that hour closes. Across the 168
@@ -152,10 +218,13 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
     },
 )
 
-# Loads the course XML blocks the edxorg and openedx archive assets land, ahead
-# of the lakehouse's non_airbyte_staging_daily at 06:00. The first run walks
-# the whole ~63 GB backlog a budget at a time; later runs read only new course
-# versions.
+# Loads the course XML blocks the edxorg and openedx archive assets land, the
+# document and transcript text the openedx location extracts from them, and the
+# edxorg and openedx course structure blocks, ahead of the lakehouse's
+# non_airbyte_staging_daily at 06:00. The first run walks the whole backlog
+# (~63 GB of blocks, ~22 GB of text on 2026-10-01, 10 GB of edxorg structure
+# blocks on 2026-10-05, 18 GB of openedx structure blocks on 2026-10-06) a
+# budget at a time; later runs read only new course versions.
 #
 # RUNNING by default in production, unlike the schedules above. A schedule
 # without default_status starts STOPPED, which is how the PostHog ingest never
@@ -178,6 +247,42 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
+
+
+def no_ocw_content_run_in_flight(context: dg.ScheduleEvaluationContext) -> bool:
+    """Skip a tick while the previous run is still reading courses.
+
+    The first run reads every course and can outlast a day. A second run
+    starting from the same saved state would read the same courses and append
+    them twice.
+    """
+    return not context.instance.get_run_records(
+        dg.RunsFilter(
+            tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+            statuses=list(IN_FLIGHT_RUN_STATUSES),
+        ),
+        limit=1,
+    )
+
+
+# OCW course pages and resource text for MIT Learn's ContentFiles, ahead of the
+# lakehouse's non_airbyte_staging_daily at 06:00. RUNNING by default in
+# production only: the source always reads the production OCW bucket, and every
+# changed course costs Tika calls.
+ocw_content_ingest_schedule = dg.ScheduleDefinition(
+    name=OCW_CONTENT_SCHEDULE_NAME,
+    target=dg.AssetSelection.keys(["ol_warehouse_raw_data", ocw_content.RAW_TABLE]),
+    cron_schedule="35 4 * * *",
+    execution_timezone="Etc/UTC",
+    should_execute=no_ocw_content_run_in_flight,
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -186,9 +291,13 @@ defs = dg.Definitions(
         mit_edx_programs_ingest_schedule,
         podcast_rss_ingest_schedule,
         youtube_ingest_schedule,
+        see_ingest_schedule,
+        news_events_ingest_schedule,
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
+        *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
+        ocw_content_ingest_schedule,
     ],
 )

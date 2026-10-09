@@ -14,23 +14,30 @@ Data flow:
         -> channel_id + playlist configs per channel
         -> raw__youtube__api__channels     (one row per configured channel)
         -> raw__youtube__api__playlists    (one row per playlist)
+        -> raw__youtube__api__playlist_items (one row per playlist + video)
         -> raw__youtube__api__videos       (one row per video)
         -> raw__youtube__api__transcripts  (one row per video with a transcript)
+
+The API key is resolved lazily at run time. The qa and production profiles
+read it from Vault (``YOUTUBE_VAULT_PATH``), where the dagster stack in
+ol-infrastructure writes MIT Learn's key. Any other profile reads
+YOUTUBE_DEVELOPER_KEY from the environment.
 
 Run standalone:
     DLT_PROFILE=dev YOUTUBE_DEVELOPER_KEY=... python -m ol_dlt.sources.youtube
 """
 
 import base64
+import functools
 import logging
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Iterator
 from typing import Any
 
 import dlt
 import yaml
 from dlt.sources.helpers import requests
 
-from ol_dlt import config
+from ol_dlt import config, vault
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +49,9 @@ WILDCARD_PLAYLIST_ID = "all"
 
 _CONFIG_FILE_REPO_DEFAULT = "mitodl/open-video-data"
 _CONFIG_FILE_FOLDER_DEFAULT = "youtube"
+
+YOUTUBE_VAULT_MOUNT = "secret-data"
+YOUTUBE_VAULT_PATH = "pipelines/youtube"
 
 
 def _github_headers(token: str | None) -> dict[str, str]:
@@ -81,29 +91,34 @@ def _fetch_channel_configs(
         file_resp.raise_for_status()
         raw_content = base64.b64decode(file_resp.json()["content"]).decode("utf-8")
 
-        try:
-            parsed = yaml.safe_load(raw_content)
-        except yaml.YAMLError:
-            logger.exception("Failed to parse YAML config: %s", file_meta["name"])
-            continue
+        # A broken file fails the run rather than being skipped. Skipping it
+        # would load a run without that file's channels, and the integrations
+        # models read the newest load as the complete channel set, so MIT Learn
+        # would unpublish them. Learn's own ETL loads nothing on a bad config.
+        parsed = yaml.safe_load(raw_content)
 
         # A file is either a single channel dict or a list of channel dicts.
         entries = parsed if isinstance(parsed, list) else [parsed]
         for entry in entries:
             if not isinstance(entry, dict) or "channel_id" not in entry:
-                logger.warning(
-                    "Skipping youtube config entry without channel_id in %s",
-                    file_meta["name"],
-                )
-                continue
-            configs.append(entry)
+                msg = f"youtube config entry without channel_id in {file_meta['name']}"
+                raise ValueError(msg)
+            configs.append({**entry, "config_file": file_meta["name"]})
 
     logger.info("Loaded %d youtube configs from %s/%s", len(configs), repo, folder)
     return configs
 
 
 def _resolve_api_key(api_key: str | None) -> str:
-    """Resolve the YouTube Data API key lazily, failing loudly if it is absent."""
+    """Resolve the YouTube Data API key lazily, failing loudly if it is absent.
+
+    Deployed profiles take the key from Vault. Explicit arguments and the
+    environment apply only to the other profiles.
+    """
+    if config.active_profile() in config.ICEBERG_PROFILES:
+        return vault.read_kv_secret(YOUTUBE_VAULT_MOUNT, YOUTUBE_VAULT_PATH)[
+            "developer_key"
+        ]
     return config.require_secrets(
         YOUTUBE_DEVELOPER_KEY=config.resolve_secret(api_key, "YOUTUBE_DEVELOPER_KEY")
     )["YOUTUBE_DEVELOPER_KEY"]
@@ -171,6 +186,25 @@ def _playlist_ids_for_config(
         yield playlist_id
 
 
+def _playlist_create_videos(channel_config: dict[str, Any], playlist_id: str) -> bool:
+    """Return whether MIT Learn creates videos for a playlist or matches them.
+
+    Mirrors learning_resources/etl/youtube.py:_extract_playlists. A playlist
+    listed by id takes its own ``create_videos`` and falls back to the
+    channel's; a playlist reached only through the ``all`` wildcard always
+    takes the channel's. The channel setting defaults to true. When false
+    (the OCW channel), Learn attaches the videos to existing OCW content files
+    instead of creating YouTube video resources.
+    """
+    channel_setting = channel_config.get("create_videos", True)
+    for playlist_config in channel_config.get("playlists") or []:
+        if isinstance(playlist_config, dict) and playlist_config.get("id") == (
+            playlist_id
+        ):
+            return playlist_config.get("create_videos", channel_setting)
+    return channel_setting
+
+
 def _video_ids_for_playlist(playlist_id: str, api_key: str) -> Generator[str]:
     """Yield the video ids contained in a playlist."""
     for item in _yt_paged_items(
@@ -193,15 +227,37 @@ def _batched(items: Iterable[str], size: int) -> Generator[list[str]]:
         yield batch
 
 
-def _channel_video_ids(configs: list[dict[str, Any]], api_key: str) -> Generator[str]:
-    """Yield the deduplicated video ids across every configured channel."""
+def _refuse_empty(
+    transform: Callable[[dict[str, Any]], Iterator[dict[str, Any]]],
+) -> Callable[[dict[str, Any]], Generator[dict[str, Any]]]:
+    """Fail a table resource that would load an empty snapshot.
+
+    The tables are merge-loaded and the dbt integrations models read each one
+    at its newest load id. A run that writes no rows to a table writes no load
+    id either, so the previous snapshot would stay current. An empty YouTube
+    response is far more likely an outage than a real state, so fail the run.
+    """
+
+    @functools.wraps(transform)
+    def _wrapped(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
+        rows = 0
+        for row in transform(listing):
+            rows += 1
+            yield row
+        if not rows:
+            msg = f"{transform.__name__} produced no rows; refusing an empty snapshot"
+            raise ValueError(msg)
+
+    return _wrapped
+
+
+def _unique(items: Iterable[str]) -> Generator[str]:
+    """Yield each item the first time it appears, keeping order."""
     seen: set[str] = set()
-    for channel_config in configs:
-        for playlist_id in _playlist_ids_for_config(channel_config, api_key):
-            for video_id in _video_ids_for_playlist(playlist_id, api_key):
-                if video_id not in seen:
-                    seen.add(video_id)
-                    yield video_id
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            yield item
 
 
 @dlt.source(name="youtube")
@@ -212,7 +268,7 @@ def youtube_source(  # noqa: C901
     github_folder: str = _CONFIG_FILE_FOLDER_DEFAULT,
     github_branch: str = "main",
 ) -> Generator[Any]:
-    """Load MIT Learn YouTube data from the Data API v3 into four raw tables.
+    """Load MIT Learn YouTube data from the Data API v3 into five raw tables.
 
     Channel configs are read from YAML files in the mitodl/open-video-data
     GitHub repository (one file per channel). For each channel the source
@@ -220,6 +276,7 @@ def youtube_source(  # noqa: C901
 
       raw__youtube__api__channels    - one record per configured channel
       raw__youtube__api__playlists   - one record per ingested playlist
+      raw__youtube__api__playlist_items - one record per video in a playlist
       raw__youtube__api__videos      - one record per video across all playlists
       raw__youtube__api__transcripts - one record per video that has a transcript
 
@@ -227,8 +284,9 @@ def youtube_source(  # noqa: C901
     module loads cleanly when secrets are absent in local development.
 
     Args:
-        api_key: YouTube Data API v3 key. Resolved from YOUTUBE_DEVELOPER_KEY
-            if not provided.
+        api_key: YouTube Data API v3 key, for non-deployed profiles. Resolved
+            from YOUTUBE_DEVELOPER_KEY if not provided. Ignored by the qa and
+            production profiles, which read it from Vault.
         github_access_token: Optional GitHub token to raise the config-fetch
             rate limit; the public repo works unauthenticated.
         github_repo: GitHub repository containing the channel YAML configs.
@@ -237,25 +295,73 @@ def youtube_source(  # noqa: C901
     """
     table_format = config.active_table_format()
 
-    def _configs() -> list[dict[str, Any]]:
-        return _fetch_channel_configs(
+    # One resolution per source instance: in deployed profiles each one is a Vault
+    # login and read, and the listing and three of the table resources need it.
+    @functools.cache
+    def _api_key() -> str:
+        return _resolve_api_key(api_key)
+
+    def _table(name: str, primary_key: str | tuple[str, ...]) -> dict[str, Any]:
+        return {
+            "name": name,
+            "write_disposition": "merge",
+            "primary_key": primary_key,
+            "table_format": table_format,
+            "schema_contract": config.JSON_API_SCHEMA_CONTRACT,
+        }
+
+    @dlt.resource(name="youtube_listing", selected=False)
+    def youtube_listing() -> Generator[dict[str, Any]]:
+        """Yield the channel configs and every playlist's video ids, once.
+
+        Every table resource is a transformer of this one, and dlt evaluates a
+        shared parent once per extraction. So a run reads the config and lists
+        playlists and playlist items in a single pass against the API quota
+        MIT Learn's key shares, and every table of the run sees the same
+        snapshot. Nothing is kept between runs.
+        """
+        key = _api_key()
+        configs = _fetch_channel_configs(
             repo=github_repo,
             folder=github_folder,
             branch=github_branch,
             token=github_access_token,
         )
+        playlists = [
+            {
+                "channel_config": channel_config,
+                "playlist_id": playlist_id,
+                "video_ids": list(_video_ids_for_playlist(playlist_id, key)),
+            }
+            for channel_config in configs
+            for playlist_id in _playlist_ids_for_config(channel_config, key)
+        ]
+        # See _refuse_empty: an empty listing would leave the previous
+        # snapshot current downstream.
+        if not any(playlist["video_ids"] for playlist in playlists):
+            msg = "youtube listing found no playlist items; refusing an empty snapshot"
+            raise ValueError(msg)
+        yield {
+            "configs": configs,
+            "playlists": playlists,
+        }
 
-    @dlt.resource(
-        name="raw__youtube__api__channels",
-        write_disposition="merge",
-        primary_key="channel_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    def _video_ids(listing: dict[str, Any]) -> Generator[str]:
+        return _unique(
+            video_id
+            for playlist in listing["playlists"]
+            for video_id in playlist["video_ids"]
+        )
+
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__channels", "channel_id"),
     )
-    def youtube_channels() -> Generator[dict[str, Any]]:
+    @_refuse_empty
+    def youtube_channels(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per configured YouTube channel."""
-        key = _resolve_api_key(api_key)
-        for channel_config in _configs():
+        key = _api_key()
+        for channel_config in listing["configs"]:
             channel_id = channel_config["channel_id"]
             items = list(
                 _yt_paged_items(
@@ -270,51 +376,76 @@ def youtube_source(  # noqa: C901
             yield {
                 "channel_id": channel_id,
                 "offered_by": channel_config.get("offered_by"),
+                # MIT Learn's YouTube ETL reads one file (YOUTUBE_CONFIG_URL),
+                # so the integrations models select channels by it.
+                "config_file": channel_config["config_file"],
                 "etl_source": "youtube",
                 **items[0],
             }
 
-    @dlt.resource(
-        name="raw__youtube__api__playlists",
-        write_disposition="merge",
-        primary_key="playlist_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__playlists", "playlist_id"),
     )
-    def youtube_playlists() -> Generator[dict[str, Any]]:
+    @_refuse_empty
+    def youtube_playlists(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per ingested playlist across all channels."""
-        key = _resolve_api_key(api_key)
-        for channel_config in _configs():
-            channel_id = channel_config["channel_id"]
-            for playlist_id in _playlist_ids_for_config(channel_config, key):
-                items = list(
-                    _yt_paged_items(
-                        "playlists",
-                        {"part": "snippet,contentDetails", "id": playlist_id},
-                        key,
-                    )
+        key = _api_key()
+        for playlist in listing["playlists"]:
+            channel_config = playlist["channel_config"]
+            playlist_id = playlist["playlist_id"]
+            items = list(
+                _yt_paged_items(
+                    "playlists",
+                    {"part": "snippet,contentDetails", "id": playlist_id},
+                    key,
                 )
-                if not items:
-                    logger.warning("No playlist data for playlist_id=%s", playlist_id)
+            )
+            if not items:
+                logger.warning("No playlist data for playlist_id=%s", playlist_id)
+                continue
+            yield {
+                "playlist_id": playlist_id,
+                "channel_id": channel_config["channel_id"],
+                "offered_by": channel_config.get("offered_by"),
+                "create_videos": _playlist_create_videos(channel_config, playlist_id),
+                "etl_source": "youtube",
+                **items[0],
+            }
+
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__playlist_items", ("playlist_id", "video_id")),
+    )
+    def youtube_playlist_items(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
+        """Yield one record per video in each ingested playlist, in playlist order.
+
+        ``position`` is the video's index in the playlist listing, counting
+        entries whose video the videos endpoint may not return (private or
+        deleted). A video listed twice keeps its first position.
+        """
+        for playlist in listing["playlists"]:
+            seen: set[str] = set()
+            for position, video_id in enumerate(playlist["video_ids"]):
+                if video_id in seen:
                     continue
+                seen.add(video_id)
                 yield {
-                    "playlist_id": playlist_id,
-                    "channel_id": channel_id,
+                    "playlist_id": playlist["playlist_id"],
+                    "video_id": video_id,
+                    "position": position,
                     "etl_source": "youtube",
-                    **items[0],
                 }
 
-    @dlt.resource(
-        name="raw__youtube__api__videos",
-        write_disposition="merge",
-        primary_key="video_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__videos", "video_id"),
     )
-    def youtube_videos() -> Generator[dict[str, Any]]:
+    @_refuse_empty
+    def youtube_videos(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video across all configured playlists."""
-        key = _resolve_api_key(api_key)
-        for batch in _batched(_channel_video_ids(_configs(), key), YOUTUBE_MAX_RESULTS):
+        key = _api_key()
+        for batch in _batched(_video_ids(listing), YOUTUBE_MAX_RESULTS):
             for video in _yt_paged_items(
                 "videos",
                 {"part": "snippet,contentDetails,statistics", "id": ",".join(batch)},
@@ -326,14 +457,11 @@ def youtube_source(  # noqa: C901
                     **video,
                 }
 
-    @dlt.resource(
-        name="raw__youtube__api__transcripts",
-        write_disposition="merge",
-        primary_key="video_id",
-        table_format=table_format,
-        schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+    @dlt.transformer(
+        data_from=youtube_listing,
+        **_table("raw__youtube__api__transcripts", "video_id"),
     )
-    def youtube_transcripts() -> Generator[dict[str, Any]]:
+    def youtube_transcripts(listing: dict[str, Any]) -> Generator[dict[str, Any]]:
         """Yield one record per video that has a transcript.
 
         Transcripts are fetched with ``youtube-transcript-api`` (imported lazily
@@ -348,10 +476,9 @@ def youtube_source(  # noqa: C901
         )
         from youtube_transcript_api.formatters import TextFormatter
 
-        key = _resolve_api_key(api_key)
         ytt_api = YouTubeTranscriptApi()
         formatter = TextFormatter()
-        for video_id in _channel_video_ids(_configs(), key):
+        for video_id in _video_ids(listing):
             try:
                 fetched = ytt_api.fetch(video_id)
             except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable):
@@ -367,8 +494,10 @@ def youtube_source(  # noqa: C901
                 "segments": fetched.to_raw_data(),
             }
 
+    yield youtube_listing
     yield youtube_channels
     yield youtube_playlists
+    yield youtube_playlist_items
     yield youtube_videos
     yield youtube_transcripts
 

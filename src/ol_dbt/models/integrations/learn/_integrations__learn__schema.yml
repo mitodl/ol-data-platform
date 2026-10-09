@@ -9,54 +9,91 @@ version: 2
 models:
 - name: integrations__learn__ocw_courses
   description: >
-    OCW courses exposed for MIT Learn's Trino-pull ETL. One row per live OCW course.
-    Sourced from int__ocw__courses, int__ocw__course_topics,
-    int__ocw__course_instructors, and int__ocw__course_departments.
+    OCW courses exposed for MIT Learn's warehouse pull. One row per course in
+    the OCW live bucket, with the fields MIT Learn's OCW ETL builds a course and
+    its one run from. Sourced from int__ocw__live_courses, which reads each
+    course's published data.json.
   columns:
   - name: readable_id
-    description: OCW course short ID (website_short_id). Used for upsert matching.
+    description: >
+      Primary course number, then "+" and the slugified term and "_" and the
+      year where the course has them, e.g. 6.1810+fall_2023.
     tests: [not_null, unique]
   - name: title
     description: Course title.
     tests: [not_null]
   - name: last_modified
-    description: Last publish date from OCW Studio.
+    description: >
+      When the platform last read the course from the bucket. A course is read
+      again when one of its objects changes, or to retry a file Tika failed on.
     tests: [not_null]
   - name: etl_source
     description: Always 'ocw'.
     tests: [not_null]
   - name: description
-    description: Course description from the OCW website.
+    description: >
+      The course description as rendered HTML (course_description_html). MIT
+      Learn passes it through nh3 before storing it.
   - name: url
-    description: URL of the course on OCW production (ocw.mit.edu).
+    description: >
+      URL of the course on ocw.mit.edu, with its trailing slash. MIT Learn
+      matches an OCW course on this, not on readable_id.
+    tests: [not_null, unique]
   - name: image_url
-    description: Course image URL.
+    description: Absolute URL of the course image; null for a course with none.
+  - name: image_alt
+    description: Alt text of the course image.
+  - name: image_description
+    description: Description of the course image.
   - name: published
-    description: Whether the course is live on ocw.mit.edu.
+    description: Always true. A course that leaves the bucket leaves the model.
   - name: platform
-    description: Always 'ocw', matches etl_source.
+    description: Always 'ocw'.
+  - name: run_id
+    description: >
+      The course's legacy_uid, or its site_uid when it has none, without
+      dashes. Equals run_readable_id in integrations__learn__ocw_content_files.
+    tests: [not_null, unique]
+  - name: slug
+    description: The course's path in the bucket, courses/<slug>.
+  - name: term
+    description: Course term (Fall, Spring, Summer, January IAP); null when not given.
+  - name: year
+    description: Course year; null when not given.
   - name: level
     description: >
-      Comma-separated course level(s), e.g. Undergraduate, Graduate,
-      Non-Credit, High School.
-  - name: term
-    description: Course term, e.g. Spring, Summer, Fall, January IAP, or blank.
-  - name: year
-    description: Course year.
+      Array of level labels (Undergraduate, Graduate, High School, Non-Credit).
+      MIT Learn's transform_levels takes these labels.
   - name: course_number
     description: Primary course number, e.g. '21A.850J'.
   - name: extra_course_numbers
-    description: Additional course numbers beyond the primary, e.g. 'STS.484J'.
+    description: Array of the cross-listed course numbers; empty when there are none.
+  - name: departments
+    description: Array of MIT department numbers, e.g. ['6', '18'].
   - name: topics
     description: >
-      Comma-separated topic labels, preferring speciality, then subtopic,
-      then topic.
+      Array of the course's MIT Learn topic names (mit_learn_topics), sorted.
+      Empty for a course OCW gave none; MIT Learn then maps ocw_topics.
+  - name: ocw_topics
+    description: Array of every OCW topic, subtopic and speciality of the course,
+      sorted.
+  - name: content_tags
+    description: >
+      Array of the course's learning resource types, e.g. Lecture Notes. MIT
+      Learn shows them as course_feature.
   - name: instructors
-    description: Comma-separated instructor names.
-  - name: departments
-    description: Comma-separated department names offering the course.
+    description: >
+      JSON array of the course's instructors as published, in order, each with
+      first_name, last_name, middle_initial, salutation and title. MIT Learn's
+      parse_instructors takes this list.
+  - name: hide_download
+    description: >
+      Whether OCW hides the course's download link. MIT Learn adds offline
+      delivery for a course that does not, when OCW_OFFLINE_DELIVERY is set.
 
 - name: integrations__learn__mitxonline_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     MITx Online courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
     Sourced from int__mitxonline__courses and int__mitxonline__course_runs.
@@ -111,6 +148,8 @@ models:
       Format per run: readable_id|start_on|end_on|is_live
 
 - name: integrations__learn__mitxonline_programs
+  config:
+    tags: [qa_scheduled]
   description: >
     MITx Online programs exposed for MIT Learn's Trino-pull ETL. One row per live
     program.
@@ -164,102 +203,183 @@ models:
     description: Comma-separated list of course readable_ids belonging to this program.
 
 - name: integrations__learn__xpro_courses
+  config:
+    tags: [qa_scheduled]
   description: >
-    xPRO courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
-    Sourced from int__mitxpro__courses and int__mitxpro__course_runs.
+    The courses xPRO's catalog API lists: live courses with a live CMS page, published
+    or not. One row per course, with the fields MIT Learn's xPRO ETL reads from the
+    API. Runs are in integrations__learn__xpro_runs.
   columns:
   - name: readable_id
-    description: xPRO course readable ID. Used for upsert matching.
+    description: str, the xPRO course readable id. Used for upsert matching.
     tests: [not_null, unique]
   - name: title
-    description: Course title.
+    description: str, course title.
     tests: [not_null]
   - name: last_modified
-    description: >
-      Last CMS page publish date. Falls back to current_timestamp for courses
-      without a Wagtail CMS page.
+    description: str, ISO 8601 time the CMS page was last published.
     tests: [not_null]
   - name: etl_source
-    description: Always 'xpro'.
+    description: str, always 'xpro'.
     tests: [not_null]
   - name: description
-    description: Course description displayed on the xPRO course page.
+    description: str, the page's description, as HTML. Not sanitized; MIT Learn passes
+      it through clean_data.
   - name: url
-    description: xPRO course page URL path (relative).
+    description: str, absolute URL of the course page on the xPRO site.
+    tests: [not_null]
   - name: image_url
-    description: Course image URL.
+    description: str, the page's thumbnail image, or the xPRO site's default image
+      when the page has none.
+    tests: [not_null]
   - name: published
-    description: Whether the course is live on xpro.mit.edu.
+    description: boolean, whether a run in integrations__learn__xpro_runs has a price
+      above zero, which is when MIT Learn publishes an xPRO course.
+    tests: [not_null]
   - name: platform
-    description: >
-      Platform name for the course, sourced from xPRO's platform dimension
-      table (e.g. 'xPRO'). Unlike etl_source, this is not a fixed literal.
-  - name: page_slug
-    description: xPRO CMS page slug, used for constructing the course page's URL.
+    description: str, the xPRO platform name (xPRO, Emeritus, Global Alumni, Simplilearn,
+      Susskind, WHU). MIT Learn maps it to a platform code.
   - name: topics
-    description: Comma-separated topic names for the course.
-  - name: instructors
-    description: Comma-separated instructor names for the course.
-  - name: length
-    description: >
-      Short description of how long the course takes to complete, e.g.
-      '4 weeks'.
-  - name: effort
-    description: Short description of expected weekly time commitment.
+    description: array(str), names of the page's xPRO topics, sorted; null when it
+      has none. A child topic is named 'Parent:Child'. MIT Learn keeps the part after
+      the colon and maps it to its own topics.
   - name: format
-    description: Course format, e.g. 'Online', 'Other'.
-  - name: runs
-    description: >
-      Pipe-delimited run metadata strings joined with semicolons.
-      Format per run: readable_id|start_on|end_on|is_live
+    description: str, the page's format, 'Online' or 'Hybrid'. MIT Learn maps it to
+      a delivery code.
+  - name: availability
+    description: str, always 'dated', as the xPRO API reports.
+  - name: continuing_ed_credits
+    description: double, CEUs from the page's certificate page; null without one.
+  - name: duration
+    description: str, free-text duration from the page, e.g. '3 Weeks'.
+  - name: min_weeks
+    description: int, shortest length in weeks; null if the page does not give one.
+  - name: max_weeks
+    description: int, longest length in weeks; null if the page does not give one.
+  - name: time_commitment
+    description: str, free-text weekly effort from the page, e.g. '5 Hours per Week'.
+  - name: min_weekly_hours
+    description: int, least weekly hours; null if the page does not give one.
+  - name: max_weekly_hours
+    description: int, most weekly hours; null if the page does not give one.
+
+- name: integrations__learn__xpro_runs
+  config:
+    tags: [qa_scheduled]
+  description: >
+    Runs of the courses in integrations__learn__xpro_courses, as xPRO's catalog API
+    lists them under a course: live, with a start date, not past their end date or
+    enrollment end, enrollment open, and with an active product. Evaluated when the
+    model builds. A run that leaves this set is one MIT Learn unpublishes.
+  columns:
+  - name: readable_id
+    description: str, the run's course.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('integrations__learn__xpro_courses')
+          field: readable_id
+  - name: run_id
+    description: str, the run's courseware id, MIT Learn's run id.
+    tests: [not_null, unique]
+  - name: title
+    description: str, the run's title.
+  - name: start_date
+    description: str, ISO 8601 UTC start.
+    tests: [not_null]
+  - name: end_date
+    description: str, ISO 8601 UTC end; null if none.
+  - name: enrollment_start
+    description: str, ISO 8601 UTC start of enrollment; null if none.
+  - name: enrollment_end
+    description: str, ISO 8601 UTC end of enrollment; null if none.
+  - name: price
+    description: decimal, price in USD from the latest version of the run's product;
+      null if the product has no version.
+  - name: instructors
+    description: array(str), names on the course page's faculty page; null without
+      one.
+  - name: published
+    description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
+      it.
+    tests: [not_null]
 
 - name: integrations__learn__xpro_programs
+  config:
+    tags: [qa_scheduled]
   description: >
-    xPRO programs exposed for MIT Learn's Trino-pull ETL. One row per live program.
-    Sourced from int__mitxpro__programs and int__mitxpro__courses.
+    The programs xPRO's catalog API lists: live programs with a live CMS page and
+    a product. One row per program, with the fields MIT Learn's xPRO ETL reads
+    from the API, including the price and dates of the one run MIT Learn gives a
+    program.
   columns:
   - name: readable_id
-    description: xPRO program readable ID. Used for upsert matching.
+    description: str, the xPRO program readable id. Used for upsert matching.
     tests: [not_null, unique]
   - name: title
-    description: Program title.
+    description: str, program title.
     tests: [not_null]
   - name: last_modified
-    description: >
-      Last CMS page publish date. Falls back to current_timestamp for programs
-      without a Wagtail CMS page.
+    description: str, ISO 8601 time the CMS page was last published.
     tests: [not_null]
   - name: etl_source
-    description: Always 'xpro'.
+    description: str, always 'xpro'.
     tests: [not_null]
   - name: description
-    description: Program description displayed on the xPRO program page.
+    description: str, the page's description, as HTML. Not sanitized; MIT Learn passes
+      it through clean_data.
   - name: url
-    description: xPRO program page URL path (relative).
+    description: str, absolute URL of the program page on the xPRO site.
+    tests: [not_null]
   - name: image_url
-    description: Program image URL.
+    description: str, the page's thumbnail image, or the xPRO site's default image
+      when the page has none.
+    tests: [not_null]
   - name: published
-    description: Whether the program is live on xpro.mit.edu.
+    description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
+      it.
+    tests: [not_null]
   - name: platform
-    description: >
-      Platform name for the program, sourced from xPRO's platform dimension
-      table (e.g. 'xPRO'). Unlike etl_source, this is not a fixed literal.
-  - name: page_slug
-    description: xPRO CMS page slug, used for constructing the program page's URL.
+    description: str, the xPRO platform name. MIT Learn maps it to a platform code.
   - name: topics
-    description: Comma-separated topic names for the program.
+    description: array(str), names of the xPRO topics of every course in the program,
+      sorted; null when there are none.
   - name: instructors
-    description: Comma-separated instructor names for the program.
-  - name: length
-    description: >
-      Short description of how long the program takes to complete, e.g.
-      '4 weeks'.
-  - name: effort
-    description: Short description of expected weekly time commitment.
-  - name: format
-    description: Program format, e.g. 'Online', 'Other'.
+    description: array(str), names on the program page's faculty page; null without
+      one.
   - name: courses
-    description: Comma-separated list of course readable_ids belonging to this program.
+    description: str, comma-separated readable ids of the program's live courses,
+      in program order.
+  - name: price
+    description: decimal, price in USD from the latest version of the program's active
+      product; null if it has none.
+  - name: start_date
+    description: str, ISO 8601 UTC start of the earliest open run of the program's
+      first course; null if it has none.
+  - name: end_date
+    description: str, ISO 8601 UTC end of the last live run of any course in the program.
+  - name: enrollment_start
+    description: str, ISO 8601 UTC enrollment start of the run start_date comes from.
+  - name: format
+    description: str, the page's format, 'Online' or 'Hybrid'. MIT Learn maps it to
+      a delivery code.
+  - name: availability
+    description: str, always 'dated', as the xPRO API reports.
+  - name: continuing_ed_credits
+    description: double, CEUs from the page's certificate page; null without one.
+  - name: duration
+    description: str, free-text duration from the page, e.g. '3 Weeks'.
+  - name: min_weeks
+    description: int, shortest length in weeks; null if the page does not give one.
+  - name: max_weeks
+    description: int, longest length in weeks; null if the page does not give one.
+  - name: time_commitment
+    description: str, free-text weekly effort from the page, e.g. '5 Hours per Week'.
+  - name: min_weekly_hours
+    description: int, least weekly hours; null if the page does not give one.
+  - name: max_weekly_hours
+    description: int, most weekly hours; null if the page does not give one.
 
 - name: integrations__learn__mit_edx_courses
   description: >
@@ -319,3 +439,27 @@ models:
     description: >
       Pipe-delimited run metadata strings joined with semicolons.
       Format per run: courserun_key|start_on|end_on|is_published
+
+unit_tests:
+- name: test_integrations__learn__ocw_courses_builds_learns_ids_and_urls
+  description: >
+    readable_id slugifies the term as Django does and leaves out a missing term
+    or year, and a course with neither uid is left out.
+  model: integrations__learn__ocw_courses
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: 1-978-atomistic-modeling-january-iap-2007, courserun_readable_id: b89637d2d64abf7896f604f5d40d48a9,
+      course_title: Atomistic Modeling, course_primary_course_number: "1.978", course_term: January
+        IAP, course_year: "2007", course_image_src: /courses/1-978-atomistic-modeling-january-iap-2007/a.jpg}
+    - {course_slug: res-tl-002-star, courserun_readable_id: a062e4e8db044bcdbb1d4d6f80c18083,
+      course_title: STAR, course_primary_course_number: RES.TL-002, course_term: null,
+      course_year: null, course_image_src: null}
+    - {course_slug: no-uid, courserun_readable_id: null, course_title: No uid, course_primary_course_number: "1.00"}
+  expect:
+    rows:
+    - {readable_id: 1.978+january-iap_2007, url: "https://ocw.mit.edu/courses/1-978-atomistic-modeling-january-iap-2007/",
+      slug: courses/1-978-atomistic-modeling-january-iap-2007, image_url: "https://ocw.mit.edu/courses/1-978-atomistic-modeling-january-iap-2007/a.jpg",
+      year: 2007, run_id: b89637d2d64abf7896f604f5d40d48a9}
+    - {readable_id: RES.TL-002, url: "https://ocw.mit.edu/courses/res-tl-002-star/",
+      slug: courses/res-tl-002-star, image_url: null, year: null, run_id: a062e4e8db044bcdbb1d4d6f80c18083}

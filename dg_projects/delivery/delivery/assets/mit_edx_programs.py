@@ -9,8 +9,9 @@ takes from its courses); this asset only shapes rows into the payload MIT Learn'
 loaders read.
 
 Data flow:
-    raw__edxorg__s3__program{,_course}, raw__edxorg__s3__mitx_course{,_run}
-    (edxorg code location, edX discovery API)
+    raw__edxorg__discovery__api__program{,_course},
+    raw__edxorg__discovery__api__mitx_course{,_run}
+    (ol_dlt.sources.mit_edx_programs, edX discovery API)
         → int__edxorg__mitx_learn_* (dbt)
             → integrations__learn__mit_edx_program{s,_instructors} (dbt)
                 → MIT Learn webhook (this asset)
@@ -28,7 +29,8 @@ unlink every course, and no courses usually means the program-course extraction
 didn't land rather than that edX emptied the program. MIT Learn's legacy ETL failed
 the run on such a program too.
 
-Scheduling: daily at 06:45 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -52,7 +54,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.github import GithubApiClientFactory
-from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 from pydantic import Field
 
 from delivery.lib.sanitize import clean_html
@@ -68,8 +70,9 @@ _PROGRAMS_TABLE = "integrations__learn__mit_edx_programs"
 _INSTRUCTORS_TABLE = "integrations__learn__mit_edx_program_instructors"
 
 _PLATFORM = "edx"
-# Matches the error_after freshness on raw__edxorg__s3__program. The extraction runs
-# daily, so this allows two missed days before refusing to re-send the last one.
+# Matches the error_after freshness on raw__edxorg__discovery__api__program. The
+# extraction runs daily, so this allows two missed days before refusing to re-send
+# the last one.
 _MAX_EXTRACTION_AGE = timedelta(days=3)
 _REVIEW_TITLE_PREFIX = "Review whether MIT Learn should unpublish edX program"
 
@@ -189,7 +192,8 @@ def check_extraction_age(
         msg = (
             f"The latest edX programs extraction ran at {retrieved_at.isoformat()}, "
             f"more than {_MAX_EXTRACTION_AGE.days} days ago; not re-sending it. Check "
-            "the edxorg_program_metadata asset and the raw__edxorg__s3__program sync."
+            "the mit_edx_programs_ingest dlt load of "
+            "raw__edxorg__discovery__api__program."
         )
         raise StaleExtractionError(msg)
 
@@ -303,8 +307,8 @@ def _read_table(context: AssetExecutionContext, table: str) -> pl.DataFrame:
         "review the programs MIT Learn still publishes instead."
     ),
     deps=[
-        AssetKey(["integrations", "learn", _PROGRAMS_TABLE]),
-        AssetKey(["integrations", "learn", _INSTRUCTORS_TABLE]),
+        AssetKey(["integrations", _PROGRAMS_TABLE]),
+        AssetKey(["integrations", _INSTRUCTORS_TABLE]),
     ],
     retry_policy=RetryPolicy(max_retries=3, delay=10.0),
 )
@@ -329,7 +333,7 @@ def mit_edx_programs_webhook(
             len(still_published),
         )
         issue_urls = open_unpublish_reviews(
-            github_api.get_client(),
+            github_api.get_client(token_permissions={"issues": "write"}),
             config.review_repository,
             still_published,
             checked_on=datetime.now(tz=UTC).date().isoformat(),
@@ -357,11 +361,12 @@ def mit_edx_programs_webhook(
         context.log.exception(msg)
         raise RuntimeError(msg) from exc
 
+    status = webhook_status(response)
     context.add_output_metadata(
         {
             "delivered_count": len(resources),
-            "webhook_status": "success",
+            "webhook_status": status,
             "response": MetadataValue.json(response),
         }
     )
-    return {"delivered_count": len(resources), "webhook_status": "success"}
+    return {"delivered_count": len(resources), "webhook_status": status}

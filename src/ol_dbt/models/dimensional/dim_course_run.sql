@@ -239,8 +239,12 @@ with micromasters_courseruns as (
         on courseruns_with_fk.platform = dim_platform_lookup.platform_readable_id
 )
 
-, final as (
-    select
+-- DISTINCT here and in records_to_expire keeps the merge idempotent when upstream
+-- briefly carries duplicate copies of a run. Without it each copy became its own current
+-- row, and the expire join multiplied existing x incoming rows on every later change
+-- (2026-09-01: two runs grew to ~1,000 versions in a day).
+, incoming as (
+    select distinct
         {{ dbt_utils.generate_surrogate_key([
             'platform',
             'courserun_readable_id'
@@ -268,33 +272,44 @@ with micromasters_courseruns as (
         , true as is_current
         , courserun_upgrade_deadline
     from courseruns_with_all_fks
-
-    {% if is_incremental() %}
-    where not exists (
-        select 1
-        from {{ this }} as existing
-        where
-            existing.courserun_readable_id = courseruns_with_all_fks.courserun_readable_id
-            and existing.platform = courseruns_with_all_fks.platform
-            and existing.is_current = true
-            and coalesce(existing.courserun_title, '') = coalesce(courseruns_with_all_fks.courserun_title, '')
-            and coalesce(existing.courserun_start_on, '') = coalesce(courseruns_with_all_fks.courserun_start_on, '')
-            and coalesce(existing.courserun_end_on, '') = coalesce(courseruns_with_all_fks.courserun_end_on, '')
-            and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
-            and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
-            and coalesce(existing.courserun_is_live, false) = coalesce(courseruns_with_all_fks.courserun_is_live, false)
-            and coalesce(existing.courserun_upgrade_deadline, '')
-            = coalesce(courseruns_with_all_fks.courserun_upgrade_deadline, '')
-            and coalesce(existing.semester, '') = coalesce(courseruns_with_all_fks.semester, '')
-            and coalesce(existing.passing_grade, -1.0) = coalesce(courseruns_with_all_fks.passing_grade, -1.0)
-    )
-    {% endif %}
 )
 
 {% if is_incremental() %}
--- Expire prior current rows that have changed
+, unchanged_keys as (
+    {{ scd2_unchanged_keys(
+        'incoming',
+        this,
+        ['courserun_readable_id', 'platform'],
+        [
+            'courserun_title',
+            'courserun_start_on',
+            'courserun_end_on',
+            'enrollment_start',
+            'enrollment_end',
+            'courserun_is_live',
+            'courserun_upgrade_deadline',
+            'semester',
+            'passing_grade'
+        ]
+    ) }}
+)
+
+, final as (
+    select incoming.*
+    from incoming
+    where not exists (
+        select 1
+        from unchanged_keys
+        where
+            unchanged_keys.courserun_readable_id = incoming.courserun_readable_id
+            and unchanged_keys.platform = incoming.platform
+    )
+)
+
+-- Expire every current row of a changed key, including extra current rows left by
+-- conflicting upstream copies
 , records_to_expire as (
-    select
+    select distinct
         existing.courserun_pk
         , existing.courserun_readable_id
         , existing.source_id
@@ -333,5 +348,5 @@ with micromasters_courseruns as (
 
 select * from combined
 {% else %}
-select * from final
+select * from incoming
 {% endif %}

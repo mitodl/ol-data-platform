@@ -13,7 +13,8 @@ Data flow:
             → integrations__learn__mitpe_{courses,programs,runs} (dbt)
                 → MIT Learn webhook (this asset)
 
-Scheduling: daily at 06:15 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -33,7 +34,7 @@ from dagster import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
-from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
 from delivery.lib.sanitize import clean_html
 
@@ -49,6 +50,7 @@ _PROGRAMS_TABLE = "integrations__learn__mitpe_programs"
 _RUNS_TABLE = "integrations__learn__mitpe_runs"
 
 _PLATFORM = "mitpe"
+_ETL_SOURCE = "mitpe"
 _CURRENCY_USD = "USD"
 
 
@@ -175,9 +177,9 @@ def _read_table(context: AssetExecutionContext, table: str) -> pl.DataFrame:
         "signed webhook batch to MIT Learn."
     ),
     deps=[
-        AssetKey(["integrations", "learn", _COURSES_TABLE]),
-        AssetKey(["integrations", "learn", _PROGRAMS_TABLE]),
-        AssetKey(["integrations", "learn", _RUNS_TABLE]),
+        AssetKey(["integrations", _COURSES_TABLE]),
+        AssetKey(["integrations", _PROGRAMS_TABLE]),
+        AssetKey(["integrations", _RUNS_TABLE]),
     ],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
@@ -196,6 +198,14 @@ def mitpe_webhook(
         len(runs_df),
     )
 
+    # MIT Learn only prunes a type that has resources in the batch, so programs
+    # are declared: when the last program leaves the feed, MIT Learn unpublishes
+    # the ones it holds. An empty course table is a broken build, not a catalog
+    # with no courses, and with programs declared it would unpublish them all.
+    if courses_df.is_empty():
+        msg = f"{_COURSES_TABLE} has no rows; not delivering MIT PE to MIT Learn"
+        raise RuntimeError(msg)
+
     resources = build_resources(
         courses_df.iter_rows(named=True),
         programs_df.iter_rows(named=True),
@@ -207,20 +217,21 @@ def mitpe_webhook(
     )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
-            resources
+            resources, sync=[(_ETL_SOURCE, "program")]
         )
     except httpx.HTTPStatusError as exc:
         msg = f"MIT PE webhook failed with status {exc.response.status_code}: {exc}"
         context.log.exception(msg)
         raise RuntimeError(msg) from exc
 
+    status = webhook_status(response)
     context.add_output_metadata(
         {
             "delivered_count": len(resources),
             "course_count": len(courses_df),
             "program_count": len(programs_df),
-            "webhook_status": "success",
+            "webhook_status": status,
             "response": MetadataValue.json(response),
         }
     )
-    return {"delivered_count": len(resources), "webhook_status": "success"}
+    return {"delivered_count": len(resources), "webhook_status": status}

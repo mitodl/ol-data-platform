@@ -72,13 +72,13 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say']
+          values: '{{ gender_values(["m", "f", "o"]) }}'
   - name: user_highest_education
     description: str, user highest education. May be null.
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
 - name: stg__mitxresidential__openedx__user_courseaccessrole
   description: This table lists the users who have a privileged role or roles for
     working in a course on Residential MITx Platform

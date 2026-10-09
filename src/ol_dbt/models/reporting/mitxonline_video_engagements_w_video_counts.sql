@@ -12,10 +12,6 @@ with mitxonline_video_engagements as (
     from {{ ref('marts__mitxonline_video_engagements') }}
 )
 
-, mitx__courses as (
-    select * from {{ ref('int__mitx__courses') }}
-)
-
 , subq_video_engagements as (
     select
         section_title

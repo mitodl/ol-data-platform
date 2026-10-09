@@ -1,6 +1,6 @@
 {#
   integrations__learn__podcast_episodes
-  Exposes MIT podcast episodes for MIT Learn's ETL (webhook delivery).
+  Exposes MIT podcast episodes for MIT Learn's ETL (warehouse pull).
   Contract: docs/learn_marts_contract.md
   Joined to integrations__learn__podcasts on podcast_readable_id = readable_id.
 
@@ -16,10 +16,7 @@
   episodes to the UNFILTERED staging table would let an episode still inside
   its grace window attach to a channel that had already aged out of the
   podcasts model -- producing rows whose podcast_readable_id matches no
-  delivered podcast. The delivery asset drops those, so the payload stayed
-  correct, but the row count did not: MIN_EPISODES counts rows in this model,
-  so orphans would inflate the very number that guards against a short read.
-  The two tables also rank recency over independent _dlt_load_id universes, so
+  podcast in that model. The two tables also rank recency over independent _dlt_load_id universes, so
   "3 loads ago" does not necessarily mean the same instant in each. Reading the
   parent from the podcasts model makes referential integrity structural instead
   of coincidental -- an episode can only exist here if its podcast ships.
@@ -39,7 +36,7 @@ with episodes as (
     select
         episode_dlt_load_id
         , row_number() over (order by episode_dlt_load_id desc) as loads_ago
-    from (select distinct episode_dlt_load_id from episodes)
+    from (select distinct episode_dlt_load_id from episodes) as episode_loads
 )
 
 , current_episodes as (
@@ -61,10 +58,10 @@ select
     , current_episodes.episode_audio_url                     as audio_url
     , current_episodes.episode_link                          as episode_link
     , current_episodes.episode_image_url                     as image_url
-    -- Free-form itunes:duration text; normalized to ISO-8601 by the delivery
-    -- asset, mirroring learning_resources/etl/utils.py:iso8601_duration.
+    -- Free-form itunes:duration text; MIT Learn normalizes it to ISO-8601
+    -- with learning_resources/etl/utils.py:iso8601_duration.
     , current_episodes.episode_duration_raw                  as duration_raw
-    -- RFC 2822 <pubDate>; parsed by the delivery asset into last_modified.
+    -- RFC 2822 <pubDate>; MIT Learn parses it into last_modified.
     , current_episodes.episode_published_on_raw              as published_on_raw
     -- The <item> XML; MIT Learn reads <podcast:transcript> tags back out of it.
     , current_episodes.episode_rss                           as rss

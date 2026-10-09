@@ -181,3 +181,41 @@ sources:
     - name: updated_on
       description: timestamp, date and time when the starter project record was last
         updated
+
+  - name: raw__ocw__s3__course_content
+    description: >
+      The data.json of every OCW course, course page and course resource in the
+      OCW live bucket (ocw-content-live-production), with the text Tika extracted
+      from the file a resource points at. Loaded by the ol_dlt ocw_content
+      source, which appends a full set of rows for a course each time the
+      course's objects change; staging keeps each course's newest set.
+    columns:
+    - name: course_slug
+      description: str, the course's directory under courses/ in the bucket
+    - name: content_kind
+      description: str, course, page or resource by where the data.json sits, or unpublished
+        for the one row marking a course that left the bucket
+    - name: s3_key
+      description: str, key of the data.json
+    - name: s3_etag
+      description: str, ETag of the data.json
+    - name: data_json
+      description: str, the data.json as published
+    - name: file_key
+      description: str, key of the file MIT Learn would extract text from for a resource;
+        null for a resource with none and for pages and courses
+    - name: file_etag
+      description: str, ETag of that file
+    - name: file_size_bytes
+      description: int, size of that file
+    - name: content
+      description: str, the file's text as extracted by Tika
+    - name: extraction_status
+      description: str, extracted, empty (no text in the file), failed (Tika could
+        not read it) or missing (the file is not in the bucket); null where there
+        is no file to extract
+    - name: course_version
+      description: str, digest of the ETags the course's rows were built from
+    - name: course_retrieved_at
+      data_type: timestamp with time zone
+      description: timestamp, when this set of the course's rows was read

@@ -43,3 +43,94 @@ sources:
       description: str, for problem blocks, markdown content if present
     - name: retrieved_at
       description: timestamp, ISO8601 timestamp when the block data was extracted
+  - name: raw__openedx__s3__course_document_text
+    description: >
+      Text Apache Tika extracted from the documents (PDFs, HTML, Office files) in
+      each Open edX course run's static assets, one row per document, written by
+      the openedx location's extract_course_document_text asset. Appended one
+      file per course version; staging keeps each course's newest file.
+    columns:
+    - name: course_id
+      description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    - name: source_system
+      description: str, Open edX deployment (mitxonline, xpro, mitx)
+    - name: file_path
+      description: str, path of the file within the course export, e.g. static/handout.pdf
+    - name: file_extension
+      description: str, lower-cased file extension with its dot; absent on a failed
+        extraction row
+    - name: content_type
+      description: str, the MIME type the file was sent to Tika as
+    - name: size_bytes
+      description: str, the file's size in bytes
+    - name: content
+      description: str, the extracted text; null when extraction was empty or failed
+    - name: extraction_status
+      description: str, extracted, empty or failed; null on an empty-file marker row
+    - name: extracted_at
+      description: str, ISO 8601 UTC time the asset extracted the file's text, one
+        value per landed file; null in files written before the assets stamped it
+    - name: _source_file
+      description: str, the landing-zone file the row was read from
+    - name: _file_modified_at
+      description: timestamp, that file's S3 modification time
+  - name: raw__openedx__s3__course_transcript_text
+    description: >
+      Plain text parsed from the subtitle files (.srt, .sjson, .vtt) in each Open
+      edX course run's static assets, one row per file, written by the openedx
+      location's course transcript asset. Appended one file per course version;
+      staging keeps each course's newest file.
+    columns:
+    - name: course_id
+      description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    - name: source_system
+      description: str, Open edX deployment (mitxonline, xpro, mitx)
+    - name: file_path
+      description: str, path of the file within the course export
+    - name: file_extension
+      description: str, lower-cased file extension with its dot
+    - name: content_type
+      description: str, MIME type of the subtitle format
+    - name: size_bytes
+      description: str, the file's size in bytes
+    - name: content
+      description: str, transcript text without cue timings; null when empty or failed
+    - name: extraction_status
+      description: str, extracted, empty or failed; null on an empty-file marker row
+    - name: extracted_at
+      description: str, ISO 8601 UTC time the asset extracted the file's text, one
+        value per landed file; null in files written before the assets stamped it
+    - name: _source_file
+      description: str, the landing-zone file the row was read from
+    - name: _file_modified_at
+      description: timestamp, that file's S3 modification time
+  - name: raw__openedx__s3__course_file_exclusions
+    description: >
+      Every file in each Open edX course run's export, flagged with whether MIT
+      Learn leaves it out of its ContentFiles, written by the openedx location's
+      extract_course_file_exclusions asset (a port of Learn's excluded_olx_paths).
+      Appended one file per course version; staging keeps each course's newest file.
+    columns:
+    - name: course_id
+      description: str, course run ID formatted as course-v1:{org}+{course}+{run}
+    - name: source_system
+      description: str, Open edX deployment (mitxonline, xpro, mitx)
+    - name: course_xml_version
+      description: str, SHA-256 of the course export the rules ran over; the course_xml_blocks
+        file parsed from that export is named after it
+    - name: file_path
+      description: str, path of the file within the course export, relative to its
+        root, e.g. static/handout.pdf
+    - name: excluded
+      description: str, true or false, whether Learn excludes the file
+    - name: exclusion_reason
+      description: str, the rule that excluded the file (staff_only, non_content,
+        unreachable_tab, about_page, unreferenced_static, course_settings, legacy_announcements);
+        null when the file is kept
+    - name: extracted_at
+      description: str, ISO 8601 UTC time the asset ran the rules, one value per landed
+        file; null in files written before the asset stamped it
+    - name: _source_file
+      description: str, the landing-zone file the row was read from
+    - name: _file_modified_at
+      description: timestamp, that file's S3 modification time

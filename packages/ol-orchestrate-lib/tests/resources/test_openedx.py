@@ -5,7 +5,12 @@ parsed as though it were a bare query string, so the whole URL became a query
 parameter *name* and each page nested it one level deeper.
 """
 
-from ol_orchestrate.resources.openedx import next_page_params
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import httpx2 as httpx
+import pytest
+from ol_orchestrate.resources.openedx import OpenEdxApiClient, next_page_params
 
 COURSES = "https://courses.learn.mit.edu/api/courses/v1/courses/"
 
@@ -45,3 +50,105 @@ def test_a_next_url_with_no_query_yields_nothing() -> None:
 def test_a_relative_next_url_is_handled() -> None:
     """Some DRF configurations return a path rather than an absolute URL."""
     assert next_page_params("/api/courses/v1/courses/?page=4") == {"page": ["4"]}
+
+
+class _PostingClient:
+    """httpx.Client stand-in that records POSTs and answers with a fixed status."""
+
+    def __init__(self, status_code: int, body: dict[str, Any]) -> None:
+        self.status_code = status_code
+        self.body = body
+        self.posts: list[tuple[str, dict[str, Any]]] = []
+        self.gets: list[tuple[str, dict[str, Any]]] = []
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        self.gets.append((url, kwargs))
+        return httpx.Response(self.status_code, request=httpx.Request("GET", url))
+
+    def post(self, url: str, **kwargs) -> httpx.Response:
+        self.posts.append((url, kwargs))
+        return httpx.Response(
+            self.status_code, json=self.body, request=httpx.Request("POST", url)
+        )
+
+
+def _studio_client(http_client: _PostingClient) -> OpenEdxApiClient:
+    client = OpenEdxApiClient(
+        client_id="id",
+        client_secret="secret",  # pragma: allowlist secret
+        token_type="JWT",
+        token_url="https://lms.example.com/oauth2/access_token",
+        base_url="https://lms.example.com",
+        studio_url="https://studio.example.com",
+    )
+    client._http_client = http_client
+    client._access_token = "token"  # noqa: S105
+    client._access_token_expires = datetime.now(tz=UTC) + timedelta(hours=1)
+    return client
+
+
+def test_content_versions_are_asked_of_studio_in_one_post() -> None:
+    """The course ids go in the body, so a 200-course batch is one request."""
+    body = {"versions": {}, "missing": ["course-v1:a+b+c"]}
+    http_client = _PostingClient(200, body)
+
+    result = _studio_client(http_client).get_course_content_versions(
+        ["course-v1:a+b+c"]
+    )
+
+    assert result == body
+    [(url, kwargs)] = http_client.posts
+    assert url == "https://studio.example.com/api/courses/v0/export/versions/"
+    assert kwargs["json"] == {"courses": ["course-v1:a+b+c"]}
+    assert kwargs["headers"] == {"Authorization": "JWT token"}
+
+
+def test_a_studio_without_the_versions_endpoint_raises() -> None:
+    """A 404 must fail the batch, not read as a batch of courses with no facts."""
+    http_client = _PostingClient(404, {"detail": "Not found."})
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _studio_client(http_client).get_course_content_versions(["course-v1:a+b+c"])
+
+
+def test_the_versions_endpoint_is_available_when_it_refuses_a_get() -> None:
+    """0.4.0's versions view only allows POST, so a GET is answered with 405."""
+    http_client = _PostingClient(405, {})
+
+    assert _studio_client(http_client).course_content_versions_available()
+    assert not http_client.posts, "the probe must never POST"
+
+
+def test_the_versions_endpoint_is_unavailable_on_an_older_plugin() -> None:
+    """0.3.0 routes the path to the export view, which 404s a GET with no course.
+
+    A POST there would queue an export of every course in the body, which is
+    why the probe is a GET.
+    """
+    http_client = _PostingClient(404, {})
+
+    assert not _studio_client(http_client).course_content_versions_available()
+    assert not http_client.posts, "the probe must never POST"
+
+
+def test_a_failing_probe_reports_its_own_status() -> None:
+    """A 500 or 401 is raised as itself, not reported as a missing endpoint."""
+    for status in (401, 500):
+        http_client = _PostingClient(status, {})
+
+        with pytest.raises(httpx.HTTPStatusError):
+            _studio_client(http_client).course_content_versions_available()
+        assert not http_client.posts, "the probe must never POST"
+
+
+def test_a_successful_probe_is_neither_answer() -> None:
+    """Neither view answers the GET with a success, so a 200 raises.
+
+    Read as available, it would POST course ids to whatever answered; read as
+    unavailable, it would be reported as a missing plugin.
+    """
+    http_client = _PostingClient(200, {})
+
+    with pytest.raises(RuntimeError, match="answered 200"):
+        _studio_client(http_client).course_content_versions_available()
+    assert not http_client.posts, "the probe must never POST"

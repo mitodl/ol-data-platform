@@ -10,6 +10,23 @@
 # which skips the MV refresh for every StarRocks model, and the tests read the
 # previous refresh's rows anyway (a plain build leaves an existing MV untouched).
 # Anything the API contract depends on is enforced in the SQL instead.
+#
+# Change logs. A model that sets config.meta.change_tracking gets a companion
+# table, <model>_changes, in this database. dbt does not build it: the Dagster
+# MV-refresh asset rewrites it after each successful refresh of the model
+# (lakehouse.lib.starrocks_dbt.stamp_change_log). It has one row per `key`
+# the model has ever held, with:
+#   - the `key` columns, the model's grain
+#   - the `identity` columns as last seen, which name the record to an API
+#     client (the key columns are warehouse surrogates)
+#   - row_hash, an md5 over every non-key column of the model
+#   - changed_on, the UTC time of the stamp that first saw the row, saw its
+#     hash change, or saw it leave or return
+#   - is_deleted, true while the key is absent from the model
+# changed_on is at or after the finish time of the refresh that exposed the
+# change, which is what makes it usable as an inclusive updated_since cursor
+# where record_updated_on is not. Removed rows are never pruned. A changed `key` or `identity` list needs the table
+# dropped by hand; the next refresh recreates it and stamps every row.
 version: 2
 models:
 - name: mv_b2b_learner_enrollment
@@ -26,12 +43,25 @@ models:
     attribution cannot fan out. The view is not filtered to the organization's
     current roster, because a learner removed from the organization keeps their
     enrollment in its contract runs; snapshot_mitxonline_b2b_userorganization
-    records membership history. There is no consent column yet. Until the
-    learner data-sharing consent field lands, the API treats every row as
-    outcomes_shared = false and nulls the grade and certificate columns. The
-    activity columns come from afact_learner_courserun_daily_activity,
+    records membership history. outcomes_shared carries the learner's
+    data-sharing decision for the enrollment's contract from
+    bridge_user_contract; the API nulls the grade and certificate columns when
+    it resolves to false. The activity columns come from afact_learner_courserun_daily_activity,
     pre-aggregated to (user, course run). This is a manual-refresh materialized
-    view.
+    view. After each refresh the Dagster MV-refresh asset stamps
+    mv_b2b_learner_enrollment_changes; see the header of this file.
+  config:
+    meta:
+      change_tracking:
+        key:
+        - contract_pk
+        - courserun_pk
+        - user_pk
+        identity:
+        - sso_organization_id
+        - contract_id
+        - courserun_readable_id
+        - user_global_id
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -156,12 +186,23 @@ models:
       The number of distinct (session, block) Open edX chatbot submits the
       learner made on each day, summed over the learner's active days. A pair
       submitted on two days therefore counts twice.
+  - name: outcomes_shared
+    description: >
+      The learner's data-sharing decision for this enrollment's contract, from
+      bridge_user_contract. Null when no decision is recorded (never asked, or
+      no contract membership row), true when they consented, false when they
+      declined or withdrew. Null is not false: the API resolves it against its
+      consent_fail_open setting, while a recorded false is withheld either way.
+  - name: outcomes_consent_on
+    description: ISO-8601 timestamp when the learner last set their consent for this
+      contract, when outcomes_shared is true. Null otherwise.
   - name: record_updated_on
     description: >
-      The latest of the enrollment, grade and certificate update timestamps, in
-      ISO-8601. It is the cursor for the API's updated_since, which therefore
-      covers only enrollment, grade and certificate changes, including
-      deactivation and revocation. It is null only when every one of those
+      The latest of the enrollment, grade, certificate and consent update
+      timestamps, in ISO-8601. It is the cursor for the API's updated_since,
+      which therefore covers only enrollment, grade, certificate and consent
+      changes, including deactivation, revocation and consent withdrawal. It is null
+      only when every one of those
       timestamps is missing. dim_user (email, name) and course-run metadata
       carry no change timestamp, so edits to them do not move it, and a partner
       picks those up from a full reload of the bulk export. Activity does not
@@ -186,9 +227,22 @@ models:
     memberships it creates itself (enrollment-code redemption, contract-run
     enrollment) so SSO reconciliation does not remove them before Keycloak
     reflects them. snapshot_mitxonline_b2b_userorganization records membership
-    history. There is no consent column, for the same reason as
-    mv_b2b_learner_enrollment. last_active_on and courses_in_progress count
-    active enrollments only. This is a manual-refresh materialized view.
+    history. outcomes_shared resolves the learner's data-sharing decision
+    across every contract of the organization they currently hold a
+    membership or have an enrollment under. last_active_on and courses_in_progress
+    count
+    active enrollments only. This is a manual-refresh materialized view. After
+    each refresh the Dagster MV-refresh asset stamps mv_b2b_learner_changes;
+    see the header of this file.
+  config:
+    meta:
+      change_tracking:
+        key:
+        - organization_key
+        - user_pk
+        identity:
+        - sso_organization_id
+        - user_global_id
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -279,15 +333,31 @@ models:
       certificate, is not passing, and has either a nonzero grade or some
       tracked activity. This matches the API's completion_status of
       in_progress on those enrollments.
+  - name: outcomes_shared
+    description: >
+      The learner's data-sharing decision for the organization, resolved across
+      every contract of the organization they currently hold a membership or
+      have an enrollment under (bridge_user_contract): false if any records a
+      decline or withdrawal, else null if any has no recorded decision
+      (including a contract they are enrolled under with no membership row),
+      else true. The outcome counts cover every one of those contracts, so a
+      decline under any of them has to win. Null is not false: the API resolves
+      it against its consent_fail_open setting, while false is withheld either
+      way.
+  - name: outcomes_consent_on
+    description: ISO-8601 timestamp of the learner's latest consent under any of the
+      organization's contracts, when outcomes_shared is true. Null otherwise.
   - name: record_updated_on
     description: >
       The latest update timestamp across all of the learner's enrollments under
       the organization's contracts, active or not, their grades and course
-      certificates, and the program certificates attributed above, revoked or
-      not, in ISO-8601. It is the cursor for updated_since. It is taken over
+      certificates, the program certificates attributed above, revoked or not,
+      and their consent decisions under the organization's contracts, in
+      ISO-8601. It is the cursor for updated_since. It is taken over
       the unfiltered set so that deactivation and revocation move it forward.
-      It is null for learners with no enrollment under the organization's
-      contracts. Roster adds, removals and manager changes, and dim_user edits,
+      It is null for learners with no enrollment and no recorded consent
+      decision under the organization's contracts. Roster adds, removals and manager
+      changes, and dim_user edits,
       carry no change timestamp and do not move it; a partner picks those up
       from a full reload of the bulk export.
 

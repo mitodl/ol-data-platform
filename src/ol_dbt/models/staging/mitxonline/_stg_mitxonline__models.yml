@@ -27,7 +27,9 @@ models:
   - name: courserunenrollment_id
     description: int, sequential ID tracking a single user enrollment
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
@@ -86,7 +88,9 @@ models:
   - name: enrollmentaudit_id
     description: int, sequential ID for this audit record
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: courserunenrollment_id
     description: int, foreign key referencing courses_courserunenrollment
@@ -110,7 +114,9 @@ models:
   - name: programenrollment_id
     description: int, sequential ID tracking a single user enrollment
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: programenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
@@ -151,7 +157,9 @@ models:
   - name: enrollmentaudit_id
     description: int, sequential ID for this audit record
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: programenrollment_id
     description: int, foreign key referencing courses_programenrollment
@@ -175,6 +183,11 @@ models:
   columns:
   - name: basketdiscount_id
     description: int, primary key representing a discount in a user's basket
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
   - name: basketdiscount_created_on
     description: timestamp, specifying when the basket discount was initially created
   - name: basketdiscount_updated_on
@@ -193,6 +206,11 @@ models:
   columns:
   - name: basketitem_id
     description: int, primary key representing a item in a user's basket
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
   - name: basketitem_created_on
     description: timestamp, specifying when the basket item was initially created
   - name: basketitem_updated_on
@@ -210,6 +228,11 @@ models:
   columns:
   - name: basket_id
     description: int, primary key representing a user basket
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
   - name: basket_created_on
     description: timestamp, specifying when the basket was initially created
   - name: basket_updated_on
@@ -226,7 +249,9 @@ models:
     description: int, primary key representing a flexible pricing application
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: flexiblepriceapplication_created_on
     description: timestamp, specifying when the table row was created
     tests:
@@ -296,7 +321,9 @@ models:
     description: int, primary key representing a flexible pricing tier
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: flexiblepricetier_created_on
     description: timestamp, specifying when the table row was created
     tests:
@@ -335,7 +362,9 @@ models:
     description: int, primary key representing a country exchange rate
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: currencyexchangerate_created_on
     description: timestamp, specifying when the table row was created
     tests:
@@ -362,7 +391,9 @@ models:
     description: int, primary key representing a country income threshold
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: countryincomethreshold_created_on
     description: timestamp, specifying when the table row was created
     tests:
@@ -387,6 +418,9 @@ models:
   - name: userdiscount_id
     description: int, primary key representing a discount user combo
     tests:
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: userdiscount_created_on
     description: timestamp, specifying when the discount user association was initially
@@ -414,6 +448,9 @@ models:
   - name: discountproduct_id
     description: int, primary key representing a discount product combo
     tests:
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: discountproduct_created_on
     description: timestamp, specifying when the discount product association was initially
@@ -434,7 +471,9 @@ models:
     description: int, primary key representing a discount
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: discount_created_on
     description: timestamp, specifying when the discount was initially created
   - name: discount_updated_on
@@ -487,6 +526,11 @@ models:
   columns:
   - name: discountredemption_id
     description: int, primary key representing a discount redemption
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
   - name: discountredemption_timestamp
     description: timestamp, specifying when the discount was redeemed by the user
   - name: user_id
@@ -501,7 +545,9 @@ models:
   - name: transaction_id
     description: int, primary key representing an ecommerce transaction
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: transaction_data
     description: json, data returned from cybersource when the transaction is fulfilled
@@ -539,7 +585,9 @@ models:
   - name: line_id
     description: int, primary key representing an ecommerce line
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: order_id
     description: int, foreign key in the orders_order table for the order that contains
@@ -567,7 +615,9 @@ models:
   - name: revision_id
     description: int, primary key representing a revision of a product or transaction
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: revision_comment
     description: string, automatically generated discription of the change
@@ -585,7 +635,9 @@ models:
   - name: version_id
     description: int, primary key representing a version of a product or transaction
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: version_object_id
     description: int, foreign key of the object being versioned
@@ -609,7 +661,9 @@ models:
     description: int, primary key representing a single MITx Online order
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: order_state
     description: string, order state. Options are "pending", "fulfilled", "canceled"
       "declined", "errored", "refunded", "review", "partially_refunded"
@@ -631,6 +685,8 @@ models:
     description: string, readable id for the order. Shared with micromasters
     tests:
     - not_null
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: order_total_price_paid
     description: number, total order amount
 
@@ -641,7 +697,9 @@ models:
     description: int, primary key representing a single MITx Online program run
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: programrun_tag
     description: str, string that identifies a single run in a prgram E.g. R11
     tests:
@@ -665,7 +723,9 @@ models:
   - name: product_id
     description: int, sequential ID for ecommerce product
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: product_price
     description: numeric, the price of the product
@@ -708,7 +768,9 @@ models:
   - name: contenttype_id
     description: int, sequential ID for the django model
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: contenttype_full_name
     description: string, name for django model. A combination of the models name and
@@ -722,7 +784,9 @@ models:
   - name: user_id
     description: int, sequential ID representing one user in MITx Online
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: user_global_id
     description: str, The SSO ID (usually a Keycloak UUID) for the user across all
@@ -764,7 +828,9 @@ models:
   - name: user_address_id
     description: int, sequential ID
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: user_address_country
     description: string, user country code
@@ -784,7 +850,9 @@ models:
   - name: user_profile_id
     description: int, sequential ID representing a single MITx Online user profile
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: user_id
     description: int,  unique ID for user on MITx Online
@@ -817,7 +885,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("gender_values") }}'
+          values: '{{ gender_values() }}'
   - name: user_company_size
     description: str, company size
     tests:
@@ -839,7 +907,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: '{{ var("highest_education_values") }}'
+          values: '{{ highest_education_values() }}'
   - name: user_profile_created_on
     description: timestamp, date and time when this profile data was initially created
   - name: user_profile_updated_on
@@ -851,7 +919,9 @@ models:
   - name: course_id
     description: int, primary key representing a single MITx Online course
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: course_is_live
     description: boolean, indicating whether course is available to users on MITx
@@ -885,7 +955,9 @@ models:
   - name: program_id
     description: int, primary key representing a single MITx Online program
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: program_is_live
     description: boolean, indicating whether the program is available to users
@@ -937,7 +1009,9 @@ models:
   - name: programrequirement_id
     description: int, primary key representing a MITx Online program requirement node
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: course_id
     description: int, foreign key to courses_course representing a single course
@@ -998,7 +1072,9 @@ models:
   - name: courserun_id
     description: int, primary key representing a single MITx Online course run
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: courserun_is_live
     description: boolean, indicating whether the course run is available to users
@@ -1073,7 +1149,9 @@ models:
   - name: coursedepartment_id
     description: int, primary key representing a single MITx Online course department
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: coursedepartment_name
     description: str, name of a course department
@@ -1092,7 +1170,9 @@ models:
     description: int, primary key representing a single MITx Online course tagged
       to a department
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: coursedepartment_id
     description: int, foreign key to courses_coursedepartment representing a single
@@ -1121,7 +1201,9 @@ models:
   - name: blockedcountry_id
     description: int, primary key for courses_blockedcountry table from MITx Online
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: blockedcountry_code
     description: str, two-letter code of a blocked country for a course
@@ -1152,7 +1234,9 @@ models:
     description: int, primary key representing a single MITxOnline course certificate
       record
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate
@@ -1194,7 +1278,9 @@ models:
     description: int, primary key representing a single MITxOnline program certificate
       record
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: programcertificate_uuid
     description: str, unique identifier for the program certificate
@@ -1234,7 +1320,9 @@ models:
   - name: courserungrade_id
     description: int, primary key representing a single MITxOnline grade record
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: courserun_id
     description: int, foreign key to courses_courserun representing a single course
@@ -1731,7 +1819,9 @@ models:
     description: int, primary key for this table.
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: wagtail_page_path
     description: str, the full materialized path for each node (readonly) e.g. 0001
       is root path, 00010001 is the path to a node in this requirement tree
@@ -1800,7 +1890,9 @@ models:
   - name: wagtail_page_id
     description: int, foreign key to wagtail_page
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: course_id
     description: int, foreign key to courses_course
@@ -1843,7 +1935,9 @@ models:
   - name: wagtail_page_id
     description: int, foreign key to wagtail_page
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: program_id
     description: int, foreign key to courses_program
@@ -1863,9 +1957,14 @@ models:
     description: str, a short description indicating how much effort is required (e.g.
       1-3 hours per week).
   - name: program_price
-    description: str, product price in plain text. e.g. $250 - $1000.
+    description: str, product price in plain text. e.g. $250 - $1000. NULL when the
+      page's price block is empty, which no production page is and 22 of the 58 QA
+      pages are (2026-10-07).
     tests:
-    - not_null
+    - not_null:
+        config:
+          severity: "{{ 'warn' if target.database == 'ol_data_lake_qa' else 'error'\
+            \ }}"
   - name: program_prerequisites
     description: text, a short description indicating prerequisites of this program.
   - name: program_faq_url
@@ -1886,7 +1985,9 @@ models:
   - name: coursetopic_id
     description: int, primary key for courses_coursetopic
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: coursetopic_name
     description: str, name of a course topic
@@ -1910,6 +2011,13 @@ models:
 
 - name: stg__mitxonline__app__postgres__cms_coursepage_topics
   columns:
+  - name: coursepage_topic_id
+    description: int, primary key in this table
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
   - name: wagtail_page_id
     description: int, foreign key to cms_coursepage referring to the course page
     tests:
@@ -1918,12 +2026,21 @@ models:
     description: int, foreign key to courses_coursetopic
     tests:
     - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - wagtail_page_id
+        - coursetopic_id
 
 - name: stg__mitxonline__app__postgres__cms_instructorpage
   columns:
   - name: wagtail_page_id
     description: int, foreign key to cms_coursepage referring to the course page
     tests:
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: instructor_name
     description: str, the name of the instructor.
@@ -1938,6 +2055,13 @@ models:
 
 - name: stg__mitxonline__app__postgres__cms_instructorpagelink
   columns:
+  - name: instructorpagelink_id
+    description: int, primary key in this table
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
   - name: wagtail_page_id
     description: int, foreign key to wagtail_page referring to the course page
     tests:
@@ -2000,39 +2124,38 @@ models:
     tests:
     - not_null
 
-  - name: stg__mitxonline__app__postgres__openedx_openedxuser
-    description: Mapping of MITx Online users to open edX users
-    columns:
-    - name: openedxuser_id
-      description: int, the primary key for the openedx_openedxuser table
-      tests:
-      - not_null
-      - unique
-    - name: user_id
-      description: int, the foreign key referencing the users_user table in the MITx
-        Online application
-      tests:
-      - unique
-      - not_null
-    - name: openedxuser_platform
-      description: str, the platform where the user is registered. e.g. "edx"
-      tests:
-      - not_null
-    - name: openedxuser_username
-      description: str, the username of the user on the open edX platform
-      tests:
-      - unique
-    - name: openedxuser_desired_username
-      description: str, the desired username for the user on the open edX platform
-      tests:
-      - unique
-    - name: openedxuser_has_been_synced
-      description: boolean, indicating whether a corresponding user has been created
-        on the open edX platform
-    - name: openedxuser_created_on
-      description: timestamp, date and time when this record was created
-    - name: openedxuser_updated_on
-      description: timestamp, date and time when this record was last updated
+- name: stg__mitxonline__app__postgres__openedx_openedxuser
+  description: Mapping of MITx Online users to open edX users
+  columns:
+  - name: openedxuser_id
+    description: int, the primary key for the openedx_openedxuser table
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
+  - name: user_id
+    description: int, the foreign key referencing the users_user table in the MITx
+      Online application
+    tests:
+    - not_null
+  - name: openedxuser_platform
+    description: str, the platform where the user is registered. e.g. "edx"
+    tests:
+    - not_null
+  - name: openedxuser_username
+    description: str, the username of the user on the open edX platform
+    tests:
+    - unique
+  - name: openedxuser_desired_username
+    description: str, the desired username for the user on the open edX platform
+  - name: openedxuser_has_been_synced
+    description: boolean, indicating whether a corresponding user has been created
+      on the open edX platform
+  - name: openedxuser_created_on
+    description: timestamp, date and time when this record was created
+  - name: openedxuser_updated_on
+    description: timestamp, date and time when this record was last updated
 
 - name: stg__mitxonline__app__postgres__cms_wagtailcore_revision
   description: Wagtail page revisions in MITx Online CMS
@@ -2040,7 +2163,9 @@ models:
   - name: wagtailcore_revision_id
     description: int, primary key for wagtailcore_revision
     tests:
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
     - not_null
   - name: wagtailcore_revision_content
     description: str, content of the revision stored as a JSON string
@@ -2082,6 +2207,11 @@ models:
     description: str, third title of the signatory
   - name: wagtail_page_id
     description: int, foreign key to wagtailcore_page
+    tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
   - name: signatorypage_organization
     description: str, the organization of the signatory
   - name: wagtailimages_image_id
@@ -2095,7 +2225,9 @@ models:
     description: primary key for this table. It is also the foreign key to cms_wagtail_page
     data_tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: organization_key
     data_type: varchar
     description: short key used for the organization. e.g. demo, Eme502
@@ -2125,7 +2257,9 @@ models:
     description: primary key for this table. It is also the foreign key to cms_wagtail_page
     data_tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: b2b_contract_name
     data_type: varchar
     description: name of the b2b contract
@@ -2160,6 +2294,82 @@ models:
     description: Membership management method for the contract. Values are 'managed'
       or 'code'.
 
+- name: stg__mitxonline__app__postgres__b2b_contractprogramitem
+  description: The programs each MITx Online B2B contract covers, as the contract
+    declares them. One row per contract and program.
+  columns:
+  - name: contractprogramitem_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
+  - name: contract_id
+    data_type: bigint
+    description: foreign key to b2b_contractpage (page_ptr_id)
+    data_tests:
+    - not_null
+  - name: program_id
+    data_type: bigint
+    description: foreign key to courses_program
+    data_tests:
+    - not_null
+  - name: contractprogramitem_sort_order
+    data_type: bigint
+    description: position of the program within the contract's list. Null when the
+      row was never ordered.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - contract_id
+      - program_id
+
+- name: stg__mitxonline__app__postgres__b2b_userb2bcontract
+  description: MITx Online B2B learner-to-contract memberships, with the learner's
+    data-sharing consent for each contract.
+  columns:
+  - name: userb2bcontract_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
+  - name: user_id
+    data_type: bigint
+    description: foreign key to users_user
+    data_tests:
+    - not_null
+  - name: contract_id
+    data_type: bigint
+    description: foreign key to b2b_contractpage (page_ptr_id)
+    data_tests:
+    - not_null
+  - name: userb2bcontract_consented_to_data_sharing
+    data_type: boolean
+    description: the learner's decision to share their course data with the contract's
+      organization. Null when the learner has not been asked or has not answered,
+      true when they consented, false when they declined or withdrew. MITx Online
+      stores one value, so declined and withdrawn are not distinguishable here.
+  - name: userb2bcontract_consent_modified_at
+    data_type: varchar
+    description: ISO-8601 timestamp when the consent value was last set. Null when
+      it never has been.
+  - name: userb2bcontract_created_on
+    data_type: varchar
+    description: ISO-8601 timestamp when the membership was created
+  - name: userb2bcontract_updated_on
+    data_type: varchar
+    description: ISO-8601 timestamp when the membership was last saved
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - user_id
+      - contract_id
+
 - name: stg__mitxonline__app__postgres__b2b_userorganization
   description: MITx Online B2B user-to-organization membership records
   columns:
@@ -2168,7 +2378,9 @@ models:
     description: primary key for this table
     data_tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: user_id
     data_type: bigint
     description: foreign key to users_user
@@ -2197,7 +2409,9 @@ models:
     description: int, primary key for the Wagtail image record
     tests:
     - not_null
-    - unique
+    - unique:
+        config:
+          error_if: "!=0"
   - name: image_file
     description: str, path to the image file in storage. May be an S3 key or a CDN-relative
       path - prepend the MITx Online media base URL to form a full image URL.

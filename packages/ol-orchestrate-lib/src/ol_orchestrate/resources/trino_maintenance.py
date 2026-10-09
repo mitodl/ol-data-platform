@@ -9,9 +9,9 @@ because:
 - ANALYZE is not available in pyiceberg at all; it is a Trino-only operation
   that collects statistics for the query optimizer.
 
-pyiceberg is used instead for EXPIRE SNAPSHOTS and REMOVE ORPHAN FILES because
-those are metadata bookkeeping operations (Glue API calls + targeted S3 deletes)
-that do not need a distributed engine.
+pyiceberg is used instead for EXPIRE SNAPSHOTS because it is a metadata
+bookkeeping operation (Glue API calls + targeted S3 deletes) that does not need
+a distributed engine.
 
 Credentials are read from Vault using BasicAuthentication (service account),
 not OAuth2 (which is for interactive developer use only).  The vault secret at

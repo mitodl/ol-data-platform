@@ -35,7 +35,7 @@ with chatbot as (
 , tutorbot as (
     select
         *
-        , json_parse(json_extract_scalar(tutorbot_chat_json, '$')) as chat_json
+        , json_parse({{ json_extract_scalar('tutorbot_chat_json', "'$'") }}) as chat_json
     from {{ ref('int__learn_ai__tutorbot') }}
 )
 
@@ -50,15 +50,15 @@ with chatbot as (
         , tutorbot.user_global_id
         , tutorbot.chatsession_created_on
         , tutorbot.chatsession_updated_on
-        , t.idx as message_index
+        , t.idx as message_index  -- noqa: RF01
         , case
-            when json_extract_scalar(t.element, '$.type') = 'HumanMessage'
-                then json_extract_scalar(t.element, '$.content')
+            when {{ json_extract_scalar('t.element', "'$.type'") }} = 'HumanMessage'  -- noqa: RF01
+                then {{ json_extract_scalar('t.element', "'$.content'") }}  -- noqa: RF01
         end as human_message
     from tutorbot
     cross join
-        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))
-        with ordinality as t(element, idx) -- noqa: PRS
+        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))  -- noqa: PRS
+        with ordinality as t(element, idx)
 )
 
 , tutorbot_deduplicated as (
@@ -159,18 +159,21 @@ select
         when 'SyllabusBot' then 'course'
         when 'CanvasSyllabusBot' then 'course'
         when 'ResourceRecommendationBot' then 'resource'
+        when 'SearchSummaryBot' then 'resource'
+        -- A warn test on int__learn_ai__chatbot.chatsession_agent flags a new agent
+        else 'unspecified'
     end as subject_type
     , human_turns.chatsession_object_id as subject_ref
     , cast(null as varchar) as subject_url
     , human_turns.explicit_rating
     , human_turns.occurred_at as created_at
     , human_turns.chatsession_updated_on as updated_at
-    , json_object(
-        'chatsession_agent': human_turns.chatsession_agent
-        , 'checkpoint_source': human_turns.checkpoint_source
-        , 'checkpoint_type': human_turns.checkpoint_type
-        , 'courserun_platform': course_run.platform
-    ) as source_metadata
+    , {{ json_object_from_pairs([
+        ['chatsession_agent', "human_turns.chatsession_agent"]
+        , ['checkpoint_source', "human_turns.checkpoint_source"]
+        , ['checkpoint_type', "human_turns.checkpoint_type"]
+        , ['courserun_platform', "course_run.platform"]
+    ]) }} as source_metadata
 from human_turns
 left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id

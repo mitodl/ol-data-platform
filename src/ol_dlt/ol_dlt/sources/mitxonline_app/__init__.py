@@ -1,7 +1,7 @@
 """MITx Online application-database ingestion via dlt.
 
 Replaces the Airbyte connection ``MITx Online Production App DB → S3 Data Lake``
-(RFC 12319 §6.5, RFC 12711 step 8). Scope is the 64 tables that connection
+(RFC 12319 §6.5, RFC 12711 step 8). Scope is the tables that connection
 declares, which is also what the inventory unit ``mitxonline/app_postgres``
 records.
 
@@ -22,8 +22,8 @@ which dlt has no practical equivalent for (INGESTION_INVENTORY_SPEC.md §3.4),
 so each of them needed either a replacement cursor or a decision to re-read it
 whole. They are all re-read whole, for three measured reasons:
 
-    Affordable.  The whole unit is 16.5M rows / 1.01 GB across 64 tables at the
-        current Iceberg snapshot (production Glue, 2026-08-31). The largest
+    Affordable.  The whole unit was 16.5M rows / 1.01 GB across 64 tables at
+        the Iceberg snapshot measured (production Glue, 2026-08-31). The largest
         table, ``openedx_openedxuser``, is 2.7M rows / 126 MB.
     Not safely keyable.  39 tables carry ``updated_on``, but that is Django's
         ``auto_now=True``, which fires on ``Model.save()`` and NOT on
@@ -75,12 +75,19 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         # The reason this source exists first. dim_organization and
         # dim_contract read these, and their keys are realm-scoped.
         DatabaseTable(name="b2b_contractpage", primary_key="page_ptr_id"),
+        # The programs a contract covers, in display order. Replaced the
+        # b2b_contractpage_programs many-to-many in MITx Online 0.135.0.
+        DatabaseTable(name="b2b_contractprogramitem", primary_key="id"),
         DatabaseTable(
             name="b2b_discountcontractattachmentredemption", primary_key="id"
         ),
         DatabaseTable(name="b2b_organizationindexpage", primary_key="page_ptr_id"),
         DatabaseTable(name="b2b_organizationpage", primary_key="page_ptr_id"),
         DatabaseTable(name="b2b_userorganization", primary_key="id"),
+        # Per-learner contract membership, carrying the learner's data-sharing
+        # consent. Replaced users_user_b2b_contracts as User.b2b_contracts' through
+        # table in MITx Online 1.168.2; the old table is no longer written.
+        DatabaseTable(name="b2b_userb2bcontract", primary_key="id"),
         # --- CMS: Wagtail page subclasses -----------------------------------
         DatabaseTable(name="cms_certificatepage", primary_key="page_ptr_id"),
         DatabaseTable(name="cms_courseindexpage", primary_key="page_ptr_id"),
@@ -96,6 +103,7 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_course", primary_key="id"),
         DatabaseTable(name="courses_course_departments", primary_key="id"),
         DatabaseTable(name="courses_courserun", primary_key="id"),
+        DatabaseTable(name="courses_courserun_enrollment_modes", primary_key="id"),
         DatabaseTable(name="courses_courseruncertificate", primary_key="id"),
         DatabaseTable(name="courses_courserunenrollment", primary_key="id"),
         DatabaseTable(name="courses_courserunenrollmentaudit", primary_key="id"),
@@ -103,6 +111,9 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_courserungradeaudit", primary_key="id"),
         DatabaseTable(name="courses_coursestopic", primary_key="id"),
         DatabaseTable(name="courses_department", primary_key="id"),
+        # The audit/verified modes a run or program offers. Learn prices and
+        # certifies a run from these, and a product does not stand in for them.
+        DatabaseTable(name="courses_enrollmentmode", primary_key="id"),
         DatabaseTable(
             name="courses_learnerprogramrecordshare", primary_key="share_uuid"
         ),
@@ -110,6 +121,7 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_partnerschool", primary_key="id"),
         DatabaseTable(name="courses_program", primary_key="id"),
         DatabaseTable(name="courses_program_departments", primary_key="id"),
+        DatabaseTable(name="courses_program_enrollment_modes", primary_key="id"),
         DatabaseTable(name="courses_programcertificate", primary_key="id"),
         DatabaseTable(name="courses_programenrollment", primary_key="id"),
         DatabaseTable(name="courses_programenrollmentaudit", primary_key="id"),
@@ -156,6 +168,11 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         ),
         DatabaseTable(name="users_user_b2b_contracts", primary_key="id"),
         DatabaseTable(name="users_userprofile", primary_key="id"),
+        # --- variants --------------------------------------------------------------
+        # Generic FK (content_type_id + object_id) onto a course or B2B contract
+        # page. Learn unpublishes a run that matches a non-default supported
+        # variant of its course.
+        DatabaseTable(name="variants_supportedvariant", primary_key="id"),
         # --- Wagtail core ----------------------------------------------------------
         DatabaseTable(name="wagtailcore_page", primary_key="id"),
         DatabaseTable(name="wagtailcore_revision", primary_key="id"),

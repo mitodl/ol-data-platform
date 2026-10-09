@@ -3,20 +3,32 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
+import pyarrow as pa
 import pytest
+from ol_orchestrate.lib import iceberg_maintenance
 from ol_orchestrate.lib.iceberg_maintenance import (
+    AIRBYTE_STAGING_BRANCH,
     RAW_LAYER_GROUP_CONFIGS,
     TableMaintenanceConfig,
+    expirable_snapshot_ids,
+    expire_snapshots,
     load_maintenance_configs_from_manifest,
+    load_raw_layer_maintenance_work,
     maintenance_failure_threshold,
     non_dbt_singleton_tables,
     partition_by_catalog_presence,
     raw_config_for_table,
     scope_schema_to_env,
+    stale_branches,
     warehouse_env_for,
 )
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
+from pyiceberg.table import Table
+from pyiceberg.table.refs import SnapshotRef, SnapshotRefType
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +42,6 @@ def _iceberg_meta(
     *,
     enabled: bool = True,
     snapshot_retention_days: int = 7,
-    orphan_retention_days: int = 7,
     optimize_after_every_n_runs: int = 1,
     analyze_after_every_n_runs: int = 7,
 ) -> dict[str, object]:
@@ -38,7 +49,6 @@ def _iceberg_meta(
     return {
         "enabled": enabled,
         "snapshot_retention_days": snapshot_retention_days,
-        "orphan_retention_days": orphan_retention_days,
         "optimize_after_every_n_runs": optimize_after_every_n_runs,
         "analyze_after_every_n_runs": analyze_after_every_n_runs,
     }
@@ -100,7 +110,6 @@ class TestLoadMaintenanceConfigsFromManifest:
         assert cfg.model_name == "mart__revenue"
         assert cfg.schema_name == "ol_warehouse_production_mart"
         assert cfg.snapshot_retention_days == 14
-        assert cfg.orphan_retention_days == 7
         assert cfg.optimize_after_every_n_runs == 1
         assert cfg.analyze_after_every_n_runs == 7
         assert cfg.asset_key == ["mart", "mart__revenue"]
@@ -115,9 +124,7 @@ class TestLoadMaintenanceConfigsFromManifest:
                     "model.proj.dim_user",
                     schema="ol_warehouse_production_dimensional",
                     config_schema="dimensional",
-                    iceberg_meta=_iceberg_meta(
-                        snapshot_retention_days=14, orphan_retention_days=14
-                    ),
+                    iceberg_meta=_iceberg_meta(snapshot_retention_days=14),
                 )
             }
         )
@@ -233,9 +240,7 @@ class TestLoadMaintenanceConfigsFromManifest:
                     schema="ol_warehouse_production_dimensional",
                     config_schema="dimensional",
                     materialized="incremental",
-                    iceberg_meta=_iceberg_meta(
-                        snapshot_retention_days=14, orphan_retention_days=14
-                    ),
+                    iceberg_meta=_iceberg_meta(snapshot_retention_days=14),
                 )
             }
         )
@@ -356,7 +361,6 @@ class TestRawConfigForTable:
         """The _default sentinel has the expected retention values."""
         default = RAW_LAYER_GROUP_CONFIGS["_default"]
         assert default.snapshot_retention_days == 7
-        assert default.orphan_retention_days == 7
 
 
 # ── Environment scoping ───────────────────────────────────────────────────────
@@ -409,6 +413,7 @@ class TestEnvironmentScoping:
         """The hand-written list hardcoded production for every environment."""
         assert [t.schema_name for t in non_dbt_singleton_tables("qa")] == [
             "ol_warehouse_qa_reporting",
+            "ol_warehouse_qa_intermediate",
             "ol_warehouse_qa_intermediate",
             "ol_warehouse_qa_intermediate",
         ]
@@ -535,3 +540,266 @@ class TestPartitionByCatalogPresence:
 
     def test_an_empty_config_list_yields_nothing(self) -> None:
         assert partition_by_catalog_presence([], {("s", "t")}) == ([], [])
+
+
+class TestExpireSnapshots:
+    """Expiry against a real pyiceberg catalog, with Airbyte-style branches.
+
+    A retention of 0 days puts the cutoff at "now", so every snapshot written
+    before the call is past retention. ``main``'s head is the fourth snapshot.
+    """
+
+    STALE = "airbyte_staging_927f86be_fdb5_3838_a59d_d1786601233e"
+    DATABASE = "raw"
+    TABLE = "raw__mitlearn__app__postgres__users_user"
+
+    @pytest.fixture
+    def catalog(self, tmp_path: Path) -> SqlCatalog:
+        catalog = SqlCatalog(
+            "test",
+            uri=f"sqlite:///{tmp_path}/catalog.db",
+            warehouse=f"file://{tmp_path}/warehouse",
+        )
+        catalog.create_namespace(self.DATABASE)
+        rows = pa.table({"id": pa.array([1], type=pa.int64())})
+        table = catalog.create_table(f"{self.DATABASE}.{self.TABLE}", rows.schema)
+        for _ in range(4):
+            table.append(rows)
+        first, second, _third, _head = (s.snapshot_id for s in table.snapshots())
+        (
+            table.manage_snapshots()
+            .create_branch(first, self.STALE)
+            .create_branch(second, "airbyte_staging")
+            .commit()
+        )
+        return catalog
+
+    def _table(self, catalog: SqlCatalog) -> Table:
+        return catalog.load_table(f"{self.DATABASE}.{self.TABLE}")
+
+    def test_a_stale_staging_branch_goes_and_takes_its_snapshot_with_it(
+        self, catalog: SqlCatalog
+    ) -> None:
+        before = [s.snapshot_id for s in self._table(catalog).snapshots()]
+
+        result = expire_snapshots(
+            catalog,
+            self.DATABASE,
+            self.TABLE,
+            retention_days=0,
+            stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+        )
+
+        table = self._table(catalog)
+        assert result["skipped"] is False
+        assert result["stale_branch_count"] == 1
+        assert set(table.metadata.refs) == {"main", "airbyte_staging"}
+        # The bare airbyte_staging head and main's head are all that is left.
+        assert [s.snapshot_id for s in table.snapshots()] == [before[1], before[3]]
+        assert result["eligible_count"] == len(before) - len(table.snapshots())
+
+    def test_without_a_pattern_a_branch_head_is_neither_expired_nor_counted(
+        self, catalog: SqlCatalog
+    ) -> None:
+        before = [s.snapshot_id for s in self._table(catalog).snapshots()]
+
+        result = expire_snapshots(catalog, self.DATABASE, self.TABLE, retention_days=0)
+
+        table = self._table(catalog)
+        assert self.STALE in table.metadata.refs
+        assert [s.snapshot_id for s in table.snapshots()] == [
+            before[0],
+            before[1],
+            before[3],
+        ]
+        assert result["eligible_count"] == 1
+        assert result["stale_branch_count"] == 0
+
+    def test_a_branch_inside_the_retention_window_is_kept(
+        self, catalog: SqlCatalog
+    ) -> None:
+        result = expire_snapshots(
+            catalog,
+            self.DATABASE,
+            self.TABLE,
+            retention_days=1,
+            stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+        )
+
+        assert result["skipped"] is True
+        assert result["reason"] == "no eligible snapshots"
+        assert self.STALE in self._table(catalog).metadata.refs
+
+    def test_a_dry_run_reports_and_changes_nothing(self, catalog: SqlCatalog) -> None:
+        before = self._table(catalog).metadata
+
+        result = expire_snapshots(
+            catalog,
+            self.DATABASE,
+            self.TABLE,
+            retention_days=0,
+            dry_run=True,
+            stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+        )
+
+        assert result["dry_run"] is True
+        assert result["eligible_count"] == 2
+        assert result["stale_branch_count"] == 1
+        assert self._table(catalog).metadata == before
+
+    def test_a_table_that_cannot_be_loaded_raises(self, catalog: SqlCatalog) -> None:
+        with pytest.raises(NoSuchTableError):
+            expire_snapshots(catalog, self.DATABASE, "missing", retention_days=0)
+
+    @pytest.mark.parametrize("pattern", [AIRBYTE_STAGING_BRANCH, None])
+    def test_a_failed_commit_raises(
+        self,
+        catalog: SqlCatalog,
+        monkeypatch: pytest.MonkeyPatch,
+        pattern: re.Pattern[str] | None,
+    ) -> None:
+        """With the pattern the branch removal commits first, without it the expiry."""
+
+        def fail(*_args: object, **_kwargs: object) -> None:
+            msg = "concurrent write"
+            raise CommitFailedException(msg)
+
+        monkeypatch.setattr(SqlCatalog, "commit_table", fail)
+
+        with pytest.raises(CommitFailedException):
+            expire_snapshots(
+                catalog,
+                self.DATABASE,
+                self.TABLE,
+                retention_days=0,
+                stale_branch_pattern=pattern,
+            )
+
+    def test_a_failed_expiry_commit_raises_after_the_branches_are_gone(
+        self, catalog: SqlCatalog, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        commit_table = SqlCatalog.commit_table
+        commits = 0
+
+        def fail_second(*args: object, **kwargs: object) -> object:
+            nonlocal commits
+            commits += 1
+            if commits == 2:
+                msg = "concurrent write"
+                raise CommitFailedException(msg)
+            return commit_table(*args, **kwargs)
+
+        monkeypatch.setattr(SqlCatalog, "commit_table", fail_second)
+
+        with pytest.raises(CommitFailedException):
+            expire_snapshots(
+                catalog,
+                self.DATABASE,
+                self.TABLE,
+                retention_days=0,
+                stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+            )
+
+        table = self._table(catalog)
+        assert self.STALE not in table.metadata.refs
+        assert len(table.snapshots()) == 4
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "main",
+            "airbyte_staging",
+            "airbyte_staging_backup",
+            "audit_2026",
+            f"{STALE}_extra",
+            f"{STALE}\n",
+        ],
+    )
+    def test_only_uuid_suffixed_staging_branches_match(self, name: str) -> None:
+        assert AIRBYTE_STAGING_BRANCH.fullmatch(name) is None
+        assert AIRBYTE_STAGING_BRANCH.fullmatch(self.STALE)
+
+    def test_a_current_snapshot_no_ref_points_at_is_kept(
+        self, catalog: SqlCatalog
+    ) -> None:
+        metadata = self._table(catalog).metadata
+        third = metadata.snapshots[2].snapshot_id
+        lagging = metadata.model_copy(update={"current_snapshot_id": third})
+        cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
+
+        assert third in expirable_snapshot_ids(metadata, cutoff_ms)
+        assert third not in expirable_snapshot_ids(lagging, cutoff_ms)
+
+    def test_a_branch_whose_head_is_missing_is_left_alone(
+        self, catalog: SqlCatalog
+    ) -> None:
+        metadata = self._table(catalog).metadata
+        dangling = "airbyte_staging_00000000_0000_0000_0000_000000000000"
+        metadata = metadata.model_copy(
+            update={
+                "refs": {
+                    **metadata.refs,
+                    dangling: SnapshotRef(
+                        snapshot_id=123, snapshot_ref_type=SnapshotRefType.BRANCH
+                    ),
+                }
+            }
+        )
+        cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
+
+        assert stale_branches(metadata, cutoff_ms, AIRBYTE_STAGING_BRANCH) == [
+            self.STALE
+        ]
+
+
+class TestLoadRawLayerMaintenanceWork:
+    """The raw scan, against a real pyiceberg catalog and a stubbed Glue listing."""
+
+    DATABASE = "raw"
+    LOADABLE = "raw__mitlearn__app__postgres__users_user"
+    MISSING = "raw__mitlearn__app__postgres__dropped_mid_scan"
+
+    def test_a_table_that_fails_to_load_is_returned_as_a_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        catalog = SqlCatalog(
+            "test",
+            uri=f"sqlite:///{tmp_path}/catalog.db",
+            warehouse=f"file://{tmp_path}/warehouse",
+        )
+        catalog.create_namespace(self.DATABASE)
+        rows = pa.table({"id": pa.array([1], type=pa.int64())})
+        catalog.create_table(f"{self.DATABASE}.{self.LOADABLE}", rows.schema).append(
+            rows
+        )
+
+        class Glue:
+            """Lists one table the catalog holds and one it does not."""
+
+            def get_paginator(self, _operation: str) -> Glue:
+                return self
+
+            def paginate(self, **_kwargs: object) -> list[dict[str, object]]:
+                names = (
+                    TestLoadRawLayerMaintenanceWork.LOADABLE,
+                    TestLoadRawLayerMaintenanceWork.MISSING,
+                )
+                return [
+                    {
+                        "TableList": [
+                            {"Name": name, "Parameters": {"table_type": "ICEBERG"}}
+                            for name in names
+                        ]
+                    }
+                ]
+
+        monkeypatch.setattr("boto3.client", lambda *_a, **_k: Glue())
+        monkeypatch.setattr(
+            iceberg_maintenance, "get_glue_catalog", lambda **_: catalog
+        )
+
+        scan = load_raw_layer_maintenance_work(self.DATABASE)
+
+        assert [t.table_name for t in scan.tables] == [self.LOADABLE]
+        assert len(scan.failures) == 1
+        assert scan.failures[0].startswith(f"{self.MISSING}: ")

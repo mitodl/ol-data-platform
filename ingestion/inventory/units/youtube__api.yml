@@ -1,0 +1,43 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+# raw__youtube__api__transcripts is not declared: the source defines it, but no
+# production load has written a row yet, so the table does not exist.
+schema_version: 1
+deployment: youtube
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__youtube__api__
+dlt:
+  source_module: ol_dlt.sources.youtube
+  write_disposition: merge
+tables:
+- name: raw__youtube__api__channels
+  raw_table: raw__youtube__api__channels
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - channel_id
+  modeled: true
+- name: raw__youtube__api__playlists
+  raw_table: raw__youtube__api__playlists
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - playlist_id
+  modeled: true
+- name: raw__youtube__api__playlist_items
+  raw_table: raw__youtube__api__playlist_items
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - playlist_id
+  - - video_id
+  modeled: true
+- name: raw__youtube__api__videos
+  raw_table: raw__youtube__api__videos
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - video_id
+  modeled: true

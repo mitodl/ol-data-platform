@@ -920,10 +920,9 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
     never sees their connections, so an entry for one is dead weight that reads
     like coverage.
 
-    Paused connections are kept. Dagster builds its assets from the live
-    workspace and selects on the connection name alone, so a paused connection
-    still produces a group — and omitting its interval would silently hand it
-    the 24-hour default the moment somebody re-enables it.
+    Paused connections are kept. Dagster leaves a paused connection out of the
+    asset graph, and omitting its interval would silently hand it the 24-hour
+    default the moment somebody re-enables it.
     """
     intervals: dict[str, int] = {}
     sources: dict[str, str] = {}

@@ -234,6 +234,8 @@ models:
       "review".
     tests:
     - not_null
+  - name: order_payment_processor
+    description: string, captures what payment processor was used for an order
   - name: order_tax_amount
     description: numeric, the amount of tax paid. Only applicable for xPro for now.
   - name: order_tax_country_code
@@ -394,6 +396,9 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
           row_condition: "courseruncertificate_is_earned = true"
+    - dbt_expectations.expect_column_values_to_be_null:
+        arguments:
+          row_condition: "courseruncertificate_is_earned = false"
   - name: courseruncertificate_issued_on
     description: timestamp, date and time when the course certificate was issued to
       the learner. For MITx Online, this is the actual issued_on date from the source
@@ -419,9 +424,13 @@ models:
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
     description: string, enrollment status for users whose enrollment changed on the
-      corresponding platform
+      corresponding platform. Records why an enrollment changed, not whether it is
+      in force; use courserunenrollment_is_active for that
   - name: courserunenrollment_is_active
-    description: boolean, indicating whether the enrollment is active
+    description: boolean, indicating whether the enrollment is active. This is the
+      canonical "currently enrolled" flag; use it rather than the enrollment status,
+      which edX.org and Residential never populate and which MITx Online sets to 'deferred'
+      on enrollments that remain active in audit mode
     tests:
     - not_null
   - name: courserunenrollment_is_edx_enrolled

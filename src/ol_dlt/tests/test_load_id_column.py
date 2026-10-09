@@ -44,13 +44,18 @@ def test_every_source_package_is_covered() -> None:
         "course_xml_blocks",
         "edxorg_s3",
         "keycloak",
+        "medium",
         "mit_climate",
         "mit_edx_programs",
         "mitpe",
         "mitxonline_app",
+        "ocw_content",
         "oll",
+        "openlearning",
         "podcast_rss",
         "posthog_events",
+        "see",
+        "xpro_app",
         "youtube",
     }
     assert set(_source_modules()) == known, (

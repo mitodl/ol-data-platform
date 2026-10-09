@@ -1,5 +1,4 @@
 {{ config(
-    materialized='table',
     unique_key='date_key'
 ) }}
 

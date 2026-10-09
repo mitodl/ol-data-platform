@@ -343,6 +343,7 @@ models:
       - xpro/mysql
   columns:
   - name: user_pk
+    data_type: varchar
     description: string, primary key for this user dim table. The grain is still one
       row per shared email, but the key's value is derived from durable identifiers
       - the user_global_id when the group has one, otherwise the highest-ranked platform
@@ -364,17 +365,21 @@ models:
         values: ['global', 'mitlearn', 'mitxonline', 'edxorg', 'micromasters', 'mitxpro',
           'residential', 'bootcamps', 'emeritus', 'global_alumni', 'email']
   - name: user_global_id
+    data_type: varchar
     description: string, a unique identifier for the user across all platforms
     tests:
     - unique
   - name: mitlearn_user_id
+    data_type: bigint
     description: int, a unique identifier for the user on the MIT Learn
   - name: mitlearn_openedx_user_id
     description: string, user id on the MIT Learn open edX platform
   - name: mitxonline_openedx_user_id
+    data_type: bigint
     description: string, openedx user id. This is deprecated in favor of mitlearn_openedx_user_id.
   - name: mitxonline_application_user_id
-    description: string, user id on MITxOnline application
+    data_type: bigint
+    description: int, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on the MITx Online open edx platform. If user doesn't
       have an open edX account, it defaults to username on the MITx Online application,
@@ -384,7 +389,8 @@ models:
   - name: bootcamps_application_user_id
     description: int, user id on Bootcamps application
   - name: mitxpro_application_user_id
-    description: string, user id on MITx Pro application
+    data_type: bigint
+    description: int, user id on MITx Pro application
   - name: user_mitxpro_username
     description: string, username on MITx Pro
   - name: residential_openedx_user_id
@@ -392,6 +398,7 @@ models:
   - name: user_residential_username
     description: string, username on MITx Residential
   - name: edxorg_openedx_user_id
+    data_type: bigint
     description: int, openedx user id for edX.org
   - name: user_edxorg_username
     description: string, username on edX.org
@@ -421,6 +428,7 @@ models:
         config:
           error_if: ">0"
   - name: email
+    data_type: varchar
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
     tests:
@@ -1428,6 +1436,13 @@ models:
     count(distinct activity_date) over this table. Certificates and
     enrollments don't count as activity here.
 
+    This is the source for learner engagement measures and for "active" in
+    the behavioural sense: a learner is active on a day, in a month or in a
+    course run when a row exists for it. That is a different thing from an
+    active enrollment (tfact_enrollment.enrollment_is_active). The
+    b2b_analytics engagement views and the b2b_learner_records views both
+    aggregate this table.
+
     Keyed on user_fk instead of email, unlike organization_administration_report,
     so a learner's rows don't split or drop when their account email changes.
     Rebuilt in full every run, since a learner's user_fk can still be
@@ -1503,10 +1518,706 @@ models:
     description: int, distinct problem blocks with a problem_check event that day.
       Excludes showanswer, which the report's problems_count includes.
   - name: navigation_events
-    description: int, course navigation events that day.
+    description: int, course navigation events that day (a count of events, not of
+      distinct pages), including events with no block.
   - name: discussion_events
-    description: int, discussion forum events that day.
+    description: int, discussion forum events that day (every edx.forum.% event, so
+      viewing a thread counts as well as posting).
   - name: chatbot_interactions
     description: int, distinct (session, block) pairs with an ol_openedx_chat.drawer.submit
       event that day, Open edX chatbot only. Unlike the report, submits with no block_id
       count.
+
+- name: afact_learner_courserun_progress
+  description: >
+    One row per (learner, course run) with the learner's enrollment, grade,
+    course certificate, last active day, completion status and the date from
+    which they need attention. This is the definition of completion_status,
+    is_certified and needs_attention_since; consumers select the columns and
+    do not restate the rules.
+
+    Population: course enrollments in tfact_enrollment with a user_fk and a
+    courserun_fk. When a learner has several enrollments in one run (refunds,
+    deferrals, transfers) the active one is reported, else the newest.
+
+    One rule covers every platform, and its inputs are weaker outside MITx
+    Online and xPRO. edxorg certificates are never marked revoked. residential
+    has no grades or certificates, so only in_progress and not_started occur.
+    bootcamps has certificates but no grades or activity, so every uncertified
+    enrollment is not_started and gets a needs_attention_since.
+
+    Consent is not applied. A consumer-facing model built on this one must
+    carry or apply consent itself.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - user_fk
+        - courserun_fk
+      config:
+        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
+        error_if: ">0"
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
+  columns:
+  - name: user_fk
+    description: string, foreign key to dim_user.
+    tests:
+    - not_null
+  - name: courserun_fk
+    description: string, foreign key to dim_course_run.
+    tests:
+    - not_null
+  - name: platform
+    description: string, platform of the enrollment (mitxonline, mitxpro, edxorg,
+      residential, bootcamps).
+    tests:
+    - not_null
+  - name: enrollment_created_on
+    description: string, ISO-8601 timestamp the reported enrollment was created. Carried
+      from tfact_enrollment.
+  - name: enrollment_updated_on
+    description: string, ISO-8601 timestamp the reported enrollment was last updated.
+      Carried from tfact_enrollment.
+  - name: enrollment_is_active
+    description: boolean, whether the reported enrollment is active. Carried from
+      tfact_enrollment.
+  - name: enrollment_mode
+    description: string, enrollment mode (audit, verified, etc.). Carried from tfact_enrollment.
+  - name: enrollment_status
+    description: string, why the enrollment changed (e.g. refunded, deferred). Carried
+      from tfact_enrollment.
+  - name: is_passing
+    description: boolean, the grade's own passing flag, carried from tfact_grade whatever
+      the certificate status. Null when there is no grade. A certified learner with
+      a passing grade is true here, so count this for "passed" totals and use completion_status
+      = 'passed' for passed-and-not-certified. A certified learner can also be false
+      or null, because an unrevoked certificate is certified without a passing grade.
+  - name: grade_value
+    description: double, grade between 0.0 and 1.0. Null when there is no grade.
+  - name: letter_grade
+    description: string, letter grade. Carried from tfact_grade.
+  - name: grade_updated_on
+    description: string, ISO-8601 timestamp the grade was last updated. Carried from
+      tfact_grade.
+  - name: certificate_is_revoked
+    description: boolean, whether the learner's course certificate for this run is
+      revoked. Null means no certificate.
+  - name: certificate_issued_on
+    description: string, ISO-8601 timestamp the course certificate was issued, revoked
+      or not.
+  - name: certificate_updated_on
+    description: string, ISO-8601 timestamp the course certificate was last updated.
+  - name: is_certified
+    description: boolean, the learner holds an unrevoked course certificate for this
+      run. Never null.
+    tests:
+    - not_null
+  - name: last_active_on
+    description: date, latest day with tracked activity in afact_learner_courserun_daily_activity.
+      Null when there is none.
+  - name: completion_status
+    description: string, certified when is_certified; else passed when is_passing;
+      else in_progress when grade_value > 0 or last_active_on is not null; else not_started.
+      A certificate does not require a passing grade.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['certified', 'passed', 'in_progress', 'not_started']
+  - name: is_in_progress
+    description: boolean, completion_status = 'in_progress'. Never null.
+    tests:
+    - not_null
+  - name: is_not_started
+    description: boolean, completion_status = 'not_started'. Never null.
+    tests:
+    - not_null
+  - name: needs_attention_since
+    description: date, the day from which the learner needs attention. A learner needs
+      attention when coalesce(needs_attention_since <= <current UTC date>, false).
+      The enrollment and activity days are read from the source timestamps as written,
+      so a source that records a local offset can be a day off UTC. not_started is
+      the enrollment date (1970-01-01 when the enrollment has none); in_progress is
+      last_active_on plus var needs_attention_quiet_days (30); null for in_progress
+      with a grade but no tracked activity, and for passed and certified.
+
+unit_tests:
+- name: test_dim_user_pk_is_minted_from_the_group_identity
+  description: >
+    Pins the user_pk mint. user_pk is md5('<identity source>-<identity id>')
+    of the highest-ranked account sharing an email: the Keycloak global id
+    when there is one, else the best-ranked platform id. Every fact table's
+    user_fk holds these values, so a change to the hashed inputs, the
+    separator, or the ranking re-keys every learner and orphans the
+    incremental facts; this test fails instead. The expected keys are md5
+    literals on purpose.
+  model: dim_user
+  given:
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows:
+    - user_id: 101
+      user_global_id: gid-ada
+      user_email: ada@example.com
+      user_first_name: Ada
+      user_last_name: Lovelace
+      user_is_active: true
+      user_joined_on: '2024-01-01T00:00:00'
+      user_created_on: '2024-01-01T00:00:00'
+      user_last_login: '2024-02-01T00:00:00'
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows:
+    - user_id: 42
+      user_username: grace
+      user_email: grace@example.com
+      user_is_active: true
+      user_joined_on: '2023-01-01T00:00:00'
+    # Upper-case email: grouping is on lower(email), so this still merges with the
+    # bootcamps account below.
+    - user_id: 7
+      user_username: alan
+      user_email: Alan@Example.com
+      user_is_active: true
+      user_joined_on: '2022-01-01T00:00:00'
+  # Joined later than the MITx Pro account it shares an email with, so it is the base row
+  # for profile fields, but MITx Pro outranks Bootcamps for naming the key.
+  - input: ref('int__bootcamps__users')
+    rows:
+    - user_id: 3
+      user_email: alan@example.com
+      user_is_active: true
+      user_joined_on: '2025-01-01T00:00:00'
+  # Inputs the cases above don't use.
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - user_pk: 14ad7bc9bcef70fc636e037934751877  # pragma: allowlist secret
+      user_pk_source: global
+      email: ada@example.com
+      mitlearn_user_id: 101
+      mitxpro_application_user_id:
+      bootcamps_application_user_id:
+    - user_pk: e82719d98dd31b1e1e2ade0acf8d82d2  # pragma: allowlist secret
+      user_pk_source: mitxpro
+      email: grace@example.com
+      mitlearn_user_id:
+      mitxpro_application_user_id: 42
+      bootcamps_application_user_id:
+    - user_pk: 14a209595bd18b974e02d3760051e818  # pragma: allowlist secret
+      user_pk_source: mitxpro
+      email: alan@example.com
+      mitlearn_user_id:
+      mitxpro_application_user_id: 7
+      bootcamps_application_user_id: 3
+- name: test_afact_learner_courserun_progress_status_and_needs_attention
+  description: >
+    Pins completion_status and needs_attention_since, one learner per case.
+    ol-analytics-api and the B2B views read these columns in place of their
+    own copies of the rule, so a changed branch changes what partners see.
+  model: afact_learner_courserun_progress
+  overrides:
+    vars:
+      needs_attention_quiet_days: 30
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - enrollment_id: "1"
+      enrollment_type: course
+      user_fk: certified
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "2"
+      enrollment_type: course
+      user_fk: certified_and_passing
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "3"
+      enrollment_type: course
+      user_fk: revoked_and_passing
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "4"
+      enrollment_type: course
+      user_fk: revoked_not_passing
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "5"
+      enrollment_type: course
+      user_fk: passing
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "6"
+      enrollment_type: course
+      user_fk: grade_only
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "7"
+      enrollment_type: course
+      user_fk: active_only
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "8"
+      enrollment_type: course
+      user_fk: zero_grade
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "9"
+      enrollment_type: course
+      user_fk: nothing
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key: 20240110
+      enrollment_created_on: "2024-01-10T00:00:00"
+    - enrollment_id: "10"
+      enrollment_type: course
+      user_fk: no_enrollment_date
+      courserun_fk: run-1
+      platform: mitxonline
+      enrollment_date_key:
+      enrollment_created_on:
+  - input: ref('tfact_grade')
+    rows:
+    - user_fk: certified_and_passing
+      courserun_fk: run-1
+      is_passing: true
+      grade_value: 0.9
+    - user_fk: revoked_and_passing
+      courserun_fk: run-1
+      is_passing: true
+      grade_value: 0.8
+    - user_fk: revoked_not_passing
+      courserun_fk: run-1
+      is_passing: false
+      grade_value: 0.4
+    - user_fk: passing
+      courserun_fk: run-1
+      is_passing: true
+      grade_value: 0.7
+    - user_fk: grade_only
+      courserun_fk: run-1
+      is_passing: false
+      grade_value: 0.2
+    - user_fk: zero_grade
+      courserun_fk: run-1
+      is_passing: false
+      grade_value: 0.0
+  - input: ref('tfact_certificate')
+    rows:
+    - user_fk: certified
+      courserun_fk: run-1
+      certificate_scope: course
+      certificate_is_revoked: false
+      is_current: true
+    - user_fk: certified_and_passing
+      courserun_fk: run-1
+      certificate_scope: course
+      certificate_is_revoked: false
+      is_current: true
+    - user_fk: revoked_and_passing
+      courserun_fk: run-1
+      certificate_scope: course
+      certificate_is_revoked: true
+      is_current: true
+    - user_fk: revoked_not_passing
+      courserun_fk: run-1
+      certificate_scope: course
+      certificate_is_revoked: true
+      is_current: true
+    # A superseded certificate does not count, even unrevoked.
+    - user_fk: passing
+      courserun_fk: run-1
+      certificate_scope: course
+      certificate_is_revoked: false
+      is_current: false
+    # Only course certificates count.
+    - user_fk: nothing
+      courserun_fk: run-1
+      certificate_scope: program
+      certificate_is_revoked: false
+      is_current: true
+  - input: ref('afact_learner_courserun_daily_activity')
+    rows:
+    - user_fk: revoked_not_passing
+      courserun_fk: run-1
+      activity_date_key: 20240301
+    - user_fk: active_only
+      courserun_fk: run-1
+      activity_date_key: 20240201
+    - user_fk: active_only
+      courserun_fk: run-1
+      activity_date_key: 20240215
+    # Going quiet after finishing is expected, so these two get no threshold date.
+    - user_fk: certified_and_passing
+      courserun_fk: run-1
+      activity_date_key: 20240215
+    - user_fk: passing
+      courserun_fk: run-1
+      activity_date_key: 20240215
+  - input: ref('dim_date')
+    rows:
+    - date_key: 20240110
+      date: "2024-01-10"
+    - date_key: 20240215
+      date: "2024-02-15"
+    - date_key: 20240301
+      date: "2024-03-01"
+  expect:
+    rows:
+    - user_fk: certified
+      is_certified: true
+      completion_status: certified
+      is_in_progress: false
+      is_not_started: false
+      last_active_on:
+      needs_attention_since:
+    - user_fk: certified_and_passing
+      is_certified: true
+      completion_status: certified
+      is_in_progress: false
+      is_not_started: false
+      last_active_on: "2024-02-15"
+      needs_attention_since:
+    - user_fk: revoked_and_passing
+      is_certified: false
+      completion_status: passed
+      is_in_progress: false
+      is_not_started: false
+      last_active_on:
+      needs_attention_since:
+    - user_fk: passing
+      is_certified: false
+      completion_status: passed
+      is_in_progress: false
+      is_not_started: false
+      last_active_on: "2024-02-15"
+      needs_attention_since:
+    # A revoked certificate without a passing grade puts the learner back in progress.
+    - user_fk: revoked_not_passing
+      is_certified: false
+      completion_status: in_progress
+      is_in_progress: true
+      is_not_started: false
+      last_active_on: "2024-03-01"
+      needs_attention_since: "2024-03-31"
+    # The latest active day plus 30 days.
+    - user_fk: active_only
+      is_certified: false
+      completion_status: in_progress
+      is_in_progress: true
+      is_not_started: false
+      last_active_on: "2024-02-15"
+      needs_attention_since: "2024-03-16"
+    # A grade with no tracked activity gives no day to count from.
+    - user_fk: grade_only
+      is_certified: false
+      completion_status: in_progress
+      is_in_progress: true
+      is_not_started: false
+      last_active_on:
+      needs_attention_since:
+    - user_fk: zero_grade
+      is_certified: false
+      completion_status: not_started
+      is_in_progress: false
+      is_not_started: true
+      last_active_on:
+      needs_attention_since: "2024-01-10"
+    - user_fk: nothing
+      is_certified: false
+      completion_status: not_started
+      is_in_progress: false
+      is_not_started: true
+      last_active_on:
+      needs_attention_since: "2024-01-10"
+    - user_fk: no_enrollment_date
+      is_certified: false
+      completion_status: not_started
+      is_in_progress: false
+      is_not_started: true
+      last_active_on:
+      needs_attention_since: "1970-01-01"
+- name: test_afact_learner_courserun_progress_reports_one_enrollment_per_run
+  description: >
+    A refund, deferral or transfer leaves several enrollments for one
+    (learner, course run). The active one is reported, else the newest, and a
+    tie goes to the highest id compared as a number. Program enrollments and
+    rows missing either key are left out.
+  model: afact_learner_courserun_progress
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - enrollment_id: "1"
+      enrollment_type: course
+      user_fk: refunded_then_active
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: false
+      enrollment_status: refunded
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "2"
+      enrollment_type: course
+      user_fk: refunded_then_active
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-02-01T00:00:00"
+    - enrollment_id: "3"
+      enrollment_type: course
+      user_fk: active_then_refunded
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "4"
+      enrollment_type: course
+      user_fk: active_then_refunded
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: false
+      enrollment_status: refunded
+      enrollment_created_on: "2024-03-01T00:00:00"
+    - enrollment_id: "5"
+      enrollment_type: course
+      user_fk: none_active
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: false
+      enrollment_status: refunded
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "6"
+      enrollment_type: course
+      user_fk: none_active
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: false
+      enrollment_status: deferred
+      enrollment_created_on: "2024-02-01T00:00:00"
+    - enrollment_id: "9"
+      enrollment_type: course
+      user_fk: same_day
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: false
+      enrollment_status: refunded
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "10"
+      enrollment_type: course
+      user_fk: same_day
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: false
+      enrollment_status: deferred
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "11"
+      enrollment_type: program
+      user_fk: program_only
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "12"
+      enrollment_type: course
+      user_fk: no_course_run
+      courserun_fk:
+      platform: mitxpro
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - enrollment_id: "13"
+      enrollment_type: course
+      user_fk:
+      courserun_fk: run-1
+      platform: mitxpro
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-01-01T00:00:00"
+  - input: ref('tfact_grade')
+    rows: []
+  - input: ref('tfact_certificate')
+    rows: []
+  - input: ref('afact_learner_courserun_daily_activity')
+    rows: []
+  - input: ref('dim_date')
+    rows: []
+  expect:
+    rows:
+    - user_fk: refunded_then_active
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-02-01T00:00:00"
+    - user_fk: active_then_refunded
+      enrollment_is_active: true
+      enrollment_status:
+      enrollment_created_on: "2024-01-01T00:00:00"
+    - user_fk: none_active
+      enrollment_is_active: false
+      enrollment_status: deferred
+      enrollment_created_on: "2024-02-01T00:00:00"
+    - user_fk: same_day
+      enrollment_is_active: false
+      enrollment_status: deferred
+      enrollment_created_on: "2024-01-01T00:00:00"
+- name: test_tfact_problem_events_rekey_keeps_stored_event_id
+  description: >
+    Regression test for the 2026-10-06 unique_tfact_problem_events_event_id failure.
+    A row re-keyed by the stale user_fk path must keep its stored event_id so
+    delete+insert replaces it. Rehashing event_timestamp, which reads back in UTC
+    rather than the source offset, gave each re-keyed event a second row.
+  model: tfact_problem_events
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__mitxonline__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
+    rows: []
+  # Empty, but typed: an empty dict fixture makes event_timestamp VARCHAR.
+  - input: ref('tfact_studentmodule_problems')
+    format: sql
+    rows: |
+      select
+          cast(null as varchar) as user_fk
+          , cast(null as varchar) as platform
+          , cast(null as integer) as openedx_user_id
+          , cast(null as varchar) as user_username
+          , cast(null as varchar) as courserun_readable_id
+          , cast(null as integer) as studentmodule_id
+          , cast(null as integer) as studentmodulehistoryextended_id
+          , cast(null as varchar) as problem_block_id
+          , cast(null as varchar) as attempt
+          , cast(null as varchar) as seed
+          , cast(null as varchar) as correct_map
+          , cast(null as varchar) as answers
+          , cast(null as varchar) as grade
+          , cast(null as varchar) as max_grade
+          , cast(null as varchar) as success
+          , cast(null as timestamp with time zone) as event_timestamp
+          , cast(null as varchar) as event_timestamp_iso8601
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
+      where false
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "NEW_USER_PK"
+      edxorg_openedx_user_id: 555
+      user_edxorg_username: "learner"
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_EDXORG"
+      platform_readable_id: "edxorg"
+  # sql format so event_timestamp is a timestamp; a dict fixture infers VARCHAR here.
+  - input: this
+    format: sql
+    rows: |
+      select
+          'stored-event-id' as event_id
+          , 'PLATFORM_EDXORG' as platform_fk
+          , 'OLD_USER_PK' as user_fk
+          , 'edxorg' as platform
+          , 555 as openedx_user_id
+          , 'learner' as user_username
+          , 'MITx/6.002x/2024' as courserun_readable_id
+          , 'showanswer' as event_type
+          , 'block-v1:MITx+6.002x+2024+type@problem+block@p1' as problem_block_fk
+          , cast(null as varchar) as answers
+          , '1' as attempt
+          , cast(null as varchar) as success
+          , cast(null as varchar) as grade
+          , cast(null as varchar) as max_grade
+          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone) as event_timestamp
+          , '2024-01-15T00:00:00Z' as event_timestamp_iso8601
+          , cast(null as integer) as time_fk
+          , cast(null as integer) as date_fk
+          , cast(null as varchar) as event_json
+      union all
+      select
+          'stored-check-id'
+          , 'PLATFORM_EDXORG'
+          , 'OLD_USER_PK'
+          , 'edxorg'
+          , 555
+          , 'learner'
+          , 'MITx/6.002x/2024'
+          , 'problem_check'
+          , 'block-v1:MITx+6.002x+2024+type@problem+block@p2'
+          , cast(null as varchar)
+          , '1'
+          , cast(null as varchar)
+          , cast(null as varchar)
+          , cast(null as varchar)
+          , cast('2024-01-15 00:00:00+00:00' as timestamp with time zone)
+          , '2024-01-15T00:00:00Z'
+          , cast(null as integer)
+          , cast(null as integer)
+          , cast(null as varchar)
+  expect:
+    rows:
+    - event_id: "stored-event-id"
+      user_fk: "NEW_USER_PK"
+      event_type: "showanswer"
+    - event_id: "stored-check-id"
+      user_fk: "NEW_USER_PK"
+      event_type: "problem_check"

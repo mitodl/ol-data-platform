@@ -17,7 +17,8 @@ that is missing, malformed, contradicts lineage, or names a unit the inventory
 omits from QA is fixed by editing text, so it is an ERROR nothing can baseline.
 A declared branch whose tables QA does not hold, or a mirror past its
 ``mirror_max_age_days``, is an operational lapse upstream: an ERROR when new,
-INFO when listed in ``qa_branch_baseline.txt``. That half reads a committed
+INFO when listed in ``qa_branch_baseline.txt``. A listed gap that has closed is
+an ERROR until the line is removed, so the lapse cannot recur unnoticed. That half reads a committed
 observation of the QA lake (``lib.qa_observation``), since CI has no AWS access.
 """
 
@@ -50,6 +51,16 @@ UNCONTRACTED_LAYERS = frozenset({"staging"})
 """Staging models read exactly one source table, so they are never a union."""
 
 _BRANCH = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$")
+
+QA_SCHEDULED_TAG = "qa_scheduled"
+"""Tag on the models the lakehouse code location builds, with their upstream, on a QA schedule.
+
+QA runs no dbt automation, so this schedule is the one dbt build there. It is
+safe only for models reading a single ingestion unit: a union built from a
+lapsed QA branch comes out partial rather than failing. Checking the tagged
+models covers their upstream too, since a parent's units are a subset of its
+child's.
+"""
 
 
 @dataclass(frozen=True)
@@ -185,6 +196,17 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                     "baselineable: see docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
                 )
 
+        if QA_SCHEDULED_TAG in node.tags and len(reads) > 1:
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"is tagged {QA_SCHEDULED_TAG} but unions {len(reads)} ingestion units",
+                f"Reads {', '.join(sorted(reads))}. The QA schedule builds this model and its "
+                "upstream unattended, where a union with a lapsed branch comes out partial. "
+                f"Drop the {QA_SCHEDULED_TAG} tag, or remove the extra unit from its lineage.",
+            )
+
         is_union = len(reads) > 1 and classify_layer(node.original_file_path) not in UNCONTRACTED_LAYERS
         # Presence again: a malformed value is already reported above, and _read_contract
         # nulls it out, so reading the parsed contract would report it as missing too.
@@ -291,7 +313,7 @@ def check_qa_gaps(  # noqa: PLR0913
     now: datetime,
     report: ValidationReport,
 ) -> None:
-    """Ratchet the operational half: new gaps ERROR, baselined ones collapse to INFO."""
+    """Ratchet the operational half: new gaps and resolved baseline entries ERROR, baselined gaps collapse to INFO."""
     age = now - observation.observed_at
     if age > timedelta(days=OBSERVATION_MAX_AGE_DAYS):
         report.add(
@@ -348,11 +370,13 @@ def check_qa_gaps(  # noqa: PLR0913
     for resolved in sorted(baseline - current):
         report.add(
             QA_CONTRACT_CHECK,
-            Severity.INFO,
+            Severity.ERROR,
             "(qa baseline)",
             f"Resolved baseline entry: {resolved}",
-            "QA holds this table now, or no declaring model reads it. Run "
-            "`ol-dbt validate --update-qa-baseline` to shrink the baseline.",
+            "QA holds this table now, or no declaring model reads it, and the entry would "
+            "tolerate the gap coming back. Run `ol-dbt validate --update-qa-baseline` and "
+            "commit the result (re-run `dbt parse` first if target/manifest.json predates "
+            "the change).",
         )
 
 
@@ -365,7 +389,8 @@ def render_qa_baseline(gaps: list[Gap]) -> str:
         "# mirror_max_age_days, or a table the observation does not cover yet",
         "# (unobserved). These are operational lapses, tolerated so QA builds",
         "# keep running while they are repaired. A gap NOT listed here fails",
-        "# `ol-dbt validate`. Contradictions between qa_branches and the inventory",
+        "# `ol-dbt validate`, and so does a line here that is no longer a gap.",
+        "# Contradictions between qa_branches and the inventory",
         "# are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
         "#",
         "# Regenerate with: ol-dbt validate --update-qa-baseline",

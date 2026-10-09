@@ -5,7 +5,8 @@
 # mirror_max_age_days, or a table the observation does not cover yet
 # (unobserved). These are operational lapses, tolerated so QA builds
 # keep running while they are repaired. A gap NOT listed here fails
-# `ol-dbt validate`. Contradictions between qa_branches and the inventory
+# `ol-dbt validate`, and so does a line here that is no longer a gap.
+# Contradictions between qa_branches and the inventory
 # are never baselined. See docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.
 #
 # Regenerate with: ol-dbt validate --update-qa-baseline
@@ -37,8 +38,12 @@ mitxonline/mysql raw__mitxonline__openedx__mysql__auth_user: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__bulk_email_optout: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__courseware_studentmodule: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__django_content_type: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__edxval_coursevideo: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__edxval_video: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__forum_comment: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__forum_commentthread: empty
+mitxonline/mysql raw__mitxonline__openedx__mysql__forum_mongocontent: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__student_courseaccessrole: empty

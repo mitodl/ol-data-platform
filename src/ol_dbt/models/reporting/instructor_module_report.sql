@@ -18,7 +18,7 @@ with chatbot_events as (
     select * from {{ ref('dim_course_run') }}
 )
 
-, user as (
+, users as (
     select * from {{ ref('dim_user') }}
 )
 
@@ -54,7 +54,7 @@ with chatbot_events as (
         user_email
         , courserun_readable_id
     from enrollment_detail
-    where courserunenrollment_enrollment_status is null
+    where courserunenrollment_is_active
     group by
         user_email
         , courserun_readable_id
@@ -69,8 +69,8 @@ with chatbot_events as (
         , max(video_events.video_position) as end_time
         , min(case when video_events.event_type = 'play_video' then video_events.video_position end) as start_time
     from video_events
-    inner join user
-        on video_events.user_fk = user.user_pk
+    inner join users
+        on video_events.user_fk = users.user_pk
     where
         video_events.event_type in (
             'play_video'
@@ -87,22 +87,22 @@ with chatbot_events as (
 
 , video_watches as (
     select
-        user.email
+        users.email
         , video_events.courserun_readable_id
         , video_events.video_block_fk
         , cast(video_events.event_timestamp as date) as activity_date
-        , lag(cast(video_events.event_timestamp as date)) over (partition by user.email
+        , lag(cast(video_events.event_timestamp as date)) over (partition by users.email
         , video_events.courserun_readable_id
         , video_events.video_block_fk order by cast(video_events.event_timestamp as date)) AS PreviousDATE
     from video_events
-    inner join user
-        on video_events.user_fk = user.user_pk
+    inner join users
+        on video_events.user_fk = users.user_pk
     where
         video_events.event_type in (
             'play_video'
         )
     group by
-        user.email
+        users.email
         , video_events.courserun_readable_id
         , video_events.video_block_fk
         , cast(video_events.event_timestamp as date)
@@ -116,7 +116,7 @@ with chatbot_events as (
         , v.block_title
         , cc_section.block_title as section_title
         , cc_subsection.block_title as subsection_title
-        , user.email
+        , users.email
         , sum(
             cast(case when a.end_time = 'null' then '0' else a.end_time end as decimal(30, 10))
             - cast(case when a.start_time = 'null' then '0' else a.start_time end as decimal(30, 10))
@@ -128,8 +128,8 @@ with chatbot_events as (
         on
             a.courserun_readable_id = c.courserun_readable_id
             and a.video_block_fk = substring(c.video_block_pk, strpos(c.video_block_pk, 'block@') + 6)
-    inner join user
-        on a.user_fk = user.user_pk
+    inner join users
+        on a.user_fk = users.user_pk
     left join course_content as v
         on
             c.content_block_fk = v.content_block_pk
@@ -151,7 +151,7 @@ with chatbot_events as (
         , v.block_title
         , cc_section.block_title
         , cc_subsection.block_title
-        , user.email
+        , users.email
 )
 
 , combined_data as (
@@ -179,7 +179,7 @@ with chatbot_events as (
     union all
 
     select
-        user.email as user_email
+        users.email as user_email
         , cast(chatbot_events.event_timestamp as date) as activity_date
         , chatbot_events.courserun_readable_id
         , count(distinct chatbot_events.session_id || chatbot_events.block_id) as chatbot_used_count
@@ -193,8 +193,8 @@ with chatbot_events as (
         , null as rewatch_indicator
         , null as video_watched_count
     from chatbot_events
-    inner join user
-        on chatbot_events.user_fk = user.user_pk
+    inner join users
+        on chatbot_events.user_fk = users.user_pk
     left join course_content as c
         on
             chatbot_events.block_id = c.block_id
@@ -209,7 +209,7 @@ with chatbot_events as (
             and subsection.is_latest = true
     where chatbot_events.event_type = 'ol_openedx_chat.drawer.submit'
     group by
-        user.email
+        users.email
         , cast(chatbot_events.event_timestamp as date)
         , chatbot_events.courserun_readable_id
         , c.block_category

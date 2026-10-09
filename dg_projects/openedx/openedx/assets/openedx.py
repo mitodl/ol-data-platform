@@ -5,12 +5,12 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 from urllib.parse import urlparse
 
 import httpx2 as httpx
@@ -31,9 +31,8 @@ from dagster import (
     multi_asset,
     observable_source_asset,
 )
-from flatten_dict import flatten
-from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
@@ -45,6 +44,7 @@ from ol_orchestrate.lib.openedx import (
     process_video_xml,
     un_nest_course_structure,
 )
+from ol_orchestrate.lib.utils import flatten_nested_dict
 from upath import UPath
 
 HTTP_SUCCESS = 200
@@ -53,10 +53,53 @@ COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT = timedelta(minutes=60)
 
 COURSEWARE_ASSET_KEY = AssetKey(["openedx", "courseware"])
 
+CoursewareVersionSource = Literal["course_outline", "content_versions"]
+
+# Which deployments read their courseware versions from the course export
+# plugin's versions endpoint (ol-openedx-course-export 0.4.0+), per environment.
+# Everything else stays on the learning_sequences outline sweep, whose version
+# only moves on publish. It is keyed by environment because a deployment's
+# Studios do not upgrade together: xpro QA runs verawood with 0.4.0, while xpro
+# production stays on ulmo without the plugin release for now.
+#
+# Opting a deployment in changes how its data version is built, so its first
+# sweep afterwards re-exports every partition once. Do it only after the plugin
+# has finished rolling out to that Studio: before 0.4.0, a POST to the versions
+# path is handled as an export of every course in it. The sweep probes first and
+# refuses to send anything if the endpoint is missing, but a rollout still in
+# progress can put the probe and the batches on different pods.
+#
+# dev talks to the QA Studios.
+CONTENT_VERSION_DEPLOYMENTS: dict[str, frozenset[str]] = {
+    "dev": frozenset({"mitx", "mitxonline", "xpro"}),
+    "ci": frozenset({"mitx", "mitxonline", "xpro"}),
+    "qa": frozenset({"mitx", "mitxonline", "xpro"}),
+    "production": frozenset({"mitx", "mitxonline"}),
+}
+
+
+def courseware_version_source(
+    deployment: str, env: str = DAGSTER_ENV
+) -> CoursewareVersionSource:
+    """Pick where a deployment's courseware versions come from in ``env``."""
+    if deployment in CONTENT_VERSION_DEPLOYMENTS.get(env, frozenset()):
+        return "content_versions"
+    return "course_outline"
+
+
 # 16 workers measured at ~53 outline fetches/sec against mitxonline with no
 # throttling. ceiling: raise only with fresh numbers from the authenticated
 # endpoint, which is slower than the anonymous one used to measure.
 OUTLINE_FETCH_WORKERS = 16
+
+# Course ids per request to the course export plugin's versions endpoint, which
+# refuses more than 200. Every value it returns is an index lookup or aggregate,
+# so a full batch costs Studio a few hundred light queries, not a course walk.
+VERSIONS_BATCH_SIZE = 200
+# Batches in flight at once. ~6,000 course runs across the deployments is ~30
+# batches a sweep; four at a time finishes well inside the sweep budget without
+# stacking load on Studio.
+VERSIONS_FETCH_WORKERS = 4
 
 
 class OutlineFetchError(Exception):
@@ -88,13 +131,38 @@ def published_version_of(
         raise OutlineFetchError from error
 
 
+def courseware_data_version(facts: Mapping[str, Any]) -> str:
+    """Fold what an export of a course would reflect into one data version.
+
+    The published version alone moves only when modulestore content is
+    published. Uploaded files and VAL transcripts never move it, though every
+    export carries both, so a version built from it alone let course_xml keep
+    serving an archive that no longer matched the course. Each part stays
+    readable -- ``{published}/{files}/{transcripts}`` -- so a changed version
+    shows which of the three moved.
+    """
+
+    def digest(part: Any) -> str:
+        encoded = json.dumps(part, sort_keys=True).encode()
+        return hashlib.sha256(encoded).hexdigest()[:12]
+
+    return "/".join(
+        (
+            facts["published_version"],
+            digest(facts["static_assets"]),
+            digest(facts["transcripts"]),
+        )
+    )
+
+
 class CoursewareSweep(NamedTuple):
-    """What one pass over a deployment's course outlines produced.
+    """What one pass over a deployment's courses produced.
 
     ``unswept`` is the tail the pass never reached -- empty unless a deadline
     cut it short. Its callers use it to decide where the next pass starts, so
     that a budget that always expires in the same place cannot starve the
-    courses that sit past it.
+    courses that sit past it. ``failures`` counts courses, not requests, so it
+    stays comparable with ``versions``.
     """
 
     versions: dict[str, str]
@@ -102,61 +170,73 @@ class CoursewareSweep(NamedTuple):
     unswept: list[str]
 
 
-def sweep_course_versions(
+def _drain(
+    futures: Mapping["Future[Any]", list[str]],
+    deadline: datetime | None,
+    handle: Callable[["Future[Any]", list[str]], None],
+) -> tuple[bool, list[str]]:
+    """Hand each finished request to ``handle`` until done or out of time.
+
+    Each future carries the course runs it covers: one for an outline fetch, a
+    batch for a versions request. Returns whether the deadline cut the pass
+    short, and the course runs whose requests never finished.
+    """
+    timeout = (
+        None
+        if deadline is None
+        else max(0.0, (deadline - datetime.now(tz=UTC)).total_seconds())
+    )
+    timed_out = False
+    # Not future.done(): a request can finish after the timeout fires without
+    # as_completed ever yielding it, and nothing would have recorded its result.
+    handled: set[Future[Any]] = set()
+    try:
+        for future in as_completed(futures, timeout=timeout):
+            handle(future, futures[future])
+            handled.add(future)
+    except TimeoutError:
+        timed_out = True
+    unswept = [
+        course_run_id
+        for future, course_run_ids in futures.items()
+        if future not in handled
+        for course_run_id in course_run_ids
+    ]
+    return timed_out, unswept
+
+
+def _sweep_course_outlines(
     client: Any,
     course_run_ids: Sequence[str],
     log: logging.Logger,
-    deadline: datetime | None = None,
+    deadline: datetime | None,
 ) -> CoursewareSweep:
-    """Fetch the published version of every course run, concurrently.
-
-    ``deadline`` bounds the wall clock the fetch phase may spend. Without one
-    the sweep runs to completion, which is what a run wants; a sensor passes one
-    because an unbounded sweep that outlives its tick emits *nothing* and saves
-    no progress -- the failure that left courses un-exported from May to August.
-
-    Stopping early is safe in a way that stopping late is not: a course left out
-    of ``versions`` emits no observation, so its last known version stands and
-    the next pass picks it up. Reporting a version we did not actually read, or
-    reporting nothing at all because the tick was killed, are the two outcomes
-    worth avoiding.
-    """
+    """Read each course run's published version from its outline, one each."""
     versions: dict[str, str] = {}
     failures = 0
-    unswept: list[str] = []
-    timed_out = False
+
+    def handle(future: "Future[dict[str, str]]", course_runs: list[str]) -> None:
+        nonlocal failures
+        [course_run_id] = course_runs
+        try:
+            published_version = published_version_of(future, course_run_id, log)
+        except OutlineFetchError:
+            failures += 1
+            return
+        # A partition left out of the mapping emits no observation at all, so
+        # its last known version stands. That is what we want for a course that
+        # has vanished from the LMS: there is nothing to export, and inventing a
+        # version would look like a change.
+        if published_version is not None:
+            versions[course_run_id] = published_version
+
     executor = ThreadPoolExecutor(max_workers=OUTLINE_FETCH_WORKERS)
     try:
         futures = {
-            executor.submit(client.get_course_outline, course_run_id): course_run_id
+            executor.submit(client.get_course_outline, course_run_id): [course_run_id]
             for course_run_id in course_run_ids
         }
-        timeout = (
-            None
-            if deadline is None
-            else max(0.0, (deadline - datetime.now(tz=UTC)).total_seconds())
-        )
-        try:
-            for future in as_completed(futures, timeout=timeout):
-                course_run_id = futures[future]
-                try:
-                    published_version = published_version_of(future, course_run_id, log)
-                except OutlineFetchError:
-                    failures += 1
-                    continue
-                # A partition left out of the mapping emits no observation at
-                # all, so its last known version stands. That is what we want
-                # for a course that has vanished from the LMS: there is nothing
-                # to export, and inventing a version would look like a change.
-                if published_version is not None:
-                    versions[course_run_id] = published_version
-        except TimeoutError:
-            timed_out = True
-        unswept = [
-            course_run_id
-            for future, course_run_id in futures.items()
-            if not future.done()
-        ]
+        timed_out, unswept = _drain(futures, deadline, handle)
     finally:
         # wait=False so a blocked worker cannot hold the caller past the
         # deadline it just set; cancel_futures so the ones still queued do not
@@ -170,6 +250,112 @@ def sweep_course_versions(
             len(course_run_ids),
         )
     return CoursewareSweep(versions=versions, failures=failures, unswept=unswept)
+
+
+def _sweep_content_versions(
+    client: Any,
+    course_run_ids: Sequence[str],
+    log: logging.Logger,
+    deadline: datetime | None,
+) -> CoursewareSweep:
+    """Read each course run's content version from Studio, a batch at a time.
+
+    A batch that fails reports none of its courses, rather than any of them
+    being given a partial version, which would read as a change and ask for an
+    export.
+    """
+    # Checked before any request that could have an effect. On a Studio still
+    # running a course export plugin without the versions endpoint, the batch
+    # POST below would queue an export of every course in the batch.
+    if course_run_ids and not client.course_content_versions_available():
+        msg = (
+            "Studio does not serve /api/courses/v0/export/versions/; deploy "
+            "ol-openedx-course-export 0.4.0 or later before sweeping."
+        )
+        raise RuntimeError(msg)
+    versions: dict[str, str] = {}
+    failures = 0
+
+    def handle(future: "Future[dict[str, Any]]", batch: list[str]) -> None:
+        nonlocal failures
+        # Parsed inside the try as well: a 200 with a body we cannot read is as
+        # much a failed batch as a 500, not a reason to lose every other
+        # batch's versions by failing the whole sweep.
+        try:
+            response = future.result()
+            missing = response["missing"]
+            batch_versions = {
+                course_run_id: courseware_data_version(facts)
+                for course_run_id, facts in response["versions"].items()
+            }
+        except Exception:
+            log.exception(
+                "Failed to fetch content versions for %s course runs starting at %s",
+                len(batch),
+                batch[0],
+            )
+            failures += len(batch)
+            return
+        # A course the instance no longer has is left out of the mapping, so it
+        # emits no observation and its last known version stands: there is
+        # nothing to export, and inventing a version would look like a change.
+        if missing:
+            log.info(
+                "No course found for %s course runs, e.g. %s",
+                len(missing),
+                missing[0],
+            )
+        versions.update(batch_versions)
+
+    batches = [
+        list(course_run_ids[start : start + VERSIONS_BATCH_SIZE])
+        for start in range(0, len(course_run_ids), VERSIONS_BATCH_SIZE)
+    ]
+    executor = ThreadPoolExecutor(max_workers=VERSIONS_FETCH_WORKERS)
+    try:
+        futures = {
+            executor.submit(client.get_course_content_versions, batch): batch
+            for batch in batches
+        }
+        timed_out, unswept = _drain(futures, deadline, handle)
+    finally:
+        # See _sweep_course_outlines: never let a blocked worker outlive the
+        # deadline, and stop queued requests against a struggling Studio.
+        executor.shutdown(wait=False, cancel_futures=True)
+    if timed_out:
+        log.warning(
+            "Course content version sweep ran out of time with %s of %s course "
+            "runs unswept; the next pass resumes from them.",
+            len(unswept),
+            len(course_run_ids),
+        )
+    return CoursewareSweep(versions=versions, failures=failures, unswept=unswept)
+
+
+def sweep_course_versions(
+    client: Any,
+    course_run_ids: Sequence[str],
+    log: logging.Logger,
+    *,
+    source: CoursewareVersionSource,
+    deadline: datetime | None = None,
+) -> CoursewareSweep:
+    """Fetch the version of every course run from ``source``, concurrently.
+
+    ``deadline`` bounds the wall clock the fetch phase may spend. Without one
+    the sweep runs to completion, which is what a run wants; a sensor passes one
+    because an unbounded sweep that outlives its tick emits *nothing* and saves
+    no progress -- the failure that left courses un-exported from May to August.
+
+    Stopping early is safe in a way that stopping late is not: a course left out
+    of ``versions`` emits no observation, so its last known version stands and
+    the next pass picks it up. Reporting a version we did not actually read, or
+    reporting nothing at all because the tick was killed, are the two outcomes
+    worth avoiding.
+    """
+    if source == "content_versions":
+        return _sweep_content_versions(client, course_run_ids, log, deadline)
+    return _sweep_course_outlines(client, course_run_ids, log, deadline)
 
 
 def build_courseware_source_asset(
@@ -215,7 +401,7 @@ def build_courseware_source_asset(
         required_resource_keys={"openedx"},
     )
     def courseware(context: OpExecutionContext) -> DataVersionsByPartition:
-        """Report the published version of every registered course run.
+        """Report the version of every registered course run.
 
         Kept so the asset is observable and so a whole deployment can still be
         swept on demand from the UI. Routine observation comes from
@@ -225,7 +411,10 @@ def build_courseware_source_asset(
             dynamic_partitions_store=context.instance
         )
         sweep = sweep_course_versions(
-            context.resources.openedx.client, partition_keys, context.log
+            context.resources.openedx.client,
+            partition_keys,
+            context.log,
+            source=courseware_version_source(deployment),
         )
         context.log.info(
             "Observed %s of %s %s course runs, %s failed",
@@ -239,7 +428,7 @@ def build_courseware_source_asset(
         # would leave every downstream quiet, hourly, forever.
         if partition_keys and sweep.failures == len(partition_keys):
             msg = (
-                f"Course outline sweep failed for all {sweep.failures} "
+                f"Courseware version sweep failed for all {sweep.failures} "
                 f"{deployment} courses"
             )
             raise RuntimeError(msg)
@@ -302,9 +491,8 @@ def course_structure(context: AssetExecutionContext):
                 ).hexdigest(),
                 "course_id": context.partition_key,
                 "course_structure": course_structure_document,
-                "course_structure_flattened": flatten(
-                    course_structure_document,
-                    reducer=make_reducer("__"),
+                "course_structure_flattened": flatten_nested_dict(
+                    course_structure_document, "__"
                 ),
                 "retrieved_at": data_retrieval_timestamp,
             }

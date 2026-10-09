@@ -1,8 +1,8 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__program_course') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__discovery__api__program_course') }}
 )
 
-{{ deduplicate_raw_table(raw_table='raw__edxorg__s3__program_course', partition_columns = 'program_uuid, course_key') }}
+{{ deduplicate_raw_table(raw_table='raw__edxorg__discovery__api__program_course', partition_columns = 'program_uuid, course_key') }}
 , cleaned as (
     select
         program_uuid

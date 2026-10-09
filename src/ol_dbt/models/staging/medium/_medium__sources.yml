@@ -1,0 +1,45 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__medium__rss__posts
+    description: >
+      The posts in MIT Open Learning's Medium publication RSS feed (the latest ten),
+      loaded by the medium dlt pipeline with the channel's fields repeated on each
+      row. Full replace on every run.
+    columns:
+    - name: guid
+      description: str, the post's guid, e.g. https://medium.com/p/d9ccc1667ae6
+    - name: title
+      description: str, post title
+    - name: link
+      description: str, URL of the post, with Medium's source query string
+    - name: description
+      description: str, the item's <description>, which Medium leaves out
+    - name: content_encoded
+      description: str, the post's full HTML (content:encoded)
+    - name: creators
+      description: str, JSON array of the dc:creator names
+    - name: categories
+      description: str, JSON array of the post's category tags
+    - name: pub_date
+      description: str, RFC 822 publication time in GMT
+    - name: updated
+      description: str, ISO 8601 time the post was last updated (atom:updated)
+    - name: feed_url
+      description: str, the RSS feed URL
+    - name: feed_title
+      description: str, the channel title
+    - name: feed_description
+      description: str, the channel description
+    - name: feed_image_url
+      description: str, URL of the channel image
+    - name: feed_image_title
+      description: str, title of the channel image
+    - name: retrieved_at
+      description: str, ISO 8601 time of the extraction

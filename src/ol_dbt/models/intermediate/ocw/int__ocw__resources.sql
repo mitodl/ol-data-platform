@@ -75,9 +75,9 @@ select
     || '/edit/'
     || websitecontents.websitecontent_text_id
     || '/' as studio_url
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
-    ), ''), 'null') as external_resource_backup_url
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.backup_url'") }}, ''
+    ), 'null') as external_resource_backup_url
     , nullif(
         nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.external_url'") }}, ''), 'null'
     ) as external_resource_url
@@ -111,30 +111,30 @@ select
         )
     ) as image_credit
     -- video_metadata for video resources
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_description' omit quotes
-    ), ''), 'null') as video_youtube_description
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_id' omit quotes
-    ), ''), 'null') as video_youtube_id
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
-    ), ''), 'null') as video_youtube_speakers
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
-    ), ''), 'null') as video_youtube_tags
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_metadata.youtube_description'") }}, ''
+    ), 'null') as video_youtube_description
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_metadata.youtube_id'") }}, ''
+    ), 'null') as video_youtube_id
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_metadata.video_speakers'") }}, ''
+    ), 'null') as video_youtube_speakers
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_metadata.video_tags'") }}, ''
+    ), 'null') as video_youtube_tags
     -- video_files for video resources
     , websitecontents.video_archive_url
     , {{ filename_from_url('websitecontents.video_archive_url') }} as video_archive_filename
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
-    ), ''), 'null') as video_captions_file
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_files.video_thumbnail_file' omit quotes
-    ), ''), 'null') as video_thumbnail_file
-    , nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
-    ), ''), 'null') as video_transcript_file
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_files.video_captions_file'") }}, ''
+    ), 'null') as video_captions_file
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_files.video_thumbnail_file'") }}, ''
+    ), 'null') as video_thumbnail_file
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.video_files.video_transcript_file'") }}, ''
+    ), 'null') as video_transcript_file
     -- resource metadata
     , nullif(nullif(
         {{ json_query_string('websitecontents.websitecontent_metadata', "'$.license'") }}, ''
@@ -157,12 +157,12 @@ select
     , nullif(nullif(
         {{ json_query_string('websitecontents.websitecontent_metadata', "'$.wayback_url'") }}, ''
     ), 'null') as external_resource_wayback_url
-    , nullif(nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.audience' omit quotes
-    ), ''), 'null'), '[]') as resource_audience
-    , nullif(nullif(nullif(json_query(
-        websitecontents.websitecontent_metadata, 'lax $.level' omit quotes
-    ), ''), 'null'), '[]') as resource_level
+    , nullif(nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.audience'") }}, ''
+    ), 'null'), '[]') as resource_audience
+    , nullif(nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.level'") }}, ''
+    ), 'null'), '[]') as resource_level
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid

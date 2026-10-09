@@ -1,7 +1,3 @@
-{{ config(
-    materialized='table'
-) }}
-
 -- Edges between platform accounts, independent of dim_user's own identity-
 -- collapsing (grouping by hashed email). from_platform = to_platform is a
 -- merge redirect (old account -> canonical, confirmed via mitxonline audit
@@ -17,22 +13,22 @@ with courserunenrollment_audit as (
 
 , user_changes as (
     select
-        json_extract_scalar(enrollmentaudit_data_before, '$.user') as platform_user_id_before
-        , json_extract_scalar(enrollmentaudit_data_after, '$.user') as platform_user_id_after
+        {{ json_extract_scalar('enrollmentaudit_data_before', "'$.user'") }} as platform_user_id_before
+        , {{ json_extract_scalar('enrollmentaudit_data_after', "'$.user'") }} as platform_user_id_after
         , enrollmentaudit_created_on
     from courserunenrollment_audit
-    where json_extract_scalar(enrollmentaudit_data_before, '$.user')
-        != json_extract_scalar(enrollmentaudit_data_after, '$.user')
+    where {{ json_extract_scalar('enrollmentaudit_data_before', "'$.user'") }}
+        != {{ json_extract_scalar('enrollmentaudit_data_after', "'$.user'") }}
 
     union all
 
     select
-        json_extract_scalar(enrollmentaudit_data_before, '$.user') as platform_user_id_before
-        , json_extract_scalar(enrollmentaudit_data_after, '$.user') as platform_user_id_after
+        {{ json_extract_scalar('enrollmentaudit_data_before', "'$.user'") }} as platform_user_id_before
+        , {{ json_extract_scalar('enrollmentaudit_data_after', "'$.user'") }} as platform_user_id_after
         , enrollmentaudit_created_on
     from programenrollment_audit
-    where json_extract_scalar(enrollmentaudit_data_before, '$.user')
-        != json_extract_scalar(enrollmentaudit_data_after, '$.user')
+    where {{ json_extract_scalar('enrollmentaudit_data_before', "'$.user'") }}
+        != {{ json_extract_scalar('enrollmentaudit_data_after', "'$.user'") }}
 )
 
 , grouped as (

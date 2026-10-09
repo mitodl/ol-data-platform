@@ -12,10 +12,7 @@ from typing import Any
 
 import pytest
 from dagster import Failure, build_asset_context
-from lakehouse.assets.airbyte_drift import (
-    _fetch_workspace,
-    airbyte_inventory_drift,
-)
+from lakehouse.assets.airbyte_drift import _fetch_workspace, airbyte_inventory_drift
 
 PREFIX = "raw__mitxonline__openedx__mysql__"
 CONNECTION_NAME = "MITx Online Open edX DB → S3 Data Lake"
@@ -60,15 +57,13 @@ class FakeClient:
         sources: list[dict[str, Any]],
         detail: dict[str, Any] | None = None,
     ) -> None:
-        self._connections = connections
-        self._sources = sources
+        self._collections = {"connections": connections, "sources": sources}
         self._detail = detail
         self.detail_calls = 0
 
-    # Both are called with keyword arguments, so the ones this fake ignores are
-    # absorbed rather than named and silenced.
-    def _paginated_request(self, url: str, **_: Any) -> list[dict[str, Any]]:
-        return self._sources if url.endswith("/sources") else self._connections
+    def list_collection(self, path: str, id_key: str) -> list[dict[str, Any]]:
+        # Keyed the way the real client keys it, so a wrong id field fails here.
+        return list({row[id_key]: row for row in self._collections[path]}.values())
 
     def _single_request(self, **_: Any) -> dict[str, Any]:
         self.detail_calls += 1
@@ -77,7 +72,6 @@ class FakeClient:
 
 class FakeWorkspace:
     workspace_id = "workspace-1"
-    request_page_size = 15
 
     def __init__(self, client: FakeClient) -> None:
         self._client = client

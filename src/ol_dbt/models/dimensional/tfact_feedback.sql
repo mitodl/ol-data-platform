@@ -2,8 +2,20 @@
     materialized='incremental',
     unique_key='feedback_pk',
     incremental_strategy='delete+insert',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook="delete from {{ this }}
+    where feedback_pk not in (
+        select {{ dbt_utils.generate_surrogate_key(['source_slug', 'source_record_ref']) }}
+        from {{ ref('int__feedback__unioned') }}
+    )
+    and feedback_source_fk in (
+        select distinct {{ dbt_utils.generate_surrogate_key(['source_slug']) }}
+        from {{ ref('int__feedback__unioned') }}
+    )"
 ) }}
+-- The post_hook deletes turns no longer upstream, which would otherwise keep a
+-- turn_index that a renumbered turn now holds. It skips a source with no rows upstream,
+-- so a failed load cannot empty that source here.
 
 with unioned as (
     select
@@ -138,20 +150,25 @@ left join {{ this }} as existing
     -- covers a source with no rows in the table yet, so its first run backfills
     -- everything instead of needing a manual --full-refresh.
     where unioned.updated_at > coalesce(watermarks.max_updated_at, '0001-01-01T00:00:00')
-    -- Backfill: a row inserted before feedback_redacted existed carries the old
-    -- feedback_text = null stub forever under the watermark above alone, because
-    -- redaction landing does not bump the source ticket's updated_at. Reselect any
-    -- row still null in the fact where redaction has since produced real text.
+    -- Backfill: redaction landing or changing (a feedback_redacted full refresh under
+    -- a new masking policy) does not bump the source ticket's updated_at, so the
+    -- watermark alone would keep the old text forever. Reselect any row whose stored
+    -- text or title differs from the current redaction, including the original
+    -- null stub. A turn with no redaction row yet is left alone.
     or (
         existing.feedback_pk is not null
-        and existing.feedback_text is null
-        and redacted.text_redacted is not null
+        and redacted.source_record_ref is not null
+        and (
+            existing.feedback_text is distinct from redacted.text_redacted
+            or existing.feedback_title is distinct from redacted.title_redacted
+        )
     )
     -- Re-key: a stored key that no longer matches the current resolution won't move
     -- updated_at to trigger the watermark. user_fk changes on a dim_user re-key;
     -- courserun_fk when a course run lands in dim_course_run after the turn;
     -- content_block_fk on a new course structure snapshot, since content_block_pk
-    -- hashes retrieved_at. existing.feedback_pk is null for a turn not stored yet.
+    -- hashes retrieved_at; subject_type when a new agent is mapped. existing.feedback_pk
+    -- is null for a turn not stored yet.
     or (
         existing.feedback_pk is not null
         and (
@@ -159,6 +176,10 @@ left join {{ this }} as existing
                 is distinct from coalesce(users_by_global_id.user_pk, users_by_email.user_pk)
             or existing.courserun_fk is distinct from dim_course_run.courserun_pk
             or existing.content_block_fk is distinct from dim_course_content.content_block_pk
+            or existing.subject_type is distinct from unioned.subject_type
         )
     )
+    -- A turn not stored yet, or renumbered upstream: neither moves updated_at.
+    or existing.feedback_pk is null
+    or existing.turn_index is distinct from unioned.turn_index
 {% endif %}

@@ -16,7 +16,11 @@ from typing import Any
 
 import pytest
 from data_loading.definitions import defs
-from data_loading.defs.ingestion.assets import MITXONLINE_APP_DLT_ENVIRONMENTS
+from data_loading.defs.ingestion.assets import (
+    MITXONLINE_APP_DLT_ENVIRONMENTS,
+    XPRO_APP_DLT_ENVIRONMENTS,
+)
+from ol_dlt.sources import mitxonline_app, xpro_app
 
 _REPO = defs.get_repository_def()
 
@@ -88,9 +92,31 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__oll__google_sheets__courses",
         "ol_warehouse_raw_data/raw__edxorg__s3__tables__auth_user",
         "ol_warehouse_raw_data/raw__edxorg__discovery__api__programs",
+        "ol_warehouse_raw_data/raw__edxorg__discovery__api__program",
+        "ol_warehouse_raw_data/raw__edxorg__discovery__api__program_course",
+        "ol_warehouse_raw_data/raw__edxorg__discovery__api__mitx_course",
+        "ol_warehouse_raw_data/raw__edxorg__discovery__api__mitx_course_run",
         "ol_warehouse_raw_data/raw__posthog__learn__s3__events",
+        "ol_warehouse_raw_data/raw__see__api__courses",
+        "ol_warehouse_raw_data/raw__see__api__course_offerings",
+        "ol_warehouse_raw_data/raw__mitpe__api__news",
+        "ol_warehouse_raw_data/raw__mitpe__api__events",
+        "ol_warehouse_raw_data/raw__openlearning__api__events",
+        "ol_warehouse_raw_data/raw__medium__rss__posts",
+        "ol_warehouse_raw_data/raw__youtube__api__channels",
+        "ol_warehouse_raw_data/raw__youtube__api__playlists",
+        "ol_warehouse_raw_data/raw__youtube__api__playlist_items",
+        "ol_warehouse_raw_data/raw__youtube__api__videos",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
+        "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
+        "ol_warehouse_raw_data/raw__mitx__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__mitxonline__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__xpro__openedx__api__course_structure_blocks",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_document_text",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
+        "ol_warehouse_raw_data/raw__openedx__s3__course_file_exclusions",
+        "ol_warehouse_raw_data/raw__ocw__s3__course_content",
     ):
         assert expected in asset_keys
 
@@ -102,8 +128,11 @@ def test_schedules_and_sensors_load() -> None:
         "mit_climate_ingest_daily_schedule",
         "mit_edx_programs_ingest_daily_schedule",
         "podcast_rss_ingest_daily_schedule",
+        "see_ingest_daily_schedule",
+        "news_events_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
+        "ocw_content_ingest_daily_schedule",
     }
     assert "edxorg_upstream_changes_sensor" in {s.name for s in _REPO.sensor_defs}
 
@@ -123,13 +152,20 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
     with _repository_for(environment) as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert set(_B2B_PILOT_ASSET_KEYS) <= asset_keys
-        assert (
-            len(
-                [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
-            )
-            == 64
-        )
-        assert "mitxonline_app_ingest_schedule" in {s.name for s in repo.schedule_defs}
+        assert len(
+            [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
+        ) == len(mitxonline_app.MITXONLINE_APP_SPEC.tables)
+        schedule = repo.get_schedule_def("mitxonline_app_ingest_schedule")
+        # The MITx Online structure blocks share the "mitxonline" group and
+        # read the production landing zone, so the app schedule must not
+        # select them.
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == {
+            key for key in asset_keys if "raw__mitxonline__app__postgres__" in key
+        }
 
 
 def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
@@ -150,10 +186,38 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
     with _repository_for("production") as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert asset_keys, "code location exposed no assets under production"
-        assert not [key for key in asset_keys if "mitxonline" in key]
+        assert not [key for key in asset_keys if "raw__mitxonline__app__" in key]
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+@pytest.mark.parametrize("environment", sorted(XPRO_APP_DLT_ENVIRONMENTS))
+def test_xpro_app_assets_load_where_dlt_owns_the_unit(environment: str) -> None:
+    with _repository_for(environment) as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert len(
+            [key for key in asset_keys if "raw__xpro__app__postgres__" in key]
+        ) == len(xpro_app.XPRO_APP_SPEC.tables)
+        schedule = repo.get_schedule_def("xpro_app_ingest_schedule")
+        # The xPro structure blocks share the "xpro" group, so the app schedule
+        # must not select them.
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == {
+            key for key in asset_keys if "raw__xpro__app__postgres__" in key
+        }
+
+
+def test_xpro_app_dlt_does_not_run_in_production() -> None:
+    """Production still loads this unit through Airbyte under the same keys."""
+    with _repository_for("production") as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert asset_keys, "code location exposed no assets under production"
+        assert not [key for key in asset_keys if "raw__xpro__app__postgres__" in key]
+        assert "xpro_app_ingest_schedule" not in {s.name for s in repo.schedule_defs}
 
 
 class _FakeInstance:
@@ -185,6 +249,24 @@ def test_posthog_schedule_skips_while_a_run_is_in_flight(
     (runs_filter,) = instance.filters
     assert runs_filter.tags == {
         "dagster/schedule_name": schedules.POSTHOG_SCHEDULE_NAME
+    }
+
+
+@pytest.mark.parametrize(("in_flight", "expected"), [(True, False), (False, True)])
+def test_ocw_content_schedule_skips_while_a_run_is_in_flight(
+    in_flight: bool,  # noqa: FBT001
+    expected: bool,  # noqa: FBT001
+) -> None:
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    instance = _FakeInstance(in_flight)
+    assert (
+        schedules.no_ocw_content_run_in_flight(_FakeScheduleContext(instance))
+        is expected
+    )
+    (runs_filter,) = instance.filters
+    assert runs_filter.tags == {
+        "dagster/schedule_name": schedules.OCW_CONTENT_SCHEDULE_NAME
     }
 
 

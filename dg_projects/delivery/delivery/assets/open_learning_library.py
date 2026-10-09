@@ -14,7 +14,8 @@ Data flow:
         → integrations__learn__oll_courses (dbt)
             → MIT Learn webhook (this asset)
 
-Scheduling: daily at 06:30 UTC. Configured in definitions.py.
+Scheduling: once a day, after its integrations models have materialized since
+06:00 UTC. See delivery.lib.scheduled_automation.
 """
 
 import logging
@@ -32,7 +33,7 @@ from dagster import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
-from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         "Read Open Learning Library courses from the integrations__learn__oll_courses "
         "Iceberg table and POST as a signed webhook batch to MIT Learn."
     ),
-    deps=[AssetKey(["integrations", "learn", "integrations__learn__oll_courses"])],
+    deps=[AssetKey(["integrations", "integrations__learn__oll_courses"])],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
 def oll_webhook(
@@ -106,11 +107,12 @@ def oll_webhook(
         context.log.exception(msg)
         raise RuntimeError(msg) from exc
 
+    status = webhook_status(response)
     context.add_output_metadata(
         {
             "delivered_count": len(resources),
-            "webhook_status": "success",
+            "webhook_status": status,
             "response": MetadataValue.json(response),
         }
     )
-    return {"delivered_count": len(resources), "webhook_status": "success"}
+    return {"delivered_count": len(resources), "webhook_status": status}

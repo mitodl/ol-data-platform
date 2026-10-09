@@ -15,7 +15,6 @@ Two assets run on staggered nightly schedules:
     - ANALYZE   (Trino)   — refresh query statistics; same threshold logic with
                             analyze_after_every_n_runs
     - EXPIRE SNAPSHOTS (pyiceberg) — always runs; uses snapshot_retention_days
-    - REMOVE ORPHAN FILES (pyiceberg) — always runs; uses orphan_retention_days
 
     Config comes from ``dbt_project.yml`` ``+meta.iceberg_maintenance`` blocks,
     compiled into each node's ``config.meta.iceberg_maintenance`` in the manifest.
@@ -27,15 +26,19 @@ Two assets run on staggered nightly schedules:
     Dagster event log because the OLAirbyteTranslator slugifies connection names
     in a way that doesn't map cleanly back to Glue table names.
 
-    Runs EXPIRE SNAPSHOTS and REMOVE ORPHAN FILES only — OPTIMIZE and ANALYZE
-    are not needed for raw tables since they are not Trino analytics targets and
-    Airbyte writes complete files per sync (no small-file accumulation).
+    Runs EXPIRE SNAPSHOTS only — OPTIMIZE and ANALYZE are not needed for raw
+    tables since they are not Trino analytics targets and Airbyte writes
+    complete files per sync (no small-file accumulation).
+
+    Airbyte leaves one ``airbyte_staging_<uuid>`` branch behind per sync, and a
+    branch head never expires, so branches whose head is past the retention
+    window are removed first. Expiry only rewrites table metadata: the files
+    the expired snapshots referenced stay in S3.
 
     Tables are processed in a ThreadPoolExecutor(max_workers=8) to handle the
     volume without overwhelming the Glue API rate limits.
 """
 
-import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -51,6 +54,7 @@ from dagster import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
+    AIRBYTE_STAGING_BRANCH,
     TableMaintenanceConfig,
     expire_snapshots,
     get_glue_catalog,
@@ -60,15 +64,12 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     non_dbt_singleton_tables,
     partition_by_catalog_presence,
     raw_config_for_table,
-    remove_orphan_files,
     warehouse_env_for,
 )
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 from pyiceberg.catalog.glue import GlueCatalog
 
 from lakehouse.assets.lakehouse.dbt import dbt_project
-
-log = logging.getLogger(__name__)
 
 # Each environment runs maintenance only against its own catalog and schema set.
 # The mapping lives in ol_orchestrate.lib.iceberg_maintenance so the raw layer
@@ -139,7 +140,7 @@ def _count_materializations_since(
 
 def _run_table_maintenance(
     cfg: TableMaintenanceConfig,
-    instance,
+    context: AssetExecutionContext,
     last_cursor: int | None,
     trino_maintenance: TrinoMaintenanceResource,
     catalog: GlueCatalog,
@@ -150,6 +151,10 @@ def _run_table_maintenance(
     tables: constructing a fresh GlueCatalog (and its S3 FileIO) per table is
     both wasteful and a known trigger for native-client hangs.
 
+    Failures are logged through ``context.log``. The deployed instance manages
+    no Python loggers, so a module logger's lines never reach the run's event
+    log, and the metadata keeps only the first 20 failures.
+
     Returns a summary dict used to aggregate the asset's output metadata.
     """
     summary: dict[str, Any] = {
@@ -157,12 +162,11 @@ def _run_table_maintenance(
         "optimized": False,
         "analyzed": False,
         "snapshots_expired": 0,
-        "orphans_removed": 0,
         "errors": [],
     }
 
     model_key = AssetKey(cfg.asset_key)
-    mat_count = _count_materializations_since(instance, model_key, last_cursor)
+    mat_count = _count_materializations_since(context.instance, model_key, last_cursor)
 
     # On the first maintenance run (last_cursor is None) treat effective count
     # as the maximum threshold so every operation runs regardless of history.
@@ -186,20 +190,13 @@ def _run_table_maintenance(
         if not exp.get("skipped"):
             summary["snapshots_expired"] = exp.get("eligible_count", 0)
     except Exception as exc:  # noqa: BLE001
-        summary["errors"].append(f"expire_snapshots: {exc}")
-
-    # REMOVE ORPHAN FILES — always, uses its own time-based filter
-    try:
-        orp = remove_orphan_files(
-            catalog=catalog,
-            database=cfg.schema_name,
-            table_name=cfg.model_name,
-            retention_days=cfg.orphan_retention_days,
+        context.log.warning(
+            "EXPIRE SNAPSHOTS failed for %s.%s: %s",
+            cfg.schema_name,
+            cfg.model_name,
+            exc,
         )
-        if not orp.get("skipped"):
-            summary["orphans_removed"] = orp.get("deleted-files", 0)
-    except Exception as exc:  # noqa: BLE001
-        summary["errors"].append(f"remove_orphan_files: {exc}")
+        summary["errors"].append(f"expire_snapshots: {exc}")
 
     # OPTIMIZE — only if enough materializations have accumulated
     if effective_count >= cfg.optimize_after_every_n_runs:
@@ -207,7 +204,7 @@ def _run_table_maintenance(
             trino_maintenance.optimize(schema=cfg.schema_name, table=cfg.model_name)
             summary["optimized"] = True
         except Exception as exc:  # noqa: BLE001
-            log.warning(
+            context.log.warning(
                 "OPTIMIZE failed for %s.%s: %s", cfg.schema_name, cfg.model_name, exc
             )
             summary["errors"].append(f"optimize: {exc}")
@@ -218,7 +215,7 @@ def _run_table_maintenance(
             trino_maintenance.analyze(schema=cfg.schema_name, table=cfg.model_name)
             summary["analyzed"] = True
         except Exception as exc:  # noqa: BLE001
-            log.warning(
+            context.log.warning(
                 "ANALYZE failed for %s.%s: %s", cfg.schema_name, cfg.model_name, exc
             )
             summary["errors"].append(f"analyze: {exc}")
@@ -316,7 +313,6 @@ def iceberg_dbt_layer_maintenance(
     tables_optimized = 0
     tables_analyzed = 0
     snapshots_expired = 0
-    orphans_removed = 0
     failures: list[str] = []
     # Counted separately from `failures`, which holds one entry per failed
     # *operation* -- OPTIMIZE and ANALYZE and EXPIRE can each fail for the same
@@ -332,7 +328,7 @@ def iceberg_dbt_layer_maintenance(
         tables_attempted += 1
         try:
             result = _run_table_maintenance(
-                cfg, context.instance, last_cursor, trino_maintenance, catalog
+                cfg, context, last_cursor, trino_maintenance, catalog
             )
             tables_processed += 1
             if result["optimized"]:
@@ -340,12 +336,11 @@ def iceberg_dbt_layer_maintenance(
             if result["analyzed"]:
                 tables_analyzed += 1
             snapshots_expired += result["snapshots_expired"]
-            orphans_removed += result["orphans_removed"]
             if result["errors"]:
                 failed_tables.add(table)
             failures.extend(f"{table}: {err}" for err in result["errors"])
         except Exception as exc:  # noqa: BLE001
-            log.warning("Maintenance failed for %s: %s", table, exc)
+            context.log.warning("Maintenance failed for %s: %s", table, exc)
             failed_tables.add(table)
             failures.append(f"{table}: {exc}")
 
@@ -397,7 +392,6 @@ def iceberg_dbt_layer_maintenance(
             "tables_optimized": MetadataValue.int(tables_optimized),
             "tables_analyzed": MetadataValue.int(tables_analyzed),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
-            "orphans_removed": MetadataValue.int(orphans_removed),
             "tables_unbacked": MetadataValue.int(len(unbacked)),
             "unbacked_details": MetadataValue.json(unbacked[:20]),
             "failed_tables": MetadataValue.int(len(failed_tables)),
@@ -412,26 +406,42 @@ def iceberg_dbt_layer_maintenance(
     group_name="lakehouse_maintenance",
     description=(
         "Nightly Iceberg maintenance for all raw/Airbyte-ingested tables in "
-        "ol_warehouse_production_raw (~1,300 tables).  Runs EXPIRE SNAPSHOTS and "
-        "REMOVE ORPHAN FILES only — OPTIMIZE and ANALYZE are not needed for raw "
-        "tables since they are not Trino analytics targets.  Tables are processed "
+        "ol_warehouse_production_raw (~1,300 tables).  Runs EXPIRE SNAPSHOTS only "
+        "— OPTIMIZE and ANALYZE are not needed for raw tables since they are not "
+        "Trino analytics targets.  Tables are processed "
         "in parallel (max_workers=8) and sorted worst-offender-first."
     ),
 )
 def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None]:
-    """Run EXPIRE SNAPSHOTS and REMOVE ORPHAN FILES for all raw layer Iceberg tables."""
+    """Run EXPIRE SNAPSHOTS for all raw layer Iceberg tables."""
     context.log.info("Scanning Glue catalog for raw layer Iceberg tables...")
-    tables = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
+    scan = load_raw_layer_maintenance_work(glue_database=RAW_GLUE_DATABASE)
+    tables = scan.tables
+    tables_scanned = len(tables) + len(scan.failures)
+    # A missing database raises in the scan. A listing that succeeds and holds
+    # no Iceberg table is the wrong database or an emptied one.
+    if not tables_scanned:
+        msg = (
+            f"Glue lists no Iceberg tables in {RAW_GLUE_DATABASE}. Refusing to "
+            "report success for zero work."
+        )
+        raise RuntimeError(msg)
     context.log.info(
         "Found %d Iceberg tables; processing with %d workers.",
-        len(tables),
+        tables_scanned,
         RAW_LAYER_WORKERS,
     )
 
     tables_cleaned = 0
     snapshots_expired = 0
-    orphans_removed = 0
-    failures: list[str] = []
+    staging_branches_removed = 0
+    # A table the scan could not load is never handed to expire_snapshots. It
+    # is a failed table all the same.
+    failures: list[str] = list(scan.failures)
+    # The metadata keeps the first 20 failures, so the log is the only place
+    # the rest are recorded.
+    for failure in failures:
+        context.log.warning("Raw layer scan failed for %s", failure)
 
     # A GlueCatalog (and its underlying S3 FileIO / boto3 client) must not be
     # shared across worker threads: concurrent commits mutate catalog state and
@@ -447,65 +457,44 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
 
     def _process_one(table_info) -> dict[str, Any]:
         cfg = raw_config_for_table(table_info.table_name)
-        catalog = _worker_catalog()
-        result: dict[str, Any] = {
-            "table": table_info.table_name,
-            "ok": True,
-            "errors": [],
-        }
-        try:
-            exp = expire_snapshots(
-                catalog=catalog,
-                database=table_info.database,
-                table_name=table_info.table_name,
-                retention_days=cfg.snapshot_retention_days,
-            )
-            result["expire"] = exp
-
-            orp = remove_orphan_files(
-                catalog=catalog,
-                database=table_info.database,
-                table_name=table_info.table_name,
-                retention_days=cfg.orphan_retention_days,
-            )
-            result["orphan"] = orp
-        except Exception as exc:  # noqa: BLE001
-            result["ok"] = False
-            result["errors"].append(str(exc))
-        return result
+        return expire_snapshots(
+            catalog=_worker_catalog(),
+            database=table_info.database,
+            table_name=table_info.table_name,
+            retention_days=cfg.snapshot_retention_days,
+            stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+        )
 
     with ThreadPoolExecutor(max_workers=RAW_LAYER_WORKERS) as executor:
         future_to_table = {executor.submit(_process_one, t): t for t in tables}
         for future in as_completed(future_to_table):
             table_info = future_to_table[future]
             try:
-                res = future.result()
-                if res["ok"]:
-                    tables_cleaned += 1
-                    exp = res.get("expire", {})
-                    orp = res.get("orphan", {})
-                    snapshots_expired += exp.get("eligible_count", 0)
-                    orphans_removed += orp.get("deleted-files", 0)
-                else:
-                    failures.extend(
-                        f"{table_info.table_name}: {err}" for err in res["errors"]
-                    )
+                exp = future.result()
             except Exception as exc:  # noqa: BLE001
+                context.log.warning(
+                    "EXPIRE SNAPSHOTS failed for %s: %s", table_info.table_name, exc
+                )
                 failures.append(f"{table_info.table_name}: {exc}")
+                continue
+            # A table with nothing past its retention is not cleaned.
+            tables_cleaned += int(not exp.get("skipped"))
+            snapshots_expired += exp.get("eligible_count", 0)
+            staging_branches_removed += exp.get("stale_branch_count", 0)
 
     context.log.info(
         "Raw layer maintenance complete: %d/%d tables cleaned, %d failures.",
         tables_cleaned,
-        len(tables),
+        tables_scanned,
         len(failures),
     )
 
     # Fail the asset if maintenance failures exceed 5% of tables scanned.
     # Prevents silent SUCCESS when Glue/S3 is unavailable for a large fraction
     # of tables, which would advance the snapshot timestamp cursor.
-    tables_processed = len(tables)
+    tables_processed = tables_scanned
     if failures:
-        failure_threshold = max(1, int(tables_processed * 0.05))
+        failure_threshold = maintenance_failure_threshold(tables_processed)
         if len(failures) >= failure_threshold:
             context.log.error(
                 "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",
@@ -524,10 +513,10 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
     return Output(
         value=None,
         metadata={
-            "tables_scanned": MetadataValue.int(len(tables)),
+            "tables_scanned": MetadataValue.int(tables_scanned),
             "tables_cleaned": MetadataValue.int(tables_cleaned),
             "snapshots_expired": MetadataValue.int(snapshots_expired),
-            "orphans_removed": MetadataValue.int(orphans_removed),
+            "staging_branches_removed": MetadataValue.int(staging_branches_removed),
             "failure_count": MetadataValue.int(len(failures)),
             "failure_details": MetadataValue.json(failures[:20]),
         },
