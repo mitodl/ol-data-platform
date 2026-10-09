@@ -18,58 +18,45 @@
 -- last_active_on and courses_in_progress also count active enrollments only: they
 -- describe current engagement, not an outcome already sent. Activity does not move
 -- record_updated_on; see mv_b2b_learner_enrollment.
--- Pre-aggregated to the (user, course run) join key so it cannot fan out.
-with activity as (
-    select
-        user_fk,
-        courserun_fk,
-        max(activity_date_key)                                                          as last_active_date_key
-    from {{ source('dimensional', 'afact_learner_courserun_daily_activity') }}
-    where platform = 'mitxonline'
-    group by user_fk, courserun_fk
-),
-
-contract_enrollments as (
+-- One row per (user, course run) enrollment from afact_learner_courserun_progress, where
+-- is_certified, is_in_progress and last_active_on are defined.
+with contract_enrollments as (
     select
         c.organization_fk,
         boc.contract_fk,
-        e.user_fk,
-        e.courserun_fk,
+        p.user_fk,
+        p.courserun_fk,
         cr.course_fk,
-        e.enrollment_created_on,
-        e.enrollment_is_active,
-        g.is_passing,
-        g.grade_value,
-        cert.certificate_is_revoked,
-        a.last_active_date_key,
+        p.enrollment_created_on,
+        p.enrollment_is_active,
+        p.is_passing,
+        p.is_certified,
+        p.is_in_progress,
+        p.last_active_on,
         -- StarRocks' greatest() returns null if any argument is null; '' sorts below
         -- any ISO-8601 date.
         greatest(
-            coalesce(e.enrollment_updated_on, ''),
-            coalesce(e.enrollment_created_on, ''),
-            coalesce(g.grade_updated_on, ''),
-            coalesce(cert.certificate_updated_on, '')
+            coalesce(p.enrollment_updated_on, ''),
+            coalesce(p.enrollment_created_on, ''),
+            coalesce(p.grade_updated_on, ''),
+            coalesce(p.certificate_updated_on, '')
         ) as record_updated_on
     from {{ source('dimensional', 'bridge_organization_courserun') }} boc
     join {{ source('dimensional', 'dim_contract') }} c
         on boc.contract_fk = c.contract_pk
     join {{ source('dimensional', 'dim_course_run') }} cr
         on boc.courserun_fk = cr.courserun_pk
-    join {{ source('dimensional', 'tfact_enrollment') }} e
-        on boc.courserun_fk = e.courserun_fk
-    left join {{ source('dimensional', 'tfact_grade') }} g
-        on e.user_fk = g.user_fk and e.courserun_fk = g.courserun_fk
-    left join {{ source('dimensional', 'tfact_certificate') }} cert
-        on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
-    left join activity a
-        on e.user_fk = a.user_fk and e.courserun_fk = a.courserun_fk
+    join {{ source('dimensional', 'afact_learner_courserun_progress') }} p
+        on boc.courserun_fk = p.courserun_fk
     where cr.is_current = true
-      and e.user_fk is not null
 ),
 
 -- record_updated_on is the max over every enrollment, not just the ones a counter
 -- keeps. Deactivating an enrollment or revoking a certificate is a save() upstream that
 -- moves its updated_on; a max over the filtered set would move backwards instead.
+-- Only the learner's current certificate is read, so when a second certificate for the
+-- same run is revoked and an older one becomes current this can still move backwards.
+-- The change log's changed_on does not: the row's hash changes.
 enrollment_rollup as (
     select
         organization_fk,
@@ -78,15 +65,9 @@ enrollment_rollup as (
         max(case when enrollment_is_active then enrollment_created_on end)              as last_enrolled_on,
         count(distinct case when enrollment_is_active then courserun_fk end)            as courses_enrolled,
         count(distinct case when is_passing then courserun_fk end)                      as courses_passed,
-        count(distinct case when certificate_is_revoked = false
-            then courserun_fk end)                                                      as courses_certified,
-        max(case when enrollment_is_active then last_active_date_key end)               as last_active_date_key,
-        -- The API's completion_status = in_progress, restricted to active enrollments:
-        -- no unrevoked certificate, not passing, and a nonzero grade or any activity.
-        count(distinct case when enrollment_is_active
-            and coalesce(certificate_is_revoked, true)
-            and not coalesce(is_passing, false)
-            and (grade_value > 0 or last_active_date_key is not null)
+        count(distinct case when is_certified then courserun_fk end)                    as courses_certified,
+        max(case when enrollment_is_active then last_active_on end)                     as last_active_on,
+        count(distinct case when enrollment_is_active and is_in_progress
             then courserun_fk end)                                                      as courses_in_progress,
         max(record_updated_on)                                                          as record_updated_on
     from contract_enrollments
@@ -211,7 +192,7 @@ select
     coalesce(er.courses_passed, 0)                                                      as courses_passed,
     coalesce(er.courses_certified, 0)                                                   as courses_certified,
     coalesce(pc.program_certificates_earned, 0)                                         as program_certificates_earned,
-    cast(d.date as date)                                                                as last_active_on,
+    er.last_active_on,
     coalesce(er.courses_in_progress, 0)                                                 as courses_in_progress,
     c.outcomes_shared,
     case when c.outcomes_shared then c.latest_consent_on end                            as outcomes_consent_on,
@@ -231,8 +212,6 @@ left join program_certificates pc
     on m.organization_fk = pc.organization_fk and m.user_fk = pc.user_fk
 left join consent c
     on m.organization_fk = c.organization_fk and m.user_fk = c.user_fk
-left join {{ source('dimensional', 'dim_date') }} d
-    on er.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'
   -- The API's learner_id is required; see mv_b2b_learner_enrollment.
   and u.user_global_id is not null

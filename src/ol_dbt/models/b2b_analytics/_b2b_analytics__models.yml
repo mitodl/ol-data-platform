@@ -50,7 +50,8 @@ models:
   - name: active_learners
     description: Distinct learners with an active enrollment under this contract.
   - name: learners_certified
-    description: Distinct learners holding a non-revoked certificate under this contract.
+    description: Distinct learners enrolled in a course run under this contract who
+      hold its non-revoked certificate.
   - name: seat_utilization_pct
     description: seats_consumed / seat_limit * 100.
   - name: completion_rate_pct
