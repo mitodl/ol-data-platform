@@ -85,6 +85,15 @@ models:
     description: str, indicates the type of chatbot agent used in the session. Possible
       values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot, CanvasSyllabusBot,
       SearchSummaryBot
+    tests:
+    # Warn, not error: a new agent should not fail the run. Map it to a subject_type
+    # in int__feedback__learn_ai_tutor, then add it here.
+    - accepted_values:
+        arguments:
+          values: ['TutorBot', 'ResourceRecommendationBot', 'VideoGPTBot', 'SyllabusBot',
+            'CanvasSyllabusBot', 'SearchSummaryBot']
+        config:
+          severity: warn
   - name: chatsession_title
     description: str, the initial question of the chat session.
   - name: chatsession_object_id

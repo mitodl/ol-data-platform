@@ -144,8 +144,8 @@ models:
   - name: subject_type
     description: str, what the chat concerns. 'courseware_block' for TutorBot and
       VideoGPTBot, 'course' for SyllabusBot and CanvasSyllabusBot, 'resource' for
-      ResourceRecommendationBot and SearchSummaryBot. Null for any other chatsession_agent
-      value.
+      ResourceRecommendationBot and SearchSummaryBot. 'unspecified' for any other
+      chatsession_agent value.
   - name: subject_ref
     description: str, the chatsession_object_id - a course id, video transcript asset
       id, or edX module id depending on chatsession_agent.
