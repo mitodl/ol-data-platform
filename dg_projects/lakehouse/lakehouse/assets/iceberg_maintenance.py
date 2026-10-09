@@ -30,7 +30,8 @@ Two assets run on staggered nightly schedules:
     tables since they are not Trino analytics targets and Airbyte writes
     complete files per sync (no small-file accumulation).
 
-    Airbyte leaves one ``airbyte_staging_<uuid>`` branch behind per sync, and a
+    Airbyte leaves one ``airbyte_staging_<uuid>`` branch behind per sync, and
+    connector versions before 0.3.50 left a bare ``airbyte_staging`` one. A
     branch head never expires, so branches whose head is past the retention
     window are removed first. Expiry only rewrites table metadata: the files
     the expired snapshots referenced stay in S3.
