@@ -157,11 +157,14 @@ RAW_LAYER_GROUP_CONFIGS: dict[str, RawLayerGroupConfig] = {
 # Airbyte's S3 Data Lake destination writes each sync to a branch named
 # ``airbyte_staging_<uuid>`` and leaves the branch behind once ``main`` has been
 # moved. pyiceberg never expires the head of a branch, so each leftover branch
-# keeps one snapshot (and every file it references) for good. The bare
-# ``airbyte_staging`` branch is not matched: whether the connector writes to it
-# again after creating it has not been checked.
+# keeps one snapshot (and every file it references) for good.
+#
+# The bare ``airbyte_staging`` branch is what the connector wrote to before
+# 0.3.50 (airbytehq/airbyte#79112), which replaced it with the per-sync name.
+# Nothing from 0.3.50 on creates, writes or removes it, so a stale one is
+# removed like the others.
 AIRBYTE_STAGING_BRANCH = re.compile(
-    r"airbyte_staging_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12}"
+    r"airbyte_staging(?:_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12})?"
 )
 MAIN_BRANCH = "main"
 

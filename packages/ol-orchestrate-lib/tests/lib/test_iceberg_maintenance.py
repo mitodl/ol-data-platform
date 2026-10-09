@@ -577,7 +577,7 @@ class TestExpireSnapshots:
     def _table(self, catalog: SqlCatalog) -> Table:
         return catalog.load_table(f"{self.DATABASE}.{self.TABLE}")
 
-    def test_a_stale_staging_branch_goes_and_takes_its_snapshot_with_it(
+    def test_stale_staging_branches_go_and_take_their_snapshots_with_them(
         self, catalog: SqlCatalog
     ) -> None:
         before = [s.snapshot_id for s in self._table(catalog).snapshots()]
@@ -592,10 +592,9 @@ class TestExpireSnapshots:
 
         table = self._table(catalog)
         assert result["skipped"] is False
-        assert result["stale_branch_count"] == 1
-        assert set(table.metadata.refs) == {"main", "airbyte_staging"}
-        # The bare airbyte_staging head and main's head are all that is left.
-        assert [s.snapshot_id for s in table.snapshots()] == [before[1], before[3]]
+        assert result["stale_branch_count"] == 2
+        assert set(table.metadata.refs) == {"main"}
+        assert [s.snapshot_id for s in table.snapshots()] == [before[3]]
         assert result["eligible_count"] == len(before) - len(table.snapshots())
 
     def test_without_a_pattern_a_branch_head_is_neither_expired_nor_counted(
@@ -643,8 +642,8 @@ class TestExpireSnapshots:
         )
 
         assert result["dry_run"] is True
-        assert result["eligible_count"] == 2
-        assert result["stale_branch_count"] == 1
+        assert result["eligible_count"] == 3
+        assert result["stale_branch_count"] == 2
         assert self._table(catalog).metadata == before
 
     def test_a_table_that_cannot_be_loaded_raises(self, catalog: SqlCatalog) -> None:
@@ -708,16 +707,17 @@ class TestExpireSnapshots:
         "name",
         [
             "main",
-            "airbyte_staging",
+            "airbyte_staging_",
             "airbyte_staging_backup",
             "audit_2026",
             f"{STALE}_extra",
             f"{STALE}\n",
         ],
     )
-    def test_only_uuid_suffixed_staging_branches_match(self, name: str) -> None:
+    def test_only_airbyte_staging_branches_match(self, name: str) -> None:
         assert AIRBYTE_STAGING_BRANCH.fullmatch(name) is None
         assert AIRBYTE_STAGING_BRANCH.fullmatch(self.STALE)
+        assert AIRBYTE_STAGING_BRANCH.fullmatch("airbyte_staging")
 
     def test_a_current_snapshot_no_ref_points_at_is_kept(
         self, catalog: SqlCatalog
@@ -748,7 +748,8 @@ class TestExpireSnapshots:
         cutoff_ms = max(s.timestamp_ms for s in metadata.snapshots) + 1
 
         assert stale_branches(metadata, cutoff_ms, AIRBYTE_STAGING_BRANCH) == [
-            self.STALE
+            "airbyte_staging",
+            self.STALE,
         ]
 
 
