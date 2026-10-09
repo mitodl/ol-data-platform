@@ -92,6 +92,7 @@ select
         combined_users.user_address_country, combined_users2.user_address_country
     ) as user_address_country
     , coalesce(courses_detail.verified_courses_taken_in_program, 0) as verified_courses_taken_in_program
+    , coalesce(courses_detail.verified_courses_taken_in_program, 0) as courses_taken_in_program
     , coalesce(courses_detail.verified_courses_passed_in_program, 0) as verified_courses_passed_in_program
     , coalesce(courses_detail.all_courses_passed_in_program, 0) as all_courses_passed_in_program
     , coalesce(

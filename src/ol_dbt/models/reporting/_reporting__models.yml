@@ -1123,6 +1123,8 @@ models:
   - name: verified_courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
       the program
+  - name: courses_taken_in_program
+    description: int, compatibility alias for verified_courses_taken_in_program
   - name: verified_courses_passed_in_program
     description: int, count of distinct verified courses the user has passed within
       the program
