@@ -214,3 +214,14 @@ DATA_LAKE_ENV = resolve_for_environment(
 # both the manifest parse and the build without threading vars through
 # DbtProject. Read by _b2b_analytics__sources.yml.
 os.environ["DBT_DATA_LAKE_ENV"] = DATA_LAKE_ENV
+
+# dbt reads the columns a unit test fixture may name from the physical relation,
+# and for an incremental model's `this` fixture that relation is the deployed
+# table. A fixture naming a column the model has just gained fails to compile,
+# and so does any `this` fixture of a model that has never been built. Either
+# way dbt skips the model, which is the only thing that would create the table
+# or add the column, so the build cannot recover on its own.
+#
+# The builds that write a warehouse therefore leave unit tests out. They run in
+# PR CI on DuckDB (`ol-dbt unit-test`), which means nothing runs them on Trino.
+SKIP_UNIT_TESTS_ARGS = ["--exclude-resource-type", "unit_test"]
