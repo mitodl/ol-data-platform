@@ -103,6 +103,7 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_course", primary_key="id"),
         DatabaseTable(name="courses_course_departments", primary_key="id"),
         DatabaseTable(name="courses_courserun", primary_key="id"),
+        DatabaseTable(name="courses_courserun_enrollment_modes", primary_key="id"),
         DatabaseTable(name="courses_courseruncertificate", primary_key="id"),
         DatabaseTable(name="courses_courserunenrollment", primary_key="id"),
         DatabaseTable(name="courses_courserunenrollmentaudit", primary_key="id"),
@@ -110,6 +111,9 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_courserungradeaudit", primary_key="id"),
         DatabaseTable(name="courses_coursestopic", primary_key="id"),
         DatabaseTable(name="courses_department", primary_key="id"),
+        # The audit/verified modes a run or program offers. Learn prices and
+        # certifies a run from these, and a product does not stand in for them.
+        DatabaseTable(name="courses_enrollmentmode", primary_key="id"),
         DatabaseTable(
             name="courses_learnerprogramrecordshare", primary_key="share_uuid"
         ),
@@ -117,6 +121,7 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_partnerschool", primary_key="id"),
         DatabaseTable(name="courses_program", primary_key="id"),
         DatabaseTable(name="courses_program_departments", primary_key="id"),
+        DatabaseTable(name="courses_program_enrollment_modes", primary_key="id"),
         DatabaseTable(name="courses_programcertificate", primary_key="id"),
         DatabaseTable(name="courses_programenrollment", primary_key="id"),
         DatabaseTable(name="courses_programenrollmentaudit", primary_key="id"),
@@ -163,6 +168,10 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         ),
         DatabaseTable(name="users_user_b2b_contracts", primary_key="id"),
         DatabaseTable(name="users_userprofile", primary_key="id"),
+        # --- variants --------------------------------------------------------------
+        # Generic FK (content_type_id + object_id) onto a run or program. Learn
+        # unpublishes a run that matches a non-default supported variant.
+        DatabaseTable(name="variants_supportedvariant", primary_key="id"),
         # --- Wagtail core ----------------------------------------------------------
         DatabaseTable(name="wagtailcore_page", primary_key="id"),
         DatabaseTable(name="wagtailcore_revision", primary_key="id"),
