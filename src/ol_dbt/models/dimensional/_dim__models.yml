@@ -333,6 +333,10 @@ models:
     where we are able to see they are the same person.
   config:
     meta:
+      # Tier1 because it carries a data contract (contracts/dim_user.yaml).
+      openmetadata:
+        owner: data-platform
+        tier: Tier.Tier1
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
