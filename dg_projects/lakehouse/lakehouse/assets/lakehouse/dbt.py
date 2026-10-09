@@ -258,9 +258,9 @@ def full_dbt_project(
     build_invocation = dbt.cli(
         ["build", *_stale_descendant_test_args(context), *build_vars], context=context
     )
-    # stream() raises once dbt exits non-zero, so the upload has to sit in a
-    # finally: a build with a failing test is the one whose results OpenMetadata
-    # most needs, and it is exactly the one that never reaches the line below.
+    # stream() raises once dbt exits non-zero, so the upload has to happen on
+    # the failure path too: a build with a failing test is the one whose results
+    # OpenMetadata most needs, and it never reaches the line after the try.
     try:
         yield from (
             build_invocation.stream().fetch_column_metadata().fetch_row_counts()
@@ -272,8 +272,17 @@ def full_dbt_project(
             dbt_s3_artifacts.write_json_artifact(
                 SURROGATE_KEY_STATE_ARTIFACT, drift.current_state, context
             )
-    finally:
-        _upload_run_results(context, dbt_s3_artifacts, build_invocation)
+    except BaseException:
+        # The build's failure is the one the run has to report, so an upload
+        # that fails on top of it is logged and not raised in its place.
+        try:
+            _upload_run_results(context, dbt_s3_artifacts, build_invocation)
+        except Exception:
+            context.log.exception(
+                "Could not upload run_results.json for the failed dbt build"
+            )
+        raise
+    _upload_run_results(context, dbt_s3_artifacts, build_invocation)
 
 
 @op(description="Generate dbt docs artifacts and upload them to S3 for OpenMetadata.")

@@ -258,8 +258,27 @@ def test_run_results_are_uploaded_when_the_build_fails(dbt_asset_module):
         and "stream" in {name for _, name in _called_names(ast.Module(node.body, []))}
     ]
     assert guarded, "the build's stream must stay inside a try"
+    handlers = guarded[0].handlers
+    assert len(handlers) == 1
+    # BaseException, so a cancelled run uploads what it finished too.
+    assert isinstance(handlers[0].type, ast.Name)
+    assert handlers[0].type.id == "BaseException"
     assert "_upload_run_results" in {
-        name for _, name in _called_names(ast.Module(guarded[0].finalbody, []))
+        name for _, name in _called_names(ast.Module(handlers[0].body, []))
+    }
+    # The upload sits in its own try, so a failed upload cannot replace the
+    # build's error, and the handler ends by re-raising that error.
+    upload_guard = handlers[0].body[0]
+    assert isinstance(upload_guard, ast.Try)
+    assert upload_guard.handlers
+    last = handlers[0].body[-1]
+    assert isinstance(last, ast.Raise)
+    assert last.exc is None
+
+    # A successful build uploads after the try.
+    after = asset.body[asset.body.index(guarded[0]) + 1 :]
+    assert "_upload_run_results" in {
+        name for _, name in _called_names(ast.Module(after, []))
     }
 
 
