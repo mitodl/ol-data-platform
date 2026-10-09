@@ -2,8 +2,14 @@
     materialized='incremental',
     unique_key='feedback_pk',
     incremental_strategy='delete+insert',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook="delete from {{ this }} where feedback_pk not in (
+        select {{ dbt_utils.generate_surrogate_key(['source_slug', 'source_record_ref']) }}
+        from {{ ref('int__feedback__unioned') }}
+    )"
 ) }}
+-- The post_hook drops turns no longer upstream, which would otherwise keep a turn_index
+-- that a renumbered turn now holds.
 
 with unioned as (
     select
@@ -165,4 +171,7 @@ left join {{ this }} as existing
             or existing.content_block_fk is distinct from dim_course_content.content_block_pk
         )
     )
+    -- A turn not stored yet, or renumbered upstream: neither moves updated_at.
+    or existing.feedback_pk is null
+    or existing.turn_index is distinct from unioned.turn_index
 {% endif %}
