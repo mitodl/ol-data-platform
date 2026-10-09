@@ -31,10 +31,11 @@ select
     cc.organization_name,
     cc.courserun_readable_id,
     cc.courserun_title,
-    count(distinct lc.user_fk)                                                as total_enrolled_learners,
+    count(distinct case when lc.enrollment_is_active then lc.user_fk end)     as total_enrolled_learners,
     count(distinct case when lc.days_active > 0 then lc.user_fk end)          as engaged_learners,
     round(100.0 * count(distinct case when lc.days_active > 0 then lc.user_fk end)
-        / nullif(count(distinct lc.user_fk), 0), 1)                           as engagement_rate_pct,
+        / nullif(count(distinct case when lc.enrollment_is_active then lc.user_fk end), 0), 1
+    )                                                                         as engagement_rate_pct,
     sum(lc.videos_played)                                                     as total_videos_watched,
     count(distinct case when lc.videos_played > 0 then lc.user_fk end)        as video_watchers,
     round(
@@ -50,7 +51,8 @@ select
     sum(lc.chatbot_interactions)                                              as total_chatbot_interactions,
     count(distinct case when lc.chatbot_interactions > 0 then lc.user_fk end) as chatbot_users,
     round(100.0 * count(distinct case when lc.chatbot_interactions > 0 then lc.user_fk end)
-        / nullif(count(distinct lc.user_fk), 0), 1)                           as chatbot_adoption_pct,
+        / nullif(count(distinct case when lc.enrollment_is_active then lc.user_fk end), 0), 1
+    )                                                                         as chatbot_adoption_pct,
     sum(case when lc.is_certified then 1 else 0 end)                          as certificates_earned
 from learner_courseruns lc
 join contract_courseruns cc
