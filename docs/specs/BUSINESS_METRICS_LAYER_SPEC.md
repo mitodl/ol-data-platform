@@ -1,0 +1,471 @@
+# Business metrics layer: technical spec
+
+**Status:** Spec (draft)
+**Project:** `wp-business-metrics-consolidated-definitions-and-me-cdf8b8`
+**Decision record:** `tk-decide-the-metrics-layer-shape-and-where-metric--0de542` (closed 2026-10-05)
+**Repos:** ol-data-platform (definitions, registry, tooling), ol-analytics-api (consumer),
+ol-infrastructure (OpenMetadata)
+
+---
+
+## 1. Problem and goal
+
+The same business metric is computed in several places, with nothing keeping the copies
+in step. Some already disagree:
+
+- "Certified learners" is `certificate_count > 0` from the administration report in
+  `mv_b2b_monthly_engagement_trend`, and `certificate_is_revoked = false` from
+  `tfact_certificate` in `mv_b2b_enrollment_completion_funnel`.
+- Completion rate is over enrolled learners in `mv_b2b_enrollment_completion_funnel` and
+  over seats consumed in `mv_b2b_mit_admin_contract_health`.
+
+Others agree today only because they were copied by hand. The completion-status rule is
+written three times: twice in ol-analytics-api (`tenants/b2b_dashboard/learner_queries.py`,
+`tenants/b2b_learner_records/queries.py`) and once as the `courses_in_progress` predicate
+in `mv_b2b_learner.sql`. The needs-attention rule and its 30-day constant exist only in
+API Python.
+
+The discovery inventory (2026-10-05, recorded in the project's tasks listed in §7) also
+found four predicates for "certificate earned" across the dbt project, a different
+"passing" rule per platform, and 69 distinct ad hoc SQL metric expressions in Superset
+charts. OpenMetadata had no Metric or glossary entities when measured on the same day.
+
+Goal: each business metric has one definition, computed in dbt, that every consumer reads,
+and one registry entry that names it, describes it and points at the column that
+implements it.
+
+### Non-goals
+
+- No query-time semantic engine. MetricFlow and Cube were considered and rejected (§2).
+- No change to ol-analytics-api's tenant auth, consent handling or k-anonymity suppression.
+- No new data quality tooling. dbt tests and dbt unit tests cover verification.
+- The OpenMetadata governance model (teams, reviewers, domains) is decided in
+  `wp-openmetadata-governance-data-contracts-and-platf-7c77ee`, not here.
+
+---
+
+## 2. Decisions
+
+| Decision | Reason |
+| --- | --- |
+| Definitions are materialized dbt columns, not generated SQL | The consumers are a StarRocks-backed API, Superset on Trino and ad hoc SQL. Tables are the only thing all three share. |
+| Row-level rules live in the dimensional Iceberg layer | Trino builds it and StarRocks reads it through `source('dimensional', ...)`, so both engines see one value. |
+| Time-relative rules are published as a threshold date | A boolean computed at build time freezes "today" at the last refresh. The consumer compares the date against its own today. |
+| The registry is `metrics/*.yaml`, not dbt `semantic_models` / `metrics` | See below. |
+| Definitions are reviewed in the pull request; OpenMetadata displays the result | Git stays authoritative, the same as `contracts/`. |
+
+Why not dbt's metric YAML. Tested on dbt-core 1.12.5 with a one-metric project:
+`dbt parse` fails without a time spine model, fails unless every measure has an
+aggregation time dimension, and rejects metric names containing `__`. A metric YAML
+mistake is a parse error, which stops every dbt command. It cannot describe a metric
+implemented by a StarRocks view column. Read from the OpenMetadata 2.0.3 source (the
+version data.ol.mit.edu reports, tag `2.0.3-release`), not tested: its dbt ingestion sends
+each metric as a single create-or-update PUT (`metadata_rest.py`, `CreateMetricRequest` in
+`write_create_request`) and the server keeps an existing non-empty description on a bot
+PUT (`EntityRepository.updateDescription`), so a description changed in git would not
+reach OpenMetadata after the first ingest.
+
+Why not MetricFlow with a StarRocks renderer. The renderer is a small patch (the Trino one
+in metricflow 0.213.0 is 157 lines) but open-source MetricFlow is a CLI and library. We
+would still have to embed it in the API to generate SQL per request and find a separate
+route for Superset.
+
+---
+
+## 3. Shape
+
+```
+staging / intermediate
+        |
+dimensional (Iceberg, built by Trino)
+  tfact_*, dim_*, bridge_*           existing facts
+  afact_learner_courserun_progress   NEW: row-level outcome rules as columns
+        |
+        +-- Trino / Superset / marts read the columns directly
+        |
+        +-- StarRocks views (b2b_analytics, b2b_learner_records) select the columns
+                |
+                +-- ol-analytics-api reads the views, restates no rule
+
+metrics/*.yaml  --validate (PR CI)-->  project YAML and SQL
+                --sync (post-build)-->  OpenMetadata Metric + lineage
+```
+
+Three kinds of definition, and where each goes:
+
+- Row-level rule (a status or flag on one entity): a column on a dimensional model.
+- Aggregate (a count or rate at some grain): a dbt model or StarRocks view that aggregates
+  the row-level columns. It may filter its population (e.g. active enrollments only) but
+  does not restate an outcome rule.
+- Time-relative rule: a threshold date column, named `<rule>_since`.
+
+---
+
+## 4. Phase 1: learner course-run progress
+
+This phase needs no registry and no OpenMetadata work.
+
+### 4.1 New model `afact_learner_courserun_progress`
+
+Location `src/ol_dbt/models/dimensional/`. Grain: one row per (user, course run).
+
+Sources: `tfact_enrollment`, `tfact_grade`, `tfact_certificate`,
+`afact_learner_courserun_daily_activity`, `dim_date`.
+
+Population: `tfact_enrollment` rows with `enrollment_type = 'course'` and non-null
+`user_fk` and `courserun_fk`. The fact's own grain is one row per enrollment, tested
+unique on (enrollment_id, platform, enrollment_type), and both foreign keys are nullable,
+so the model picks one enrollment per (user, course run): the active one first, then the
+latest `enrollment_created_on`, then the highest `enrollment_id`.
+
+Measured on production `tfact_enrollment` on 2026-10-06: 267 (user, course run) pairs have
+more than one course enrollment, out of about 15.8 million, and all 267 are on xPRO. They
+are refund, deferral and transfer histories (233 are a refunded enrollment followed by a
+new active one). No pair has two active enrollments; 241 have one and 26 have none. The
+active one is the newest in 240 of the 241, which is why "active first" comes before
+"latest". 239 of the pairs have a grade and 220 a certificate, so the pick decides which
+enrollment a real outcome is reported against.
+
+The key filters drop 129,940 of 196,646 residential course enrollments and 7,097 MITx
+Online ones that have no `courserun_fk`, and about 3,100 rows with no `user_fk`.
+
+Certificates: `tfact_certificate` can hold more than one course certificate per (user,
+course run). Measured on production on 2026-10-06: 11 pairs, 10 with an edX.org row and a
+MicroMasters copy of it left behind by incremental runs, and 1 MITx Online pair with two
+live certificates. ol-data-platform#2864 adds `is_current` to the fact, true for one
+certificate per (user, course run, scope): the unrevoked one, then the latest issued, then
+the highest id. The model joins on `certificate_scope = 'course' and is_current` and does
+not reduce the fact again, so #2864 merges before the model.
+
+| Column | Definition |
+| --- | --- |
+| `user_fk`, `courserun_fk`, `platform` | Keys, from `tfact_enrollment`. |
+| `enrollment_created_on`, `enrollment_updated_on`, `enrollment_is_active`, `enrollment_mode`, `enrollment_status` | Carried from `tfact_enrollment`. |
+| `is_passing`, `grade_value`, `letter_grade`, `grade_updated_on` | Carried from `tfact_grade`. |
+| `certificate_is_revoked`, `certificate_issued_on`, `certificate_updated_on` | Carried from the current course certificate in `tfact_certificate`, revoked or not. `certificate_is_revoked` stays three-valued: null means no certificate. |
+| `is_certified` | `coalesce(certificate_is_revoked = false, false)`. Never null. |
+| `last_active_on` | DATE of the latest row in `afact_learner_courserun_daily_activity`, as that fact buckets days (see 4.2). |
+| `completion_status` | `certified` when `is_certified`; else `passed` when `is_passing`; else `in_progress` when `grade_value > 0` or `last_active_on` is not null; else `not_started`. |
+| `is_in_progress`, `is_not_started` | `completion_status` equals that value. Never null. |
+| `needs_attention_since` | DATE. See 4.2. |
+
+`completion_status` is the API's current `_COMPLETION_STATUS` CASE unchanged, including
+that an unrevoked certificate is `certified` without requiring `is_passing`
+(ol-data-platform#2669) and that `in_progress` needs a nonzero grade or tracked activity
+(ol-data-platform#2693).
+
+There is no `is_passed` flag. `is_passing` (the grade's own flag, true for certified
+learners too) is what `courses_passed` and `passing_learners` count today, and a second
+flag meaning "passing and not certified" would invite using the wrong one. The `passed`
+status bucket is `completion_status = 'passed'`.
+
+Platform scope: the model covers every platform in `tfact_enrollment`, with one rule for
+all of them. The rule was written for MITx Online B2B and its inputs are weaker elsewhere.
+The model's YAML description states these gaps:
+
+| Platform | Grades | Certificates | Activity | Reachable statuses |
+| --- | --- | --- | --- | --- |
+| mitxonline, mitxpro | yes | yes | yes | all four |
+| edxorg | yes | yes, never marked revoked | yes | all four |
+| residential | no | no | yes | `in_progress`, `not_started` |
+| bootcamps | no | yes | no | `certified`, `not_started` |
+
+Every uncertified bootcamps enrollment is therefore `not_started` and gets a
+`needs_attention_since`. The gaps are closed in the inputs by the passing and certificate
+tasks in §7, not by platform branches in this model.
+
+Access: the model keeps the `dimensional` layer's grants. Its inputs (enrollments, grades,
+certificates, `dim_user`) are already readable by those roles, so it exposes no new source
+data, only the derived status and needs-attention date. Consent is not applied in the
+dimensional layer. It is applied where the model is joined to consent for a consumer: the
+mart, reporting and integration layers. The B2B path already works this way: the StarRocks
+views join consent and emit `outcomes_shared`, and the API withholds outcomes on it. A new
+consumer-facing model built on this one must carry or apply consent itself.
+
+Tests: `unique_combination_of_columns` on (user_fk, courserun_fk), `not_null` on both,
+`accepted_values` on `completion_status`, and dbt unit tests (run by `ol-dbt unit-test`)
+covering each status branch, a revoked certificate with and without a passing grade, each
+row of the `needs_attention_since` table, and the enrollment pick (a refunded enrollment
+followed by an active one, an older active one with a newer refunded one, and none active).
+
+### 4.2 `needs_attention_since`
+
+The rule is the one in ol-analytics-api PR #87: a learner needs attention if they never
+started, or if they are in progress and their last recorded activity was at least N days
+ago. A learner who is currently `passed` or `certified` never needs attention, because
+going quiet after finishing is expected. (API `main` applies staleness to every status;
+that version is not carried over.)
+
+| `completion_status` | `needs_attention_since` |
+| --- | --- |
+| `not_started` | enrollment date, or `1970-01-01` when the enrollment has no created date |
+| `in_progress` with a `last_active_on` | `last_active_on` + N days |
+| `in_progress` with a grade but no tracked activity | null |
+| `passed`, `certified` | null |
+
+The consumer's predicate is `coalesce(needs_attention_since <= <today>, false)`. N is a dbt
+var, `needs_attention_quiet_days`, default 30, replacing `NEEDS_ATTENTION_QUIET_DAYS`.
+
+"Today" is the current UTC date. The consumer asks for the UTC date explicitly and does
+not rely on the session timezone. The StarRocks Helm values in ol-infrastructure set
+`timeZone: UTC`, so this matches the API's current `CURRENT_DATE()` as long as the running
+clusters carry that setting, which has not been checked on the live clusters.
+
+The input days are not converted to UTC. The enrollment day is `enrollment_date_key` and
+`last_active_on` is the latest `activity_date_key`, both read through `dim_date` as the
+facts wrote them. The activity fact takes its day from the event timestamp with the offset
+dropped, not shifted, so an event near midnight in a non-UTC source can land a day away
+from its UTC date and move the threshold by one day.
+
+#87 flags `not_started` unconditionally. The fallback date keeps that true when
+`enrollment_created_on` is null, which the fact allows.
+
+The column follows the row's current status, as #87 does. A learner whose certificate is
+revoked and who is not passing is `in_progress` again on the next build and gets a
+threshold date again.
+
+### 4.3 StarRocks views
+
+No existing view column is removed or changes definition. The change adds columns and
+moves where the inputs are read from.
+
+- Add `afact_learner_courserun_progress` to the `dimensional` source in
+  `b2b_analytics/_b2b_analytics__sources.yml`.
+- `mv_b2b_learner_enrollment` replaces its `tfact_enrollment`, `tfact_grade`,
+  `tfact_certificate` and last-active joins with one join to the progress model. It keeps
+  every column it has today, including `certificate_is_revoked` and `certificate_issued_on`,
+  which the API publishes, and adds `completion_status`, `is_certified`, `is_in_progress`,
+  `is_not_started` and `needs_attention_since`.
+- `record_updated_on` stays computed in the view, from the model's enrollment, grade and
+  certificate timestamps plus `consent_modified_at`. It is the API's `updated_since`
+  cursor, and consent is at the view's (learner, contract) grain, not the model's.
+- The engagement counters (`days_active`, `videos_played`, ...) stay on the activity fact
+  until the engagement task consolidates them.
+- `mv_b2b_learner` reads the same model. Both views read Iceberg, so the name-order refresh
+  constraint that stops one view selecting from the other does not apply. Its counters keep
+  their current meaning: `courses_passed` counts `is_passing`, `courses_certified` counts
+  `is_certified`, and `courses_in_progress` counts `enrollment_is_active and is_in_progress`.
+- `mv_b2b_enrollment_completion_funnel` moves `passing_learners` to `is_passing` and
+  `certified_learners` to `is_certified` in the same change. The views that take certified
+  counts from the administration report move with the engagement task, since that is where
+  their numbers change.
+
+Build order: the views read the new table through the Iceberg source, and adding view
+columns makes the Dagster asset escalate the StarRocks build to `--full-refresh`, which
+recreates the views (`dbt_project.yml`, `b2b_analytics` block). The Trino build of the
+progress model must therefore have run in a lake before the view change reaches the
+StarRocks build that reads that lake. That holds for QA as well as production, because the
+`ci` environment reads the QA lake. Ship the model in one pull request and the view change
+in a second, merged after the model exists in both lakes.
+
+### 4.4 ol-analytics-api
+
+After the views are rebuilt in production:
+
+- Delete both `_COMPLETION_STATUS` definitions and select the column.
+- `_needs_attention(cutoff)` becomes `COALESCE(needs_attention_since <= <cutoff>, FALSE)`.
+  `NEEDS_ATTENTION_QUIET_DAYS` and the `DATE_SUB` in `NEEDS_ATTENTION_CUTOFF_QUERY` are
+  removed; the query resolves the current UTC date only, still once per request.
+- `_recomputed_learners` keeps its shape and its `include_inactive` / `contract_id`
+  filters, and counts the flags in place of the status CASE.
+
+The API must deploy after the view build, or its SELECT fails on an unknown column. The
+view change only adds columns, so the old API keeps working against the new views.
+
+### 4.5 Verification
+
+- Before switching the views: on QA StarRocks, compare `completion_status` from the new
+  model against the API's CASE evaluated over the current `mv_b2b_learner_enrollment`, row
+  by row on (user, course run). Any difference blocks the change until explained.
+- For the counters: before the view change deploys, copy `mv_b2b_learner` and
+  `mv_b2b_enrollment_completion_funnel` to scratch tables on QA StarRocks, then compare
+  the rebuilt views to the copies with SQL. `ol-dbt diff` runs on DuckDB, where these
+  models are disabled, so it does not apply here.
+- The API's `test_needs_attention_boundary_is_computed_from_real_rows` is rewritten against
+  the new column and must still pin the 30th day as included.
+
+---
+
+## 5. Phase 2: metric registry and PR validation
+
+### 5.1 File format
+
+One file per metric under `metrics/`, mirroring `contracts/`:
+
+```yaml
+metric:                         # OpenMetadata CreateMetric body
+  name: learner_completion_status
+  displayName: Course completion status
+  description: >
+    Where a learner stands in a course run: certified, passed, in_progress or not_started.
+  metricType: OTHER
+  owners: [{type: team, name: <team>}]        # names come from the governance decision
+  reviewers: [{type: team, name: <team>}]
+  tags:
+    - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
+status: Approved                # entityStatus; applied by PATCH, not part of CreateMetric
+implemented_by:
+  - dbt_model: afact_learner_courserun_progress
+    columns: [completion_status]
+  - dbt_model: mv_b2b_learner_enrollment
+    columns: [completion_status]
+```
+
+- `metric` uses OpenMetadata's field names so the file needs no translation layer.
+  `metricType`, `unitOfMeasurement` and `granularity` take OpenMetadata's enum values.
+- `owners` and `reviewers` are `{type: team | user, name: ...}`. CreateMetric takes an id,
+  which only exists in the live catalog, so sync resolves the name.
+- CreateMetric has no glossary field. A glossary term is a `tags` entry with
+  `source: Glossary`.
+- `implemented_by` is ours. Each entry is a `dbt_model` (or `fqn` for an entity dbt does
+  not build) and the columns that carry the metric. The first entry is the defining
+  implementation; later entries are places it is served from.
+- `metricExpression` is optional and is documentation only. The column is the definition.
+
+### 5.2 Naming
+
+OpenMetadata's Metric fully qualified name is the bare name, so names are global. Names are
+`<subject>_<measure>` in snake case with no double underscore, e.g.
+`learner_completion_status`, `contract_seats_used`, `learner_needs_attention_since`. The
+file is named after the metric.
+
+### 5.3 `ol-dbt validate --only metric_registry`
+
+Built in ol-data-platform#2851: `ol_dbt_cli/lib/metric_registry.py` beside
+`data_contracts.py`, reusing its binding parser, run in the global-gates step of
+`dbt_pr_ci.yaml` and skipped in the changed-models step. `metrics/**` is in that
+workflow's path filter. It needs no credentials and no network. Errors:
+
+- an `implemented_by` model does not exist in the project, or a listed column is not
+  declared in the model's YAML or not selected by its SQL;
+- two files declare the same metric name, a name breaks the convention, or the file is not
+  named after its metric;
+- `metric` sets a field CreateMetric does not have, or one sync owns (`id`,
+  `fullyQualifiedName`);
+- a value in `metric`, or `status`, does not fit the server's schema (a wrong type, a value
+  outside an enum, a nested object missing a required key).
+
+The schema is not hand-written. `lib/openmetadata_metric_schema.json` is a committed
+snapshot of CreateMetric cut from the server's published OpenAPI document, stamped with the
+server version it was read from (2.0.3 today). `ol-dbt metrics refresh-schema --server-url
+<url>` rewrites it after an OpenMetadata upgrade. It is committed instead of fetched in CI
+so a PR check does not depend on the catalog being reachable, and so an upgrade changes
+what a metric file may contain in a reviewed commit.
+
+Bindings are resolved against the project's model YAML and SQL files, not against manifest
+nodes. PR CI parses with the DuckDB target, where `b2b_analytics` and
+`b2b_learner_records` are disabled, so a manifest lookup would reject every binding to a
+StarRocks view.
+
+### 5.4 First entries
+
+The five metrics with competing definitions today: completion status, certified learners,
+completion rate, monthly active learners, seats used. The first two are implemented by
+phase 1. The others get a registry entry when their consolidation task lands, not before:
+an entry must point at a column that exists.
+
+---
+
+## 6. Phase 3: sync to OpenMetadata
+
+Blocked on the governance decision for team and reviewer names
+(`tk-decide-the-openmetadata-governance-model-and-whe-14f5a6`).
+
+`ol-dbt metrics sync --service <name> [--dry-run]`, reusing `OpenMetadataClient` from
+`commands/contracts.py` (extracted to `lib/` on this second use). For each file:
+
+Before the first file, sync compares the server's version (`/v1/system/version`) with the
+one stamped in the schema snapshot and stops when they differ: the files were validated
+against a schema the server no longer publishes, and `refresh-schema` comes first.
+
+1. Resolve owner and reviewer names to ids, and check each glossary `tagFQN` exists.
+2. `GET /v1/metrics/name/{name}` and run the drift check below on what comes back. Nothing
+   has been written at this point.
+3. `PUT /v1/metrics` with the `metric` body. This creates the entity or updates its
+   structural fields.
+4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status. A bot PUT does
+   not overwrite an existing description, so git wins only through PATCH.
+5. For each `implemented_by` entry, resolve the table from a production manifest and
+   `PUT /v1/lineage` with a table-to-metric edge, with no column lineage.
+
+Drift: step 2 reads the live entity's `updatedBy`. If the last change was not made by the
+sync's bot and description, reviewers or status differ from the file, report the
+difference and exit non-zero without writing, unless `--force`. The edit then becomes a
+pull request. This needs no stored state. The check has to precede the PUT: a PUT that
+changes a structural field (e.g. `metricType`) records the bot as `updatedBy` while the
+server keeps the human-edited description, and a check made afterwards would see the bot
+and let the PATCH overwrite it.
+
+Column lineage: OpenMetadata 2.0.3 stores none for a Metric. `LineageRepository`
+returns no child names for one ("Metric column level lineage is not supported") and
+`validateLineageDetails` drops every column mapping whose target is not a child name, so
+the request succeeds and the columns are discarded. The column binding stays in the
+registry file, which is where a reader finds which column carries the metric.
+
+Where it runs: `ol-dbt contracts sync` has no scheduled caller in this repo today. Both
+syncs should run from the same place after the production dbt build. Choosing that place
+(a Dagster asset in the lakehouse code location vs. a Concourse step) belongs to the
+governance project's config-as-code decision.
+
+Not covered: lineage to StarRocks views. OpenMetadata has no StarRocks service, so an
+`implemented_by` entry naming a view is checked in CI but skipped by sync, with a warning,
+until that service exists.
+
+---
+
+## 7. Phase 4: per-metric consolidation
+
+Each is an existing task. Each follows the phase 1 pattern: define the row-level columns
+once, move aggregates onto them, add the registry entry, compare before and after, tell
+the dashboard owners which numbers change.
+
+| Metric area | Task |
+| --- | --- |
+| Certificates: four "earned" predicates, two revoked conventions | `tk-course-certificate-earned-four-predicates-and-tw-6badf1` |
+| Engagement and "active": one activity fact | `tk-engagement-metrics-one-activity-fact-as-the-sour-9491c3` |
+| Passing rule per platform | `tk-passing-has-a-different-rule-per-platform-and-tf-ffcbcd` |
+| Enrollment populations and counts | `tk-enrollment-metrics-population-differs-between-tf-a15f8b` |
+| Program completion | `tk-program-completion-certificate-url-rule-vs-edx-r-a485f6` |
+| Commerce and net revenue | `tk-commerce-metrics-discount-amount-type-which-orde-154836` |
+| Superset chart expressions | `tk-move-the-69-distinct-ad-hoc-sql-metric-expressio-f03265` |
+
+The certificate and passing tasks change inputs of `afact_learner_courserun_progress`.
+Phase 1 ships with today's inputs; those tasks then change `is_certified` and `is_passing`
+in one place.
+
+Cohort metadata for the API's k-anonymity policy (column `meta` on `b2b_analytics` plus a
+dbt exposure per API tenant) is `tk-carry-the-api-s-cohort-policy-and-column-contrac-2aa49d`.
+It is independent of the registry: it describes how columns relate for suppression, and
+the API's CI reads it from the manifest.
+
+---
+
+## 8. Order and dependencies
+
+1. Phase 1 dbt model (ol-data-platform), built by Trino in QA and production.
+2. Phase 1 view change (ol-data-platform). After 1 exists in both lakes.
+3. Phase 1 API change (ol-analytics-api). After 2 is built in production.
+4. Phase 2 registry format and CI check. Independent of 1 to 3, but its first entries need
+   1 and 2.
+5. Phase 3 sync. After 4 and the governance decision.
+6. Phase 4 tasks. Any order after 1; each adds registry entries once 4 exists.
+
+---
+
+## 9. Open questions and unverified points
+
+Nothing here blocks phase 1.
+
+- Order against API PRs #87 and #89, both open: either they merge first and the API change
+  in 4.4 replaces the merged rule with the column, or they are rebased onto the column.
+  The rule is the same either way. Needs the PR author. #89's distinct-learner count stays
+  in the API as a distinct count over `needs_attention_since <= <cutoff>`.
+- Whether Dagster orders the StarRocks build after the Trino build of a newly added
+  dimensional model has not been traced. 4.3 avoids depending on it by splitting the pull
+  requests.
+- Materialization: table vs. incremental for the progress model. Start as a table and
+  measure the build.
+- Reviewers on re-sync: whether a bot PUT clears reviewers set in the OpenMetadata UI is
+  not verified. Test on QA before writing the drift check.
+- Creating a Metric with reviewers may start OpenMetadata's approval workflow and set the
+  status itself. Not verified; affects step 3 of sync.
