@@ -98,11 +98,19 @@ models:
       +schema: staging
       +grants:
         select: ["read_only_production", "ol_data_analyst", "reverse_etl"]
+      +meta:
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier4
     migration:
       +materialized: table
       +schema: migration
       +grants:
         select: ["read_only_production", "ol_data_analyst", "reverse_etl"]
+      +meta:
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier5
     dimensional:
       +materialized: table
       +schema: dimensional
@@ -113,6 +121,9 @@ models:
       # 14-day snapshot retention provides a time-travel window for point-in-time
       # queries and safe re-runs across two weekly optimize cycles.
       +meta:
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier2
         iceberg_maintenance:
           snapshot_retention_days: 14
           optimize_after_every_n_runs: 1
@@ -123,6 +134,10 @@ models:
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
           "ol_business_analyst", "reverse_etl"]
+      +meta:
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier3
     marts:
       +materialized: table
       +schema: mart
@@ -131,6 +146,9 @@ models:
           'ol_business_analyst', 'reverse_etl', 'finance']
       # 14-day retention so mart snapshots survive a missed nightly run.
       +meta:
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier2
         iceberg_maintenance:
           snapshot_retention_days: 14
           optimize_after_every_n_runs: 1
@@ -141,6 +159,10 @@ models:
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
           "ol_business_analyst", "reverse_etl"]
+      +meta:
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier2
     integrations:
       +materialized: table
       +schema: integrations
@@ -215,12 +237,29 @@ models:
       # CREATE TABLE AS already writes statistics.
       +meta:
         required_docs: true
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier4
         iceberg_maintenance:
           enabled: false
     +properties:
       format: "'PARQUET'"
     +meta:
       required_docs: true
+      # Owner and criticality tier in OpenMetadata, applied by the nightly
+      # om-ingest-dbt job (ol-infrastructure substructure/open_metadata).
+      # `owner` is an OpenMetadata user or Group-type team name; any other
+      # name is skipped with a warning. A tier set here replaces one set in the
+      # OpenMetadata UI on the next run. Tiers by layer: Tier2 dimensional,
+      # marts and reporting, Tier3 intermediate, Tier4 staging and external,
+      # Tier5 migration. Tier1 is set per model, on the models that carry a
+      # data contract (see /contracts). Layers with no tier decided
+      # (integrations, b2b_*) inherit only the owner.
+      #
+      # Like iceberg_maintenance below, an override replaces the whole
+      # `openmetadata` dict, so it must repeat `owner`.
+      openmetadata:
+        owner: data-platform
       # Iceberg maintenance config -- inherited by all models, overrideable per
       # folder (see dimensional/marts above) or per-model in schema YAML files.
       # dbt compiles these defaults into each model's manifest node at build
@@ -251,6 +290,9 @@ snapshots:
       format: "'PARQUET'"
     +meta:
       required_docs: true
+      # See models above. No tier is decided for snapshots.
+      openmetadata:
+        owner: data-platform
     # History of raw tables, one snapshot per table (macro raw_history_snapshot).
     raw_history:
       +schema: history
