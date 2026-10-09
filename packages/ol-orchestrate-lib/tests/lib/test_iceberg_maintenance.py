@@ -597,6 +597,25 @@ class TestExpireSnapshots:
         assert [s.snapshot_id for s in table.snapshots()] == [before[3]]
         assert result["eligible_count"] == len(before) - len(table.snapshots())
 
+    def test_a_branch_the_pattern_does_not_match_keeps_its_head(
+        self, catalog: SqlCatalog
+    ) -> None:
+        table = self._table(catalog)
+        before = [s.snapshot_id for s in table.snapshots()]
+        table.manage_snapshots().create_branch(before[2], "audit_2026").commit()
+
+        expire_snapshots(
+            catalog,
+            self.DATABASE,
+            self.TABLE,
+            retention_days=0,
+            stale_branch_pattern=AIRBYTE_STAGING_BRANCH,
+        )
+
+        table = self._table(catalog)
+        assert set(table.metadata.refs) == {"main", "audit_2026"}
+        assert [s.snapshot_id for s in table.snapshots()] == [before[2], before[3]]
+
     def test_without_a_pattern_a_branch_head_is_neither_expired_nor_counted(
         self, catalog: SqlCatalog
     ) -> None:
@@ -627,7 +646,9 @@ class TestExpireSnapshots:
 
         assert result["skipped"] is True
         assert result["reason"] == "no eligible snapshots"
-        assert self.STALE in self._table(catalog).metadata.refs
+        assert {self.STALE, "airbyte_staging"} <= set(
+            self._table(catalog).metadata.refs
+        )
 
     def test_a_dry_run_reports_and_changes_nothing(self, catalog: SqlCatalog) -> None:
         before = self._table(catalog).metadata
