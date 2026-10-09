@@ -63,10 +63,12 @@ DBT_TARGET_MAP: Mapping[str, str] = {
 # StarRocks. These name a CLUSTER and its auth, not a data lake: dev and qa
 # share starrocks_qa_vault because a developer port-forwards to the QA cluster.
 # Which catalog each then reads is DATA_LAKE_ENV_MAP's job, not this map's.
-# `dev` is a placeholder for the planned local environment (RFC 12711
-# Local-2/3/4); until that exists it resolves exactly like `qa` here and in
-# DATA_LAKE_ENV_MAP.
-# Matches the dbt_target choices in ol_dbt_cli/commands/starrocks.py's _ENVS.
+# `dev` is a placeholder for the local environment (RFC 12711 Local-2/3/4) and
+# resolves exactly like `qa` here and in DATA_LAKE_ENV_MAP. The CLI has moved:
+# `ol-dbt starrocks --env dev` builds on the local lake (starrocks_local). This
+# side follows once StarRocksResource can connect without Vault.
+# Otherwise matches the dbt_target choices in ol_dbt_cli/commands/starrocks.py's
+# _ENVS.
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "starrocks_qa_vault",
     # ci connects directly to its own FE service (no port-forward), same
@@ -150,6 +152,8 @@ DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 
 # Which lake each StarRocks environment READS. Mirrors the `data_lake_env`
 # entries in _ENVS in ol_dbt_cli/commands/starrocks.py; keep the two in step.
+# `dev` is the exception for now: the CLI's reads the local lake (see
+# STARROCKS_DBT_TARGET_MAP above).
 #
 # Matches trino_catalog_map in definitions.py for every environment except
 # `dev`, deliberately. Trino `dev` still reads production through the

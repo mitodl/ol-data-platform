@@ -21,6 +21,9 @@ Workflow::
     # Pass dbt flags through
     ol-dbt starrocks run --full-refresh --select my_model+
 
+    # The local lake in the ol-infrastructure local-dev cluster: no Vault
+    ol-dbt starrocks run --env dev --select +integrations__learn__oll_courses
+
 dbt ``profiles.yml`` must reference the env vars this command injects::
 
     starrocks:
@@ -74,25 +77,27 @@ _VAULT_MOUNT = "database-starrocks"
 # Mirrors STARROCKS_DBT_TARGET_MAP / DATA_LAKE_ENV_MAP in
 # lakehouse.lib.dbt_environment; keep the two in step.
 _ENVS: dict[str, dict[str, Any]] = {
-    # `dev` belongs to the local environment planned in RFC 12711's Local-2/3/4
-    # (k3d, its own object store and catalog), which does not exist yet. Until
-    # it does, `dev` is the QA cluster reading the QA lake, same as `qa`. It
-    # used to read the production lake through the QA cluster, which stopped
-    # working once the QA cluster lost production lake access (Glue deny from
-    # ol-infrastructure#5472/#5670, then #6023 dropped its production policy
-    # and catalog). Repointing at the production cluster instead would have
-    # developer builds writing into it.
-    # Matches DATA_LAKE_ENV_MAP["dev"] so `ol-dbt starrocks --env dev` and a
-    # bare `dagster dev` resolve identically.
+    # `dev` is the local lake from ol-infrastructure's local-dev stack
+    # (`data-platform` in enabled_apps): StarRocks in k3d, with the
+    # ol_data_lake_local catalog on Gravitino and RustFS. It has no Vault
+    # (`vault_addr: None`): the local StarRocks takes a passwordless root, which
+    # the starrocks_local profile names itself. Tilt keeps 127.0.0.1:9030
+    # forwarded, so no port-forward is started here unless --port-forward asks
+    # for one.
+    # The Dagster side has not moved yet: STARROCKS_DBT_TARGET_MAP["dev"] and
+    # DATA_LAKE_ENV_MAP["dev"] in lakehouse.lib.dbt_environment still name the
+    # QA cluster, so a bare `dagster dev` and `--env dev` here disagree until
+    # the StarRocks resource there can connect without Vault.
     "dev": {
-        "host": "lakehouse.qa.starrocks.ol.mit.edu",
-        "eks_context": "data-qa",
-        "k8s_namespace": "starrocks",
-        "fe_service": "lakehouse-starrocks-fe-service",
-        "vault_addr": "https://vault-qa.odl.mit.edu",
-        "vault_mount": _VAULT_MOUNT,
-        "dbt_target": "starrocks_qa_vault",
-        "data_lake_env": "qa",
+        "host": "127.0.0.1",
+        "eks_context": "k3d-local-dev",
+        "k8s_namespace": "local-infra",
+        "fe_service": "starrocks",
+        "vault_addr": None,
+        "vault_mount": None,
+        "dbt_target": "starrocks_local",
+        "data_lake_env": "local",
+        "port_forward": False,
     },
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
@@ -208,8 +213,8 @@ def run(  # noqa: PLR0913
         str,
         Parameter(
             name=["--env", "-e"],
-            help="Target StarRocks environment (dev, qa, production, ci). `dev` is reserved "
-            "for the planned local environment and is the same as `qa` until it exists.",
+            help="Target StarRocks environment (dev, qa, production, ci). `dev` is the local "
+            "lake in the ol-infrastructure local-dev cluster and needs no Vault login.",
         ),
     ] = "qa",
     vault_role: Annotated[
@@ -228,7 +233,8 @@ def run(  # noqa: PLR0913
         bool | None,
         Parameter(
             name="--port-forward",
-            help="Tunnel StarRocks MySQL port via kubectl port-forward (default: true; false for ci).",
+            help="Tunnel StarRocks MySQL port via kubectl port-forward (default: true; false for ci, "
+            "and for dev, where Tilt already forwards it).",
         ),
     ] = None,
     target: Annotated[
@@ -283,29 +289,31 @@ def run(  # noqa: PLR0913
     # inferable from the env name (`ci` is the CI cluster on the QA lake),
     # and "you cannot tell which mode you are in" is the specific failure this
     # separation exists to fix -- so say it, every run.
+    uses_vault = env_cfg["vault_addr"] is not None
     console.print(
         f"[bold]ol-dbt starrocks[/] — env: [cyan]{env}[/], "
         f"cluster: [cyan]{env_cfg['host']}[/], "
         f"reading: [cyan]ol_data_lake_{env_cfg['data_lake_env']}[/], "
-        f"role: [cyan]{vault_role}[/], "
+        f"role: [cyan]{vault_role if uses_vault else 'root (no Vault)'}[/], "
         f"port-forward: [cyan]{port_forward}[/]"
     )
 
-    console.print(f"[dim]Fetching Vault credentials ({env_cfg['vault_mount']}/creds/{vault_role})...[/]")
-    username, password = fetch_vault_db_credentials(
-        env_cfg["vault_addr"], env_cfg["vault_mount"], env, vault_role, vault_oidc_role
-    )
-    console.print(f"[dim]Vault user:[/] {username}")
+    if uses_vault:
+        console.print(f"[dim]Fetching Vault credentials ({env_cfg['vault_mount']}/creds/{vault_role})...[/]")
+        username, password = fetch_vault_db_credentials(
+            env_cfg["vault_addr"], env_cfg["vault_mount"], env, vault_role, vault_oidc_role
+        )
+        console.print(f"[dim]Vault user:[/] {username}")
+        # Inject credentials into the current process environment so that the dbt
+        # subprocess launched by _dbt_run() inherits them automatically.
+        # Use the DBT_STARROCKS_* names that profiles.yml already references.
+        os.environ["DBT_STARROCKS_USERNAME"] = username
+        os.environ["DBT_STARROCKS_PASSWORD"] = password
 
     host = "127.0.0.1" if port_forward else env_cfg["host"]
     if port_forward:
         _start_port_forward(env_cfg)
 
-    # Inject credentials into the current process environment so that the dbt
-    # subprocess launched by _dbt_run() inherits them automatically.
-    # Use the DBT_STARROCKS_* names that profiles.yml already references.
-    os.environ["DBT_STARROCKS_USERNAME"] = username
-    os.environ["DBT_STARROCKS_PASSWORD"] = password
     os.environ["DBT_STARROCKS_HOST"] = host
     # Read by _b2b_analytics__sources.yml's env_var() to pick the external
     # catalog. Set from --env even when --target overrides the cluster, so

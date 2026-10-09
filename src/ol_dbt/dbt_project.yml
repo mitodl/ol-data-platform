@@ -40,6 +40,7 @@ vars:
   iceberg_schema_location_roots:
     ol_data_lake_qa: "s3://ol-data-lake-staging-qa/processed"
     ol_data_lake_production: "s3://ol-data-lake-staging-production/processed"
+    ol_data_lake_local: "s3://ol-data-lake-local/warehouse"
 
   open_learning:
     platforms: ["Bootcamps", "xPro", "xPRO Emeritus", "xPRO Global Alumni", "MITx\
