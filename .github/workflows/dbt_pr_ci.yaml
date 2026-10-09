@@ -89,11 +89,13 @@ jobs:
     # its OpenMetadata contract in contracts/ lists. The metric registry check
     # fails when a file in metrics/ would not sync to OpenMetadata, or names a
     # column its model no longer declares or selects. The pipe concat check
-    # fails on a || operator, which StarRocks evaluates as a logical OR.
-    - name: Layering, QA branch, contract, metric registry and pipe concat lint
+    # fails on a || operator, which StarRocks evaluates as a logical OR. The
+    # cohort policy check fails when a model's config.meta.cohort column
+    # declarations are incomplete or name a column that is not a cohort.
+    - name: Layering, QA branch, contract, metric, pipe concat and cohort lint
       run: |
         uv run ol-dbt validate \
-          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat \
+          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy \
           --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
@@ -105,7 +107,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat \
+          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.
