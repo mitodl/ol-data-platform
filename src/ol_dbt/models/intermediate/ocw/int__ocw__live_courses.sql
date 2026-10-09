@@ -9,7 +9,7 @@
 
   A site renamed in ocw-studio is published under its new path and its old
   directory stays in the bucket, with a data.json that carries the same uids.
-  MIT Learn keeps the newer of the two by the files' S3 modification times,
+  MIT Learn keeps the newer of the two by data.json's S3 modification time,
   which the load does not record. ocw-studio's url_path is the path a site is
   published at now, so a directory no site has as its url_path is left out.
 #}
@@ -17,7 +17,6 @@
 with published_paths as (
     select distinct website_url_path
     from {{ ref('stg__ocw__studio__postgres__websites_website') }}
-    where website_url_path is not null
 )
 
 , content as (

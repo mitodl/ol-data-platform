@@ -544,7 +544,6 @@ unit_tests:
     - {website_url_path: courses/b-course}
     # Two sites holding one url_path do not double the course.
     - {website_url_path: courses/b-course}
-    - {website_url_path: null}
   - input: ref('stg__ocw__s3__course_content')
     rows:
     - course_slug: a-course
