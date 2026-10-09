@@ -327,6 +327,67 @@ def drifted_relations(
     )
 
 
+class MissingBaseTablesError(Exception):
+    """A full refresh was called for while a base table could not be read."""
+
+    def __init__(self, failures: Mapping[str, Exception]) -> None:
+        self.failures = dict(failures)
+        detail = "\n".join(f"{name}: {exc}" for name, exc in self.failures.items())
+        super().__init__(
+            f"{len(self.failures)} base table(s) of the StarRocks materialized "
+            "views could not be read, so the views were not rebuilt with "
+            f"--full-refresh and still hold their previous definition:\n{detail}"
+        )
+
+
+def base_table_relations(manifest: Mapping[str, Any]) -> list[str]:
+    """List the source tables the StarRocks MVs select from, as dbt renders them.
+
+    `relation_name` is the string `source()` puts into the MV's CREATE
+    statement, catalog and quoting included, so a probe built from it resolves
+    the same table the build would.
+    """
+    return sorted(
+        {
+            manifest["sources"][unique_id]["relation_name"]
+            for node in _materialized_view_nodes(manifest)
+            for unique_id in node["depends_on"]["nodes"]
+            if unique_id.startswith("source.")
+        }
+    )
+
+
+def unreadable_base_tables(
+    relations: Iterable[str], fetch: Callable[[str], Any]
+) -> dict[str, Exception]:
+    """Probe each of *relations* and return the ones StarRocks can't resolve.
+
+    Run this before a `dbt build --full-refresh`. That build drops every
+    selected MV and recreates it, and a CREATE whose base table is missing
+    fails after the drop. On 2026-10-09 five views were lost that way: #2881
+    pointed them at afact_learner_courserun_progress, which production had
+    never built, and ol-analytics-api answered 500 on the endpoints that read
+    them until the next successful build.
+
+    `limit 0` reads no data; the statement only has to get through analysis,
+    which is where a missing table is reported.
+
+    :param relations: Rendered relation names, as `base_table_relations`
+        returns them.
+    :param fetch: Runs one SELECT. `StarRocksResource.fetch` in the asset.
+    :returns: The error for each relation that could not be read.
+    """
+    failures: dict[str, Exception] = {}
+    for relation in relations:
+        try:
+            fetch(f"select 1 from {relation} limit 0")  # noqa: S608
+        # Whatever StarRocks says about the table is the finding; the caller
+        # raises with all of them.
+        except Exception as exc:  # noqa: BLE001
+            failures[relation] = exc
+    return failures
+
+
 # Model `meta` key that opts a materialized view into a change log.
 CHANGE_TRACKING_META_KEY = "change_tracking"
 CHANGE_LOG_SUFFIX = "_changes"

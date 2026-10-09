@@ -17,6 +17,8 @@ from lakehouse.lib.starrocks_dbt import (
     RETRY_BASE_DELAY,
     ChangeTrackedView,
     MaterializedViewRefreshError,
+    MissingBaseTablesError,
+    base_table_relations,
     change_tracked_views,
     documented_columns,
     drifted_relations,
@@ -29,6 +31,7 @@ from lakehouse.lib.starrocks_dbt import (
     seed_change_log_sql,
     stamp_change_log,
     stamp_change_log_sql,
+    unreadable_base_tables,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
@@ -613,6 +616,111 @@ class TestRefreshMaterializedViews:
         _refresh(starrocks, ["b2b_analytics.mv_a", "b2b_analytics.mv_b"], sleeps)
         assert len(starrocks.statements) == 2
         assert sleeps == []
+
+
+# Verbatim from production run 9031a9df, 2026-10-09 06:03 UTC. #2881 pointed
+# four views at a fact table that production had never built.
+UNKNOWN_BASE_TABLE_FAILURE = (
+    "5502 (42602): Getting analyzing error. Detail message: Unknown table "
+    "'ol_warehouse_production_dimensional.afact_learner_courserun_progress'."
+)
+
+DIMENSIONAL = "`ol_data_lake_production`.`ol_warehouse_production_dimensional`"
+
+
+def _source(table):
+    return {"relation_name": f"{DIMENSIONAL}.`{table}`"}
+
+
+def _reading(node, *unique_ids):
+    return {**node, "depends_on": {"nodes": list(unique_ids)}}
+
+
+class TestBaseTableRelations:
+    def test_lists_each_source_the_views_read_once(self):
+        manifest = {
+            **_manifest(
+                [
+                    _reading(
+                        _mv_node("mv_b2b_program_funnel", ["organization_key"]),
+                        "source.open_learning.dimensional.tfact_enrollment",
+                        "source.open_learning.dimensional.dim_program",
+                    ),
+                    _reading(
+                        _mv_node("mv_b2b_contract_utilization", ["contract_pk"]),
+                        "source.open_learning.dimensional.tfact_enrollment",
+                        # Another view, which dbt builds itself.
+                        "model.open_learning.mv_b2b_program_funnel",
+                    ),
+                ]
+            ),
+            "sources": {
+                "source.open_learning.dimensional.tfact_enrollment": _source(
+                    "tfact_enrollment"
+                ),
+                "source.open_learning.dimensional.dim_program": _source("dim_program"),
+                "source.open_learning.dimensional.dim_user": _source("dim_user"),
+            },
+        }
+        assert base_table_relations(manifest) == [
+            f"{DIMENSIONAL}.`dim_program`",
+            f"{DIMENSIONAL}.`tfact_enrollment`",
+        ]
+
+    def test_ignores_sources_of_models_on_other_engines(self):
+        manifest = {
+            **_manifest(
+                [
+                    _reading(
+                        _model_node(
+                            "marts__combined__users",
+                            schema="mart",
+                            materialized="table",
+                            tags=[],
+                        ),
+                        "source.open_learning.dimensional.dim_user",
+                    )
+                ]
+            ),
+            "sources": {
+                "source.open_learning.dimensional.dim_user": _source("dim_user")
+            },
+        }
+        assert base_table_relations(manifest) == []
+
+
+class TestUnreadableBaseTables:
+    def test_reports_the_table_starrocks_cannot_resolve(self):
+        missing = f"{DIMENSIONAL}.`afact_learner_courserun_progress`"
+        present = f"{DIMENSIONAL}.`tfact_enrollment`"
+        statements: list[str] = []
+
+        def fetch(sql):
+            statements.append(sql)
+            if missing in sql:
+                raise RuntimeError(UNKNOWN_BASE_TABLE_FAILURE)
+            return []
+
+        failures = unreadable_base_tables([missing, present], fetch)
+        assert list(failures) == [missing]
+        assert str(failures[missing]) == UNKNOWN_BASE_TABLE_FAILURE
+        # One table failing doesn't hide a second missing one.
+        assert [sql.split()[3] for sql in statements] == [missing, present]
+        assert all(sql.endswith(" limit 0") for sql in statements)
+
+    def test_readable_tables_report_nothing(self):
+        assert unreadable_base_tables([f"{DIMENSIONAL}.`dim_user`"], lambda _: []) == {}
+
+    def test_the_error_names_every_table_and_says_the_views_are_intact(self):
+        error = MissingBaseTablesError(
+            {
+                f"{DIMENSIONAL}.`afact_learner_courserun_progress`": RuntimeError(
+                    UNKNOWN_BASE_TABLE_FAILURE
+                )
+            }
+        )
+        assert "afact_learner_courserun_progress" in str(error)
+        assert "still hold their previous definition" in str(error)
 
 
 LEARNER_VIEW = ChangeTrackedView(
