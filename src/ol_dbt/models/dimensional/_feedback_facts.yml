@@ -643,3 +643,78 @@ unit_tests:
     rows:
     - feedback_pk: "e73a45b9031f588f053effc7b085ffc9"  # pragma: allowlist secret
       subject_type: "resource"
+- name: test_tfact_feedback_reselects_renumbered_turns
+  description: >
+    A turn that reaches upstream late (CP-B) renumbers the turns after it without
+    moving updated_at. The new turn and every renumbered turn are re-selected with
+    their current turn_index; CP-A kept its index and is left alone.
+  model: tfact_feedback
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__feedback__unioned')
+    rows:
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CP-A"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      updated_at: "2025-01-10T00:00:00"
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CP-B"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 2
+      is_conversation_opening: false
+      updated_at: "2025-01-10T00:00:00"
+    - source_slug: "learn_ai_tutor"
+      source_record_ref: "CP-C"
+      channel_slug: "chat"
+      conversation_ref: "THREAD-1"
+      turn_index: 3
+      is_conversation_opening: false
+      updated_at: "2025-01-10T00:00:00"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      email: "someone@example.com"
+  - input: source('feedback_intermediate', 'feedback_redacted')
+    rows: []
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "COURSERUN_PK"
+      courserun_readable_id: "course-v1:none"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_course_content')
+    rows:
+    - content_block_pk: "CONTENT_BLOCK_PK"
+      courserun_readable_id: "course-v1:none"
+      block_id: "block-v1:none"
+      platform: "mitxonline"
+      is_latest: true
+  - input: this
+    # Stored before CP-B arrived: CP-C was turn 2. Nothing passes the `>` watermark.
+    rows:
+    - feedback_pk: "347dbf449cfeb09638e80fbe09a06a32"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 1
+      is_conversation_opening: true
+      feedback_updated_at: "2025-01-10T00:00:00"
+    - feedback_pk: "a7f3374b548391c6aba1c1e541af6ab1"  # pragma: allowlist secret
+      feedback_source_fk: "09ccda9515f33e4efa51bbf8e7773eae"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 2
+      is_conversation_opening: false
+      feedback_updated_at: "2025-01-10T00:00:00"
+  expect:
+    rows:
+    - feedback_pk: "c6c28725a0ac147d104ffadf217ef954"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 2
+    - feedback_pk: "a7f3374b548391c6aba1c1e541af6ab1"  # pragma: allowlist secret
+      conversation_id: "THREAD-1"
+      turn_index: 3
