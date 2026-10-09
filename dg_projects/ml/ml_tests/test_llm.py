@@ -5,6 +5,7 @@ from collections.abc import Callable
 import httpx2
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
+from google import genai
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 
@@ -189,3 +190,56 @@ def test_get_client_azure_openai_sends_entra_token_as_bearer() -> None:
     )
 
     assert seen_auth == ["Bearer entra-test-token"]
+
+
+def test_get_client_gemini_uses_vertex_ai_without_an_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deployed pods authenticate with workload identity, so a key is ignored."""
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test")
+    monkeypatch.setenv("GOOGLE_GENAI_USE_ENTERPRISE", "false")
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "global")
+
+    client = LLMClientFactory(client_class="gemini").get_client()
+
+    assert isinstance(client, genai.Client)
+    assert client.vertexai is True
+    assert client._api_client.project == "test-project"
+    assert client._api_client.location == "global"
+    assert client._api_client.api_key is None
+
+
+def test_get_client_gemini_on_vertex_ai_requires_a_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "1")
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "global")
+
+    with pytest.raises(ValueError, match="GOOGLE_CLOUD_PROJECT"):
+        LLMClientFactory(client_class="gemini").get_client()
+
+
+def test_get_client_gemini_reads_the_api_key_outside_vertex_ai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.setenv("GOOGLE_GENAI_USE_ENTERPRISE", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test")
+
+    client = LLMClientFactory(client_class="gemini").get_client()
+
+    assert isinstance(client, genai.Client)
+    assert client.vertexai is False
+
+
+def test_get_client_gemini_requires_an_api_key_outside_vertex_ai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+        LLMClientFactory(client_class="gemini").get_client()

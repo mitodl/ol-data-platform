@@ -8,7 +8,23 @@ from typing import Any
 
 from pydantic import Field
 
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.api_client import BaseApiClient
+
+
+def webhook_status(response: dict[str, Any]) -> str:
+    """Name what MIT Learn did with a learning_resources webhook batch.
+
+    MIT Learn runs the batch as a shadow when its ETLSourceOwnership rows name
+    the webhook as the shadow of the batch's (etl_source, resource_type) pairs:
+    it loads the batch, rolls the load back and answers with what would have
+    changed under ``shadow``. Nothing was delivered in that case.
+
+    :param response: the decoded webhook response
+    :returns: ``shadow`` if the batch was a shadow run, else ``success``
+    :rtype: str
+    """
+    return "shadow" if "shadow" in response else "success"
 
 
 class MITLearnApiClient(BaseApiClient):
@@ -28,12 +44,27 @@ class MITLearnApiClient(BaseApiClient):
         learn = raw_secret.get("learn") or {}
         learn["base_url"] = learn.get("base_url") or learn.pop("url", None)
         # Allow local development to point the client at a non-prod MIT Learn
-        # without rewriting Vault.
-        if override := os.environ.get("MIT_LEARN_BASE_URL"):
-            learn["base_url"] = override
-        if token_override := os.environ.get("MIT_LEARN_WEBHOOK_SECRET"):
-            learn["token"] = token_override
+        # without rewriting Vault. Dev only: a stray variable in a deployed
+        # environment must not be able to redirect a delivery.
+        if DAGSTER_ENV == "dev":
+            if override := os.environ.get("MIT_LEARN_BASE_URL"):
+                learn["base_url"] = override
+            if token_override := os.environ.get("MIT_LEARN_WEBHOOK_SECRET"):
+                learn["token"] = token_override
         return cls(**learn)
+
+    @classmethod
+    def local_secret(cls) -> dict[str, Any] | None:
+        """Return the secret for a local MIT Learn, when the environment names one.
+
+        Both variables are needed. With only one set the rest still has to come
+        from Vault, where ``from_secret`` applies it as an override.
+        """
+        base_url = os.environ.get("MIT_LEARN_BASE_URL")
+        token = os.environ.get("MIT_LEARN_WEBHOOK_SECRET")
+        if base_url and token:
+            return {"learn": {"base_url": base_url, "token": token}}
+        return None
 
     def _post_signed_webhook(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
         payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces

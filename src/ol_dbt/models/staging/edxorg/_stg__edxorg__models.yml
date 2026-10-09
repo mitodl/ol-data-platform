@@ -29,9 +29,9 @@ models:
   - name: courserun_enrollment_start_date
     description: date, registration open date for the course
   - name: courserun_start_date
-    description: date, The date on which the course starts
+    description: str, The date on which the course starts, as an ISO 8601 timestamp
   - name: courserun_end_date
-    description: date, The date on which the course ends
+    description: str, The date on which the course ends, as an ISO 8601 timestamp
   - name: courserun_is_self_paced
     description: boolean, Indicate whether or not the course is self paced
   - name: courserun_institution

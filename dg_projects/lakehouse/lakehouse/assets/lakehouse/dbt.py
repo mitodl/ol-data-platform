@@ -28,7 +28,11 @@ from dagster_dbt.asset_utils import DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED, DBT_TARGET
+from lakehouse.lib.dbt_environment import (
+    DBT_AUTOMATION_ENABLED,
+    DBT_TARGET,
+    SKIP_UNIT_TESTS_ARGS,
+)
 from lakehouse.lib.stale_descendant_tests import (
     stale_descendant_test_names,
     unselected_model_test_names,
@@ -220,7 +224,13 @@ def full_dbt_project(
     drift = _surrogate_key_drift(context, dbt_s3_artifacts)
 
     build_invocation = dbt.cli(
-        ["build", *_stale_descendant_test_args(context), *build_vars], context=context
+        [
+            "build",
+            *SKIP_UNIT_TESTS_ARGS,
+            *_stale_descendant_test_args(context),
+            *build_vars,
+        ],
+        context=context,
     )
     yield from (build_invocation.stream().fetch_column_metadata().fetch_row_counts())
 

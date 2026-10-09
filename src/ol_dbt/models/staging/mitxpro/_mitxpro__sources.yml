@@ -1611,18 +1611,6 @@ sources:
     - name: item_type
       description: varchar, the type of student item
 
-  - name: raw__xpro__openedx__mysql__assessment_aiclassifier
-    description: MITx Pro open edX assessment ai classifier
-    columns:
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: classifier_data
-      description: varchar, the content of the classifier
-    - name: criterion_id
-      description: int, foreign key referencing criterion
-
   - name: raw__xpro__openedx__mysql__assessment_assessmentpart
     description: MITx Pro open edX assessment part
     columns:
@@ -1862,16 +1850,6 @@ sources:
       description: int, unique identifier for the rubric
     - name: raw_answer
       description: str, the raw text of the training example answer
-
-  - name: raw__xpro__openedx__mysql__assessment_aitrainingworkflow_training_examples
-    description: MITx Pro open edX assessment ai training workflow training examples
-    columns:
-    - name: trainingexample_id
-      description: int, the foreign key referencing the training example
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: aitrainingworkflow_id
-      description: int, the foreign key referencing the ai training workflow
 
   - name: raw__xpro__openedx__mysql__assessment_assessmentfeedbackoption
     description: MITx Pro open edX assessment feedback options

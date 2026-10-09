@@ -28,6 +28,16 @@ class BaseApiClient(ConfigurableResource):
     def from_secret(cls, raw_secret: dict[str, Any]) -> "BaseApiClient":
         return cls(**raw_secret)
 
+    @classmethod
+    def local_secret(cls) -> dict[str, Any] | None:
+        """Return this client's secret from the environment, for local development.
+
+        :returns: a dict of the shape ``from_secret`` reads, or ``None`` when the
+            environment does not carry a complete one and Vault has to be read
+        :rtype: dict[str, Any] | None
+        """
+        return None
+
     def get_request(
         self, endpoint: str, headers: dict[str, str] | None = None
     ) -> httpx.Response:

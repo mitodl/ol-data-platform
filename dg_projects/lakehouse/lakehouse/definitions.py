@@ -187,6 +187,15 @@ airbyte_workspace = (
         # left at the library default of False it raised "Found sync job for
         # connection_id=... already running" across ten connections.
         poll_previous_running_sync=True,
+        # Leave the Airbyte job running when the run worker is terminated. Run
+        # pods are preempted and the monitoring daemon resumes them, so the
+        # library default of True cancels a healthy sync that the resumed
+        # worker would have attached to: it then finds nothing in flight, POSTs
+        # a new job while the cancelled one winds down and gets a 409, and any
+        # other run attached to the same job fails with "Job was cancelled".
+        # The cost is that terminating a run in Dagster no longer stops the
+        # sync; cancel it in Airbyte.
+        cancel_on_termination=False,
     )
     if not SKIP_AIRBYTE
     else None
@@ -288,15 +297,25 @@ if DAGSTER_ENV == "production":
             stacklevel=2,
         )
 
+# The dbt schema, and so the Dagster group, of the raw history snapshots
+# (`snapshots: raw_history: +schema` in dbt_project.yml).
+RAW_HISTORY_GROUP = "history"
+
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
 group_count = len(group_names)
 for group_name in group_names:
     job = define_asset_job(
         name=f"sync_and_stage_{group_name}",
-        selection=AssetSelection.groups(group_name)
-        .downstream(depth=1, include_self=True)
-        .required_multi_asset_neighbors(),
+        # The raw history snapshots read the raw tables directly, so depth 1
+        # reaches them as it does staging. They are left to dbt_automation_sensor
+        # instead: it runs them once per change to raw whichever loader made it,
+        # and a run from this job would not clear the sensor's pending upstream
+        # change, so each sync would snapshot twice.
+        selection=(
+            AssetSelection.groups(group_name).downstream(depth=1, include_self=True)
+            - AssetSelection.groups(RAW_HISTORY_GROUP)
+        ).required_multi_asset_neighbors(),
     )
     interval = group_name_to_interval.get(group_name, 24)  # default to 24 hours
     # No offset needed - K8s autoscaling handles concurrent syncs
