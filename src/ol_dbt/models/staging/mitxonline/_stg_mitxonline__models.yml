@@ -2723,3 +2723,141 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_readable_id", "organization_id"]
+
+- name: stg__mitxonline__app__postgres__courses_enrollmentmode
+  description: Enrollment modes a MITx Online course run or program can offer
+  columns:
+  - name: enrollmentmode_id
+    description: int, primary key representing an enrollment mode
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: enrollmentmode_slug
+    description: str, slug of the enrollment mode, e.g. audit or verified
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: enrollmentmode_display_name
+    description: str, display name of the enrollment mode
+  - name: enrollmentmode_requires_payment
+    description: boolean, whether enrolling in this mode requires payment
+    tests:
+    - not_null
+
+- name: stg__mitxonline__app__postgres__courses_courserun_enrollment_modes
+  description: Enrollment modes offered by each MITx Online course run
+  columns:
+  - name: courserunenrollmentmode_id
+    description: int, primary key representing a course run offering an enrollment
+      mode
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: courserun_id
+    description: int, foreign key to courses_courserun
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_courserun')
+          field: courserun_id
+  - name: enrollmentmode_id
+    description: int, foreign key to courses_enrollmentmode
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_enrollmentmode')
+          field: enrollmentmode_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_id", "enrollmentmode_id"]
+
+- name: stg__mitxonline__app__postgres__courses_program_enrollment_modes
+  description: Enrollment modes offered by each MITx Online program
+  columns:
+  - name: programenrollmentmode_id
+    description: int, primary key representing a program offering an enrollment mode
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_program')
+          field: program_id
+  - name: enrollmentmode_id
+    description: int, foreign key to courses_enrollmentmode
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_enrollmentmode')
+          field: enrollmentmode_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["program_id", "enrollmentmode_id"]
+
+- name: stg__mitxonline__app__postgres__variants_supportedvariant
+  description: Language, length and industry variants supported by a MITx Online course
+    or B2B contract page
+  columns:
+  - name: supportedvariant_id
+    description: int, primary key representing a supported variant
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: contenttype_id
+    description: int, foreign key to django_content_type. The model supportedvariant_object_id
+      refers to, courses.course or b2b.contractpage
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__django_contenttype')
+          field: contenttype_id
+  - name: supportedvariant_object_id
+    description: int, primary key of the course or contract page the variant belongs
+      to
+    tests:
+    - not_null
+  - name: supportedvariant_language
+    description: str, language code of the variant, e.g. en or es_419
+    tests:
+    - not_null
+  - name: supportedvariant_length
+    description: str, length code of the variant. Blank is the full length course,
+      S is short
+  - name: supportedvariant_industry
+    description: str, industry code of the variant. Blank is the original course
+  - name: supportedvariant_is_active
+    description: boolean, whether the variant is active
+    tests:
+    - not_null
+  - name: supportedvariant_is_b2b_only
+    description: boolean, whether the variant is offered only to B2B learners
+    tests:
+    - not_null
+  - name: supportedvariant_is_default
+    description: boolean, whether this is the default variant of the object
+    tests:
+    - not_null
+  - name: supportedvariant_created_on
+    description: timestamp, when the variant was created
+  - name: supportedvariant_updated_on
+    description: timestamp, when the variant was last updated

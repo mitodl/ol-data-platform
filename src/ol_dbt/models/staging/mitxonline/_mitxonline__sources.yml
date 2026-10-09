@@ -2374,3 +2374,65 @@ sources:
       description: timestamp, when the row was created
     - name: modified
       description: timestamp, when the row was last modified
+
+  - name: raw__mitxonline__app__postgres__courses_enrollmentmode
+    description: Enrollment modes a course run or program can offer (audit, verified)
+    columns:
+    - name: id
+      description: int, primary key for courses_enrollmentmode
+    - name: mode_slug
+      description: str, slug of the enrollment mode, e.g. audit or verified
+    - name: mode_display_name
+      description: str, display name of the enrollment mode
+    - name: requires_payment
+      description: boolean, whether enrolling in this mode requires payment
+
+  - name: raw__mitxonline__app__postgres__courses_courserun_enrollment_modes
+    description: Enrollment modes offered by each course run
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: courserun_id
+      description: int, foreign key to courses_courserun
+    - name: enrollmentmode_id
+      description: int, foreign key to courses_enrollmentmode
+
+  - name: raw__mitxonline__app__postgres__courses_program_enrollment_modes
+    description: Enrollment modes offered by each program
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: enrollmentmode_id
+      description: int, foreign key to courses_enrollmentmode
+
+  - name: raw__mitxonline__app__postgres__variants_supportedvariant
+    description: Language, length and industry variants supported by a course or a
+      B2B contract page
+    columns:
+    - name: id
+      description: int, primary key for variants_supportedvariant
+    - name: content_type_id
+      description: int, foreign key to django_content_type. The model object_id refers
+        to, courses.course or b2b.contractpage
+    - name: object_id
+      description: int, primary key of the course or contract page the variant belongs
+        to
+    - name: language
+      description: str, language code of the variant, e.g. en or es_419
+    - name: variant_length
+      description: str, length code of the variant. Blank is the full length course,
+        S is short
+    - name: variant_industry
+      description: str, industry code of the variant. Blank is the original course
+    - name: active
+      description: boolean, whether the variant is active
+    - name: b2b_only
+      description: boolean, whether the variant is offered only to B2B learners
+    - name: default_variant
+      description: boolean, whether this is the default variant of the object
+    - name: created_on
+      description: timestamp, when the variant was created
+    - name: updated_on
+      description: timestamp, when the variant was last updated

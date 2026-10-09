@@ -246,7 +246,7 @@ tables:
   namespace: public
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: courses_courseruncertificate
   raw_table: raw__mitxonline__app__postgres__courses_courseruncertificate
   sync_mode: incremental_deduped_history
@@ -302,7 +302,7 @@ tables:
   namespace: public
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: courses_learnerprogramrecordshare
   raw_table: raw__mitxonline__app__postgres__courses_learnerprogramrecordshare
   sync_mode: incremental_deduped_history
@@ -344,7 +344,7 @@ tables:
   namespace: public
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: courses_programcertificate
   raw_table: raw__mitxonline__app__postgres__courses_programcertificate
   sync_mode: incremental_deduped_history
@@ -561,7 +561,7 @@ tables:
   namespace: public
   primary_key:
   - - id
-  modeled: false
+  modeled: true
 - name: wagtailcore_page
   raw_table: raw__mitxonline__app__postgres__wagtailcore_page
   sync_mode: incremental_deduped_history
