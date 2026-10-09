@@ -49,13 +49,13 @@ select
     , content_feedback.contentfeedback_sentiment as explicit_rating
     , content_feedback.contentfeedback_created_on as created_at
     , content_feedback.contentfeedback_updated_on as updated_at
-    , json_object(
-        'courserun_title': content_feedback.courserun_title
-        , 'block_type': content_feedback.contentfeedback_block_type
-        , 'block_display_name': content_feedback.contentfeedback_block_display_name
-        , 'unit_title': content_feedback.contentfeedback_unit_title
-        , 'courserun_platform': course_run.platform
-    ) as source_metadata
+    , {{ json_object_from_pairs([
+        ['courserun_title', "content_feedback.courserun_title"]
+        , ['block_type', "content_feedback.contentfeedback_block_type"]
+        , ['block_display_name', "content_feedback.contentfeedback_block_display_name"]
+        , ['unit_title', "content_feedback.contentfeedback_unit_title"]
+        , ['courserun_platform', "course_run.platform"]
+    ]) }} as source_metadata
 from content_feedback
 left join users
     on content_feedback.user_id = users.user_id
