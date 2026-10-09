@@ -186,11 +186,13 @@ with mitxonline_enrollments as (
     select
         -- Source has no native enrollment_id. Keyed on the staging model's unique grain, not
         -- the student id: any change to this id moving forward would change the key and
-        -- result in a duplicate record.
+        -- result in a duplicate record. The name is keyed as first and last, not the
+        -- concatenated user_full_name, which can join two different splits of one name.
         {{ dbt_utils.generate_surrogate_key([
             'emeritus_enrollments.courserun_external_readable_id',
             'emeritus_enrollments.user_email',
-            'emeritus_enrollments.user_full_name'
+            'emeritus_enrollments.user_first_name',
+            'emeritus_enrollments.user_last_name'
         ]) }} as enrollment_id
         , cast(null as bigint) as user_id
         , emeritus_enrollments.user_id as external_user_id

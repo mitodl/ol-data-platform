@@ -1353,6 +1353,92 @@ unit_tests:
       platform_fk: "PLATFORM_GLOBAL_ALUMNI"
       enrollment_type: "course"
       enrollment_is_active: false
+- name: test_tfact_enrollment_keys_emeritus_enrollment_id_on_the_staging_grain
+  description: >
+    An Emeritus enrollment_id is keyed on run code, email and first and last name,
+    never the
+    student id, so a student id filled in on a later load is the same enrollment (one
+    row),
+    while a different email is a different enrollment. The name is keyed as first
+    and last, so
+    two splits of one name ("William" + "Lo Cubilla" and "William Lo" + "Cubilla")
+    stay
+    separate rows.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+      # no student id yet
+    - user_id:
+      user_email: "kay@example.com"
+      user_first_name: "Kay"
+      user_last_name: "Lee"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # the same enrollment after the student id is filled in
+    - user_id: "E-9"
+      user_email: "kay@example.com"
+      user_first_name: "Kay"
+      user_last_name: "Lee"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # the same student id on a different email
+    - user_id: "E-9"
+      user_email: "kay2@example.com"
+      user_first_name: "Kay"
+      user_last_name: "Lee"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # two splits of one full name
+    - user_id:
+      user_email: "w@example.com"
+      user_first_name: "William"
+      user_last_name: "Lo Cubilla"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+    - user_id:
+      user_email: "w@example.com"
+      user_first_name: "William Lo"
+      user_last_name: "Cubilla"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - enrollment_id: "dbaaca616b05ba02444ae6779d09d88f"
+    - enrollment_id: "c94628ef8ab4d0e3d40d2ea10cdd7867"
+    - enrollment_id: "3215e2888d9716016c40078b0c02d2a7"
+    - enrollment_id: "ed6e9b6f1b305180a4fd254b6e4a5b4e"
 - name: test_tfact_grade_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
