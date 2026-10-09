@@ -119,8 +119,8 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # table's metadata still reaches. It only reports until the asset's
     # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names an environment, which
     # today is nowhere. Production from the start, unlike the sweep: raw
-    # snapshot expiry runs there alone, so that is where the files it strands
-    # are, and a report reads Glue and S3 and writes nothing. Never dev: it
+    # snapshot expiry ran there first, so that is where most of the files it
+    # strands are, and a report reads Glue and S3 and writes nothing. Never dev: it
     # resolves to the production warehouse.
     "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably

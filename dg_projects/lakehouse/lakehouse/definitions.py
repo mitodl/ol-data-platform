@@ -382,11 +382,16 @@ superset_starrocks_assets = [
     if key.path[0] in dbt_models_for_superset_datasets
 ]
 
-# Iceberg maintenance schedules — both default STOPPED; enable in production via
-# the Dagster UI or Terraform after verifying the first manual run succeeds.
+# Iceberg maintenance schedules.
 #
 # 02:00 UTC: dbt layer (after nightly Airbyte syncs complete, before business hours)
 # 03:00 UTC: raw layer (staggered to avoid concurrent Glue/S3 load with dbt layer)
+#
+# The dbt-layer schedule defaults to STOPPED and is started in the Dagster UI.
+# The raw-layer schedule is RUNNING where it is registered: left STOPPED it was
+# registered in QA and never ticked, so nothing expired the snapshots QA's own
+# raw loads leave behind. An instance where it has been started or stopped in
+# the UI keeps that state.
 iceberg_dbt_maintenance_schedule = ScheduleDefinition(
     name="iceberg_dbt_maintenance_nightly",
     job=define_asset_job(
@@ -406,7 +411,7 @@ iceberg_raw_maintenance_schedule = ScheduleDefinition(
     ),
     cron_schedule="0 3 * * *",
     execution_timezone="UTC",
-    default_status=DefaultScheduleStatus.STOPPED,
+    default_status=DefaultScheduleStatus.RUNNING,
 )
 
 # Weekly, not nightly: an orphan has to be LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS old
@@ -524,7 +529,7 @@ airbyte_drift_schedules = (
                 ),
                 cron_schedule="0 3 * * *",
                 execution_timezone="UTC",
-                # RUNNING, unlike the maintenance schedules above that someone
+                # RUNNING, unlike the dbt maintenance schedule above that someone
                 # starts by hand: left at Dagster's STOPPED default this never
                 # ticked in production (no SchedulerDaemon evaluation of it in
                 # the 30 days to 2026-09-26). It only reads, and
@@ -764,10 +769,10 @@ defs = Definitions(
         dbt_docs_artifacts_job,
         dbt_source_freshness_job,
     ],
-    # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
-    # on each of these only seeds the instance's instigator state on first
-    # deploy; a UI toggle overrides it forever after, so whether one of these
-    # ticked in QA was instance state nothing in this file had a say in. A
+    # Registration is the gate. A `default_status` on one of these only seeds
+    # the instance's instigator state on first deploy; a UI toggle overrides
+    # it forever after, so whether a STOPPED one ticked in QA was instance
+    # state nothing in this file had a say in. A
     # schedule this filter drops is not stopped, it is absent -- there is
     # nothing left to toggle. Note it also drops the job for the four that
     # build one inline; see scheduled_automation for what that does and does
