@@ -14,6 +14,8 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from jinja2 import Environment
+
 # Retries are of the whole `dbt build`, since dbt-starrocks has no adapter-level
 # retry of its own. Two failure modes need covering, and the slower one sets the
 # schedule: a rolling restart of the 3-replica FE StatefulSet, measured at ~3
@@ -340,50 +342,102 @@ class MissingBaseTablesError(Exception):
         )
 
 
-def base_table_relations(manifest: Mapping[str, Any]) -> list[str]:
-    """List the source tables the StarRocks MVs select from, as dbt renders them.
+def _render_source_part(
+    source: Mapping[str, Any], part: str, env: Mapping[str, str]
+) -> str:
+    """Render a source's database or schema against *env*.
 
-    `relation_name` is the string `source()` puts into the MV's CREATE
-    statement, catalog and quoting included, so a probe built from it resolves
-    the same table the build would.
+    The manifest's rendered `database` and `schema` can't be used. One image
+    serves every environment, so its manifest is parsed at build time with a
+    placeholder DBT_DATA_LAKE_ENV (see the Dockerfile), and the build itself
+    re-parses with the run-time value. Rendering the YAML's own template with
+    the run-time environment names the catalog the build will read.
     """
+    template = source.get(f"unrendered_{part}")
+    if not template:
+        return source[part]
+
+    def env_var(name: str, default: str | None = None) -> str:
+        return env[name] if default is None else env.get(name, default)
+
+    # S701: the output is an identifier inside a SQL statement, not HTML.
+    return Environment().from_string(template).render(env_var=env_var)  # noqa: S701
+
+
+def base_table_relations(
+    manifest: Mapping[str, Any], env: Mapping[str, str]
+) -> list[str]:
+    """List the source tables the StarRocks MVs select from.
+
+    Only a view's own `source()` calls are followed, including the ones its
+    macros make. Every view reads its sources directly today.
+
+    :param manifest: The parsed StarRocks dbt manifest.
+    :param env: The process environment the build will run with, which is
+        where `DBT_DATA_LAKE_ENV` picks the lake.
+    :returns: Catalog-qualified names, quoted as dbt-starrocks quotes them.
+    """
+    sources = [
+        manifest["sources"][unique_id]
+        for node in _materialized_view_nodes(manifest)
+        for unique_id in node["depends_on"]["nodes"]
+        if unique_id.startswith("source.")
+    ]
     return sorted(
         {
-            manifest["sources"][unique_id]["relation_name"]
-            for node in _materialized_view_nodes(manifest)
-            for unique_id in node["depends_on"]["nodes"]
-            if unique_id.startswith("source.")
+            ".".join(
+                f"`{part}`"
+                for part in (
+                    _render_source_part(source, "database", env),
+                    _render_source_part(source, "schema", env),
+                    source["identifier"],
+                )
+            )
+            for source in sources
         }
     )
 
 
 def unreadable_base_tables(
-    relations: Iterable[str], fetch: Callable[[str], Any]
+    relations: Iterable[str], fetch: Callable[[str], Any], *, log: logging.Logger
 ) -> dict[str, Exception]:
     """Probe each of *relations* and return the ones StarRocks can't resolve.
 
     Run this before a `dbt build --full-refresh`. That build drops every
     selected MV and recreates it, and a CREATE whose base table is missing
-    fails after the drop. On 2026-10-09 five views were lost that way: #2881
+    fails after the drop. On 2026-10-09 four views were lost that way: #2881
     pointed them at afact_learner_courserun_progress, which production had
     never built, and ol-analytics-api answered 500 on the endpoints that read
     them until the next successful build.
 
     `limit 0` reads no data; the statement only has to get through analysis,
-    which is where a missing table is reported.
+    which is where a missing table is reported. It does not check that the
+    table has the columns the view selects.
 
-    :param relations: Rendered relation names, as `base_table_relations`
+    A probe that fails on one of the build's own retriable signatures (a
+    dropped connection, an FE restart, a base table Trino has just rebuilt) is
+    not a finding. Those clear on their own and the build retries them.
+
+    :param relations: Catalog-qualified names, as `base_table_relations`
         returns them.
     :param fetch: Runs one SELECT. `StarRocksResource.fetch` in the asset.
+    :param log: Where progress goes. `context.log` in the asset.
     :returns: The error for each relation that could not be read.
     """
     failures: dict[str, Exception] = {}
     for relation in relations:
         try:
             fetch(f"select 1 from {relation} limit 0")  # noqa: S608
-        # Whatever StarRocks says about the table is the finding; the caller
-        # raises with all of them.
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            if looks_retriable(exc):
+                log.warning(
+                    "Probe of %s failed on a retriable error, leaving it to "
+                    "the build: %s",
+                    relation,
+                    exc,
+                )
+                continue
+            log.exception("Base table %s can't be read", relation)
             failures[relation] = exc
     return failures
 

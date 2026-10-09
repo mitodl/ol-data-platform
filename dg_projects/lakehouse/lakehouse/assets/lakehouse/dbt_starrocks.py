@@ -119,15 +119,22 @@ def _stale_materialized_views(
     return drifted_relations(documented, live_columns(starrocks.fetch(query, params)))
 
 
-def _require_base_tables(starrocks: StarRocksResource) -> None:
+def _require_base_tables(
+    context: AssetExecutionContext, starrocks: StarRocksResource
+) -> None:
     """Refuse a --full-refresh while a base table of the MVs can't be read.
 
     The run fails with every view still in place. They keep the previous
-    SELECT and the previous refresh's rows, which is a day stale; the
+    SELECT and the previous refresh's rows until a later run succeeds; the
     alternative is a dropped view and a 500 in ol-analytics-api.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
-    unreadable = unreadable_base_tables(base_table_relations(manifest), starrocks.fetch)
+    relations = base_table_relations(manifest, os.environ)
+    context.log.info(
+        "Checking the %d base tables of the materialized views before --full-refresh",
+        len(relations),
+    )
+    unreadable = unreadable_base_tables(relations, starrocks.fetch, log=context.log)
     if unreadable:
         raise MissingBaseTablesError(unreadable)
 
@@ -171,7 +178,7 @@ def starrocks_dbt_assets(
             "building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )
-        _require_base_tables(starrocks)
+        _require_base_tables(context, starrocks)
         build_args.append("--full-refresh")
 
     last_exc: DagsterDbtCliRuntimeError | None = None

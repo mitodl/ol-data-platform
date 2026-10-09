@@ -624,97 +624,178 @@ UNKNOWN_BASE_TABLE_FAILURE = (
     "5502 (42602): Getting analyzing error. Detail message: Unknown table "
     "'ol_warehouse_production_dimensional.afact_learner_courserun_progress'."
 )
+# Verbatim from the same run, on a fifth view. It had cleared by the retry 30s
+# later.
+BASE_TABLE_DROPPED_PROBE_FAILURE = (
+    "1064 (HY000): Getting analyzing error. Detail message: base-table dropped: "
+    "afact_learner_courserun_daily_activity."
+)
 
-DIMENSIONAL = "`ol_data_lake_production`.`ol_warehouse_production_dimensional`"
+QA_DIMENSIONAL = "`ol_data_lake_qa`.`ol_warehouse_qa_dimensional`"
+QA_LAKE = {"DBT_DATA_LAKE_ENV": "qa"}
 
 
 def _source(table):
-    return {"relation_name": f"{DIMENSIONAL}.`{table}`"}
+    """Build a `dimensional` source as the image's manifest holds it.
+
+    It is rendered for production at build time, whatever environment the
+    image runs in.
+    """
+    return {
+        "database": "ol_data_lake_production",
+        "schema": "ol_warehouse_production_dimensional",
+        "identifier": table,
+        "unrendered_database": (
+            "ol_data_lake_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}"
+        ),
+        "unrendered_schema": (
+            "ol_warehouse_{{ env_var('DBT_DATA_LAKE_ENV', 'production') }}_dimensional"
+        ),
+    }
 
 
 def _reading(node, *unique_ids):
     return {**node, "depends_on": {"nodes": list(unique_ids)}}
 
 
+def _manifest_reading(sources, nodes):
+    return {
+        **_manifest(nodes),
+        "sources": {
+            f"source.open_learning.dimensional.{table}": _source(table)
+            for table in sources
+        },
+    }
+
+
 class TestBaseTableRelations:
     def test_lists_each_source_the_views_read_once(self):
-        manifest = {
-            **_manifest(
-                [
-                    _reading(
-                        _mv_node("mv_b2b_program_funnel", ["organization_key"]),
-                        "source.open_learning.dimensional.tfact_enrollment",
-                        "source.open_learning.dimensional.dim_program",
-                    ),
-                    _reading(
-                        _mv_node("mv_b2b_contract_utilization", ["contract_pk"]),
-                        "source.open_learning.dimensional.tfact_enrollment",
-                        # Another view, which dbt builds itself.
-                        "model.open_learning.mv_b2b_program_funnel",
-                    ),
-                ]
-            ),
-            "sources": {
-                "source.open_learning.dimensional.tfact_enrollment": _source(
-                    "tfact_enrollment"
+        manifest = _manifest_reading(
+            ["tfact_enrollment", "dim_program", "dim_user"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_program_funnel", ["organization_key"]),
+                    "source.open_learning.dimensional.tfact_enrollment",
+                    "source.open_learning.dimensional.dim_program",
                 ),
-                "source.open_learning.dimensional.dim_program": _source("dim_program"),
-                "source.open_learning.dimensional.dim_user": _source("dim_user"),
-            },
+                _reading(
+                    _mv_node("mv_b2b_contract_utilization", ["contract_pk"]),
+                    "source.open_learning.dimensional.tfact_enrollment",
+                    # Another view, which dbt builds itself.
+                    "model.open_learning.mv_b2b_program_funnel",
+                ),
+            ],
+        )
+        assert base_table_relations(manifest, QA_LAKE) == [
+            f"{QA_DIMENSIONAL}.`dim_program`",
+            f"{QA_DIMENSIONAL}.`tfact_enrollment`",
+        ]
+
+    def test_names_the_lake_the_build_reads_not_the_one_the_image_was_parsed_for(
+        self,
+    ):
+        manifest = _manifest_reading(
+            ["dim_user"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.dimensional.dim_user",
+                )
+            ],
+        )
+        assert base_table_relations(manifest, QA_LAKE) == [
+            f"{QA_DIMENSIONAL}.`dim_user`"
+        ]
+        assert base_table_relations(manifest, {"DBT_DATA_LAKE_ENV": "production"}) == [
+            "`ol_data_lake_production`.`ol_warehouse_production_dimensional`.`dim_user`"
+        ]
+
+    def test_a_source_with_no_template_keeps_its_rendered_name(self):
+        manifest = _manifest_reading(
+            [],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.fixed.roster",
+                )
+            ],
+        )
+        manifest["sources"]["source.open_learning.fixed.roster"] = {
+            "database": "default_catalog",
+            "schema": "b2b_learner_records",
+            "identifier": "roster",
+            "unrendered_database": None,
+            "unrendered_schema": None,
         }
-        assert base_table_relations(manifest) == [
-            f"{DIMENSIONAL}.`dim_program`",
-            f"{DIMENSIONAL}.`tfact_enrollment`",
+        assert base_table_relations(manifest, {}) == [
+            "`default_catalog`.`b2b_learner_records`.`roster`"
         ]
 
     def test_ignores_sources_of_models_on_other_engines(self):
-        manifest = {
-            **_manifest(
-                [
-                    _reading(
-                        _model_node(
-                            "marts__combined__users",
-                            schema="mart",
-                            materialized="table",
-                            tags=[],
-                        ),
-                        "source.open_learning.dimensional.dim_user",
-                    )
-                ]
-            ),
-            "sources": {
-                "source.open_learning.dimensional.dim_user": _source("dim_user")
-            },
-        }
-        assert base_table_relations(manifest) == []
+        manifest = _manifest_reading(
+            ["dim_user"],
+            [
+                _reading(
+                    _model_node(
+                        "marts__combined__users",
+                        schema="mart",
+                        materialized="table",
+                        tags=[],
+                    ),
+                    "source.open_learning.dimensional.dim_user",
+                )
+            ],
+        )
+        assert base_table_relations(manifest, QA_LAKE) == []
+
+
+def _probe(relations, failing):
+    statements: list[str] = []
+
+    def fetch(sql):
+        statements.append(sql)
+        for relation, message in failing.items():
+            if relation in sql:
+                raise RuntimeError(message)
+        return []
+
+    failures = unreadable_base_tables(relations, fetch, log=logging.getLogger("test"))
+    return failures, statements
 
 
 class TestUnreadableBaseTables:
     def test_reports_the_table_starrocks_cannot_resolve(self):
-        missing = f"{DIMENSIONAL}.`afact_learner_courserun_progress`"
-        present = f"{DIMENSIONAL}.`tfact_enrollment`"
-        statements: list[str] = []
-
-        def fetch(sql):
-            statements.append(sql)
-            if missing in sql:
-                raise RuntimeError(UNKNOWN_BASE_TABLE_FAILURE)
-            return []
-
-        failures = unreadable_base_tables([missing, present], fetch)
+        missing = f"{QA_DIMENSIONAL}.`afact_learner_courserun_progress`"
+        present = f"{QA_DIMENSIONAL}.`tfact_enrollment`"
+        failures, statements = _probe(
+            [missing, present], {missing: UNKNOWN_BASE_TABLE_FAILURE}
+        )
         assert list(failures) == [missing]
         assert str(failures[missing]) == UNKNOWN_BASE_TABLE_FAILURE
         # One table failing doesn't hide a second missing one.
         assert [sql.split()[3] for sql in statements] == [missing, present]
         assert all(sql.endswith(" limit 0") for sql in statements)
 
+    @pytest.mark.parametrize(
+        "message",
+        [
+            BASE_TABLE_DROPPED_PROBE_FAILURE,
+            "(2003, \"Can't connect to MySQL server on 'starrocks-fe'\")",
+        ],
+    )
+    def test_an_error_the_build_retries_is_not_a_missing_table(self, message):
+        relation = f"{QA_DIMENSIONAL}.`afact_learner_courserun_daily_activity`"
+        failures, _ = _probe([relation], {relation: message})
+        assert failures == {}
+
     def test_readable_tables_report_nothing(self):
-        assert unreadable_base_tables([f"{DIMENSIONAL}.`dim_user`"], lambda _: []) == {}
+        failures, _ = _probe([f"{QA_DIMENSIONAL}.`dim_user`"], {})
+        assert failures == {}
 
     def test_the_error_names_every_table_and_says_the_views_are_intact(self):
         error = MissingBaseTablesError(
             {
-                f"{DIMENSIONAL}.`afact_learner_courserun_progress`": RuntimeError(
+                f"{QA_DIMENSIONAL}.`afact_learner_courserun_progress`": RuntimeError(
                     UNKNOWN_BASE_TABLE_FAILURE
                 )
             }
