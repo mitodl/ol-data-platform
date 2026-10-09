@@ -168,12 +168,12 @@ select
     , human_turns.explicit_rating
     , human_turns.occurred_at as created_at
     , human_turns.chatsession_updated_on as updated_at
-    , json_object(
-        'chatsession_agent': human_turns.chatsession_agent
-        , 'checkpoint_source': human_turns.checkpoint_source
-        , 'checkpoint_type': human_turns.checkpoint_type
-        , 'courserun_platform': course_run.platform
-    ) as source_metadata
+    , {{ json_object_from_pairs([
+        ['chatsession_agent', "human_turns.chatsession_agent"]
+        , ['checkpoint_source', "human_turns.checkpoint_source"]
+        , ['checkpoint_type', "human_turns.checkpoint_type"]
+        , ['courserun_platform', "course_run.platform"]
+    ]) }} as source_metadata
 from human_turns
 left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id

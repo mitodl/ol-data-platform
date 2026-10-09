@@ -212,12 +212,12 @@ select
     , cast(null as varchar) as explicit_rating
     , numbered_turns.post_created_on as created_at
     , numbered_turns.thread_updated_on as updated_at
-    , json_object(
-        'post_type': numbered_turns.post_type
-        , 'thread_type': forum_thread.forumthread_type
-        , 'commentable_id': forum_thread.forumthread_commentable_id
-        , 'courserun_platform': 'mitxonline'
-    ) as source_metadata
+    , {{ json_object_from_pairs([
+        ['post_type', "numbered_turns.post_type"]
+        , ['thread_type', "forum_thread.forumthread_type"]
+        , ['commentable_id', "forum_thread.forumthread_commentable_id"]
+        , ['courserun_platform', "'mitxonline'"]
+    ]) }} as source_metadata
 from numbered_turns
 inner join forum_thread
     on numbered_turns.forumthread_id = forum_thread.forumthread_id

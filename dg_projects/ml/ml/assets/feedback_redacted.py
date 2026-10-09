@@ -70,7 +70,7 @@ class FeedbackRedactedConfig(Config):
 
 
 @asset(
-    code_version="feedback_redacted_v4",
+    code_version="feedback_redacted_v5",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_redacted"]),
     deps=[AssetKey(["intermediate", "int__feedback__unioned"])],
