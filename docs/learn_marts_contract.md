@@ -73,7 +73,9 @@ Each source may add additional columns following its needs. Common patterns incl
 `integrations__learn__ocw_courses` has one row per course in the OCW live bucket, read from
 the course's published `data.json`, which is what MIT Learn's OCW ETL reads. It does not
 follow the delimited-string columns above. A course has one run, so the run's fields are
-columns of the course. A course that leaves the bucket leaves the model.
+columns of the course. A course that leaves the bucket leaves the model. A directory left in
+the bucket by a site that ocw-studio now publishes under another path is not a course, and
+its files are not in `integrations__learn__ocw_content_files`.
 
 MIT Learn matches an OCW course on `url`, not `readable_id`; both are unique here.
 
@@ -288,3 +290,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-05 | Tobias Macey | YouTube and podcasts are pulled from the warehouse, not pushed by webhook. Added the media sources section. `etl_source` for podcasts is `podcast`, as the models and MIT Learn's `ETLSource` have it. |
 | 2026-10-06 | Tobias Macey | xPRO models rebuilt on what MIT Learn's xPRO ETL reads from the xPRO catalog API. Added `integrations__learn__xpro_runs` with prices and enrollment dates. `runs`, `page_slug`, `length`, `effort` and the course `instructors` string are gone from the xPRO models; `topics` is an array; `url` is absolute; `published` follows price. |
 | 2026-10-07 | Tobias Macey | `integrations__learn__ocw_courses` rebuilt on each course's published `data.json`, which MIT Learn's OCW ETL reads, in place of ocw-studio's database. `readable_id` takes Learn's form; added `run_id`, `slug`, `image_alt`, `image_description`, `ocw_topics`, `content_tags`, `hide_download`; `level`, `extra_course_numbers`, `departments` and `topics` are arrays; `departments` holds numbers; `instructors` is JSON; `description` is HTML; `url` ends in a slash. |
+| 2026-10-09 | Tobias Macey | The OCW models leave out a bucket directory that no ocw-studio site has as its `url_path` (the old path of a renamed site), which had put two rows with one `readable_id` and `run_id` in `integrations__learn__ocw_courses`. |
