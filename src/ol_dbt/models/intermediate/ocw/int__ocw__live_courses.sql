@@ -6,11 +6,26 @@
   int__ocw__courses is the same courses as ocw-studio holds them. data.json is
   what OCW published: its description is rendered HTML, its topics include the
   MIT Learn topics, and its paths are the published ones.
+
+  A site renamed in ocw-studio is published under its new path and its old
+  directory stays in the bucket, with a data.json that carries the same uids.
+  MIT Learn keeps the newer of the two by the files' S3 modification times,
+  which the load does not record. ocw-studio's url_path is the path a site is
+  published at now, so a directory no site has as its url_path is left out.
 #}
 
-with content as (
-    select * from {{ ref('stg__ocw__s3__course_content') }}
-    where coursecontent_kind = 'course'
+with published_paths as (
+    select distinct website_url_path
+    from {{ ref('stg__ocw__studio__postgres__websites_website') }}
+    where website_url_path is not null
+)
+
+, content as (
+    select course_content.*
+    from {{ ref('stg__ocw__s3__course_content') }} as course_content
+    inner join published_paths
+        on concat('courses/', course_content.course_slug) = published_paths.website_url_path
+    where course_content.coursecontent_kind = 'course'
 )
 
 , parsed as (
