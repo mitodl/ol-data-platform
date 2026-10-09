@@ -461,7 +461,7 @@ models:
   - name: ai_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
       values - TutorBot, CanvasSyllabusBot, ResourceRecommendationBot, VideoGPTBot,
-      SyllabusBot
+      SyllabusBot, SearchSummaryBot
     tests:
     - not_null
   - name: courserun_readable_id
@@ -473,7 +473,7 @@ models:
     - not_null
   - name: resource_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
-      on the ai_agent. May be blank for ResourceRecommendationBot.
+      on the ai_agent. May be blank for ResourceRecommendationBot and SearchSummaryBot.
   - name: human_message
     description: str, the human message
   - name: ai_message
