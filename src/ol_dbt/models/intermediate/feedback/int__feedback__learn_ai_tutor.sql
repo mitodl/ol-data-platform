@@ -159,6 +159,7 @@ select
         when 'SyllabusBot' then 'course'
         when 'CanvasSyllabusBot' then 'course'
         when 'ResourceRecommendationBot' then 'resource'
+        when 'SearchSummaryBot' then 'resource'
     end as subject_type
     , human_turns.chatsession_object_id as subject_ref
     , cast(null as varchar) as subject_url
