@@ -38,6 +38,8 @@ from ol_dbt_cli.lib.surrogate_keys import (
     surrogate_key_state,
 )
 
+from lakehouse.lib.dbt_environment import SKIP_UNIT_TESTS_ARGS
+
 SURROGATE_KEY_STATE_ARTIFACT = "surrogate-key-state.json"
 """S3 object (under DbtS3ArtifactsResource's prefix) holding the last build's
 surrogate-key hash inputs. Written only after the repair build succeeds, so a
@@ -139,6 +141,7 @@ def full_refresh_build_args(
     return [
         "build",
         "--full-refresh",
+        *SKIP_UNIT_TESTS_ARGS,
         "--select",
         " ".join(models),
         *(build_vars or []),

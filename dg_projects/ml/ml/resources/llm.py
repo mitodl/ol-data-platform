@@ -120,7 +120,23 @@ class LLMClientFactory(ConfigurableResource):
             return self._client
 
         if self.client_class == "gemini":
-            self._client = genai.Client(api_key=self._require_env("GEMINI_API_KEY"))
+            # Deployed environments set GOOGLE_GENAI_USE_VERTEXAI along with
+            # GOOGLE_CLOUD_PROJECT/LOCATION and a workload identity credential
+            # file, so the client reaches Gemini through Vertex AI with no API
+            # key. Everything is passed explicitly: left to its own environment
+            # lookup the SDK lets GOOGLE_GENAI_USE_ENTERPRISE override this
+            # variable, and falls back to a stray API key when project and
+            # location are both missing.
+            if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("true", "1"):
+                self._client = genai.Client(
+                    vertexai=True,
+                    project=self._require_env("GOOGLE_CLOUD_PROJECT"),
+                    location=self._require_env("GOOGLE_CLOUD_LOCATION"),
+                )
+            else:
+                self._client = genai.Client(
+                    vertexai=False, api_key=self._require_env("GEMINI_API_KEY")
+                )
             return self._client
 
         # anthropic/openai: the only two client_class values with no dedicated

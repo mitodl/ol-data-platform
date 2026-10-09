@@ -41,12 +41,16 @@ from __future__ import annotations
 import datetime
 import logging
 import re
-from dataclasses import dataclass
+from collections.abc import Collection
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import boto3
+from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.glue import GlueCatalog
+from pyiceberg.table.metadata import TableMetadata
+from pyiceberg.table.refs import SnapshotRefType
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +103,16 @@ class RawLayerTableInfo:
     latest_snapshot_timestamp_ms: int | None = None
 
 
+@dataclass
+class RawLayerScan:
+    """What the raw-layer catalog scan found, and what it could not read."""
+
+    tables: list[RawLayerTableInfo] = field(default_factory=list)
+    # "<table>: <error>" for each table whose metadata failed to load. These
+    # never reach expire_snapshots, so the caller has to count them as failed.
+    failures: list[str] = field(default_factory=list)
+
+
 @dataclass(frozen=True)
 class SnapshotPointerLag:
     """A table whose Iceberg current-snapshot-id lags behind the latest snapshot.
@@ -139,6 +153,17 @@ RAW_LAYER_GROUP_CONFIGS: dict[str, RawLayerGroupConfig] = {
     # Fallback for all other raw__ groups
     "_default": RawLayerGroupConfig(snapshot_retention_days=7),
 }
+
+# Airbyte's S3 Data Lake destination writes each sync to a branch named
+# ``airbyte_staging_<uuid>`` and leaves the branch behind once ``main`` has been
+# moved. pyiceberg never expires the head of a branch, so each leftover branch
+# keeps one snapshot (and every file it references) for good. The bare
+# ``airbyte_staging`` branch is not matched: whether the connector writes to it
+# again after creating it has not been checked.
+AIRBYTE_STAGING_BRANCH = re.compile(
+    r"airbyte_staging_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12}"
+)
+MAIN_BRANCH = "main"
 
 # Which warehouse environment each Dagster environment maintains. dev maps to
 # production because DAGSTER_ENV="dev" targets the production dbt profile
@@ -291,18 +316,78 @@ def get_glue_catalog(region: str = AWS_REGION) -> GlueCatalog:
 # ── Maintenance Operations ────────────────────────────────────────────────────
 
 
-def expire_snapshots(
-    catalog: GlueCatalog,
+def stale_branches(
+    metadata: TableMetadata, cutoff_ms: int, pattern: re.Pattern[str]
+) -> list[str]:
+    """Return the branches matching *pattern* whose head is older than the cutoff.
+
+    ``main`` is never returned, whatever the pattern. Neither is a branch whose
+    head is missing from the metadata: pyiceberg refuses to remove such a ref.
+    """
+    timestamps = {s.snapshot_id: s.timestamp_ms for s in metadata.snapshots}
+    return sorted(
+        name
+        for name, ref in metadata.refs.items()
+        if name != MAIN_BRANCH
+        and ref.snapshot_ref_type == SnapshotRefType.BRANCH
+        and pattern.fullmatch(name)
+        and ref.snapshot_id in timestamps
+        and timestamps[ref.snapshot_id] < cutoff_ms
+    )
+
+
+def expirable_snapshot_ids(
+    metadata: TableMetadata, cutoff_ms: int, dropped_refs: Collection[str] = ()
+) -> set[int]:
+    """Return the snapshots past the cutoff that are safe to expire.
+
+    The head of every branch and every tagged snapshot is kept whatever its
+    age, apart from the refs in *dropped_refs*. So is the current snapshot:
+    pyiceberg protects ref heads only, and on a table whose ``main`` ref and
+    ``current-snapshot-id`` disagree (see ``find_snapshot_pointer_lag``) it
+    would expire the snapshot readers are on.
+    """
+    protected = {
+        ref.snapshot_id
+        for name, ref in metadata.refs.items()
+        if name not in dropped_refs
+    }
+    if metadata.current_snapshot_id is not None:
+        protected.add(metadata.current_snapshot_id)
+    return {
+        s.snapshot_id
+        for s in metadata.snapshots
+        if s.timestamp_ms < cutoff_ms and s.snapshot_id not in protected
+    }
+
+
+def expire_snapshots(  # noqa: PLR0913
+    catalog: Catalog,
     database: str,
     table_name: str,
     retention_days: int,
     *,
     dry_run: bool = False,
+    stale_branch_pattern: re.Pattern[str] | None = None,
 ) -> dict[str, Any]:
     """Expire old Iceberg snapshots for a table via pyiceberg.
 
     Uses the pyiceberg >= 0.10.0 API:
-        ``table.maintenance.expire_snapshots().older_than(cutoff_dt).commit()``
+        ``table.maintenance.expire_snapshots().by_ids(ids).commit()``
+
+    The ids come from ``expirable_snapshot_ids`` instead of ``older_than``,
+    which does not protect a current snapshot that no ref points at.
+
+    This removes the snapshots from the table metadata and nothing else.
+    pyiceberg deletes none of the data, manifest or manifest-list files the
+    expired snapshots referenced, so expiry by itself frees no storage.
+
+    With *stale_branch_pattern*, branches matching it whose head is older than
+    the retention window are removed first, so the snapshots they pin expire in
+    the same run.
+
+    A table that cannot be loaded, or a commit that fails, raises. Callers
+    count that as a failed table.
 
     Returns a result dict with the following keys:
 
@@ -310,62 +395,45 @@ def expire_snapshots(
     - ``dry_run`` (bool, optional): Present when dry_run=True.
     - ``reason`` (str, optional): Why the operation was skipped.
     - ``total_snapshots`` (int): Total snapshot count before expiry.
-    - ``eligible_count`` (int): Number of snapshots that qualified for expiry.
-    - ``error`` (str, optional): Exception message on failure.
+    - ``eligible_count`` (int): Number of snapshots expired (or, on a dry run,
+      that would be).
+    - ``stale_branch_count`` (int): Number of branches removed (or that would be).
     """
     cutoff_dt = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(
         days=retention_days
     )
     cutoff_ms = int(cutoff_dt.timestamp() * 1000)
 
-    try:
-        table = catalog.load_table(f"{database}.{table_name}")
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "Could not load %s.%s for snapshot expiry: %s", database, table_name, exc
-        )
-        return {"skipped": True, "error": str(exc)}
-
-    snapshots = table.metadata.snapshots
-    current_id = table.metadata.current_snapshot_id
-    eligible = [
-        s
-        for s in snapshots
-        if s.snapshot_id != current_id and s.timestamp_ms < cutoff_ms
-    ]
+    table = catalog.load_table(f"{database}.{table_name}")
+    metadata = table.metadata
+    branches = (
+        stale_branches(metadata, cutoff_ms, stale_branch_pattern)
+        if stale_branch_pattern
+        else []
+    )
+    eligible = expirable_snapshot_ids(metadata, cutoff_ms, branches)
+    result: dict[str, Any] = {
+        "skipped": True,
+        "total_snapshots": len(metadata.snapshots),
+        "eligible_count": len(eligible),
+        "stale_branch_count": len(branches),
+    }
 
     if dry_run:
-        return {
-            "skipped": True,
-            "dry_run": True,
-            "total_snapshots": len(snapshots),
-            "eligible_count": len(eligible),
-        }
+        return {**result, "dry_run": True}
 
-    if not eligible:
-        return {
-            "skipped": True,
-            "reason": "no eligible snapshots",
-            "total_snapshots": len(snapshots),
-            "eligible_count": 0,
-        }
+    if not eligible and not branches:
+        return {**result, "reason": "no eligible snapshots"}
 
-    try:
-        table.maintenance.expire_snapshots().older_than(cutoff_dt).commit()
-    except Exception as exc:  # noqa: BLE001
-        log.warning("expire_snapshots failed for %s.%s: %s", database, table_name, exc)
-        return {
-            "skipped": True,
-            "error": str(exc),
-            "total_snapshots": len(snapshots),
-            "eligible_count": len(eligible),
-        }
+    if branches:
+        manage = table.manage_snapshots()
+        for branch in branches:
+            manage.remove_branch(branch)
+        manage.commit()
+    if eligible:
+        table.maintenance.expire_snapshots().by_ids(sorted(eligible)).commit()
 
-    return {
-        "skipped": False,
-        "total_snapshots": len(snapshots),
-        "eligible_count": len(eligible),
-    }
+    return {**result, "skipped": False}
 
 
 # ── Manifest Parsing ──────────────────────────────────────────────────────────
@@ -516,11 +584,14 @@ def raw_config_for_table(table_name: str) -> RawLayerGroupConfig:
 def load_raw_layer_maintenance_work(
     glue_database: str,
     region: str = AWS_REGION,
-) -> list[RawLayerTableInfo]:
+) -> RawLayerScan:
     """Scan the Glue catalog and return RawLayerTableInfo sorted by eligible snapshots.
 
     This is a read-only inspection — it does not run any maintenance.  Pass the
-    returned list to the maintenance asset for parallel processing.
+    returned tables to the maintenance asset for parallel processing.
+
+    A table whose metadata cannot be loaded is returned in ``failures`` instead
+    of ``tables``.  The caller logs them.
 
     Tables are sorted descending by ``eligible_snapshot_count`` so the worst
     offenders are processed first (fail-fast semantics for long-running jobs).
@@ -545,6 +616,7 @@ def load_raw_layer_maintenance_work(
     # ── 2. Load each table's snapshot metadata ────────────────────────────
     now_ms = int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1000)
     results: list[RawLayerTableInfo] = []
+    failures: list[str] = []
 
     for table_name in iceberg_table_names:
         group_cfg = raw_config_for_table(table_name)
@@ -553,13 +625,11 @@ def load_raw_layer_maintenance_work(
         try:
             table = catalog.load_table(f"{glue_database}.{table_name}")
             snapshots = table.metadata.snapshots
-            current_id = table.metadata.current_snapshot_id
-
-            eligible = [
-                s
-                for s in snapshots
-                if s.snapshot_id != current_id and s.timestamp_ms < cutoff_ms
-            ]
+            eligible = expirable_snapshot_ids(
+                table.metadata,
+                cutoff_ms,
+                stale_branches(table.metadata, cutoff_ms, AIRBYTE_STAGING_BRANCH),
+            )
             latest_ts = max((s.timestamp_ms for s in snapshots), default=None)
 
             results.append(
@@ -572,16 +642,18 @@ def load_raw_layer_maintenance_work(
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("Could not inspect %s.%s: %s", glue_database, table_name, exc)
+            failures.append(f"{table_name}: {exc}")
 
     # Worst offenders first so they are processed before a potential timeout
     results.sort(key=lambda t: t.eligible_snapshot_count, reverse=True)
     log.info(
-        "Snapshot scan complete: %d tables inspected, %d total snapshots eligible",
+        "Snapshot scan complete: %d tables inspected, %d could not be loaded, "
+        "%d total snapshots eligible",
         len(results),
+        len(failures),
         sum(t.eligible_snapshot_count for t in results),
     )
-    return results
+    return RawLayerScan(tables=results, failures=failures)
 
 
 def find_snapshot_pointer_lag(  # noqa: C901

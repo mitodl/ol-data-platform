@@ -1201,3 +1201,43 @@
         , cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<json>)
     )
 {%- endmacro %}
+
+{# base64url_decode_or_null: URL-safe base64 to UTF-8 text, NULL when it does not decode. #}
+{% macro base64url_decode_or_null(string_expr) -%}
+    {{ adapter.dispatch('base64url_decode_or_null', 'open_learning')(string_expr) }}
+{%- endmacro %}
+
+{% macro default__base64url_decode_or_null(string_expr) -%}
+    try(from_utf8(from_base64url({{ string_expr }})))
+{%- endmacro %}
+
+{% macro duckdb__base64url_decode_or_null(string_expr) -%}
+    {# DuckDB's from_base64 takes only the standard alphabet, padded. #}
+    try(decode(from_base64(rpad(
+        translate({{ string_expr }}, '-_', '+/')
+        , cast(ceil(length({{ string_expr }}) / 4.0) * 4 as integer)
+        , '='
+    ))))
+{%- endmacro %}
+
+
+{# json_object_from_pairs: a JSON object as varchar from [key, expression] pairs, in order. #}
+{% macro json_object_from_pairs(pairs) -%}
+    {{ adapter.dispatch('json_object_from_pairs', 'open_learning')(pairs) }}
+{%- endmacro %}
+
+{% macro default__json_object_from_pairs(pairs) -%}
+    json_object(
+        {%- for key, expr in pairs %}
+        {% if not loop.first %}, {% endif %}'{{ key }}': {{ expr }}
+        {%- endfor %}
+    )
+{%- endmacro %}
+
+{% macro duckdb__json_object_from_pairs(pairs) -%}
+    cast(json_object(
+        {%- for key, expr in pairs %}
+        {% if not loop.first %}, {% endif %}'{{ key }}', {{ expr }}
+        {%- endfor %}
+    ) as varchar)
+{%- endmacro %}

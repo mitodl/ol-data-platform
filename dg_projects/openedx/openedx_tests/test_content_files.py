@@ -289,7 +289,7 @@ def test_empty_counts_toward_health():
 
 
 def _http_error(status):
-    request = httpx.Request("PUT", "https://tika.example/tika")
+    request = httpx.Request("PUT", "https://tika.example/rmeta/text")
     response = httpx.Response(status, request=request)
     message = f"HTTP {status}"
     return httpx.HTTPStatusError(message, request=request, response=response)
