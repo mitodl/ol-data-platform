@@ -390,8 +390,8 @@ superset_starrocks_assets = [
 # The dbt-layer schedule defaults to STOPPED and is started in the Dagster UI.
 # The raw-layer schedule is RUNNING where it is registered: left STOPPED it was
 # registered in QA and never ticked, so nothing expired the snapshots QA's own
-# raw loads leave behind. An instance that already stores a state for it keeps
-# that state.
+# raw loads leave behind. An instance where it has been started or stopped in
+# the UI keeps that state.
 iceberg_dbt_maintenance_schedule = ScheduleDefinition(
     name="iceberg_dbt_maintenance_nightly",
     job=define_asset_job(
@@ -769,10 +769,10 @@ defs = Definitions(
         dbt_docs_artifacts_job,
         dbt_source_freshness_job,
     ],
-    # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
-    # on each of these only seeds the instance's instigator state on first
-    # deploy; a UI toggle overrides it forever after, so whether one of these
-    # ticked in QA was instance state nothing in this file had a say in. A
+    # Registration is the gate. A `default_status` on one of these only seeds
+    # the instance's instigator state on first deploy; a UI toggle overrides
+    # it forever after, so whether a STOPPED one ticked in QA was instance
+    # state nothing in this file had a say in. A
     # schedule this filter drops is not stopped, it is absent -- there is
     # nothing left to toggle. Note it also drops the job for the four that
     # build one inline; see scheduled_automation for what that does and does
