@@ -144,18 +144,19 @@ def bucket_root(profile: str | None = None) -> str:
     """Return the destination bucket root (no trailing slash) for the profile.
 
     qa/production resolve to the raw data lake bucket for that environment.
-    dev resolves to a prefix of the local lake's bucket and ci/test to a
-    filesystem path; the ``OL_DLT_BUCKET_URL`` env var overrides those three
-    (the test harness sets it to a per-test tmp dir).
+    dev resolves to a prefix of the local lake's bucket: its catalog and
+    credentials belong to that one object store, so nothing overrides it.
+    ci/test resolve to a filesystem path, which the ``OL_DLT_BUCKET_URL`` env
+    var overrides (the test harness sets it to a per-test tmp dir).
     """
     resolved = profile or active_profile()
     if resolved in DEPLOYED_PROFILES:
         return f"s3://ol-data-lake-raw-{resolved}"
+    if resolved == LOCAL_LAKE_PROFILE:
+        return LOCAL_LAKE_BUCKET_ROOT
     override = os.getenv("OL_DLT_BUCKET_URL")
     if override:
         return override.rstrip("/")
-    if resolved == LOCAL_LAKE_PROFILE:
-        return LOCAL_LAKE_BUCKET_ROOT
     if resolved == "test":
         return Path(tempfile.gettempdir(), "ol_dlt_test").as_uri()
     return "file:///tmp/.dlt/data"

@@ -60,7 +60,8 @@ def test_bucket_root(
 
 def test_bucket_root_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OL_DLT_BUCKET_URL", "file:///custom/dir/")
-    assert config.bucket_root("dev") == "file:///custom/dir"
+    assert config.bucket_root("ci") == "file:///custom/dir"
+    assert config.bucket_root("dev") == "s3://ol-data-lake-local/raw"
 
 
 def test_destination_per_source_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,7 +76,6 @@ def test_dev_destination_is_the_local_lake(monkeypatch: pytest.MonkeyPatch) -> N
     The endpoint and keys come from the catalog entry, so dlt's own files and
     the Iceberg tables cannot land in different stores.
     """
-    monkeypatch.delenv("OL_DLT_BUCKET_URL", raising=False)
     monkeypatch.setenv(
         "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT", "http://rustfs.test:9000"
     )

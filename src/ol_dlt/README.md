@@ -170,8 +170,10 @@ behind Gravitino's Iceberg REST catalog, read by StarRocks. Tables land in
 `ol-dbt starrocks --env dev`, so a source run against a local app database feeds a
 local dbt build with no Vault, VPN or AWS credentials.
 
-The pipeline runs on your machine, so it needs three port-forwards, each in its own
-terminal:
+The pipeline runs on your machine, so it needs three port-forwards. Tilt holds the
+catalog and object store ones (`iceberg-catalog-port-forward`,
+`lake-object-store-port-forward`) when your ol-infrastructure checkout has them; open
+those two by hand only if it does not, each in its own terminal:
 
 ```bash
 kubectl -n local-infra port-forward svc/local-pg-rw 5432:5432   # the app databases
