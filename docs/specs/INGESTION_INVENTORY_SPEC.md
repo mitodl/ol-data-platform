@@ -952,8 +952,10 @@ A unit moves in two steps, and they are separate changes:
 1. The dlt source is built and runs in `dev`, `ci` and `qa`. `mitxonline/app_postgres` and
    `xpro/app_postgres` are here today (`MITXONLINE_APP_DLT_ENVIRONMENTS` and
    `XPRO_APP_DLT_ENVIRONMENTS` in `dg_projects/data_loading`).
-2. Production is cut over: the Airbyte connection is paused, `production` joins that set and
-   the unit flips to `loader: dlt`.
+2. Production is cut over: every production Airbyte connection of the unit is paused,
+   `production` joins that set and the unit flips to `loader: dlt`. A unit can have more than
+   one connection (§3.5). Five in the order below have two: the three `mysql` units,
+   `edxorg/s3` and `irx/bigquery`. One left running is a second writer on the unit's tables.
 
 Local ingest needs step 1 only. In the `dev` profile `ol_dlt.database` already reads the
 local-dev CloudNativePG cluster with fixed credentials and no Vault. So the order below is
