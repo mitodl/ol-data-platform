@@ -258,6 +258,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt unit-test` | Run dbt unit tests on DuckDB with no warehouse credentials (also runs in dbt PR CI) |
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
+| `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` (see `docs/LOCAL_LAKE.md`) |
 
 ### `ol-dbt run` — Incremental State-Based Execution
 

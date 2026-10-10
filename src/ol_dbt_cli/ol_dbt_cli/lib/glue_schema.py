@@ -27,7 +27,20 @@ def columns_by_table(
     prefixes: Iterable[str] | None = None,
     region: str = "us-east-1",
 ) -> dict[str, list[str]]:
-    """Map raw table name -> its landed column names.
+    """Map raw table name -> its landed column names. See :func:`column_types_by_table`."""
+    return {
+        table: list(columns)
+        for table, columns in column_types_by_table(database, prefixes=prefixes, region=region).items()
+    }
+
+
+def column_types_by_table(
+    database: str = DEFAULT_GLUE_DATABASE,
+    *,
+    prefixes: Iterable[str] | None = None,
+    region: str = "us-east-1",
+) -> dict[str, dict[str, str]]:
+    """Map raw table name -> its landed columns, in order, with their Glue types.
 
     ``prefixes`` narrows the scan with a Glue expression per prefix, which is
     much cheaper than listing a 2,000-table database when only a few units are
@@ -43,7 +56,7 @@ def columns_by_table(
     paginator = client.get_paginator("get_tables")
     expressions = [f"{p}.*" for p in prefixes] if prefixes else [None]
 
-    out: dict[str, list[str]] = {}
+    out: dict[str, dict[str, str]] = {}
     for expression in expressions:
         kwargs = {"DatabaseName": database}
         if expression:
@@ -51,5 +64,5 @@ def columns_by_table(
         for page in paginator.paginate(**kwargs):
             for table in page["TableList"]:
                 storage = table.get("StorageDescriptor") or {}
-                out[table["Name"]] = [column["Name"] for column in storage.get("Columns", [])]
+                out[table["Name"]] = {column["Name"]: column["Type"] for column in storage.get("Columns", [])}
     return out
