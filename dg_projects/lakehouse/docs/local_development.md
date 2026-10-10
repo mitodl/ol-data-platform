@@ -72,9 +72,11 @@ To use the QA cluster instead, run with `DAGSTER_ENVIRONMENT=qa`, which is what
 (`bin/vault-login`).
 
 `DAGSTER_DBT_STARROCKS_TARGET` cannot cross that line. The host follows the
-environment and the login follows the target, so a Vault-backed target under
-`dev`, or a local target under any other environment, fails when the code
-location loads.
+environment and the login follows the target, so `dev` with any target other
+than `starrocks_local_b2b`, or a local target under any other environment,
+fails when the code location loads. That includes `starrocks_local` under
+`dev`: it would build the views in the Iceberg catalog, where the refresh asset
+does not look.
 
 The Trino side of `dev` is unchanged and still reads production.
 

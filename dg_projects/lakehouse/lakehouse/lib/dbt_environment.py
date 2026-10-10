@@ -71,12 +71,16 @@ DBT_TARGET_MAP: Mapping[str, str] = {
 # default_catalog, so it takes the local profile that writes there. The CLI's
 # `--env dev` defaults to starrocks_local, which writes the layered warehouse
 # into the Iceberg catalog, and accepts this one through --target.
+STARROCKS_LOCAL_TARGET = "starrocks_local_b2b"
+
+# Every profile that logs in to the local cluster as a passwordless root. Same
+# set as _LOCAL_DBT_TARGETS in the CLI.
 STARROCKS_LOCAL_TARGETS: frozenset[str] = frozenset(
-    {"starrocks_local", "starrocks_local_b2b"}
+    {"starrocks_local", STARROCKS_LOCAL_TARGET}
 )
 
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
-    "dev": "starrocks_local_b2b",
+    "dev": STARROCKS_LOCAL_TARGET,
     # ci connects directly to its own FE service (no port-forward), same
     # connection shape as production -- matches _ENVS["ci"]["dbt_target"].
     "ci": "starrocks_production",
@@ -212,26 +216,38 @@ STARROCKS_DBT_TARGET = resolve_for_environment(
 
 
 def starrocks_is_local(target: str, dagster_env: str) -> bool:
-    """Whether *target* is a local one, which logs in as a passwordless root.
+    """Whether *target* is the local one, which logs in as a passwordless root.
 
     The StarRocks host follows the environment and the login follows the
     target, so the two have to agree. DAGSTER_DBT_STARROCKS_TARGET could
     otherwise send the root login to a deployed FE, or Vault credentials for
     the QA cluster to whatever is listening on the local port.
 
-    :raises ValueError: when a local target is paired with a deployed
-        environment, or a Vault-backed target with ``dev``.
+    ``dev`` takes STARROCKS_LOCAL_TARGET and nothing else. The other local
+    profile, starrocks_local, is refused everywhere: it would build the views
+    in the Iceberg catalog while the refresh asset and the drift check look for
+    them in default_catalog.
+
+    :raises ValueError: when ``dev`` is paired with any other target, or a
+        deployed environment with a local one.
     """
-    is_local = target in STARROCKS_LOCAL_TARGETS
-    if is_local != (dagster_env == "dev"):
+    is_dev = dagster_env == "dev"
+    allowed = (
+        target == STARROCKS_LOCAL_TARGET
+        if is_dev
+        else target not in STARROCKS_LOCAL_TARGETS
+    )
+    if not allowed:
         msg = (
             f"StarRocks dbt target {target!r} cannot be used with "
-            f"DAGSTER_ENVIRONMENT={dagster_env!r}: the local targets "
-            f"({', '.join(sorted(STARROCKS_LOCAL_TARGETS))}) belong to dev and "
-            f"dev takes no other. For the QA cluster set DAGSTER_ENVIRONMENT=qa."
+            f"DAGSTER_ENVIRONMENT={dagster_env!r}: dev takes "
+            f"{STARROCKS_LOCAL_TARGET} and nothing else, and no other "
+            f"environment takes a local target "
+            f"({', '.join(sorted(STARROCKS_LOCAL_TARGETS))}). For the QA cluster "
+            f"set DAGSTER_ENVIRONMENT=qa."
         )
         raise ValueError(msg)
-    return is_local
+    return is_dev
 
 
 STARROCKS_IS_LOCAL = starrocks_is_local(STARROCKS_DBT_TARGET, DAGSTER_ENV)

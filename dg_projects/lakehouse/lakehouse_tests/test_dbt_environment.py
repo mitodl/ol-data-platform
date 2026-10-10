@@ -18,6 +18,7 @@ from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
     STARROCKS_DBT_TARGET_MAP,
+    STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
     resolve_for_environment,
     starrocks_is_local,
@@ -92,9 +93,9 @@ def test_both_dbt_projects_agree_on_environment(environment, monkeypatch):
 def test_dev_reads_the_lake_its_cluster_can_see():
     """`dev` is the local StarRocks, whose only lake catalog is the local one.
 
-    Its target has to be a local one too: only those log in without Vault.
+    Its target has to be the local one too: only that logs in without Vault.
     """
-    assert STARROCKS_DBT_TARGET_MAP["dev"] in STARROCKS_LOCAL_TARGETS
+    assert STARROCKS_DBT_TARGET_MAP["dev"] == STARROCKS_LOCAL_TARGET
     assert DATA_LAKE_ENV_MAP["dev"] == "local"
 
 
@@ -136,6 +137,9 @@ def test_every_environment_s_own_target_passes_the_login_guard(environment):
     ("target", "environment"),
     [
         ("starrocks_local", "production"),
+        # Passwordless and local, but it writes the Iceberg catalog, where the
+        # refresh asset and the drift check would not find the views.
+        ("starrocks_local", "dev"),
         ("starrocks_local_b2b", "qa"),
         ("starrocks_local_b2b", "ci"),
         ("starrocks_qa_vault", "dev"),
