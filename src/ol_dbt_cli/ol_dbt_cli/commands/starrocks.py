@@ -61,6 +61,7 @@ console = Console()
 err_console = Console(stderr=True)
 
 _STARROCKS_PORT = 9030
+_LOCAL_DBT_TARGET = "starrocks_local"
 _PORT_FORWARD_TIMEOUT = 15
 
 # Mirrors ENVS in bin/starrocks-auth; keep in sync when adding environments.
@@ -100,7 +101,7 @@ _ENVS: dict[str, dict[str, Any]] = {
         "fe_service": "starrocks",
         "vault_addr": None,
         "vault_mount": None,
-        "dbt_target": "starrocks_local",
+        "dbt_target": _LOCAL_DBT_TARGET,
         "data_lake_env": "local",
         "port_forward": False,
     },
@@ -296,6 +297,15 @@ def run(  # noqa: PLR0913
     # and "you cannot tell which mode you are in" is the specific failure this
     # separation exists to fix -- so say it, every run.
     uses_vault = env_cfg["vault_addr"] is not None
+    # The local profile carries its own credentials and the others read the
+    # ones fetched from Vault below, so a --target on the other side of that
+    # line would run with credentials meant for a different cluster, or none.
+    if target is not None and (target == _LOCAL_DBT_TARGET) == uses_vault:
+        err_console.print(
+            f"[red]--target {target} cannot be used with --env {env}:[/] "
+            f"{_LOCAL_DBT_TARGET} is the only target for the local lake, and it only works there."
+        )
+        sys.exit(1)
     console.print(
         f"[bold]ol-dbt starrocks[/] — env: [cyan]{env}[/], "
         f"cluster: [cyan]{env_cfg['host']}[/], "

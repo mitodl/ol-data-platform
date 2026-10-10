@@ -141,6 +141,25 @@ def test_dev_env_reads_the_local_lake_without_vault(mock_fetch, mock_port_forwar
     assert kwargs["target"] == "starrocks_local"
 
 
+@pytest.mark.parametrize(
+    ("env", "target"),
+    [("dev", "starrocks_production"), ("dev", "starrocks_qa_vault"), ("qa", "starrocks_local")],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_target_cannot_cross_between_local_and_vault(
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str
+) -> None:
+    """A Vault-backed target under `dev` has no credentials; the local one elsewhere has the wrong ones."""
+    with pytest.raises(SystemExit):
+        run(env=env, target=target)
+
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
