@@ -65,7 +65,7 @@ ol-dbt fixtures capture --unit xpro/app_postgres
 ```
 
 That writes the columns and types of the unit's `modeled: true` tables (or of each
-`--table`) into the fixture file and keeps any rows already there. A nested or binary
+`--table`) into the fixture file and keeps the rows and comments already there. A nested or binary
 column has no fixture type and is left out, with a warning naming it. For a table a dlt
 source in this repository writes, the source's schema is the authority and no capture is
 needed (`ingestion/inventory/fixtures/ocw__s3.yml` follows `ol_dlt.sources.ocw_content`).

@@ -218,3 +218,91 @@ def test_capture_rejects_a_table_the_units_do_not_declare(tmp_path: Path, monkey
 
     with pytest.raises(SystemExit):
         fixtures_command.capture(unit=["demo/s3"], inventory_dir=inventory_dir, table=["raw__demo__s3__nope"])
+
+
+def test_capture_keeps_comments_and_writes_nothing_when_glue_has_no_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inventory_dir = _inventory(tmp_path, None)
+    path = inventory_dir / "fixtures" / "demo__s3.yml"
+    monkeypatch.setattr(fixtures_command, "column_types_by_table", lambda *_, **__: {})
+
+    fixtures_command.capture(unit=["demo/s3"], inventory_dir=inventory_dir)
+    assert not path.exists()
+
+    path.parent.mkdir()
+    path.write_text(
+        "schema_version: 1\ntables:\n"
+        f"  {RAW_TABLE}:\n    columns:\n      id: long\n    rows:\n"
+        "    # the row the model must drop\n    - id: 1\n"
+    )
+    monkeypatch.setattr(
+        fixtures_command, "column_types_by_table", lambda *_, **__: {RAW_TABLE: {"id": "bigint", "name": "string"}}
+    )
+
+    fixtures_command.capture(unit=["demo/s3"], inventory_dir=inventory_dir)
+
+    assert "# the row the model must drop" in path.read_text()
+    (fixture,) = load_fixtures(inventory_dir, load_units(inventory_dir))
+    assert fixture.tables[0].columns == {"id": "long", "name": "string"}
+    assert fixture.tables[0].rows == [{"id": 1}]
+
+
+class _Recorder:
+    """Stands in for the StarRocks connection and its cursor."""
+
+    def __init__(self) -> None:
+        self.connect_kwargs: dict[str, Any] = {}
+        self.statements: list[tuple[str, Any]] = []
+
+    def connect(self, **kwargs: Any) -> _Recorder:
+        self.connect_kwargs = kwargs
+        return self
+
+    def cursor(self) -> _Recorder:
+        return self
+
+    def execute(self, statement: str) -> None:
+        self.statements.append((statement, None))
+
+    def executemany(self, statement: str, parameters: list[tuple[Any, ...]]) -> None:
+        self.statements.append((statement, parameters))
+
+    def close(self) -> None:
+        pass
+
+
+def test_load_recreates_each_table_on_the_local_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import mysql.connector  # noqa: PLC0415
+
+    fixture = _fixture({"id": "long"}, [{"id": 1}])
+    fixture["tables"]["raw__demo__s3__unread"] = {"columns": {"id": "long"}, "rows": []}
+    inventory_dir = _inventory(tmp_path, fixture)
+    recorder = _Recorder()
+    monkeypatch.setattr(mysql.connector, "connect", recorder.connect)
+    # A shell set up for the QA profile must not move the root login off the local lake.
+    monkeypatch.setenv("DBT_STARROCKS_HOST", "lakehouse.qa.example")
+
+    fixtures_command.load(inventory_dir=inventory_dir)
+
+    assert recorder.connect_kwargs == {
+        "host": "127.0.0.1",
+        "port": 9030,
+        "user": "root",
+        "password": "",
+        "autocommit": True,
+    }
+    raw = "`ol_data_lake_local`.`ol_warehouse_local_raw`"
+    assert recorder.statements == [
+        (f"CREATE DATABASE IF NOT EXISTS {raw}", None),
+        (f"DROP TABLE IF EXISTS {raw}.`{RAW_TABLE}` FORCE", None),
+        (f"CREATE TABLE {raw}.`{RAW_TABLE}` (`id` BIGINT)", None),
+        (f"INSERT INTO {raw}.`{RAW_TABLE}` (`id`) VALUES (%s)", [(1,)]),  # noqa: S608
+        (f"DROP TABLE IF EXISTS {raw}.`raw__demo__s3__unread` FORCE", None),
+        (f"CREATE TABLE {raw}.`raw__demo__s3__unread` (`id` BIGINT)", None),
+    ]
+
+
+def test_load_without_fixtures_exits(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        fixtures_command.load(inventory_dir=_inventory(tmp_path, None))

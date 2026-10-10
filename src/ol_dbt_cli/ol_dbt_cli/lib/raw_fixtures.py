@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, MutableMapping
 
     from ol_dbt_cli.lib.inventory import Unit
 
@@ -246,21 +246,24 @@ def _parameter(value: Any) -> Any:
     return value
 
 
-def merge_captured(existing: Mapping[str, Any] | None, captured: Mapping[str, Mapping[str, str]]) -> dict[str, Any]:
+def merge_captured(existing: MutableMapping[str, Any] | None, captured: Mapping[str, Mapping[str, str]]) -> Any:
     """Fold freshly captured column maps into a fixture document.
 
     A table already in the document keeps its rows and takes the captured
-    columns; a table not captured is left alone.
+    columns; a table not captured is left alone. ``existing`` is changed in
+    place and returned, so a round-trip YAML document keeps its comments.
 
     :param existing: The parsed fixture file, or ``None`` when there is none.
     :param captured: ``{raw_table: {column: fixture type}}``.
     :returns: The document to write.
-    :rtype: dict[str, Any]
     """
-    document: dict[str, Any] = {"schema_version": SCHEMA_VERSION, "tables": {}}
-    if existing:
-        document["tables"] = {name: dict(body) for name, body in existing["tables"].items()}
+    document: MutableMapping[str, Any] = (
+        existing if existing is not None else {"schema_version": SCHEMA_VERSION, "tables": {}}
+    )
+    tables: MutableMapping[str, Any] = document["tables"]
     for raw_table, columns in captured.items():
-        body = document["tables"].setdefault(raw_table, {"rows": []})
-        document["tables"][raw_table] = {"columns": dict(columns), "rows": body.get("rows") or []}
+        if raw_table in tables:
+            tables[raw_table]["columns"] = dict(columns)
+        else:
+            tables[raw_table] = {"columns": dict(columns), "rows": []}
     return document

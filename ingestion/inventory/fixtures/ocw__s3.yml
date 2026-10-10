@@ -32,7 +32,7 @@ tables:
         primary_course_number: '99.001'
       course_version: v1
       course_retrieved_at: 2026-09-01 00:00:00
-      _dlt_load_id: '1756684800.000001'
+      _dlt_load_id: '1788220800.000001'
     - course_slug: 99-001-local-fixtures-fall-2025
       content_kind: course
       s3_key: courses/99-001-local-fixtures-fall-2025/data.json
@@ -67,7 +67,7 @@ tables:
         hide_download: false
       course_version: v2
       course_retrieved_at: 2026-10-01 00:00:00
-      _dlt_load_id: '1759276800.000001'
+      _dlt_load_id: '1790812800.000001'
     - course_slug: 99-001-local-fixtures-fall-2025
       content_kind: page
       s3_key: courses/99-001-local-fixtures-fall-2025/pages/syllabus/data.json
@@ -77,7 +77,7 @@ tables:
         content: The syllabus of a course that exists only in the local lake.
       course_version: v2
       course_retrieved_at: 2026-10-01 00:00:00
-      _dlt_load_id: '1759276800.000001'
+      _dlt_load_id: '1790812800.000001'
     - course_slug: 99-001-local-fixtures-fall-2025
       content_kind: resource
       s3_key: courses/99-001-local-fixtures-fall-2025/resources/lecture-1/data.json
@@ -96,7 +96,7 @@ tables:
       extraction_status: extracted
       course_version: v2
       course_retrieved_at: 2026-10-01 00:00:00
-      _dlt_load_id: '1759276800.000001'
+      _dlt_load_id: '1790812800.000001'
     # A second course with the optional fields absent.
     - course_slug: 99-002-sparse-metadata-spring-2026
       content_kind: course
@@ -113,7 +113,7 @@ tables:
         hide_download: true
       course_version: v1
       course_retrieved_at: 2026-10-01 00:00:00
-      _dlt_load_id: '1759276800.000001'
+      _dlt_load_id: '1790812800.000001'
     # A course that left the bucket: its newest set is the one unpublished row,
     # so it must not reach the model.
     - course_slug: 99-003-unpublished-fall-2024
@@ -126,9 +126,9 @@ tables:
         primary_course_number: '99.003'
       course_version: v1
       course_retrieved_at: 2026-09-01 00:00:00
-      _dlt_load_id: '1756684800.000001'
+      _dlt_load_id: '1788220800.000001'
     - course_slug: 99-003-unpublished-fall-2024
       content_kind: unpublished
       course_version: v2
       course_retrieved_at: 2026-10-01 00:00:00
-      _dlt_load_id: '1759276800.000001'
+      _dlt_load_id: '1790812800.000001'

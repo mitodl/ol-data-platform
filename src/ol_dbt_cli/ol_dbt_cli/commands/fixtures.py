@@ -11,15 +11,14 @@ are in ``ol_dbt_cli.lib.raw_fixtures``.
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, cast
 
-import yaml
 from cyclopts import App, Parameter
 from rich.console import Console
 from rich.markup import escape
+from ruamel.yaml import YAML
 
 from ol_dbt_cli.lib.cursor_audit import select_units
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, column_types_by_table
@@ -51,6 +50,12 @@ fixtures_app = App(
 LOCAL_CATALOG = "ol_data_lake_local"
 LOCAL_RAW_SCHEMA = "ol_warehouse_local_raw"
 LOCAL_USER = "root"
+# Where Tilt forwards the local StarRocks, and what `ol-dbt starrocks --env dev`
+# sets DBT_STARROCKS_HOST to. Not read from that variable: a shell that exports
+# it for the QA profile would send this command's root login to QA.
+LOCAL_HOST = "127.0.0.1"
+LOCAL_PORT = 9030
+YAML_WIDTH = 4096
 
 InventoryDir = Annotated[
     Path,
@@ -78,10 +83,8 @@ def load(
     *,
     inventory_dir: InventoryDir = DEFAULT_INVENTORY_DIR,
     unit: UnitKeys = None,
-    host: Annotated[
-        str | None, Parameter(help="StarRocks FE host. Default: DBT_STARROCKS_HOST, else 127.0.0.1.")
-    ] = None,
-    port: Annotated[int | None, Parameter(help="StarRocks query port. Default: DBT_STARROCKS_PORT, else 9030.")] = None,
+    host: Annotated[str, Parameter(help="StarRocks FE host.")] = LOCAL_HOST,
+    port: Annotated[int, Parameter(help="StarRocks query port.")] = LOCAL_PORT,
     schema: Annotated[str, Parameter(help="Raw schema to create the tables in.")] = LOCAL_RAW_SCHEMA,
 ) -> None:
     """Create and fill the raw tables of every committed fixture.
@@ -100,8 +103,8 @@ def load(
     import mysql.connector  # noqa: PLC0415
 
     connection = mysql.connector.connect(
-        host=host or os.environ.get("DBT_STARROCKS_HOST", "127.0.0.1"),
-        port=port or int(os.environ.get("DBT_STARROCKS_PORT", "9030")),
+        host=host,
+        port=port,
         user=LOCAL_USER,
         password="",
         autocommit=True,
@@ -148,21 +151,26 @@ def capture(
     (struct, array, map, binary) is left out and named, since a staging model
     that reads it will not build from the fixture.
     """
+    units = _select(inventory_dir, unit)
     wanted = set(table or [])
-    found: set[str] = set()
-    for selected in _select(inventory_dir, unit):
+    declared = {str(entry["raw_table"]) for selected in units for entry in selected.tables}
+    if unknown := sorted(wanted - declared):
+        err_console.print(f"[bold red]Not a table of the selected units: {', '.join(unknown)}")
+        sys.exit(1)
+    for selected in units:
         if selected.data["strategies"]["local"] != FIXTURE_STRATEGY:
             err_console.print(
                 f"[bold red]{escape(selected.key)} has strategies.local: "
                 f"{escape(str(selected.data['strategies']['local']))}; `load` would reject its fixture."
             )
             sys.exit(1)
+
+    for selected in units:
         tables = [
             str(entry["raw_table"])
             for entry in selected.tables
             if (entry["raw_table"] in wanted if wanted else entry["modeled"])
         ]
-        found.update(tables)
         if not tables:
             continue
         landed = column_types_by_table(glue_database, prefixes=[str(selected.data["table_prefix"])], region=region)
@@ -181,14 +189,21 @@ def capture(
                     )
                     continue
                 columns[column] = fixture_type
+            if not columns:
+                err_console.print(f"[yellow]{escape(raw_table)} has no column the format can hold; skipped.")
+                continue
             captured[raw_table] = columns
 
         path = fixture_path(inventory_dir, selected)
-        existing: dict[str, Any] | None = yaml.safe_load(path.read_text()) if path.exists() else None
+        if not captured:
+            err_console.print(f"[yellow]Nothing captured for {escape(selected.key)}; {escape(str(path))} not written.")
+            continue
+        # Round-trip, so the comments explaining hand-written rows survive.
+        round_trip = YAML()
+        round_trip.explicit_start = True
+        round_trip.width = YAML_WIDTH
+        existing = round_trip.load(path.read_text()) if path.exists() else None
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("---\n" + yaml.safe_dump(merge_captured(existing, captured), sort_keys=False))
+        with path.open("w") as handle:
+            round_trip.dump(merge_captured(existing, captured), handle)
         console.print(f"Wrote {escape(str(path))}: {len(captured)} table(s)")
-
-    if unknown := sorted(wanted - found):
-        err_console.print(f"[bold red]Not a table of the selected units: {', '.join(unknown)}")
-        sys.exit(1)

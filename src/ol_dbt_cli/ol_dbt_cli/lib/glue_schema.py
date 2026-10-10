@@ -64,5 +64,5 @@ def column_types_by_table(
         for page in paginator.paginate(**kwargs):
             for table in page["TableList"]:
                 storage = table.get("StorageDescriptor") or {}
-                out[table["Name"]] = {column["Name"]: column["Type"] for column in storage.get("Columns", [])}
+                out[table["Name"]] = {column["Name"]: column.get("Type", "") for column in storage.get("Columns", [])}
     return out
