@@ -62,6 +62,9 @@ err_console = Console(stderr=True)
 
 _STARROCKS_PORT = 9030
 _LOCAL_DBT_TARGET = "starrocks_local"
+# The second local profile writes StarRocks' own tables (the b2b materialized
+# views) into default_catalog on the same cluster. Dagster's `dev` builds on it.
+_LOCAL_DBT_TARGETS = frozenset({_LOCAL_DBT_TARGET, "starrocks_local_b2b"})
 _PORT_FORWARD_TIMEOUT = 15
 
 # Mirrors ENVS in bin/starrocks-auth; keep in sync when adding environments.
@@ -80,8 +83,8 @@ _VAULT_MOUNT = "database-starrocks"
 # so adding an environment forces both answers.
 #
 # Mirrors STARROCKS_DBT_TARGET_MAP / DATA_LAKE_ENV_MAP in
-# lakehouse.lib.dbt_environment; keep the two in step, except for `dev` (see
-# its entry).
+# lakehouse.lib.dbt_environment; keep the two in step. The `dev` targets differ
+# on purpose (see its entry).
 _ENVS: dict[str, dict[str, Any]] = {
     # `dev` is the local lake from ol-infrastructure's local-dev stack
     # (`data-platform` in enabled_apps): StarRocks in k3d, with the
@@ -90,10 +93,10 @@ _ENVS: dict[str, dict[str, Any]] = {
     # the starrocks_local profile names itself. Tilt keeps 127.0.0.1:9030
     # forwarded, so no port-forward is started here unless --port-forward asks
     # for one.
-    # The Dagster side has not moved yet: STARROCKS_DBT_TARGET_MAP["dev"] and
-    # DATA_LAKE_ENV_MAP["dev"] in lakehouse.lib.dbt_environment still name the
-    # QA cluster, so a bare `dagster dev` and `--env dev` here disagree until
-    # the StarRocks resource there can connect without Vault.
+    # Dagster's `dev` is the same cluster and lake, on the starrocks_local_b2b
+    # profile: its StarRocks project builds only the b2b materialized views,
+    # which belong in default_catalog. `--target starrocks_local_b2b` does the
+    # same from here.
     "dev": {
         "host": "127.0.0.1",
         "eks_context": "k3d-local-dev",
@@ -297,13 +300,14 @@ def run(  # noqa: PLR0913
     # and "you cannot tell which mode you are in" is the specific failure this
     # separation exists to fix -- so say it, every run.
     uses_vault = env_cfg["vault_addr"] is not None
-    # The local profile carries its own credentials and the others read the
+    # The local profiles carry their own credentials and the others read the
     # ones fetched from Vault below, so a --target on the other side of that
     # line would run with credentials meant for a different cluster, or none.
-    if target is not None and (target == _LOCAL_DBT_TARGET) == uses_vault:
+    if target is not None and (target in _LOCAL_DBT_TARGETS) == uses_vault:
         err_console.print(
             f"[red]--target {target} cannot be used with --env {env}:[/] "
-            f"{_LOCAL_DBT_TARGET} is the only target for the local lake, and it only works there."
+            f"{', '.join(sorted(_LOCAL_DBT_TARGETS))} are the targets for the local lake, "
+            "and they only work there."
         )
         sys.exit(1)
     console.print(

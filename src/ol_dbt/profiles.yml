@@ -119,6 +119,19 @@ open_learning:
       username: root
       password: ''
       threads: 4
+    # StarRocks' own tables on the same local cluster: the b2b materialized
+    # views live in default_catalog and read ol_data_lake_local through it.
+    # Dagster's `dev` builds on this one. The stack creates b2b_analytics and
+    # b2b_learner_records.
+    starrocks_local_b2b:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      database: default_catalog
+      schema: b2b_analytics
+      username: root
+      password: ''
+      threads: 4
     starrocks_production:
       type: starrocks
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")

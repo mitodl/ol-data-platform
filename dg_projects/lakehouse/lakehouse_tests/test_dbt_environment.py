@@ -8,20 +8,27 @@ exhaustiveness rather than about specific target names.
 """
 
 import importlib
+from pathlib import Path
 
 import pytest
+import yaml
 from lakehouse.lib import dbt_environment
 from lakehouse.lib.dbt_environment import (
     DATA_LAKE_ENV_MAP,
     DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
     STARROCKS_DBT_TARGET_MAP,
+    STARROCKS_LOCAL_TARGETS,
     resolve_for_environment,
+    starrocks_is_local,
 )
+from ol_dbt_cli.commands import starrocks as starrocks_cli
 from ol_orchestrate.lib import constants
 from ol_orchestrate.lib.constants import VALID_DAGSTER_ENVS
 
 ENVIRONMENTS = ("dev", "ci", "qa", "production")
+
+PROFILES_PATH = Path(__file__).parents[3] / "src/ol_dbt/profiles.yml"
 
 ALL_MAPS = pytest.mark.parametrize(
     ("name", "value_map"),
@@ -54,11 +61,10 @@ def test_unknown_environment_raises(name, value_map, monkeypatch):
         )
 
 
-# `dev` is excluded deliberately: a laptop cannot reach the production
-# StarRocks FE (an in-cluster service), so the dev StarRocks target
-# port-forwards to the QA cluster while the dev Trino target is production.
-# That divergence is real, and it is exactly why "which cluster" and "which
-# lake" have to be separate axes.
+# `dev` is excluded deliberately: the dev StarRocks target is the local k3d
+# cluster while the dev Trino target is production. That divergence is real,
+# and it is exactly why "which cluster" and "which lake" have to be separate
+# axes.
 DEPLOYED_ENVIRONMENTS = ("ci", "qa", "production")
 
 
@@ -84,19 +90,72 @@ def test_both_dbt_projects_agree_on_environment(environment, monkeypatch):
 
 
 def test_dev_reads_the_lake_its_cluster_can_see():
-    """`dev` connects to the QA StarRocks cluster, so it must read the QA lake.
+    """`dev` is the local StarRocks, whose only lake catalog is the local one.
 
-    It used to read production through the QA cluster, which has no
-    production lake access (ol-infrastructure#5472/#5670, #6023), so any other
-    value here fails every dev b2b build.
+    Its target has to be a local one too: only those log in without Vault.
     """
-    assert STARROCKS_DBT_TARGET_MAP["dev"] == STARROCKS_DBT_TARGET_MAP["qa"]
-    assert DATA_LAKE_ENV_MAP["dev"] == DATA_LAKE_ENV_MAP["qa"] == "qa"
+    assert STARROCKS_DBT_TARGET_MAP["dev"] in STARROCKS_LOCAL_TARGETS
+    assert DATA_LAKE_ENV_MAP["dev"] == "local"
+
+
+def test_only_dev_is_local():
+    """A deployed environment on a local target would log in as a bare root."""
+    for environment in DEPLOYED_ENVIRONMENTS:
+        assert STARROCKS_DBT_TARGET_MAP[environment] not in STARROCKS_LOCAL_TARGETS
+        assert DATA_LAKE_ENV_MAP[environment] != "local"
+
+
+def test_local_targets_are_declared_profiles():
+    """A target missing from profiles.yml only fails when dbt parses."""
+    profiles = yaml.safe_load(PROFILES_PATH.read_text())
+    assert set(profiles["open_learning"]["outputs"]) >= STARROCKS_LOCAL_TARGETS
+
+
+def test_local_targets_match_the_cli():
+    """The CLI keeps its own copy of the set for the same guard."""
+    assert starrocks_cli._LOCAL_DBT_TARGETS == STARROCKS_LOCAL_TARGETS
+
+
+def test_local_profiles_take_no_credentials_from_the_environment():
+    """Dagster exports Vault credentials as DBT_STARROCKS_*; these ignore them."""
+    outputs = yaml.safe_load(PROFILES_PATH.read_text())["open_learning"]["outputs"]
+    for target in STARROCKS_LOCAL_TARGETS:
+        assert (outputs[target]["username"], outputs[target]["password"]) == (
+            "root",
+            "",
+        )
+
+
+@pytest.mark.parametrize("environment", ENVIRONMENTS)
+def test_every_environment_s_own_target_passes_the_login_guard(environment):
+    target = STARROCKS_DBT_TARGET_MAP[environment]
+    assert starrocks_is_local(target, environment) is (environment == "dev")
+
+
+@pytest.mark.parametrize(
+    ("target", "environment"),
+    [
+        ("starrocks_local", "production"),
+        ("starrocks_local_b2b", "qa"),
+        ("starrocks_local_b2b", "ci"),
+        ("starrocks_qa_vault", "dev"),
+        ("starrocks_production", "dev"),
+    ],
+)
+def test_an_override_cannot_cross_between_local_and_vault(target, environment):
+    """The host follows the environment and the login follows the target.
+
+    A local target under a deployed environment would send a bare root login to
+    that environment's FE; a Vault target under dev would send QA credentials
+    to the local port.
+    """
+    with pytest.raises(ValueError, match=target):
+        starrocks_is_local(target, environment)
 
 
 def test_data_lake_env_values_are_real_catalogs():
     """Values are interpolated into `ol_data_lake_<env>`, so typos are silent."""
-    assert set(DATA_LAKE_ENV_MAP.values()) <= {"qa", "production"}
+    assert set(DATA_LAKE_ENV_MAP.values()) <= {"local", "qa", "production"}
 
 
 @ALL_MAPS

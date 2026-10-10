@@ -141,9 +141,26 @@ def test_dev_env_reads_the_local_lake_without_vault(mock_fetch, mock_port_forwar
     assert kwargs["target"] == "starrocks_local"
 
 
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_dev_env_accepts_the_local_b2b_target(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """The profile Dagster's `dev` builds the b2b views on is reachable from the CLI too."""
+    run(env="dev", target="starrocks_local_b2b")
+
+    mock_fetch.assert_not_called()
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["target"] == "starrocks_local_b2b"
+
+
 @pytest.mark.parametrize(
     ("env", "target"),
-    [("dev", "starrocks_production"), ("dev", "starrocks_qa_vault"), ("qa", "starrocks_local")],
+    [
+        ("dev", "starrocks_production"),
+        ("dev", "starrocks_qa_vault"),
+        ("qa", "starrocks_local"),
+        ("qa", "starrocks_local_b2b"),
+    ],
 )
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
