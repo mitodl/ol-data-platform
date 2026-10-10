@@ -107,6 +107,18 @@ open_learning:
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
       threads: 4
+    # The lake in ol-infrastructure's local-dev cluster (`data-platform` in
+    # enabled_apps), reached over Tilt's port-forward. `ol-dbt starrocks --env dev`
+    # selects it. The schema is created by that stack, not by dbt.
+    starrocks_local:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      catalog: ol_data_lake_local
+      schema: ol_warehouse_local
+      username: root
+      password: ''
+      threads: 4
     starrocks_production:
       type: starrocks
       host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")

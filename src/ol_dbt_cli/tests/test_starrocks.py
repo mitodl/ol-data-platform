@@ -37,18 +37,16 @@ def test_env_config_has_required_keys(env_name: str) -> None:
 @pytest.mark.parametrize("env_name", list(_ENVS))
 def test_data_lake_env_is_a_real_catalog(env_name: str) -> None:
     """Interpolated into `ol_data_lake_<env>`, so a typo fails only at query time."""
-    assert _ENVS[env_name]["data_lake_env"] in {"qa", "production"}
+    assert _ENVS[env_name]["data_lake_env"] in {"local", "qa", "production"}
 
 
-def test_dev_reads_the_lake_its_cluster_can_see() -> None:
-    """`dev` connects to the QA cluster, which has no production catalog.
-
-    Mirrors STARROCKS_DBT_TARGET_MAP["dev"] / DATA_LAKE_ENV_MAP["dev"] in
-    lakehouse.lib.dbt_environment, which the Dagster side resolves from.
-    """
-    assert _ENVS["dev"]["dbt_target"] == _ENVS["qa"]["dbt_target"]
-    assert _ENVS["dev"]["host"] == _ENVS["qa"]["host"]
-    assert _ENVS["dev"]["data_lake_env"] == _ENVS["qa"]["data_lake_env"] == "qa"
+def test_dev_is_the_local_lake() -> None:
+    """`dev` is the k3d lake: its own cluster and catalog, and no Vault."""
+    assert _ENVS["dev"]["dbt_target"] == "starrocks_local"
+    assert _ENVS["dev"]["host"] == "127.0.0.1"
+    assert _ENVS["dev"]["data_lake_env"] == "local"
+    assert _ENVS["dev"]["vault_addr"] is None
+    assert _ENVS["dev"]["port_forward"] is False
 
 
 def test_ci_connects_directly_like_production() -> None:
@@ -130,15 +128,36 @@ def test_ci_env_skips_port_forward_by_default(mock_fetch, mock_port_forward, moc
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
-def test_dev_env_reads_qa_lake_from_qa_cluster(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
-    """`--env dev` connects to QA and exports the QA lake, the only one it can read."""
-    mock_fetch.return_value = ("user", "pass")
+def test_dev_env_reads_the_local_lake_without_vault(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """`--env dev` reaches the local StarRocks with no Vault login and no tunnel of its own."""
     run(env="dev")
 
-    mock_port_forward.assert_called_once()
-    assert os.environ["DBT_DATA_LAKE_ENV"] == "qa"
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    assert os.environ["DBT_STARROCKS_HOST"] == "127.0.0.1"
+    assert os.environ["DBT_DATA_LAKE_ENV"] == "local"
+    assert "DBT_STARROCKS_USERNAME" not in os.environ
     _, kwargs = mock_dbt_run.call_args
-    assert kwargs["target"] == "starrocks_qa_vault"
+    assert kwargs["target"] == "starrocks_local"
+
+
+@pytest.mark.parametrize(
+    ("env", "target"),
+    [("dev", "starrocks_production"), ("dev", "starrocks_qa_vault"), ("qa", "starrocks_local")],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_target_cannot_cross_between_local_and_vault(
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str
+) -> None:
+    """A Vault-backed target under `dev` has no credentials; the local one elsewhere has the wrong ones."""
+    with pytest.raises(SystemExit):
+        run(env=env, target=target)
+
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
 
 
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")

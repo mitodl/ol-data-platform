@@ -17,7 +17,14 @@
     CREATE DATABASE. The MVs landed somewhere ungranted, so the `app` role that
     the API authenticates as could not have read them anyway.
 
-    For StarRocks, therefore, treat `+schema` as the literal schema name.
+    For StarRocks' own tables, therefore, treat `+schema` as the literal schema
+    name.
+
+    That holds only while the target writes to default_catalog. A target whose
+    `catalog` is an Iceberg lake (starrocks_local) builds the same layered
+    warehouse the Trino targets do, and its readers address a layer as
+    `<target.schema>_<layer>` (MIT Learn's WAREHOUSE_SCHEMA, the `_raw` suffix
+    the source definitions add), so it keeps dbt's concatenation.
 
     Every other target keeps dbt's default concatenation: this macro file is
     shared by both dbt projects in this repo (the Trino-scoped one in dbt.py and
@@ -40,7 +47,7 @@
     `None` and is refused for the same reason.
 #}
 {% macro generate_schema_name(custom_schema_name, node) -%}
-    {%- if target.type == 'starrocks' and custom_schema_name is not none -%}
+    {%- if target.type == 'starrocks' and target.catalog == 'default_catalog' and custom_schema_name is not none -%}
         {{ custom_schema_name | trim }}
     {%- else -%}
         {%- set schema_name = default__generate_schema_name(custom_schema_name, node) | trim -%}
