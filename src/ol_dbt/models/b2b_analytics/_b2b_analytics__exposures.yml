@@ -1,0 +1,36 @@
+---
+# What reads these views outside the warehouse. ol-analytics-api selects columns
+# by name (build_select in its tenants/b2b_dashboard/queries.py), so removing or
+# renaming a column of a model listed here breaks the API until it is changed,
+# and an added column the API is to select has to be built before the API
+# deploys. Enabled on StarRocks only, like the models: a ref to a disabled model
+# fails parsing on the other targets.
+version: 2
+exposures:
+- name: ol_analytics_api_b2b_dashboard
+  label: ol-analytics-api B2B dashboard
+  type: application
+  maturity: high
+  url: https://github.com/mitodl/ol-analytics-api/tree/main/src/ol_analytics_api/tenants/b2b_dashboard
+  description: >
+    The b2b_dashboard tenant of ol-analytics-api, which serves the organization
+    and contract dashboards in MIT Learn. It publishes rows of these views
+    under a k-anonymity floor. Its own CohortPolicy declarations say how the
+    floor applies to each column; config.meta.cohort on the models records the
+    same thing next to the SQL.
+  config:
+    enabled: "{{ target.type == 'starrocks' }}"
+  owner:
+    name: data-platform
+  depends_on:
+  - ref('mv_b2b_contract_utilization')
+  - ref('mv_b2b_enrollment_completion_funnel')
+  - ref('mv_b2b_monthly_engagement_trend')
+  - ref('mv_b2b_contract_monthly_engagement_trend')
+  - ref('mv_b2b_program_funnel')
+  - ref('mv_b2b_content_engagement_depth')
+  - ref('mv_b2b_contract_content_engagement_depth')
+  - ref('mv_b2b_mit_admin_contract_health')
+  - ref('mv_b2b_learner_enrollment')
+  - ref('mv_b2b_learner')
+  - ref('mv_b2b_contract_courserun')

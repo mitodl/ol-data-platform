@@ -4,6 +4,24 @@
 # against the live materialized view and rebuilds the view when the two differ
 # (lakehouse/lib/starrocks_dbt.py). ol-dbt validate errors in both directions,
 # so the lists cannot fall out of step without CI saying so.
+#
+# Every column also declares config.meta.cohort: what a consumer that publishes
+# these rows under a k-anonymity floor has to do with it. ol-analytics-api
+# declares the same thing per response model as a CohortPolicy
+# (tenants/b2b_dashboard/models.py). Nothing compares the two yet; where they
+# differ, the declaration here is the one checked against this SQL.
+#   role: primary     the row's headline cohort; the row is withheld under the floor
+#   role: secondary   another distinct-learner count, withheld on its own under the
+#                     floor. contained_in names the cohort it is a subset of, so the
+#                     learners in that cohort and not in this one are also checked
+#                     against the floor. uncontained: true says no such check
+#                     applies: it is a subset of no cohort in the row, or only of
+#                     one the consumer does not publish (contributing_learners).
+#   role: derived     a total, rate or average that gives away the size of the
+#                     cohorts in derived_from, and is withheld whenever one of them is
+#   role: measure     computed, and needs no rule beyond the row being published
+#   role: dimension   a key, label or attribute of the grain
+# ol-dbt validate (cohort_policy) holds the declarations of one model together.
 version: 2
 models:
 - name: mv_b2b_contract_utilization
@@ -15,15 +33,31 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_id
     description: >
       mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
@@ -31,30 +65,86 @@ models:
       ol-analytics-api filters contracts on. contract_pk above is the
       dimensional surrogate (md5 of this value) and is the join key to
       dim_contract; a caller holding a contract from mitxonline has this one.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_is_active
     description: Whether the contract is currently active.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_start_date
     description: Contract start date.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_end_date
     description: >
       Contract end date. It drives the at_risk window in
       mv_b2b_mit_admin_contract_health.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: seat_limit
     description: b2b_contract_max_learners.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_membership_type
     description: Contract membership type.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: seats_consumed
     description: Distinct learners enrolled in any course run under this contract.
+    config:
+      meta:
+        cohort:
+          role: primary
   - name: active_learners
     description: Distinct learners with an active enrollment under this contract.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: seats_consumed
   - name: learners_certified
-    description: Distinct learners holding a non-revoked certificate under this contract.
+    description: >
+      Distinct learners holding a non-revoked certificate under this contract.
+      Certificates are joined to the contract by course run, not through an
+      enrollment, so a holder with no enrollment row is counted here and not in
+      seats_consumed.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: seat_utilization_pct
     description: seats_consumed / seat_limit * 100.
+    config:
+      meta:
+        cohort:
+          role: measure
   - name: completion_rate_pct
     description: learners_certified / seats_consumed * 100.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - learners_certified
 
 - name: mv_b2b_enrollment_completion_funnel
   description: >
@@ -65,15 +155,31 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_id
     description: >
       mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
@@ -81,26 +187,77 @@ models:
       ol-analytics-api filters contracts on. contract_pk above is the
       dimensional surrogate (md5 of this value) and is the join key to
       dim_contract; a caller holding a contract from mitxonline has this one.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_pk
     description: Surrogate key of the course run.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_readable_id
     description: Human-readable course run identifier.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_title
     description: Course run title.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: enrolled_learners
     description: Distinct learners enrolled in this course run.
+    config:
+      meta:
+        cohort:
+          role: primary
   - name: active_learners
     description: Distinct learners with an active enrollment.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: enrolled_learners
   - name: passing_learners
     description: Distinct learners with a passing grade.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: enrolled_learners
   - name: certified_learners
     description: Distinct learners with a non-revoked certificate.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: enrolled_learners
   - name: active_rate_pct
     description: active_learners / enrolled_learners * 100.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - active_learners
   - name: completion_rate_pct
     description: certified_learners / enrolled_learners * 100.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - certified_learners
 
 - name: mv_b2b_monthly_engagement_trend
   description: >
@@ -115,71 +272,151 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: activity_year_and_month
     description: The month this row aggregates, as YYYY-MM.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: monthly_active_learners
     description: >
       Distinct learners with tracked course activity in the month (a video
       play, problem check, navigation, discussion event or chatbot submit).
       Enrolling or being issued a certificate does not count as activity.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: new_enrollments
     description: >
       Active enrollments created in the month, an EVENT count
       (learner x course run), not a learner count. Floor it via
       enrolling_learners, not via its own value.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - enrolling_learners
   - name: enrolling_learners
     description: >
       Distinct learners who newly enrolled in the month. They are the cohort
       new_enrollments is attributable to. Enrolling is not activity, so
       this is not a subset of monthly_active_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: certificates_earned
     description: >
       Unrevoked certificates earned in the month, an EVENT count (learner x
       course run), whether or not the enrollment is still active. Floor it via
       certified_learners.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - certified_learners
   - name: certified_learners
     description: >
       Distinct learners who earned a certificate in the month. Earning a
       certificate is not activity, so this is not a subset of
       monthly_active_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: total_videos_watched
     description: >
       Videos played in the month (distinct videos per learner per day,
       summed), an EVENT count. Floor it via
       video_watchers.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - video_watchers
   - name: video_watchers
     description: >
       Distinct learners who watched a video in the month. They are the cohort
       total_videos_watched is attributable to, and a subset of
       monthly_active_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: monthly_active_learners
   - name: total_problems_attempted
     description: >
       Problems checked in the month (distinct problems per learner per day,
       summed; viewing an answer is not an attempt), an EVENT count. Floor it via
       problem_attempters.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - problem_attempters
   - name: problem_attempters
     description: >
       Distinct learners who attempted a problem in the month. They are the
       cohort total_problems_attempted is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: monthly_active_learners
   - name: total_chatbot_interactions
     description: >
       Chatbot interactions in the month, an EVENT count. Floor it via
       chatbot_users.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - chatbot_users
   - name: chatbot_users
     description: >
       Distinct learners who used the chatbot in the month. They are the cohort
       total_chatbot_interactions is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: monthly_active_learners
   - name: contributing_learners
     description: >
       Distinct learners with any row behind this month: tracked activity, a new
       enrollment or a certificate. Every other learner count in the row is a
       subset of it, so ol-analytics-api gates the whole row on it.
+    config:
+      meta:
+        cohort:
+          role: primary
 
 - name: mv_b2b_program_funnel
   description: >
@@ -191,15 +428,31 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_id
     description: >
       mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
@@ -207,24 +460,58 @@ models:
       ol-analytics-api filters contracts on. contract_pk above is the
       dimensional surrogate (md5 of this value) and is the join key to
       dim_contract; a caller holding a contract from mitxonline has this one.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: program_pk
     description: Surrogate key of the program.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: program_title
     description: Program title.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: total_courses
     description: >
       Distinct courses in this program that the contract actually covers. The
       denominator is scoped to (contract, program), not to the full program, so
       completion rates aren't understated for partial-program contracts.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: enrolled_in_contract_courses
     description: Learners enrolled in any contract course belonging to this program.
+    config:
+      meta:
+        cohort:
+          role: primary
   - name: enrolled_via_program
     description: Learners who explicitly enrolled via the program pathway (tfact_enrollment.program_fk).
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: enrolled_in_contract_courses
   - name: program_course_completers
     description: Learners holding a non-revoked certificate in any course in this
       program (approximation).
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: enrolled_in_contract_courses
 
 - name: mv_b2b_content_engagement_depth
   description: >
@@ -240,66 +527,159 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_readable_id
     description: Human-readable course run identifier.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_title
     description: Course run title.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: total_enrolled_learners
     description: Distinct learners with an active enrollment in this course run.
+    config:
+      meta:
+        cohort:
+          role: primary
   - name: engaged_learners
     description: >
       Distinct enrolled learners with at least one day of tracked course
       activity in the run. A certificate alone does not count. They are the
       denominator of both avg_* columns and of engagement_rate_pct.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: total_enrolled_learners
   - name: engagement_rate_pct
     description: engaged_learners / total_enrolled_learners * 100.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - engaged_learners
   - name: total_videos_watched
     description: >
       Videos watched, all-time. This is an EVENT count. Floor it via video_watchers.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - video_watchers
   - name: video_watchers
     description: >
       Distinct learners who watched at least one video. They are the cohort
       total_videos_watched is attributable to, and a subset of
       engaged_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: engaged_learners
   - name: avg_videos_per_engaged_learner
     description: >
       total_videos_watched / engaged_learners, averaged across every engaged
       learner, so learners who watched nothing count as 0.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - engaged_learners
+          - video_watchers
   - name: total_problems_attempted
     description: >
       Problems checked, all-time (distinct problems per learner per day,
       summed; viewing an answer is not an attempt). This is an EVENT count. Floor
       it via
       problem_attempters.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - problem_attempters
   - name: problem_attempters
     description: >
       Distinct learners who attempted at least one problem. They are the
       cohort total_problems_attempted is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: engaged_learners
   - name: avg_problems_per_engaged_learner
     description: >
       total_problems_attempted / engaged_learners, averaged across every
       engaged learner, so learners who attempted nothing count as 0.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - engaged_learners
+          - problem_attempters
   - name: total_chatbot_interactions
     description: >
       Chatbot interactions, all-time, an EVENT count. Floor it via
       chatbot_users.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - chatbot_users
   - name: chatbot_users
     description: >
       Distinct learners who used the chatbot. They are the cohort
       total_chatbot_interactions is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: engaged_learners
   - name: chatbot_adoption_pct
     description: chatbot_users / total_enrolled_learners * 100.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - chatbot_users
   - name: certificates_earned
     description: >
       Learners holding an unrevoked certificate for this course run, whether
       or not their enrollment is still active, so it is not a subset of
       total_enrolled_learners. One per learner, so it is its own cohort.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -313,15 +693,31 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on. Null for
       organization_keys that don't resolve to a mitxonline org.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_id
     description: >
       mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
@@ -329,36 +725,92 @@ models:
       ol-analytics-api filters contracts on. contract_pk above is the
       dimensional surrogate (md5 of this value) and is the join key to
       dim_contract; a caller holding a contract from mitxonline has this one.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_is_active
     description: >
       Whether the contract is currently active. It drives the inactive
       health_status.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_start_date
     description: Contract start date.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_end_date
     description: >
       Contract end date. It drives the at_risk 90-day window.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: seat_limit
     description: b2b_contract_max_learners.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_membership_type
     description: Contract membership type.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: seats_consumed
     description: Distinct learners enrolled in any course run under this contract.
+    config:
+      meta:
+        cohort:
+          role: primary
   - name: active_learners
     description: Distinct learners with an active enrollment under this contract.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: seats_consumed
   - name: certified_learners
     description: Distinct learners holding a non-revoked certificate under this contract.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: seats_consumed
   - name: seat_utilization_pct
     description: seats_consumed / seat_limit * 100.
+    config:
+      meta:
+        cohort:
+          role: measure
   - name: completion_rate_pct
     description: certified_learners / seats_consumed * 100.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - certified_learners
   - name: health_status
     description: >
       One of: inactive (contract not active), at_risk (utilization < 25% and
       expiring within 90 days), high_utilization (utilization >= 90%), healthy
       (utilization >= 50% and not at_risk), early_stage (everything else).
+    config:
+      meta:
+        cohort:
+          role: measure
 - name: mv_b2b_contract_monthly_engagement_trend
   description: >
     Monthly engagement, enrollment, and content-interaction totals per org x
@@ -377,81 +829,173 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_id
     description: >
       mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
       the identifier that appears in mitxonline manager-dashboard URLs and that
       ol-analytics-api filters contracts on.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: activity_year_and_month
     description: The month this row aggregates, as YYYY-MM.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: monthly_active_learners
     description: >
       Distinct learners with tracked course activity in the month (enrolling
       or being issued a certificate does not count), under course runs
       belonging to this contract. A learner active under two contracts counts
       in both rows, so contract rows do not partition the org's learner count.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: new_enrollments
     description: >
       Active enrollments created in the month, an EVENT count
       (learner x course run), not a learner count. Floor it via
       enrolling_learners, not via its own value.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - enrolling_learners
   - name: enrolling_learners
     description: >
       Distinct learners who newly enrolled in the month. They are the cohort
       new_enrollments is attributable to. Enrolling is not activity, so
       this is not a subset of monthly_active_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: certificates_earned
     description: >
       Unrevoked certificates earned in the month, an EVENT count (learner x
       course run), whether or not the enrollment is still active. Floor it via
       certified_learners.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - certified_learners
   - name: certified_learners
     description: >
       Distinct learners who earned a certificate in the month. Earning a
       certificate is not activity, so this is not a subset of
       monthly_active_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
   - name: total_videos_watched
     description: >
       Videos played in the month (distinct videos per learner per day,
       summed), an EVENT count. Floor it via
       video_watchers.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - video_watchers
   - name: video_watchers
     description: >
       Distinct learners who watched a video in the month. They are the cohort
       total_videos_watched is attributable to, and a subset of
       monthly_active_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: monthly_active_learners
   - name: total_problems_attempted
     description: >
       Problems checked in the month (distinct problems per learner per day,
       summed; viewing an answer is not an attempt), an EVENT count. Floor it via
       problem_attempters.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - problem_attempters
   - name: problem_attempters
     description: >
       Distinct learners who attempted a problem in the month. They are the
       cohort total_problems_attempted is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: monthly_active_learners
   - name: total_chatbot_interactions
     description: >
       Chatbot interactions in the month, an EVENT count. Floor it via
       chatbot_users.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - chatbot_users
   - name: chatbot_users
     description: >
       Distinct learners who used the chatbot in the month. They are the cohort
       total_chatbot_interactions is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: monthly_active_learners
   - name: contributing_learners
     description: >
       Distinct learners with any row behind this month: tracked activity, a new
       enrollment or a certificate. Every other learner count in the row is a
       subset of it, so ol-analytics-api gates the whole row on it.
+    config:
+      meta:
+        cohort:
+          role: primary
 - name: mv_b2b_contract_content_engagement_depth
   description: >
     All-time content engagement depth per org x contract x course run. This is
@@ -468,76 +1012,181 @@ models:
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: sso_organization_id
     description: >
       Keycloak organization UUID (dim_organization.sso_organization_id). This
       is the identifier the ol-analytics-api filters organizations on.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: organization_name
     description: Display name of the organization.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: contract_id
     description: >
       mitxonline's ContractPage.page_ptr_id (dim_contract.contract_id). This is
       the identifier that appears in mitxonline manager-dashboard URLs and that
       ol-analytics-api filters contracts on.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_readable_id
     description: Course run identifier (e.g. course-v1:MITx+6.00+2026).
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: courserun_title
     description: Display title of the course run.
+    config:
+      meta:
+        cohort:
+          role: dimension
   - name: total_enrolled_learners
     description: Distinct learners with an active enrollment in this course run under
       this contract.
+    config:
+      meta:
+        cohort:
+          role: primary
   - name: engaged_learners
     description: >
       Distinct enrolled learners with at least one day of tracked course
       activity in this course run. A certificate alone does not count.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: total_enrolled_learners
   - name: engagement_rate_pct
     description: engaged_learners as a percentage of total_enrolled_learners.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - engaged_learners
   - name: total_videos_watched
     description: >
       Videos watched in this course run, an EVENT count. Floor it via
       video_watchers.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - video_watchers
   - name: video_watchers
     description: >
       Distinct learners who watched a video. They are the cohort
       total_videos_watched is attributable to, and a subset of
       engaged_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: engaged_learners
   - name: avg_videos_per_engaged_learner
     description: >
       total_videos_watched divided by engaged_learners. Derived from BOTH
       cohorts: the denominator is engaged_learners, but the numerator is
       contributed only by video_watchers, so an unsuppressed average times a
       published engaged_learners recovers the total.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - engaged_learners
+          - video_watchers
   - name: total_problems_attempted
     description: >
       Problems checked in this course run (distinct problems per learner per
       day, summed; viewing an answer is not an attempt), an EVENT count. Floor it
       via
       problem_attempters.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - problem_attempters
   - name: problem_attempters
     description: >
       Distinct learners who attempted a problem. They are the cohort
       total_problems_attempted is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: engaged_learners
   - name: avg_problems_per_engaged_learner
     description: >
       total_problems_attempted divided by engaged_learners. Derived from both
       cohorts, for the same reason as avg_videos_per_engaged_learner.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - engaged_learners
+          - problem_attempters
   - name: total_chatbot_interactions
     description: >
       Chatbot interactions in this course run, an EVENT count. Floor it via
       chatbot_users.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - chatbot_users
   - name: chatbot_users
     description: >
       Distinct learners who used the chatbot. They are the cohort
       total_chatbot_interactions is attributable to.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: engaged_learners
   - name: chatbot_adoption_pct
     description: chatbot_users as a percentage of total_enrolled_learners.
+    config:
+      meta:
+        cohort:
+          role: derived
+          derived_from:
+          - chatbot_users
   - name: certificates_earned
     description: >
       Learners holding an unrevoked certificate for this course run, whether
       or not their enrollment is still active, so it is not a subset of
       total_enrolled_learners. One per learner, so ol-analytics-api flooring
       it as a count of itself floors a learner cohort.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
