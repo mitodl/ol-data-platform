@@ -121,12 +121,16 @@ models:
           role: secondary
           contained_in: seats_consumed
   - name: learners_certified
-    description: Distinct learners holding a non-revoked certificate under this contract.
+    description: >
+      Distinct learners holding a non-revoked certificate under this contract.
+      Certificates are joined to the contract by course run, not through an
+      enrollment, so a holder with no enrollment row is counted here and not in
+      seats_consumed.
     config:
       meta:
         cohort:
           role: secondary
-          contained_in: seats_consumed
+          uncontained: true
   - name: seat_utilization_pct
     description: seats_consumed / seat_limit * 100.
     config:
