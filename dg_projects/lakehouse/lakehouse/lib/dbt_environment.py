@@ -152,7 +152,7 @@ DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 
 # Which lake each StarRocks environment READS. Mirrors the `data_lake_env`
 # entries in _ENVS in ol_dbt_cli/commands/starrocks.py; keep the two in step.
-# `dev` is the exception for now: the CLI's reads the local lake (see
+# `dev` is the exception for now: the CLI's `dev` reads the local lake (see
 # STARROCKS_DBT_TARGET_MAP above).
 #
 # Matches trino_catalog_map in definitions.py for every environment except

@@ -10,6 +10,10 @@ users). Credentials are issued by Vault's database secrets engine
 max: 6 months). The full OIDC flow documented in ``bin/starrocks-auth`` is
 for human interactive sessions; dbt uses the Vault path exclusively.
 
+The exception is ``--env dev``, the lake in the ol-infrastructure local-dev
+cluster. It has no Vault: the local StarRocks takes a passwordless root, and
+``--vault-role`` / ``--vault-oidc-role`` are ignored.
+
 Workflow::
 
     # One-shot: port-forward lives for the dbt run duration
@@ -75,7 +79,8 @@ _VAULT_MOUNT = "database-starrocks"
 # so adding an environment forces both answers.
 #
 # Mirrors STARROCKS_DBT_TARGET_MAP / DATA_LAKE_ENV_MAP in
-# lakehouse.lib.dbt_environment; keep the two in step.
+# lakehouse.lib.dbt_environment; keep the two in step, except for `dev` (see
+# its entry).
 _ENVS: dict[str, dict[str, Any]] = {
     # `dev` is the local lake from ol-infrastructure's local-dev stack
     # (`data-platform` in enabled_apps): StarRocks in k3d, with the
@@ -198,7 +203,7 @@ def _start_port_forward(env_cfg: dict[str, Any]) -> None:
 
 starrocks_app = cyclopts.App(
     name="starrocks",
-    help="Run dbt against the StarRocks lakehouse using Vault dynamic credentials.",
+    help="Run dbt against the StarRocks lakehouse using Vault dynamic credentials (none needed for --env dev).",
 )
 
 
@@ -272,7 +277,8 @@ def run(  # noqa: PLR0913
 ) -> None:
     """Run dbt against StarRocks with Vault-issued credentials.
 
-    Fetches a short-lived native-password credential from Vault's dynamic
+    ``--env dev`` is the local lake and skips the Vault step. Otherwise this
+    fetches a short-lived native-password credential from Vault's dynamic
     database secrets engine, optionally starts a kubectl port-forward to the
     StarRocks FE service, injects DBT_STARROCKS_USERNAME / DBT_STARROCKS_PASSWORD /
     DBT_STARROCKS_HOST into the environment, then delegates to ``ol-dbt run``
