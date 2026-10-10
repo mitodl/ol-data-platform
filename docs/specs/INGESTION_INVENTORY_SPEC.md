@@ -990,11 +990,11 @@ Local app is the directory under `ol-infrastructure/local-dev/apps/` that runs t
 |---|---|---|---|---|---|
 | 1 | `mitxonline/app_postgres` | `mitxonline` | 220 | 3 | Source built, production on Airbyte |
 | 2 | `xpro/app_postgres` | none | 183 | 3 | Source built, production on Airbyte |
-| 3 | `mitlearn/app_postgres` | `mit-learn` | 63 | 3 | The 3 Learn views depend on it for build order only (`int__learn__offeror_topic_lookup`) and read none of its rows |
-| 4 | `ocw/app_postgres` | `ocw-studio` | 47 | 0 | |
-| 5 | `learn_ai/app_postgres` | `learn-ai` | 19 | 0 | `ai_chatbots_djangocheckpoint` needs a load strategy first (PR #2879, open) |
-| 6 | `ovs/app_postgres` | `odl-video-service` | 13 | 0 | |
-| 7 | `micromasters/app_postgres` | none | 175 | 1 | |
+| 3 | `micromasters/app_postgres` | to be added | 175 | 1 | No local app today |
+| 4 | `mitlearn/app_postgres` | `mit-learn` | 63 | 3 | The 3 Learn views depend on it for build order only (`int__learn__offeror_topic_lookup`) and read none of its rows |
+| 5 | `ocw/app_postgres` | `ocw-studio` | 47 | 0 | |
+| 6 | `learn_ai/app_postgres` | `learn-ai` | 19 | 0 | `ai_chatbots_djangocheckpoint` needs a load strategy first (PR #2879, open) |
+| 7 | `ovs/app_postgres` | `odl-video-service` | 13 | 0 | |
 | 8 | `mitxonline/mysql` | `openedx` | 169 | 1 | First MySQL source |
 | 9 | `mitx/mysql` | none | 137 | 0 | |
 | 10 | `xpro/mysql` | none | 120 | 0 | |
@@ -1029,16 +1029,20 @@ How the order was built:
   one table, so it goes ahead. Zendesk and Mailgun (23, 24) have no source either, though
   several HTTP API sources exist (`mitpe`, `see`, `youtube`).
 - Within a tier, a unit whose source is already built goes first (1 and 2). After that a unit
-  with a local app goes ahead of one without, then by models downstream.
+  with a local app, or one that is to get one, goes ahead of one without, then by models
+  downstream.
 - The three `mysql` units share the Open edX schema, so 9 and 10 are configuration once 8
   exists. The local `openedx` app is one generic Open edX on lehrer's MariaDB and pairs with
   the local `mitxonline` app, which is why `mitxonline/mysql` is the one that goes first.
 
-The local input changes the difficulty-only order in two places. `micromasters/app_postgres`
-has the third most models downstream and would be third among the Postgres units. It drops
-to seventh, behind four units a contributor can run. MySQL goes ahead of S3 and file sources.
-RFC 12319 puts both in its first tier without ordering them. No S3 unit has a local producer,
-and the Open edX tables are read by more models than any S3 unit.
+The local input changes the difficulty-only order in one place. MySQL goes ahead of S3 and
+file sources. RFC 12319 puts both in its first tier without ordering them. No S3 unit has a
+local producer, and the Open edX tables are read by more models than any S3 unit.
+
+`micromasters/app_postgres` has no app under `local-dev/apps/` today. It is ranked as a unit
+with one, because the MicroMasters app can be added to local-dev, and that puts it third on
+models downstream. Until the app is added a contributor cannot ingest this unit locally, so
+its dlt source can be built before anyone can run it against a local database.
 
 ### 10.3 What was not measured
 
@@ -1048,7 +1052,7 @@ file per commit) under `src/ol_dbt/models/staging/` from 2026-07-10 to `a2a43e4d
 directories an Airbyte unit feeds: `mitxonline` 139, `mitxpro` 55, `edxorg` 54,
 `mitxresidential` 24, `openedx` 12, `zendesk` 11, `mitlearn` 11, `ocw` 10, `micromasters` 8,
 `learn-ai` 6, `ovs` 2. That agrees with the head of the order and does not separate units 3
-to 6.
+to 7.
 
 Nobody has run a dlt source against a local-dev app database and built models on the result.
 The claim that `ol_dlt.database` reads the local cluster is from its code and README.
