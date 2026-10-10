@@ -55,6 +55,7 @@ from cyclopts import Parameter
 from rich.console import Console
 
 from ol_dbt_cli.commands._vault_auth import fetch_vault_db_credentials
+from ol_dbt_cli.commands.run import IndirectSelection
 from ol_dbt_cli.commands.run import run as _dbt_run
 
 console = Console()
@@ -107,6 +108,11 @@ _ENVS: dict[str, dict[str, Any]] = {
         "dbt_target": _LOCAL_DBT_TARGET,
         "data_lake_env": "local",
         "port_forward": False,
+        # The local lake holds only what the developer built. dbt's default runs
+        # a relationships test when either model it joins is selected, so
+        # `--select +one_model` would fail on the tables of every model that
+        # points at one of its parents.
+        "indirect_selection": "buildable",
     },
     "qa": {
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
@@ -278,6 +284,14 @@ def run(  # noqa: PLR0913
         str | None,
         Parameter(name="--project-dir", help="Path to the dbt project root."),
     ] = None,
+    indirect_selection: Annotated[
+        IndirectSelection | None,
+        Parameter(
+            name="--indirect-selection",
+            help="dbt's --indirect-selection. Default: buildable for dev, dbt's own (eager) elsewhere.",
+            show_default=False,
+        ),
+    ] = None,
 ) -> None:
     """Run dbt against StarRocks with Vault-issued credentials.
 
@@ -354,4 +368,5 @@ def run(  # noqa: PLR0913
         state_dir=state_dir,
         vars=vars,
         project_dir=project_dir,
+        indirect_selection=indirect_selection or env_cfg.get("indirect_selection"),
     )

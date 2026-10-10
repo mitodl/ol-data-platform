@@ -139,6 +139,29 @@ def test_dev_env_reads_the_local_lake_without_vault(mock_fetch, mock_port_forwar
     assert "DBT_STARROCKS_USERNAME" not in os.environ
     _, kwargs = mock_dbt_run.call_args
     assert kwargs["target"] == "starrocks_local"
+    assert kwargs["indirect_selection"] == "buildable"
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_indirect_selection_is_dbt_s_default_off_the_local_lake(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """Only the local lake changes the default: the other environments get dbt's own."""
+    mock_fetch.return_value = ("user", "password")
+    run(env="qa")
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["indirect_selection"] is None
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_explicit_indirect_selection_overrides_env_default(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    run(env="dev", indirect_selection="eager")
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["indirect_selection"] == "eager"
 
 
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
