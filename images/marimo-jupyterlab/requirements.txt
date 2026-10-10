@@ -11,4 +11,4 @@
 marimo[sandbox]==0.25.1
 marimo-jupyter-extension==0.5.0
 pydantic-ai-slim[bedrock]>=1.107.0,<3.0.0
-uv==0.12.23
+uv==0.13.0
