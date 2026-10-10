@@ -1,0 +1,628 @@
+---
+# Raw tables of the mitxonline/app_postgres unit for the local lake: the 12 that
+# +integrations__learn__mitxonline_courses and _programs read. Loaded by
+# `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
+# leaves out Airbyte's _airbyte_meta struct. Every row is invented: nothing here
+# is copied from a deployed MITx Online.
+schema_version: 1
+tables:
+  raw__mitxonline__app__postgres__cms_coursepage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      about: string
+      price: string
+      effort: string
+      length: string
+      faq_url: string
+      course_id: long
+      max_weeks: long
+      min_weeks: long
+      video_url: string
+      description: string
+      page_ptr_id: long
+      prerequisites: string
+      what_you_learn: string
+      search_image_id: long
+      feature_image_id: long
+      max_weekly_hours: string
+      min_weekly_hours: string
+      faculty_section_title: string
+      include_in_learn_catalog: boolean
+      ingest_content_files_for_ai: boolean
+      hyl_choice_learn_by_doing: boolean
+      hyl_choice_learn_on_demand: boolean
+      hyl_choice_learn_from_others: boolean
+      hyl_choice_ai_enabled_support: boolean
+      hyl_choice_realworld_learning: boolean
+      hyl_choice_stackable_credentials: boolean
+      max_price: double
+      min_price: double
+      hubspot_form_id: string
+      show_course_outline: boolean
+      show_stay_updated: boolean
+    rows:
+    # `price` is a Wagtail StreamField, stored as a JSON list of blocks.
+    - page_ptr_id: 10
+      course_id: 1
+      description: <p>A course that exists only in the local lake.</p>
+      length: 4 weeks
+      effort: 5 hours per week
+      prerequisites: <p>None.</p>
+      about: <p>About a course that exists only in the local lake.</p>
+      what_you_learn: <ul><li>How fixtures stand in for a loader.</li></ul>
+      price:
+      - type: price_details
+        value:
+          text: $100
+          link: ''
+        id: 0f0e0d0c-0b0a-4909-8807-060504030201
+      min_weeks: 4
+      max_weeks: 4
+      feature_image_id: 100
+      include_in_learn_catalog: true
+      ingest_content_files_for_ai: false
+  raw__mitxonline__app__postgres__cms_coursepage_topics:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      coursepage_id: long
+      coursestopic_id: long
+    rows:
+    - id: 1
+      coursepage_id: 10
+      coursestopic_id: 1
+    - id: 2
+      coursepage_id: 10
+      coursestopic_id: 2
+  raw__mitxonline__app__postgres__cms_instructorpage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      page_ptr_id: long
+      instructor_name: string
+      feature_image_id: long
+      instructor_title: string
+      instructor_bio_long: string
+      instructor_bio_short: string
+    rows:
+    - page_ptr_id: 12
+      instructor_name: Ada Example
+      instructor_title: Professor of Fixtures
+      instructor_bio_short: Teaches courses that exist only in the local lake.
+    - page_ptr_id: 13
+      instructor_name: Grace Sample
+      instructor_title: Lecturer
+  raw__mitxonline__app__postgres__cms_instructorpagelink:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      order: long
+      page_id: long
+      linked_instructor_page_id: long
+    rows:
+    - id: 1
+      order: 0
+      page_id: 10
+      linked_instructor_page_id: 12
+    - id: 2
+      order: 1
+      page_id: 10
+      linked_instructor_page_id: 13
+    - id: 3
+      order: 0
+      page_id: 11
+      linked_instructor_page_id: 12
+  raw__mitxonline__app__postgres__cms_programpage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      about: string
+      price: string
+      effort: string
+      length: string
+      faq_url: string
+      max_weeks: long
+      min_weeks: long
+      video_url: string
+      program_id: long
+      description: string
+      page_ptr_id: long
+      prerequisites: string
+      what_you_learn: string
+      search_image_id: long
+      feature_image_id: long
+      max_weekly_hours: string
+      min_weekly_hours: string
+      faculty_section_title: string
+      include_in_learn_catalog: boolean
+      hyl_choice_learn_by_doing: boolean
+      hyl_choice_learn_on_demand: boolean
+      hyl_choice_learn_from_others: boolean
+      hyl_choice_ai_enabled_support: boolean
+      hyl_choice_realworld_learning: boolean
+      hyl_choice_stackable_credentials: boolean
+      list_price: double
+      max_price: double
+      min_price: double
+      hubspot_form_id: string
+      show_stay_updated: boolean
+    rows:
+    - page_ptr_id: 11
+      program_id: 1
+      description: <p>A program that exists only in the local lake.</p>
+      length: 8 weeks
+      effort: 5 hours per week
+      price:
+      - type: price_details
+        value:
+          text: $180
+          link: ''
+        id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+      feature_image_id: 101
+      include_in_learn_catalog: true
+  raw__mitxonline__app__postgres__courses_course:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      title: string
+      created_on: timestamp
+      updated_on: timestamp
+      readable_id: string
+      certificates_disabled: boolean
+    rows:
+    - id: 1
+      live: true
+      title: Local Fixtures 101
+      readable_id: course-v1:MITxT+99.001x
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+      certificates_disabled: false
+    # Live, with no CMS page: every page-derived column is NULL.
+    - id: 2
+      live: true
+      title: Sparse Metadata
+      readable_id: course-v1:MITxT+99.002x
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+      certificates_disabled: false
+    # Not live, so it must not reach the Learn model.
+    - id: 3
+      live: false
+      title: Unpublished Course
+      readable_id: course-v1:MITxT+99.003x
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+      certificates_disabled: false
+    # Only in the MicroMasters program, so its certification type is the
+    # MicroMasters one.
+    - id: 4
+      live: true
+      title: MicroMasters Capstone
+      readable_id: course-v1:MITxT+99.004x
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+      certificates_disabled: false
+  raw__mitxonline__app__postgres__courses_courserun:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      title: string
+      run_tag: string
+      end_date: timestamp
+      course_id: long
+      created_on: timestamp
+      start_date: timestamp
+      updated_on: timestamp
+      courseware_id: string
+      is_self_paced: boolean
+      enrollment_end: timestamp
+      expiration_date: timestamp
+      enrollment_start: timestamp
+      upgrade_deadline: timestamp
+      certificate_available_date: timestamp
+      b2b_contract_id: long
+      is_source_run: boolean
+      has_courseware_url: boolean
+      language: string
+      is_primary_language: boolean
+      variant_length: string
+      variant_industry: string
+      b2b_only: boolean
+      courseware_url_path: string
+    rows:
+    - id: 1
+      course_id: 1
+      live: true
+      title: Local Fixtures 101
+      run_tag: 1T2026
+      courseware_id: course-v1:MITxT+99.001x+1T2026
+      courseware_url_path: /learn/course/course-v1:MITxT+99.001x+1T2026/home
+      has_courseware_url: true
+      is_self_paced: false
+      is_source_run: false
+      b2b_only: false
+      start_date: 2026-02-01 00:00:00
+      end_date: 2026-05-31 00:00:00
+      enrollment_start: 2026-01-01 00:00:00
+      enrollment_end: 2026-03-01 00:00:00
+      upgrade_deadline: 2026-05-01 00:00:00
+      created_on: 2025-12-01 00:00:00
+      updated_on: 2026-01-01 00:00:00
+    # A run that is not live and has no end date: it stays in the course's run
+    # list, flagged false, with an empty end.
+    - id: 2
+      course_id: 1
+      live: false
+      title: Local Fixtures 101
+      run_tag: 3T2026
+      courseware_id: course-v1:MITxT+99.001x+3T2026
+      has_courseware_url: false
+      is_self_paced: true
+      is_source_run: false
+      b2b_only: false
+      start_date: 2026-09-01 00:00:00
+      created_on: 2026-06-01 00:00:00
+      updated_on: 2026-06-01 00:00:00
+    - id: 3
+      course_id: 2
+      live: true
+      title: Sparse Metadata
+      run_tag: 1T2026
+      courseware_id: course-v1:MITxT+99.002x+1T2026
+      has_courseware_url: true
+      is_self_paced: true
+      is_source_run: false
+      b2b_only: false
+      start_date: 2026-02-01 00:00:00
+      created_on: 2025-12-01 00:00:00
+      updated_on: 2026-01-01 00:00:00
+    - id: 4
+      course_id: 3
+      live: true
+      title: Unpublished Course
+      run_tag: 1T2026
+      courseware_id: course-v1:MITxT+99.003x+1T2026
+      has_courseware_url: true
+      is_self_paced: false
+      is_source_run: false
+      b2b_only: false
+      start_date: 2026-02-01 00:00:00
+      created_on: 2025-12-01 00:00:00
+      updated_on: 2026-01-01 00:00:00
+    # Course 4 has no run.
+  raw__mitxonline__app__postgres__courses_coursestopic:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      name: string
+      parent_id: long
+      created_on: timestamp
+      updated_on: timestamp
+    rows:
+    - id: 1
+      name: Engineering
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+    - id: 2
+      name: Data Engineering
+      parent_id: 1
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+  raw__mitxonline__app__postgres__courses_program:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      title: string
+      end_date: timestamp
+      created_on: timestamp
+      start_date: timestamp
+      updated_on: timestamp
+      readable_id: string
+      availability: string
+      program_type: string
+      enrollment_end: timestamp
+      enrollment_start: timestamp
+      b2b_only: boolean
+      display_mode: string
+      certificates_disabled: boolean
+    rows:
+    - id: 1
+      live: true
+      title: Local Fixtures Series
+      readable_id: program-v1:MITxT+LF
+      program_type: Series
+      availability: anytime
+      display_mode: course
+      b2b_only: false
+      certificates_disabled: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # A MicroMasters program with no CMS page. Staging cuts the type down to
+    # "MicroMasters" and splits the title into name and track.
+    - id: 2
+      live: true
+      title: 'Local Fixtures: Data Track'
+      readable_id: program-v1:MITxT+DEDP-LF
+      program_type: MicroMasters®
+      availability: dated
+      b2b_only: false
+      certificates_disabled: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # Not live, so it must not reach the Learn model.
+    - id: 3
+      live: false
+      title: Unpublished Program
+      readable_id: program-v1:MITxT+UNPUB
+      program_type: Series
+      availability: anytime
+      b2b_only: false
+      certificates_disabled: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+  raw__mitxonline__app__postgres__courses_programrequirement:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      path: string
+      depth: long
+      title: string
+      numchild: long
+      operator: string
+      course_id: long
+      node_type: string
+      program_id: long
+      elective_flag: boolean
+      operator_value: string
+      required_program_id: long
+    rows:
+    # A treebeard tree per program: a root, operator nodes under it and course
+    # nodes under those. `path` is four characters per level.
+    # Program 1: course 1 is required, course 2 is one of one elective.
+    - id: 1
+      program_id: 1
+      path: '0001'
+      depth: 1
+      numchild: 2
+      node_type: program_root
+      elective_flag: false
+    - id: 2
+      program_id: 1
+      path: '00010001'
+      depth: 2
+      numchild: 1
+      node_type: operator
+      operator: all_of
+      title: Required Courses
+      elective_flag: false
+    - id: 3
+      program_id: 1
+      course_id: 1
+      path: '000100010001'
+      depth: 3
+      numchild: 0
+      node_type: course
+      elective_flag: false
+    - id: 4
+      program_id: 1
+      path: '00010002'
+      depth: 2
+      numchild: 1
+      node_type: operator
+      operator: min_number_of
+      operator_value: '1'
+      title: Elective Courses
+      elective_flag: true
+    - id: 5
+      program_id: 1
+      course_id: 2
+      path: '000100020001'
+      depth: 3
+      numchild: 0
+      node_type: course
+      elective_flag: false
+    # Program 2: courses 1 and 4 are required. Course 1 is then in both
+    # programs and keeps the certification type of the one that is not a
+    # MicroMasters.
+    - id: 6
+      program_id: 2
+      path: '0002'
+      depth: 1
+      numchild: 1
+      node_type: program_root
+      elective_flag: false
+    - id: 7
+      program_id: 2
+      path: '00020001'
+      depth: 2
+      numchild: 2
+      node_type: operator
+      operator: all_of
+      title: Required Courses
+      elective_flag: false
+    - id: 8
+      program_id: 2
+      course_id: 1
+      path: '000200010001'
+      depth: 3
+      numchild: 0
+      node_type: course
+      elective_flag: false
+    - id: 9
+      program_id: 2
+      course_id: 4
+      path: '000200010002'
+      depth: 3
+      numchild: 0
+      node_type: course
+      elective_flag: false
+  raw__mitxonline__app__postgres__wagtailcore_page:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      path: string
+      slug: string
+      depth: long
+      title: string
+      locked: boolean
+      expired: boolean
+      numchild: long
+      owner_id: long
+      url_path: string
+      expire_at: timestamp
+      locale_id: long
+      locked_at: timestamp
+      seo_title: string
+      go_live_at: timestamp
+      alias_of_id: long
+      draft_title: string
+      locked_by_id: long
+      show_in_menus: boolean
+      content_type_id: long
+      translation_key: string
+      live_revision_id: long
+      last_published_at: timestamp
+      first_published_at: timestamp
+      latest_revision_id: long
+      search_description: string
+      has_unpublished_changes: boolean
+      latest_revision_created_at: timestamp
+    rows:
+    - id: 10
+      path: '0001000100010001'
+      depth: 4
+      numchild: 0
+      title: Local Fixtures 101
+      draft_title: Local Fixtures 101
+      seo_title: ''
+      search_description: ''
+      slug: course-v1mitxt99001x
+      url_path: /home/courses/course-v1mitxt99001x/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 50
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2026-09-15 12:30:00
+      latest_revision_created_at: 2026-09-15 12:30:00
+    # Published once and never again: last_modified falls back to the first
+    # publication.
+    - id: 11
+      path: '0001000100020001'
+      depth: 4
+      numchild: 0
+      title: Local Fixtures Series
+      draft_title: Local Fixtures Series
+      seo_title: ''
+      search_description: ''
+      slug: program-v1mitxtlf
+      url_path: /home/programs/program-v1mitxtlf/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 51
+      first_published_at: 2025-09-01 00:00:00
+      latest_revision_created_at: 2025-09-01 00:00:00
+    - id: 12
+      path: '0001000100030001'
+      depth: 4
+      numchild: 0
+      title: Ada Example
+      draft_title: Ada Example
+      seo_title: ''
+      search_description: ''
+      slug: ada-example
+      url_path: /home/instructors/ada-example/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 52
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+    - id: 13
+      path: '0001000100030002'
+      depth: 4
+      numchild: 0
+      title: Grace Sample
+      draft_title: Grace Sample
+      seo_title: ''
+      search_description: ''
+      slug: grace-sample
+      url_path: /home/instructors/grace-sample/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 52
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+  raw__mitxonline__app__postgres__wagtailimages_image:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      file: string
+      title: string
+      width: long
+      height: long
+      file_hash: string
+      file_size: long
+      created_at: timestamp
+      description: string
+      collection_id: long
+      focal_point_x: long
+      focal_point_y: long
+      focal_point_width: long
+      focal_point_height: long
+      uploaded_by_user_id: long
+    rows:
+    - id: 100
+      title: Local Fixtures 101
+      file: original_images/local-fixtures-101.jpg
+      width: 1200
+      height: 675
+      file_size: 20480
+      file_hash: '0000000000000000000000000000000000000100'
+      collection_id: 1
+      created_at: 2025-09-01 00:00:00
+    - id: 101
+      title: Local Fixtures Series
+      file: original_images/local-fixtures-series.jpg
+      width: 1200
+      height: 675
+      file_size: 20480
+      file_hash: '0000000000000000000000000000000000000101'
+      collection_id: 1
+      created_at: 2025-09-01 00:00:00

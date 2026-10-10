@@ -17,7 +17,21 @@ ol-dbt starrocks build --env dev --select +integrations__learn__ocw_courses
 ```
 
 Models land in `ol_warehouse_local_<layer>`. A model whose raw tables have no fixture
-fails on the missing source table.
+fails on the missing source table. The committed fixtures cover what these models and
+their parents read:
+
+| Fixture | Models |
+|---|---|
+| `ocw__s3.yml` | `integrations__learn__ocw_courses` |
+| `mitxonline__app_postgres.yml` | `integrations__learn__mitxonline_courses`, `_programs` |
+| `xpro__app_postgres.yml` | `integrations__learn__xpro_courses`, `_programs`, `_runs` |
+
+The lake holds only what you built, so `--env dev` passes dbt
+`--indirect-selection buildable`: a test that also reads a model outside the selection
+(a `relationships` test from some other model onto one you selected) is left out, where
+dbt's default would run it and fail on the missing table. `--indirect-selection eager`
+restores the default. A run with no `--select` re-selects the tests that failed last time
+by name, so after a failed eager run pass `--select` again or `--full-refresh`.
 
 ## Raw fixtures
 
