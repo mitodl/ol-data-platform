@@ -199,6 +199,10 @@ Gravitino tells every client to use the object store's in-cluster address, which
 not resolve on your machine. `ol_dlt/local_lake.py` keeps the forwarded one, and
 explains why that needs a catalog subclass.
 
+The `data_loading` container in `docker-compose.yaml` cannot reach those forwards, so
+it sets `DLT_PROFILE=ci` and keeps writing parquet files inside the container. Run the
+code location on your machine (`dagster dev`) to materialize an asset into the lake.
+
 Two things to know when a dbt build follows a load:
 
 - StarRocks caches a table's snapshot. Measured on StarRocks 4.1.6, it kept answering

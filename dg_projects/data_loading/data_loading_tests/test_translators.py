@@ -2,7 +2,7 @@
 
 These assert the asset specs produced by RawDataDltTranslator /
 EdxorgDltTranslator via the build_ingest_assets factory. They run under the
-default dev profile (filesystem storage).
+default dev profile (Iceberg on the local lake).
 """
 
 import pytest

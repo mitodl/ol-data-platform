@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import dlt
 import pytest
 from dlt.common.libs import pyiceberg as dlt_pyiceberg
 from pyiceberg.catalog.rest import RestCatalog
@@ -10,58 +11,100 @@ from ol_dlt import config, local_lake
 
 HOST_ENDPOINT = "http://localhost:9000"
 CLUSTER_ENDPOINT = "http://rustfs.local-infra.svc.cluster.local:9000"
+# What Gravitino puts in the ``config`` of a table response.
+TABLE_CONFIG = {"s3.endpoint": CLUSTER_ENDPOINT}
+LOCATION = "s3://ol-data-lake-local/raw/t"
 
 
-def _serve_cluster_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make ``/v1/config`` answer as Gravitino does, with no network."""
+@pytest.fixture(autouse=True)
+def _committed_catalog_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Read the committed entry, whatever overrides the developer has exported."""
+    for name in (
+        "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI",
+        "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
-    def fetch_config(self: RestCatalog) -> None:
-        self.properties = {**self.properties, "s3.endpoint": CLUSTER_ENDPOINT}
 
-    monkeypatch.setattr(RestCatalog, "_fetch_config", fetch_config)
+@pytest.fixture
+def offline_catalog(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Let a REST catalog be built with no server; record namespaces it creates."""
+    created: list[str] = []
+    monkeypatch.setattr(RestCatalog, "_fetch_config", lambda _self: None)
+    monkeypatch.setattr(
+        RestCatalog,
+        "create_namespace",
+        lambda _self, namespace, properties=None: created.append(namespace),  # noqa: ARG005
+    )
+    return created
 
 
-def test_dlt_loads_the_host_endpoint_catalog_for_the_local_lake(
-    monkeypatch: pytest.MonkeyPatch,
+def _open_table_catalog(profile: str, tmp_path: Any) -> Any:  # noqa: ANN401
+    pipeline = dlt.pipeline(
+        pipeline_name=f"catalog_{profile}",
+        pipelines_dir=str(tmp_path),
+        destination=config.destination_for("oll", profile),
+        dataset_name=config.dataset_name(profile),
+    )
+    with pipeline.destination_client() as client:
+        return client.get_open_table_catalog("iceberg")
+
+
+def test_dlt_opens_the_local_lake_catalog_for_the_dev_destination(
+    offline_catalog: list[str], tmp_path: Any
 ) -> None:
-    _serve_cluster_endpoint(monkeypatch)
-    catalog = dlt_pyiceberg.get_catalog(config.LOCAL_LAKE_CATALOG)
+    """Through dlt's own filesystem client, which is what a load calls."""
+    catalog = _open_table_catalog("dev", tmp_path)
     assert isinstance(catalog, local_lake.HostEndpointRestCatalog)
     assert catalog.uri == "http://localhost:9001/iceberg"
+    assert offline_catalog == ["ol_warehouse_local_raw"]
 
 
-def test_other_catalogs_go_to_dlts_loader(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        local_lake, "_dlt_load_catalog_from_pyiceberg", lambda name: f"dlt:{name}"
-    )
-    assert local_lake.load_catalog_from_pyiceberg("aws_glue") == "dlt:aws_glue"
-
-
-@pytest.mark.parametrize(
-    "table_config",
-    [{}, {"s3.endpoint": CLUSTER_ENDPOINT}],
-    ids=["server-override-in-config", "endpoint-in-table-response"],
-)
-def test_table_io_keeps_the_host_endpoint(
-    monkeypatch: pytest.MonkeyPatch, table_config: dict[str, Any]
+def test_a_dev_destination_does_not_change_the_catalog_of_another(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
-    """Neither place the server names its endpoint reaches the table's IO."""
-    _serve_cluster_endpoint(monkeypatch)
-    catalog = local_lake.load_catalog_from_pyiceberg(config.LOCAL_LAKE_CATALOG)
-    assert catalog.properties["s3.endpoint"] == CLUSTER_ENDPOINT
-    io = catalog._load_file_io(table_config, "s3://ol-data-lake-local/raw/t")  # noqa: SLF001
+    """A deployed destination built in the same process still gets dlt's catalog."""
+    config.destination_for("oll", "dev")
+    calls: list[dict[str, Any]] = []
+
+    class _Catalog:
+        name = "aws_glue"
+
+        def create_namespace(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+    def dlt_get_catalog(*_args: Any, **kwargs: Any) -> _Catalog:
+        calls.append(kwargs)
+        return _Catalog()
+
+    monkeypatch.setattr(local_lake, "_dlt_get_catalog", dlt_get_catalog)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test")  # pragma: allowlist secret
+    catalog = _open_table_catalog("production", tmp_path)
+    assert isinstance(catalog, _Catalog)
+    assert len(calls) == 1
+
+
+def test_the_wrapper_is_what_dlt_calls() -> None:
+    assert dlt_pyiceberg.get_catalog is local_lake.get_catalog
+
+
+def test_table_io_keeps_the_host_endpoint(offline_catalog: list[str]) -> None:
+    del offline_catalog
+    catalog = local_lake.get_catalog(credentials=local_lake.object_store_credentials())
+    io = catalog._load_file_io(TABLE_CONFIG, LOCATION)  # noqa: SLF001
     assert io.properties["s3.endpoint"] == HOST_ENDPOINT
 
 
-def test_a_plain_rest_catalog_takes_the_server_endpoint(
-    monkeypatch: pytest.MonkeyPatch,
+def test_a_plain_rest_catalog_takes_the_table_response_endpoint(
+    offline_catalog: list[str],
 ) -> None:
     """The behaviour the subclass exists for; when this fails, delete it."""
-    _serve_cluster_endpoint(monkeypatch)
+    del offline_catalog
     catalog = RestCatalog(
         "plain", uri="http://localhost:9001/iceberg", **{"s3.endpoint": HOST_ENDPOINT}
     )
-    io = catalog._load_file_io({}, "s3://ol-data-lake-local/raw/t")  # noqa: SLF001
+    io = catalog._load_file_io(TABLE_CONFIG, LOCATION)  # noqa: SLF001
     assert io.properties["s3.endpoint"] == CLUSTER_ENDPOINT
 
 

@@ -49,8 +49,6 @@ LOCAL_LAKE_CATALOG = "ol-data-lake-local"
 LOCAL_LAKE_BUCKET_ROOT = "s3://ol-data-lake-local/raw"
 LOCAL_LAKE_DATASET = "ol_warehouse_local_raw"
 
-_CATALOG_NAME_ENV = "ICEBERG_CATALOG__ICEBERG_CATALOG_NAME"
-
 # dlt's table_format hint accepts only iceberg/delta/hive/native (NOT "parquet",
 # and NOT None per the type stub). "native" means the destination's native format
 # — plain parquet files for filesystem — which is what local/test/ci want.
@@ -170,17 +168,14 @@ def destination_for(source_name: str, profile: str | None = None) -> Any:  # noq
     the per-source destination isolation that used to be enumerated in
     ``.dlt/config.toml``.
 
-    The local lake profile also selects its catalog. dlt resolves the catalog
-    name from configuration alone, with no argument on the destination, and
-    ``.dlt/config.toml`` names the Glue one, so the environment variable is the
-    one place that can say otherwise. It is left alone when already set.
+    The local lake's destination carries its object store credentials, and
+    those are also what selects its catalog: see ``ol_dlt.local_lake``.
     """
     options: dict[str, Any] = {}
     if (profile or active_profile()) == LOCAL_LAKE_PROFILE:
         # Imported here because local_lake reads this module's constants.
         from ol_dlt.local_lake import object_store_credentials  # noqa: PLC0415
 
-        os.environ.setdefault(_CATALOG_NAME_ENV, LOCAL_LAKE_CATALOG)
         options["credentials"] = object_store_credentials()
     return filesystem(
         bucket_url=f"{bucket_root(profile)}/{source_name}",

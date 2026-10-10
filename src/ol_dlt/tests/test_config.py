@@ -1,7 +1,5 @@
 """Unit tests for ol_dlt.config profile resolution."""
 
-import os
-
 import pytest
 
 from ol_dlt import config
@@ -72,13 +70,12 @@ def test_destination_per_source_isolation(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_dev_destination_is_the_local_lake(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``dev`` writes to the local object store through the local catalog.
+    """``dev`` writes to the local object store with the catalog entry's keys.
 
     The endpoint and keys come from the catalog entry, so dlt's own files and
     the Iceberg tables cannot land in different stores.
     """
     monkeypatch.delenv("OL_DLT_BUCKET_URL", raising=False)
-    monkeypatch.delenv("ICEBERG_CATALOG__ICEBERG_CATALOG_NAME", raising=False)
     monkeypatch.setenv(
         "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT", "http://rustfs.test:9000"
     )
@@ -87,25 +84,11 @@ def test_dev_destination_is_the_local_lake(monkeypatch: pytest.MonkeyPatch) -> N
     credentials = dest.config_params["credentials"]
     assert credentials.endpoint_url == "http://rustfs.test:9000"
     assert credentials.aws_access_key_id == "localdevaccess"
-    assert os.environ["ICEBERG_CATALOG__ICEBERG_CATALOG_NAME"] == "ol-data-lake-local"
-
-
-def test_dev_destination_keeps_a_catalog_already_chosen(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("ICEBERG_CATALOG__ICEBERG_CATALOG_NAME", "another")
-    config.destination_for("oll", "dev")
-    assert os.environ["ICEBERG_CATALOG__ICEBERG_CATALOG_NAME"] == "another"
 
 
 @pytest.mark.parametrize("profile", ["ci", "test", "qa", "production"])
-def test_other_profiles_leave_the_catalog_alone(
-    monkeypatch: pytest.MonkeyPatch, profile: str
-) -> None:
-    monkeypatch.delenv("ICEBERG_CATALOG__ICEBERG_CATALOG_NAME", raising=False)
-    dest = config.destination_for("oll", profile)
-    assert "credentials" not in dest.config_params
-    assert "ICEBERG_CATALOG__ICEBERG_CATALOG_NAME" not in os.environ
+def test_other_profiles_carry_no_local_lake_credentials(profile: str) -> None:
+    assert "credentials" not in config.destination_for("oll", profile).config_params
 
 
 def test_pipeline_for_binds_profile(monkeypatch: pytest.MonkeyPatch) -> None:

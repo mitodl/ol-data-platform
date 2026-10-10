@@ -15,11 +15,14 @@ from this process's own catalog entry, which is the same object store through
 a port-forward. Table locations are ``s3://`` URIs with no endpoint in them, so
 what the host writes is what StarRocks reads.
 
-pyiceberg can load a catalog class named by ``py-catalog-impl``, but
-``load_catalog`` looks for that key only in its keyword arguments and never in
-the ``.pyiceberg.yaml`` entry, and dlt calls ``load_catalog(name)`` with none.
-So this module wraps dlt's loader and builds the local lake's catalog itself.
-Every other catalog name goes to dlt's loader untouched.
+dlt has no way to give one destination its own catalog: the catalog name is
+process-wide configuration, which ``.dlt/config.toml`` sets to the Glue one,
+and pyiceberg's ``py-catalog-impl`` is read only from ``load_catalog``'s keyword
+arguments, never from a ``.pyiceberg.yaml`` entry. dlt does pass the
+destination's credentials to ``get_catalog``, so this module wraps that
+function and answers with the local lake's catalog for the one destination
+whose credentials name the local lake's object store. Every other call goes to dlt
+untouched, whatever profile the process started under.
 """
 
 from typing import Any
@@ -34,7 +37,7 @@ from pyiceberg.utils.config import Config
 
 from ol_dlt import config
 
-_dlt_load_catalog_from_pyiceberg = dlt_pyiceberg._load_catalog_from_pyiceberg  # noqa: SLF001
+_dlt_get_catalog = dlt_pyiceberg.get_catalog
 
 
 class HostEndpointRestCatalog(RestCatalog):
@@ -57,7 +60,7 @@ class HostEndpointRestCatalog(RestCatalog):
 def catalog_properties() -> dict[str, Any]:
     """Return the local lake's catalog entry, environment overrides applied.
 
-    :returns: The ``ol_data_lake_local`` entry of ``.pyiceberg.yaml`` merged
+    :returns: The ``ol-data-lake-local`` entry of ``.pyiceberg.yaml`` merged
         with any ``PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__*`` variables.
     :rtype: dict[str, Any]
     :raises ValueError: When pyiceberg finds no such entry, which means
@@ -75,7 +78,7 @@ def catalog_properties() -> dict[str, Any]:
 
 
 def object_store_credentials() -> AwsCredentials:
-    """Return the object store credentials for dlt's own files.
+    """Return the object store credentials for the local lake's destination.
 
     dlt writes its state and load records beside the tables with fsspec, not
     through the catalog, so it needs the endpoint and keys as well. They are
@@ -87,12 +90,21 @@ def object_store_credentials() -> AwsCredentials:
     return AwsCredentials.from_pyiceberg_fileio_config(catalog_properties())
 
 
-def load_catalog_from_pyiceberg(catalog_name: str) -> Catalog:
-    """Load ``catalog_name`` as dlt does, except for the local lake's catalog."""
-    if catalog_name == config.LOCAL_LAKE_CATALOG:
-        return HostEndpointRestCatalog(catalog_name, **catalog_properties())
-    return _dlt_load_catalog_from_pyiceberg(catalog_name)
+def get_catalog(*args: Any, **kwargs: Any) -> Catalog:  # noqa: ANN401
+    """Return the local lake's catalog for its destination, else dlt's own.
+
+    The destination is recognised by its object store endpoint. dlt resolves
+    the credentials it was given into a new object, so the endpoint is the one
+    thing ``object_store_credentials`` set that still tells them apart: no
+    other profile's destination sets one.
+    """
+    endpoint = getattr(kwargs.get("credentials"), "endpoint_url", None)
+    if endpoint is not None:
+        properties = catalog_properties()
+        if endpoint == properties[S3_ENDPOINT]:
+            return HostEndpointRestCatalog(config.LOCAL_LAKE_CATALOG, **properties)
+    return _dlt_get_catalog(*args, **kwargs)
 
 
-# dlt's get_catalog resolves this name in its module globals at call time.
-dlt_pyiceberg._load_catalog_from_pyiceberg = load_catalog_from_pyiceberg  # noqa: SLF001
+# dlt's filesystem client imports get_catalog from this module at call time.
+dlt_pyiceberg.get_catalog = get_catalog

@@ -15,7 +15,7 @@ catalog:
   #   PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT
   # The keys are the fixed local-dev pair from
   # local-dev/infra/modules/objectstore.py. ol_dlt.local_lake builds the catalog
-  # from this entry itself, so pyiceberg's own load_catalog is not what reads it.
+  # from this entry for the dev destination; no catalog name setting selects it.
   ol-data-lake-local:
     uri: http://localhost:9001/iceberg
     # Local Gravitino runs the `simple` authenticator: no header is `anonymous`
