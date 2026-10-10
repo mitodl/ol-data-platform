@@ -284,6 +284,7 @@ ol-dbt run test                      # tests only
 ol-dbt run --target dev_qa           # run against QA Trino
 ol-dbt run --no-defer                # disable upstream deferral
 ol-dbt run --no-save-state           # skip writing state artifacts after run
+ol-dbt run --indirect-selection buildable  # skip tests that also read an unselected model
 ```
 
 **Incremental selection logic (when `.dbt-state/` exists and no `--select` given):**

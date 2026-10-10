@@ -87,6 +87,9 @@ def _save_artifacts(target_dir: Path, state_dir: Path) -> list[str]:
     return saved
 
 
+IndirectSelection = Literal["eager", "cautious", "buildable", "empty"]
+
+
 def _build_dbt_command(
     subcommand: str,
     profiles_dir: Path,
@@ -208,6 +211,17 @@ def run(  # noqa: PLR0913
             help="Path to the dbt project root (must contain dbt_project.yml). Defaults to src/ol_dbt.",
         ),
     ] = None,
+    indirect_selection: Annotated[
+        IndirectSelection | None,
+        Parameter(
+            name="--indirect-selection",
+            help=(
+                "Which tests a selected model brings with it (dbt's --indirect-selection). "
+                "`buildable` leaves out a test that also reads a model outside the selection."
+            ),
+            show_default=False,
+        ),
+    ] = None,
 ) -> None:
     """Execute dbt incrementally using state-based selection.
 
@@ -271,7 +285,7 @@ def run(  # noqa: PLR0913
         defer=defer,
         target=target,
         vars=vars,
-        extra_args=[],
+        extra_args=["--indirect-selection", indirect_selection] if indirect_selection else [],
     )
 
     console.print(f"\n[dim]$ {' '.join(cmd)}[/]\n")
