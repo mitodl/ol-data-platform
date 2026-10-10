@@ -50,14 +50,14 @@ dependencies = [
     # Since 1.45.0 the HTTP exporter sends through urllib3, which this image
     # instruments. Its requests stay untraced only because the SDK suppresses
     # instrumentation around each export.
-    "opentelemetry-distro==0.66b0",
+    "opentelemetry-distro==0.66b1",
     "opentelemetry-sdk==1.45.0",
     "opentelemetry-exporter-otlp-proto-http==1.45.0",
-    "opentelemetry-instrumentation-sqlalchemy==0.66b0",
-    "opentelemetry-instrumentation-grpc==0.66b0",
-    "opentelemetry-instrumentation-botocore==0.66b0",
-    "opentelemetry-instrumentation-requests==0.66b0",
-    "opentelemetry-instrumentation-urllib3==0.66b0",
+    "opentelemetry-instrumentation-sqlalchemy==0.66b1",
+    "opentelemetry-instrumentation-grpc==0.66b1",
+    "opentelemetry-instrumentation-botocore==0.66b1",
+    "opentelemetry-instrumentation-requests==0.66b1",
+    "opentelemetry-instrumentation-urllib3==0.66b1",
 ]
 
 [tool.uv]
