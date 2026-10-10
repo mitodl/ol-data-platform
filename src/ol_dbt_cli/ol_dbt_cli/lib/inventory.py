@@ -301,10 +301,13 @@ def _check_tables(unit: Unit, report: ValidationReport) -> None:
             Severity.WARNING,
             unit.key,
             f"{len(riders)} incremental stream(s) ride xmin, which dlt cannot reproduce",
-            "Each needs a replacement cursor column chosen before dlt can take "
-            "over this unit, and source-postgres 3.8+ refuses xmin outright on any "
+            "Each needs a replacement cursor column, or a decision to re-read the "
+            "table whole, before dlt can take over this unit. That choice belongs "
+            "on the dlt source (`DatabaseTable.cursor_column`), not in a "
+            "`cursor_field` here, which the drift check compares against Airbyte. "
+            "Independently, source-postgres 3.8+ refuses xmin outright on any "
             "database that has ever wrapped around. See "
-            "tk-determine-per-source-incremental-cursor-viabilit-51f299.",
+            "INGESTION_INVENTORY_SPEC.md §3.4.",
         )
 
 
@@ -1314,9 +1317,10 @@ def _compare_source(  # noqa: PLR0913
 
     `replication_method` is recorded deliberately and is not decorative (§3.4):
     it is what `tk-determine-per-source-incremental-cursor-viabilit-51f299`
-    reads to decide which connections need a replacement cursor before dlt can
-    take over. A source flipped from xmin to a cursor column changes nothing
-    about the streams, so comparing streams alone would report no drift while
+    reads to decide which connections need a replacement cursor, or a full
+    re-read, before dlt can take over. A source flipped from xmin to a cursor
+    column changes nothing about the streams, so comparing streams alone would
+    report no drift while
     that answer silently went wrong.
     """
     source = live_sources.get(str(live.get("sourceId", "")))
@@ -1345,7 +1349,8 @@ def _compare_source(  # noqa: PLR0913
             key,
             f"connection {name!r} replicates by {live_method!r}, unit declares {declared_method!r}",
             "§3.4 records this so `rg replication_method: xmin` answers which "
-            "connections need a replacement cursor before dlt can take them. A "
+            "connections need a replacement cursor or a full re-read before dlt "
+            "can take them. A "
             "stale value makes that answer wrong without changing any stream.",
         )
 
