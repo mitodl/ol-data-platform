@@ -22,16 +22,18 @@ so the QA code location wrote the production warehouse while the StarRocks
 project next to it targeted QA. The two disagreed for months because neither
 had to say what it meant.
 
+``dev``
+-------
+``dev`` is the local environment for StarRocks: the k3d cluster from
+ol-infrastructure's local-dev stack (``data-platform`` in ``enabled_apps``),
+with its own object store and Iceberg catalog, and a root login that needs no
+Vault credentials. A developer who wants the QA cluster runs with
+``DAGSTER_ENVIRONMENT=qa``, as docker-compose.yaml does for this code location.
+The Trino map has not followed: ``dev`` there is still the production Galaxy
+cluster.
+
 Adding an environment
 ---------------------
-``dev`` is meant to target a local environment (k3d + Tilt, its own object
-store and Iceberg catalog), planned in RFC 12711's Local-2/3/4 tasks, which
-specify that it extends *this* convention rather than introducing a third
-resolution style. That environment does not exist yet, so until it does the
-StarRocks entries for ``dev`` resolve exactly like ``qa``. When it lands,
-repoint ``dev`` in every map below and in ``_ENVS`` in
-``ol_dbt_cli/commands/starrocks.py``, which mirrors these.
-
 A genuinely new ``DAGSTER_ENV`` value needs an entry in every map below, and
 until it has one ``resolve_for_environment`` raises on it, which is the point:
 the failure is a missing declaration, not a silently inherited warehouse.
@@ -60,17 +62,25 @@ DBT_TARGET_MAP: Mapping[str, str] = {
     "production": "production",
 }
 
-# StarRocks. These name a CLUSTER and its auth, not a data lake: dev and qa
-# share starrocks_qa_vault because a developer port-forwards to the QA cluster.
-# Which catalog each then reads is DATA_LAKE_ENV_MAP's job, not this map's.
-# `dev` is a placeholder for the local environment (RFC 12711 Local-2/3/4) and
-# resolves exactly like `qa` here and in DATA_LAKE_ENV_MAP. The CLI has moved:
-# `ol-dbt starrocks --env dev` builds on the local lake (starrocks_local). This
-# side follows once StarRocksResource can connect without Vault.
-# Otherwise matches the dbt_target choices in ol_dbt_cli/commands/starrocks.py's
-# _ENVS.
+# StarRocks. These name a CLUSTER and its auth, not a data lake. Which catalog
+# each then reads is DATA_LAKE_ENV_MAP's job, not this map's.
+#
+# `dev` is the local cluster, and the one entry that differs from `dbt_target`
+# in ol_dbt_cli/commands/starrocks.py's _ENVS. The project this map serves
+# builds only tag:starrocks, the materialized views StarRocks keeps in
+# default_catalog, so it takes the local profile that writes there. The CLI's
+# `--env dev` defaults to starrocks_local, which writes the layered warehouse
+# into the Iceberg catalog, and accepts this one through --target.
+STARROCKS_LOCAL_TARGET = "starrocks_local_b2b"
+
+# Every profile that logs in to the local cluster as a passwordless root. Same
+# set as _LOCAL_DBT_TARGETS in the CLI.
+STARROCKS_LOCAL_TARGETS: frozenset[str] = frozenset(
+    {"starrocks_local", STARROCKS_LOCAL_TARGET}
+)
+
 STARROCKS_DBT_TARGET_MAP: Mapping[str, str] = {
-    "dev": "starrocks_qa_vault",
+    "dev": STARROCKS_LOCAL_TARGET,
     # ci connects directly to its own FE service (no port-forward), same
     # connection shape as production -- matches _ENVS["ci"]["dbt_target"].
     "ci": "starrocks_production",
@@ -152,17 +162,14 @@ DBT_AUTOMATION_ENABLED = DAGSTER_ENV in DBT_AUTOMATION_ENVIRONMENTS
 
 # Which lake each StarRocks environment READS. Mirrors the `data_lake_env`
 # entries in _ENVS in ol_dbt_cli/commands/starrocks.py; keep the two in step.
-# `dev` is the exception for now: the CLI's `dev` reads the local lake (see
-# STARROCKS_DBT_TARGET_MAP above).
 #
 # Matches trino_catalog_map in definitions.py for every environment except
 # `dev`, deliberately. Trino `dev` still reads production through the
-# production Galaxy cluster, but StarRocks `dev` connects to the QA cluster,
-# which has no production lake access (ol-infrastructure#5472/#5670, #6023).
-# Syncing this entry back to trino_catalog_map["dev"] breaks every dev b2b
-# build.
+# production Galaxy cluster, but StarRocks `dev` is the local cluster, whose
+# only lake catalog is ol_data_lake_local. Syncing this entry back to
+# trino_catalog_map["dev"] breaks every dev b2b build.
 DATA_LAKE_ENV_MAP: Mapping[str, str] = {
-    "dev": "qa",
+    "dev": "local",
     "ci": "qa",
     "qa": "qa",
     "production": "production",
@@ -206,6 +213,44 @@ STARROCKS_DBT_TARGET = resolve_for_environment(
     override_env_var="DAGSTER_DBT_STARROCKS_TARGET",
     what="StarRocks dbt target",
 )
+
+
+def starrocks_is_local(target: str, dagster_env: str) -> bool:
+    """Whether *target* is the local one, which logs in as a passwordless root.
+
+    The StarRocks host follows the environment and the login follows the
+    target, so the two have to agree. DAGSTER_DBT_STARROCKS_TARGET could
+    otherwise send the root login to a deployed FE, or Vault credentials for
+    the QA cluster to whatever is listening on the local port.
+
+    ``dev`` takes STARROCKS_LOCAL_TARGET and nothing else. The other local
+    profile, starrocks_local, is refused everywhere: it would build the views
+    in the Iceberg catalog while the refresh asset and the drift check look for
+    them in default_catalog.
+
+    :raises ValueError: when ``dev`` is paired with any other target, or a
+        deployed environment with a local one.
+    """
+    is_dev = dagster_env == "dev"
+    allowed = (
+        target == STARROCKS_LOCAL_TARGET
+        if is_dev
+        else target not in STARROCKS_LOCAL_TARGETS
+    )
+    if not allowed:
+        msg = (
+            f"StarRocks dbt target {target!r} cannot be used with "
+            f"DAGSTER_ENVIRONMENT={dagster_env!r}: dev takes "
+            f"{STARROCKS_LOCAL_TARGET} and nothing else, and no other "
+            f"environment takes a local target "
+            f"({', '.join(sorted(STARROCKS_LOCAL_TARGETS))}). For the QA cluster "
+            f"set DAGSTER_ENVIRONMENT=qa."
+        )
+        raise ValueError(msg)
+    return is_dev
+
+
+STARROCKS_IS_LOCAL = starrocks_is_local(STARROCKS_DBT_TARGET, DAGSTER_ENV)
 
 DATA_LAKE_ENV = resolve_for_environment(
     DATA_LAKE_ENV_MAP,

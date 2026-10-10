@@ -132,10 +132,11 @@ def starrocks_dbt_assets(
 ):
     """Build the tag:starrocks dbt models directly against StarRocks.
 
-    The StarRocks profile (unlike the Trino profile used elsewhere in this
-    project) has no static service-account password sitting in the pod
+    The deployed StarRocks profiles (unlike the Trino profile used elsewhere in
+    this project) have no static service-account password sitting in the pod
     environment -- credentials come from Vault's dynamic database secrets
-    engine and must be generated fresh for this run. Shares the same
+    engine and must be generated fresh for this run. The local profiles name
+    their own login and ignore the two credential variables set below. Shares the same
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
 
@@ -162,7 +163,7 @@ def starrocks_dbt_assets(
             delay = retry_delay(attempt)
             context.log.warning(
                 "dbt build failed (attempt %d/%d) -- retrying in %ds with fresh "
-                "Vault credentials: %s",
+                "credentials: %s",
                 attempt,
                 MAX_BUILD_ATTEMPTS,
                 delay,
