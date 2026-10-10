@@ -115,7 +115,7 @@ def _resolve_api_key(api_key: str | None) -> str:
     Deployed profiles take the key from Vault. Explicit arguments and the
     environment apply only to the other profiles.
     """
-    if config.active_profile() in config.ICEBERG_PROFILES:
+    if config.active_profile() in config.DEPLOYED_PROFILES:
         return vault.read_kv_secret(YOUTUBE_VAULT_MOUNT, YOUTUBE_VAULT_PATH)[
             "developer_key"
         ]

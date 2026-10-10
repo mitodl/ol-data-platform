@@ -37,6 +37,22 @@ dbt's default would run it and fail on the missing table. `--indirect-selection 
 restores the default. A run with no `--select` re-selects the tests that failed last time
 by name, so after a failed eager run pass `--select` again or `--full-refresh`.
 
+## Raw tables from a local app database
+
+A source built on `ol_dlt.database` reads the local-dev Postgres cluster under
+`DLT_PROFILE=dev` and writes its tables into the same raw schema, so a local app's own
+rows can stand in for a fixture. See "Local lake" in
+[src/ol_dlt/README.md](../src/ol_dlt/README.md) for the port-forwards it needs.
+
+```bash
+(cd src/ol_dlt && uv run python -m ol_dlt.sources.mitxonline_app)
+```
+
+`ol-dbt fixtures load` drops and recreates the tables it has a fixture for. The source
+keeps a table that already exists and replaces its rows, so load fixtures first and the
+source second when both cover a table. StarRocks answers from the previous load for up
+to half a minute afterwards; the README section has the statement that refreshes it.
+
 ## Raw fixtures
 
 The lake starts with an empty raw schema. A unit with `strategies.local: fixture` in

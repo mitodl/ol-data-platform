@@ -6,3 +6,24 @@ catalog:
     s3.region: us-east-1
     s3.connect-timeout: "10"
     s3.request-timeout: "120"
+  # The local lake of ol-infrastructure/local-dev, for DLT_PROFILE=dev. Both
+  # addresses are port-forwards (see README.md, "Local lake"). The name is
+  # hyphenated, unlike the StarRocks catalog ol_data_lake_local, because
+  # pyiceberg turns every underscore of an environment variable into a hyphen,
+  # so only a hyphenated entry can be overridden:
+  #   PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI
+  #   PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT
+  # The keys are the fixed local-dev pair from
+  # local-dev/infra/modules/objectstore.py. ol_dlt.local_lake builds the catalog
+  # from this entry itself, so pyiceberg's own load_catalog is not what reads it.
+  ol-data-lake-local:
+    uri: http://localhost:9001/iceberg
+    # Local Gravitino runs the `simple` authenticator: no header is `anonymous`
+    # and a Bearer header is a 401, which is what pyiceberg sends by default.
+    auth:
+      type: noop
+    py-io-impl: pyiceberg.io.fsspec.FsspecFileIO
+    s3.endpoint: http://localhost:9000
+    s3.access-key-id: localdevaccess
+    s3.secret-access-key: localdevsecret123  # pragma: allowlist secret
+    s3.region: us-east-1

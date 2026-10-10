@@ -190,7 +190,7 @@ def test_table_format_follows_the_explicit_profile(
         database.vault, "read_database_credentials", lambda *_a: ("u", "p")
     )
     deployed = database.build_database_source(_SPEC, profile="production")
-    local = database.build_database_source(_SPEC, profile="dev")
+    local = database.build_database_source(_SPEC, profile="ci")
     assert (
         deployed.resources["raw__example__app__postgres__widget"]
         .compute_table_schema()

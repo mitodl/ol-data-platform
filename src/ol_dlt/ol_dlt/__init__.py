@@ -17,5 +17,6 @@ _PROJECT_DIR = Path(__file__).resolve().parent.parent
 os.environ.setdefault("DLT_PROJECT_DIR", str(_PROJECT_DIR))
 os.environ.setdefault("PYICEBERG_HOME", str(_PROJECT_DIR / ".dlt"))
 
-# Imported for its side effect: it wraps dlt's Iceberg merge for every source.
-from ol_dlt import iceberg_upsert_guard  # noqa: E402, F401
+# Imported for their side effects: one wraps dlt's Iceberg merge for every
+# source, the other dlt's catalog loader for the local lake.
+from ol_dlt import iceberg_upsert_guard, local_lake  # noqa: E402, F401
