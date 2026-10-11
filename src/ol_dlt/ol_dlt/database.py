@@ -26,7 +26,9 @@ Reflection is deferred (``defer_table_reflect=True``) for the same reason — no
 database connection is opened until a resource is extracted.
 """
 
+import ipaddress
 import logging
+import os
 from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -56,6 +58,19 @@ DEFAULT_CHUNK_SIZE = 50_000
 LOCAL_DEV_HOST = "localhost"
 LOCAL_DEV_USERNAME = "app"
 LOCAL_DEV_PASSWORD = "localdev"  # noqa: S105  # pragma: allowlist secret
+# Set by `ol-dbt ingest local`, which promises to load the local lake from the
+# local-dev cluster. With it, a `<NAME>_DB_HOST` override has to be a loopback
+# address, whichever provider it came from (environment or .dlt/secrets.toml).
+LOCAL_SOURCES_ONLY_VARIABLE = "OL_DLT_LOCAL_SOURCES_ONLY"
+
+
+def _is_loopback(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -166,6 +181,13 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
             database=spec.database,
             query={"sslmode": "require"},
         )
+    if host and os.getenv(LOCAL_SOURCES_ONLY_VARIABLE) and not _is_loopback(host):
+        msg = (
+            f"{spec.env_prefix}_HOST is {host!r}, which is not this machine, and "
+            f"{LOCAL_SOURCES_ONLY_VARIABLE} is set. Remove the override from the "
+            "environment or .dlt/secrets.toml to read the local-dev database."
+        )
+        raise ValueError(msg)
     return URL.create(
         spec.drivername,
         username=config.resolve_secret(None, f"{spec.env_prefix}_USERNAME")

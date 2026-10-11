@@ -86,6 +86,42 @@ def test_local_profile_url_honors_env_overrides(
     assert "sslmode" not in url.query
 
 
+@pytest.mark.parametrize("host", ["db.internal", "10.0.0.5"])
+def test_local_sources_only_refuses_a_host_off_this_machine(
+    monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    monkeypatch.setenv(database.LOCAL_SOURCES_ONLY_VARIABLE, "1")
+    monkeypatch.setenv("EXAMPLE_DB_HOST", host)
+    with pytest.raises(ValueError, match="EXAMPLE_DB_HOST is .* not this machine"):
+        database._connection_url(_SPEC, "dev")  # noqa: SLF001
+
+
+def test_local_sources_only_refuses_a_host_from_secrets_toml(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The host is checked where it is resolved, so the provider does not matter."""
+    monkeypatch.setenv(database.LOCAL_SOURCES_ONLY_VARIABLE, "1")
+    monkeypatch.delenv("EXAMPLE_DB_HOST", raising=False)
+    monkeypatch.setattr(
+        database.config,
+        "resolve_secret",
+        lambda _, name: "db.internal" if name == "EXAMPLE_DB_HOST" else None,
+    )
+    with pytest.raises(ValueError, match="not this machine"):
+        database._connection_url(_SPEC, "dev")  # noqa: SLF001
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1"])
+def test_local_sources_only_keeps_a_loopback_override(
+    monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    monkeypatch.setenv(database.LOCAL_SOURCES_ONLY_VARIABLE, "1")
+    monkeypatch.setenv("EXAMPLE_DB_HOST", host)
+    monkeypatch.setenv("EXAMPLE_DB_PORT", "15432")
+    url = database._connection_url(_SPEC, "dev")  # noqa: SLF001
+    assert (url.host, url.port) == (host, 15432)
+
+
 def test_deployed_profile_url_omits_credentials_and_requires_tls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

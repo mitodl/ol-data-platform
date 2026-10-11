@@ -78,11 +78,10 @@ ol-dbt ingest local --unit mitxonline/app_postgres  # one of them
 It runs each unit's source (`python -m ol_dlt.sources.<name>` in `src/ol_dlt`) with
 `DLT_PROFILE=dev` whatever your shell exports, so a shell left on `qa` or `production` does
 not send the load to that lake. The `<NAME>_DB_*` and `PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__*`
-overrides in the ol_dlt README still apply, for a forward on another port. The command
-refuses to run when a `<NAME>_DB_HOST` or one of the catalog's two URLs names a host that
-is not this machine, and it validates the inventory first. A value in
-`src/ol_dlt/.dlt/secrets.toml` is not checked.
-A source that fails does not stop the others, and the command then exits non-zero.
+overrides in the ol_dlt README still apply, for a forward on another port, and each has to
+name this machine. The command refuses to start when one of the catalog's two URLs does
+not, and a source fails when its `<NAME>_DB_HOST` does not, whether that came from your
+shell or from `src/ol_dlt/.dlt/secrets.toml`. The inventory is validated first.
 
 `ol-dbt fixtures load` drops and recreates the tables it has a fixture for, and the
 source replaces a fixture's table that has no `_dlt_` column with its own, so load

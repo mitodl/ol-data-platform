@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import ipaddress
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -46,11 +45,13 @@ OL_DLT_DIR = Path("src/ol_dlt")
 # Set on every run and never read from the caller's shell: one that exports
 # DLT_PROFILE=qa or production would send this command's load to that lake.
 LOCAL_DLT_PROFILE = "dev"
-# What ol_dlt lets the environment move under the dev profile: the database a
-# source reads (`<NAME>_DB_HOST`, ol_dlt.database) and the local catalog and
-# object store (.dlt/.pyiceberg.yaml). They exist for a port-forward on another
-# port, so each has to stay on this machine.
-_DB_HOST_VARIABLE = re.compile(r"^[A-Z0-9_]+_DB_HOST$")
+# ol_dlt.database reads this and refuses a `<NAME>_DB_HOST` override that is not
+# a loopback address. The check lives there because the host is resolved there,
+# through dlt's providers: the environment and .dlt/secrets.toml.
+LOCAL_SOURCES_ONLY_VARIABLE = "OL_DLT_LOCAL_SOURCES_ONLY"
+# The local catalog and object store (.dlt/.pyiceberg.yaml) can be moved from
+# the environment, for a port-forward on another port. Each has to stay on this
+# machine.
 _CATALOG_URL_VARIABLES = (
     "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI",
     "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT",
@@ -66,26 +67,28 @@ def _is_loopback(host: str | None) -> bool:
         return False
 
 
-def overrides_off_this_machine(environment: Mapping[str, str]) -> list[str]:
-    """Return the variables that would point a source away from the local-dev cluster.
+def catalog_overrides_off_this_machine(environment: Mapping[str, str]) -> list[str]:
+    """Return the local-catalog overrides whose host is not a loopback address.
 
     :param environment: The environment a source would run in.
-    :returns: Names of the database-host and local-catalog overrides whose
-        host is not a loopback address.
+    :returns: The names of the offending variables.
     :rtype: list[str]
     """
-    hosts: dict[str, str | None] = {name: value for name, value in environment.items() if _DB_HOST_VARIABLE.match(name)}
-    hosts |= {name: urlsplit(environment[name]).hostname for name in _CATALOG_URL_VARIABLES if name in environment}
-    return sorted(name for name, host in hosts.items() if not _is_loopback(host))
+    return [
+        name
+        for name in _CATALOG_URL_VARIABLES
+        if name in environment and not _is_loopback(urlsplit(environment[name]).hostname)
+    ]
 
 
 def source_environment() -> dict[str, str]:
-    """Return the caller's environment, pinned to the local dlt profile."""
+    """Return the caller's environment, pinned to the local dlt profile and the local-dev databases."""
     # VIRTUAL_ENV names ol-dbt's own environment, which uv would warn about and
     # pass over: the source runs in ol_dlt's. Without PYICEBERG_HOME ol_dlt
     # reads the catalog file committed beside it.
     environment = {key: value for key, value in os.environ.items() if key not in {"VIRTUAL_ENV", "PYICEBERG_HOME"}}
     environment["DLT_PROFILE"] = LOCAL_DLT_PROFILE
+    environment[LOCAL_SOURCES_ONLY_VARIABLE] = "1"
     return environment
 
 
@@ -124,9 +127,9 @@ def local(
         sys.exit(1)
 
     environment = source_environment()
-    if elsewhere := overrides_off_this_machine(environment):
+    if elsewhere := catalog_overrides_off_this_machine(environment):
         err_console.print(
-            f"[bold red]{escape(', '.join(elsewhere))} would take a source off this machine.[/] "
+            f"[bold red]{escape(', '.join(elsewhere))} would take the load off this machine.[/] "
             "This command loads the local lake from the local-dev cluster. Unset what is "
             "named, or run the source yourself if that is what you mean."
         )

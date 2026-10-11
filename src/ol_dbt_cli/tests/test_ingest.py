@@ -59,7 +59,7 @@ def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, Any]
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(ingest, "get_repo_root", lambda _: tmp_path)
-    for name in ("MITXONLINE_DB_HOST", *ingest._CATALOG_URL_VARIABLES):  # noqa: SLF001
+    for name in ingest._CATALOG_URL_VARIABLES:  # noqa: SLF001
         monkeypatch.delenv(name, raising=False)
     return recorded
 
@@ -84,18 +84,18 @@ def test_the_callers_dlt_profile_is_not_used(
 
     (run,) = runs
     assert run["env"]["DLT_PROFILE"] == "dev"
+    assert run["env"]["OL_DLT_LOCAL_SOURCES_ONLY"] == "1"
     assert not {"VIRTUAL_ENV", "PYICEBERG_HOME"} & run["env"].keys()
 
 
 @pytest.mark.parametrize(
     ("name", "value"),
     [
-        ("MITXONLINE_DB_HOST", "mitxonline-db.example.org"),
         ("PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI", "https://catalog.example.org/iceberg"),
         ("PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT", "http://10.0.0.5:9000"),
     ],
 )
-def test_an_override_that_leaves_this_machine_is_refused(
+def test_a_catalog_override_that_leaves_this_machine_is_refused(
     inventory_dir: Path, runs: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch, name: str, value: str
 ) -> None:
     monkeypatch.setenv(name, value)
@@ -110,7 +110,6 @@ def test_an_override_for_a_forward_on_another_port_is_kept(
     inventory_dir: Path, runs: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     overrides = {
-        "MITXONLINE_DB_HOST": "127.0.0.1",
         "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI": "http://localhost:19001/iceberg",
         "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT": "http://localhost:19000",
     }
