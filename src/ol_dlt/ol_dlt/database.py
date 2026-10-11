@@ -175,6 +175,11 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
         host=host or LOCAL_DEV_HOST,
         port=int(port) if port else spec.port,
         database=spec.database,
+        # Closing a TLS session through `kubectl port-forward` can reset the pod
+        # side of the stream, and kubectl answers a reset by dropping the whole
+        # forward ("lost connection to pod"), which fails every other table
+        # mid-extract. A host override is some other database, left to libpq.
+        query={} if host else {"sslmode": "disable"},
     )
 
 

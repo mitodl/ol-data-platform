@@ -72,7 +72,7 @@ def test_local_profile_url_uses_local_dev_defaults() -> None:
     assert url.username == database.LOCAL_DEV_USERNAME
     assert url.password == database.LOCAL_DEV_PASSWORD
     assert url.database == "example"
-    assert "sslmode" not in url.query
+    assert url.query["sslmode"] == "disable"
 
 
 def test_local_profile_url_honors_env_overrides(
@@ -83,6 +83,7 @@ def test_local_profile_url_honors_env_overrides(
     monkeypatch.setenv("EXAMPLE_DB_USERNAME", "reader")
     url = database._connection_url(_SPEC, "dev")  # noqa: SLF001
     assert (url.host, url.port, url.username) == ("db.internal", 6543, "reader")
+    assert "sslmode" not in url.query
 
 
 def test_deployed_profile_url_omits_credentials_and_requires_tls(
