@@ -89,9 +89,9 @@ the models ten courses to build from.
 
 ## Delivering a build to a local MIT Learn
 
-A source that reads no database needs neither a fixture nor an app. Open Learning
-Library's reads a public CSV, so its raw table lands with the catalog and object store
-forwards alone:
+A source that reads no database needs neither a fixture nor an app. The Open Learning
+Library source reads a public CSV, so its raw table lands with the catalog and object
+store forwards alone:
 
 ```bash
 (cd src/ol_dlt && uv run python -m ol_dlt.sources.oll)
