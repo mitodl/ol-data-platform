@@ -62,7 +62,13 @@ from ol_dbt_cli.commands.run import IndirectSelection, _find_dbt_dir
 from ol_dbt_cli.commands.run import run as _dbt_run
 from ol_dbt_cli.lib.git_utils import get_repo_root
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
-from ol_dbt_cli.lib.local_branches import local_branches, parents_not_built, render_local_branches, union_tables
+from ol_dbt_cli.lib.local_branches import (
+    BUILT_RESOURCE_TYPES,
+    local_branches,
+    parents_not_built,
+    render_local_branches,
+    union_tables,
+)
 from ol_dbt_cli.lib.manifest import load_manifest
 from ol_dbt_cli.lib.raw_fixtures import fixture_path, qualified_name
 
@@ -254,13 +260,13 @@ def _report_local_branches(dbt_dir: Path, started: float) -> None:
     # dbt leaves the previous run's file in place when it stops before running a node.
     if not results_path.exists() or results_path.stat().st_mtime < started:
         return
-    built = [
-        result["unique_id"]
-        for result in json.loads(results_path.read_text())["results"]
-        if result["status"] == "success" and result["unique_id"].startswith("model.")
-    ]
     manifest = load_manifest(dbt_dir / "target" / "manifest.json")
-    models = {manifest.nodes[unique_id].name for unique_id in built}
+    built = [
+        manifest.nodes[result["unique_id"]]
+        for result in json.loads(results_path.read_text())["results"]
+        if result["status"] == "success" and result["unique_id"].split(".", 1)[0] in BUILT_RESOURCE_TYPES
+    ]
+    models = {node.name for node in built if node.is_model}
     inventory_dir = get_repo_root(dbt_dir) / DEFAULT_INVENTORY_DIR
     units = load_units(inventory_dir)
     unions = union_tables(manifest, units, models)
@@ -273,7 +279,7 @@ def _report_local_branches(dbt_dir: Path, started: float) -> None:
     lines = render_local_branches(
         local_branches(unions, units, rows, fixture_units),
         LOCAL_RAW_SCHEMA,
-        parents_not_built(manifest, unions, models),
+        parents_not_built(manifest, unions, {node.name for node in built}),
     )
     console.print()
     for line in lines:

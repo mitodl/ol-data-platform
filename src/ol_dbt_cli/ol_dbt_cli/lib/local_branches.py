@@ -29,6 +29,8 @@ if TYPE_CHECKING:
 
 BranchState = Literal["present", "partial", "absent"]
 MAX_TABLES_LISTED = 5
+BUILT_RESOURCE_TYPES = frozenset({"model", "snapshot"})
+"""What a dbt run writes a table for from other tables. A seed's rows come from a file."""
 
 
 @dataclass(frozen=True)
@@ -118,16 +120,19 @@ def local_branches(
 
 
 def parents_not_built(manifest: ManifestRegistry, models: Iterable[str], built: set[str]) -> dict[str, int]:
-    """Count, for each of ``models``, the models upstream of it that the run did not build.
+    """Count, for each of ``models``, the tables upstream of it that the run did not build.
 
     A union reads its parents' tables, not the raw schema. With saved state or a
     selection without ``+``, dbt rebuilds the union alone, on parents built
     from whatever the raw schema held at the time. The row counts then say
     nothing certain about the table just built.
 
-    :param built: names of the models the run built
-    :returns: model name to the number of its upstream models outside ``built``,
-        for the models with any
+    A snapshot is a parent like any model: `dbt run` builds every model above
+    one and leaves the snapshot's own table as it was.
+
+    :param built: names of the models and snapshots the run built
+    :returns: model name to the number of its upstream models and snapshots
+        outside ``built``, for the models with any
     """
     by_name = {node.name: node for node in manifest.nodes.values() if node.is_model}
     memo: dict[str, set[str]] = {}
@@ -137,7 +142,7 @@ def parents_not_built(manifest: ManifestRegistry, models: Iterable[str], built: 
             found: set[str] = set()
             for parent_id in manifest.nodes[unique_id].depends_on:
                 parent = manifest.nodes.get(parent_id)
-                if parent is not None and parent.is_model:
+                if parent is not None and parent.resource_type in BUILT_RESOURCE_TYPES:
                     found |= {parent.name} | ancestors(parent_id)
             memo[unique_id] = found
         return memo[unique_id]

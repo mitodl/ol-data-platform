@@ -207,3 +207,30 @@ def test_render_says_which_unions_were_built_on_parents_the_run_did_not_rebuild(
         "  1 of them were built on parents this run did not rebuild, so their rows may predate these counts: "
         "dim_user. A `+` before the model in --select rebuilds its parents too.",
     ]
+
+
+def _snapshot_manifest() -> ManifestRegistry:
+    """dim_user reads xPRO through a snapshot, which `dbt run` does not rebuild."""
+    manifest = _manifest()
+    snapshot = _node("snapshot_xpro", "snapshots/xpro.sql", ["model.pkg.stg_xpro"], "snapshot")
+    manifest.nodes[snapshot.unique_id] = snapshot
+    manifest.nodes["model.pkg.dim_user"].depends_on = [
+        "model.pkg.int_mitxonline",
+        "snapshot.pkg.snapshot_xpro",
+        "model.pkg.stg_edxorg",
+    ]
+    return manifest
+
+
+def test_a_snapshot_the_run_left_alone_counts_as_a_parent_not_built() -> None:
+    """Every model above it can be rebuilt while the snapshot's table stays as it was."""
+    every_model = {"dim_user", "int_mitxonline", "stg_mitxonline", "stg_xpro", "stg_edxorg"}
+
+    assert parents_not_built(_snapshot_manifest(), ["dim_user"], every_model) == {"dim_user": 1}
+    assert parents_not_built(_snapshot_manifest(), ["dim_user"], every_model | {"snapshot_xpro"}) == {}
+
+
+def test_models_behind_a_snapshot_are_parents_too() -> None:
+    built = {"dim_user", "int_mitxonline", "stg_mitxonline", "stg_edxorg", "snapshot_xpro"}
+
+    assert parents_not_built(_snapshot_manifest(), ["dim_user"], built) == {"dim_user": 1}

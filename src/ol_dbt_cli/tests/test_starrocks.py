@@ -462,3 +462,38 @@ def test_report_flags_a_union_rebuilt_without_its_parents(
     out = capsys.readouterr().out
     assert "1 of 1 union model(s) built have rows in every branch" in out
     assert "built on parents this run did not rebuild" in out
+
+
+def test_report_counts_a_snapshot_the_run_built(local_build: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`dbt build` snapshots too, and its result must not read as a parent left alone."""
+    target = local_build / "src" / "ol_dbt" / "target"
+    manifest = json.loads((target / "manifest.json").read_text())
+    manifest["nodes"]["snapshot.pkg.snapshot_xpro"] = {
+        "unique_id": "snapshot.pkg.snapshot_xpro",
+        "name": "snapshot_xpro",
+        "resource_type": "snapshot",
+        "original_file_path": "snapshots/xpro.sql",
+        "depends_on": {"nodes": ["model.pkg.stg_xpro"]},
+    }
+    manifest["nodes"]["model.pkg.dim_user"]["depends_on"]["nodes"] = [
+        "model.pkg.stg_mitxonline",
+        "snapshot.pkg.snapshot_xpro",
+    ]
+    (target / "manifest.json").write_text(json.dumps(manifest))
+    models = ["model.pkg.stg_mitxonline", "model.pkg.stg_xpro", "model.pkg.dim_user"]
+
+    def report(unique_ids: list[str]) -> str:
+        results = [{"unique_id": unique_id, "status": "success"} for unique_id in unique_ids]
+        (target / "run_results.json").write_text(json.dumps({"results": results}))
+        with (
+            patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+            patch(
+                "ol_dbt_cli.commands.starrocks._local_raw_row_counts",
+                return_value={"raw__mitxonline__users": 4, "raw__xpro__users": 2},
+            ),
+        ):
+            _report_local_branches(target.parent, time.time() - 60)
+        return capsys.readouterr().out
+
+    assert "built on parents this run did not rebuild" in report(models)
+    assert "built on parents this run did not rebuild" not in report([*models, "snapshot.pkg.snapshot_xpro"])
