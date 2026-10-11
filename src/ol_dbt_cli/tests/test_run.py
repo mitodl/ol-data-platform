@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from ol_dbt_cli.commands.run import _build_dbt_command, run
+from ol_dbt_cli.commands.run import DEFAULT_PROFILE_TARGET, _build_dbt_command, run
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -266,3 +267,28 @@ def test_indirect_selection_reaches_dbt(tmp_path: Path) -> None:
 
 def test_indirect_selection_absent_by_default(tmp_path: Path) -> None:
     assert "--indirect-selection" not in _dbt_command_from_run(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Which lake the default target reads
+# ---------------------------------------------------------------------------
+
+
+def test_default_profile_target_matches_profiles_yml() -> None:
+    profiles = Path(__file__).parents[2] / "ol_dbt" / "profiles.yml"
+    match = re.search(r"^  target: (\S+)$", profiles.read_text(), re.MULTILINE)
+
+    assert match is not None
+    assert match.group(1) == DEFAULT_PROFILE_TARGET
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "said"),
+    [({}, True), ({"target": "dev_local"}, True), ({"target": "starrocks_local"}, False)],
+)
+def test_run_says_the_duckdb_target_reads_the_deployed_lake(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], kwargs: dict[str, str], said: bool
+) -> None:
+    _dbt_command_from_run(tmp_path, **kwargs)
+
+    assert ("Target dev_local: DuckDB" in capsys.readouterr().out) is said

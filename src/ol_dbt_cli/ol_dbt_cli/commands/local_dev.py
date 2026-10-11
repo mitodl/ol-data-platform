@@ -740,14 +740,15 @@ local_app = cyclopts.App(
 )
 
 
-def _print_mode(databases: list[str]) -> None:
+def _print_mode(databases: list[str] | None = None) -> None:
     """Say which lake the views read.
 
     "local" names the engine here, not the data: these views are the deployed
     lake's tables, and the lake a developer's own apps feed is a different
     command.
     """
-    print(f"ol-dbt local: DuckDB on this machine, reading AWS Glue ({', '.join(databases)}).")
+    glue = f"AWS Glue ({', '.join(databases)})" if databases else "AWS Glue"
+    print(f"ol-dbt local: DuckDB on this machine, reading {glue}.")
     print("  Needs AWS credentials. Rows from your local-dev apps are not here:")
     print("  `ol-dbt starrocks build --env dev` builds on the local lake (docs/LOCAL_LAKE.md).")
 
@@ -898,6 +899,7 @@ def list_sources(
     ] = DEFAULT_DUCKDB_PATH,
 ) -> None:
     """List currently registered Glue sources in DuckDB."""
+    _print_mode()
     _show_registry(duckdb_path)
 
 
@@ -1020,6 +1022,7 @@ def test(
     print("=" * 70)
     print("Testing DuckDB + AWS Glue + Iceberg Integration")
     print("=" * 70)
+    _print_mode()
 
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"\nConnecting to DuckDB at: {duckdb_path}")

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated, cast
+from typing import TYPE_CHECKING, Annotated, cast
 
 from cyclopts import App, Parameter
 from rich.console import Console
@@ -34,6 +34,9 @@ from ol_dbt_cli.lib.raw_fixtures import (
     qualified_name,
     row_parameters,
 )
+
+if TYPE_CHECKING:
+    from mysql.connector.abstracts import MySQLConnectionAbstract
 
 console = Console()
 err_console = Console(stderr=True)
@@ -67,6 +70,22 @@ UnitKeys = Annotated[
 ]
 
 
+def connect_local_lake(host: str = LOCAL_HOST, port: int = LOCAL_PORT) -> MySQLConnectionAbstract:
+    """Open the local StarRocks as its passwordless root.
+
+    The one place that login is made, so the host stays the constant above
+    unless a caller passes another.
+    """
+    # Imported here for the reason boto3 is in lib.glue_schema: only the
+    # commands on the local lake connect to StarRocks.
+    import mysql.connector  # noqa: PLC0415
+
+    return cast(
+        "MySQLConnectionAbstract",
+        mysql.connector.connect(host=host, port=port, user=LOCAL_USER, password="", autocommit=True),
+    )
+
+
 def _select(inventory_dir: Path, unit: list[str] | None) -> list[Unit]:
     units = load_units(inventory_dir)
     if not unit:
@@ -98,17 +117,7 @@ def load(
         err_console.print(f"[bold red]No fixtures under {escape(str(inventory_dir))}.")
         sys.exit(1)
 
-    # Imported here for the reason boto3 is in lib.glue_schema: only this
-    # command connects to StarRocks.
-    import mysql.connector  # noqa: PLC0415
-
-    connection = mysql.connector.connect(
-        host=host,
-        port=port,
-        user=LOCAL_USER,
-        password="",
-        autocommit=True,
-    )
+    connection = connect_local_lake(host, port)
     cursor = connection.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, schema)}")
     for fixture in fixtures:

@@ -57,7 +57,7 @@ from cyclopts import Parameter
 from rich.console import Console
 
 from ol_dbt_cli.commands._vault_auth import fetch_vault_db_credentials
-from ol_dbt_cli.commands.fixtures import LOCAL_CATALOG, LOCAL_HOST, LOCAL_PORT, LOCAL_RAW_SCHEMA, LOCAL_USER
+from ol_dbt_cli.commands.fixtures import LOCAL_CATALOG, LOCAL_RAW_SCHEMA, connect_local_lake
 from ol_dbt_cli.commands.run import IndirectSelection, _find_dbt_dir
 from ol_dbt_cli.commands.run import run as _dbt_run
 from ol_dbt_cli.lib.git_utils import get_repo_root
@@ -232,10 +232,7 @@ def _local_raw_row_counts(tables: set[str]) -> dict[str, int]:
     external write by up to 30 seconds. A staging model built in the same run
     read that snapshot too.
     """
-    # Imported here as in commands.fixtures: only the local lake connects from this module.
-    import mysql.connector  # noqa: PLC0415
-
-    connection = mysql.connector.connect(host=LOCAL_HOST, port=LOCAL_PORT, user=LOCAL_USER, password="")
+    connection = connect_local_lake()
     cursor = connection.cursor()
     cursor.execute(f"SHOW TABLES FROM {qualified_name(LOCAL_CATALOG, LOCAL_RAW_SCHEMA)}")
     held = {str(name) for (name,) in cast("list[tuple[str]]", cursor.fetchall())}
