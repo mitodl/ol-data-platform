@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
+import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
-from ol_dbt_cli.commands.starrocks import _ENVS, _port_is_free, run
+from ol_dbt_cli.commands.starrocks import _ENVS, _port_is_free, _report_local_branches, run
 
 # ---------------------------------------------------------------------------
 # _ENVS config consistency
@@ -245,3 +249,150 @@ def test_explicit_port_forward_overrides_env_default(mock_fetch, mock_port_forwa
 def test_unknown_env_exits() -> None:
     with pytest.raises(SystemExit):
         run(env="nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# The branch report after a build on the local lake
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("env", "target", "reported"),
+    [
+        ("dev", None, True),
+        # Reads default_catalog, not the raw schema the report counts.
+        ("dev", "starrocks_local_b2b", False),
+        ("qa", None, False),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_only_a_build_on_the_local_lake_reports_branches(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_report, env: str, target: str | None, reported: bool
+) -> None:
+    mock_fetch.return_value = ("user", "password")
+    run(env=env, target=target)
+
+    assert mock_report.called is reported
+
+
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=SystemExit(1))
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+def test_branches_are_reported_on_a_failed_build_and_dbt_s_exit_code_survives(
+    mock_port_forward, mock_dbt_run, mock_report
+) -> None:
+    """`ol-dbt run` leaves by sys.exit, and a failed build still built the models before the failure."""
+    with pytest.raises(SystemExit) as exit_info:
+        run(env="dev")
+
+    assert exit_info.value.code == 1
+    mock_report.assert_called_once()
+
+
+def _source(table: str) -> dict[str, object]:
+    return {
+        "unique_id": f"source.pkg.raw.{table}",
+        "name": table,
+        "identifier": table,
+        "source_name": "raw",
+        "resource_type": "source",
+        "original_file_path": "models/staging/_sources.yml",
+    }
+
+
+def _model(name: str, path: str, parents: list[str]) -> dict[str, object]:
+    return {
+        "unique_id": f"model.pkg.{name}",
+        "name": name,
+        "resource_type": "model",
+        "original_file_path": path,
+        "depends_on": {"nodes": parents},
+    }
+
+
+@pytest.fixture
+def local_build(tmp_path: Path) -> Path:
+    """Lay out a repo with two units, a fixture for one, and the artifacts of a build of a union of both."""
+    inventory = tmp_path / "ingestion" / "inventory"
+    for deployment in ("mitxonline", "xpro"):
+        unit = {
+            "deployment": deployment,
+            "layer": "app_postgres",
+            "strategies": {"qa": "ingest", "local": "fixture"},
+            "tables": [{"raw_table": f"raw__{deployment}__users"}],
+        }
+        path = inventory / "units" / f"{deployment}__app_postgres.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(unit))
+    fixture = inventory / "fixtures" / "mitxonline__app_postgres.yml"
+    fixture.parent.mkdir()
+    fixture.write_text("---\n")
+
+    nodes = [
+        _model("stg_mitxonline", "models/staging/a.sql", ["source.pkg.raw.raw__mitxonline__users"]),
+        _model("stg_xpro", "models/staging/b.sql", ["source.pkg.raw.raw__xpro__users"]),
+        _model("dim_user", "models/dimensional/dim_user.sql", ["model.pkg.stg_mitxonline", "model.pkg.stg_xpro"]),
+    ]
+    sources = [_source("raw__mitxonline__users"), _source("raw__xpro__users")]
+    target = tmp_path / "src" / "ol_dbt" / "target"
+    target.mkdir(parents=True)
+    (target / "manifest.json").write_text(
+        json.dumps(
+            {
+                "nodes": {str(node["unique_id"]): node for node in nodes},
+                "sources": {str(source["unique_id"]): source for source in sources},
+            }
+        )
+    )
+    results = [
+        {"unique_id": "model.pkg.stg_mitxonline", "status": "success"},
+        {"unique_id": "model.pkg.stg_xpro", "status": "success"},
+        {"unique_id": "model.pkg.dim_user", "status": "success"},
+        {"unique_id": "test.pkg.not_null_dim_user_id", "status": "pass"},
+    ]
+    (target / "run_results.json").write_text(json.dumps({"results": results}))
+    return tmp_path
+
+
+def test_report_names_the_branch_a_built_union_lacks(local_build: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with (
+        patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+        patch(
+            "ol_dbt_cli.commands.starrocks._local_raw_row_counts",
+            return_value={"raw__mitxonline__users": 4},
+        ) as mock_counts,
+    ):
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() - 60)
+
+    mock_counts.assert_called_once_with({"raw__mitxonline__users", "raw__xpro__users"})
+    out = capsys.readouterr().out
+    assert "dim_user: 1 of 2 branches present" in out
+    assert "xpro/app_postgres: absent (1 table(s)); no fixture committed for this unit" in out
+    assert "mitxonline/app_postgres: present" in out
+
+
+def test_report_skips_results_left_by_an_earlier_run(local_build: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A dbt run that stops before its first node leaves the old run_results.json, which describes another build."""
+    with patch("ol_dbt_cli.commands.starrocks._local_raw_row_counts") as mock_counts:
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() + 60)
+
+    mock_counts.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_report_opens_no_connection_when_the_build_made_no_union(
+    local_build: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = local_build / "src" / "ol_dbt" / "target" / "run_results.json"
+    results.write_text(json.dumps({"results": [{"unique_id": "model.pkg.stg_xpro", "status": "success"}]}))
+    with (
+        patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+        patch("ol_dbt_cli.commands.starrocks._local_raw_row_counts") as mock_counts,
+    ):
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() - 60)
+
+    mock_counts.assert_not_called()
+    assert capsys.readouterr().out == ""
