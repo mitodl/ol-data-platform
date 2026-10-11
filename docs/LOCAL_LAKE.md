@@ -37,6 +37,31 @@ dbt's default would run it and fail on the missing table. `--indirect-selection 
 restores the default. A run with no `--select` re-selects the tests that failed last time
 by name, so after a failed eager run pass `--select` again or `--full-refresh`.
 
+## Which branches a build had
+
+A model above staging unions several ingestion units, and it builds without error when
+one of them has no rows. After a build on `starrocks_local`, `ol-dbt starrocks` counts the
+raw tables each union it built reads and prints the ones that came out partial:
+
+```text
+Ingestion branches in ol_warehouse_local_raw: 0 of 1 union model(s) built have rows in every branch.
+  dim_instructor: 1 of 3 branches present
+    mitxonline/app_postgres: partial (2 of 3 table(s)); the tables hold no rows
+      raw__mitxonline__app__postgres__cms_instructorpage (no rows), raw__mitxonline__app__postgres__cms_instructorpagelink (no rows)
+    ocw/app_postgres: absent (1 table(s)); no fixture committed for this unit
+    xpro/app_postgres: present
+```
+
+A branch is an inventory unit (`deployment/layer`). It is present when every raw table of
+the unit that the model reads has rows, and absent when none does. The report changes
+nothing about the build or its exit code, and a report that fails is skipped with one line.
+The counts are of the raw schema when the build ends. A union reads its parents' tables,
+so one rebuilt alone (saved state, or a `--select` without a leading `+`) may hold rows
+from before the last `ol-dbt fixtures load`. The report names those unions.
+
+A model that reads one unit is not listed, and
+neither is a build on `starrocks_local_b2b`, which does not read the raw schema.
+
 ## Raw tables from a local app database
 
 A source built on `ol_dlt.database` reads the local-dev Postgres cluster under

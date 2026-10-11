@@ -43,20 +43,34 @@ dbt ``profiles.yml`` must reference the env vars this command injects::
 from __future__ import annotations
 
 import atexit
+import json
 import os
 import socket
 import subprocess
 import sys
 import time
-from typing import Annotated, Any, Literal
+from pathlib import Path
+from typing import Annotated, Any, Literal, cast
 
 import cyclopts
 from cyclopts import Parameter
 from rich.console import Console
 
 from ol_dbt_cli.commands._vault_auth import fetch_vault_db_credentials
-from ol_dbt_cli.commands.run import IndirectSelection
+from ol_dbt_cli.commands.fixtures import LOCAL_CATALOG, LOCAL_RAW_SCHEMA, connect_local_lake
+from ol_dbt_cli.commands.run import IndirectSelection, _find_dbt_dir
 from ol_dbt_cli.commands.run import run as _dbt_run
+from ol_dbt_cli.lib.git_utils import get_repo_root
+from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
+from ol_dbt_cli.lib.local_branches import (
+    BUILT_RESOURCE_TYPES,
+    local_branches,
+    parents_not_built,
+    render_local_branches,
+    union_tables,
+)
+from ol_dbt_cli.lib.manifest import load_manifest
+from ol_dbt_cli.lib.raw_fixtures import fixture_path, qualified_name
 
 console = Console()
 err_console = Console(stderr=True)
@@ -217,6 +231,61 @@ starrocks_app = cyclopts.App(
 )
 
 
+def _local_raw_row_counts(tables: set[str]) -> dict[str, int]:
+    """Count the rows of each of ``tables`` that the local raw schema holds.
+
+    StarRocks answers from the snapshot it has cached, which can trail an
+    external write by up to 30 seconds. A staging model built in the same run
+    read that snapshot too.
+    """
+    connection = connect_local_lake()
+    cursor = connection.cursor()
+    cursor.execute(f"SHOW TABLES FROM {qualified_name(LOCAL_CATALOG, LOCAL_RAW_SCHEMA)}")
+    held = {str(name) for (name,) in cast("list[tuple[str]]", cursor.fetchall())}
+    counts: dict[str, int] = {}
+    for table in sorted(tables & held):
+        cursor.execute(f"SELECT count(*) FROM {qualified_name(LOCAL_CATALOG, LOCAL_RAW_SCHEMA, table)}")  # noqa: S608
+        ((counts[table],),) = cast("list[tuple[int]]", cursor.fetchall())
+    connection.close()
+    return counts
+
+
+def _report_local_branches(dbt_dir: Path, started: float) -> None:
+    """Say which ingestion branches the unions this build produced had rows for.
+
+    The local raw schema holds what the developer loaded, so a union built here
+    is usually missing branches, and dbt reports it as a success either way.
+    """
+    results_path = dbt_dir / "target" / "run_results.json"
+    # dbt leaves the previous run's file in place when it stops before running a node.
+    if not results_path.exists() or results_path.stat().st_mtime < started:
+        return
+    manifest = load_manifest(dbt_dir / "target" / "manifest.json")
+    built = [
+        manifest.nodes[result["unique_id"]]
+        for result in json.loads(results_path.read_text())["results"]
+        if result["status"] == "success" and result["unique_id"].split(".", 1)[0] in BUILT_RESOURCE_TYPES
+    ]
+    models = {node.name for node in built if node.is_model}
+    inventory_dir = get_repo_root(dbt_dir) / DEFAULT_INVENTORY_DIR
+    units = load_units(inventory_dir)
+    unions = union_tables(manifest, units, models)
+    if not unions:
+        return
+    rows = _local_raw_row_counts(
+        {table for by_unit in unions.values() for tables in by_unit.values() for table in tables}
+    )
+    fixture_units = {unit.key for unit in units if fixture_path(inventory_dir, unit).exists()}
+    lines = render_local_branches(
+        local_branches(unions, units, rows, fixture_units),
+        LOCAL_RAW_SCHEMA,
+        parents_not_built(manifest, unions, {node.name for node in built}),
+    )
+    console.print()
+    for line in lines:
+        console.print(line, markup=False, highlight=False, soft_wrap=True)
+
+
 @starrocks_app.default
 def run(  # noqa: PLR0913
     subcommand: Annotated[
@@ -358,15 +427,28 @@ def run(  # noqa: PLR0913
     # Default to the env-appropriate dbt target if the caller didn't specify one.
     effective_target = target or env_cfg["dbt_target"]
 
-    _dbt_run(
-        subcommand,
-        target=effective_target,
-        select=select,
-        full_refresh=full_refresh,
-        defer=defer,
-        save_state=save_state,
-        state_dir=state_dir,
-        vars=vars,
-        project_dir=project_dir,
-        indirect_selection=indirect_selection or env_cfg.get("indirect_selection"),
-    )
+    started = time.time()
+    try:
+        _dbt_run(
+            subcommand,
+            target=effective_target,
+            select=select,
+            full_refresh=full_refresh,
+            defer=defer,
+            save_state=save_state,
+            state_dir=state_dir,
+            vars=vars,
+            project_dir=project_dir,
+            indirect_selection=indirect_selection or env_cfg.get("indirect_selection"),
+        )
+    except SystemExit:
+        # _dbt_run always leaves this way, with dbt's return code. The b2b target
+        # reads default_catalog, not the raw schema counted here.
+        if effective_target == _LOCAL_DBT_TARGET:
+            try:
+                _report_local_branches(_find_dbt_dir(project_dir), started)
+            except Exception as exc:  # noqa: BLE001
+                # The report describes a build that is already over. Raising here
+                # would replace dbt's exit code with a traceback's.
+                err_console.print(f"[yellow]Branch report skipped:[/] {exc!r}")
+        raise

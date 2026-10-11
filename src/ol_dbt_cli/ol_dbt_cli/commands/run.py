@@ -49,6 +49,8 @@ run_app = cyclopts.App(
 )
 
 DEFAULT_STATE_DIR = ".dbt-state"
+# The `target:` of src/ol_dbt/profiles.yml, which a run with no --target gets.
+DEFAULT_PROFILE_TARGET = "dev_local"
 STATE_ARTIFACTS = ("manifest.json", "run_results.json")
 
 
@@ -247,6 +249,12 @@ def run(  # noqa: PLR0913
 
     # ── Status banner ──────────────────────────────────────────────────────
     console.print(f"\n[bold]ol-dbt run[/] [dim]{subcommand}[/] — dbt project: [cyan]{dbt_dir}[/]")
+    if (target or DEFAULT_PROFILE_TARGET) == DEFAULT_PROFILE_TARGET:
+        # "local" is the engine: the views are the deployed lake's tables.
+        console.print(
+            f"[dim]Target {DEFAULT_PROFILE_TARGET}: DuckDB on this machine, reading the deployed lake's Glue tables. "
+            "The local lake is `ol-dbt starrocks build --env dev`.[/]"
+        )
     if full_refresh:
         console.print("[yellow]⟳  Full refresh — ignoring saved state[/]")
     elif has_any_state and select is None:
