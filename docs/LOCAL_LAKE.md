@@ -48,10 +48,19 @@ rows can stand in for a fixture. See "Local lake" in
 (cd src/ol_dlt && uv run python -m ol_dlt.sources.mitxonline_app)
 ```
 
-`ol-dbt fixtures load` drops and recreates the tables it has a fixture for. The source
-keeps a table that already exists and replaces its rows, so load fixtures first and the
-source second when both cover a table. StarRocks answers from the previous load for up
-to half a minute afterwards; the README section has the statement that refreshes it.
+`ol-dbt fixtures load` drops and recreates the tables it has a fixture for, and the
+source replaces a fixture's table with its own, so load fixtures first and the source
+second when both cover a table. The models then build on the app's rows:
+
+```bash
+ol-dbt fixtures load
+(cd src/ol_dlt && uv run python -m ol_dlt.sources.mitxonline_app)
+ol-dbt starrocks build --env dev \
+    --select "+integrations__learn__mitxonline_courses +integrations__learn__mitxonline_programs"
+```
+
+MITx Online's `populate_course_data` seed (`seed-mitxonline-course-data` in Tilt) gives
+the models ten courses to build from.
 
 ## Raw fixtures
 

@@ -205,15 +205,25 @@ The `data_loading` container in `docker-compose.yaml` cannot reach those forward
 it sets `DLT_PROFILE=ci` and keeps writing parquet files inside the container. Run the
 code location on your machine (`dagster dev`) to materialize an asset into the lake.
 
+The Postgres connection is made without TLS when it goes to the forward (no
+`<NAME>_DB_HOST` set). Closing a TLS session through `kubectl port-forward` can make it
+exit with "lost connection to pod", which takes every other table's connection with it.
+
 Two things to know when a dbt build follows a load:
 
-- StarRocks caches a table's snapshot. Measured on StarRocks 4.1.6, it kept answering
-  from the previous load for 25 to 30 seconds after a new one. `REFRESH EXTERNAL TABLE
-  <catalog>.<schema>.<table>` makes it current at once.
+- The local StarRocks catalog has its Iceberg metadata cache off
+  (`enable_iceberg_metadata_cache` in ol-infrastructure's `lakehouse.py`), so a build
+  started right after a load reads that load. A cluster whose core stack last ran before
+  that setting existed answers from the previous load for about half a minute, and the
+  build passes on the old rows. Restart Tilt to apply it, or run `REFRESH EXTERNAL TABLE
+  <catalog>.<schema>.<table>` after a load.
 - `ol-dbt fixtures load` writes the same schema, and drops and recreates the tables it
-  has a fixture for. A `replace` source loading a table that already exists keeps the
-  table, replaces its rows and adds the columns it is missing, so a fixture's table
-  keeps any column only the fixture had. Drop the table first for a clean one.
+  has a fixture for. A source does the same in the other direction: a table it loads
+  that no dlt load made is dropped and created from the source's columns
+  (`ol_dlt/local_lake.py` logs each one). The fixture's column types are the deployed
+  table's, and where Airbyte landed those (`timestamp`, `double`) pyiceberg cannot evolve
+  them into what the source reads (`timestamptz`, `decimal`). Whichever ran last owns
+  the table, so run the source after the fixtures.
 
 ## Backfilling a file-drop source
 
