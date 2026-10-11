@@ -11,10 +11,14 @@ credentials. The port-forwards a source needs are in "Local lake" in
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from cyclopts import App
 from rich.console import Console
@@ -22,7 +26,11 @@ from rich.markup import escape
 
 from ol_dbt_cli.commands.fixtures import InventoryDir, UnitKeys
 from ol_dbt_cli.lib.git_utils import get_repo_root
-from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units, local_ingest_sources
+from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, local_ingest_sources, validate_inventory
+from ol_dbt_cli.lib.validation import ValidationReport
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 console = Console()
 err_console = Console(stderr=True)
@@ -38,13 +46,45 @@ OL_DLT_DIR = Path("src/ol_dlt")
 # Set on every run and never read from the caller's shell: one that exports
 # DLT_PROFILE=qa or production would send this command's load to that lake.
 LOCAL_DLT_PROFILE = "dev"
+# What ol_dlt lets the environment move under the dev profile: the database a
+# source reads (`<NAME>_DB_HOST`, ol_dlt.database) and the local catalog and
+# object store (.dlt/.pyiceberg.yaml). They exist for a port-forward on another
+# port, so each has to stay on this machine.
+_DB_HOST_VARIABLE = re.compile(r"^[A-Z0-9_]+_DB_HOST$")
+_CATALOG_URL_VARIABLES = (
+    "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI",
+    "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT",
+)
+
+
+def _is_loopback(host: str | None) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host or "").is_loopback
+    except ValueError:
+        return False
+
+
+def overrides_off_this_machine(environment: Mapping[str, str]) -> list[str]:
+    """Return the variables that would point a source away from the local-dev cluster.
+
+    :param environment: The environment a source would run in.
+    :returns: Names of the database-host and local-catalog overrides whose
+        host is not a loopback address.
+    :rtype: list[str]
+    """
+    hosts: dict[str, str | None] = {name: value for name, value in environment.items() if _DB_HOST_VARIABLE.match(name)}
+    hosts |= {name: urlsplit(environment[name]).hostname for name in _CATALOG_URL_VARIABLES if name in environment}
+    return sorted(name for name, host in hosts.items() if not _is_loopback(host))
 
 
 def source_environment() -> dict[str, str]:
     """Return the caller's environment, pinned to the local dlt profile."""
     # VIRTUAL_ENV names ol-dbt's own environment, which uv would warn about and
-    # pass over: the source runs in ol_dlt's.
-    environment = {key: value for key, value in os.environ.items() if key != "VIRTUAL_ENV"}
+    # pass over: the source runs in ol_dlt's. Without PYICEBERG_HOME ol_dlt
+    # reads the catalog file committed beside it.
+    environment = {key: value for key, value in os.environ.items() if key not in {"VIRTUAL_ENV", "PYICEBERG_HOME"}}
     environment["DLT_PROFILE"] = LOCAL_DLT_PROFILE
     return environment
 
@@ -63,7 +103,15 @@ def local(
     afterwards. A source that fails does not stop the others, and the command
     then exits non-zero.
     """
-    sources = local_ingest_sources(load_units(inventory_dir))
+    report = ValidationReport()
+    units = validate_inventory(inventory_dir, report)
+    if report.errors:
+        for issue in report.errors:
+            err_console.print(f"[bold red]{escape(issue.model)}: {escape(issue.message)}")
+        err_console.print("Nothing was run. See `ol-dbt inventory validate`.")
+        sys.exit(1)
+
+    sources = local_ingest_sources(units)
     if unknown := sorted(set(unit or []) - sources.keys()):
         err_console.print(
             f"[bold red]Not a unit with strategies.local: ingest: {escape(', '.join(unknown))}.[/] "
@@ -75,13 +123,27 @@ def local(
         err_console.print(f"[bold red]No unit under {escape(str(inventory_dir))} has strategies.local: ingest.")
         sys.exit(1)
 
-    ol_dlt_dir = get_repo_root(inventory_dir) / OL_DLT_DIR
     environment = source_environment()
+    if elsewhere := overrides_off_this_machine(environment):
+        err_console.print(
+            f"[bold red]{escape(', '.join(elsewhere))} would take a source off this machine.[/] "
+            "This command loads the local lake from the local-dev cluster. Unset what is "
+            "named, or run the source yourself if that is what you mean."
+        )
+        sys.exit(1)
+
+    ol_dlt_dir = get_repo_root(inventory_dir) / OL_DLT_DIR
     failed = []
     for key, module in selected.items():
         console.print(f"[bold]{escape(key)}[/]: {escape(module)} (DLT_PROFILE={LOCAL_DLT_PROFILE})")
         command = ["uv", "run", "python", "-m", module]
-        if subprocess.run(command, cwd=ol_dlt_dir, env=environment, check=False).returncode:  # noqa: S603
+        try:
+            returncode = subprocess.run(command, cwd=ol_dlt_dir, env=environment, check=False).returncode  # noqa: S603
+        except OSError as error:
+            # `uv` is not on PATH, or src/ol_dlt is not under the repository the inventory is in.
+            err_console.print(f"[bold red]{escape(key)} did not start:[/] {escape(str(error))}")
+            returncode = 1
+        if returncode:
             failed.append(key)
 
     if failed:
