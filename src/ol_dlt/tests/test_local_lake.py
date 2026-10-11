@@ -185,6 +185,19 @@ def test_a_load_through_another_catalog_drops_nothing(
     assert lake_tables["evolved"] == ["raw.t"]
 
 
+def test_a_positional_call_goes_to_dlt_untouched(
+    lake_tables: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """dlt calls with keywords today; a release that does not must still load."""
+    seen: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(
+        local_lake, "_dlt_evolve_table", lambda *args, **_kwargs: seen.append(args)
+    )
+    local_lake.evolve_table(lake_tables["catalog"], None, None, "raw.t", "s3://x")
+    assert len(seen) == 1
+    assert lake_tables["dropped"] == []
+
+
 def test_object_store_credentials_follow_the_catalog_entry() -> None:
     credentials = local_lake.object_store_credentials()
     assert credentials.endpoint_url == HOST_ENDPOINT

@@ -29,7 +29,7 @@ deployed tables have today. Where those are the types Airbyte landed
 (``timestamp`` and ``double`` for a source's ``timestamptz`` and ``numeric``),
 pyiceberg refuses to evolve the fixture's table into the source's and the load
 fails. ``evolve_table`` wraps dlt's function to drop a table of this lake that
-no dlt load made, so the source creates its own.
+has no ``_dlt_load_id`` column, so the source creates its own.
 """
 
 import logging
@@ -118,16 +118,20 @@ def get_catalog(*args: Any, **kwargs: Any) -> Catalog:  # noqa: ANN401
     return _dlt_get_catalog(*args, **kwargs)
 
 
-def evolve_table(**kwargs: Any) -> Any:  # noqa: ANN401
+def evolve_table(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
     """Open a table for a load, replacing one in the local lake no dlt load made.
 
-    Every table a source here writes carries ``_dlt_load_id``, an empty one
-    included, so a table without it came from ``ol-dbt fixtures load``. Only a
-    load passes ``schema``, so reading a fixture's table leaves it alone.
+    dlt stamps ``_dlt_load_id`` on every root table, an empty one included, so
+    a table without it is taken to come from ``ol-dbt fixtures load``. (A
+    fixture that declares the column itself, as the one for ``ocw_content``
+    does, is kept: it already has the source's schema.) Only a load passes
+    ``schema``, so reading a fixture's table leaves it alone. dlt calls this
+    with keywords; a call made any other way goes through untouched.
     """
-    catalog, table_id = kwargs["catalog"], kwargs["table_id"]
+    catalog, table_id = kwargs.get("catalog"), kwargs.get("table_id")
     if (
         isinstance(catalog, HostEndpointRestCatalog)
+        and table_id is not None
         and kwargs.get("schema") is not None
     ):
         try:
@@ -136,13 +140,13 @@ def evolve_table(**kwargs: Any) -> Any:  # noqa: ANN401
             columns = None
         if columns is not None and not set(columns) & set(config.DLT_LOAD_ID_COLUMN):
             logger.warning(
-                "Dropping %s from the local lake: it was not written by a dlt "
-                "load (`ol-dbt fixtures load` makes such tables), and this load "
-                "creates its own.",
+                "Dropping %s from the local lake: it has no _dlt_load_id column, "
+                "so no dlt load wrote it (`ol-dbt fixtures load` makes such "
+                "tables), and this load creates its own.",
                 table_id,
             )
             catalog.drop_table(table_id)
-    return _dlt_evolve_table(**kwargs)
+    return _dlt_evolve_table(*args, **kwargs)
 
 
 # dlt's filesystem client imports both from this module at call time.
