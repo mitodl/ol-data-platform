@@ -76,7 +76,9 @@ ol-dbt ingest local --unit mitxonline/app_postgres  # one of them
 ```
 
 It runs each unit's source (`python -m ol_dlt.sources.<name>` in `src/ol_dlt`) with
-`DLT_PROFILE=dev` whatever your shell exports, so the load cannot land in a deployed lake.
+`DLT_PROFILE=dev` whatever your shell exports, so a shell left on `qa` or `production` does
+not send the load to that lake. The `<NAME>_DB_*` and `PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__*`
+overrides in the ol_dlt README still apply: the source reads and writes what they name.
 A source that fails does not stop the others, and the command then exits non-zero.
 
 `ol-dbt fixtures load` drops and recreates the tables it has a fixture for, and the

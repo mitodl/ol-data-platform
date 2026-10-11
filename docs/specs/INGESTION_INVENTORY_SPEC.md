@@ -246,7 +246,8 @@ New here:
 6. Every `airbyte.connections[].name` ends with `s3 data lake` (case-insensitive) — the
    Dagster selector's precondition (§1.3) — or the unit is marked `dagster_visible: false`,
    which is an assertion that no dbt model depends on it (§8.1 finding C).
-7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`. A third
+7. `airbyte:` is present iff `loader: airbyte`. `dlt:` is required by `loader: dlt` and may
+   also sit on a `loader: airbyte` unit whose source is built (rule 2). A third
    value, `loader: dagster`, carries neither block: some tables are produced by a bespoke
    asset pipeline under `dg_projects/` rather than pulled by a loader, and the inventory
    claims to record everything we load (§2), not everything a loader fetches.
@@ -968,11 +969,12 @@ Until a unit's source is built, its local raw tables come from committed fixture
 (`ingestion/inventory/fixtures/`, loaded with `ol-dbt fixtures load`). Units 1 and 2 have
 them. What the source adds is rows from the contributor's own running app.
 
-A unit whose source is built declares `local: ingest` and names the source in a `dlt:`
-block, while `loader` goes on recording what loads production (§3.3 rule 2).
+A unit whose source is built, and whose app runs in local-dev, declares `local: ingest` and
+names the source in a `dlt:` block, while `loader` goes on recording what loads production (§3.3 rule 2).
 `ol-dbt ingest local` runs the source of every such unit under the `dev` dlt profile, which
 writes Iceberg tables into the local lake's raw schema, the one `ol-dbt starrocks --env dev`
-reads. The unit keeps its fixture for a contributor who is not running the app.
+reads. The unit keeps its fixture for a contributor who is not running the app. Unit 2
+(`xpro/app_postgres`) has a source and no local app, so it stays `local: fixture`.
 
 ### 10.2 The order
 

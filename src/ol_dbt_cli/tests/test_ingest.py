@@ -10,6 +10,9 @@ import pytest
 import yaml
 
 from ol_dbt_cli.commands import ingest
+from ol_dbt_cli.lib.inventory import load_units, local_ingest_sources
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _unit(deployment: str, local: str) -> dict[str, Any]:
@@ -58,7 +61,7 @@ def test_runs_every_ingest_unit_and_fails_when_one_does(inventory_dir: Path, run
     assert {run["cwd"] for run in runs} == {inventory_dir.parents[1] / "src" / "ol_dlt"}
 
 
-def test_the_caller_cannot_move_the_load_off_the_local_lake(
+def test_the_callers_dlt_profile_is_not_used(
     inventory_dir: Path, runs: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("DLT_PROFILE", "production")
@@ -79,3 +82,11 @@ def test_a_unit_that_is_not_ingested_locally_is_refused(
         ingest.local(inventory_dir=inventory_dir, unit=["mitxonline/app_postgres", unit])
 
     assert runs == []
+
+
+def test_every_unit_the_inventory_marks_ingest_names_a_runnable_source() -> None:
+    sources = local_ingest_sources(load_units(REPO_ROOT / "ingestion" / "inventory"))
+
+    assert sources.keys() == {"keycloak/app_postgres", "mitxonline/app_postgres"}
+    for module in sources.values():
+        assert (REPO_ROOT / "src" / "ol_dlt" / Path(*module.split(".")) / "__main__.py").is_file(), module
