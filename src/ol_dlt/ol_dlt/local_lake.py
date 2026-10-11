@@ -118,13 +118,19 @@ def get_catalog(*args: Any, **kwargs: Any) -> Catalog:  # noqa: ANN401
     return _dlt_get_catalog(*args, **kwargs)
 
 
+# Every column dlt adds to a table it writes (_dlt_load_id, _dlt_id, and on a
+# nested table _dlt_parent_id, _dlt_root_id and _dlt_list_idx) starts with this.
+DLT_COLUMN_PREFIX = "_dlt_"
+
+
 def evolve_table(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
     """Open a table for a load, replacing one in the local lake no dlt load made.
 
-    dlt stamps ``_dlt_load_id`` on every root table, an empty one included, so
-    a table without it is taken to come from ``ol-dbt fixtures load``. (A
-    fixture that declares the column itself, as the one for ``ocw_content``
-    does, is kept: it already has the source's schema.) Only a load passes
+    dlt stamps ``_dlt_load_id`` on every root table, an empty one included, and
+    ``_dlt_parent_id`` on the nested tables it splits out of one, so a table
+    with no ``_dlt_`` column is taken to come from ``ol-dbt fixtures load``. (A
+    fixture that declares one itself, as the one for ``ocw_content`` does, is
+    kept: it already has the source's schema.) Only a load passes
     ``schema``, so reading a fixture's table leaves it alone. dlt calls this
     with keywords; a call made any other way goes through untouched.
     """
@@ -138,9 +144,11 @@ def evolve_table(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             columns = catalog.load_table(table_id).schema().column_names
         except NoSuchTableError:
             columns = None
-        if columns is not None and not set(columns) & set(config.DLT_LOAD_ID_COLUMN):
+        if columns is not None and not any(
+            column.startswith(DLT_COLUMN_PREFIX) for column in columns
+        ):
             logger.warning(
-                "Dropping %s from the local lake: it has no _dlt_load_id column, "
+                "Dropping %s from the local lake: it has no _dlt_ column, "
                 "so no dlt load wrote it (`ol-dbt fixtures load` makes such "
                 "tables), and this load creates its own.",
                 table_id,

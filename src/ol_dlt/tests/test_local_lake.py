@@ -157,6 +157,12 @@ def test_dlt_calls_the_evolve_wrapper() -> None:
     [
         pytest.param(("id", "title"), object(), ["raw.t"], id="fixture-table-loaded"),
         pytest.param(("id", "_dlt_load_id"), object(), [], id="dlt-table-loaded"),
+        pytest.param(
+            ("value", "_dlt_parent_id", "_dlt_list_idx", "_dlt_id"),
+            object(),
+            [],
+            id="dlt-nested-table-loaded",
+        ),
         pytest.param(("id", "title"), None, [], id="fixture-table-read"),
         pytest.param(None, object(), [], id="no-table"),
     ],

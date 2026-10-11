@@ -219,7 +219,7 @@ Two things to know when a dbt build follows a load:
   <catalog>.<schema>.<table>` after a load.
 - `ol-dbt fixtures load` writes the same schema, and drops and recreates the tables it
   has a fixture for. A source does the same in the other direction: a table it loads
-  that has no `_dlt_load_id` column is dropped and created from the source's columns
+  that has no `_dlt_` column is dropped and created from the source's columns
   (`ol_dlt/local_lake.py` logs each one). A fixture that declares `_dlt_load_id`
   (`ocw__s3.yml`, which follows its dlt source's schema) is kept and loaded into. The fixture's column types are the deployed
   table's, and where Airbyte landed those (`timestamp`, `double`) pyiceberg cannot evolve

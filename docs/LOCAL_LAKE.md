@@ -49,7 +49,7 @@ rows can stand in for a fixture. See "Local lake" in
 ```
 
 `ol-dbt fixtures load` drops and recreates the tables it has a fixture for, and the
-source replaces a fixture's table that has no `_dlt_load_id` column with its own, so load
+source replaces a fixture's table that has no `_dlt_` column with its own, so load
 fixtures first and the source second when both cover a table. The models then build on the app's rows:
 
 ```bash
