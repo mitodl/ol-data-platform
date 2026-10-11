@@ -23,21 +23,33 @@ destination's credentials to ``get_catalog``, so this module wraps that
 function and answers with the local lake's catalog for the one destination
 whose credentials name the local lake's object store. Every other call goes to dlt
 untouched, whatever profile the process started under.
+
+``ol-dbt fixtures load`` writes the same raw schema, with the column types the
+deployed tables have today. Where those are the types Airbyte landed
+(``timestamp`` and ``double`` for a source's ``timestamptz`` and ``numeric``),
+pyiceberg refuses to evolve the fixture's table into the source's and the load
+fails. ``evolve_table`` wraps dlt's function to drop a table of this lake that
+has no ``_dlt_load_id`` column, so the source creates its own.
 """
 
+import logging
 from typing import Any
 
 from dlt.common.libs import pyiceberg as dlt_pyiceberg
 from dlt.sources.credentials import AwsCredentials
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.rest import RestCatalog
+from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.io import S3_ENDPOINT, FileIO
 from pyiceberg.typedef import EMPTY_DICT, Properties
 from pyiceberg.utils.config import Config
 
 from ol_dlt import config
 
+logger = logging.getLogger(__name__)
+
 _dlt_get_catalog = dlt_pyiceberg.get_catalog
+_dlt_evolve_table = dlt_pyiceberg.evolve_table
 
 
 class HostEndpointRestCatalog(RestCatalog):
@@ -106,5 +118,45 @@ def get_catalog(*args: Any, **kwargs: Any) -> Catalog:  # noqa: ANN401
     return _dlt_get_catalog(*args, **kwargs)
 
 
-# dlt's filesystem client imports get_catalog from this module at call time.
+# Every column dlt adds to a table it writes (_dlt_load_id, _dlt_id, and on a
+# nested table _dlt_parent_id, _dlt_root_id and _dlt_list_idx) starts with this.
+DLT_COLUMN_PREFIX = "_dlt_"
+
+
+def evolve_table(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+    """Open a table for a load, replacing one in the local lake no dlt load made.
+
+    dlt stamps ``_dlt_load_id`` on every root table, an empty one included, and
+    ``_dlt_parent_id`` on the nested tables it splits out of one, so a table
+    with no ``_dlt_`` column is taken to come from ``ol-dbt fixtures load``. (A
+    fixture that declares one itself, as the one for ``ocw_content`` does, is
+    kept: it already has the source's schema.) Only a load passes
+    ``schema``, so reading a fixture's table leaves it alone. dlt calls this
+    with keywords; a call made any other way goes through untouched.
+    """
+    catalog, table_id = kwargs.get("catalog"), kwargs.get("table_id")
+    if (
+        isinstance(catalog, HostEndpointRestCatalog)
+        and table_id is not None
+        and kwargs.get("schema") is not None
+    ):
+        try:
+            columns = catalog.load_table(table_id).schema().column_names
+        except NoSuchTableError:
+            columns = None
+        if columns is not None and not any(
+            column.startswith(DLT_COLUMN_PREFIX) for column in columns
+        ):
+            logger.warning(
+                "Dropping %s from the local lake: it has no _dlt_ column, "
+                "so no dlt load wrote it (`ol-dbt fixtures load` makes such "
+                "tables), and this load creates its own.",
+                table_id,
+            )
+            catalog.drop_table(table_id)
+    return _dlt_evolve_table(*args, **kwargs)
+
+
+# dlt's filesystem client imports both from this module at call time.
 dlt_pyiceberg.get_catalog = get_catalog
+dlt_pyiceberg.evolve_table = evolve_table
