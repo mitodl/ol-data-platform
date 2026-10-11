@@ -1,5 +1,8 @@
 """Tests for reaching the local lake from a host process."""
 
+import os
+from pathlib import Path
+
 import pytest
 from ol_orchestrate.lib import local_lake
 from ol_orchestrate.lib.local_lake import (
@@ -11,6 +14,17 @@ from pyiceberg.catalog.rest import RestCatalog
 from pyiceberg.io import S3_ENDPOINT
 
 IN_CLUSTER_ENDPOINT = "http://rustfs.local-infra.svc.cluster.local:9000"
+
+
+@pytest.fixture(autouse=True)
+def no_local_pyiceberg_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hide the developer's own catalog entry and overrides from pyiceberg."""
+    for name in list(os.environ):
+        if name.startswith("PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("PYICEBERG_HOME", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
 
 
 @pytest.fixture
@@ -50,10 +64,6 @@ def test_table_io_keeps_the_host_endpoint(monkeypatch: pytest.MonkeyPatch) -> No
         seen.update(properties)
 
     monkeypatch.setattr(RestCatalog, "_load_file_io", _load_file_io)
-    monkeypatch.delenv(
-        "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT", raising=False
-    )
-
     get_local_lake_catalog()._load_file_io(
         {S3_ENDPOINT: IN_CLUSTER_ENDPOINT, "s3.region": "us-east-1"}
     )

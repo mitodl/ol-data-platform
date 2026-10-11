@@ -136,7 +136,10 @@ schema that `ol-dbt starrocks build --env dev` writes (see
 [docs/LOCAL_LAKE.md](../../docs/LOCAL_LAKE.md)). The rows an asset delivers
 are then the ones your branch's model produced, so a change to an
 `integrations__learn__*` model and to the asset that delivers it can be
-checked together. Setting both variables is an error.
+checked together. Setting both variables is an error. Like the fixture
+directory, the variable is read by every caller of that helper, so every other
+asset run from the same shell reads the local lake too, and fails on a table
+no local build made.
 
 The read goes through the catalog and object store forwards Tilt holds when
 `data-platform` is enabled (ports 9001 and 9000). A moved forward is followed

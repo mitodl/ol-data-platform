@@ -81,7 +81,9 @@ def local_lake_database(database_name: str) -> str:
     """Return the local lake's schema for a deployed warehouse database.
 
     :param database_name: A Glue database, ``ol_warehouse_<env>_<layer>``.
-    :returns: ``ol_warehouse_local_<layer>``.
+    :returns: ``ol_warehouse_local_<layer>``. Everything after the environment
+        is kept, so a database with a ``DBT_SCHEMA_SUFFIX`` in its name maps to
+        a schema no local build writes and the table load fails on it.
     :rtype: str
     :raises ValueError: When the name is not a deployed warehouse database, so
         there is no layer to carry over.
