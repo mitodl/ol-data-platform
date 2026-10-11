@@ -7,12 +7,18 @@ import os
 import socket
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 
-from ol_dbt_cli.commands.starrocks import _ENVS, _port_is_free, _report_local_branches, run
+from ol_dbt_cli.commands.starrocks import (
+    _ENVS,
+    _local_raw_row_counts,
+    _port_is_free,
+    _report_local_branches,
+    run,
+)
 
 # ---------------------------------------------------------------------------
 # _ENVS config consistency
@@ -266,14 +272,15 @@ def test_unknown_env_exits() -> None:
     ],
 )
 @patch("ol_dbt_cli.commands.starrocks._report_local_branches")
-@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=SystemExit(0))
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
 def test_only_a_build_on_the_local_lake_reports_branches(  # noqa: PLR0913
     mock_fetch, mock_port_forward, mock_dbt_run, mock_report, env: str, target: str | None, reported: bool
 ) -> None:
     mock_fetch.return_value = ("user", "password")
-    run(env=env, target=target)
+    with pytest.raises(SystemExit):
+        run(env=env, target=target)
 
     assert mock_report.called is reported
 
@@ -290,6 +297,46 @@ def test_branches_are_reported_on_a_failed_build_and_dbt_s_exit_code_survives(
 
     assert exit_info.value.code == 1
     mock_report.assert_called_once()
+
+
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches", side_effect=RuntimeError("lake is gone"))
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=SystemExit(2))
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+def test_a_report_that_fails_does_not_replace_dbt_s_exit_code(
+    mock_port_forward, mock_dbt_run, mock_report, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        run(env="dev")
+
+    assert exit_info.value.code == 2  # noqa: PLR2004
+    assert "Branch report skipped" in capsys.readouterr().err
+
+
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=KeyboardInterrupt)
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+def test_an_interrupted_build_reports_nothing(mock_port_forward, mock_dbt_run, mock_report) -> None:
+    with pytest.raises(KeyboardInterrupt):
+        run(env="dev")
+
+    mock_report.assert_not_called()
+
+
+def test_row_counts_cover_only_the_tables_the_raw_schema_holds() -> None:
+    """A count on a table that is not there would fail the whole report."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[("raw__a",), ("raw__other",)], [(7,)]]
+    with patch("mysql.connector.connect") as mock_connect:
+        mock_connect.return_value.cursor.return_value = cursor
+        counts = _local_raw_row_counts({"raw__a", "raw__b"})
+
+    assert counts == {"raw__a": 7}
+    assert mock_connect.call_args.kwargs["host"] == "127.0.0.1"
+    statements = [call.args[0] for call in cursor.execute.call_args_list]
+    assert statements == [
+        "SHOW TABLES FROM `ol_data_lake_local`.`ol_warehouse_local_raw`",
+        "SELECT count(*) FROM `ol_data_lake_local`.`ol_warehouse_local_raw`.`raw__a`",
+    ]
 
 
 def _source(table: str) -> dict[str, object]:
@@ -396,3 +443,22 @@ def test_report_opens_no_connection_when_the_build_made_no_union(
 
     mock_counts.assert_not_called()
     assert capsys.readouterr().out == ""
+
+
+def test_report_flags_a_union_rebuilt_without_its_parents(
+    local_build: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = local_build / "src" / "ol_dbt" / "target" / "run_results.json"
+    results.write_text(json.dumps({"results": [{"unique_id": "model.pkg.dim_user", "status": "success"}]}))
+    with (
+        patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+        patch(
+            "ol_dbt_cli.commands.starrocks._local_raw_row_counts",
+            return_value={"raw__mitxonline__users": 4, "raw__xpro__users": 2},
+        ),
+    ):
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() - 60)
+
+    out = capsys.readouterr().out
+    assert "1 of 1 union model(s) built have rows in every branch" in out
+    assert "built on parents this run did not rebuild" in out

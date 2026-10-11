@@ -62,7 +62,7 @@ from ol_dbt_cli.commands.run import IndirectSelection, _find_dbt_dir
 from ol_dbt_cli.commands.run import run as _dbt_run
 from ol_dbt_cli.lib.git_utils import get_repo_root
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
-from ol_dbt_cli.lib.local_branches import local_branches, raw_tables_read, render_local_branches
+from ol_dbt_cli.lib.local_branches import local_branches, parents_not_built, render_local_branches, union_tables
 from ol_dbt_cli.lib.manifest import load_manifest
 from ol_dbt_cli.lib.raw_fixtures import fixture_path, qualified_name
 
@@ -229,8 +229,8 @@ def _local_raw_row_counts(tables: set[str]) -> dict[str, int]:
     """Count the rows of each of ``tables`` that the local raw schema holds.
 
     StarRocks answers from the snapshot it has cached, which can trail an
-    external write by up to 30 seconds. That is the snapshot the dbt build just
-    read, so the counts describe the build rather than the lake.
+    external write by up to 30 seconds. A staging model built in the same run
+    read that snapshot too.
     """
     # Imported here as in commands.fixtures: only the local lake connects from this module.
     import mysql.connector  # noqa: PLC0415
@@ -263,19 +263,23 @@ def _report_local_branches(dbt_dir: Path, started: float) -> None:
         if result["status"] == "success" and result["unique_id"].startswith("model.")
     ]
     manifest = load_manifest(dbt_dir / "target" / "manifest.json")
-    models = [manifest.nodes[unique_id].name for unique_id in built]
-    inventory_dir = get_repo_root() / DEFAULT_INVENTORY_DIR
+    models = {manifest.nodes[unique_id].name for unique_id in built}
+    inventory_dir = get_repo_root(dbt_dir) / DEFAULT_INVENTORY_DIR
     units = load_units(inventory_dir)
-    fixture_units = {unit.key for unit in units if fixture_path(inventory_dir, unit).exists()}
-
-    # First with no counts, to learn whether the build produced a union at all
-    # before opening a connection for it.
-    unions = local_branches(manifest, units, models, {}, fixture_units)
+    unions = union_tables(manifest, units, models)
     if not unions:
         return
-    rows = _local_raw_row_counts(raw_tables_read(manifest, units, unions))
+    rows = _local_raw_row_counts(
+        {table for by_unit in unions.values() for tables in by_unit.values() for table in tables}
+    )
+    fixture_units = {unit.key for unit in units if fixture_path(inventory_dir, unit).exists()}
+    lines = render_local_branches(
+        local_branches(unions, units, rows, fixture_units),
+        LOCAL_RAW_SCHEMA,
+        parents_not_built(manifest, unions, models),
+    )
     console.print()
-    for line in render_local_branches(local_branches(manifest, units, unions, rows, fixture_units), LOCAL_RAW_SCHEMA):
+    for line in lines:
         console.print(line, markup=False, highlight=False, soft_wrap=True)
 
 
@@ -434,8 +438,14 @@ def run(  # noqa: PLR0913
             project_dir=project_dir,
             indirect_selection=indirect_selection or env_cfg.get("indirect_selection"),
         )
-    finally:
-        # _dbt_run exits with dbt's return code, so this runs on the way out.
-        # The b2b target reads default_catalog, not the raw schema counted here.
+    except SystemExit:
+        # _dbt_run always leaves this way, with dbt's return code. The b2b target
+        # reads default_catalog, not the raw schema counted here.
         if effective_target == _LOCAL_DBT_TARGET:
-            _report_local_branches(_find_dbt_dir(project_dir), started)
+            try:
+                _report_local_branches(_find_dbt_dir(project_dir), started)
+            except Exception as exc:  # noqa: BLE001
+                # The report describes a build that is already over. Raising here
+                # would replace dbt's exit code with a traceback's.
+                err_console.print(f"[yellow]Branch report skipped:[/] {exc!r}")
+        raise

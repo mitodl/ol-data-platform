@@ -62,36 +62,47 @@ class Branch:
         return "the tables hold no rows"
 
 
-def local_branches(
-    manifest: ManifestRegistry,
-    units: list[Unit],
-    models: Iterable[str],
-    rows: Mapping[str, int],
-    fixture_units: set[str],
-) -> dict[str, list[Branch]]:
-    """Return the branches of each union among ``models``.
+def union_tables(
+    manifest: ManifestRegistry, units: list[Unit], models: Iterable[str]
+) -> dict[str, dict[str, list[str]]]:
+    """Return, for each union among ``models``, the raw tables it reads by unit.
 
     :param models: names of the models the build produced
-    :param rows: row count of every table in the local raw schema; a table not
-        in it does not exist there
-    :param fixture_units: keys of the units with a committed fixture file
-    :returns: model name to its branches, for models above staging that read
-        more than one unit. A model reading one unit cannot come out partial
-        across branches, and with no rows in it the build is empty, not partial.
+    :returns: model name to unit key to raw tables, for models above staging
+        that read more than one unit. A model reading one unit cannot come out
+        partial across branches, and with no rows in it the build is empty, not
+        partial.
     """
     owners = tables_by_raw_name(units)
-    strategies = {unit.key: str(unit.data["strategies"]["local"]) for unit in units}
     lineage = upstream_tables(manifest, units)
     layers = {node.name: classify_layer(node.original_file_path) for node in manifest.nodes.values() if node.is_model}
 
-    report: dict[str, list[Branch]] = {}
+    unions: dict[str, dict[str, list[str]]] = {}
     for model in sorted(set(models)):
         by_unit: dict[str, list[str]] = {}
         for table in sorted(lineage.get(model, ())):
             by_unit.setdefault(owners[table], []).append(table)
-        if len(by_unit) < 2 or layers[model] in UNCONTRACTED_LAYERS:  # noqa: PLR2004
-            continue
-        report[model] = [
+        if len(by_unit) > 1 and layers[model] not in UNCONTRACTED_LAYERS:
+            unions[model] = dict(sorted(by_unit.items()))
+    return unions
+
+
+def local_branches(
+    unions: Mapping[str, Mapping[str, list[str]]],
+    units: list[Unit],
+    rows: Mapping[str, int],
+    fixture_units: set[str],
+) -> dict[str, list[Branch]]:
+    """Return the branches of each union, judged against the raw schema's row counts.
+
+    :param unions: what :func:`union_tables` returned
+    :param rows: row count of every table in the local raw schema; a table not
+        in it does not exist there
+    :param fixture_units: keys of the units with a committed fixture file
+    """
+    strategies = {unit.key: str(unit.data["strategies"]["local"]) for unit in units}
+    return {
+        model: [
             Branch(
                 unit=unit,
                 strategy=strategies[unit],
@@ -100,30 +111,66 @@ def local_branches(
                 empty=tuple(t for t in tables if rows.get(t) == 0),
                 has_fixture=unit in fixture_units,
             )
-            for unit, tables in sorted(by_unit.items())
+            for unit, tables in by_unit.items()
         ]
-    return report
+        for model, by_unit in unions.items()
+    }
 
 
-def raw_tables_read(manifest: ManifestRegistry, units: list[Unit], models: Iterable[str]) -> set[str]:
-    """Return every inventory-declared raw table in the lineage of ``models``."""
-    lineage = upstream_tables(manifest, units)
-    return {table for model in models for table in lineage.get(model, ())}
+def parents_not_built(manifest: ManifestRegistry, models: Iterable[str], built: set[str]) -> dict[str, int]:
+    """Count, for each of ``models``, the models upstream of it that the run did not build.
+
+    A union reads its parents' tables, not the raw schema. With saved state or a
+    selection without ``+``, dbt rebuilds the union alone, on parents built
+    from whatever the raw schema held at the time. The row counts then say
+    nothing certain about the table just built.
+
+    :param built: names of the models the run built
+    :returns: model name to the number of its upstream models outside ``built``,
+        for the models with any
+    """
+    by_name = {node.name: node for node in manifest.nodes.values() if node.is_model}
+    memo: dict[str, set[str]] = {}
+
+    def ancestors(unique_id: str) -> set[str]:
+        if unique_id not in memo:
+            found: set[str] = set()
+            for parent_id in manifest.nodes[unique_id].depends_on:
+                parent = manifest.nodes.get(parent_id)
+                if parent is not None and parent.is_model:
+                    found |= {parent.name} | ancestors(parent_id)
+            memo[unique_id] = found
+        return memo[unique_id]
+
+    counts = {model: len(ancestors(by_name[model].unique_id) - built) for model in models}
+    return {model: count for model, count in counts.items() if count}
 
 
-def render_local_branches(report: Mapping[str, list[Branch]], raw_schema: str) -> list[str]:
+def render_local_branches(
+    report: Mapping[str, list[Branch]], raw_schema: str, not_rebuilt: Mapping[str, int]
+) -> list[str]:
     """Return the lines to print after a local build.
 
     A union with every branch present is counted, not listed: the report is for
     the ones that came out partial.
+
+    :param not_rebuilt: what :func:`parents_not_built` returned for the unions
     """
     if not report:
         return []
     partial = {model: branches for model, branches in report.items() if any(b.state != "present" for b in branches)}
     lines = [
         f"Ingestion branches in {raw_schema}: {len(report) - len(partial)} of {len(report)} "
-        "union model(s) built with every branch present."
+        "union model(s) built have rows in every branch."
     ]
+    if not_rebuilt:
+        names = sorted(not_rebuilt)
+        more = len(names) - MAX_TABLES_LISTED
+        listed = ", ".join(names[:MAX_TABLES_LISTED]) + (f", and {more} more" if more > 0 else "")
+        lines.append(
+            f"  {len(names)} of them were built on parents this run did not rebuild, so their rows "
+            f"may predate these counts: {listed}. A `+` before the model in --select rebuilds its parents too."
+        )
     for model, branches in partial.items():
         held = sum(1 for b in branches if b.state == "present")
         lines.append(f"  {model}: {held} of {len(branches)} branches present")

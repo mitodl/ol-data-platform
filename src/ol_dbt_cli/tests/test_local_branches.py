@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from ol_dbt_cli.lib.inventory import Unit
-from ol_dbt_cli.lib.local_branches import local_branches, raw_tables_read, render_local_branches
+from ol_dbt_cli.lib.local_branches import (
+    Branch,
+    local_branches,
+    parents_not_built,
+    render_local_branches,
+    union_tables,
+)
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
 
 MITXONLINE_USERS = "raw__mitxonline__app__postgres__users_user"
@@ -73,8 +79,13 @@ def _manifest() -> ManifestRegistry:
     return registry
 
 
+def _report(rows: dict[str, int], models: list[str] | None = None) -> dict[str, list[Branch]]:
+    unions = union_tables(_manifest(), UNITS, models or ["dim_user"])
+    return local_branches(unions, UNITS, rows, FIXTURE_UNITS)
+
+
 def _branches(rows: dict[str, int], models: list[str] | None = None) -> dict[str, dict[str, str]]:
-    report = local_branches(_manifest(), UNITS, models or ["dim_user"], rows, FIXTURE_UNITS)
+    report = _report(rows, models)
     return {model: {branch.unit: branch.state for branch in branches} for model, branches in report.items()}
 
 
@@ -106,7 +117,7 @@ def test_a_model_named_twice_is_reported_once() -> None:
 
 def test_remedy_says_what_would_fill_the_branch() -> None:
     rows = {MITXONLINE_USERS: 3, MITXONLINE_PROFILES: 0}
-    (branches,) = local_branches(_manifest(), UNITS, ["dim_user"], rows, FIXTURE_UNITS).values()
+    (branches,) = _report(rows).values()
     remedy = {branch.unit: branch.remedy for branch in branches}
 
     assert remedy == {
@@ -117,26 +128,38 @@ def test_remedy_says_what_would_fill_the_branch() -> None:
 
 
 def test_remedy_for_a_committed_fixture_that_was_not_loaded() -> None:
-    (branches,) = local_branches(_manifest(), UNITS, ["dim_user"], {}, FIXTURE_UNITS).values()
+    (branches,) = _report({}).values()
     remedy = {branch.unit: branch.remedy for branch in branches}
 
     assert remedy["mitxonline/app_postgres"] == "run `ol-dbt fixtures load`, or add the tables to the fixture"
 
 
-def test_raw_tables_read_is_the_lineage_of_the_named_models() -> None:
-    assert raw_tables_read(_manifest(), UNITS, ["int_mitxonline", "stg_xpro"]) == {
-        MITXONLINE_USERS,
-        MITXONLINE_PROFILES,
-        XPRO_USERS,
+def test_union_tables_groups_the_raw_tables_a_union_reads_by_unit() -> None:
+    assert union_tables(_manifest(), UNITS, ["dim_user", "int_mitxonline"]) == {
+        "dim_user": {
+            "edxorg/s3": [EDXORG_USERS],
+            "mitxonline/app_postgres": [MITXONLINE_USERS, MITXONLINE_PROFILES],
+            "xpro/app_postgres": [XPRO_USERS],
+        }
     }
+
+
+def test_parents_not_built_counts_the_upstream_models_the_run_left_alone() -> None:
+    """A union rebuilt alone reads parents built from an earlier raw schema."""
+    manifest = _manifest()
+
+    assert parents_not_built(manifest, ["dim_user"], {"dim_user"}) == {"dim_user": 4}
+    assert parents_not_built(manifest, ["dim_user"], {"dim_user", "int_mitxonline", "stg_xpro"}) == {"dim_user": 2}
+    everything = {"dim_user", "int_mitxonline", "stg_mitxonline", "stg_xpro", "stg_edxorg"}
+    assert parents_not_built(manifest, ["dim_user"], everything) == {}
 
 
 def test_render_lists_the_partial_unions_and_counts_the_rest() -> None:
     rows = {MITXONLINE_USERS: 3, MITXONLINE_PROFILES: 0, XPRO_USERS: 2}
-    report = local_branches(_manifest(), UNITS, ["dim_user"], rows, FIXTURE_UNITS)
+    report = _report(rows)
 
-    assert render_local_branches(report, "ol_warehouse_local_raw") == [
-        "Ingestion branches in ol_warehouse_local_raw: 0 of 1 union model(s) built with every branch present.",
+    assert render_local_branches(report, "ol_warehouse_local_raw", {}) == [
+        "Ingestion branches in ol_warehouse_local_raw: 0 of 1 union model(s) built have rows in every branch.",
         "  dim_user: 1 of 3 branches present",
         "    edxorg/s3: absent (1 table(s)); strategies.local is omit",
         "    mitxonline/app_postgres: partial (1 of 2 table(s)); the tables hold no rows",
@@ -147,12 +170,12 @@ def test_render_lists_the_partial_unions_and_counts_the_rest() -> None:
 
 def test_render_is_one_line_when_nothing_is_partial_and_nothing_with_no_union() -> None:
     rows = {MITXONLINE_USERS: 3, MITXONLINE_PROFILES: 3, XPRO_USERS: 2, EDXORG_USERS: 1}
-    report = local_branches(_manifest(), UNITS, ["dim_user"], rows, FIXTURE_UNITS)
+    report = _report(rows)
 
-    assert render_local_branches(report, "ol_warehouse_local_raw") == [
-        "Ingestion branches in ol_warehouse_local_raw: 1 of 1 union model(s) built with every branch present."
+    assert render_local_branches(report, "ol_warehouse_local_raw", {}) == [
+        "Ingestion branches in ol_warehouse_local_raw: 1 of 1 union model(s) built have rows in every branch."
     ]
-    assert render_local_branches({}, "ol_warehouse_local_raw") == []
+    assert render_local_branches({}, "ol_warehouse_local_raw", {}) == []
 
 
 def test_render_caps_the_tables_it_names() -> None:
@@ -164,10 +187,23 @@ def test_render_caps_the_tables_it_names() -> None:
         _node("int_all", "models/intermediate/a.sql", [f"source.pkg.{table}" for table in [*tables, XPRO_USERS]]),
     ]
     registry.nodes = {node.unique_id: node for node in nodes}
-    report = local_branches(registry, units, ["int_all"], {tables[0]: 1, XPRO_USERS: 1}, set())
+    report = local_branches(union_tables(registry, units, ["int_all"]), units, {tables[0]: 1, XPRO_USERS: 1}, set())
 
-    lines = render_local_branches(report, "ol_warehouse_local_raw")
+    lines = render_local_branches(report, "ol_warehouse_local_raw", {})
 
     assert lines[2] == "    mitxonline/app_postgres: partial (7 of 8 table(s)); no fixture committed for this unit"
     assert lines[3].count("(absent)") == 5
     assert lines[3].endswith(", and 2 more")
+
+
+def test_render_says_which_unions_were_built_on_parents_the_run_did_not_rebuild() -> None:
+    """Their row counts describe the raw schema now, which is not what the union read."""
+    rows = {MITXONLINE_USERS: 3, MITXONLINE_PROFILES: 3, XPRO_USERS: 2, EDXORG_USERS: 1}
+
+    lines = render_local_branches(_report(rows), "ol_warehouse_local_raw", {"dim_user": 4})
+
+    assert lines == [
+        "Ingestion branches in ol_warehouse_local_raw: 1 of 1 union model(s) built have rows in every branch.",
+        "  1 of them were built on parents this run did not rebuild, so their rows may predate these counts: "
+        "dim_user. A `+` before the model in --select rebuilds its parents too.",
+    ]

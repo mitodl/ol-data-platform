@@ -44,7 +44,7 @@ one of them has no rows. After a build on `starrocks_local`, `ol-dbt starrocks` 
 raw tables each union it built reads and prints the ones that came out partial:
 
 ```text
-Ingestion branches in ol_warehouse_local_raw: 0 of 1 union model(s) built with every branch present.
+Ingestion branches in ol_warehouse_local_raw: 0 of 1 union model(s) built have rows in every branch.
   dim_instructor: 1 of 3 branches present
     mitxonline/app_postgres: partial (2 of 3 table(s)); the tables hold no rows
       raw__mitxonline__app__postgres__cms_instructorpage (no rows), raw__mitxonline__app__postgres__cms_instructorpagelink (no rows)
@@ -54,7 +54,12 @@ Ingestion branches in ol_warehouse_local_raw: 0 of 1 union model(s) built with e
 
 A branch is an inventory unit (`deployment/layer`). It is present when every raw table of
 the unit that the model reads has rows, and absent when none does. The report changes
-nothing about the build or its exit code. A model that reads one unit is not listed, and
+nothing about the build or its exit code, and a report that fails is skipped with one line.
+The counts are of the raw schema when the build ends. A union reads its parents' tables,
+so one rebuilt alone (saved state, or a `--select` without a leading `+`) may hold rows
+from before the last `ol-dbt fixtures load`. The report names those unions.
+
+A model that reads one unit is not listed, and
 neither is a build on `starrocks_local_b2b`, which does not read the raw schema.
 
 ## Raw tables from a local app database
