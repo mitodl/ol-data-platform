@@ -87,6 +87,22 @@ ol-dbt starrocks build --env dev \
 MITx Online's `populate_course_data` seed (`seed-mitxonline-course-data` in Tilt) gives
 the models ten courses to build from.
 
+## Delivering a build to a local MIT Learn
+
+A source that reads no database needs neither a fixture nor an app. Open Learning
+Library's reads a public CSV, so its raw table lands with the catalog and object store
+forwards alone:
+
+```bash
+(cd src/ol_dlt && uv run python -m ol_dlt.sources.oll)
+ol-dbt starrocks build --env dev --select +integrations__learn__oll_courses
+```
+
+A webhook delivery asset reads the table that build made when `DBT_MODEL_LOCAL_LAKE=1`
+is set, and posts it to the MIT Learn of the same cluster. See "Delivering what a local
+dbt build made" in
+[dg_projects/delivery/CONTRIBUTING.md](../dg_projects/delivery/CONTRIBUTING.md).
+
 ## Raw fixtures
 
 The lake starts with an empty raw schema. A unit with `strategies.local: fixture` in

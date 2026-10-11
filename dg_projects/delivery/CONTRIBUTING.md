@@ -127,6 +127,48 @@ should be for a source nothing else in your local database loads. Delivering
 two rows of `mitxonline` courses would unpublish every other MITx Online course
 you have.
 
+#### Delivering what a local dbt build made
+
+`DBT_MODEL_LOCAL_LAKE=1` takes the place of `DBT_MODEL_FIXTURE_DIR`, also only
+in dev. `get_dbt_model_as_dataframe` then reads the table from the local lake
+of ol-infrastructure's local-dev stack, in the `ol_warehouse_local_<layer>`
+schema that `ol-dbt starrocks build --env dev` writes (see
+[docs/LOCAL_LAKE.md](../../docs/LOCAL_LAKE.md)). The rows an asset delivers
+are then the ones your branch's model produced, so a change to an
+`integrations__learn__*` model and to the asset that delivers it can be
+checked together. Setting both variables is an error.
+
+The read goes through the catalog and object store forwards Tilt holds when
+`data-platform` is enabled (ports 9001 and 9000). A moved forward is followed
+with `PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI` and
+`PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT`, the same variables the
+dlt sources read.
+
+Open Learning Library is the source to try this with. Its dlt source reads a
+public CSV, the same file MIT Learn's legacy pipeline loads, so the raw table
+needs no fixture and no credentials:
+
+```bash
+# From the repository root: land the raw table and build the model.
+(cd src/ol_dlt && uv run python -m ol_dlt.sources.oll)
+ol-dbt starrocks build --env dev --select +integrations__learn__oll_courses
+
+cd dg_projects/delivery
+unset DBT_MODEL_FIXTURE_DIR
+export VAULT_OIDC_NONINTERACTIVE=1
+export DBT_MODEL_LOCAL_LAKE=1
+export MIT_LEARN_BASE_URL=https://api.learn.mit.dev
+export MIT_LEARN_WEBHOOK_SECRET=local-dev-mitlearn-insecure-webhook-secret  # pragma: allowlist secret
+
+uv run dagster asset materialize -m delivery.definitions \
+  --select "mit_learn_delivery/oll_webhook"
+```
+
+The `oll`/`course` ownership row has to name the webhook first, as above.
+"Rehearsing a webhook cutover" in ol-infrastructure's
+[local-dev/README.md](https://github.com/mitodl/ol-infrastructure/blob/main/local-dev/README.md)
+walks the whole flip, from MIT Learn's legacy load to the webhook and back.
+
 ### Running tests
 
 ```bash
