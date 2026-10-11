@@ -184,6 +184,9 @@ cd src/ol_dlt
 uv run python -m ol_dlt.sources.keycloak
 ```
 
+From the repository root, `ol-dbt ingest local` runs every source the inventory marks
+`strategies.local: ingest` the same way, with `DLT_PROFILE=dev` set for it.
+
 `mysql -h 127.0.0.1 -P 9030 -u root` then reads the tables:
 
 ```sql

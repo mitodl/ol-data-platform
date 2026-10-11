@@ -133,7 +133,7 @@ def test_load_fixtures_reads_a_valid_file(tmp_path: Path) -> None:
         (_fixture({"id": "bigint"}, []), "fixture", "things.id: unsupported fixture type 'bigint'"),
         (_fixture({"id": "long"}, [], table="raw__other__s3__things"), "fixture", "is not a table of unit demo/s3"),
         (_fixture({}, []), "fixture", "has no columns"),
-        (_fixture({"id": "long"}, []), "ingest", "strategies.local: ingest, not fixture"),
+        (_fixture({"id": "long"}, []), "omit", "strategies.local: omit, which takes no fixture"),
         ({"schema_version": 2, "tables": {}}, "fixture", "schema_version 2"),
     ],
 )
@@ -203,8 +203,17 @@ def test_capture_writes_modeled_tables_and_leaves_out_nested_columns(
     assert fixture.tables[0].rows == [{"id": 1}]
 
 
-def test_capture_rejects_a_unit_that_is_not_a_fixture_unit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    inventory_dir = _inventory(tmp_path, None, local="ingest")
+def test_an_ingest_unit_keeps_its_fixture(tmp_path: Path) -> None:
+    """The fixture fills the unit's tables when the app its source reads is not running."""
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, [{"id": 1}]), local="ingest")
+
+    (fixture,) = load_fixtures(inventory_dir, load_units(inventory_dir))
+
+    assert fixture.tables[0].rows == [{"id": 1}]
+
+
+def test_capture_rejects_a_unit_that_takes_no_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    inventory_dir = _inventory(tmp_path, None, local="omit")
     monkeypatch.setattr(fixtures_command, "column_types_by_table", lambda *_, **__: {RAW_TABLE: {"id": "bigint"}})
 
     with pytest.raises(SystemExit):

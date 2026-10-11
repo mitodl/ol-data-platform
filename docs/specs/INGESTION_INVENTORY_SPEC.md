@@ -214,10 +214,12 @@ tables:
 Carried over from RFC 12711 §3, unchanged:
 
 1. `local: mirror` is rejected by the schema (the enum omits the value).
-2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d. Adding `dagster`
-   (rule 7) does not widen this: dlt is the only supported local ingest target, so the rule
-   stays "requires dlt" rather than becoming "bans Airbyte". A `dagster` unit declaring
-   `local: ingest` would name a local path nothing implements.
+2. `local: ingest` requires a `dlt:` block — Airbyte cannot run in k3d. The rule keys on the
+   unit naming a dlt source and not on `loader`, because `loader` records what loads
+   production and a source runs locally before production is cut over to it (§10.1). For that
+   reason `dlt:` is also allowed beside `airbyte:` on a `loader: airbyte` unit. Adding
+   `dagster` (rule 7) does not widen this: dlt is the only supported local ingest target, and
+   a `dagster` unit declaring `local: ingest` would name a local path nothing implements.
 3. `mirror_max_age_days` is required iff any strategy is `mirror`, with no default.
 
 New here:
@@ -966,16 +968,11 @@ Until a unit's source is built, its local raw tables come from committed fixture
 (`ingestion/inventory/fixtures/`, loaded with `ol-dbt fixtures load`). Units 1 and 2 have
 them. What the source adds is rows from the contributor's own running app.
 
-Two things stand between a built source and `local: ingest`, and both belong to the local
-ingest runner (`tk-local-3-local-dlt-ingest-runner-against-k3d-app--1155b0`):
-
-- The `dev` dlt destination is Parquet on the local filesystem (`src/ol_dlt/README.md`). It
-  does not write Iceberg tables into the local lake's raw schema, which is what
-  `ol-dbt starrocks --env dev` reads.
-- The validator rejects `strategies.local: ingest` unless the unit is `loader: dlt` (§3.3
-  rule 2, and `QA_DATA_TOPOLOGY_SPEC.md` §3). `loader` records what loads production, so a
-  unit in step 1 cannot declare the local path it already has. Either that rule is amended to
-  key on the unit having a dlt source, or the declaration waits for step 2. Not decided here.
+A unit whose source is built declares `local: ingest` and names the source in a `dlt:`
+block, while `loader` goes on recording what loads production (§3.3 rule 2).
+`ol-dbt ingest local` runs the source of every such unit under the `dev` dlt profile, which
+writes Iceberg tables into the local lake's raw schema, the one `ol-dbt starrocks --env dev`
+reads. The unit keeps its fixture for a contributor who is not running the app.
 
 ### 10.2 The order
 
@@ -1054,8 +1051,10 @@ directories an Airbyte unit feeds: `mitxonline` 139, `mitxpro` 55, `edxorg` 54,
 `learn-ai` 6, `ovs` 2. That agrees with the head of the order and does not separate units 3
 to 7.
 
-Nobody has run a dlt source against a local-dev app database and built models on the result.
-The claim that `ol_dlt.database` reads the local cluster is from its code and README.
+Unit 1 has been run against a local-dev database and built on (2026-10-11, at `98ac575b1`):
+`mitxonline_app` loaded a seeded MITx Online database into the local lake and
+`+integrations__learn__mitxonline_courses` built on it. The other units' sources are not
+built, so nothing is measured for them.
 
 The per-source cutover recipe (`tk-per-source-dlt-cutover-recipe-sql-database-files-f7c0cf`)
 should be proven on unit 1. Its source exists, it is the unit most models read, and it is the

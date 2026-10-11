@@ -24,7 +24,7 @@ from ol_dbt_cli.lib.cursor_audit import select_units
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, column_types_by_table
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import (
-    FIXTURE_STRATEGY,
+    FIXTURE_STRATEGIES,
     create_table_sql,
     fixture_path,
     fixture_type_from_glue,
@@ -167,7 +167,7 @@ def capture(
         err_console.print(f"[bold red]Not a table of the selected units: {', '.join(unknown)}")
         sys.exit(1)
     for selected in units:
-        if selected.data["strategies"]["local"] != FIXTURE_STRATEGY:
+        if selected.data["strategies"]["local"] not in FIXTURE_STRATEGIES:
             err_console.print(
                 f"[bold red]{escape(selected.key)} has strategies.local: "
                 f"{escape(str(selected.data['strategies']['local']))}; `load` would reject its fixture."

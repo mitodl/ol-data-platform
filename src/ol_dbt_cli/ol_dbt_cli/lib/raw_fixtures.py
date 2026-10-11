@@ -1,7 +1,9 @@
 """Raw-table fixtures for the local lake.
 
 A unit whose inventory entry says ``strategies.local: fixture`` has no local
-loader, so its raw tables have to be created from something committed. This is
+loader, so its raw tables have to be created from something committed. An
+``ingest`` unit may carry one too: it is what the lake holds until the unit's
+source is run against the local app (``ol-dbt ingest local``). This is
 that something: one file per unit under ``ingestion/inventory/fixtures/``, named
 as the unit file is, holding each table's columns with their types and a few
 rows::
@@ -41,6 +43,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from ol_dbt_cli.lib.inventory import LOCAL_INGEST_STRATEGY
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, MutableMapping
 
@@ -49,6 +53,9 @@ if TYPE_CHECKING:
 FIXTURES_SUBDIR = "fixtures"
 SCHEMA_VERSION = 1
 FIXTURE_STRATEGY = "fixture"
+# The local strategies a unit can have a fixture under. `omit` is the one left
+# out: a fixture there would fill a unit the inventory says local does not hold.
+FIXTURE_STRATEGIES = frozenset({FIXTURE_STRATEGY, LOCAL_INGEST_STRATEGY})
 
 # Iceberg primitive names on the left, what StarRocks calls the column in a
 # CREATE TABLE on an Iceberg catalog on the right. `timestamp` covers Iceberg's
@@ -145,7 +152,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
     :param unit: The inventory unit of the same name.
     :returns: The parsed fixture.
     :rtype: UnitFixture
-    :raises ValueError: If the unit is not a fixture unit, a table is not the
+    :raises ValueError: If the unit's local strategy takes no fixture, a table is not the
         unit's, a type is not in the format, or a row sets a column the table
         does not have.
     """
@@ -154,8 +161,8 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
         msg = f"{path}: schema_version {data['schema_version']!r}, expected {SCHEMA_VERSION}"
         raise ValueError(msg)
     local_strategy = unit.data["strategies"]["local"]
-    if local_strategy != FIXTURE_STRATEGY:
-        msg = f"{path}: unit {unit.key} has strategies.local: {local_strategy}, not {FIXTURE_STRATEGY}"
+    if local_strategy not in FIXTURE_STRATEGIES:
+        msg = f"{path}: unit {unit.key} has strategies.local: {local_strategy}, which takes no fixture"
         raise ValueError(msg)
     declared = {table["raw_table"] for table in unit.tables}
 
