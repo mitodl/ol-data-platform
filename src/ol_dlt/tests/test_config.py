@@ -8,7 +8,7 @@ from ol_dlt import config
 @pytest.mark.parametrize(
     ("profile", "expected_format"),
     [
-        ("dev", "native"),
+        ("dev", "iceberg"),
         ("ci", "native"),
         ("test", "native"),
         ("qa", "iceberg"),
@@ -26,13 +26,14 @@ def test_active_table_format(
 def test_default_profile_is_dev(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DLT_PROFILE", raising=False)
     assert config.active_profile() == "dev"
-    assert config.active_table_format() == "native"
+    assert config.active_table_format() == "iceberg"
 
 
 @pytest.mark.parametrize(
     ("profile", "expected_dataset"),
     [
-        ("dev", "ol_warehouse_dev_raw"),
+        ("dev", "ol_warehouse_local_raw"),
+        ("ci", "ol_warehouse_ci_raw"),
         ("qa", "ol_warehouse_qa_raw"),
         ("production", "ol_warehouse_production_raw"),
     ],
@@ -46,7 +47,8 @@ def test_dataset_name(profile: str, expected_dataset: str) -> None:
     [
         ("qa", "s3://ol-data-lake-raw-qa"),
         ("production", "s3://ol-data-lake-raw-production"),
-        ("dev", "file:///tmp/.dlt/data"),
+        ("dev", "s3://ol-data-lake-local/raw"),
+        ("ci", "file:///tmp/.dlt/data"),
     ],
 )
 def test_bucket_root(
@@ -58,13 +60,35 @@ def test_bucket_root(
 
 def test_bucket_root_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OL_DLT_BUCKET_URL", "file:///custom/dir/")
-    assert config.bucket_root("dev") == "file:///custom/dir"
+    assert config.bucket_root("ci") == "file:///custom/dir"
+    assert config.bucket_root("dev") == "s3://ol-data-lake-local/raw"
 
 
 def test_destination_per_source_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DLT_PROFILE", "production")
     dest = config.destination_for("oll")
     assert dest.config_params["bucket_url"] == "s3://ol-data-lake-raw-production/oll"
+
+
+def test_dev_destination_is_the_local_lake(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``dev`` writes to the local object store with the catalog entry's keys.
+
+    The endpoint and keys come from the catalog entry, so dlt's own files and
+    the Iceberg tables cannot land in different stores.
+    """
+    monkeypatch.setenv(
+        "PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT", "http://rustfs.test:9000"
+    )
+    dest = config.destination_for("oll", "dev")
+    assert dest.config_params["bucket_url"] == "s3://ol-data-lake-local/raw/oll"
+    credentials = dest.config_params["credentials"]
+    assert credentials.endpoint_url == "http://rustfs.test:9000"
+    assert credentials.aws_access_key_id == "localdevaccess"
+
+
+@pytest.mark.parametrize("profile", ["ci", "test", "qa", "production"])
+def test_other_profiles_carry_no_local_lake_credentials(profile: str) -> None:
+    assert "credentials" not in config.destination_for("oll", profile).config_params
 
 
 def test_pipeline_for_binds_profile(monkeypatch: pytest.MonkeyPatch) -> None:

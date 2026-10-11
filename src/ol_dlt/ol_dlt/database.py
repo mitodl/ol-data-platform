@@ -76,8 +76,8 @@ class DatabaseTable:
             yields a load that captures new rows and silently never reflects an
             edit. And ``merge`` only dedupes on the Iceberg profiles — the
             filesystem destination falls back to append on the native parquet
-            used by ``dev``/``test``, so a local incremental run accumulates
-            duplicate rows even though the deployed run does not.
+            used by ``ci``/``test``, so an incremental run there accumulates
+            duplicate rows even though the ``dev`` and deployed runs do not.
         excluded_columns: Columns never to select. Use this for secrets and
             credential material, which must not reach the warehouse at all.
     """
@@ -139,7 +139,7 @@ class DatabaseSourceSpec:
 
 def _uses_vault(profile: str) -> bool:
     """Return True when the profile reads a deployed (Vault-backed) database."""
-    return profile in config.ICEBERG_PROFILES
+    return profile in config.DEPLOYED_PROFILES
 
 
 def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:

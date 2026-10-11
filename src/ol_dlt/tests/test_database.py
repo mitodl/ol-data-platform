@@ -190,7 +190,7 @@ def test_table_format_follows_the_explicit_profile(
         database.vault, "read_database_credentials", lambda *_a: ("u", "p")
     )
     deployed = database.build_database_source(_SPEC, profile="production")
-    local = database.build_database_source(_SPEC, profile="dev")
+    local = database.build_database_source(_SPEC, profile="ci")
     assert (
         deployed.resources["raw__example__app__postgres__widget"]
         .compute_table_schema()
@@ -277,7 +277,7 @@ def test_cursor_column_reads_only_rows_above_the_stored_cursor(
     Deliberately asserts on rows *extracted*, not on the destination contents:
     the filesystem destination only honours ``write_disposition="merge"`` when
     the table format is ``iceberg`` (deployed profiles), and falls back to
-    append on the native parquet used by ``test``/``dev``. Counting extracted
+    append on the native parquet used by ``test``/``ci``. Counting extracted
     rows tests our cursor wiring rather than the destination's merge support.
     """
     db_path = tmp_path / "incremental.db"
