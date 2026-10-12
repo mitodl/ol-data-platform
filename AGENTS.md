@@ -362,6 +362,8 @@ incremental until `--full-refresh` is used.
 - `DBT_MODEL_FIXTURE_DIR`: in dev, `get_dbt_model_as_dataframe` reads
   `<dir>/<table_name>.jsonl` and not Glue. See
   `dg_projects/delivery/CONTRIBUTING.md`, "Delivering to a local MIT Learn"
+- `DBT_MODEL_LOCAL_LAKE`: in dev, `get_dbt_model_as_dataframe` reads the table
+  from the local lake (`ol_warehouse_local_<layer>`) and not Glue. Same section
 
 ## Trust These Instructions
 
