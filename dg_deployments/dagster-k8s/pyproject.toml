@@ -51,8 +51,8 @@ dependencies = [
     # instruments. Its requests stay untraced only because the SDK suppresses
     # instrumentation around each export.
     "opentelemetry-distro==0.66b0",
-    "opentelemetry-sdk==1.45.0",
-    "opentelemetry-exporter-otlp-proto-http==1.45.0",
+    "opentelemetry-sdk==1.45.1",
+    "opentelemetry-exporter-otlp-proto-http==1.45.1",
     "opentelemetry-instrumentation-sqlalchemy==0.66b0",
     "opentelemetry-instrumentation-grpc==0.66b0",
     "opentelemetry-instrumentation-botocore==0.66b0",
