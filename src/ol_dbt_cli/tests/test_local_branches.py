@@ -234,3 +234,20 @@ def test_models_behind_a_snapshot_are_parents_too() -> None:
     built = {"dim_user", "int_mitxonline", "stg_mitxonline", "stg_edxorg", "snapshot_xpro"}
 
     assert parents_not_built(_snapshot_manifest(), ["dim_user"], built) == {"dim_user": 1}
+
+
+def test_remedy_for_an_ingest_unit_names_the_ingest_command() -> None:
+    def branch(*, has_fixture: bool, absent: tuple[str, ...]) -> Branch:
+        return Branch(
+            unit="mitxonline/app_postgres",
+            strategy="ingest",
+            tables=(MITXONLINE_USERS,),
+            absent=absent,
+            empty=tuple({MITXONLINE_USERS} - set(absent)),
+            has_fixture=has_fixture,
+        )
+
+    ingest = "run `ol-dbt ingest local --unit mitxonline/app_postgres` with the app running"
+    assert branch(has_fixture=False, absent=(MITXONLINE_USERS,)).remedy == ingest
+    assert branch(has_fixture=True, absent=(MITXONLINE_USERS,)).remedy == f"{ingest}, or `ol-dbt fixtures load`"
+    assert branch(has_fixture=True, absent=()).remedy == ingest

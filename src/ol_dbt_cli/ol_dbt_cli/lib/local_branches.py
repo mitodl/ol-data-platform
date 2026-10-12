@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Literal
 from ol_dbt_cli.lib.dimensional_layering import classify_layer
 from ol_dbt_cli.lib.inventory import tables_by_raw_name
 from ol_dbt_cli.lib.qa_contract import UNCONTRACTED_LAYERS, upstream_tables
-from ol_dbt_cli.lib.raw_fixtures import FIXTURE_STRATEGY
+from ol_dbt_cli.lib.raw_fixtures import FIXTURE_STRATEGIES, FIXTURE_STRATEGY
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -55,8 +55,11 @@ class Branch:
     @property
     def remedy(self) -> str:
         """What fills the branch, or why nothing will."""
-        if self.strategy != FIXTURE_STRATEGY:
+        if self.strategy not in FIXTURE_STRATEGIES:
             return f"strategies.local is {self.strategy}"
+        if self.strategy != FIXTURE_STRATEGY:
+            ingest = f"run `ol-dbt ingest local --unit {self.unit}` with the app running"
+            return f"{ingest}, or `ol-dbt fixtures load`" if self.has_fixture and self.absent else ingest
         if not self.has_fixture:
             return "no fixture committed for this unit"
         if self.absent:

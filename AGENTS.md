@@ -259,6 +259,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
 | `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` (see `docs/LOCAL_LAKE.md`) |
+| `ol-dbt ingest local` | Load the local lake's raw tables from the local-dev app databases, for units with `strategies.local: ingest` |
 
 ### `ol-dbt run` — Incremental State-Based Execution
 

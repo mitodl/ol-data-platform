@@ -64,14 +64,24 @@ neither is a build on `starrocks_local_b2b`, which does not read the raw schema.
 
 ## Raw tables from a local app database
 
-A source built on `ol_dlt.database` reads the local-dev Postgres cluster under
-`DLT_PROFILE=dev` and writes its tables into the same raw schema, so a local app's own
-rows can stand in for a fixture. See "Local lake" in
-[src/ol_dlt/README.md](../src/ol_dlt/README.md) for the port-forwards it needs.
+A unit with `strategies.local: ingest` in `ingestion/inventory/units/` names a dlt source
+that reads the app's database in the local-dev Postgres cluster and writes its tables into
+the same raw schema, so a local app's own rows can stand in for a fixture. Today those are
+`mitxonline/app_postgres` and `keycloak/app_postgres`. See "Local lake" in
+[src/ol_dlt/README.md](../src/ol_dlt/README.md) for the port-forwards a source needs.
 
 ```bash
-(cd src/ol_dlt && uv run python -m ol_dlt.sources.mitxonline_app)
+ol-dbt ingest local                                 # every unit that can ingest locally
+ol-dbt ingest local --unit mitxonline/app_postgres  # one of them
 ```
+
+It runs each unit's source (`python -m ol_dlt.sources.<name>` in `src/ol_dlt`) with
+`DLT_PROFILE=dev` whatever your shell exports, so a shell left on `qa` or `production` does
+not send the load to that lake. The `<NAME>_DB_*` and `PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__*`
+overrides in the ol_dlt README still apply, for a forward on another port, and each has to
+name this machine. The command refuses to start when one of the catalog's two URLs does
+not, and a source fails when its `<NAME>_DB_HOST` does not, whether that came from your
+shell or from `src/ol_dlt/.dlt/secrets.toml`. The inventory is validated first.
 
 `ol-dbt fixtures load` drops and recreates the tables it has a fixture for, and the
 source replaces a fixture's table that has no `_dlt_` column with its own, so load
@@ -79,7 +89,7 @@ fixtures first and the source second when both cover a table. The models then bu
 
 ```bash
 ol-dbt fixtures load
-(cd src/ol_dlt && uv run python -m ol_dlt.sources.mitxonline_app)
+ol-dbt ingest local --unit mitxonline/app_postgres
 ol-dbt starrocks build --env dev \
     --select "+integrations__learn__mitxonline_courses +integrations__learn__mitxonline_programs"
 ```
@@ -91,7 +101,8 @@ the models ten courses to build from.
 
 The lake starts with an empty raw schema. A unit with `strategies.local: fixture` in
 `ingestion/inventory/units/` has no local loader, so its raw tables come from a file of the
-same name under `ingestion/inventory/fixtures/`:
+same name under `ingestion/inventory/fixtures/`. An `ingest` unit can have one too
+(`mitxonline__app_postgres.yml`), which is what its tables hold until the source is run:
 
 ```yaml
 schema_version: 1

@@ -9,6 +9,7 @@ from ol_dbt_cli.commands.diff import diff
 from ol_dbt_cli.commands.fixtures import fixtures_app
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
+from ol_dbt_cli.commands.ingest import ingest_app
 from ol_dbt_cli.commands.inventory import inventory_app
 from ol_dbt_cli.commands.local_dev import local_app
 from ol_dbt_cli.commands.metrics import metrics_app
@@ -60,6 +61,9 @@ app = cyclopts.App(
          $ ol-dbt fixtures load
          $ ol-dbt starrocks build --env dev --select +integrations__learn__ocw_courses
 
+      7f. Replace a fixture's rows with the ones in your local-dev app database:
+         $ ol-dbt ingest local --unit mitxonline/app_postgres
+
       8. JSON output for CI pipelines:
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
@@ -75,6 +79,7 @@ app.command(run_app)
 app.command(starrocks_app)
 app.command(inventory_app)
 app.command(fixtures_app)
+app.command(ingest_app)
 app.command(contracts_app)
 app.command(metrics_app)
 app.command(impact, name="impact")
