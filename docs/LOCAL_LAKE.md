@@ -9,6 +9,13 @@ This is a different thing from the DuckDB target in [LOCAL_DEVELOPMENT.md](LOCAL
 which reads production Iceberg tables.
 
 ```bash
+# Once per checkout: install the `ol-dbt` CLI into .venv.
+uv sync
+
+# In each new shell: put it on PATH. Without this, write each `ol-dbt`
+# below as `uv run ol-dbt`.
+source .venv/bin/activate
+
 # Once per checkout: install the dbt packages. Without them the build stops with
 # "dbt expects 6 package(s) ... found only 0".
 (cd src/ol_dbt && uv run dbt deps)
