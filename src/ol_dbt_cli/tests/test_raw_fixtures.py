@@ -180,6 +180,18 @@ def test_a_factory_package_that_fails_to_import_is_an_error(tmp_path: Path, monk
         unit_factories(unit, package="broken_factories")
 
 
+def test_a_factory_package_without_the_contract_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A directory with only `_generated.py` imports as a namespace package."""
+    (unit,) = load_units(_inventory(tmp_path, None))
+    package = tmp_path / "scaffolded_factories" / "demo__s3"
+    package.mkdir(parents=True)
+    (package / "_generated.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with pytest.raises(ValueError, match="scaffolded_factories.demo__s3 has no SEED or generate"):
+        unit_factories(unit, package="scaffolded_factories")
+
+
 def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.syspath_prepend(str(FACTORY_PACKAGES))
     inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "by hand"}]))

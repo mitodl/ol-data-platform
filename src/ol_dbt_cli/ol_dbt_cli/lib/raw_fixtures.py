@@ -242,6 +242,7 @@ def unit_factories(unit: Unit, package: str = FACTORY_PACKAGE) -> UnitFactories 
         unit file is.
     :returns: The imported package, which generates rows for the unit's fixture.
     :rtype: UnitFactories | None
+    :raises ValueError: If the package lacks ``SEED`` or ``generate``.
     """
     name = f"{package}.{unit.path.stem}"
     try:
@@ -252,6 +253,11 @@ def unit_factories(unit: Unit, package: str = FACTORY_PACKAGE) -> UnitFactories 
         if error.name != name:
             raise
         return None
+    # A directory holding only `_generated.py`, or a `__pycache__` left by
+    # another branch, imports as an empty namespace package.
+    if lacking := [attribute for attribute in ("SEED", "generate") if not hasattr(module, attribute)]:
+        msg = f"{name} has no {' or '.join(lacking)}; a unit's factory package defines both in its __init__.py"
+        raise ValueError(msg)
     return cast("UnitFactories", module)
 
 
