@@ -72,6 +72,14 @@ READ_BATCH_ROWS = 16_384
 MAX_TABLE_READS = 3
 
 
+class SourceTableReplacedError(Exception):
+    """A data file of the snapshot being read no longer exists.
+
+    The irx models are dbt tables, so a build writes a new table and drops the
+    old one with its data files, whatever snapshot a reader has pinned.
+    """
+
+
 @dataclass(frozen=True)
 class IrxExportFile:
     """One legacy CSV and the irx__ model it is cut from."""
@@ -328,14 +336,23 @@ def read_data_files(
                     "does not apply; the export would deliver deleted rows."
                 )
             )
-        with table.io.new_input(task.file.file_path).open() as source:
-            for batch in pq.ParquetFile(source).iter_batches(
-                batch_size=READ_BATCH_ROWS, columns=schema.names
-            ):
-                yield cast(
-                    "pl.DataFrame",
-                    pl.from_arrow(batch.select(schema.names).cast(schema)),
-                )
+        data_file = table.io.new_input(task.file.file_path)
+        try:
+            with data_file.open() as source:
+                for batch in pq.ParquetFile(source).iter_batches(
+                    batch_size=READ_BATCH_ROWS, columns=schema.names
+                ):
+                    yield cast(
+                        "pl.DataFrame",
+                        pl.from_arrow(batch.select(schema.names).cast(schema)),
+                    )
+        except OSError as error:
+            # A file dropped before it is opened raises FileNotFoundError; one
+            # dropped between two ranged reads raises a bare OSError naming the
+            # object store's own error, so the file is looked for again.
+            if isinstance(error, FileNotFoundError) or not data_file.exists():
+                raise SourceTableReplacedError(task.file.file_path) from error
+            raise
 
 
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
@@ -481,7 +498,7 @@ def _read_pinned(
 
     Pinned so the file's metadata names the snapshot its rows came from. The
     pin does not keep the snapshot readable: a dbt rebuild replaces the table
-    and deletes the old one's data files (see _export_table).
+    and deletes the old one's data files (SourceTableReplacedError).
     """
     table = load_dbt_model_table(IRX_GLUE_DATABASE, table_name)
     snapshot = table.current_snapshot()
@@ -553,11 +570,9 @@ def _export_table(  # noqa: PLR0913
 ) -> MaterializeResult:
     """Export one irx table, starting over if dbt replaces it under the read.
 
-    The irx models are dbt tables, so a build writes a new table and drops the
-    old one with its data files, and a read still in progress hits a file that
-    no longer exists. The file is then rewritten whole from the new table's
-    snapshot: the destination is overwritten, and the digest, row count and
-    snapshot id recorded are the last read's.
+    The file is rewritten whole from the new table's snapshot: the destination
+    is overwritten, and the digest, row count and snapshot id recorded are the
+    last read's.
     """
 
     def export_once() -> MaterializeResult:
@@ -567,9 +582,9 @@ def _export_table(  # noqa: PLR0913
     for _ in range(MAX_TABLE_READS - 1):
         try:
             return export_once()
-        except FileNotFoundError as error:
+        except SourceTableReplacedError as error:
             get_dagster_logger().warning(
-                "%s.%s was replaced while it was being read (%s); "
+                "%s.%s was replaced while it was being read (%s is gone); "
                 "reading it again from its current snapshot",
                 IRX_GLUE_DATABASE,
                 table_name,
