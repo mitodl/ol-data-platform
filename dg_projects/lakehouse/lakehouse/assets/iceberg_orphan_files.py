@@ -110,6 +110,13 @@ def iceberg_raw_orphan_files(
             "with delete=false to report."
         )
         raise ValueError(msg)
+    if config.delete and config.min_age_days < ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS:
+        msg = (
+            f"A delete run needs min_age_days of at least "
+            f"{ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS}, got {config.min_age_days}. A "
+            "report can use less."
+        )
+        raise ValueError(msg)
 
     glue, s3 = _aws_clients()
     result = remove_database_orphan_files(

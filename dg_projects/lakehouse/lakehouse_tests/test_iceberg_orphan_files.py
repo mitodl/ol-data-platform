@@ -110,6 +110,19 @@ def test_delete_is_refused_where_it_is_not_enabled(monkeypatch: pytest.MonkeyPat
     assert calls == []
 
 
+def test_delete_is_refused_below_the_scheduled_floor(monkeypatch: pytest.MonkeyPatch):
+    _enable_delete(monkeypatch)
+    calls = _returning(monkeypatch, _result())
+
+    with pytest.raises(ValueError, match="at least 7"):
+        iceberg_raw_orphan_files(
+            build_asset_context(),
+            IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS - 1, delete=True),
+        )
+
+    assert calls == []
+
+
 def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
     calls = _returning(monkeypatch, _result())
 
