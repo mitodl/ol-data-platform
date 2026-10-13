@@ -36,10 +36,12 @@ the host, and StarRocks is the engine that then reads the tables.
 
 from __future__ import annotations
 
+import datetime
 import importlib
 import json
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -260,26 +262,30 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
     :param unit: The inventory unit, for each table's ``primary_key``.
     :param generated: What the unit's ``generate`` returned.
     :raises ValueError: If a table is not in the fixture file, a row sets a
-        column the table does not have, a primary key column is NULL, or a
-        primary key repeats one of the hand-written or generated rows.
+        column the table does not have, a primary key column is NULL or holds
+        a value its type cannot, or a primary key repeats one of the
+        hand-written or generated rows.
     """
     tables = {table.raw_table: table for table in fixture.tables}
-    primary_keys = {
-        table["raw_table"]: [path[0] for path in table["primary_key"]]
-        for table in unit.tables
-        if table.get("primary_key")
-    }
+    primary_keys = {table["raw_table"]: table["primary_key"] for table in unit.tables if table.get("primary_key")}
     for raw_table, rows in generated.items():
         where = f"{unit.key} factories: {raw_table}"
         if raw_table not in tables:
             msg = f"{where} is not a table of {fixture.path}"
             raise ValueError(msg)
         table = tables[raw_table]
-        key_columns = primary_keys.get(raw_table, [])
+        key_paths = primary_keys.get(raw_table, [])
+        if nested := [".".join(path) for path in key_paths if len(path) > 1]:
+            msg = f"{where} has nested primary key path {', '.join(nested)}, which a fixture row cannot hold"
+            raise ValueError(msg)
+        key_columns = [path[0] for path in key_paths]
         if undeclared := [column for column in key_columns if column not in table.columns]:
             msg = f"{where} has primary key column {', '.join(undeclared)}, which {fixture.path} does not declare"
             raise ValueError(msg)
-        seen = {tuple(row.get(column) for column in key_columns) for row in table.rows}
+        seen = {
+            _primary_key(table, row, key_columns, f"{where} hand-written row {number}")
+            for number, row in enumerate(table.rows, start=1)
+        }
         for number, row in enumerate(rows, start=1):
             if unknown := sorted(set(row) - set(table.columns)):
                 msg = f"{where} generated row {number} sets {', '.join(unknown)}, which the table does not have"
@@ -289,12 +295,41 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             if missing := [column for column in key_columns if row.get(column) is None]:
                 msg = f"{where} generated row {number} has no value for primary key column {', '.join(missing)}"
                 raise ValueError(msg)
-            key = tuple(row[column] for column in key_columns)
+            key = _primary_key(table, row, key_columns, f"{where} generated row {number}")
             if key in seen:
-                value = ", ".join(f"{column}={part!r}" for column, part in zip(key_columns, key, strict=True))
+                value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
                 msg = f"{where} generated row {number} repeats primary key {value}"
                 raise ValueError(msg)
             seen.add(key)
+
+
+def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[str], label: str) -> tuple[Any, ...]:
+    """Return the key of ``row`` as the table will hold it, so `"1"` and `1` in a ``long`` column are one key."""
+    key = []
+    for column in key_columns:
+        value, fixture_type = row.get(column), table.columns[column]
+        try:
+            key.append(None if value is None else _stored_value(value, fixture_type))
+        except (ValueError, TypeError, ArithmeticError) as error:
+            msg = f"{label} has {value!r} in primary key column {column}, which is not a {fixture_type}"
+            raise ValueError(msg) from error
+    return tuple(key)
+
+
+def _stored_value(value: Any, fixture_type: str) -> Any:
+    if fixture_type in {"int", "long"}:
+        return int(value)
+    if fixture_type in {"float", "double"}:
+        return float(value)
+    if _DECIMAL.match(fixture_type):
+        return Decimal(str(value))
+    if fixture_type == "string":
+        return str(value)
+    if fixture_type == "date" and isinstance(value, str):
+        return datetime.date.fromisoformat(value)
+    if fixture_type == "timestamp" and isinstance(value, str):
+        return datetime.datetime.fromisoformat(value)
+    return value
 
 
 def _quote(identifier: str) -> str:

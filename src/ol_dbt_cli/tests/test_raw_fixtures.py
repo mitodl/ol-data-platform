@@ -81,6 +81,13 @@ def test_committed_fixtures_are_valid() -> None:
             assert all(len(row) == len(table.columns) for row in row_parameters(table))
 
 
+def test_committed_hand_written_keys_are_what_their_columns_hold() -> None:
+    inventory_dir = REPO_ROOT / DEFAULT_INVENTORY_DIR
+    units = {unit.path.name: unit for unit in load_units(inventory_dir)}
+    for fixture in load_fixtures(inventory_dir, units.values()):
+        validate_generated(fixture, units[fixture.path.name], {table.raw_table: [] for table in fixture.tables})
+
+
 @pytest.mark.parametrize(
     ("fixture_type", "expected"),
     [("long", "BIGINT"), ("timestamp", "DATETIME"), ("string", "STRING"), ("decimal(38,9)", "DECIMAL(38, 9)")],
@@ -206,6 +213,11 @@ def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.Monk
         ({RAW_TABLE: [{"id": None}]}, "things generated row 1 has no value for primary key column id"),
         ({RAW_TABLE: [{"id": 1}]}, "things generated row 1 repeats primary key id=1"),
         ({RAW_TABLE: [{"id": 2}, {"id": 2}]}, "things generated row 2 repeats primary key id=2"),
+        ({RAW_TABLE: [{"id": "1"}]}, "things generated row 1 repeats primary key id='1'"),
+        (
+            {RAW_TABLE: [{"id": "one"}]},
+            "things generated row 1 has 'one' in primary key column id, which is not a long",
+        ),
     ],
 )
 def test_validate_generated_rejects(tmp_path: Path, generated: dict[str, list[dict[str, Any]]], message: str) -> None:
@@ -228,6 +240,37 @@ def test_validate_generated_compares_every_column_of_a_compound_key(tmp_path: Pa
         validate_generated(fixture, unit, {RAW_TABLE: [{"id": 2, "name": "a"}, {"id": 1, "name": "a"}]})
     with pytest.raises(ValueError, match="generated row 1 has no value for primary key column name"):
         validate_generated(fixture, unit, {RAW_TABLE: [{"id": 2}]})
+
+
+@pytest.mark.parametrize(
+    ("fixture_type", "hand_written", "generated"),
+    [
+        ("string", "7", 7),
+        ("double", 1, "1.0"),
+        ("decimal(10,2)", "1.50", 1.5),
+        ("date", datetime.date(2026, 1, 1), "2026-01-01"),
+        ("timestamp", datetime.datetime(2026, 1, 1, 12), "2026-01-01 12:00:00"),  # noqa: DTZ001
+    ],
+)
+def test_validate_generated_compares_keys_as_the_column_holds_them(
+    tmp_path: Path, fixture_type: str, hand_written: Any, generated: Any
+) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": fixture_type}, [{"id": hand_written}]))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match="generated row 1 repeats primary key"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": generated}]})
+
+
+def test_validate_generated_rejects_a_nested_primary_key_path(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+    unit.tables[0]["primary_key"] = [["data", "id"]]
+
+    with pytest.raises(ValueError, match=r"things has nested primary key path data\.id"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1}]})
 
 
 def test_validate_generated_without_a_primary_key_checks_tables_and_columns_only(tmp_path: Path) -> None:
