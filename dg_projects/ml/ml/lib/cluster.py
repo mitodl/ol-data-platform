@@ -84,10 +84,25 @@ def platforms_from_run_value(value: str | None) -> list[str] | None:
     return value.split(",") if value is not None else None
 
 
+# A Zendesk ticket with no body arrives as "[No content]", or as only a redaction
+# tag such as <PERSON>. The LLM summarizes it as "no feedback provided".
+EMPTY_CONVERSATION_PATTERN = r"\[No content\]|<[A-Z_]+>|\s"
+
+
 def drop_short_conversations(
     conversations_lf: pl.LazyFrame, min_chars_by_source: dict[str, int] | None
 ) -> pl.LazyFrame:
-    """Drop conversations below their source's minimum length; others stay."""
+    """Drop empty conversations, and those below their source's minimum length."""
+    # Null, not empty: redaction hasn't reached the row yet (see needs_summary).
+    conversations_lf = conversations_lf.filter(
+        pl.col("conversation_text").is_null()
+        | (
+            pl.col("conversation_text")
+            .str.replace_all(EMPTY_CONVERSATION_PATTERN, "")
+            .str.len_chars()
+            > 0
+        )
+    )
     for source_slug, min_chars in (min_chars_by_source or {}).items():
         conversations_lf = conversations_lf.filter(
             ~(
@@ -107,7 +122,8 @@ def filter_conversation_scope(
     | None = DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
 ) -> pl.LazyFrame:
     """Keep rows whose conversation opened on or after feedback_since, whose
-    platform is in platforms, and that meets its source's minimum length.
+    platform is in platforms, and that is not empty and meets its source's minimum
+    length.
 
     rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
     cluster membership. feedback_since is a YYYY-MM-DD date, platforms a list of
