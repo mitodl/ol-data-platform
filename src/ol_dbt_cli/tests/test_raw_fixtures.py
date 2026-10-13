@@ -27,10 +27,13 @@ from ol_dbt_cli.lib.raw_fixtures import (
     merge_captured,
     row_parameters,
     starrocks_type,
+    unit_factories,
+    validate_generated,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RAW_TABLE = "raw__demo__s3__things"
+FACTORY_PACKAGES = Path(__file__).parent / "fixtures"
 
 
 def _inventory(tmp_path: Path, fixture: dict[str, Any] | None, *, local: str = "fixture") -> Path:
@@ -43,7 +46,13 @@ def _inventory(tmp_path: Path, fixture: dict[str, Any] | None, *, local: str = "
         "loader": "dlt",
         "table_prefix": "raw__demo__s3__",
         "tables": [
-            {"name": "things", "raw_table": RAW_TABLE, "sync_mode": "full_refresh_overwrite", "modeled": True},
+            {
+                "name": "things",
+                "raw_table": RAW_TABLE,
+                "sync_mode": "full_refresh_overwrite",
+                "primary_key": [["id"]],
+                "modeled": True,
+            },
             {"name": "unread", "raw_table": "raw__demo__s3__unread", "sync_mode": "append", "modeled": False},
         ],
     }
@@ -142,6 +151,63 @@ def test_load_fixtures_rejects(tmp_path: Path, fixture: dict[str, Any], local: s
 
     with pytest.raises(ValueError, match=message):
         load_fixtures(inventory_dir, load_units(inventory_dir))
+
+
+def test_a_unit_without_a_factory_package_has_none(tmp_path: Path) -> None:
+    (unit,) = load_units(_inventory(tmp_path, None))
+
+    assert unit_factories(unit) is None
+
+
+def test_a_factory_package_that_fails_to_import_is_an_error(tmp_path: Path) -> None:
+    (unit,) = load_units(_inventory(tmp_path, None))
+
+    with pytest.raises(ModuleNotFoundError, match="no_such_package"):
+        unit_factories(unit, package="no_such_package")
+
+
+def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.syspath_prepend(str(FACTORY_PACKAGES))
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "by hand"}]))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    factories = unit_factories(unit, package="fixture_factories")
+    assert factories is not None
+    generated = factories.generate({table.raw_table: table.rows for table in fixture.tables}, scale=2)
+
+    validate_generated(fixture, unit, generated)
+    assert factories.SEED == 20261013  # noqa: PLR2004
+    assert generated == {
+        RAW_TABLE: [
+            {"id": 2},
+            {"id": 3, "name": "thing 3"},
+            {"id": 4},
+            {"id": 5, "name": "thing 5"},
+            {"id": 6},
+            {"id": 7, "name": "thing 7"},
+        ]
+    }
+
+
+@pytest.mark.parametrize(
+    ("generated", "message"),
+    [
+        ({"raw__demo__s3__unread": [{"id": 1}]}, "demo/s3 factories: raw__demo__s3__unread is not a table of"),
+        ({RAW_TABLE: [{"id": 2}, {"id": 3, "nmae": "x"}]}, "things generated row 2 sets nmae"),
+        ({RAW_TABLE: [{"name": "x"}]}, "things generated row 1 has no value for primary key column id"),
+        ({RAW_TABLE: [{"id": None}]}, "things generated row 1 has no value for primary key column id"),
+        ({RAW_TABLE: [{"id": 1}]}, "things generated row 1 repeats primary key id=1"),
+        ({RAW_TABLE: [{"id": 2}, {"id": 2}]}, "things generated row 2 repeats primary key id=2"),
+    ],
+)
+def test_validate_generated_rejects(tmp_path: Path, generated: dict[str, list[dict[str, Any]]], message: str) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1}]))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match=message):
+        validate_generated(fixture, unit, generated)
 
 
 def test_selected_unit_without_a_fixture_is_an_error(tmp_path: Path) -> None:
