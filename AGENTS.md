@@ -258,6 +258,8 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt unit-test` | Run dbt unit tests on DuckDB with no warehouse credentials (also runs in dbt PR CI) |
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
+| `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` (see `docs/LOCAL_LAKE.md`) |
+| `ol-dbt ingest local` | Load the local lake's raw tables from the local-dev app databases, for units with `strategies.local: ingest` |
 
 ### `ol-dbt run` — Incremental State-Based Execution
 
@@ -283,6 +285,7 @@ ol-dbt run test                      # tests only
 ol-dbt run --target dev_qa           # run against QA Trino
 ol-dbt run --no-defer                # disable upstream deferral
 ol-dbt run --no-save-state           # skip writing state artifacts after run
+ol-dbt run --indirect-selection buildable  # skip tests that also read an unselected model
 ```
 
 **Incremental selection logic (when `.dbt-state/` exists and no `--select` given):**
@@ -354,6 +357,13 @@ incremental until `--full-refresh` is used.
   `~/.cache/vault`); compose points the containers at the read-only mount
 - `VAULT_OIDC_NONINTERACTIVE`: set in the containers so a cache miss fails with
   "run `bin/vault-login`" instead of hanging on a browser that cannot open
+- `MIT_LEARN_BASE_URL` + `MIT_LEARN_WEBHOOK_SECRET`: in dev, set together they
+  configure `learn_api` without Vault (a local MIT Learn)
+- `DBT_MODEL_FIXTURE_DIR`: in dev, `get_dbt_model_as_dataframe` reads
+  `<dir>/<table_name>.jsonl` and not Glue. See
+  `dg_projects/delivery/CONTRIBUTING.md`, "Delivering to a local MIT Learn"
+- `DBT_MODEL_LOCAL_LAKE`: in dev, `get_dbt_model_as_dataframe` reads the table
+  from the local lake (`ol_warehouse_local_<layer>`) and not Glue. Same section
 
 ## Trust These Instructions
 

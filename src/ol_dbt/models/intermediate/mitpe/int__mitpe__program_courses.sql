@@ -37,6 +37,6 @@ select
     , courses.readable_id as course_readable_id
 from program_titles
 inner join resources as courses
-    on {{ html_unescape(regexp_replace_all('program_titles.course_title', "'^\\s+|\\s+$'", "''")) }} = courses.title
+    on {{ html_unescape(strip_whitespace('program_titles.course_title')) }} = courses.title
     and courses.resource_type = 'course'
 where program_titles.course_title != ''

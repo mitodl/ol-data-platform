@@ -73,7 +73,7 @@ with forum_thread as (
 
 , posts as (
     select
-        'commentthread-' || cast(forumthread_id as varchar) as source_record_ref
+        {{ dbt.concat(["'commentthread-'", "cast(forumthread_id as varchar)"]) }} as source_record_ref
         , 'commentthread' as content_model
         , forumthread_id as object_id
         , forumthread_id
@@ -92,7 +92,7 @@ with forum_thread as (
     union all
 
     select
-        'comment-' || cast(forumcomment_id as varchar) as source_record_ref
+        {{ dbt.concat(["'comment-'", "cast(forumcomment_id as varchar)"]) }} as source_record_ref
         , 'comment' as content_model
         , forumcomment_id as object_id
         , forumthread_id
@@ -181,7 +181,7 @@ select
             and forum_thread.forumthread_title is not null
             and thread_author_retired.openedx_user_id is null
             and forum_thread.user_retired_username is null
-            then forum_thread.forumthread_title || chr(10) || chr(10) || numbered_turns.post_body
+            then {{ dbt.concat(["forum_thread.forumthread_title", codepoint_char(10), codepoint_char(10), "numbered_turns.post_body"]) }}
         else numbered_turns.post_body
     end as text
     -- Other learners' replies stay, without the retired author's title over them

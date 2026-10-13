@@ -1,0 +1,134 @@
+---
+# Raw tables of the ocw/s3 unit for the local lake. Loaded by `ol-dbt fixtures load`.
+# The columns are SCHEMA in ol_dlt.sources.ocw_content plus dlt's load id. The
+# courses are invented: nothing here is copied from the OCW bucket.
+schema_version: 1
+tables:
+  raw__ocw__s3__course_content:
+    columns:
+      course_slug: string
+      content_kind: string
+      s3_key: string
+      s3_etag: string
+      data_json: string
+      file_key: string
+      file_etag: string
+      file_size_bytes: long
+      content: string
+      extraction_status: string
+      course_version: string
+      course_retrieved_at: timestamp
+      _dlt_load_id: string
+    rows:
+    # An older set of the first course. Staging keeps the newest set, so this
+    # title must not reach the model.
+    - course_slug: 99-001-local-fixtures-fall-2025
+      content_kind: course
+      s3_key: courses/99-001-local-fixtures-fall-2025/data.json
+      s3_etag: etag-course-1-old
+      data_json:
+        site_uid: 0f0e0d0c-0b0a-4909-8807-060504030201
+        course_title: Local Fixtures (superseded title)
+        primary_course_number: '99.001'
+      course_version: v1
+      course_retrieved_at: 2026-09-01 00:00:00
+      _dlt_load_id: '1788220800.000001'
+    - course_slug: 99-001-local-fixtures-fall-2025
+      content_kind: course
+      s3_key: courses/99-001-local-fixtures-fall-2025/data.json
+      s3_etag: etag-course-1
+      data_json:
+        site_uid: 0f0e0d0c-0b0a-4909-8807-060504030201
+        legacy_uid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+        course_title: Local Fixtures
+        course_description_html: <p>A course that exists only in the local lake.</p>
+        primary_course_number: '99.001'
+        extra_course_numbers: 99.901, 98.001
+        term: Fall
+        year: '2025'
+        level: [Undergraduate]
+        department_numbers: ['99', '98']
+        learning_resource_types: [Lecture Notes, Problem Sets]
+        topics:
+        - [Engineering, Computer Science, Data Engineering]
+        - [Engineering, Systems Engineering]
+        mit_learn_topics:
+        - [Data Science, Analytics & Computer Technology, Data Engineering]
+        instructors:
+        - first_name: Ada
+          last_name: Example
+          salutation: Prof.
+          title: Prof. Ada Example
+        image_src: /courses/99-001-local-fixtures-fall-2025/cover.jpg
+        course_image_metadata:
+          description: A stack of test fixtures.
+          image_metadata:
+            image-alt: Stacked boxes.
+        hide_download: false
+      course_version: v2
+      course_retrieved_at: 2026-10-01 00:00:00
+      _dlt_load_id: '1790812800.000001'
+    - course_slug: 99-001-local-fixtures-fall-2025
+      content_kind: page
+      s3_key: courses/99-001-local-fixtures-fall-2025/pages/syllabus/data.json
+      s3_etag: etag-page-1
+      data_json:
+        title: Syllabus
+        content: The syllabus of a course that exists only in the local lake.
+      course_version: v2
+      course_retrieved_at: 2026-10-01 00:00:00
+      _dlt_load_id: '1790812800.000001'
+    - course_slug: 99-001-local-fixtures-fall-2025
+      content_kind: resource
+      s3_key: courses/99-001-local-fixtures-fall-2025/resources/lecture-1/data.json
+      s3_etag: etag-resource-1
+      data_json:
+        title: Lecture 1 notes
+        description: Notes for the first lecture.
+        resourcetype: Document
+        file: /courses/99-001-local-fixtures-fall-2025/lecture-1.pdf
+        file_type: application/pdf
+        learning_resource_types: [Lecture Notes]
+      file_key: courses/99-001-local-fixtures-fall-2025/lecture-1.pdf
+      file_etag: etag-file-1
+      file_size_bytes: 20480
+      content: Fixtures stand in for the rows a loader would have written.
+      extraction_status: extracted
+      course_version: v2
+      course_retrieved_at: 2026-10-01 00:00:00
+      _dlt_load_id: '1790812800.000001'
+    # A second course with the optional fields absent.
+    - course_slug: 99-002-sparse-metadata-spring-2026
+      content_kind: course
+      s3_key: courses/99-002-sparse-metadata-spring-2026/data.json
+      s3_etag: etag-course-2
+      data_json:
+        site_uid: 11111111-2222-4333-8444-555555555555
+        course_title: Sparse Metadata
+        course_description_html: <p>A course with only the required fields.</p>
+        primary_course_number: '99.002'
+        term: Spring
+        year: '2026'
+        instructors:
+        hide_download: true
+      course_version: v1
+      course_retrieved_at: 2026-10-01 00:00:00
+      _dlt_load_id: '1790812800.000001'
+    # A course that left the bucket: its newest set is the one unpublished row,
+    # so it must not reach the model.
+    - course_slug: 99-003-unpublished-fall-2024
+      content_kind: course
+      s3_key: courses/99-003-unpublished-fall-2024/data.json
+      s3_etag: etag-course-3
+      data_json:
+        site_uid: 66666666-7777-4888-8999-000000000000
+        course_title: Unpublished
+        primary_course_number: '99.003'
+      course_version: v1
+      course_retrieved_at: 2026-09-01 00:00:00
+      _dlt_load_id: '1788220800.000001'
+    - course_slug: 99-003-unpublished-fall-2024
+      content_kind: unpublished
+      course_version: v2
+      course_retrieved_at: 2026-10-01 00:00:00
+      _dlt_load_id: '1790812800.000001'

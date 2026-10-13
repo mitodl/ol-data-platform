@@ -10,7 +10,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "PyAthena ~=3.37.0",
     "boto3 ~=1.43.0",
     "dagster ~= 1.11",
     "dagster-aws ~=0.29.0",
@@ -24,8 +23,8 @@ dependencies = [
     "pandas ~=3.0.0",
     "polars>=1.35.1",
     "psycopg2-binary ~= 2.9.10",
-    "pyarrow ~=25.0.0",
-    "pydantic ~=2.13.2",
+    "pyarrow ~=26.0.0",
+    "pydantic ~=2.14.1",
     "pygithub>=2.8.1",
     "pyiceberg[polars]>=0.11.1",
     "pyyaml>=6.0",

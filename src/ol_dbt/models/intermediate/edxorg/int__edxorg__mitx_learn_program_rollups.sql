@@ -95,8 +95,7 @@ select
     , coalesce(program_topics.topics, {{ null_varchar_array() }}) as topics
     , case
         when commitment.total_weeks > 0
-            then cast(commitment.total_weeks as varchar)
-            || case when commitment.total_weeks > 1 then ' weeks' else ' week' end
+            then {{ dbt.concat(["cast(commitment.total_weeks as varchar)", "case when commitment.total_weeks > 1 then ' weeks' else ' week' end"]) }}
         else ''
     end as duration
     , case when commitment.total_weeks > 0 then commitment.total_weeks end as min_weeks
@@ -104,13 +103,13 @@ select
     , case
         when commitment.effort_min != 0 or commitment.effort_max != 0
             then
-                case
-                    when commitment.effort_min != commitment.effort_max
-                        then cast(commitment.effort_min as varchar) || '-'
-                    else ''
-                end
-                || cast(commitment.effort_max as varchar)
-                || case when commitment.effort_max > 1 then ' hours/week' else ' hour/week' end
+                {{ dbt.concat([
+                    "case when commitment.effort_min != commitment.effort_max then "
+                    ~ dbt.concat(["cast(commitment.effort_min as varchar)", "'-'"])
+                    ~ " else '' end",
+                    "cast(commitment.effort_max as varchar)",
+                    "case when commitment.effort_max > 1 then ' hours/week' else ' hour/week' end"
+                ]) }}
         else ''
     end as time_commitment
     , case

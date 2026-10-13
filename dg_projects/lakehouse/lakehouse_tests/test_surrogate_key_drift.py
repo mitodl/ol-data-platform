@@ -268,6 +268,44 @@ def test_the_repair_is_scoped_to_what_this_run_actually_built(dbt_asset_module):
     assert "_models_built_by" in {name for _, name in _called_names(asset)}
 
 
+def test_run_results_are_uploaded_when_the_build_fails(dbt_asset_module):
+    """stream() raises on a failing test, the build OpenMetadata most needs.
+
+    An upload placed after the stream is skipped by exactly those builds, which
+    leaves OpenMetadata able to show a dbt test as passed or stale, never failed.
+    """
+    asset = _function(dbt_asset_module, "full_dbt_project")
+    guarded = [
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try)
+        and "stream" in {name for _, name in _called_names(ast.Module(node.body, []))}
+    ]
+    assert guarded, "the build's stream must stay inside a try"
+    handlers = guarded[0].handlers
+    assert len(handlers) == 1
+    # BaseException, so a cancelled run uploads what it finished too.
+    assert isinstance(handlers[0].type, ast.Name)
+    assert handlers[0].type.id == "BaseException"
+    assert "_upload_run_results" in {
+        name for _, name in _called_names(ast.Module(handlers[0].body, []))
+    }
+    # The upload sits in its own try, so a failed upload cannot replace the
+    # build's error, and the handler ends by re-raising that error.
+    upload_guard = handlers[0].body[0]
+    assert isinstance(upload_guard, ast.Try)
+    assert upload_guard.handlers
+    last = handlers[0].body[-1]
+    assert isinstance(last, ast.Raise)
+    assert last.exc is None
+
+    # A successful build uploads after the try.
+    after = asset.body[asset.body.index(guarded[0]) + 1 :]
+    assert "_upload_run_results" in {
+        name for _, name in _called_names(ast.Module(after, []))
+    }
+
+
 def test_the_state_artifact_name_is_stable():
     """Renaming it silently orphans the baseline and re-fires every escalation."""
     assert SURROGATE_KEY_STATE_ARTIFACT == "surrogate-key-state.json"

@@ -7,6 +7,10 @@ requires-python = "~=3.13,<3.15"
 license = "BSD-3-Clause"
 dependencies = [
     "dlt[filesystem,parquet,pyiceberg,sql_database]>=1.28,<2",
+    # sqlglot 30.22.0 removed qualify()'s `infer_schema` argument, which dlt
+    # through 1.31.0 still passes, so every load fails in lineage. Drop the cap
+    # once a dlt release includes https://github.com/dlt-hub/dlt/pull/4538.
+    "sqlglot<30.22",
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
     # >=1.2 for the CSV reader's `strict_mode` argument (edxorg_s3 source).
@@ -18,7 +22,7 @@ dependencies = [
     "youtube-transcript-api>=1.0,<2",
     # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real
     # arguments -- a date window and a chunk size -- rather than env vars.
-    "cyclopts~=5.1.1",
+    "cyclopts~=5.2.0",
 ]
 
 [dependency-groups]

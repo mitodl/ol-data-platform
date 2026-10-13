@@ -89,9 +89,11 @@ with chatbot as (
 
 , tutorbot_turns as (
     select
-        cast(tutorbot_deduplicated.tutorbotoutput_id as varchar)
-            || '-' || cast(tutorbot_deduplicated.message_index as varchar)
-            as source_record_ref
+        {{ dbt.concat([
+            "cast(tutorbot_deduplicated.tutorbotoutput_id as varchar)"
+            , "'-'"
+            , "cast(tutorbot_deduplicated.message_index as varchar)"
+        ]) }} as source_record_ref
         , tutorbot_deduplicated.chatsession_thread_id
         , tutorbot_deduplicated.chatsession_agent
         , tutorbot_deduplicated.chatsession_title

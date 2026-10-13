@@ -7,6 +7,12 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(
+    raw_table='raw__irx__edxorg__bigquery__mitx_person_course'
+    , partition_columns='user_id, course_id'
+    , then_by='last_event'
+) }}
+
 , renamed as (
 
     select
@@ -58,7 +64,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('cert_modified_date') }} as courseruncertificate_updated_on
         ,{{ cast_timestamp_to_iso8601('first_event') }} as courseactivitiy_first_event_timestamp
         ,{{ cast_timestamp_to_iso8601('last_event') }} as courseactivitiy_last_event_timestamp
-    from source
+    from most_recent_source
     where user_id is not null --- temporary fix to filter the bad data
 
 )

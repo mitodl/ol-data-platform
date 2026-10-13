@@ -252,7 +252,7 @@ with mitx__users as (
     union all
 
     select
-        {{ generate_hash_id("cast(mitlearn_user_id as varchar) || '" ~ var("mitlearn") ~ "'") }} as user_hashed_id
+        {{ generate_hash_id(dbt.concat(["cast(mitlearn_user_id as varchar)", "'" ~ var("mitlearn") ~ "'"])) }} as user_hashed_id
         , null as user_mitxonline_id
         , null as user_edxorg_id
         , null as user_mitxpro_id

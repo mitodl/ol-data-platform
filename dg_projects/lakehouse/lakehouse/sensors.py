@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import json
 import logging
 
@@ -176,7 +176,7 @@ def iceberg_snapshot_pointer_lag_sensor(
         # Include the UTC hour in the run_key so that failed repair runs are
         # retried on the next hourly tick rather than being silently skipped
         # (Dagster's run_key deduplication prevents re-running the same key).
-        hour_bucket = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H")
+        hour_bucket = dt.datetime.now(dt.UTC).strftime("%Y%m%d%H")
         run_requests.append(RunRequest(run_key=f"repair-{hour_bucket}"))
 
     return SensorResult(

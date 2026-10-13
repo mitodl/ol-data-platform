@@ -45,7 +45,7 @@ with source as (
                 replace(
                     (
                         concat_ws(
-                            chr(32)
+                            ' '
                             , nullif(first_name, '')
                             , nullif(last_name, '')
                         )
@@ -54,7 +54,7 @@ with source as (
             ), '<>', ' '
         ) as user_full_name
         , concat_ws(
-            chr(32)
+            ' '
             , nullif(romanized_first_name, '')
             , nullif(romanized_last_name, '')
         ) as user_romanized_full_name

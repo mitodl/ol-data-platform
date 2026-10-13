@@ -51,7 +51,7 @@ with
             program_is_live as is_active,
             program_is_external,
             platform_name as partner_platform_name,
-            case when program_is_external then 'xPRO ' || platform_name else 'xPro' end as platform_readable_id,
+            case when program_is_external then {{ dbt.concat(["'xPRO '", "platform_name"]) }} else 'xPro' end as platform_readable_id,
             'mitxpro' as platform_code,
             cms_programpage_first_published_on as first_published_date,  -- Keep as VARCHAR
             cast(null as varchar) as enrollment_start_date,

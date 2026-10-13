@@ -43,7 +43,7 @@ with program_requirements as (
             as requirement_nesting
     from course_nodes
     left join operator_nodes
-        on course_nodes.programrequirement_path like operator_nodes.programrequirement_path || '%'
+        on course_nodes.programrequirement_path like {{ dbt.concat(["operator_nodes.programrequirement_path", "'%'"]) }}
 )
 
 , child_requirements as (
@@ -88,7 +88,7 @@ with program_requirements as (
     from child_requirements
     left join parent_requirements
         on
-            child_requirements.programrequirement_path like parent_requirements.programrequirement_path || '%'
+            child_requirements.programrequirement_path like {{ dbt.concat(["parent_requirements.programrequirement_path", "'%'"]) }}
             and child_requirements.course_id = parent_requirements.course_id
             and child_requirements.program_id = parent_requirements.program_id
 )
@@ -117,7 +117,7 @@ with program_requirements as (
         group by
             combined_requirements.program_id
             , combined_requirements.programrequirement_requirement_id
-    )
+    ) as elective_sets
     group by program_id
 
 )

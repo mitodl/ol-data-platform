@@ -14,7 +14,7 @@ with source as (
         , state_or_territory as user_address_state_or_territory
         , postal_code as user_address_postal_code
         , concat_ws(
-            chr(10)
+            {{ codepoint_char(10) }}
             , nullif(street_address_1, '')
             , nullif(street_address_2, '')
             , nullif(street_address_3, '')

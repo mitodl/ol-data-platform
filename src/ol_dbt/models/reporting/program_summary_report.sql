@@ -13,13 +13,13 @@ with program_enrollments as (
 , aggregated_course_enrollments as (
     select
         program_courses.program_name
-        , count(distinct course_enrollments.courserun_readable_id || course_enrollments.user_email) as total_enrollments
+        , count(distinct {{ dbt.concat(["course_enrollments.courserun_readable_id", "course_enrollments.user_email"]) }}) as total_enrollments
         , count(distinct course_enrollments.user_email) as unique_users
         , count(distinct course_enrollments.user_country_code) as unique_countries
         , count(
             distinct case
                 when course_enrollments.courserunenrollment_enrollment_mode = 'verified'
-                    then course_enrollments.courserun_readable_id || course_enrollments.user_email
+                    then {{ dbt.concat(["course_enrollments.courserun_readable_id", "course_enrollments.user_email"]) }}
             end
         ) as verified_enrollments
         , count(
@@ -31,7 +31,7 @@ with program_enrollments as (
         , count(
             distinct case
                 when course_enrollments.courseruncertificate_is_earned = true
-                    then course_enrollments.courserun_readable_id || course_enrollments.user_email
+                    then {{ dbt.concat(["course_enrollments.courserun_readable_id", "course_enrollments.user_email"]) }}
             end
         ) as course_certificates
         , count(
