@@ -133,8 +133,6 @@ def filter_conversation_scope(
     None for any skips that filter. Other rows stay in their tables; this only hides
     them from the caller.
     """
-    if feedback_since is None and platforms is None and not min_chars_by_source:
-        return rows_lf
     in_scope_lf = conversations_lf
     if feedback_since is not None:
         # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix
