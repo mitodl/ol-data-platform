@@ -3,8 +3,19 @@
 --
 -- Reads the fact rather than int__feedback__unioned because the text must be REDACTED,
 -- which only tfact_feedback carries. conversation_text is null until that asset lands.
+-- Keep in step with EMPTY_CONVERSATION_PATTERN in dg_projects/ml/ml/lib/cluster.py.
+{% set empty_text_pattern = "'\\[No content\\]|SCRUBBED|<[A-Z_]+>|-|\\s'" %}
+
 with feedback as (
-    select * from {{ ref('tfact_feedback') }}
+    select
+        *
+        , {{ regexp_replace_all("feedback_text", empty_text_pattern, "''") }} != ''
+            as has_own_text
+        , case
+            when {{ regexp_replace_all("feedback_title", empty_text_pattern, "''") }} != ''
+                then feedback_title
+        end as subject_text
+    from {{ ref('tfact_feedback') }}
 )
 
 , platform as (
@@ -35,10 +46,18 @@ select
     -- nullif because array_join drops null elements: with the redaction stub in place
     -- every turn's text is null, and the join yields '' rather than null. An empty
     -- string reads as real content to the summarizer's skip rule.
-    , nullif({{ array_join(
-        "array_agg(feedback.feedback_text order by feedback.turn_index)",
-        "\n---\n"
-    ) }}, '') as conversation_text
+    , case
+        -- A Zendesk email sent with only a subject: the body arrives as "[No content]",
+        -- so the subject stands in for it.
+        when
+            sum(case when feedback.has_own_text then 1 else 0 end) = 0
+            and max(feedback.subject_text) is not null
+            then max(feedback.subject_text)
+        else nullif({{ array_join(
+            "array_agg(feedback.feedback_text order by feedback.turn_index)",
+            "\n---\n"
+        ) }}, '')
+    end as conversation_text
 from feedback
 inner join feedback_source
     on feedback.feedback_source_fk = feedback_source.feedback_source_pk

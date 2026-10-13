@@ -182,12 +182,19 @@ def test_filter_conversation_scope_drops_conversations_below_source_minimum() ->
 def test_drop_short_conversations_drops_placeholder_only_text() -> None:
     conversations_lf = pl.LazyFrame(
         {
-            "feedback_conversation_pk": ["empty", "redacted", "short", "pending"],
-            "source_slug": ["zendesk"] * 4,
-            "conversation_text_chars": [12, 18, 2, None],
+            "feedback_conversation_pk": [
+                "empty",
+                "redacted",
+                "two_empty_turns",
+                "short",
+                "pending",
+            ],
+            "source_slug": ["zendesk"] * 5,
+            "conversation_text_chars": [12, 18, 24, 2, None],
             "conversation_text": [
                 "[No content]",
                 "<PERSON>\n <EMAIL_ADDRESS>",
+                "[No content]\n---\nSCRUBBED",
                 "Hi",
                 None,
             ],

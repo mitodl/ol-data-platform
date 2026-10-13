@@ -84,9 +84,11 @@ def platforms_from_run_value(value: str | None) -> list[str] | None:
     return value.split(",") if value is not None else None
 
 
-# A Zendesk ticket with no body arrives as "[No content]", or as only a redaction
-# tag such as <PERSON>. The LLM summarizes it as "no feedback provided".
-EMPTY_CONVERSATION_PATTERN = r"\[No content\]|<[A-Z_]+>|\s"
+# Text with nothing left after removing these is empty: "[No content]" (a Zendesk
+# body), "SCRUBBED" (a deleted ticket), redaction tags, the turn separator "---", and
+# whitespace. int__feedback__conversation uses the subject in place of an empty body,
+# so this drops only tickets where both are empty. Keep in step with that model.
+EMPTY_CONVERSATION_PATTERN = r"\[No content\]|SCRUBBED|<[A-Z_]+>|-|\s"
 
 
 def drop_short_conversations(

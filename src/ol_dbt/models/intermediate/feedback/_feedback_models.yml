@@ -492,7 +492,9 @@ models:
     description: int, summed pre-redaction length of the kept turns.
   - name: conversation_text
     description: str, the conversation's redacted turns concatenated in order with
-      a turn delimiter. Null until the feedback_redacted asset populates the fact.
+      a turn delimiter. When no turn has text of its own (only "[No content]", "SCRUBBED"
+      or redaction tags), the subject instead. Null until the feedback_redacted asset
+      populates the fact.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -684,3 +686,35 @@ unit_tests:
     - {source_record_ref: '8', text: "My certificate is missing.", subject_type: unspecified,
       subject_url: null}
     - {source_record_ref: '9', text: null, subject_type: unspecified, subject_url: null}
+- name: test_int__feedback__conversation_uses_the_subject_when_no_turn_has_text
+  description: >
+    A ticket whose turns are all "[No content]" takes its subject as the text. A
+    ticket with real text keeps it, and one with no subject either keeps its raw text.
+  model: int__feedback__conversation
+  given:
+  - input: ref('tfact_feedback')
+    rows:
+    - {feedback_source_fk: z, conversation_id: subject_only, platform_fk: null, turn_index: 1,
+      feedback_occurred_at: '2026-10-01T00:00:00', feedback_text_chars: 12, feedback_text: '[No
+        content]', feedback_title: No verification email received yet}
+    - {feedback_source_fk: z, conversation_id: subject_only, platform_fk: null, turn_index: 2,
+      feedback_occurred_at: '2026-10-02T00:00:00', feedback_text_chars: 8, feedback_text: <PERSON>,
+      feedback_title: No verification email received yet}
+    - {feedback_source_fk: z, conversation_id: has_text, platform_fk: null, turn_index: 1,
+      feedback_occurred_at: '2026-10-01T00:00:00', feedback_text_chars: 26, feedback_text: My
+        certificate is missing., feedback_title: Certificate}
+    - {feedback_source_fk: z, conversation_id: all_empty, platform_fk: null, turn_index: 1,
+      feedback_occurred_at: '2026-10-01T00:00:00', feedback_text_chars: 12, feedback_text: '[No
+        content]', feedback_title: SCRUBBED}
+  - input: ref('dim_feedback_source')
+    rows:
+    - {feedback_source_pk: z, source_slug: zendesk}
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - {conversation_ref: subject_only, turn_count: 2, conversation_text: No verification
+        email received yet}
+    - {conversation_ref: has_text, turn_count: 1, conversation_text: My certificate
+        is missing.}
+    - {conversation_ref: all_empty, turn_count: 1, conversation_text: '[No content]'}
