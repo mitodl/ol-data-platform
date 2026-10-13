@@ -36,7 +36,16 @@ RAW_TABLE = "raw__demo__s3__things"
 FACTORY_PACKAGES = Path(__file__).parent / "fixtures"
 
 
-def _inventory(tmp_path: Path, fixture: dict[str, Any] | None, *, local: str = "fixture") -> Path:
+def _inventory(
+    tmp_path: Path,
+    fixture: dict[str, Any] | None,
+    *,
+    local: str = "fixture",
+    primary_key: tuple[str, ...] = ("id",),
+) -> Path:
+    things: dict[str, Any] = {"name": "things", "raw_table": RAW_TABLE, "sync_mode": "full_refresh_overwrite"}
+    if primary_key:
+        things["primary_key"] = [[column] for column in primary_key]
     unit = {
         "schema_version": 1,
         "deployment": "demo",
@@ -46,13 +55,7 @@ def _inventory(tmp_path: Path, fixture: dict[str, Any] | None, *, local: str = "
         "loader": "dlt",
         "table_prefix": "raw__demo__s3__",
         "tables": [
-            {
-                "name": "things",
-                "raw_table": RAW_TABLE,
-                "sync_mode": "full_refresh_overwrite",
-                "primary_key": [["id"]],
-                "modeled": True,
-            },
+            {**things, "modeled": True},
             {"name": "unread", "raw_table": "raw__demo__s3__unread", "sync_mode": "append", "modeled": False},
         ],
     }
@@ -159,11 +162,15 @@ def test_a_unit_without_a_factory_package_has_none(tmp_path: Path) -> None:
     assert unit_factories(unit) is None
 
 
-def test_a_factory_package_that_fails_to_import_is_an_error(tmp_path: Path) -> None:
+def test_a_factory_package_that_fails_to_import_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (unit,) = load_units(_inventory(tmp_path, None))
+    package = tmp_path / "broken_factories" / "demo__s3"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("import no_such_dependency\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(ModuleNotFoundError, match="no_such_package"):
-        unit_factories(unit, package="no_such_package")
+    with pytest.raises(ModuleNotFoundError, match="no_such_dependency"):
+        unit_factories(unit, package="broken_factories")
 
 
 def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -208,6 +215,38 @@ def test_validate_generated_rejects(tmp_path: Path, generated: dict[str, list[di
 
     with pytest.raises(ValueError, match=message):
         validate_generated(fixture, unit, generated)
+
+
+def test_validate_generated_compares_every_column_of_a_compound_key(tmp_path: Path) -> None:
+    fixture_file = _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "a"}])
+    inventory_dir = _inventory(tmp_path, fixture_file, primary_key=("id", "name"))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1, "name": "b"}, {"id": 2, "name": "a"}]})
+    with pytest.raises(ValueError, match="generated row 2 repeats primary key id=1, name='a'"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": 2, "name": "a"}, {"id": 1, "name": "a"}]})
+    with pytest.raises(ValueError, match="generated row 1 has no value for primary key column name"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": 2}]})
+
+
+def test_validate_generated_without_a_primary_key_checks_tables_and_columns_only(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, [{"id": 1}]), primary_key=())
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1}, {}]})
+    with pytest.raises(ValueError, match="generated row 1 sets nmae"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"nmae": "x"}]})
+
+
+def test_validate_generated_rejects_a_key_column_the_fixture_does_not_declare(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"name": "string"}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match="things has primary key column id, which .* does not declare"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"name": "x"}]})
 
 
 def test_selected_unit_without_a_fixture_is_an_error(tmp_path: Path) -> None:

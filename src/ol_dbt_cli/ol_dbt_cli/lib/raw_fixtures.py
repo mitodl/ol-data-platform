@@ -276,6 +276,9 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             raise ValueError(msg)
         table = tables[raw_table]
         key_columns = primary_keys.get(raw_table, [])
+        if undeclared := [column for column in key_columns if column not in table.columns]:
+            msg = f"{where} has primary key column {', '.join(undeclared)}, which {fixture.path} does not declare"
+            raise ValueError(msg)
         seen = {tuple(row.get(column) for column in key_columns) for row in table.rows}
         for number, row in enumerate(rows, start=1):
             if unknown := sorted(set(row) - set(table.columns)):
