@@ -36,7 +36,7 @@ class UploadEdxGcsCourseConfig(Config):
     out={"edx_course_tarball_directory": Out(dagster_type=Path)},
 )
 def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
-    # TODO: replace context and config with a new asset config  # noqa: E501, FIX002, TD002, TD003
+    # TODO: replace context and config with a new asset config  # noqa: FIX002, TD002, TD003
     # once resources have been migrated
     storage_client = context.resources.gcp_gcs.client
     bucket = storage_client.get_bucket(config.edx_gcs_course_tarballs)
@@ -80,7 +80,7 @@ def upload_edx_gcs_course_data_to_s3(
 
     :yield: The S3 path of the uploaded directory
     """
-    # TODO: replace context and config with a new asset config once  # noqa: E501, FIX002, TD002, TD003
+    # TODO: replace context and config with a new asset config once  # noqa: FIX002, TD002, TD003
     #  resources have been migrated
     results_bucket = config.edx_etl_results_bucket
     for path_object in context.resources.results_dir.path.iterdir():

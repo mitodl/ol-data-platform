@@ -38,7 +38,7 @@ committed data.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import logging
 import re
 from collections.abc import Collection
@@ -402,9 +402,7 @@ def expire_snapshots(  # noqa: PLR0913
       that would be).
     - ``stale_branch_count`` (int): Number of branches removed (or that would be).
     """
-    cutoff_dt = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(
-        days=retention_days
-    )
+    cutoff_dt = dt.datetime.now(tz=dt.UTC) - dt.timedelta(days=retention_days)
     cutoff_ms = int(cutoff_dt.timestamp() * 1000)
 
     table = catalog.load_table(f"{database}.{table_name}")
@@ -617,7 +615,7 @@ def load_raw_layer_maintenance_work(
     log.info("Found %d Iceberg tables in %s", len(iceberg_table_names), glue_database)
 
     # ── 2. Load each table's snapshot metadata ────────────────────────────
-    now_ms = int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1000)
+    now_ms = int(dt.datetime.now(tz=dt.UTC).timestamp() * 1000)
     results: list[RawLayerTableInfo] = []
     failures: list[str] = []
 
