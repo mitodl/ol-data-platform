@@ -44,6 +44,12 @@ CLUSTER_RUN_SCHEMA = {
     "hdbscan_min_samples": pl.Int64,
     "hdbscan_cluster_selection_method": pl.String,
     "max_clusters": pl.Int64,
+    # 'full' reclusters everything; 'extend' keeps the live clusters (see
+    # extend_clusters). Null on runs written before this column existed: full.
+    "run_type": pl.String,
+    # Extend runs only
+    "placed_noise_count": pl.Int64,
+    "new_cluster_count": pl.Int64,
 }
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
@@ -142,6 +148,9 @@ CLUSTER_CANDIDATE_SCHEMA = {
     "cluster_run_id": pl.String,
     "cluster_id": pl.Int64,
     "cluster_probability": pl.Float64,
+    # The active cluster_key an extend run carried forward; null for new clusters,
+    # noise, and every row of a full run.
+    "cluster_key": pl.String,
 }
 
 # §C: UMAP to ~5-15 dims before HDBSCAN. 10 is the midpoint of that range, pending
@@ -169,6 +178,21 @@ MAX_CLUSTERS: int | None = (
     int(os.environ["CLUSTER_MAX_CLUSTERS"])
     if os.environ.get("CLUSTER_MAX_CLUSTERS")
     else None
+)
+
+# Extend runs only. HDBSCAN leaves conversations between two similar clusters as
+# noise, such as course prerequisites vs. course overview questions. Members average
+# about 0.66 similarity to their centroid, so 0.70 places only clear fits.
+NOISE_PLACEMENT_MIN_SIMILARITY = float(
+    os.environ.get("NOISE_PLACEMENT_MIN_SIMILARITY", "0.70")
+)
+
+# Extend runs only: HDBSCAN over the noise that is left finds new common themes.
+# Most groups it finds are the loose edge of an existing cluster (centroid
+# similarity 0.77-0.95 in 2026-10), so a group too close to one stays noise.
+NEW_CLUSTER_MIN_SIZE = int(os.environ.get("NEW_CLUSTER_MIN_SIZE", "200"))
+NEW_CLUSTER_MAX_CENTROID_SIMILARITY = float(
+    os.environ.get("NEW_CLUSTER_MAX_CENTROID_SIMILARITY", "0.75")
 )
 
 # Fixed rather than left to UMAP/HDBSCAN's own default (None -- a fresh random
@@ -294,6 +318,96 @@ def reduce_and_cluster(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
         ):
             return labels, clusterer.probabilities_, reduced, min_cluster_size
         min_cluster_size = max(min_cluster_size + 1, round(min_cluster_size * 1.25))
+
+
+def _unit_centroids(
+    unit_vectors: np.ndarray, labels: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    cluster_ids = np.unique(labels[labels != NOISE_CLUSTER_ID])
+    if len(cluster_ids) == 0:
+        return cluster_ids, np.empty((0, unit_vectors.shape[1]))
+    centroids = np.stack([unit_vectors[labels == c].mean(axis=0) for c in cluster_ids])
+    return cluster_ids, centroids / np.linalg.norm(centroids, axis=1, keepdims=True)
+
+
+def place_noise(
+    unit_vectors: np.ndarray,
+    labels: np.ndarray,
+    min_similarity: float = NOISE_PLACEMENT_MIN_SIMILARITY,
+) -> tuple[np.ndarray, int]:
+    """Move each noise conversation into its nearest cluster when its cosine
+    similarity to that cluster's centroid is at least min_similarity.
+
+    Returns (labels, placed_count).
+    """
+    noise = np.flatnonzero(labels == NOISE_CLUSTER_ID)
+    cluster_ids, centroids = _unit_centroids(unit_vectors, labels)
+    if len(noise) == 0 or len(cluster_ids) == 0:
+        return labels, 0
+    similarities = unit_vectors[noise] @ centroids.T
+    nearest = similarities.argmax(axis=1)
+    placed = similarities[np.arange(len(noise)), nearest] >= min_similarity
+    labels = labels.copy()
+    labels[noise[placed]] = cluster_ids[nearest[placed]]
+    return labels, int(placed.sum())
+
+
+def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
+    unit_vectors: np.ndarray,
+    labels: np.ndarray,
+    probabilities: np.ndarray,
+    min_cluster_size: int = NEW_CLUSTER_MIN_SIZE,
+    max_centroid_similarity: float = NEW_CLUSTER_MAX_CENTROID_SIMILARITY,
+    *,
+    umap_params: tuple[int, int] = (UMAP_N_COMPONENTS, UMAP_N_NEIGHBORS),
+    random_state: int = RANDOM_STATE,
+    min_samples: int | None = HDBSCAN_MIN_SAMPLES,
+    cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Cluster the noise, with UMAP fitted on the noise alone, and keep each group
+    whose centroid is not close to any existing cluster's as a new cluster.
+
+    New clusters get ids after the existing ones. Returns (labels, probabilities,
+    new_cluster_count).
+    """
+    umap_n_components, umap_n_neighbors = umap_params
+    noise = np.flatnonzero(labels == NOISE_CLUSTER_ID)
+    # UMAP needs more points than n_components
+    if len(noise) < max(min_cluster_size, umap_n_components + 2):
+        return labels, probabilities, 0
+    reduced = UMAP(
+        n_components=umap_n_components,
+        n_neighbors=umap_n_neighbors,
+        random_state=random_state,
+        metric="cosine",
+    ).fit_transform(unit_vectors[noise])
+    clusterer = HDBSCAN(
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        cluster_selection_method=cluster_selection_method,
+    )
+    group_labels = clusterer.fit_predict(reduced)
+    _, centroids = _unit_centroids(unit_vectors, labels)
+    labels = labels.copy()
+    probabilities = probabilities.copy()
+    next_cluster_id = labels.max() + 1
+    new_cluster_count = 0
+    for group in np.unique(group_labels[group_labels != NOISE_CLUSTER_ID]):
+        in_group = group_labels == group
+        centroid = unit_vectors[noise[in_group]].mean(axis=0)
+        centroid /= np.linalg.norm(centroid)
+        if len(centroids) and (centroids @ centroid).max() >= max_centroid_similarity:
+            continue
+        labels[noise[in_group]] = next_cluster_id
+        probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
+        next_cluster_id += 1
+        new_cluster_count += 1
+    return labels, probabilities, new_cluster_count
+
+
+def _unit_vectors(vectors: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    return np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms > 0)
 
 
 def _stratified_sample_indices(
@@ -447,6 +561,7 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         pl.lit(cluster_run_id).alias("cluster_run_id"),
         pl.Series("cluster_id", labels, dtype=pl.Int64),
         pl.Series("cluster_probability", probabilities, dtype=pl.Float64),
+        pl.lit(None, dtype=pl.String).alias("cluster_key"),
     )
 
     noise_count = int((labels == NOISE_CLUSTER_ID).sum())
@@ -470,5 +585,100 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         "hdbscan_min_samples": min_samples,
         "hdbscan_cluster_selection_method": cluster_selection_method,
         "max_clusters": max_clusters,
+        "run_type": "full",
+    }
+    return candidates_df, run_metadata
+
+
+def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
+    embeddings_df: pl.DataFrame,
+    embedding_provenance: tuple[str, int, str | None],
+    cluster_key_by_pk: dict[str, str],
+    umap_params: tuple[int, int] = (UMAP_N_COMPONENTS, UMAP_N_NEIGHBORS),
+    random_state: int = RANDOM_STATE,
+    cluster_run_id: str | None = None,
+    *,
+    is_promoted: bool = DEFAULT_IS_PROMOTED,
+    min_samples: int | None = HDBSCAN_MIN_SAMPLES,
+    cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    new_cluster_min_size: int = NEW_CLUSTER_MIN_SIZE,
+) -> tuple[pl.DataFrame, dict[str, Any]]:
+    """Keep the current clusters, place close noise into them, and add new themes.
+
+    A full recluster reshuffles many clusters even when the data barely changes,
+    so the scheduled runs use this instead. Every conversation in
+    cluster_key_by_pk (its live, active cluster_key) keeps that key; the rest are
+    noise for place_noise and cluster_new_themes. Each candidate row carries the
+    cluster_key it keeps, which feedback_cluster_identity uses in place of
+    Jaccard matching. Returns the same shape as cluster_embeddings.
+    """
+    embedding_model_version, embedding_dim, embedding_input_filter = (
+        embedding_provenance
+    )
+    cluster_run_id = cluster_run_id or new_cluster_run_id()
+    cluster_keys = sorted(set(cluster_key_by_pk.values()))
+    cluster_id_of_key = {key: cluster_id for cluster_id, key in enumerate(cluster_keys)}
+    cluster_id_by_pk = {
+        pk: cluster_id_of_key[key] for pk, key in cluster_key_by_pk.items()
+    }
+    labels = np.array(
+        [
+            cluster_id_by_pk.get(pk, NOISE_CLUSTER_ID)
+            for pk in embeddings_df["feedback_conversation_pk"]
+        ],
+        dtype=np.int64,
+    )
+    unit_vectors = _unit_vectors(
+        embeddings_df["embedding_vector"].list.to_array(embedding_dim).to_numpy()
+    )
+    labels, placed_noise_count = place_noise(unit_vectors, labels)
+    # No HDBSCAN membership strength for clusters this run did not build
+    probabilities = np.full(len(labels), np.nan)
+    labels, probabilities, new_cluster_count = cluster_new_themes(
+        unit_vectors,
+        labels,
+        probabilities,
+        new_cluster_min_size,
+        umap_params=umap_params,
+        random_state=random_state,
+        min_samples=min_samples,
+        cluster_selection_method=cluster_selection_method,
+    )
+    carried_keys = [
+        cluster_keys[label] if 0 <= label < len(cluster_keys) else None
+        for label in labels
+    ]
+    candidates_df = embeddings_df.select(JOIN_COLS + DEBUG_COLS).with_columns(
+        pl.lit(cluster_run_id).alias("cluster_run_id"),
+        pl.Series("cluster_id", labels, dtype=pl.Int64),
+        pl.Series("cluster_probability", probabilities, dtype=pl.Float64).fill_nan(
+            None
+        ),
+        pl.Series("cluster_key", carried_keys, dtype=pl.String),
+    )
+    umap_n_components, umap_n_neighbors = umap_params
+    run_metadata = {
+        "cluster_run_id": cluster_run_id,
+        "algorithm": "extend",
+        "embedding_model_version": embedding_model_version,
+        "embedding_dim": embedding_dim,
+        "embedding_input_filter": embedding_input_filter,
+        "umap_n_components": umap_n_components,
+        "umap_n_neighbors": umap_n_neighbors,
+        "hdbscan_min_cluster_size": None,
+        "random_state": random_state,
+        "cluster_count": len(np.unique(labels[labels != NOISE_CLUSTER_ID])),
+        "noise_count": int((labels == NOISE_CLUSTER_ID).sum()),
+        "total_conversations": embeddings_df.height,
+        # The clusters weren't built in one reduced space, so there's none to score
+        "silhouette_score": None,
+        "run_status": "completed",
+        "is_promoted": is_promoted,
+        "hdbscan_min_samples": min_samples,
+        "hdbscan_cluster_selection_method": cluster_selection_method,
+        "max_clusters": None,
+        "run_type": "extend",
+        "placed_noise_count": placed_noise_count,
+        "new_cluster_count": new_cluster_count,
     }
     return candidates_df, run_metadata

@@ -307,6 +307,50 @@ def match_clusters(
     return matches, lineage_rows
 
 
+def extend_matches(
+    new_cluster_members: dict[int, frozenset[str]],
+    carried_key_of_cluster_id: dict[int, str],
+    active_cluster_keys: set[str],
+) -> tuple[list[ClusterMatch], list[dict[str, Any]]]:
+    """Resolve an extend run (ml.lib.cluster.extend_clusters) without Jaccard.
+
+    The run already names the key each cluster keeps: placed noise can double a
+    cluster, which Jaccard would read as a split. A cluster_id that carries an
+    active key continues it, any other cluster_id is new, and an active key the
+    run has no cluster for retires. Returns the same shape as match_clusters.
+    """
+    matches: list[ClusterMatch] = []
+    lineage_rows: list[dict[str, Any]] = []
+    for new_id in new_cluster_members:
+        carried_key = carried_key_of_cluster_id.get(new_id)
+        if carried_key in active_cluster_keys:
+            match = ClusterMatch(new_id, carried_key, "continued", carried_key, None)
+        else:
+            match = ClusterMatch(new_id, new_cluster_key(), "new", None, None)
+        matches.append(match)
+        lineage_rows.append(
+            {
+                "prior_cluster_key": match.prior_cluster_key,
+                "cluster_key": match.cluster_key,
+                "cluster_id": new_id,
+                "relation": match.relation,
+                "jaccard": None,
+            }
+        )
+    continued_keys = {m.cluster_key for m in matches if m.relation == "continued"}
+    lineage_rows.extend(
+        {
+            "prior_cluster_key": old_key,
+            "cluster_key": None,
+            "cluster_id": None,
+            "relation": "retired",
+            "jaccard": None,
+        }
+        for old_key in sorted(active_cluster_keys - continued_keys)
+    )
+    return matches, lineage_rows
+
+
 def compute_continuity(
     matches: list[ClusterMatch], new_cluster_members: dict[int, frozenset[str]]
 ) -> float:

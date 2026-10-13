@@ -28,6 +28,7 @@ from ml.lib.cluster_identity import (
     cluster_lineage_pk,
     compute_cluster_stats,
     compute_continuity,
+    extend_matches,
     match_clusters,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
@@ -277,7 +278,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_key"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v3",
+            code_version="feedback_cluster_identity_v4",
             automation_condition=upstream_or_code_changes(),
         ),
         "feedback_cluster_lineage": AssetOut(
@@ -288,7 +289,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v3",
+            code_version="feedback_cluster_identity_v4",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -301,7 +302,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_run_id"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v3",
+            code_version="feedback_cluster_identity_v4",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -325,7 +326,9 @@ def feedback_cluster_identity(
     any previous run's numbering. This asset compares the new run's clusters
     against every currently-active cluster_key's live membership (from
     feedback_cluster_membership) by Jaccard overlap, and resolves each new cluster
-    to continued/merged/split/new (ml.lib.cluster_identity.match_clusters), writing
+    to continued/merged/split/new (ml.lib.cluster_identity.match_clusters). An
+    extend run names the key each cluster keeps, so it skips Jaccard
+    (ml.lib.cluster_identity.extend_matches). It writes
     one feedback_cluster row per resolved key and one feedback_cluster_lineage row
     per edge (plus one 'retired' row per active key that didn't survive, and one
     per active key from a *different* embedding_model_version/embedding_dim/
@@ -357,6 +360,11 @@ def feedback_cluster_identity(
     embedding_model_version = run_row["embedding_model_version"]
     embedding_dim = run_row["embedding_dim"]
     embedding_input_filter = run_row["embedding_input_filter"]
+    is_extend_run = run_row.get("run_type") == "extend"
+    candidate_columns = ["feedback_conversation_pk", "cluster_id"]
+    # Only extend runs write cluster_key; an older table may not have the column
+    if is_extend_run:
+        candidate_columns.append("cluster_key")
 
     candidates_df = (
         get_dbt_model_as_dataframe(
@@ -366,7 +374,7 @@ def feedback_cluster_identity(
             (pl.col("cluster_run_id") == cluster_run_id)
             & (pl.col("cluster_id") != NOISE_CLUSTER_ID)
         )
-        .select(["feedback_conversation_pk", "cluster_id"])
+        .select(candidate_columns)
         .collect()
     )
     new_cluster_members = {
@@ -388,9 +396,20 @@ def feedback_cluster_identity(
         active_cluster_members = dict.fromkeys(active_cluster_members, frozenset())
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
-    matches, lineage_rows = match_clusters(
-        new_cluster_members, active_cluster_members, config.match_threshold
-    )
+    if is_extend_run:
+        carried_key_of_cluster_id = dict(
+            candidates_df.select("cluster_id", "cluster_key")
+            .drop_nulls("cluster_key")
+            .unique()
+            .iter_rows()
+        )
+        matches, lineage_rows = extend_matches(
+            new_cluster_members, carried_key_of_cluster_id, set(active_cluster_members)
+        )
+    else:
+        matches, lineage_rows = match_clusters(
+            new_cluster_members, active_cluster_members, config.match_threshold
+        )
     lineage_rows.extend(
         {
             "prior_cluster_key": other_config_key,

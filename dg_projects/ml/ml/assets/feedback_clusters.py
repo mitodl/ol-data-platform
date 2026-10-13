@@ -12,6 +12,7 @@ from dagster import (
     Output,
     multi_asset,
 )
+from ml.assets.feedback_cluster_identity import _active_cluster_members
 from ml.lib.cluster import (
     CLUSTER_CANDIDATE_SCHEMA,
     CLUSTER_RUN_SCHEMA,
@@ -26,6 +27,7 @@ from ml.lib.cluster import (
     UMAP_N_COMPONENTS,
     UMAP_N_NEIGHBORS,
     cluster_embeddings,
+    extend_clusters,
     failed_run_metadata,
     filter_conversation_scope,
     platforms_to_run_value,
@@ -48,6 +50,25 @@ else:
     database_name = "ol_warehouse_production_intermediate"
 
 
+def _live_cluster_keys(
+    catalog,
+    embedding_provenance: tuple[str, int, str | None],
+    feedback_since: str | None,
+    platforms: list[str] | None,
+) -> dict[str, str]:
+    """feedback_conversation_pk -> active cluster_key, for an extend run to keep."""
+    members_by_key = _active_cluster_members(
+        catalog, *embedding_provenance, feedback_since, platforms
+    )
+    if not members_by_key:
+        msg = (
+            "No live clusters for this embedding config to extend; run "
+            "feedback_clusters with mode 'full'."
+        )
+        raise permanent_failure(msg)
+    return {pk: key for key, pks in members_by_key.items() for pk in pks}
+
+
 def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> None:
     """Delete any rows a failed prior attempt at this cluster_run_id already wrote."""
     try:
@@ -58,6 +79,16 @@ def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> N
 
 
 class FeedbackClustersConfig(Config):
+    mode: Literal["full", "extend"] = Field(
+        default="full",
+        description=(
+            "'full' clusters every conversation again, which can split, merge, and "
+            "relabel existing clusters. 'extend' keeps the live clusters, places "
+            "close noise into them, and adds new themes only "
+            "(ml.lib.cluster.extend_clusters). The schedule and growth sensor use "
+            "'extend'."
+        ),
+    )
     sample_limit: int | None = Field(
         default=None,
         description="Cap the number of embedded conversations clustered, for fast "
@@ -165,7 +196,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v5",
+            code_version="feedback_clusters_v6",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -175,7 +206,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v5",
+            code_version="feedback_clusters_v6",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -184,7 +215,8 @@ class FeedbackClustersConfig(Config):
 )
 def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersConfig):
     """
-    Reduce (UMAP) and cluster (HDBSCAN) feedback conversation embeddings.
+    Reduce (UMAP) and cluster (HDBSCAN) feedback conversation embeddings, or, in
+    'extend' mode, add to the live clusters without reclustering them.
 
     One row lands in feedback_cluster_run describing the run as a whole (params,
     cluster/noise counts, silhouette, run_status='completed'|'failed', is_promoted
@@ -193,7 +225,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     feedback_cluster_candidate. Both are append-only:
     every run gets its own cluster_run_id. Scheduled/triggered (see
     feedback_clusters_schedule/feedback_clusters_growth_sensor in definitions.py),
-    not chained on every feedback_embeddings refresh -- a full re-cluster is
+    not chained on every feedback_embeddings refresh -- a run is
     expensive relative to how often new conversations show up, and
     feedback_cluster_assignment (incremental placement) handles those between
     runs. feedback_cluster_identity matches this run's clusters onto stable
@@ -255,7 +287,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     umap_params = (config.umap_n_components, config.umap_n_neighbors)
 
     # umap_n_components too: UMAP needs n_components < height or it raises TypeError.
-    if (
+    if config.mode == "full" and (
         embeddings_df.height < config.min_cluster_size
         or embeddings_df.height <= config.umap_n_components
     ):
@@ -284,6 +316,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             config.hdbscan_cluster_selection_method
         )
         failed_metadata["max_clusters"] = config.max_clusters
+        failed_metadata["run_type"] = config.mode
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
             output_name="feedback_cluster_run",
@@ -298,28 +331,46 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     )
     _clear_partial_run(catalog, f"{database_name}.feedback_cluster_run", cluster_run_id)
 
-    candidates_df, run_metadata = cluster_embeddings(
-        embeddings_df,
-        embedding_provenance,
-        umap_params=umap_params,
-        min_cluster_size=config.min_cluster_size,
-        min_samples=config.hdbscan_min_samples,
-        cluster_selection_method=config.hdbscan_cluster_selection_method,
-        max_clusters=config.max_clusters,
-        cluster_run_id=cluster_run_id,
-        is_promoted=config.is_promoted,
-    )
+    step_settings = {
+        "min_samples": config.hdbscan_min_samples,
+        "cluster_selection_method": config.hdbscan_cluster_selection_method,
+        "cluster_run_id": cluster_run_id,
+        "is_promoted": config.is_promoted,
+    }
+    if config.mode == "extend":
+        candidates_df, run_metadata = extend_clusters(
+            embeddings_df,
+            embedding_provenance,
+            _live_cluster_keys(
+                catalog, embedding_provenance, config.feedback_since, config.platforms
+            ),
+            umap_params=umap_params,
+            **step_settings,
+        )
+    else:
+        candidates_df, run_metadata = cluster_embeddings(
+            embeddings_df,
+            embedding_provenance,
+            umap_params=umap_params,
+            min_cluster_size=config.min_cluster_size,
+            max_clusters=config.max_clusters,
+            **step_settings,
+        )
     run_metadata["run_at"] = datetime.now(tz=UTC)
     run_metadata["feedback_since"] = config.feedback_since
     run_metadata["platforms"] = platforms_to_run_value(config.platforms)
     run_df = pl.DataFrame([run_metadata], schema=CLUSTER_RUN_SCHEMA)
 
     context.log.info(
-        "Cluster run %s: %d conversations, %d clusters, %d noise, silhouette=%s",
+        "Cluster run %s (%s): %d conversations, %d clusters, %d noise, "
+        "%s noise placed, %s new clusters, silhouette=%s",
         run_metadata["cluster_run_id"],
+        run_metadata["run_type"],
         run_metadata["total_conversations"],
         run_metadata["cluster_count"],
         run_metadata["noise_count"],
+        run_metadata.get("placed_noise_count"),
+        run_metadata.get("new_cluster_count"),
         run_metadata["silhouette_score"],
     )
 
