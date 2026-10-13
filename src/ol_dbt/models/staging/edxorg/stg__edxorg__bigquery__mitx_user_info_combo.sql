@@ -6,6 +6,12 @@ with source as (
     from {{ source('ol_warehouse_raw_data','raw__irx__edxorg__bigquery__mitx_user_info_combo') }}
 )
 
+-- No then_by: the key is unique within one load, so the loader column alone decides.
+{{ deduplicate_raw_table(
+    raw_table='raw__irx__edxorg__bigquery__mitx_user_info_combo'
+    , partition_columns='user_id, enrollment_course_id, certificate_course_id'
+) }}
+
 , cleaned as (
 
     select
@@ -45,7 +51,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('certificate_modified_date') }} as courseruncertificate_updated_on
         , enrollment_course_id as courserunenrollment_courserun_readable_id
         , certificate_course_id as courseruncertificate_courserun_readable_id
-    from source
+    from most_recent_source
     --- user_id could be blank due to parsing error on edx data so filter out these
     where user_id is not null
 )
