@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import datetime
 import random
+import re
 import string
 import struct
 import types
@@ -58,6 +59,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import factory
 import factory.random
+from factory.declarations import BaseDeclaration
 from mimesis import Field, Locale
 
 from ol_dbt_cli.lib.raw_fixtures import coerce_value, validate_generated
@@ -73,13 +75,13 @@ type Row = dict[str, Any]
 # RFC 2606 reserves it, so a local app that sends mail to or fetches from a
 # generated address reaches nothing.
 RESERVED_DOMAIN = "example.com"
-# The instant the committed fixtures give their `_dlt_load_id`.
+# The day the committed fixtures' `_dlt_load_id` values fall on.
 LOADED_AT = datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
 _DLT_ID_ALPHABET = string.ascii_letters + string.digits
 _DLT_ID_LENGTH = 14
 
 # mimesis methods that make up a hostname with a real top-level domain.
-_REAL_ADDRESS_METHODS = frozenset({"url", "uri", "hostname"})
+_REAL_ADDRESS_METHODS = frozenset({"url", "uri", "hostname", "dsn"})
 # mimesis methods whose default range ends at the current year, and the
 # arguments that pin it.
 _CLOCK_BOUNDS: dict[str, tuple[str, str]] = {
@@ -87,8 +89,12 @@ _CLOCK_BOUNDS: dict[str, tuple[str, str]] = {
     "datetime": ("start", "end"),
     "timestamp": ("start", "end"),
     "week_date": ("start", "end"),
+    "formatted_date": ("start", "end"),
+    "formatted_datetime": ("start", "end"),
     "year": ("minimum", "maximum"),
 }
+# mimesis methods that count from today, with no argument that pins them.
+_CLOCK_METHODS = frozenset({"past_date", "past_datetime", "future_date", "future_datetime", "calver"})
 
 
 @dataclass
@@ -140,6 +146,12 @@ def table[FactoryT: type[RowFactory]](raw_table: str, default_count: int) -> Cal
         raise ValueError(msg)
 
     def declare(cls: FactoryT) -> FactoryT:
+        if getattr(cls, "raw_table", raw_table) != raw_table:
+            msg = (
+                f"{cls.__name__} subclasses the factory of {cls.raw_table} and would count on its sequence; "
+                f"a factory of {raw_table} subclasses RowFactory"
+            )
+            raise ValueError(msg)
         # factory_boy shares a sequence counter between a factory and its base
         # when both have a model, and reads every public class attribute as a
         # column. So the model is set on a subclass made here, one per table,
@@ -176,7 +188,8 @@ def draw(provider: str, **kwargs: Any) -> Any:
     :param kwargs: The provider's arguments.
     :raises ValueError: See :func:`value`.
     """
-    return _current().field(provider, **_checked(provider, kwargs))
+    kwargs = _checked(provider, kwargs)
+    return _current().field(provider, **kwargs)
 
 
 def value(provider: str, **kwargs: Any) -> Any:
@@ -198,15 +211,19 @@ def value(provider: str, **kwargs: Any) -> Any:
 
 
 def _checked(provider: str, kwargs: dict[str, Any]) -> dict[str, Any]:
-    method = provider.rpartition(".")[2]
+    # mimesis takes other separators than a dot between provider and method.
+    method = re.split(r"\W", provider)[-1]
     if method in _REAL_ADDRESS_METHODS:
         msg = f"{provider} makes up a hostname under a real top-level domain; use url()"
+        raise ValueError(msg)
+    if method in _CLOCK_METHODS:
+        msg = f"{provider} counts from today, so its rows change with the date"
         raise ValueError(msg)
     if missing := [bound for bound in _CLOCK_BOUNDS.get(method, ()) if bound not in kwargs]:
         msg = f"{provider} defaults {' and '.join(missing)} to the current year, so its rows change with the date"
         raise ValueError(msg)
-    if method == "email":
-        return {"domains": [RESERVED_DOMAIN], **kwargs}
+    if method == "email" and kwargs.get("domains") is None:
+        return {**kwargs, "domains": [RESERVED_DOMAIN]}
     return kwargs
 
 
@@ -262,19 +279,35 @@ def seed_generation(seed: int, sequence_starts: Mapping[str, int] | None = None)
     factory.random.reseed_random(seed)
     _generation = _Generation(field=Field(Locale.EN, seed=seed), random=random.Random(seed))  # noqa: S311
     starts = sequence_starts or {}
-    for row_factory in _row_factories(RowFactory):
-        # A class-level factory.Iterator carries its position from one build to the next.
+    # Every factory, not only the tables': a JSON column's factory.DictFactory
+    # counts and iterates too.
+    for row_factory in _subclasses(factory.Factory):
         for declaration in row_factory._meta.declarations.values():  # noqa: SLF001
-            if isinstance(declaration, factory.Iterator):
-                declaration.reset()
-        if raw_table := getattr(row_factory, "raw_table", None):
-            row_factory.reset_sequence(starts.get(raw_table, 1), force=True)
+            _reset_iterators(declaration)
+        raw_table = getattr(row_factory, "raw_table", None)
+        row_factory.reset_sequence(starts.get(raw_table, 1) if raw_table else 0, force=True)
 
 
-def _row_factories(base: type[RowFactory]) -> Iterator[type[RowFactory]]:
-    for row_factory in base.__subclasses__():
-        yield row_factory
-        yield from _row_factories(row_factory)
+def _subclasses(base: type[Any]) -> Iterator[Any]:
+    for subclass in base.__subclasses__():
+        yield subclass
+        yield from _subclasses(subclass)
+
+
+def _reset_iterators(declaration: Any) -> None:
+    """Restart ``declaration`` and every ``factory.Iterator`` it holds.
+
+    An iterator carries its position from one build to the next. It can sit
+    inside a ``factory.Dict``, ``List`` or ``Maybe``, which hold their parts in
+    attributes of their own.
+    """
+    if isinstance(declaration, factory.Iterator):
+        declaration.reset()
+    if not isinstance(declaration, BaseDeclaration):
+        return
+    for held in vars(declaration).values():
+        for part in held.values() if isinstance(held, dict) else [held]:
+            _reset_iterators(part)
 
 
 def generate_rows(

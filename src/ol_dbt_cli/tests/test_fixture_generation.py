@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import factory
+import factory.fuzzy
 import pytest
 import yaml
 
@@ -203,6 +204,49 @@ def test_a_subclass_fills_its_base_factorys_table_on_the_same_sequence() -> None
     assert (NamedThing.raw_table, NamedThing.default_count) == ("raw__demo__app__postgres__things", 5)
 
 
+def test_a_factory_cannot_take_a_second_table() -> None:
+    @table("raw__demo__app__postgres__things", default_count=5)
+    class Thing(RowFactory):
+        id = factory.Sequence(lambda n: n)
+
+    with pytest.raises(ValueError, match="Other subclasses the factory of raw__demo__app__postgres__things"):
+
+        @table("raw__demo__app__postgres__others", default_count=5)
+        class Other(Thing):
+            pass
+
+    @table("raw__demo__app__postgres__things", default_count=50)
+    class ManyThings(Thing):
+        pass
+
+    assert (Thing.default_count, ManyThings.default_count) == (5, 50)
+
+
+def test_seeding_restarts_what_factory_boy_keeps_between_builds() -> None:
+    """Nested iterators, a JSON column's own factory, and factory_boy's random source."""
+
+    class Settings(factory.DictFactory):
+        revision = factory.Sequence(lambda n: n)
+
+    @table("raw__demo__app__postgres__things", default_count=5)
+    class Thing(RowFactory):
+        id = factory.Sequence(lambda n: n)
+        size = factory.fuzzy.FuzzyInteger(0, 10**9)
+        settings = factory.SubFactory(Settings)
+        shape = factory.Dict({"kind": factory.Iterator(["a", "b", "c"])})
+        tags = factory.List([factory.Iterator(["x", "y", "z"])])
+
+    seed_generation(7)
+    first = Thing.build_batch(4)
+    seed_generation(7)
+
+    assert Thing.build_batch(4) == first
+    assert [(row["settings"], row["shape"], row["tags"]) for row in first[:2]] == [
+        ({"revision": 0}, {"kind": "a"}, ["x"]),
+        ({"revision": 1}, {"kind": "b"}, ["y"]),
+    ]
+
+
 @pytest.mark.parametrize("default_count", [0, -1, 2.5, True])
 def test_table_rejects_a_default_count_that_is_not_a_positive_integer(default_count: Any) -> None:
     with pytest.raises(ValueError, match="raw__demo__app__postgres__things: default_count is .*positive integer"):
@@ -266,11 +310,19 @@ def test_generated_addresses_are_on_the_reserved_domain(tmp_path: Path, demo: Un
         ("datetime.datetime", {}, "datetime.datetime defaults start and end to the current year"),
         ("datetime.date", {"start": 2020}, "datetime.date defaults end to the current year"),
         ("datetime.year", {}, "datetime.year defaults minimum and maximum to the current year"),
+        ("internet:url", {}, "internet:url makes up a hostname"),
+        ("internet.dsn", {}, "internet.dsn makes up a hostname"),
+        ("datetime.formatted_date", {}, "datetime.formatted_date defaults start and end to the current year"),
+        ("datetime.past_date", {}, "datetime.past_date counts from today"),
+        ("development.calver", {}, "development.calver counts from today"),
     ],
 )
 def test_value_refuses_what_would_not_be_reserved_or_repeatable(
-    provider: str, kwargs: dict[str, Any], message: str
+    monkeypatch: pytest.MonkeyPatch, provider: str, kwargs: dict[str, Any], message: str
 ) -> None:
+    # Refused for what it names, so before anything is seeded too.
+    monkeypatch.setattr(fixture_generation, "_generation", None)
+
     with pytest.raises(ValueError, match=message):
         value(provider, **kwargs)
     with pytest.raises(ValueError, match=message):
@@ -281,6 +333,7 @@ def test_an_email_keeps_the_domain_the_factory_names() -> None:
     seed_generation(1)
 
     assert draw("person.email", domains=["mail.test"]).endswith("@mail.test")
+    assert draw("person.email", domains=None).endswith(f"@{RESERVED_DOMAIN}")
 
 
 def test_building_before_seeding_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -346,6 +399,7 @@ def test_a_loader_column_the_factory_set_is_kept(tmp_path: Path) -> None:
             datetime.datetime(2024, 5, 6, 7, 8, tzinfo=datetime.timezone(datetime.timedelta(hours=-4))),
             datetime.datetime(2024, 5, 6, 11, 8),
         ),
+        ("timestamp", "2024-05-06T07:08:00-04:00", datetime.datetime(2024, 5, 6, 11, 8)),
         ("string", 12, "12"),
         ("string", {"a": [1]}, {"a": [1]}),
         ("string", ["a"], ["a"]),
@@ -368,6 +422,8 @@ def test_coerce_value(fixture_type: str, generated: Any, expected: Any) -> None:
         ("price", 1000),
         ("price", "9.9.9"),
         ("created_on", 1790812800),
+        ("title", {"alpha", "beta"}),
+        ("title", {"at": datetime.datetime(2024, 5, 6)}),
     ],
 )
 def test_a_value_its_column_cannot_hold_names_the_column(tmp_path: Path, column: str, generated: Any) -> None:

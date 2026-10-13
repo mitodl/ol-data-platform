@@ -387,8 +387,9 @@ def coerce_value(value: Any, fixture_type: str) -> Any:
     A hand-written value is what YAML made of it. A generated one is whatever
     its provider returned, so it is brought to the column's type here: a
     ``decimal(p,s)`` is rounded to ``s`` places, an aware ``timestamp`` is moved
-    to UTC and loses its offset, and anything in a ``string`` column but a
-    mapping or a list (which the loader writes as JSON) becomes its ``str``.
+    to UTC and loses its offset, and a scalar in a ``string`` column becomes
+    its ``str``. A mapping or a list there is left for the loader to write
+    as JSON.
 
     :param value: The generated value, not ``None``.
     :param fixture_type: The column's type in the fixture file.
@@ -398,13 +399,22 @@ def coerce_value(value: Any, fixture_type: str) -> Any:
         the type.
     """
     if fixture_type == "string":
-        return value if isinstance(value, (str, dict, list)) else str(value)
+        if isinstance(value, (dict, list)):
+            # Raises TypeError here, where the column is known, not in the loader.
+            json.dumps(value)
+            return value
+        if isinstance(value, (set, frozenset, tuple, bytes, bytearray)):
+            raise TypeError(value)
+        return str(value)
     if match := _DECIMAL.match(fixture_type):
         precision, scale = int(match.group(1)), int(match.group(2))
         # Raises InvalidOperation when the rounded value has more than `precision` digits.
         value = Decimal(str(value)).quantize(Decimal(1).scaleb(-scale), context=Context(prec=precision))
-    elif fixture_type == "timestamp" and isinstance(value, datetime.datetime) and value.tzinfo is not None:
-        value = value.astimezone(datetime.UTC)
+    elif fixture_type == "timestamp":
+        if isinstance(value, str):
+            value = datetime.datetime.fromisoformat(value)
+        if isinstance(value, datetime.datetime) and value.tzinfo is not None:
+            value = value.astimezone(datetime.UTC)
     return _stored_value(value, fixture_type)
 
 
