@@ -215,10 +215,26 @@ The input days are not converted to UTC. The enrollment day is `enrollment_date_
 `last_active_on` is the latest `activity_date_key`, both read through `dim_date` as the
 facts wrote them. The activity fact takes its day from the event timestamp with the offset
 dropped, not shifted, so an event near midnight in a non-UTC source can land a day away
-from its UTC date and move the threshold by one day.
+from its UTC date and move the threshold by one day. The shift is fixed per event
+(`iso8601_to_date_key` reads the first 19 characters of the timestamp string), so a
+learner's threshold is the same on every build and is early or late by at most that day.
+It does not move a learner in and out of the flag between builds.
+
+The model's unit test pins the threshold arithmetic (`last_active_on` 2024-02-15 gives
+2024-03-16) and the API test in 4.5 pins the 30th day as included. Neither covers the day
+an offset timestamp lands on, because the model receives a date key, not a timestamp. A
+unit test for that belongs on the event facts that call `iso8601_to_date_key`, and none
+exists today.
 
 #87 flags `not_started` unconditionally. The fallback date keeps that true when
 `enrollment_created_on` is null, which the fact allows.
+
+`needs_attention_since` is a threshold to compare against, not a date to subtract from.
+`<today> - needs_attention_since` for a fallback row is about 56 years, so an average,
+range or "days needing attention" figure built on the column must leave out rows where it
+is `1970-01-01`. The model's column description should say so, and any view or dashboard
+that publishes a duration from this column applies that filter itself. No consumer in this
+spec does: the API and the views only evaluate the predicate above.
 
 The column follows the row's current status, as #87 does. A learner whose certificate is
 revoked and who is not passing is `in_progress` again on the next build and gets a
@@ -257,6 +273,13 @@ progress model must therefore have run in a lake before the view change reaches 
 StarRocks build that reads that lake. That holds for QA as well as production, because the
 `ci` environment reads the QA lake. Ship the model in one pull request and the view change
 in a second, merged after the model exists in both lakes.
+
+The pipeline enforces the half of this that loses data. Since ol-data-platform#2926 the
+asset probes every source table the views read before it adds `--full-refresh`, and fails
+with the unreadable tables listed while every view is still in place. Before that, a view
+change that reached production ahead of its base table dropped five views (2026-10-09,
+after ol-data-platform#2881). The probe does not make the view change build, so the merge
+order above still applies and the view pull request states which lakes have the table.
 
 ### 4.4 ol-analytics-api
 
