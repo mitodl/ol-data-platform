@@ -2491,30 +2491,6 @@ models:
     description: array(str), names of the instructor pages linked to the page, in
       link order; null without any
 
-- name: int__mitxonline__catalog_requirement_nodes
-  description: The nodes of every MITx Online program's requirement tree, one per
-    tree path. Where raw holds a deleted node and the node that took its path, only
-    the newer one is kept.
-  columns:
-  - name: programrequirement_id
-    description: int, primary key of the node
-    tests: [unique, not_null]
-  - name: program_id
-    description: int, the program the tree belongs to
-    tests: [not_null]
-  - name: course_id
-    description: int, the course a 'course' node refers to
-  - name: required_program_id
-    description: int, the program a 'program' node requires
-  - name: programrequirement_node_type
-    description: str, program_root, operator, course or program
-  - name: programrequirement_path
-    description: str, the node's treebeard path, four characters per level. Path order
-      is tree order
-    tests: [unique, not_null]
-  - name: programrequirement_depth
-    description: int, depth of the node; the root is 1
-
 unit_tests:
 - name: test_int__mitxonline__catalog_course_runs_enrollable_and_variant
   description: >
@@ -2583,22 +2559,3 @@ unit_tests:
     - {courserun_id: 5, courserun_course_number: "2.01x", courserun_is_enrollable: false,
       courserun_is_fully_enrollable: false, courserun_is_variant: false, courserun_has_verified_mode: false,
       courserun_has_audit_mode: false}
-
-- name: test_int__mitxonline__catalog_requirement_nodes_keeps_the_newer_node_of_a_path
-  description: >
-    A deleted node stays in raw and its path goes to the node added in its place,
-    so of two rows with one path the higher id is kept.
-  model: int__mitxonline__catalog_requirement_nodes
-  given:
-  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
-    rows:
-    - {programrequirement_id: 1, program_id: 1, programrequirement_path: "00010001",
-      course_id: 10}
-    - {programrequirement_id: 5, program_id: 1, programrequirement_path: "00010001",
-      course_id: 20}
-    - {programrequirement_id: 2, program_id: 1, programrequirement_path: "00010002",
-      course_id: 30}
-  expect:
-    rows:
-    - {programrequirement_id: 5, programrequirement_path: "00010001", course_id: 20}
-    - {programrequirement_id: 2, programrequirement_path: "00010002", course_id: 30}

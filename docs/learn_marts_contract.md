@@ -230,12 +230,16 @@ the program's requirement tree:
 A course is listed only when its page is live, so positions have gaps. A required program is
 followed one level down: no required program requires another today.
 
+`courses_programrequirement` and `courses_program_departments` are replicated without
+deletes. A deleted tree node whose path another node took is left out (the staging model
+keeps the higher id of a path, which is the wrong row if the path went to an older sibling
+that moved up), and one whose path was not reused still appears as a child. A department
+removed from a program can linger too.
+
 Checked on 2026-10-13 against a build on production raw: the models publish the same 157
 courses and 28 programs MIT Learn does, with the same published runs, run dates, prices,
-course numbers, certification, availability, pace, images and child positions. Two things
-differ by design of the source data: `courses_program_departments` and
-`wagtailcore_page` are replicated without deletes, so a removed department or page can
-linger (one program had a stale department).
+course numbers, certification, availability, pace and images, and the same position for
+every program child MIT Learn shows.
 
 ### Content File Sources
 

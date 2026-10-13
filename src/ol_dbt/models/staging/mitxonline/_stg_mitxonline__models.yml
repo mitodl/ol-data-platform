@@ -1058,6 +1058,9 @@ models:
       is root path, 00010001 is the path to a node in this requirement tree
     tests:
     - not_null
+    - unique:
+        config:
+          error_if: "!=0"
   - name: programrequirement_depth
     description: int, depth of a node in the tree. A root node has a depth of 1. (readonly)
     tests:
@@ -2164,9 +2167,6 @@ models:
       page
     tests:
     - not_null
-  - name: instructorpagelink_order
-    description: int, ordering value of the link. Every link has 1, and the MITx Online
-      API does not read it
 
 - name: stg__mitxonline__openedx__courseware_studentmodulehistoryextended
   description: History of studentmodule in MITx Online open edx platform
@@ -2991,3 +2991,18 @@ unit_tests:
     rows:
     - {wagtail_page_id: 1, program_price: Coming soon}
     - {wagtail_page_id: 2, program_price: null}
+- name: test_stg__mitxonline__app__postgres__courses_programrequirement_keeps_one_node_per_path
+  description: >
+    A deleted node stays in raw and its path goes to another node, so of two rows
+    with one path the higher id is kept.
+  model: stg__mitxonline__app__postgres__courses_programrequirement
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {id: 1, program_id: 1, path: "00010001", course_id: 10}
+    - {id: 5, program_id: 1, path: "00010001", course_id: 20}
+    - {id: 2, program_id: 1, path: "00010002", course_id: 30}
+  expect:
+    rows:
+    - {programrequirement_id: 5, programrequirement_path: "00010001", course_id: 20}
+    - {programrequirement_id: 2, programrequirement_path: "00010002", course_id: 30}

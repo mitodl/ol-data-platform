@@ -101,7 +101,7 @@ with courses as (
 , departments as (
     select
         course_departments.course_id
-        , array_agg(departments.coursedepartment_name order by departments.coursedepartment_name) as departments
+        , array_agg(distinct departments.coursedepartment_name order by departments.coursedepartment_name) as departments
     from {{ ref('stg__mitxonline__app__postgres__courses_course_to_department') }} as course_departments
     inner join {{ ref('stg__mitxonline__app__postgres__courses_department') }} as departments
         on course_departments.coursedepartment_id = departments.coursedepartment_id
@@ -116,7 +116,7 @@ with courses as (
         requirements.course_id
         , programs.program_certification_type
         , row_number() over (partition by requirements.course_id order by programs.program_id) as program_rank
-    from {{ ref('int__mitxonline__catalog_requirement_nodes') }} as requirements
+    from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }} as requirements
     inner join {{ ref('stg__mitxonline__app__postgres__courses_program') }} as programs
         on requirements.program_id = programs.program_id
     inner join {{ ref('int__mitxonline__catalog_pages') }} as program_pages

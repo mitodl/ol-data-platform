@@ -9,7 +9,6 @@ with source as (
         id as instructorpagelink_id
         , page_id as wagtail_page_id
         , linked_instructor_page_id as instructor_wagtail_page_id
-        , {{ adapter.quote('order') }} as instructorpagelink_order
     from most_recent_source
 )
 

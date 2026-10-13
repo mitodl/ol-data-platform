@@ -32,8 +32,8 @@ with programs as (
     select distinct
         program_id
         , course_id
-    from {{ ref('int__mitxonline__catalog_requirement_nodes') }}
-    where course_id is not null
+    from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }}
+    where programrequirement_node_type = 'course' and course_id is not null
 )
 
 -- Program.next_starting_run: the earliest future start of a live run, source runs excluded,
@@ -79,7 +79,7 @@ with programs as (
 , departments as (
     select
         program_departments.program_id
-        , array_agg(departments.coursedepartment_name order by departments.coursedepartment_name) as departments
+        , array_agg(distinct departments.coursedepartment_name order by departments.coursedepartment_name) as departments
     from {{ ref('stg__mitxonline__app__postgres__courses_program_to_department') }} as program_departments
     inner join {{ ref('stg__mitxonline__app__postgres__courses_department') }} as departments
         on program_departments.coursedepartment_id = departments.coursedepartment_id

@@ -23,7 +23,7 @@ with programs as (
         , required_program_id
         , programrequirement_node_type
         , programrequirement_path
-    from {{ ref('int__mitxonline__catalog_requirement_nodes') }}
+    from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }}
     where programrequirement_node_type in ('course', 'program')
 )
 

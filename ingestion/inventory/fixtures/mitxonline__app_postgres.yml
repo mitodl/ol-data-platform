@@ -198,7 +198,7 @@ tables:
       created_on: 2025-08-01 00:00:00
       updated_on: 2026-09-01 00:00:00
       certificates_disabled: false
-    # Not live, so it must not reach the Learn model.
+    # Not live and without a page: it reaches the Learn model unpublished.
     - id: 3
       live: false
       title: Unpublished Course
@@ -206,8 +206,8 @@ tables:
       created_on: 2025-08-01 00:00:00
       updated_on: 2026-09-01 00:00:00
       certificates_disabled: false
-    # Only in the MicroMasters program, so its certification type is the
-    # MicroMasters one.
+    # Only in the MicroMasters program, which has no CMS page, so its
+    # certification type is still the plain certificate.
     - id: 4
       live: true
       title: MicroMasters Capstone
@@ -265,8 +265,8 @@ tables:
       upgrade_deadline: 2026-05-01 00:00:00
       created_on: 2025-12-01 00:00:00
       updated_on: 2026-01-01 00:00:00
-    # A run that is not live and has no end date: it stays in the course's run
-    # list, flagged false, with an empty end.
+    # A run that is not live and has no end date: it is in the runs model,
+    # unpublished and archived, with an empty end.
     - id: 2
       course_id: 1
       live: false
@@ -449,8 +449,8 @@ tables:
       node_type: course
       elective_flag: false
     # Program 2: courses 1 and 4 are required. Course 1 is then in both
-    # programs and keeps the certification type of the one that is not a
-    # MicroMasters.
+    # programs and takes its certification type from program 1, the lowest id
+    # among its live programs with a live page.
     - id: 6
       program_id: 2
       path: '0002'
@@ -653,7 +653,8 @@ tables:
       courserun_id: long
       enrollmentmode_id: long
     rows:
-    # Run 1 offers both modes, so it carries zero and the page's two prices.
+    # Run 1 offers both modes. Its enrollment has ended, so it is priced at zero
+    # only; move enrollment_end into the future to see the page's two prices.
     - id: 1
       courserun_id: 1
       enrollmentmode_id: 1

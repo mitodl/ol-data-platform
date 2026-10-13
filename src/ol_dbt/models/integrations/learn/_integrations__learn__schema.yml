@@ -727,7 +727,7 @@ unit_tests:
     - {program_id: 3, program_readable_id: as-course, program_is_live: true, program_is_b2b_only: false,
       program_display_mode: course}
     - {program_id: 4, program_readable_id: b2b, program_is_live: true, program_is_b2b_only: true}
-  - input: ref('int__mitxonline__catalog_requirement_nodes')
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
     rows:
     - {program_id: 1, programrequirement_node_type: program_root, programrequirement_path: "0001"}
     - {program_id: 1, programrequirement_node_type: course, programrequirement_path: "000100010001",
@@ -776,3 +776,128 @@ unit_tests:
       child_display_mode: null, child_position: 1}
     - {readable_id: track, child_resource_type: course, child_readable_id: course-14,
       child_display_mode: null, child_position: 2}
+
+- name: test_integrations__learn__mitxonline_courses_published_certification_and_numbers
+  description: >
+    A course is published when its page is live and in the Learn catalog and one
+    of its runs is published. It is certified when a published, current run offers
+    the verified mode. Course numbers run from the latest run back, each once.
+    Topics include parent topics, and a proctored exam course is left out.
+  model: integrations__learn__mitxonline_courses
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows:
+    - {course_id: 1, course_readable_id: course-1, course_title: Published}
+    - {course_id: 2, course_readable_id: course-2, course_title: Not in the catalog}
+    - {course_id: 3, course_readable_id: course-3, course_title: No page}
+    - {course_id: 4, course_readable_id: course-4, course_title: Proctored exam}
+  - input: ref('int__mitxonline__catalog_pages')
+    rows:
+    - {course_id: 1, program_id: null, wagtail_page_id: 10, page_is_live: true, page_is_in_learn_catalog: true,
+      page_ingests_content_files_for_ai: false}
+    - {course_id: 2, program_id: null, wagtail_page_id: 20, page_is_live: true, page_is_in_learn_catalog: false,
+      page_ingests_content_files_for_ai: false}
+    - {course_id: null, program_id: 7, wagtail_page_id: 70, page_is_live: true, page_is_in_learn_catalog: true,
+      page_ingests_content_files_for_ai: false}
+  - input: ref('integrations__learn__mitxonline_runs')
+    rows:
+    - {readable_id: course-1, run_id: run-1, published: true, status: Current, has_verified_mode: true,
+      pace: self_paced}
+    - {readable_id: course-1, run_id: run-2, published: false, status: Archived, has_verified_mode: true,
+      pace: instructor_paced}
+    - {readable_id: course-2, run_id: run-3, published: true, status: Archived, has_verified_mode: true,
+      pace: self_paced}
+  - input: ref('int__mitxonline__catalog_course_runs')
+    rows:
+    - {courserun_id: 1, course_id: 1, courserun_course_number: "1.01x", courserun_start_on: "2020-01-01T00:00:00.000",
+      courserun_is_enrollable: true, courserun_is_self_paced: true}
+    - {courserun_id: 2, course_id: 1, courserun_course_number: "1.02x", courserun_start_on: "2021-01-01T00:00:00.000",
+      courserun_is_enrollable: false, courserun_is_self_paced: false}
+    - {courserun_id: 3, course_id: 1, courserun_course_number: "1.01x", courserun_start_on: "2022-01-01T00:00:00.000",
+      courserun_is_enrollable: false, courserun_is_self_paced: false}
+    - {courserun_id: 4, course_id: 2, courserun_course_number: "2.01x", courserun_start_on: "2020-01-01T00:00:00.000",
+      courserun_is_enrollable: true, courserun_is_self_paced: false}
+  - input: ref('int__mitxonline__course_to_topics')
+    rows:
+    - {course_id: 1, coursetopic_id: 2, coursetopic_parent_id: 1, coursetopic_name: Algebra}
+  - input: ref('stg__mitxonline__app__postgres__courses_coursetopic')
+    rows:
+    - {coursetopic_id: 1, coursetopic_name: Mathematics}
+  - input: ref('stg__mitxonline__app__postgres__courses_course_to_department')
+    rows:
+    - {course_id: 1, coursedepartment_id: 1}
+  - input: ref('stg__mitxonline__app__postgres__courses_department')
+    rows:
+    - {coursedepartment_id: 1, coursedepartment_name: Mathematics}
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {program_id: 7, course_id: 1, programrequirement_node_type: course}
+  - input: ref('stg__mitxonline__app__postgres__courses_program')
+    rows:
+    - {program_id: 7, program_is_live: true, program_certification_type: MicroMasters
+        Credential}
+  expect:
+    rows:
+    - {readable_id: course-1, has_page: true, published: true, certification: true,
+      certification_type: MicroMasters Credential, availability: anytime, course_numbers: [
+        "1.01x", "1.02x"], topics: ["Algebra", "Mathematics"], departments: ["Mathematics"]}
+    - {readable_id: course-2, has_page: true, published: false, certification: false,
+      certification_type: Certificate of Completion, availability: dated, course_numbers: [
+        "2.01x"], topics: null, departments: null}
+    - {readable_id: course-3, has_page: false, published: false, certification: false,
+      certification_type: Certificate of Completion, availability: anytime, course_numbers: null,
+      topics: null, departments: null}
+
+- name: test_integrations__learn__mitxonline_programs_listed_published_and_priced
+  description: >
+    Only live programs that are not B2B-only are listed. A program is published
+    when its page is live and in the Learn catalog, certified when it has a page
+    and the verified mode, and priced from its page when it has that mode. The
+    start date is the program's own when no course run starts in the future.
+  model: integrations__learn__mitxonline_programs
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_program')
+    rows:
+    - {program_id: 1, program_readable_id: program-1, program_title: Priced, program_is_live: true,
+      program_is_b2b_only: false, program_certification_type: Certificate of Completion,
+      program_start_on: "2020-01-01T00:00:00.000", program_enrollment_start_on: "2019-01-01T00:00:00.000"}
+    - {program_id: 2, program_readable_id: program-2, program_title: No page, program_is_live: true,
+      program_is_b2b_only: false, program_certification_type: Certificate of Completion,
+      program_start_on: null, program_enrollment_start_on: "2019-01-01T00:00:00.000"}
+    - {program_id: 3, program_readable_id: program-3, program_title: B2B, program_is_live: true,
+      program_is_b2b_only: true, program_certification_type: Certificate of Completion,
+      program_start_on: null, program_enrollment_start_on: null}
+    - {program_id: 4, program_readable_id: program-4, program_title: Not live, program_is_live: false,
+      program_is_b2b_only: false, program_certification_type: Certificate of Completion,
+      program_start_on: null, program_enrollment_start_on: null}
+  - input: ref('int__mitxonline__catalog_pages')
+    rows:
+    - {program_id: 1, wagtail_page_id: 10, page_is_live: true, page_is_in_learn_catalog: true,
+      page_min_price: 500, page_max_price: 500}
+  - input: ref('stg__mitxonline__app__postgres__courses_program_enrollment_modes')
+    rows:
+    - {program_id: 1, enrollmentmode_id: 2}
+    - {program_id: 2, enrollmentmode_id: 2}
+  - input: ref('stg__mitxonline__app__postgres__courses_enrollmentmode')
+    rows:
+    - {enrollmentmode_id: 2, enrollmentmode_slug: verified}
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_courserun')
+    rows:
+    - {courserun_id: 1, course_id: 99, courserun_is_live: true, courserun_is_source_run: false,
+      courserun_tag: 1T2000, courserun_start_on: "2000-01-01T00:00:00.000"}
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxonline__course_to_topics')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_program_to_department')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_department')
+    rows: []
+  expect:
+    rows:
+    - {readable_id: program-1, has_page: true, published: true, certification: true,
+      prices: [500], start_date: "2020-01-01T00:00:00.000"}
+    - {readable_id: program-2, has_page: false, published: false, certification: false,
+      prices: [0], start_date: "2019-01-01T00:00:00.000"}

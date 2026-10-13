@@ -22,7 +22,7 @@ with runs as (
 
 -- A course's variant sets. b2b.contractpage rows share object ids with courses, so the
 -- content type has to match. MIT Learn takes the first set with the run's language; the API
--- does not order them, so the lowest id stands in for first.
+-- does not order them, so the lowest id stands in for first. A run with no language matches none.
 , course_variants as (
     select
         variants.supportedvariant_object_id as course_id
@@ -98,4 +98,5 @@ left join course_variants
     on
         enrollable.course_id = course_variants.course_id
         and enrollable.courserun_language = course_variants.supportedvariant_language
+        and enrollable.courserun_language != ''
         and course_variants.variant_rank = 1
