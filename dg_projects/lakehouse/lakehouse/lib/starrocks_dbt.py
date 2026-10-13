@@ -16,6 +16,12 @@ from typing import Any
 
 from jinja2 import Environment
 
+# What OpenMetadata ingests from a build. manifest.json goes up with the results
+# because nothing else produces one for this target: dbt_docs_artifacts_job
+# generates the Trino manifest, which has no tag:starrocks models in it. The
+# build has already written it, so this costs no extra dbt invocation.
+OM_ARTIFACTS = ("run_results.json", "manifest.json")
+
 # Retries are of the whole `dbt build`, since dbt-starrocks has no adapter-level
 # retry of its own. Two failure modes need covering, and the slower one sets the
 # schedule: a rolling restart of the 3-replica FE StatefulSet, measured at ~3

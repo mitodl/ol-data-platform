@@ -653,6 +653,10 @@ learn_integrations_qa_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
+DBT_ARTIFACTS_S3_PREFIX = os.environ.get(
+    "DBT_ARTIFACTS_S3_PREFIX", "openmetadata/dbt-artifacts"
+).rstrip("/")
+
 # Build resources dict, conditionally including airbyte
 resources_dict = {
     "dbt": dbt_cli,
@@ -667,9 +671,16 @@ resources_dict = {
     ),
     "dbt_s3_artifacts": DbtS3ArtifactsResource(
         s3_bucket=os.environ.get("DBT_ARTIFACTS_S3_BUCKET", ""),
-        s3_prefix=os.environ.get(
-            "DBT_ARTIFACTS_S3_PREFIX", "openmetadata/dbt-artifacts"
-        ),
+        s3_prefix=DBT_ARTIFACTS_S3_PREFIX,
+    ),
+    # The StarRocks target has its own manifest (the tag:starrocks models exist
+    # only there) and OpenMetadata ingests it into a different database
+    # service, so its artifacts are kept apart from the Trino ones. Nested
+    # under the same prefix so the bucket policy that covers one covers both;
+    # the Trino ingestion lists <prefix>/runs/ and never sees these.
+    "starrocks_dbt_s3_artifacts": DbtS3ArtifactsResource(
+        s3_bucket=os.environ.get("DBT_ARTIFACTS_S3_BUCKET", ""),
+        s3_prefix=f"{DBT_ARTIFACTS_S3_PREFIX}/starrocks",
     ),
     "vault": vault,
     "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),

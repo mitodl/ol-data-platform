@@ -1,6 +1,6 @@
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -200,40 +200,62 @@ def _repair_surrogate_key_drift(
     return complete
 
 
-def _upload_run_results(
+def upload_build_artifacts(
     context: AssetExecutionContext,
     dbt_s3_artifacts: DbtS3ArtifactsResource,
     invocation: DbtCliInvocation,
+    artifacts: Sequence[str] = ("run_results.json",),
 ) -> None:
-    """Upload a build's run_results.json so OpenMetadata can ingest its outcomes.
+    """Upload a build's artifacts so OpenMetadata can ingest its outcomes.
 
-    Stored at a per-run versioned S3 key, so every incremental and full run is
-    kept. Called whether or not the build succeeded.
+    run_results.json is stored at a per-run versioned S3 key, so every
+    incremental and full run is kept. Called whether or not the build succeeded.
 
-    manifest.json and catalog.json are NOT generated here: producing the catalog
-    recompiles the whole project and queries every relation, which is far too
-    expensive to repeat on each incremental subset build. That work lives in the
-    dedicated `dbt_docs_artifacts_job`, which runs on a daily schedule.
+    catalog.json is NOT generated here: producing it recompiles the whole
+    project and queries every relation, which is far too expensive to repeat on
+    each incremental subset build. That work lives in the dedicated
+    `dbt_docs_artifacts_job`, which runs on a daily schedule and uploads the
+    Trino manifest.json with it.
     """
     if DAGSTER_ENV == "dev":
         return
     if not dbt_s3_artifacts.s3_bucket:
         context.log.warning(
-            "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt run results will "
+            "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt artifacts will "
             "not be uploaded to S3 for OpenMetadata ingestion."
         )
         return
     # dbt writes run_results.json once it has run its nodes, so a build that
     # died before that (e.g. a parse error) leaves none behind.
-    if not (invocation.target_path / "run_results.json").exists():
+    written = [
+        artifact
+        for artifact in artifacts
+        if (invocation.target_path / artifact).exists()
+    ]
+    if missing := sorted(set(artifacts) - set(written)):
         context.log.warning(
-            "dbt build did not produce run_results.json; nothing to upload for "
-            "OpenMetadata."
+            "dbt build did not produce %s; not uploaded for OpenMetadata.",
+            ", ".join(missing),
         )
-        return
-    dbt_s3_artifacts.upload_artifacts(
-        invocation.target_path, ["run_results.json"], context
-    )
+    dbt_s3_artifacts.upload_artifacts(invocation.target_path, written, context)
+
+
+def upload_build_artifacts_best_effort(
+    context: AssetExecutionContext,
+    dbt_s3_artifacts: DbtS3ArtifactsResource,
+    invocation: DbtCliInvocation,
+    artifacts: Sequence[str] = ("run_results.json",),
+) -> None:
+    """Upload a build's artifacts, logging an upload error and not raising it.
+
+    For the exits where something else has to decide the run's outcome: a
+    failed build has its own error to report, and an upload that fails on top
+    of it must not be raised in its place.
+    """
+    try:
+        upload_build_artifacts(context, dbt_s3_artifacts, invocation, artifacts)
+    except Exception:
+        context.log.exception("Could not upload the dbt build's artifacts")
 
 
 @dbt_assets(
@@ -283,16 +305,9 @@ def full_dbt_project(
                 SURROGATE_KEY_STATE_ARTIFACT, drift.current_state, context
             )
     except BaseException:
-        # The build's failure is the one the run has to report, so an upload
-        # that fails on top of it is logged and not raised in its place.
-        try:
-            _upload_run_results(context, dbt_s3_artifacts, build_invocation)
-        except Exception:
-            context.log.exception(
-                "Could not upload run_results.json for the failed dbt build"
-            )
+        upload_build_artifacts_best_effort(context, dbt_s3_artifacts, build_invocation)
         raise
-    _upload_run_results(context, dbt_s3_artifacts, build_invocation)
+    upload_build_artifacts(context, dbt_s3_artifacts, build_invocation)
 
 
 @op(description="Generate dbt docs artifacts and upload them to S3 for OpenMetadata.")

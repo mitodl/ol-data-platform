@@ -287,23 +287,35 @@ def test_run_results_are_uploaded_when_the_build_fails(dbt_asset_module):
     # BaseException, so a cancelled run uploads what it finished too.
     assert isinstance(handlers[0].type, ast.Name)
     assert handlers[0].type.id == "BaseException"
-    assert "_upload_run_results" in {
+    assert "upload_build_artifacts_best_effort" in {
         name for _, name in _called_names(ast.Module(handlers[0].body, []))
     }
-    # The upload sits in its own try, so a failed upload cannot replace the
-    # build's error, and the handler ends by re-raising that error.
-    upload_guard = handlers[0].body[0]
-    assert isinstance(upload_guard, ast.Try)
-    assert upload_guard.handlers
+    # The handler ends by re-raising the build's error.
     last = handlers[0].body[-1]
     assert isinstance(last, ast.Raise)
     assert last.exc is None
 
     # A successful build uploads after the try.
     after = asset.body[asset.body.index(guarded[0]) + 1 :]
-    assert "_upload_run_results" in {
+    assert "upload_build_artifacts" in {
         name for _, name in _called_names(ast.Module(after, []))
     }
+
+
+def test_a_failed_upload_cannot_replace_the_build_error(dbt_asset_module):
+    """The upload after a failed build sits in its own try and never raises."""
+    helper = _function(dbt_asset_module, "upload_build_artifacts_best_effort")
+    upload_guard = helper.body[-1]
+    assert isinstance(upload_guard, ast.Try)
+    assert "upload_build_artifacts" in {
+        name for _, name in _called_names(ast.Module(upload_guard.body, []))
+    }
+    assert [
+        handler.type.id
+        for handler in upload_guard.handlers
+        if isinstance(handler.type, ast.Name)
+    ] == ["Exception"]
+    assert not any(isinstance(node, ast.Raise) for node in ast.walk(upload_guard))
 
 
 def test_the_state_artifact_name_is_stable():
