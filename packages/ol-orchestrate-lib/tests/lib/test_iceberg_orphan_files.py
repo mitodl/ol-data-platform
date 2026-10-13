@@ -198,6 +198,25 @@ class TestRemoveTableOrphanFiles:
         assert reloaded.scan().to_arrow().column("id").to_pylist() == [7, 8]
         assert _run(catalog, store).orphan_objects == 0
 
+    def test_a_delete_logs_every_key_it_removes(
+        self, catalog: SqlCatalog, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        _expired_table(catalog)
+        store = LocalStore()
+
+        with caplog.at_level("INFO", logger=iceberg_orphan_files.log.name):
+            result = _run(catalog, store, delete=True)
+
+        prefix = f"Deleting under {result.location}: "
+        logged = [
+            f"{result.location}/{key}"
+            for message in caplog.messages
+            if message.startswith(prefix)
+            for key in message.removeprefix(prefix).split()
+        ]
+        assert sorted(logged) == sorted(store.deleted)
+        assert len(logged) == result.deleted_objects > 0
+
     def test_a_young_orphan_is_counted_and_left_alone(
         self, catalog: SqlCatalog
     ) -> None:

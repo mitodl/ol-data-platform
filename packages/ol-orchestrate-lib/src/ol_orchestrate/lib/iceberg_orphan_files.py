@@ -234,6 +234,27 @@ def _location_refusal(location: str, expected_location: str | None) -> str:
     return ""
 
 
+# Keeps one log line to a few kilobytes of keys.
+DELETED_KEYS_PER_LOG_LINE = 100
+
+
+def _log_doomed_keys(logger: logging.Logger, location: str, uris: list[str]) -> None:
+    """Log the keys about to be deleted, relative to ``location``.
+
+    The only record of which files went. The bucket's delete markers carry the
+    same keys, but finding them means knowing when to look.
+    """
+    for start in range(0, len(uris), DELETED_KEYS_PER_LOG_LINE):
+        logger.info(
+            "Deleting under %s: %s",
+            location,
+            " ".join(
+                uri.removeprefix(f"{location}/")
+                for uri in uris[start : start + DELETED_KEYS_PER_LOG_LINE]
+            ),
+        )
+
+
 def remove_table_orphan_files(  # noqa: PLR0913
     catalog: Catalog,
     database: str,
@@ -332,7 +353,9 @@ def remove_table_orphan_files(  # noqa: PLR0913
         size,
         result.location,
     )
-    result.delete_errors = store.delete_objects([obj.uri for obj in doomed])
+    uris = [obj.uri for obj in doomed]
+    _log_doomed_keys(logger, result.location, uris)
+    result.delete_errors = store.delete_objects(uris)
     result.deleted_objects = len(doomed) - len(result.delete_errors)
     result.deleted_bytes = size
     return result
