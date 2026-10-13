@@ -169,10 +169,10 @@ with mitxonline_enrollments as (
     from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
--- Emeritus/Global Alumni don't own course run records; their enrollments map onto
--- existing MITxPro course runs via courserun_external_readable_id, mirroring the join
--- logic in int__combined__courserun_enrollments. This lookup resolves that external id
--- to the MITxPro-platform courserun_readable_id used elsewhere in dim_course_run.
+-- Emeritus/Global Alumni enrollments carry an external run code. Where an xPro run has the
+-- same code (courserun_external_readable_id, as in int__combined__courserun_enrollments),
+-- this lookup resolves it to that run's courserun_readable_id. Codes with no xPro run keep
+-- the external code, which matches the platform's own dim_course_run row.
 , mitxpro_external_readable_id_lookup as (
     select courserun_external_readable_id, courserun_readable_id
     from {{ ref('int__mitxpro__course_runs') }}
@@ -302,8 +302,9 @@ with mitxonline_enrollments as (
     where is_current = true
 )
 
--- Emeritus/Global Alumni enrollments resolve their course run FK against MITxPro-platform
--- dim_course_run rows (see mitxpro_external_readable_id_lookup above).
+-- Emeritus/Global Alumni enrollments matched to an xPro run resolve their course run FK
+-- against MITxPro-platform dim_course_run rows (see mitxpro_external_readable_id_lookup
+-- above); the rest resolve through the generic platform join.
 , dim_course_run_mitxpro as (
     select courserun_pk, courserun_readable_id
     from {{ ref('dim_course_run') }}
