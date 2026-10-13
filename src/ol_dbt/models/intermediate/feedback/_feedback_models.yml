@@ -492,7 +492,9 @@ models:
     description: int, summed pre-redaction length of the kept turns.
   - name: conversation_text
     description: str, the conversation's redacted turns concatenated in order with
-      a turn delimiter. Null until the feedback_redacted asset populates the fact.
+      a turn delimiter. When no turn has text of its own (only "[No content]", "SCRUBBED"
+      or redaction tags), the subject instead. Null until the feedback_redacted asset
+      populates the fact.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -599,7 +601,9 @@ unit_tests:
   description: >
     Appzi emails keep only the feedback type and answer, digests drop out, a changed
     template keeps the whole email, other comments pass through, and subject_url
-    is the decoded page URL without its EMAIL parameter.
+    is the decoded page URL without its EMAIL parameter. An email cut off before its
+    first question, and a notification with nothing typed above the reply line, are
+    parsed too.
   model: int__feedback__zendesk
   given:
   - input: ref('int__zendesk__ticket_comment')
@@ -658,6 +662,22 @@ unit_tests:
         \ certificate is missing."}
     - {comment_id: 9, ticket_id: 1, comment_author_user_id: 10, comment_is_public: true,
       comment_source_channel: email, comment_created_at: '2026-10-09T00:00:00', comment_plain_body: null}
+    - {comment_id: 10, ticket_id: 1, comment_author_user_id: 10, comment_is_public: true,
+      comment_source_channel: email, comment_created_at: '2026-10-10T00:00:00', comment_plain_body: "*\n\
+        \nWhat did you find? \n\n delete my account \n\n  *\n\nFeedback Origin \n\n\
+        \ learn.mit.edu/dashboard \n\n learner@example.com"}
+    - {comment_id: 11, ticket_id: 1, comment_author_user_id: 10, comment_is_public: true,
+      comment_source_channel: email, comment_created_at: '2026-10-11T00:00:00', comment_plain_body: "•\
+        \ What did you find?\n\nI never receive the email \n\n • \n\nFeedback Origin\n\
+        \nlearn.mit.edu/terms \n\n learner@example.com"}
+    - {comment_id: 12, ticket_id: 1, comment_author_user_id: 10, comment_is_public: true,
+      comment_source_channel: email, comment_created_at: '2026-10-12T00:00:00', comment_plain_body: "##-\
+        \ Please type your reply above this line -## \n\n Your request has been updated.\
+        \ \n\n Hello, please send a screenshot. * Thanks \n\n Instantly Capture Insightful\
+        \ Customer Feedback \n\n New feedback on Portal MIT Learn / MIT Learn soft\
+        \ launch \n\n\U0001F41E Bug \n\n *\n\nWhat did you find? \n\n I cannot type\
+        \ my gender \n\n *\n\nFeedback Origin \n\n learn.mit.edu/ (http://kgwv.mjt.lu/lnk/AAAA/2/BBBB/aHR0cHM6Ly9sZWFybi5taXQuZWR1Lw)\
+        \ \n\n learner@example.com"}
   - input: ref('int__zendesk__ticket')
     rows:
     - {ticket_id: 1, ticket_requester_user_id: 10, ticket_updated_at: '2026-10-09T00:00:00'}
@@ -684,3 +704,41 @@ unit_tests:
     - {source_record_ref: '8', text: "My certificate is missing.", subject_type: unspecified,
       subject_url: null}
     - {source_record_ref: '9', text: null, subject_type: unspecified, subject_url: null}
+    - {source_record_ref: '10', text: "delete my account", subject_type: unspecified,
+      subject_url: null}
+    - {source_record_ref: '11', text: "I never receive the email", subject_type: unspecified,
+      subject_url: null}
+    - {source_record_ref: '12', text: "Bug: I cannot type my gender", subject_type: page_url,
+      subject_url: "https://learn.mit.edu/"}
+- name: test_int__feedback__conversation_uses_the_subject_when_no_turn_has_text
+  description: >
+    A ticket whose turns are all "[No content]" takes its subject as the text. A
+    ticket with real text keeps it, and one with no subject either keeps its raw text.
+  model: int__feedback__conversation
+  given:
+  - input: ref('tfact_feedback')
+    rows:
+    - {feedback_source_fk: z, conversation_id: subject_only, platform_fk: null, turn_index: 1,
+      feedback_occurred_at: '2026-10-01T00:00:00', feedback_text_chars: 12, feedback_text: '[No
+        content]', feedback_title: No verification email received yet}
+    - {feedback_source_fk: z, conversation_id: subject_only, platform_fk: null, turn_index: 2,
+      feedback_occurred_at: '2026-10-02T00:00:00', feedback_text_chars: 8, feedback_text: <PERSON>,
+      feedback_title: No verification email received yet}
+    - {feedback_source_fk: z, conversation_id: has_text, platform_fk: null, turn_index: 1,
+      feedback_occurred_at: '2026-10-01T00:00:00', feedback_text_chars: 26, feedback_text: My
+        certificate is missing., feedback_title: Certificate}
+    - {feedback_source_fk: z, conversation_id: all_empty, platform_fk: null, turn_index: 1,
+      feedback_occurred_at: '2026-10-01T00:00:00', feedback_text_chars: 12, feedback_text: '[No
+        content]', feedback_title: SCRUBBED}
+  - input: ref('dim_feedback_source')
+    rows:
+    - {feedback_source_pk: z, source_slug: zendesk}
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - {conversation_ref: subject_only, turn_count: 2, conversation_text: No verification
+        email received yet}
+    - {conversation_ref: has_text, turn_count: 1, conversation_text: My certificate
+        is missing.}
+    - {conversation_ref: all_empty, turn_count: 1, conversation_text: '[No content]'}

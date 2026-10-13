@@ -5,7 +5,19 @@
   {%- set pattern -%}
     '^(\[https://appzistatic[^\]]*\]\S*\s*)?Instantly Capture Insightful Customer Feedback'
   {%- endset -%}
-  coalesce({{ regexp_like(body, pattern) }}, false)
+  {#- An Appzi email that starts at its first question, without the header. -#}
+  {%- set cut_off_pattern -%}'(?s)^[*•][^\n]*\n.*\n\nFeedback Origin'{%- endset -%}
+  {#- A Zendesk notification with nothing typed above the reply line, so the quoted
+      Appzi email is its only content. -#}
+  {%- set empty_reply_pattern -%}
+    '(?s)^##- Please type your reply above this line -##.*Instantly Capture Insightful Customer Feedback'
+  {%- endset -%}
+  coalesce(
+      {{ regexp_like(body, pattern) }}
+      or {{ regexp_like(body, cut_off_pattern) }}
+      or {{ regexp_like(body, empty_reply_pattern) }}
+      , false
+  )
 {% endmacro %}
 
 
@@ -25,11 +37,17 @@
   {#- "<type>: <answer>". An unmatched body comes back whole, so a template change loses no text. -#}
   {%- set type_pattern -%}'\n\n\S+ ([A-Za-z]+) \n\n {1,2}\*\n\n'{%- endset -%}
   {%- set answer_pattern -%}'(?s)\*\n\n[^\n]*\n\n (.*?) \n\n {1,2}\*\n\nFeedback Origin'{%- endset -%}
+  {#- Fallback for a cut-off email: its spacing differs, and some use "•" for "*".
+      Naming MIT Learn's three questions keeps it off an earlier "*". -#}
+  {%- set cut_off_answer_pattern -%}
+    '(?s)[*•] ?\n{0,2}What (?:did you find|is your suggestion|did you like)\? ?\n\n ?(.*?) ?\n\n {0,2}[*•] ?\n\nFeedback Origin'
+  {%- endset -%}
   {%- set no_answer_pattern -%}'\n\n\S+ [A-Za-z]+ \n\n {1,2}\*\n\nFeedback Origin'{%- endset -%}
   {#- Sent in place of the feedback when the Appzi plan limit is reached. -#}
   {%- set excerpt_pattern -%}'(?s)Excerpt: (.*?)\n\nYour portal has exceeded'{%- endset -%}
   {%- set feedback_type = regexp_extract_or_null(body, type_pattern, 1) -%}
-  {%- set answer = regexp_extract_or_null(body, answer_pattern, 1) -%}
+  {%- set answer = "coalesce(" ~ regexp_extract_or_null(body, answer_pattern, 1) ~ ", "
+      ~ regexp_extract_or_null(body, cut_off_answer_pattern, 1) ~ ")" -%}
   {%- set excerpt = regexp_extract_or_null(body, excerpt_pattern, 1) -%}
   case
       when {{ answer }} is not null
