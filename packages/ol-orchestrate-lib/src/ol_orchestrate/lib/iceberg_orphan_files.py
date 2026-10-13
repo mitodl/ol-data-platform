@@ -23,6 +23,7 @@ Every function takes its clients as arguments, so the callers decide how they
 are built and the tests pass fakes.
 """
 
+import json
 import logging
 import threading
 import time
@@ -242,16 +243,16 @@ def _log_doomed_keys(logger: logging.Logger, location: str, uris: list[str]) -> 
     """Log the keys about to be deleted, relative to ``location``.
 
     The only record of which files went. The bucket's delete markers carry the
-    same keys, but finding them means knowing when to look.
+    same keys, but finding them means knowing when to look. A JSON list,
+    because a key can hold a space.
     """
-    for start in range(0, len(uris), DELETED_KEYS_PER_LOG_LINE):
+    root = f"{_directory(location)}/"
+    keys = [file_id(uri).removeprefix(root) for uri in uris]
+    for start in range(0, len(keys), DELETED_KEYS_PER_LOG_LINE):
         logger.info(
             "Deleting under %s: %s",
             location,
-            " ".join(
-                uri.removeprefix(f"{location}/")
-                for uri in uris[start : start + DELETED_KEYS_PER_LOG_LINE]
-            ),
+            json.dumps(keys[start : start + DELETED_KEYS_PER_LOG_LINE]),
         )
 
 

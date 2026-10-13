@@ -5,6 +5,7 @@ filesystem, so what counts as reachable is decided by pyiceberg's own metadata
 and manifests, not by a fake of them.
 """
 
+import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -209,13 +210,30 @@ class TestRemoveTableOrphanFiles:
 
         prefix = f"Deleting under {result.location}: "
         logged = [
-            f"{result.location}/{key}"
+            key
             for message in caplog.messages
             if message.startswith(prefix)
-            for key in message.removeprefix(prefix).split()
+            for key in json.loads(message.removeprefix(prefix))
         ]
-        assert sorted(logged) == sorted(store.deleted)
+        root = file_id(result.location).rstrip("/")
+        assert sorted(f"{root}/{key}" for key in logged) == sorted(
+            file_id(uri) for uri in store.deleted
+        )
         assert len(logged) == result.deleted_objects > 0
+
+    def test_logged_keys_survive_spaces_and_a_different_scheme(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("INFO", logger=iceberg_orphan_files.log.name):
+            iceberg_orphan_files._log_doomed_keys(
+                iceberg_orphan_files.log,
+                "s3://lake/t/",
+                ["s3a://lake/t/data/a b.parquet", "s3://lake/t/data/c.parquet"],
+            )
+
+        assert caplog.messages == [
+            'Deleting under s3://lake/t/: ["data/a b.parquet", "data/c.parquet"]'
+        ]
 
     def test_a_young_orphan_is_counted_and_left_alone(
         self, catalog: SqlCatalog
