@@ -34,7 +34,9 @@ with enrollments_ranked as (
 )
 
 , enrollments as (
-    select *
+    select
+        *
+        , {{ openedx_enrollment_track_group_id('enrollment_mode', 'enrollment_is_active') }} as enrollment_track_group_id
     from enrollments_ranked
     where enrollment_rank = 1
 )
@@ -64,14 +66,16 @@ with enrollments_ranked as (
     group by user_fk, courserun_fk
 )
 
--- A unit is an Open edX vertical with at least one block that counts toward progress.
+-- A run's units, for each enrollment track group dim_course_content_progress_block tells
+-- apart in it. Group 0 is every learner whose own group the run's restrictions do not name.
 , content_totals as (
     select
         courserun_fk
+        , enrollment_track_group_id
         , count(distinct vertical_block_id) as content_units_total
     from {{ ref('dim_course_content_progress_block') }}
     where courserun_fk is not null
-    group by courserun_fk
+    group by courserun_fk, enrollment_track_group_id
 )
 
 , joined as (
@@ -94,10 +98,10 @@ with enrollments_ranked as (
         , coalesce(certificates.certificate_is_revoked = false, false) as is_certified
         , cast(enrollment_dates.date as date) as enrolled_on
         , cast(activity_dates.date as date) as last_active_on
-        , content_totals.content_units_total
+        , coalesce(track_totals.content_units_total, default_totals.content_units_total) as content_units_total
         -- Null only when the run has no course structure to count against.
         , case
-            when content_totals.content_units_total is not null
+            when default_totals.content_units_total is not null
                 then coalesce(content_progress.content_units_completed, 0)
         end as content_units_completed
     from enrollments
@@ -110,11 +114,17 @@ with enrollments_ranked as (
     left join activity
         on enrollments.user_fk = activity.user_fk
         and enrollments.courserun_fk = activity.courserun_fk
-    left join content_totals
-        on enrollments.courserun_fk = content_totals.courserun_fk
+    left join content_totals as track_totals
+        on enrollments.courserun_fk = track_totals.courserun_fk
+        and enrollments.enrollment_track_group_id = track_totals.enrollment_track_group_id
+    left join content_totals as default_totals
+        on enrollments.courserun_fk = default_totals.courserun_fk
+        and default_totals.enrollment_track_group_id = 0
     left join {{ ref('afact_learner_courserun_content_progress') }} as content_progress
         on enrollments.user_fk = content_progress.user_fk
         and enrollments.courserun_fk = content_progress.courserun_fk
+        and content_progress.enrollment_track_group_id
+        = case when track_totals.courserun_fk is not null then enrollments.enrollment_track_group_id else 0 end
     left join {{ ref('dim_date') }} as enrollment_dates
         on enrollments.enrollment_date_key = enrollment_dates.date_key
     left join {{ ref('dim_date') }} as activity_dates
