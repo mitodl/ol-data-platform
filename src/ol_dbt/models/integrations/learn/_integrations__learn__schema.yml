@@ -99,112 +99,308 @@ models:
   config:
     tags: [qa_scheduled]
   description: >
-    MITx Online courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
-    Sourced from int__mitxonline__courses and int__mitxonline__course_runs.
+    The courses MITx Online's catalog API for MIT Learn (/api/internal/courses/) lists:
+    every course, published or not, except the proctored exam courses MIT Learn's
+    ETL drops. One row per course, with the fields MIT Learn's MITx Online ETL reads
+    from the API or derives from the course's runs. Runs are in
+    integrations__learn__mitxonline_runs.
   columns:
   - name: readable_id
-    description: MITxOnline course readable ID. Used for upsert matching.
+    description: str, the MITx Online course readable id. Used for upsert matching.
     tests: [not_null, unique]
   - name: title
-    description: Course title.
+    description: str, course title.
     tests: [not_null]
   - name: last_modified
-    description: >
-      Last CMS page publish date. Falls back to current_timestamp for courses
-      without a Wagtail CMS page.
+    description: str, ISO 8601 time the CMS page was last published; the build time
+      for a course with no page.
     tests: [not_null]
   - name: etl_source
-    description: Always 'mitxonline'.
+    description: str, always 'mitxonline'.
+    tests: [not_null]
+  - name: platform
+    description: str, always 'mitxonline'.
     tests: [not_null]
   - name: description
-    description: Course description shown on the course's home/product page.
-  - name: url
-    description: MITx Online course page URL path (relative).
+    description: str, the page's description, as HTML; null without a page. The API
+      strips the tags and MIT Learn then passes it through clean_data.
   - name: image_url
-    description: Course image URL.
+    description: str, the page's feature image on the MITx Online site, with the ?v=<file
+      hash> suffix the API adds; null without one.
+  - name: has_page
+    description: boolean, whether the course has a CMS page. MIT Learn gives the course
+      a URL on its own site (/courses/<readable_id>) only when it has one.
+    tests: [not_null]
   - name: published
-    description: Whether the course is live on mitxonline.mit.edu.
-  - name: platform
-    description: Always 'mitxonline', matches etl_source.
-  - name: page_slug
-    description: MITx Online CMS page slug, used for constructing the course page's
-      URL.
+    description: boolean, whether MIT Learn publishes the course - its page is live
+      and in the Learn catalog, and a run in integrations__learn__mitxonline_runs
+      is published.
+    tests: [not_null]
+  - name: include_in_learn_catalog
+    description: boolean, the page's include_in_learn_catalog flag; false without
+      a page.
+    tests: [not_null]
+  - name: ingest_content_files_for_ai
+    description: boolean, the page's ingest_content_files_for_ai flag, MIT Learn's
+      force_ingest; false without a page.
+    tests: [not_null]
   - name: topics
-    description: Comma-separated topic names for the course.
-  - name: instructors
-    description: Comma-separated instructor names for the course.
+    description: array(str), names of the page's topics and of their parent topics,
+      sorted; null when it has none. MIT Learn maps them to its own topics.
+  - name: departments
+    description: array(str), names of the course's departments, sorted; null when
+      it has none. MIT Learn maps them to department ids.
+  - name: course_numbers
+    description: array(str), the course numbers of the course's runs, the latest run's
+      first. The first is the primary number and the rest are cross-listed.
+  - name: certification
+    description: boolean, whether a published, current run offers the verified enrollment
+      mode.
+    tests: [not_null]
   - name: certification_type
-    description: Either 'MicroMasters Credential' or 'Certificate of Completion'.
-  - name: price
-    description: >
-      Product price in plain text, e.g. '$250 - $1000 (financial assistance
-      available)'.
-  - name: length
-    description: >
-      Short description of how long the course takes to complete, e.g.
-      '4 weeks'.
-  - name: effort
-    description: >
-      Short description of expected weekly effort, e.g. '1-3 hours per week'.
-  - name: runs
-    description: >
-      Pipe-delimited run metadata strings joined with semicolons.
-      Format per run: readable_id|start_on|end_on|is_live
+    description: str, 'MicroMasters Credential' when the course's first live program
+      with a live page is a MicroMasters program, otherwise 'Certificate of Completion'.
+      MIT Learn uses it only when certification is true.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['MicroMasters Credential', 'Certificate of Completion']
+  - name: availability
+    description: str, 'dated' when any run of the course is enrollable and not self-paced,
+      otherwise 'anytime'. Evaluated when the model builds.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['dated', 'anytime']
+  - name: pace
+    description: array(str), the distinct pace of the course's runs, 'instructor_paced'
+      or 'self_paced'; null for a course with no run.
+  - name: duration
+    description: str, free-text length from the page, e.g. '14 weeks'.
+  - name: min_weeks
+    description: int, shortest length in weeks; null if the page does not give one.
+  - name: max_weeks
+    description: int, longest length in weeks; null if the page does not give one.
+  - name: time_commitment
+    description: str, free-text weekly effort from the page, e.g. '10-14 hours per
+      week'.
+  - name: min_weekly_hours
+    description: str, least weekly hours as the page stores it; MIT Learn parses it
+      to an integer.
+  - name: max_weekly_hours
+    description: str, most weekly hours as the page stores it; MIT Learn parses it
+      to an integer.
+  - name: min_price
+    description: decimal, the page's lowest certificate price in USD; null if not
+      set.
+  - name: max_price
+    description: decimal, the page's highest certificate price in USD; null if not
+      set.
+
+- name: integrations__learn__mitxonline_runs
+  config:
+    tags: [qa_scheduled]
+  description: >
+    Every run of the courses in integrations__learn__mitxonline_courses, source and
+    B2B runs included, as MITx Online's catalog API for MIT Learn lists them under
+    a course. One row per run, with what MIT Learn's MITx Online ETL derives for
+    it. published, status and prices depend on the time the model builds.
+  columns:
+  - name: readable_id
+    description: str, the run's course.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('integrations__learn__mitxonline_courses')
+          field: readable_id
+  - name: run_id
+    description: str, the run's courseware id, MIT Learn's run id.
+    tests: [not_null, unique]
+  - name: title
+    description: str, the run's title.
+  - name: start_date
+    description: str, ISO 8601 UTC start, or the start of enrollment when the run
+      has no start; null if neither.
+  - name: end_date
+    description: str, ISO 8601 UTC end; null if none.
+  - name: enrollment_start
+    description: str, ISO 8601 UTC start of enrollment; null if none.
+  - name: enrollment_end
+    description: str, ISO 8601 UTC end of enrollment; null if none.
+  - name: published
+    description: boolean, whether MIT Learn publishes the run - it is not a variant,
+      it is enrollable (live, started enrollment, enrollment not ended, has a start
+      date) and the course page is live.
+    tests: [not_null]
+  - name: b2b_only
+    description: boolean, whether the run is offered only under a B2B contract.
+    tests: [not_null]
+  - name: is_variant
+    description: boolean, whether the run is B2B-only or its language matches a variant
+      set of the course that is not the default.
+    tests: [not_null]
+  - name: status
+    description: str, 'Current' when the course has a page and the run is enrollable
+      and not past its enrollment end (or its end, without one), otherwise 'Archived'.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['Current', 'Archived']
+  - name: pace
+    description: str, 'self_paced' or 'instructor_paced'.
+    tests: [not_null]
+  - name: language
+    description: str, the run's language code, e.g. en or es_419.
+  - name: course_number
+    description: str, the course part of the run's courseware id.
+  - name: has_verified_mode
+    description: boolean, whether the run offers the verified enrollment mode.
+    tests: [not_null]
+  - name: prices
+    description: array(decimal), the run's distinct prices in USD, ascending - zero
+      for the audit mode and the course page's min and max price for the verified
+      mode. Only zero when the run is not current or the page has no price.
+    tests: [not_null]
+  - name: instructors
+    description: array(str), names of the instructors linked to the course page; null
+      without any.
 
 - name: integrations__learn__mitxonline_programs
   config:
     tags: [qa_scheduled]
   description: >
-    MITx Online programs exposed for MIT Learn's Trino-pull ETL. One row per live
-    program.
-    Sourced from int__mitxonline__programs and int__mitxonline__program_requirements.
+    The programs MITx Online's catalog API (/api/v2/programs/?live=true) lists: live
+    programs that are not B2B-only, published or not. One row per program, with the
+    fields MIT Learn's MITx Online ETL reads from the API, including the dates and
+    prices of the one run MIT Learn gives a program. Its courses and child programs
+    are in integrations__learn__mitxonline_program_children.
   columns:
   - name: readable_id
-    description: MITxOnline program readable ID. Used for upsert matching.
+    description: str, the MITx Online program readable id. Used for upsert matching
+      and as the id of the program's run.
     tests: [not_null, unique]
   - name: title
-    description: Program title.
+    description: str, program title.
     tests: [not_null]
   - name: last_modified
-    description: >
-      Last CMS page publish date. Falls back to current_timestamp for programs
-      without a Wagtail CMS page.
+    description: str, ISO 8601 time the CMS page was last published; the build time
+      for a program with no page.
     tests: [not_null]
   - name: etl_source
-    description: Always 'mitxonline'.
+    description: str, always 'mitxonline'.
+    tests: [not_null]
+  - name: platform
+    description: str, always 'mitxonline'.
     tests: [not_null]
   - name: description
-    description: Program description shown on the program's home/product page.
-  - name: url
-    description: MITx Online program page URL path (relative).
+    description: str, the page's description, as HTML; null without a page. The API
+      strips the tags and MIT Learn then passes it through clean_data.
   - name: image_url
-    description: Program image URL.
+    description: str, the page's feature image on the MITx Online site, with the ?v=<file
+      hash> suffix the API adds; null without one.
+  - name: has_page
+    description: boolean, whether the program has a CMS page. MIT Learn gives the
+      program a URL on its own site, publishes its run and marks the run current only
+      when it has one.
+    tests: [not_null]
   - name: published
-    description: Whether the program is live on mitxonline.mit.edu.
-  - name: platform
-    description: Always 'mitxonline', matches etl_source.
-  - name: program_type
-    description: >
-      Program type, free text from the source CMS, e.g. 'MicroMasters',
-      'Series'.
-  - name: certification_type
-    description: Either 'MicroMasters Credential' or 'Certificate of Completion'.
+    description: boolean, whether MIT Learn publishes the program - its page is live
+      and in the Learn catalog.
+    tests: [not_null]
+  - name: display_mode
+    description: str, 'course' for a program MIT Learn shows as a course (resource_category
+      course, URL /courses/p/<readable_id>); otherwise null.
   - name: topics
-    description: >
-      Comma-separated topic names aggregated across all courses in the
-      program.
-  - name: instructors
-    description: Comma-separated instructor names for the program.
-  - name: page_slug
-    description: MITx Online CMS page slug, used for constructing the program page's
-      URL.
-  - name: price
-    description: Product price in plain text, e.g. '$250 - $1000'.
-  - name: effort
-    description: >
-      Short description of expected weekly effort, e.g. '1-3 hours per week'.
-  - name: courses
-    description: Comma-separated list of course readable_ids belonging to this program.
+    description: array(str), names of the page topics of the program's live courses,
+      sorted; null when there are none.
+  - name: departments
+    description: array(str), names of the program's departments, sorted; null when
+      it has none.
+  - name: certification
+    description: boolean, whether the program has a page and offers the verified enrollment
+      mode.
+    tests: [not_null]
+  - name: certification_type
+    description: str, 'MicroMasters Credential' for a MicroMasters program, otherwise
+      'Certificate of Completion'. MIT Learn uses it only when certification is true.
+    tests: [not_null]
+  - name: availability
+    description: str, the program's availability, 'dated' or 'anytime'.
+  - name: start_date
+    description: str, ISO 8601 UTC start of the next live run of any course in the
+      program's requirements, else the program's own start date, else its enrollment
+      start. Evaluated when the model builds.
+  - name: end_date
+    description: str, ISO 8601 UTC end of the program; null if none.
+  - name: enrollment_start
+    description: str, ISO 8601 UTC start of enrollment; null if none.
+  - name: enrollment_end
+    description: str, ISO 8601 UTC end of enrollment; null if none.
+  - name: prices
+    description: array(decimal), the program's distinct prices in USD, ascending -
+      zero for the audit mode and the page's min and max price for the verified mode.
+      Only zero when the page has no price.
+    tests: [not_null]
+  - name: duration
+    description: str, free-text length from the page.
+  - name: min_weeks
+    description: int, shortest length in weeks; null if the page does not give one.
+  - name: max_weeks
+    description: int, longest length in weeks; null if the page does not give one.
+  - name: time_commitment
+    description: str, free-text weekly effort from the page.
+  - name: min_weekly_hours
+    description: str, least weekly hours as the page stores it.
+  - name: max_weekly_hours
+    description: str, most weekly hours as the page stores it.
+  - name: min_price
+    description: decimal, the page's lowest price in USD; null if not set.
+  - name: max_price
+    description: decimal, the page's highest price in USD; null if not set.
+
+- name: integrations__learn__mitxonline_program_children
+  config:
+    tags: [qa_scheduled]
+  description: >
+    The courses and child programs of each program in integrations__learn__mitxonline_programs,
+    from the program's requirement tree. One row per program and child. A course
+    row is a course with a live page, in the program's own tree or in the tree of
+    a program it requires. A program row is a program it requires that the API lists.
+  columns:
+  - name: readable_id
+    description: str, the parent program.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('integrations__learn__mitxonline_programs')
+          field: readable_id
+  - name: child_resource_type
+    description: str, 'course' or 'program'.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['course', 'program']
+  - name: child_readable_id
+    description: str, readable id of the child course or program.
+    tests: [not_null]
+  - name: child_display_mode
+    description: str, the display mode of a child program, 'course' or null; null
+      for a course.
+  - name: child_position
+    description: int, zero-based place of the child in the requirement tree, as MIT
+      Learn orders a program's courses. Null for a child program that is not shown
+      as a course - its courses have positions of their own. Positions have gaps where
+      a course in the tree has no live page.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["readable_id", "child_resource_type", "child_readable_id"]
 
 - name: integrations__learn__xpro_courses
   config:
@@ -467,3 +663,116 @@ unit_tests:
       year: 2007, run_id: b89637d2d64abf7896f604f5d40d48a9}
     - {readable_id: RES.TL-002, url: "https://ocw.mit.edu/courses/res-tl-002-star/",
       slug: courses/res-tl-002-star, image_url: null, year: null, run_id: a062e4e8db044bcdbb1d4d6f80c18083}
+
+- name: test_integrations__learn__mitxonline_runs_published_status_and_prices
+  description: >
+    A run is published when it is not a variant, is enrollable and the course page
+    is live. Its prices are zero for the audit mode plus the page's min and max
+    price for the verified mode, and only zero when it is not fully enrollable.
+    Runs of a proctored exam course are left out.
+  model: integrations__learn__mitxonline_runs
+  given:
+  - input: ref('int__mitxonline__catalog_course_runs')
+    rows:
+    - {courserun_id: 1, course_id: 1, courserun_readable_id: run-1, courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: true, courserun_is_variant: false, courserun_is_b2b_only: false,
+      courserun_has_verified_mode: true, courserun_has_audit_mode: true, courserun_is_self_paced: true}
+    - {courserun_id: 2, course_id: 1, courserun_readable_id: run-2, courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: false, courserun_is_variant: false, courserun_is_b2b_only: false,
+      courserun_has_verified_mode: true, courserun_has_audit_mode: true, courserun_is_self_paced: false}
+    - {courserun_id: 3, course_id: 1, courserun_readable_id: run-3, courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: true, courserun_is_variant: true, courserun_is_b2b_only: true,
+      courserun_has_verified_mode: true, courserun_has_audit_mode: false, courserun_is_self_paced: false}
+    - {courserun_id: 4, course_id: 2, courserun_readable_id: run-4, courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: true, courserun_is_variant: false, courserun_is_b2b_only: false,
+      courserun_has_verified_mode: true, courserun_has_audit_mode: true, courserun_is_self_paced: false}
+    - {courserun_id: 5, course_id: 3, courserun_readable_id: run-5, courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: true, courserun_is_variant: false, courserun_is_b2b_only: false,
+      courserun_has_verified_mode: true, courserun_has_audit_mode: true, courserun_is_self_paced: false}
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows:
+    - {course_id: 1, course_readable_id: course-1, course_title: Priced with a live
+        page}
+    - {course_id: 2, course_readable_id: course-2, course_title: No page}
+    - {course_id: 3, course_readable_id: course-3, course_title: Proctored Exam for
+        course 1}
+  - input: ref('int__mitxonline__catalog_pages')
+    rows:
+    - {course_id: 1, wagtail_page_id: 10, page_is_live: true, page_min_price: 49,
+      page_max_price: 99}
+  expect:
+    rows:
+    - {readable_id: course-1, run_id: run-1, published: true, is_variant: false, status: Current,
+      pace: self_paced, prices: [0, 49, 99]}
+    - {readable_id: course-1, run_id: run-2, published: true, is_variant: false, status: Archived,
+      pace: instructor_paced, prices: [0]}
+    - {readable_id: course-1, run_id: run-3, published: false, is_variant: true, status: Current,
+      pace: instructor_paced, prices: [49, 99]}
+    - {readable_id: course-2, run_id: run-4, published: false, is_variant: false,
+      status: Archived, pace: instructor_paced, prices: [0]}
+
+- name: test_integrations__learn__mitxonline_program_children_follows_the_requirement_tree
+  description: >
+    Children are numbered in path order. A required program shown as a course takes
+    a position of its own; any other required program contributes its courses where
+    its node is and has no position. A course met a second time keeps its first
+    position, a course without a live page leaves a gap, and a required program
+    the API does not list (B2B-only) is skipped.
+  model: integrations__learn__mitxonline_program_children
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_program')
+    rows:
+    - {program_id: 1, program_readable_id: parent, program_is_live: true, program_is_b2b_only: false}
+    - {program_id: 2, program_readable_id: track, program_is_live: true, program_is_b2b_only: false}
+    - {program_id: 3, program_readable_id: as-course, program_is_live: true, program_is_b2b_only: false,
+      program_display_mode: course}
+    - {program_id: 4, program_readable_id: b2b, program_is_live: true, program_is_b2b_only: true}
+  - input: ref('int__mitxonline__catalog_requirement_nodes')
+    rows:
+    - {program_id: 1, programrequirement_node_type: program_root, programrequirement_path: "0001"}
+    - {program_id: 1, programrequirement_node_type: course, programrequirement_path: "000100010001",
+      course_id: 11}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010002",
+      required_program_id: 2}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010003",
+      required_program_id: 3}
+    - {program_id: 1, programrequirement_node_type: course, programrequirement_path: "000100010004",
+      course_id: 13}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010005",
+      required_program_id: 4}
+    - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010001",
+      course_id: 12}
+    - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010002",
+      course_id: 11}
+    - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010003",
+      course_id: 14}
+    - {program_id: 4, programrequirement_node_type: course, programrequirement_path: "000400010001",
+      course_id: 14}
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows:
+    - {course_id: 11, course_readable_id: course-11, course_title: Eleven}
+    - {course_id: 12, course_readable_id: course-12, course_title: Twelve}
+    - {course_id: 13, course_readable_id: course-13, course_title: Thirteen}
+    - {course_id: 14, course_readable_id: course-14, course_title: Fourteen}
+  - input: ref('int__mitxonline__catalog_pages')
+    rows:
+    - {course_id: 11, page_is_live: true}
+    - {course_id: 12, page_is_live: false}
+    - {course_id: 13, page_is_live: true}
+    - {course_id: 14, page_is_live: true}
+  expect:
+    rows:
+    - {readable_id: parent, child_resource_type: course, child_readable_id: course-11,
+      child_display_mode: null, child_position: 0}
+    - {readable_id: parent, child_resource_type: course, child_readable_id: course-14,
+      child_display_mode: null, child_position: 2}
+    - {readable_id: parent, child_resource_type: program, child_readable_id: as-course,
+      child_display_mode: course, child_position: 3}
+    - {readable_id: parent, child_resource_type: course, child_readable_id: course-13,
+      child_display_mode: null, child_position: 4}
+    - {readable_id: parent, child_resource_type: program, child_readable_id: track,
+      child_display_mode: null, child_position: null}
+    - {readable_id: track, child_resource_type: course, child_readable_id: course-11,
+      child_display_mode: null, child_position: 1}
+    - {readable_id: track, child_resource_type: course, child_readable_id: course-14,
+      child_display_mode: null, child_position: 2}

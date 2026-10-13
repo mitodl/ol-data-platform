@@ -506,6 +506,22 @@ sources:
       description: timestamp, specifying when a course run was initially created
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
+    - name: b2b_only
+      description: boolean, whether it is offered only under a B2B contract
+    - name: is_source_run
+      description: boolean, whether the run is the source other runs of the course
+        are cloned from
+    - name: language
+      description: str, language code of the run, e.g. en or es_419
+    - name: is_primary_language
+      description: boolean, whether the run is the primary-language run among those
+        sharing its run tag
+    - name: variant_length
+      description: str, length code of the run's variant. Blank is the full length
+        course, S is short
+    - name: variant_industry
+      description: str, industry code of the run's variant. Blank is the original
+        course
 
   - name: raw__mitxonline__app__postgres__users_user
     columns:
@@ -634,6 +650,19 @@ sources:
       description: timestamp, specifying when a program was initially created
     - name: updated_on
       description: timestamp, specifying when a program was most recently updated
+    - name: display_mode
+      description: str, 'course' for a program presented to learners as a course,
+        otherwise null
+    - name: b2b_only
+      description: boolean, whether it is offered only under a B2B contract
+    - name: start_date
+      description: timestamp, when the program starts
+    - name: end_date
+      description: timestamp, when the program ends
+    - name: enrollment_start
+      description: timestamp, when enrollment in the program starts
+    - name: enrollment_end
+      description: timestamp, when enrollment in the program ends
 
   - name: raw__mitxonline__app__postgres__courses_programrequirement
     columns:
@@ -664,6 +693,9 @@ sources:
     - name: operator_value
       description: str, value of the operator for this requirement e.g. if operator
         is all_of, the corresponding operator_value 3 means all of 3 courses
+    - name: required_program_id
+      description: int, foreign key to courses_program for the program a 'program'
+        node requires
 
   - name: raw__mitxonline__app__postgres__courses_department
     columns:
@@ -682,6 +714,15 @@ sources:
       description: int, primary key for this table
     - name: course_id
       description: int, foreign key to courses_course
+    - name: department_id
+      description: int, foreign key to courses_department
+
+  - name: raw__mitxonline__app__postgres__courses_program_departments
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: program_id
+      description: int, foreign key to courses_program
     - name: department_id
       description: int, foreign key to courses_department
 
@@ -1772,6 +1813,23 @@ sources:
     - name: faculty_section_title
       description: str, the title text to display in the faculty cards section of
         the product page.
+    - name: min_weeks
+      description: int, shortest length in weeks
+    - name: max_weeks
+      description: int, longest length in weeks
+    - name: min_weekly_hours
+      description: str, least weekly hours
+    - name: max_weekly_hours
+      description: str, most weekly hours
+    - name: min_price
+      description: numeric, lowest certificate price in USD
+    - name: max_price
+      description: numeric, highest certificate price in USD
+    - name: include_in_learn_catalog
+      description: boolean, whether the page is included in the MIT Learn catalog
+    - name: ingest_content_files_for_ai
+      description: boolean, whether MIT Learn ingests the course's content files regardless
+        of the catalog flag
 
   - name: raw__mitxonline__app__postgres__cms_programpage
     columns:
@@ -1806,6 +1864,20 @@ sources:
     - name: faculty_section_title
       description: str, the title text to display in the faculty cards section of
         the product page.
+    - name: min_weeks
+      description: int, shortest length in weeks
+    - name: max_weeks
+      description: int, longest length in weeks
+    - name: min_weekly_hours
+      description: str, least weekly hours
+    - name: max_weekly_hours
+      description: str, most weekly hours
+    - name: min_price
+      description: numeric, lowest certificate price in USD
+    - name: max_price
+      description: numeric, highest certificate price in USD
+    - name: include_in_learn_catalog
+      description: boolean, whether the page is included in the MIT Learn catalog
 
   - name: raw__mitxonline__app__postgres__cms_instructorpage
     columns:
@@ -1832,6 +1904,8 @@ sources:
     - name: linked_instructor_page_id
       description: int, foreign key to wagtail_page referring to the linked instructor
         page
+    - name: order
+      description: int, ordering value of the link. Every link has 1
 
   - name: raw__mitxonline__app__postgres__courses_coursestopic
     columns:

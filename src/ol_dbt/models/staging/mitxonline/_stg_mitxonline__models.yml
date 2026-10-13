@@ -972,6 +972,19 @@ models:
     description: str, either 'anytime' or 'date'
     tests:
     - not_null
+  - name: program_display_mode
+    description: str, 'course' for a program presented to learners as a course, otherwise
+      null
+  - name: program_is_b2b_only
+    description: boolean, whether the program is offered only under a B2B contract
+  - name: program_start_on
+    description: timestamp, when the program starts
+  - name: program_end_on
+    description: timestamp, when the program ends
+  - name: program_enrollment_start_on
+    description: timestamp, when enrollment in the program starts
+  - name: program_enrollment_end_on
+    description: timestamp, when enrollment in the program ends
   - name: program_certification_type
     description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
       These values are currently set in the application code.
@@ -1028,6 +1041,9 @@ models:
         arguments:
           to: ref('stg__mitxonline__app__postgres__courses_program')
           field: program_id
+  - name: required_program_id
+    description: int, foreign key to courses_program for the program a 'program' node
+      requires
   - name: programrequirement_node_type
     description: str, different types of nodes that exist in a requirement tree -
       program_root (represent a program) - course (represent a reference to a course)
@@ -1123,6 +1139,21 @@ models:
       pace and earn certificate at any time
   - name: b2b_contract_id
     description: int, foreign key to b2b_contract
+  - name: courserun_is_b2b_only
+    description: boolean, whether the run is offered only under a B2B contract
+  - name: courserun_is_source_run
+    description: boolean, whether the run is the source run other runs of the course
+      are cloned from
+  - name: courserun_language
+    description: str, language code of the run, e.g. en or es_419
+  - name: courserun_is_primary_language
+    description: boolean, whether the run is the primary-language run among those
+      sharing its run tag
+  - name: courserun_variant_length
+    description: str, length code of the run's variant. Blank is the full length course,
+      S is short
+  - name: courserun_variant_industry
+    description: str, industry code of the run's variant. Blank is the original course
   - name: courserun_start_on
     description: timestamp, specifying when the course begins
   - name: courserun_end_on
@@ -1195,6 +1226,37 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["coursedepartment_id", "course_id"]
+
+- name: stg__mitxonline__app__postgres__courses_program_to_department
+  columns:
+  - name: programtodepartment_id
+    description: int, primary key representing a single MITx Online program tagged
+      to a department
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: coursedepartment_id
+    description: int, foreign key to courses_department representing a single department
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_department')
+          field: coursedepartment_id
+  - name: program_id
+    description: int, foreign key to courses_program representing a single program
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_program')
+          field: program_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["coursedepartment_id", "program_id"]
 
 - name: stg__mitxonline__app__postgres__courses_blockedcountry
   columns:
@@ -1928,6 +1990,23 @@ models:
   - name: course_feature_image_id
     description: int, foreign key to wagtailimages_image for the course's feature
       image
+  - name: course_min_weeks
+    description: int, shortest length of the course in weeks
+  - name: course_max_weeks
+    description: int, longest length of the course in weeks
+  - name: course_min_weekly_hours
+    description: str, least weekly hours the course takes
+  - name: course_max_weekly_hours
+    description: str, most weekly hours the course takes
+  - name: course_min_price
+    description: double, lowest price of the course's certificate in USD
+  - name: course_max_price
+    description: double, highest price of the course's certificate in USD
+  - name: course_is_in_learn_catalog
+    description: boolean, whether the course is included in the MIT Learn catalog
+  - name: course_ingests_content_files_for_ai
+    description: boolean, whether MIT Learn ingests the course's content files for
+      its AI features even when the course is not in the catalog
 
 - name: stg__mitxonline__app__postgres__cms_programpage
   description: program page metadata sourced from Wagtail CMS
@@ -1979,6 +2058,20 @@ models:
   - name: program_feature_image_id
     description: int, foreign key to wagtailimages_image for the program's feature
       image
+  - name: program_min_weeks
+    description: int, shortest length of the program in weeks
+  - name: program_max_weeks
+    description: int, longest length of the program in weeks
+  - name: program_min_weekly_hours
+    description: str, least weekly hours the program takes
+  - name: program_max_weekly_hours
+    description: str, most weekly hours the program takes
+  - name: program_min_price
+    description: double, lowest price of the program's certificate in USD
+  - name: program_max_price
+    description: double, highest price of the program's certificate in USD
+  - name: program_is_in_learn_catalog
+    description: boolean, whether the program is included in the MIT Learn catalog
 
 - name: stg__mitxonline__app__postgres__courses_coursetopic
   columns:
@@ -2071,6 +2164,9 @@ models:
       page
     tests:
     - not_null
+  - name: instructorpagelink_order
+    description: int, ordering value of the link. Every link has 1, and the MITx Online
+      API does not read it
 
 - name: stg__mitxonline__openedx__courseware_studentmodulehistoryextended
   description: History of studentmodule in MITx Online open edx platform

@@ -10,6 +10,7 @@ with source as (
     select
         id as programrequirement_id
         , course_id
+        , required_program_id
         , program_id
         , path as programrequirement_path
         , depth as programrequirement_depth

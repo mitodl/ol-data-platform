@@ -1,6 +1,6 @@
 ---
-# Raw tables of the mitxonline/app_postgres unit for the local lake: the 12 that
-# +integrations__learn__mitxonline_courses and _programs read. Loaded by
+# Raw tables of the mitxonline/app_postgres unit for the local lake: the 20 that
+# the +integrations__learn__mitxonline_* models read. Loaded by
 # `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
 # leaves out Airbyte's _airbyte_meta struct. Every row is invented: nothing here
 # is copied from a deployed MITx Online.
@@ -60,6 +60,8 @@ tables:
         id: 0f0e0d0c-0b0a-4909-8807-060504030201
       min_weeks: 4
       max_weeks: 4
+      min_price: 49.0
+      max_price: 99.0
       feature_image_id: 100
       include_in_learn_catalog: true
       ingest_content_files_for_ai: false
@@ -253,6 +255,7 @@ tables:
       courseware_url_path: /learn/course/course-v1:MITxT+99.001x+1T2026/home
       has_courseware_url: true
       is_self_paced: false
+      language: en
       is_source_run: false
       b2b_only: false
       start_date: 2026-02-01 00:00:00
@@ -272,6 +275,7 @@ tables:
       courseware_id: course-v1:MITxT+99.001x+3T2026
       has_courseware_url: false
       is_self_paced: true
+      language: en
       is_source_run: false
       b2b_only: false
       start_date: 2026-09-01 00:00:00
@@ -285,6 +289,7 @@ tables:
       courseware_id: course-v1:MITxT+99.002x+1T2026
       has_courseware_url: true
       is_self_paced: true
+      language: en
       is_source_run: false
       b2b_only: false
       start_date: 2026-02-01 00:00:00
@@ -298,6 +303,7 @@ tables:
       courseware_id: course-v1:MITxT+99.003x+1T2026
       has_courseware_url: true
       is_self_paced: false
+      language: en
       is_source_run: false
       b2b_only: false
       start_date: 2026-02-01 00:00:00
@@ -626,3 +632,149 @@ tables:
       file_hash: '0000000000000000000000000000000000000101'
       collection_id: 1
       created_at: 2025-09-01 00:00:00
+  raw__mitxonline__app__postgres__courses_course_departments:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      course_id: long
+      department_id: long
+    rows:
+    - id: 1
+      course_id: 1
+      department_id: 1
+  raw__mitxonline__app__postgres__courses_courserun_enrollment_modes:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      courserun_id: long
+      enrollmentmode_id: long
+    rows:
+    # Run 1 offers both modes, so it carries zero and the page's two prices.
+    - id: 1
+      courserun_id: 1
+      enrollmentmode_id: 1
+    - id: 2
+      courserun_id: 1
+      enrollmentmode_id: 2
+    - id: 3
+      courserun_id: 3
+      enrollmentmode_id: 1
+  raw__mitxonline__app__postgres__courses_department:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      name: string
+      slug: string
+      created_on: timestamp
+      updated_on: timestamp
+    rows:
+    - id: 1
+      name: Local Fixture Studies
+      slug: local-fixture-studies
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+  raw__mitxonline__app__postgres__courses_enrollmentmode:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      mode_slug: string
+      requires_payment: boolean
+      mode_display_name: string
+    rows:
+    - id: 1
+      mode_slug: audit
+      mode_display_name: Audit
+      requires_payment: false
+    - id: 2
+      mode_slug: verified
+      mode_display_name: Verified
+      requires_payment: true
+  raw__mitxonline__app__postgres__courses_program_departments:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      program_id: long
+      department_id: long
+    rows:
+    - id: 1
+      program_id: 1
+      department_id: 1
+  raw__mitxonline__app__postgres__courses_program_enrollment_modes:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      program_id: long
+      enrollmentmode_id: long
+    rows:
+    - id: 1
+      program_id: 1
+      enrollmentmode_id: 2
+  raw__mitxonline__app__postgres__django_content_type:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      model: string
+      app_label: string
+    rows:
+    # The two models a supported variant can belong to.
+    - id: 1
+      app_label: courses
+      model: course
+    - id: 2
+      app_label: b2b
+      model: contractpage
+  raw__mitxonline__app__postgres__variants_supportedvariant:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      active: boolean
+      b2b_only: boolean
+      language: string
+      object_id: long
+      created_on: timestamp
+      updated_on: timestamp
+      variant_length: string
+      content_type_id: long
+      default_variant: boolean
+      variant_industry: string
+    rows:
+    - id: 1
+      content_type_id: 1
+      object_id: 1
+      language: en
+      variant_length: ''
+      variant_industry: ''
+      active: true
+      b2b_only: false
+      default_variant: true
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+    # A contract page's variant with a course's object id: it must not make
+    # course 1's English runs variants.
+    - id: 2
+      content_type_id: 2
+      object_id: 1
+      language: en
+      variant_length: S
+      variant_industry: ''
+      active: true
+      b2b_only: false
+      default_variant: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00

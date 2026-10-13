@@ -2378,3 +2378,227 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_readable_id", "organization_key"]
+
+- name: int__mitxonline__catalog_course_runs
+  description: Every MITx Online course run, source and B2B runs included, with the
+    state MITx Online's catalog API and MIT Learn's ETL derive for it. One row per
+    run. The enrollable columns are evaluated when the model builds.
+  columns:
+  - name: courserun_id
+    description: int, primary key of the course run
+    tests: [unique, not_null]
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests: [not_null]
+  - name: courserun_readable_id
+    description: str, the run's courseware id
+  - name: courserun_title
+    description: str, title of the run
+  - name: courserun_start_on
+    description: timestamp, when the run starts
+  - name: courserun_end_on
+    description: timestamp, when the run ends
+  - name: courserun_enrollment_start_on
+    description: timestamp, when enrollment starts
+  - name: courserun_enrollment_end_on
+    description: timestamp, when enrollment ends
+  - name: courserun_is_live
+    description: boolean, whether the run is live
+  - name: courserun_is_self_paced
+    description: boolean, whether the run is self-paced
+  - name: courserun_is_source_run
+    description: boolean, whether the run is the source other runs are cloned from
+  - name: courserun_language
+    description: str, language code of the run
+  - name: courserun_is_enrollable
+    description: boolean, whether the run is live, has a start date, has started enrollment
+      and has not ended it (CourseRun.is_enrollable in mitxonline)
+    tests: [not_null]
+  - name: courserun_course_number
+    description: str, the course part of the courseware id
+  - name: courserun_is_b2b_only
+    description: boolean, whether the run is offered only under a B2B contract
+    tests: [not_null]
+  - name: courserun_is_variant
+    description: boolean, whether the run is B2B-only or its language matches a variant
+      set of its course that is not the default
+    tests: [not_null]
+  - name: courserun_is_fully_enrollable
+    description: boolean, whether the run is enrollable and not past its enrollment
+      end, or its end when it has no enrollment end (is_fully_enrollable in MIT Learn)
+    tests: [not_null]
+  - name: courserun_enrollment_modes
+    description: array(str), slugs of the run's enrollment modes, sorted; null without
+      any
+  - name: courserun_has_verified_mode
+    description: boolean, whether the run offers the verified enrollment mode
+    tests: [not_null]
+  - name: courserun_has_audit_mode
+    description: boolean, whether the run offers the audit enrollment mode
+    tests: [not_null]
+
+- name: int__mitxonline__catalog_pages
+  description: The CMS page of each MITx Online course and program with what MITx
+    Online's catalog API reads off it. One row per course or program page; exactly
+    one of course_id and program_id is set.
+  columns:
+  - name: course_id
+    description: int, the page's course; null for a program page
+    tests:
+    - unique
+  - name: program_id
+    description: int, the page's program; null for a course page
+    tests:
+    - unique
+  - name: wagtail_page_id
+    description: int, primary key of the page in wagtailcore_page
+    tests: [unique, not_null]
+  - name: page_is_live
+    description: boolean, whether the page is published
+  - name: page_first_published_on
+    description: timestamp, when the page was first published
+  - name: page_last_published_on
+    description: timestamp, when the page was last published
+  - name: page_description
+    description: str, the page's description, as HTML
+  - name: page_length
+    description: str, free-text length of the course or program
+  - name: page_effort
+    description: str, free-text weekly effort
+  - name: page_min_weeks
+    description: int, shortest length in weeks
+  - name: page_max_weeks
+    description: int, longest length in weeks
+  - name: page_min_weekly_hours
+    description: str, least weekly hours
+  - name: page_max_weekly_hours
+    description: str, most weekly hours
+  - name: page_min_price
+    description: double, lowest certificate price in USD
+  - name: page_max_price
+    description: double, highest certificate price in USD
+  - name: page_is_in_learn_catalog
+    description: boolean, whether the page is included in the MIT Learn catalog
+    tests: [not_null]
+  - name: page_ingests_content_files_for_ai
+    description: boolean, whether MIT Learn ingests the course's content files regardless
+      of the catalog flag; false for a program page
+    tests: [not_null]
+  - name: page_feature_image_src
+    description: str, URL of the page's feature image with the ?v=<file hash> suffix
+      the API adds; null without an image
+  - name: page_instructors
+    description: array(str), names of the instructor pages linked to the page, in
+      link order; null without any
+
+- name: int__mitxonline__catalog_requirement_nodes
+  description: The nodes of every MITx Online program's requirement tree, one per
+    tree path. Where raw holds a deleted node and the node that took its path, only
+    the newer one is kept.
+  columns:
+  - name: programrequirement_id
+    description: int, primary key of the node
+    tests: [unique, not_null]
+  - name: program_id
+    description: int, the program the tree belongs to
+    tests: [not_null]
+  - name: course_id
+    description: int, the course a 'course' node refers to
+  - name: required_program_id
+    description: int, the program a 'program' node requires
+  - name: programrequirement_node_type
+    description: str, program_root, operator, course or program
+  - name: programrequirement_path
+    description: str, the node's treebeard path, four characters per level. Path order
+      is tree order
+    tests: [unique, not_null]
+  - name: programrequirement_depth
+    description: int, depth of the node; the root is 1
+
+unit_tests:
+- name: test_int__mitxonline__catalog_course_runs_enrollable_and_variant
+  description: >
+    A run is enrollable when it is live, has a start date, enrollment has started
+    and has not ended. It is fully enrollable while not past its enrollment end,
+    or its end without one. A B2B-only run is a variant, and so is a run whose
+    language matches a non-default variant set of its own course; a b2b.contractpage
+    variant with the same object id does not count.
+  model: int__mitxonline__catalog_course_runs
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_courserun')
+    rows:
+    - {courserun_id: 1, course_id: 1, courserun_readable_id: "course-v1:MITxT+1.01x+1T2000",
+      courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000", courserun_enrollment_start_on: "2000-01-01T00:00:00.000",
+      courserun_language: en, courserun_is_b2b_only: false}
+    - {courserun_id: 2, course_id: 1, courserun_readable_id: "MITx/1.02x/1T2000",
+      courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000", courserun_enrollment_start_on: "2000-01-01T00:00:00.000",
+      courserun_end_on: "2000-06-01T00:00:00.000", courserun_language: es, courserun_is_b2b_only: false}
+    - {courserun_id: 3, course_id: 1, courserun_readable_id: "course-v1:MITxT+1.01x+2T2000",
+      courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000", courserun_enrollment_start_on: "2000-01-01T00:00:00.000",
+      courserun_enrollment_end_on: "2000-06-01T00:00:00.000", courserun_language: en,
+      courserun_is_b2b_only: true}
+    - {courserun_id: 4, course_id: 1, courserun_readable_id: "course-v1:MITxT+1.01x+3T2000",
+      courserun_is_live: true, courserun_start_on: "2000-01-01T00:00:00.000", courserun_language: en,
+      courserun_is_b2b_only: false}
+    - {courserun_id: 5, course_id: 2, courserun_readable_id: "course-v1:MITxT+2.01x+1T2000",
+      courserun_is_live: false, courserun_start_on: "2000-01-01T00:00:00.000", courserun_enrollment_start_on: "2000-01-01T00:00:00.000",
+      courserun_language: es, courserun_is_b2b_only: false}
+  - input: ref('stg__mitxonline__app__postgres__courses_courserun_enrollment_modes')
+    rows:
+    - {courserun_id: 1, enrollmentmode_id: 1}
+    - {courserun_id: 1, enrollmentmode_id: 2}
+    - {courserun_id: 2, enrollmentmode_id: 1}
+  - input: ref('stg__mitxonline__app__postgres__courses_enrollmentmode')
+    rows:
+    - {enrollmentmode_id: 1, enrollmentmode_slug: audit}
+    - {enrollmentmode_id: 2, enrollmentmode_slug: verified}
+  - input: ref('stg__mitxonline__app__postgres__variants_supportedvariant')
+    rows:
+    - {supportedvariant_id: 1, contenttype_id: 10, supportedvariant_object_id: 1,
+      supportedvariant_language: en, supportedvariant_is_default: true}
+    - {supportedvariant_id: 2, contenttype_id: 10, supportedvariant_object_id: 1,
+      supportedvariant_language: en, supportedvariant_is_default: false}
+    - {supportedvariant_id: 3, contenttype_id: 10, supportedvariant_object_id: 1,
+      supportedvariant_language: es, supportedvariant_is_default: false}
+    - {supportedvariant_id: 4, contenttype_id: 20, supportedvariant_object_id: 2,
+      supportedvariant_language: es, supportedvariant_is_default: false}
+  - input: ref('stg__mitxonline__app__postgres__django_contenttype')
+    rows:
+    - {contenttype_id: 10, contenttype_full_name: courses_course}
+    - {contenttype_id: 20, contenttype_full_name: b2b_contractpage}
+  expect:
+    rows:
+    - {courserun_id: 1, courserun_course_number: "1.01x", courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: true, courserun_is_variant: false, courserun_has_verified_mode: true,
+      courserun_has_audit_mode: true}
+    - {courserun_id: 2, courserun_course_number: "1.02x", courserun_is_enrollable: true,
+      courserun_is_fully_enrollable: false, courserun_is_variant: true, courserun_has_verified_mode: false,
+      courserun_has_audit_mode: true}
+    - {courserun_id: 3, courserun_course_number: "1.01x", courserun_is_enrollable: false,
+      courserun_is_fully_enrollable: false, courserun_is_variant: true, courserun_has_verified_mode: false,
+      courserun_has_audit_mode: false}
+    - {courserun_id: 4, courserun_course_number: "1.01x", courserun_is_enrollable: false,
+      courserun_is_fully_enrollable: false, courserun_is_variant: false, courserun_has_verified_mode: false,
+      courserun_has_audit_mode: false}
+    - {courserun_id: 5, courserun_course_number: "2.01x", courserun_is_enrollable: false,
+      courserun_is_fully_enrollable: false, courserun_is_variant: false, courserun_has_verified_mode: false,
+      courserun_has_audit_mode: false}
+
+- name: test_int__mitxonline__catalog_requirement_nodes_keeps_the_newer_node_of_a_path
+  description: >
+    A deleted node stays in raw and its path goes to the node added in its place,
+    so of two rows with one path the higher id is kept.
+  model: int__mitxonline__catalog_requirement_nodes
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {programrequirement_id: 1, program_id: 1, programrequirement_path: "00010001",
+      course_id: 10}
+    - {programrequirement_id: 5, program_id: 1, programrequirement_path: "00010001",
+      course_id: 20}
+    - {programrequirement_id: 2, program_id: 1, programrequirement_path: "00010002",
+      course_id: 30}
+  expect:
+    rows:
+    - {programrequirement_id: 5, programrequirement_path: "00010001", course_id: 20}
+    - {programrequirement_id: 2, programrequirement_path: "00010002", course_id: 30}

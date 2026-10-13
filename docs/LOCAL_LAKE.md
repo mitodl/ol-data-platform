@@ -34,7 +34,7 @@ their parents read:
 | Fixture | Models |
 |---|---|
 | `ocw__s3.yml`, `ocw__app_postgres.yml` | `integrations__learn__ocw_courses`, `_ocw_content_files` |
-| `mitxonline__app_postgres.yml` | `integrations__learn__mitxonline_courses`, `_programs` |
+| `mitxonline__app_postgres.yml` | `integrations__learn__mitxonline_courses`, `_runs`, `_programs`, `_program_children` |
 | `xpro__app_postgres.yml` | `integrations__learn__xpro_courses`, `_programs`, `_runs` |
 
 The lake holds only what you built, so `--env dev` passes dbt
@@ -98,7 +98,7 @@ fixtures first and the source second when both cover a table. The models then bu
 ol-dbt fixtures load
 ol-dbt ingest local --unit mitxonline/app_postgres
 ol-dbt starrocks build --env dev \
-    --select "+integrations__learn__mitxonline_courses +integrations__learn__mitxonline_programs"
+    --select "+integrations__learn__mitxonline_courses +integrations__learn__mitxonline_programs +integrations__learn__mitxonline_program_children"
 ```
 
 MITx Online's `populate_course_data` seed (`seed-mitxonline-course-data` in Tilt) gives
