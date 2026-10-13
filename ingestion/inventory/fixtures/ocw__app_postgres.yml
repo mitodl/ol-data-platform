@@ -1,0 +1,128 @@
+---
+# Raw tables of the ocw/app_postgres unit for the local lake: the one that
+# +integrations__learn__ocw_courses and _ocw_content_files read. Loaded by
+# `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
+# leaves out Airbyte's _airbyte_meta struct. Every site is invented: nothing
+# here is copied from ocw-studio. A site's uuid is the site_uid of its
+# data.json in ocw__s3.yml, and its url_path is that file's directory.
+schema_version: 1
+tables:
+  raw__ocw__studio__postgres__websites_website:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      name: string
+      uuid: string
+      title: string
+      source: string
+      metadata: string
+      owner_id: long
+      short_id: string
+      url_path: string
+      synced_on: timestamp
+      created_on: timestamp
+      starter_id: long
+      updated_on: timestamp
+      sync_errors: string
+      sync_status: string
+      publish_date: timestamp
+      gdrive_folder: string
+      live_build_date: timestamp
+      draft_build_date: timestamp
+      unpublish_status: string
+      draft_publish_date: timestamp
+      live_publish_status: string
+      draft_publish_status: string
+      has_unpublished_live: boolean
+      latest_build_id_live: long
+      has_unpublished_draft: boolean
+      latest_build_id_draft: long
+      last_unpublished_by_id: long
+      live_last_published_by_id: long
+      draft_last_published_by_id: long
+      unpublish_status_updated_on: timestamp
+      first_published_to_production: timestamp
+      live_publish_status_updated_on: timestamp
+      draft_publish_status_updated_on: timestamp
+      site_type: string
+    rows:
+    - uuid: 0f0e0d0c-0b0a-4909-8807-060504030201
+      name: 99-001-local-fixtures-fall-2025
+      title: Local Fixtures
+      short_id: 99.001-fall-2025
+      source: studio
+      metadata:
+        course_title: Local Fixtures
+        primary_course_number: '99.001'
+        term: Fall
+        year: '2025'
+      owner_id: 1
+      starter_id: 1
+      url_path: courses/99-001-local-fixtures-fall-2025
+      live_publish_status: succeeded
+      has_unpublished_live: false
+      has_unpublished_draft: false
+      publish_date: 2026-09-30 00:00:00
+      first_published_to_production: 2025-09-01 00:00:00
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-30 00:00:00
+    # A renamed site. It is published at the spring-2026 path, and ocw__s3.yml
+    # still has its old spring-2016 directory, which no site has as url_path.
+    - uuid: 11111111-2222-4333-8444-555555555555
+      name: 99-002-sparse-metadata-spring-2026
+      title: Sparse Metadata
+      short_id: 99.002-spring-2026
+      source: studio
+      metadata:
+        course_title: Sparse Metadata
+        primary_course_number: '99.002'
+        term: Spring
+        year: '2026'
+      owner_id: 1
+      starter_id: 1
+      url_path: courses/99-002-sparse-metadata-spring-2026
+      live_publish_status: succeeded
+      has_unpublished_live: false
+      has_unpublished_draft: false
+      publish_date: 2026-09-30 00:00:00
+      first_published_to_production: 2016-02-01 00:00:00
+      created_on: 2016-01-15 00:00:00
+      updated_on: 2026-09-30 00:00:00
+    # Unpublished, as the bucket's newest set for its directory says.
+    - uuid: 66666666-7777-4888-8999-000000000000
+      name: 99-003-unpublished-fall-2024
+      title: Unpublished
+      short_id: 99.003-fall-2024
+      source: ocw-import
+      metadata:
+        course_title: Unpublished
+        primary_course_number: '99.003'
+        term: Fall
+        year: '2024'
+      owner_id: 1
+      starter_id: 1
+      url_path: courses/99-003-unpublished-fall-2024
+      unpublish_status: succeeded
+      live_publish_status: succeeded
+      has_unpublished_live: false
+      has_unpublished_draft: false
+      publish_date: 2024-09-01 00:00:00
+      first_published_to_production: 2024-09-01 00:00:00
+      created_on: 2024-08-01 00:00:00
+      updated_on: 2026-09-30 00:00:00
+    # Never published, so it has no url_path and no directory in the bucket.
+    - uuid: 77777777-8888-4999-8aaa-bbbbbbbbbbbb
+      name: 99-004-draft-only-fall-2026
+      title: Draft Only
+      short_id: 99.004-fall-2026
+      source: studio
+      metadata:
+        course_title: Draft Only
+        primary_course_number: '99.004'
+      owner_id: 1
+      starter_id: 1
+      has_unpublished_live: true
+      has_unpublished_draft: true
+      created_on: 2026-09-15 00:00:00
+      updated_on: 2026-09-15 00:00:00

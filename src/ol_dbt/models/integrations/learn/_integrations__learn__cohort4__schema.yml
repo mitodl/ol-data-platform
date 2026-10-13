@@ -97,6 +97,10 @@ models:
     bucket, which is what Learn's OCW ETL reads, and the text Tika extracts from
     each resource's file. Not applied: Learn's nh3 sanitizing of a resource's
     description, so description is the HTML OCW published.
+  config:
+    meta:
+      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
+      qa_buildable: false
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

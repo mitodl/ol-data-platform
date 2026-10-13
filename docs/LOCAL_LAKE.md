@@ -33,7 +33,7 @@ their parents read:
 
 | Fixture | Models |
 |---|---|
-| `ocw__s3.yml` | `integrations__learn__ocw_courses` |
+| `ocw__s3.yml`, `ocw__app_postgres.yml` | `integrations__learn__ocw_courses`, `_ocw_content_files` |
 | `mitxonline__app_postgres.yml` | `integrations__learn__mitxonline_courses`, `_programs` |
 | `xpro__app_postgres.yml` | `integrations__learn__xpro_courses`, `_programs`, `_runs` |
 
