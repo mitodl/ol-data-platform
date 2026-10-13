@@ -217,7 +217,12 @@ def drop_root(tmp_path, monkeypatch) -> UPath:
     return drop
 
 
-def _run_export(monkeypatch, fail_on: str | None = None):
+def _run_export(
+    monkeypatch, fail_on: str | None = None, replaced: dict[str, int] | None = None
+):
+    """Run the mitx export; ``replaced`` maps a model to reads that lose a file."""
+    replaced = dict(replaced or {})
+
     def read(
         table: _Table, _snapshot_id: int, columns: tuple[str, ...]
     ) -> Iterator[pl.DataFrame]:
@@ -229,6 +234,12 @@ def _run_export(monkeypatch, fail_on: str | None = None):
         # One batch per row, after the empty schema batch, so the drop is
         # assembled across batches the way a multi-file table's would be.
         yield frame.clear()
+        model = next((name for name in replaced if table.name.endswith(name)), None)
+        if model and replaced[model]:
+            replaced[model] -= 1
+            # Partway through, so rows of the dropped table are already written.
+            yield frame.head(1)
+            raise FileNotFoundError(table.name)
         yield from frame.iter_slices(1)
 
     monkeypatch.setattr(irx_export, "read_data_files", read)
@@ -273,6 +284,45 @@ def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> Non
     assert (drop_root / MANIFEST_NAME).exists()
 
     result = _run_export(monkeypatch, fail_on="courseware_studentmodule")
+
+    assert not result.success
+    assert not (drop_root / MANIFEST_NAME).exists()
+
+
+def test_a_table_replaced_mid_read_is_exported_again_from_the_start(
+    drop_root, monkeypatch
+) -> None:
+    assert _run_export(monkeypatch).success
+    clean = {
+        path.name: path.read_bytes()
+        for path in drop_root.iterdir()
+        if path.name != MANIFEST_NAME
+    }
+
+    result = _run_export(
+        monkeypatch,
+        replaced={
+            "courseware_studentmodule": irx_export.MAX_TABLE_READS - 1,
+            "forum_contents": 1,
+        },
+    )
+
+    assert result.success
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    for entry in manifest["files"]:
+        data = (drop_root / entry["name"]).read_bytes()
+        assert data == clean[entry["name"]]
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest()
+    row_counts = {entry["name"]: entry["row_count"] for entry in manifest["files"]}
+    assert row_counts["studentmodule_query.csv"] == 1
+    assert row_counts["forum_contents.parquet"] == len(FORUM_ROWS)
+
+
+def test_a_table_replaced_on_every_read_fails_the_drop(drop_root, monkeypatch) -> None:
+    result = _run_export(
+        monkeypatch,
+        replaced={"courseware_studentmodule": irx_export.MAX_TABLE_READS},
+    )
 
     assert not result.success
     assert not (drop_root / MANIFEST_NAME).exists()
