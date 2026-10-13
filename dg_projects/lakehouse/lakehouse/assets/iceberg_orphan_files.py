@@ -9,9 +9,12 @@ directory and compares it with what the table's metadata can still reach (see
 :mod:`ol_orchestrate.lib.iceberg_orphan_files`).
 
 It reports everywhere and deletes only where
-:data:`ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so. That set starts
-empty: the first report for an environment gets read by a person before the
-environment is added.
+:data:`ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so. An environment is
+added after a person has read a report for it. QA is on the list; production
+is not yet.
+
+The raw buckets are versioned with a 90-day noncurrent expiry, so a delete
+leaves the bytes billed for another 90 days and recoverable for as long.
 
 Raw only. The dbt layers lose files to expiry the same way, but a ``table``
 materialization moves to a new directory on every build and the sweep collects
@@ -40,7 +43,7 @@ RAW_GLUE_DATABASE = f"ol_warehouse_{WAREHOUSE_ENV}_raw"
 
 # Keyed on the Dagster environment, not the warehouse one: `dev` resolves to the
 # production warehouse, and a laptop must never be able to delete from it.
-ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset()
+ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
 
 # The floor has to exceed the longest time a writer holds a file before the
 # commit that references it. Not measured for the raw writers (an Airbyte sync

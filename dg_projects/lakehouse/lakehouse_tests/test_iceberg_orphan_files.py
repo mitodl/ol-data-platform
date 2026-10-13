@@ -89,8 +89,8 @@ def _enable_delete(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_no_environment_deletes_yet():
-    assert frozenset() == module.ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS
+def test_only_qa_deletes():
+    assert frozenset({"qa"}) == module.ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS
 
 
 def test_config_has_no_default_minimum_age():
