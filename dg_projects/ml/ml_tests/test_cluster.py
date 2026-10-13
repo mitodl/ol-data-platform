@@ -228,6 +228,7 @@ def test_extend_clusters_keeps_live_keys_and_adds_new_themes() -> None:
         ("text-embedding-3-small", 3, "summary"),
         dict.fromkeys(pks[:10], "a"),
         umap_params=(2, 5),
+        add_new_clusters=True,
         new_cluster_min_size=5,
     )
 
@@ -239,10 +240,22 @@ def test_extend_clusters_keeps_live_keys_and_adds_new_themes() -> None:
     assert len(set(cluster_ids[25:])) == 1
     assert len({cluster_ids[0], cluster_ids[15], cluster_ids[25]}) == 3
     assert cluster.NOISE_CLUSTER_ID not in cluster_ids
-    assert run_metadata["run_type"] == "extend"
+    assert run_metadata["run_type"] == "incremental"
     assert run_metadata["placed_noise_count"] == 5
     assert run_metadata["new_cluster_count"] == 2
     assert run_metadata["cluster_count"] == 3
+
+    # The default only places close noise: the new themes stay noise.
+    default_df, default_metadata = cluster.extend_clusters(
+        df,
+        ("text-embedding-3-small", 3, "summary"),
+        dict.fromkeys(pks[:10], "a"),
+        umap_params=(2, 5),
+    )
+    assert default_df["cluster_key"].to_list()[:15] == ["a"] * 15
+    assert set(default_df["cluster_id"].to_list()[15:]) == {cluster.NOISE_CLUSTER_ID}
+    assert default_metadata["new_cluster_count"] is None
+    assert default_metadata["cluster_count"] == 1
 
 
 def test_filter_conversation_scope_drops_conversations_below_source_minimum() -> None:

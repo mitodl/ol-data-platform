@@ -56,6 +56,7 @@ def test_small_run_writes_a_failed_run_row_with_no_candidates() -> None:
                 "ops": {
                     "feedback_clusters": {
                         "config": FeedbackClustersConfig(
+                            full_refresh=True,
                             min_cluster_size=5,
                             umap_n_components=5,
                             embedding_model_version="text-embedding-3-small",

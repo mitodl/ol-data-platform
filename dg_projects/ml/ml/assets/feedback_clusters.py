@@ -62,8 +62,8 @@ def _live_cluster_keys(
     )
     if not members_by_key:
         msg = (
-            "No live clusters for this embedding config to extend; run "
-            "feedback_clusters with mode 'full'."
+            "No live clusters for this embedding config to add to; run "
+            "feedback_clusters with full_refresh."
         )
         raise permanent_failure(msg)
     return {pk: key for key, pks in members_by_key.items() for pk in pks}
@@ -79,14 +79,21 @@ def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> N
 
 
 class FeedbackClustersConfig(Config):
-    mode: Literal["full", "extend"] = Field(
-        default="full",
+    full_refresh: bool = Field(
+        default=False,
         description=(
-            "'full' clusters every conversation again, which can split, merge, and "
-            "relabel existing clusters. 'extend' keeps the live clusters, places "
-            "close noise into them, and adds new themes only "
-            "(ml.lib.cluster.extend_clusters). The schedule and growth sensor use "
-            "'extend'."
+            "Rebuild all clusters from scratch, which can split, merge, and relabel "
+            "existing categories. Run it rarely, and review the labels after. False "
+            "keeps the live clusters and adds new conversations that clearly fit "
+            "one (ml.lib.cluster.extend_clusters)."
+        ),
+    )
+    add_new_clusters: bool = Field(
+        default=False,
+        description=(
+            "When not a full refresh, also create clusters for new common themes. "
+            "Run it with is_promoted false and promote the run after a review. "
+            "Ignored with full_refresh, which builds every cluster from scratch."
         ),
     )
     sample_limit: int | None = Field(
@@ -215,8 +222,8 @@ class FeedbackClustersConfig(Config):
 )
 def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersConfig):
     """
-    Reduce (UMAP) and cluster (HDBSCAN) feedback conversation embeddings, or, in
-    'extend' mode, add to the live clusters without reclustering them.
+    Add new feedback conversations to the live clusters, or, with full_refresh,
+    reduce (UMAP) and cluster (HDBSCAN) every conversation embedding again.
 
     One row lands in feedback_cluster_run describing the run as a whole (params,
     cluster/noise counts, silhouette, run_status='completed'|'failed', is_promoted
@@ -287,7 +294,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     umap_params = (config.umap_n_components, config.umap_n_neighbors)
 
     # umap_n_components too: UMAP needs n_components < height or it raises TypeError.
-    if config.mode == "full" and (
+    if config.full_refresh and (
         embeddings_df.height < config.min_cluster_size
         or embeddings_df.height <= config.umap_n_components
     ):
@@ -316,7 +323,9 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             config.hdbscan_cluster_selection_method
         )
         failed_metadata["max_clusters"] = config.max_clusters
-        failed_metadata["run_type"] = config.mode
+        failed_metadata["run_type"] = (
+            "full_refresh" if config.full_refresh else "incremental"
+        )
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
             output_name="feedback_cluster_run",
@@ -337,7 +346,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         "cluster_run_id": cluster_run_id,
         "is_promoted": config.is_promoted,
     }
-    if config.mode == "extend":
+    if not config.full_refresh:
         candidates_df, run_metadata = extend_clusters(
             embeddings_df,
             embedding_provenance,
@@ -345,6 +354,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
                 catalog, embedding_provenance, config.feedback_since, config.platforms
             ),
             umap_params=umap_params,
+            add_new_clusters=config.add_new_clusters,
             **step_settings,
         )
     else:

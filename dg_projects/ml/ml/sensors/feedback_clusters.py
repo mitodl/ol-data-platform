@@ -26,7 +26,7 @@ from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
     minimum_interval_seconds=3600,
     default_status=DefaultSensorStatus.STOPPED,
     description=(
-        "Triggers an extend run of feedback_clusters early when the embedded "
+        "Triggers an incremental run of feedback_clusters early when the embedded "
         "corpus has grown enough since the live run, before "
         "feedback_clusters_weekly_schedule. Only checks corpus growth -- an "
         "unplaced-share trigger would also need feedback_cluster_membership."
@@ -82,13 +82,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         embedding_count, last_completed_total_conversations
     ):
         return RunRequest(
-            run_config={
-                "ops": {
-                    "feedback_clusters": {
-                        "config": {"is_promoted": True, "mode": "extend"}
-                    }
-                }
-            }
+            run_config={"ops": {"feedback_clusters": {"config": {"is_promoted": True}}}}
         )
     return SkipReason(
         "Corpus growth since the last completed run is below the trigger threshold"

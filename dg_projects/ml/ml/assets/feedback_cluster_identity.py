@@ -360,7 +360,7 @@ def feedback_cluster_identity(
     embedding_model_version = run_row["embedding_model_version"]
     embedding_dim = run_row["embedding_dim"]
     embedding_input_filter = run_row["embedding_input_filter"]
-    is_extend_run = run_row.get("run_type") == "extend"
+    is_extend_run = run_row.get("run_type") == "incremental"
     candidate_columns = ["feedback_conversation_pk", "cluster_id"]
     # Only extend runs write cluster_key; an older table may not have the column
     if is_extend_run:

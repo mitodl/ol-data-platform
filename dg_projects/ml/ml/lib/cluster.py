@@ -44,8 +44,9 @@ CLUSTER_RUN_SCHEMA = {
     "hdbscan_min_samples": pl.Int64,
     "hdbscan_cluster_selection_method": pl.String,
     "max_clusters": pl.Int64,
-    # 'full' reclusters everything; 'extend' keeps the live clusters (see
-    # extend_clusters). Null on runs written before this column existed: full.
+    # 'full_refresh' reclusters everything; 'incremental' keeps the live clusters
+    # (see extend_clusters). Null on runs written before this column existed: a full
+    # refresh.
     "run_type": pl.String,
     # Extend runs only
     "placed_noise_count": pl.Int64,
@@ -585,7 +586,7 @@ def cluster_embeddings(  # noqa: PLR0913 -- provenance/params/retry-id are each 
         "hdbscan_min_samples": min_samples,
         "hdbscan_cluster_selection_method": cluster_selection_method,
         "max_clusters": max_clusters,
-        "run_type": "full",
+        "run_type": "full_refresh",
     }
     return candidates_df, run_metadata
 
@@ -601,14 +602,16 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
     is_promoted: bool = DEFAULT_IS_PROMOTED,
     min_samples: int | None = HDBSCAN_MIN_SAMPLES,
     cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    add_new_clusters: bool = False,
     new_cluster_min_size: int = NEW_CLUSTER_MIN_SIZE,
 ) -> tuple[pl.DataFrame, dict[str, Any]]:
-    """Keep the current clusters, place close noise into them, and add new themes.
+    """Keep the current clusters and place close noise into them; with
+    add_new_clusters, also add new themes (cluster_new_themes).
 
     A full recluster reshuffles many clusters even when the data barely changes,
     so the scheduled runs use this instead. Every conversation in
     cluster_key_by_pk (its live, active cluster_key) keeps that key; the rest are
-    noise for place_noise and cluster_new_themes. Each candidate row carries the
+    noise. Each candidate row carries the
     cluster_key it keeps, which feedback_cluster_identity uses in place of
     Jaccard matching. Returns the same shape as cluster_embeddings.
     """
@@ -634,16 +637,18 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
     labels, placed_noise_count = place_noise(unit_vectors, labels)
     # No HDBSCAN membership strength for clusters this run did not build
     probabilities = np.full(len(labels), np.nan)
-    labels, probabilities, new_cluster_count = cluster_new_themes(
-        unit_vectors,
-        labels,
-        probabilities,
-        new_cluster_min_size,
-        umap_params=umap_params,
-        random_state=random_state,
-        min_samples=min_samples,
-        cluster_selection_method=cluster_selection_method,
-    )
+    new_cluster_count = None
+    if add_new_clusters:
+        labels, probabilities, new_cluster_count = cluster_new_themes(
+            unit_vectors,
+            labels,
+            probabilities,
+            new_cluster_min_size,
+            umap_params=umap_params,
+            random_state=random_state,
+            min_samples=min_samples,
+            cluster_selection_method=cluster_selection_method,
+        )
     carried_keys = [
         cluster_keys[label] if 0 <= label < len(cluster_keys) else None
         for label in labels
@@ -659,7 +664,7 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
     umap_n_components, umap_n_neighbors = umap_params
     run_metadata = {
         "cluster_run_id": cluster_run_id,
-        "algorithm": "extend",
+        "algorithm": "incremental",
         "embedding_model_version": embedding_model_version,
         "embedding_dim": embedding_dim,
         "embedding_input_filter": embedding_input_filter,
@@ -677,7 +682,7 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
         "hdbscan_min_samples": min_samples,
         "hdbscan_cluster_selection_method": cluster_selection_method,
         "max_clusters": None,
-        "run_type": "extend",
+        "run_type": "incremental",
         "placed_noise_count": placed_noise_count,
         "new_cluster_count": new_cluster_count,
     }
