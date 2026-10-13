@@ -450,13 +450,15 @@ with mitxonline_enrollments as (
     group by platform, enrollment_type
 )
 
--- Snapshot of the target's current (enrollment_key, user_fk) pairs, used to re-select rows
--- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
--- change, so the activity-timestamp watermark alone would never catch it).
-, stale_user_fk_lookup as (
+-- Snapshot of the target's current (enrollment_key, user_fk, courserun_fk) triples, used to
+-- re-select rows whose user_fk has gone stale after a dim_user re-key, or whose courserun_fk
+-- has changed (e.g. an Emeritus run code that gains an xPro match). The source row itself did
+-- not change, so the activity-timestamp watermark alone would never catch either.
+, stale_fk_lookup as (
     select
         enrollment_key
         , user_fk as stored_user_fk
+        , courserun_fk as stored_courserun_fk
     from {{ this }}
 )
 {% endif %}
@@ -490,8 +492,8 @@ with mitxonline_enrollments as (
     left join incremental_watermarks w
         on w.watermark_platform = ewf.platform
         and w.watermark_enrollment_type = ewf.enrollment_scope
-    left join stale_user_fk_lookup as sufk
-        on sufk.enrollment_key = {{ dbt_utils.generate_surrogate_key([
+    left join stale_fk_lookup as sfk
+        on sfk.enrollment_key = {{ dbt_utils.generate_surrogate_key([
             "cast(ewf.enrollment_id as varchar)",
             "ewf.platform",
             "ewf.enrollment_scope"
@@ -509,7 +511,9 @@ with mitxonline_enrollments as (
         )
         or ewf.enrollment_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
-        or sufk.stored_user_fk is distinct from ewf.user_fk
+        or sfk.stored_user_fk is distinct from ewf.user_fk
+        -- course run re-resolved: re-select rows whose resolved courserun_fk no longer matches
+        or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
     )
     {% endif %}
 )

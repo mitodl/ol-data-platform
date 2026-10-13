@@ -109,7 +109,7 @@ models:
     description: Enrollment creation timestamp (for incremental processing)
   - name: enrollment_updated_on
     description: Enrollment last-updated timestamp (for incremental processing). Null
-      for edxorg and residential platforms.
+      for edxorg, residential and global_alumni platforms.
   - name: enrollment_is_edx_enrolled
     description: >
       Boolean indicating whether the learner is enrolled on the edX side of the platform.
@@ -1235,6 +1235,110 @@ unit_tests:
       enrollment_type: "course"
       enrollment_date_key: 20240115
       user_fk: "NEW_USER_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_refreshes_stale_courserun_fk_after_course_run_remap
+  description: >
+    When an enrollment resolves to a different dim_course_run than the one stored
+    (for
+    example an Emeritus run code that gains an xPro match after first resolving to
+    its
+    platform-native run), the incremental filter must re-select it and write the new
+    courserun_fk, even though user_fk and the source timestamps did not change.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows:
+    - courserunenrollment_id: 6001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+      courserunenrollment_enrollment_status: "enrolled"
+      courserunenrollment_is_edx_enrolled: true
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "NEW_RUN_PK"
+      courserun_readable_id: "course-v1:MITxT+1"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+      # Existing target state carries the old courserun_fk; an unrelated later-dated enrollment pushes the watermark past our row so only the stale-courserun_fk check can reselect it.
+  - input: this
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "USER_PK"
+      courserun_fk: "OLD_RUN_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "9999"
+      enrollment_type: "course"
+      enrollment_date_key: 20240201
+      user_fk: "USER_PK"
+      courserun_fk: "OLD_RUN_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_updated_on: "2024-02-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+  expect:
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "USER_PK"
+      courserun_fk: "NEW_RUN_PK"
       platform: "mitxonline"
       enrollment_is_active: true
       enrollment_mode: "verified"
