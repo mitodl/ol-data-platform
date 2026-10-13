@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -286,6 +287,8 @@ def test_validate_generated_compares_keys_as_the_column_holds_them(
         ("int", 2**31),
         ("long", -(2**63) - 1),
         ("long", 1.5),
+        ("long", Decimal("2.7")),
+        ("long", "2.7"),
         ("float", 1e39),
         ("decimal(5,2)", "1.234"),
         ("decimal(5,2)", 1000),
@@ -311,6 +314,8 @@ def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path,
     [
         ("int", 2**31 - 1),
         ("long", -(2**63)),
+        ("long", Decimal("3.0")),
+        ("long", 4.0),
         ("decimal(5,2)", "999.99"),
         ("decimal(5,2)", -0.5),
         ("decimal(5,2)", "1.500"),

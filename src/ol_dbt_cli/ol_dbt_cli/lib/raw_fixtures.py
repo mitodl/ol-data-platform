@@ -327,9 +327,10 @@ def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[
 
 def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
     if fixture_type in _INTEGER_BITS:
-        if isinstance(value, float) and not value.is_integer():
-            raise ValueError(value)
         number = int(value)
+        # int() drops the fraction of a float or Decimal. Of a string it raises.
+        if not isinstance(value, str) and number != value:
+            raise ValueError(value)
         limit = 2 ** (_INTEGER_BITS[fixture_type] - 1)
         if not -limit <= number < limit:
             raise OverflowError(number)
