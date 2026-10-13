@@ -11,6 +11,7 @@ from ml.lib.cluster import (
     DEFAULT_FEEDBACK_SINCE,
     DEFAULT_PLATFORMS,
     filter_conversation_scope,
+    platforms_to_run_value,
     should_trigger_early_recluster,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
@@ -63,19 +64,47 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         .item()
     )
 
-    # The live run, not the latest promoted one: a run promoted by hand through
-    # feedback_cluster_identity's cluster_run_id keeps is_promoted=false.
-    live_run_id = latest_identity_processed_run(catalog, cluster_database_name)
-    if live_run_id is None:
+    if latest_identity_processed_run(catalog, cluster_database_name) is None:
         return SkipReason("No live clusters to extend; run a full recluster first")
-    last_completed_total_conversations = (
+    processed_run_ids = (
+        get_dbt_model_as_dataframe(
+            database_name=cluster_database_name, table_name="feedback_cluster_lineage"
+        )
+        .select("cluster_run_id")
+        .unique()
+        .collect()["cluster_run_id"]
+        .to_list()
+    )
+    # Promoted counts as soon as the run completes, so this sensor's own run is not
+    # started again while identity catches up. Processed counts too: a run promoted
+    # by hand through identity's cluster_run_id keeps is_promoted=false.
+    baseline_df = (
         get_dbt_model_as_dataframe(
             database_name=cluster_database_name, table_name="feedback_cluster_run"
         )
-        .filter(pl.col("cluster_run_id") == live_run_id)
+        .filter(
+            (pl.col("run_status") == "completed")
+            & (
+                pl.col("is_promoted")
+                | pl.col("cluster_run_id").is_in(processed_run_ids)
+            )
+            & (pl.col("embedding_model_version") == default_embedding_model_version())
+            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            & (pl.col("embedding_input_filter") == "summary")
+            & pl.col("feedback_since").eq_missing(
+                pl.lit(DEFAULT_FEEDBACK_SINCE, dtype=pl.String)
+            )
+            & pl.col("platforms").eq_missing(
+                pl.lit(platforms_to_run_value(DEFAULT_PLATFORMS), dtype=pl.String)
+            )
+        )
+        .sort("run_at", descending=True)
         .select("total_conversations")
+        .limit(1)
         .collect()
-        .item()
+    )
+    last_completed_total_conversations = (
+        baseline_df.item() if baseline_df.height else None
     )
 
     if should_trigger_early_recluster(

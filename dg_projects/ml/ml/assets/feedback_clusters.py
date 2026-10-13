@@ -32,6 +32,7 @@ from ml.lib.cluster import (
     filter_conversation_scope,
     platforms_to_run_value,
 )
+from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failures import permanent_failure
@@ -56,17 +57,40 @@ def _live_cluster_keys(
     feedback_since: str | None,
     platforms: list[str] | None,
 ) -> dict[str, str]:
-    """feedback_conversation_pk -> active cluster_key, for an extend run to keep."""
+    # Another scope would carry no member forward, and identity would then retire
+    # every live key without the continuity floor to stop it.
+    live_run_id = latest_identity_processed_run(catalog, database_name)
+    live_run = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster_run"
+        )
+        .filter(pl.col("cluster_run_id") == live_run_id)
+        .collect()
+        .to_dicts()
+    )
+    if live_run and (
+        live_run[0].get("feedback_since"),
+        live_run[0].get("platforms"),
+    ) != (
+        feedback_since,
+        platforms_to_run_value(platforms),
+    ):
+        msg = (
+            f"feedback_since/platforms differ from the live run {live_run_id}'s; "
+            "change the scope only with full_refresh."
+        )
+        raise permanent_failure(msg)
     members_by_key = _active_cluster_members(
         catalog, *embedding_provenance, feedback_since, platforms
     )
-    if not members_by_key:
+    cluster_key_by_pk = {pk: key for key, pks in members_by_key.items() for pk in pks}
+    if not cluster_key_by_pk:
         msg = (
-            "No live clusters for this embedding config to add to; run "
+            "No live cluster has members for this embedding config and scope; run "
             "feedback_clusters with full_refresh."
         )
         raise permanent_failure(msg)
-    return {pk: key for key, pks in members_by_key.items() for pk in pks}
+    return cluster_key_by_pk
 
 
 def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> None:
@@ -323,9 +347,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             config.hdbscan_cluster_selection_method
         )
         failed_metadata["max_clusters"] = config.max_clusters
-        failed_metadata["run_type"] = (
-            "full_refresh" if config.full_refresh else "incremental"
-        )
+        failed_metadata["run_type"] = "full_refresh"
         yield Output(
             pl.DataFrame([failed_metadata], schema=CLUSTER_RUN_SCHEMA),
             output_name="feedback_cluster_run",

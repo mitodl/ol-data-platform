@@ -364,12 +364,13 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     random_state: int = RANDOM_STATE,
     min_samples: int | None = HDBSCAN_MIN_SAMPLES,
     cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
+    first_new_cluster_id: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, int]:
     """Cluster the noise, with UMAP fitted on the noise alone, and keep each group
     whose centroid is not close to any existing cluster's as a new cluster.
 
-    New clusters get ids after the existing ones. Returns (labels, probabilities,
-    new_cluster_count).
+    New clusters get ids after the existing ones, and never below
+    first_new_cluster_id. Returns (labels, probabilities, new_cluster_count).
     """
     umap_n_components, umap_n_neighbors = umap_params
     noise = np.flatnonzero(labels == NOISE_CLUSTER_ID)
@@ -391,7 +392,7 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     _, centroids = _unit_centroids(unit_vectors, labels)
     labels = labels.copy()
     probabilities = probabilities.copy()
-    next_cluster_id = labels.max() + 1
+    next_cluster_id = max(labels.max() + 1, first_new_cluster_id)
     new_cluster_count = 0
     for group in np.unique(group_labels[group_labels != NOISE_CLUSTER_ID]):
         in_group = group_labels == group
@@ -648,6 +649,8 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
             random_state=random_state,
             min_samples=min_samples,
             cluster_selection_method=cluster_selection_method,
+            # A live key with no member in this run still owns its id
+            first_new_cluster_id=len(cluster_keys),
         )
     carried_keys = [
         cluster_keys[label] if 0 <= label < len(cluster_keys) else None

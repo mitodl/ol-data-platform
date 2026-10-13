@@ -245,6 +245,19 @@ def test_extend_clusters_keeps_live_keys_and_adds_new_themes() -> None:
     assert run_metadata["new_cluster_count"] == 2
     assert run_metadata["cluster_count"] == 3
 
+    # A live key with no member in this run keeps its id: "z" sorts after "a", so
+    # the first new theme would otherwise take it and continue "z".
+    gap_df, _ = cluster.extend_clusters(
+        df,
+        ("text-embedding-3-small", 3, "summary"),
+        {**dict.fromkeys(pks[:10], "a"), "missing": "z"},
+        umap_params=(2, 5),
+        add_new_clusters=True,
+        new_cluster_min_size=5,
+    )
+    assert "z" not in gap_df["cluster_key"].to_list()
+    assert gap_df["cluster_key"].to_list()[15:] == [None] * 20
+
     # The default only places close noise: the new themes stay noise.
     default_df, default_metadata = cluster.extend_clusters(
         df,
