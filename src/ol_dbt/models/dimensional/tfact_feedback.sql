@@ -2,8 +2,20 @@
     materialized='incremental',
     unique_key='feedback_pk',
     incremental_strategy='delete+insert',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook="delete from {{ this }}
+    where feedback_pk not in (
+        select {{ dbt_utils.generate_surrogate_key(['source_slug', 'source_record_ref']) }}
+        from {{ ref('int__feedback__unioned') }}
+    )
+    and feedback_source_fk in (
+        select distinct {{ dbt_utils.generate_surrogate_key(['source_slug']) }}
+        from {{ ref('int__feedback__unioned') }}
+    )"
 ) }}
+-- The post_hook deletes turns no longer upstream, which would otherwise keep a
+-- turn_index that a renumbered turn now holds. It skips a source with no rows upstream,
+-- so a failed load cannot empty that source here.
 
 with unioned as (
     select
@@ -167,4 +179,7 @@ left join {{ this }} as existing
             or existing.subject_type is distinct from unioned.subject_type
         )
     )
+    -- A turn not stored yet, or renumbered upstream: neither moves updated_at.
+    or existing.feedback_pk is null
+    or existing.turn_index is distinct from unioned.turn_index
 {% endif %}

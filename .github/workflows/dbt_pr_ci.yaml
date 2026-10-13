@@ -88,11 +88,12 @@ jobs:
     # contract check fails when a dbt model or source drops or retypes a column
     # its OpenMetadata contract in contracts/ lists. The metric registry check
     # fails when a file in metrics/ would not sync to OpenMetadata, or names a
-    # column its model no longer declares or selects.
-    - name: Layering, QA branch contract, data contract and metric registry lint
+    # column its model no longer declares or selects. The pipe concat check
+    # fails on a || operator, which StarRocks evaluates as a logical OR.
+    - name: Layering, QA branch, contract, metric registry and pipe concat lint
       run: |
         uv run ol-dbt validate \
-          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry \
+          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat \
           --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
@@ -104,7 +105,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry \
+          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.

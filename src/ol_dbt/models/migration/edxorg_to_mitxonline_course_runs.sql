@@ -60,7 +60,7 @@ select distinct
     , if(
         mitx_courses.mitxonline_course_id is not null
         , mitx_courses.course_readable_id
-        , 'course-v1:MITx+' || mitx_courses.course_number
+        , {{ dbt.concat(["'course-v1:MITx+'", "mitx_courses.course_number"]) }}
     ) as course_readable_id
     , mitx_courses.course_title
     , edx_courseruns.courserun_is_self_paced as is_self_paced

@@ -1,0 +1,969 @@
+---
+# Raw tables of the xpro/app_postgres unit for the local lake: the 18 that
+# +integrations__learn__xpro_courses, _programs and _runs read. Loaded by
+# `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
+# leaves out Airbyte's _airbyte_meta struct. Every row is invented: nothing here
+# is copied from a deployed xPRO.
+schema_version: 1
+tables:
+  raw__xpro__app__postgres__cms_certificatepage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      ceus: double
+      overrides: string
+      page_ptr_id: long
+      signatories: string
+      product_name: string
+      institute_text: string
+      partner_logo_id: long
+      partner_logo_placement: long
+      display_mit_seal: boolean
+    rows:
+    # `signatories` is a Wagtail StreamField, stored as a JSON list of blocks.
+    - page_ptr_id: 11
+      product_name: Local Fixtures I
+      ceus: 2.5
+      signatories:
+      - type: signatory
+        value: 5
+        id: 0f0e0d0c-0b0a-4909-8807-060504030201
+      display_mit_seal: true
+    - page_ptr_id: 21
+      product_name: Local Fixtures Professional Certificate
+      ceus: 10.0
+      signatories:
+      - type: signatory
+        value: 5
+        id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+      - type: signatory
+        value: 6
+        id: 11111111-2222-4333-8444-555555555555
+      display_mit_seal: true
+  raw__xpro__app__postgres__cms_coursepage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      format: string
+      content: string
+      subhead: string
+      duration: string
+      featured: boolean
+      course_id: long
+      max_weeks: long
+      min_weeks: long
+      video_url: string
+      description: string
+      language_id: long
+      page_ptr_id: long
+      video_title: string
+      catalog_details: string
+      search_image_id: long
+      time_commitment: string
+      max_weekly_hours: long
+      min_weekly_hours: long
+      thumbnail_image_id: long
+      background_image_id: long
+      background_video_url: string
+      external_marketing_url: string
+      marketing_hubspot_form_id: string
+    rows:
+    - page_ptr_id: 10
+      course_id: 1
+      description: <p>A course that exists only in the local lake.</p>
+      subhead: Fixtures, part one
+      format: Online
+      duration: 6 weeks
+      time_commitment: 4-6 hours per week
+      min_weeks: 6
+      max_weeks: 6
+      min_weekly_hours: 4
+      max_weekly_hours: 6
+      thumbnail_image_id: 100
+      catalog_details: ''
+      featured: false
+    # No optional fields: the image falls back to the default one.
+    - page_ptr_id: 13
+      course_id: 2
+      description: <p>The second course of a local-only program.</p>
+      subhead: Fixtures, part two
+      format: Online
+      catalog_details: ''
+      featured: false
+    - page_ptr_id: 15
+      course_id: 4
+      description: <p>A course whose page was never published.</p>
+      subhead: Never published
+      format: Online
+      catalog_details: ''
+      featured: false
+  raw__xpro__app__postgres__cms_coursepage_topics:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      coursepage_id: long
+      coursetopic_id: long
+    rows:
+    - id: 1
+      coursepage_id: 10
+      coursetopic_id: 1
+    - id: 2
+      coursepage_id: 10
+      coursetopic_id: 2
+    - id: 3
+      coursepage_id: 13
+      coursetopic_id: 1
+  raw__xpro__app__postgres__cms_externalcoursepage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      format: string
+      content: string
+      subhead: string
+      duration: string
+      featured: boolean
+      course_id: long
+      max_weeks: long
+      min_weeks: long
+      video_url: string
+      description: string
+      language_id: long
+      page_ptr_id: long
+      video_title: string
+      catalog_details: string
+      search_image_id: long
+      time_commitment: string
+      max_weekly_hours: long
+      min_weekly_hours: long
+      thumbnail_image_id: long
+      background_image_id: long
+      background_video_url: string
+      external_marketing_url: string
+      marketing_hubspot_form_id: string
+    rows:
+    - page_ptr_id: 14
+      course_id: 3
+      description: <p>A partner's course that exists only in the local lake.</p>
+      subhead: A partner's course
+      format: Other
+      duration: 2 days
+      external_marketing_url: https://partner.example.com/external-leadership-course
+      catalog_details: ''
+      featured: false
+  raw__xpro__app__postgres__cms_externalcoursepage_topics:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      coursetopic_id: long
+      externalcoursepage_id: long
+    rows:
+    - id: 1
+      externalcoursepage_id: 14
+      coursetopic_id: 3
+  raw__xpro__app__postgres__cms_externalprogrampage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      format: string
+      content: string
+      subhead: string
+      duration: string
+      featured: boolean
+      max_weeks: long
+      min_weeks: long
+      video_url: string
+      program_id: long
+      description: string
+      language_id: long
+      page_ptr_id: long
+      video_title: string
+      catalog_details: string
+      search_image_id: long
+      time_commitment: string
+      max_weekly_hours: long
+      min_weekly_hours: long
+      thumbnail_image_id: long
+      background_image_id: long
+      background_video_url: string
+      external_marketing_url: string
+      marketing_hubspot_form_id: string
+    rows:
+    - page_ptr_id: 23
+      program_id: 2
+      description: <p>A partner's program that exists only in the local lake.</p>
+      subhead: A partner's program
+      format: Other
+      duration: 3 months
+      external_marketing_url: https://partner.example.com/external-leadership-program
+      catalog_details: ''
+      featured: false
+  raw__xpro__app__postgres__cms_facultymemberspage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      heading: string
+      members: string
+      subhead: string
+      page_ptr_id: long
+    rows:
+    # `members` is a StreamField too. The models read each block's value.name.
+    - page_ptr_id: 12
+      heading: Your instructors
+      members:
+      - type: member
+        value:
+          name: Ada Example
+          image: 100
+          description: <p>Teaches courses that exist only in the local lake.</p>
+        id: 66666666-7777-4888-8999-000000000000
+      - type: member
+        value:
+          name: Grace Sample
+          image:
+          description: ''
+        id: 66666666-7777-4888-8999-000000000001
+    - page_ptr_id: 22
+      heading: Program faculty
+      members:
+      - type: member
+        value:
+          name: Ada Example
+          image: 100
+          description: <p>Teaches courses that exist only in the local lake.</p>
+        id: 66666666-7777-4888-8999-000000000002
+  raw__xpro__app__postgres__cms_programpage:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      format: string
+      content: string
+      subhead: string
+      duration: string
+      featured: boolean
+      max_weeks: long
+      min_weeks: long
+      video_url: string
+      program_id: long
+      description: string
+      language_id: long
+      page_ptr_id: long
+      video_title: string
+      catalog_details: string
+      search_image_id: long
+      time_commitment: string
+      max_weekly_hours: long
+      min_weekly_hours: long
+      thumbnail_image_id: long
+      background_image_id: long
+      background_video_url: string
+      external_marketing_url: string
+      marketing_hubspot_form_id: string
+    rows:
+    - page_ptr_id: 20
+      program_id: 1
+      description: <p>A program that exists only in the local lake.</p>
+      subhead: Fixtures, start to finish
+      format: Online
+      duration: 12 weeks
+      time_commitment: 4-6 hours per week
+      min_weeks: 12
+      max_weeks: 12
+      min_weekly_hours: 4
+      max_weekly_hours: 6
+      thumbnail_image_id: 101
+      catalog_details: ''
+      featured: true
+    - page_ptr_id: 24
+      program_id: 3
+      description: <p>A program whose only product was retired.</p>
+      subhead: Retired
+      format: Online
+      catalog_details: ''
+      featured: false
+  raw__xpro__app__postgres__courses_course:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      title: string
+      created_on: timestamp
+      program_id: long
+      updated_on: timestamp
+      is_external: boolean
+      platform_id: long
+      readable_id: string
+      external_course_id: string
+      position_in_program: long
+    rows:
+    - id: 1
+      live: true
+      title: Local Fixtures I
+      readable_id: course-v1:xPRO+LF1x
+      program_id: 1
+      position_in_program: 1
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # Its one run has no product, so the course is listed with published false
+    # and the run is not.
+    - id: 2
+      live: true
+      title: Local Fixtures II
+      readable_id: course-v1:xPRO+LF2x
+      program_id: 1
+      position_in_program: 2
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # An external course outside any program, on an external course page.
+    - id: 3
+      live: true
+      title: External Leadership Course
+      readable_id: course-v1:xPRO+EXT1x
+      platform_id: 2
+      is_external: true
+      external_course_id: EXT-1
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # Live, but its page is a draft, so it must not reach the Learn model.
+    - id: 4
+      live: true
+      title: Draft Page Course
+      readable_id: course-v1:xPRO+DRAFTx
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # Not live, so it must not reach the Learn model. It is in program 1, and
+    # the program's course list leaves it out.
+    - id: 5
+      live: false
+      title: Unpublished Course
+      readable_id: course-v1:xPRO+UNPUBx
+      program_id: 1
+      position_in_program: 3
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+  raw__xpro__app__postgres__courses_courserun:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      title: string
+      run_tag: string
+      end_date: timestamp
+      course_id: long
+      created_on: timestamp
+      start_date: timestamp
+      updated_on: timestamp
+      courseware_id: string
+      enrollment_end: timestamp
+      expiration_date: timestamp
+      enrollment_start: timestamp
+      courseware_url_path: string
+      external_course_run_id: string
+    rows:
+    # Whether a run is expired is decided against the clock when the model
+    # builds, so the open runs end in 2099 and the closed one ended in 2025.
+    - id: 1
+      course_id: 1
+      live: true
+      title: Local Fixtures I
+      run_tag: R1
+      courseware_id: course-v1:xPRO+LF1x+R1
+      courseware_url_path: /courses/course-v1:xPRO+LF1x+R1/course/
+      start_date: 2026-01-15 00:00:00
+      end_date: 2099-12-31 00:00:00
+      enrollment_start: 2025-12-01 00:00:00
+      enrollment_end: 2099-06-30 00:00:00
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    # Ended: it has a product, and is still not listed.
+    - id: 2
+      course_id: 1
+      live: true
+      title: Local Fixtures I
+      run_tag: R0
+      courseware_id: course-v1:xPRO+LF1x+R0
+      courseware_url_path: /courses/course-v1:xPRO+LF1x+R0/course/
+      start_date: 2025-01-15 00:00:00
+      end_date: 2025-06-30 00:00:00
+      enrollment_start: 2024-12-01 00:00:00
+      enrollment_end: 2025-02-01 00:00:00
+      created_on: 2024-11-01 00:00:00
+      updated_on: 2024-11-01 00:00:00
+    # Open with no end or enrollment window, and no product.
+    - id: 3
+      course_id: 2
+      live: true
+      title: Local Fixtures II
+      run_tag: R1
+      courseware_id: course-v1:xPRO+LF2x+R1
+      courseware_url_path: /courses/course-v1:xPRO+LF2x+R1/course/
+      start_date: 2026-03-01 00:00:00
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 4
+      course_id: 3
+      live: true
+      title: External Leadership Course
+      run_tag: R1
+      courseware_id: course-v1:xPRO+EXT1x+R1
+      external_course_run_id: EXT-1-R1
+      start_date: 2026-02-01 00:00:00
+      end_date: 2099-12-31 00:00:00
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    # Not live.
+    - id: 5
+      course_id: 1
+      live: false
+      title: Local Fixtures I
+      run_tag: R2
+      courseware_id: course-v1:xPRO+LF1x+R2
+      start_date: 2026-06-01 00:00:00
+      end_date: 2099-12-31 00:00:00
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    # Live with no start date: the catalog does not consider it.
+    - id: 6
+      course_id: 1
+      live: true
+      title: Local Fixtures I
+      run_tag: R3
+      courseware_id: course-v1:xPRO+LF1x+R3
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+  raw__xpro__app__postgres__courses_coursetopic:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      name: string
+      parent_id: long
+      created_on: timestamp
+      updated_on: timestamp
+    rows:
+    - id: 1
+      name: Technology
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+    - id: 2
+      name: Data Science
+      parent_id: 1
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+    - id: 3
+      name: Leadership
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+  raw__xpro__app__postgres__courses_platform:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      name: string
+      created_on: timestamp
+      updated_on: timestamp
+      enable_sync: boolean
+    rows:
+    - id: 1
+      name: xPRO
+      enable_sync: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+    - id: 2
+      name: Emeritus
+      enable_sync: true
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2025-08-01 00:00:00
+  raw__xpro__app__postgres__courses_program:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      title: string
+      created_on: timestamp
+      updated_on: timestamp
+      is_external: boolean
+      platform_id: long
+      readable_id: string
+    rows:
+    - id: 1
+      live: true
+      title: Local Fixtures Professional Certificate
+      readable_id: program-v1:xPRO+LFx
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # An external program: its page is an external program page and it has no
+    # course with a run, so its dates are NULL.
+    - id: 2
+      live: true
+      title: External Leadership Program
+      readable_id: program-v1:xPRO+EXTx
+      platform_id: 2
+      is_external: true
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # Its only product is inactive: listed, with no price and published false.
+    - id: 3
+      live: true
+      title: Retired Pricing Program
+      readable_id: program-v1:xPRO+RETx
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+    # Not live, so it must not reach the Learn model.
+    - id: 4
+      live: false
+      title: Unpublished Program
+      readable_id: program-v1:xPRO+UNPUBx
+      platform_id: 1
+      is_external: false
+      created_on: 2025-08-01 00:00:00
+      updated_on: 2026-09-01 00:00:00
+  raw__xpro__app__postgres__django_content_type:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      model: string
+      app_label: string
+    rows:
+    # A product points at a course run or a program through one of these.
+    - id: 10
+      app_label: courses
+      model: courserun
+    - id: 11
+      app_label: courses
+      model: program
+  raw__xpro__app__postgres__ecommerce_product:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      is_active: boolean
+      object_id: long
+      created_on: timestamp
+      is_private: boolean
+      updated_on: timestamp
+      content_type_id: long
+    rows:
+    - id: 1
+      content_type_id: 10
+      object_id: 1
+      is_active: true
+      is_private: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 2
+      content_type_id: 10
+      object_id: 2
+      is_active: true
+      is_private: false
+      created_on: 2024-11-01 00:00:00
+      updated_on: 2024-11-01 00:00:00
+    - id: 3
+      content_type_id: 11
+      object_id: 1
+      is_active: true
+      is_private: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 4
+      content_type_id: 10
+      object_id: 4
+      is_active: true
+      is_private: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 5
+      content_type_id: 11
+      object_id: 2
+      is_active: true
+      is_private: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 6
+      content_type_id: 11
+      object_id: 3
+      is_active: false
+      is_private: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+  raw__xpro__app__postgres__ecommerce_productversion:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      price: double
+      text_id: string
+      created_on: timestamp
+      product_id: long
+      updated_on: timestamp
+      description: string
+      requires_enrollment_code: boolean
+    rows:
+    # Product 1 was repriced: the newer version is its price.
+    - id: 1
+      product_id: 1
+      price: 900.0
+      text_id: course-v1:xPRO+LF1x+R1
+      description: Local Fixtures I
+      requires_enrollment_code: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 2
+      product_id: 1
+      price: 1000.0
+      text_id: course-v1:xPRO+LF1x+R1
+      description: Local Fixtures I
+      requires_enrollment_code: false
+      created_on: 2025-12-01 00:00:00
+      updated_on: 2025-12-01 00:00:00
+    - id: 3
+      product_id: 2
+      price: 800.0
+      text_id: course-v1:xPRO+LF1x+R0
+      description: Local Fixtures I
+      requires_enrollment_code: false
+      created_on: 2024-11-01 00:00:00
+      updated_on: 2024-11-01 00:00:00
+    - id: 4
+      product_id: 3
+      price: 2500.0
+      text_id: program-v1:xPRO+LFx
+      description: Local Fixtures Professional Certificate
+      requires_enrollment_code: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 5
+      product_id: 4
+      price: 1500.0
+      text_id: course-v1:xPRO+EXT1x+R1
+      description: External Leadership Course
+      requires_enrollment_code: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 6
+      product_id: 5
+      price: 3000.0
+      text_id: program-v1:xPRO+EXTx
+      description: External Leadership Program
+      requires_enrollment_code: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+    - id: 7
+      product_id: 6
+      price: 500.0
+      text_id: program-v1:xPRO+RETx
+      description: Retired Pricing Program
+      requires_enrollment_code: false
+      created_on: 2025-11-01 00:00:00
+      updated_on: 2025-11-01 00:00:00
+  raw__xpro__app__postgres__wagtailcore_page:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      live: boolean
+      path: string
+      slug: string
+      depth: long
+      title: string
+      locked: boolean
+      expired: boolean
+      numchild: long
+      owner_id: long
+      url_path: string
+      expire_at: timestamp
+      locale_id: long
+      locked_at: timestamp
+      seo_title: string
+      go_live_at: timestamp
+      alias_of_id: long
+      draft_title: string
+      locked_by_id: long
+      show_in_menus: boolean
+      content_type_id: long
+      translation_key: string
+      live_revision_id: long
+      last_published_at: timestamp
+      first_published_at: timestamp
+      latest_revision_id: long
+      search_description: string
+      has_unpublished_changes: boolean
+      latest_revision_created_at: timestamp
+    rows:
+    # Product pages sit at depth 4. A certificate page or a faculty page is a
+    # child of its product page: the parent's `path` plus four characters.
+    - id: 10
+      path: '0001000100010001'
+      depth: 4
+      numchild: 2
+      title: Local Fixtures I
+      draft_title: Local Fixtures I
+      seo_title: ''
+      search_description: ''
+      slug: local-fixtures-i
+      url_path: /home/courses/local-fixtures-i/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 50
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2026-09-15 12:30:00
+      latest_revision_created_at: 2026-09-15 12:30:00
+    - id: 11
+      path: '00010001000100010001'
+      depth: 5
+      numchild: 0
+      title: Certificate for Local Fixtures I
+      draft_title: Certificate for Local Fixtures I
+      seo_title: ''
+      search_description: ''
+      slug: certificate
+      url_path: /home/courses/local-fixtures-i/certificate/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 52
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+    - id: 12
+      path: '00010001000100010002'
+      depth: 5
+      numchild: 0
+      title: Faculty
+      draft_title: Faculty
+      seo_title: ''
+      search_description: ''
+      slug: faculty
+      url_path: /home/courses/local-fixtures-i/faculty/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 53
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+    # No child pages and never republished: no CEUs, no instructors, and
+    # last_modified falls back to the first publication.
+    - id: 13
+      path: '0001000100010002'
+      depth: 4
+      numchild: 0
+      title: Local Fixtures II
+      draft_title: Local Fixtures II
+      seo_title: ''
+      search_description: ''
+      slug: local-fixtures-ii
+      url_path: /home/courses/local-fixtures-ii/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 50
+      first_published_at: 2025-09-01 00:00:00
+      latest_revision_created_at: 2025-09-01 00:00:00
+    - id: 14
+      path: '0001000100010003'
+      depth: 4
+      numchild: 0
+      title: External Leadership Course
+      draft_title: External Leadership Course
+      seo_title: ''
+      search_description: ''
+      slug: external-leadership-course
+      url_path: /home/courses/external-leadership-course/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 54
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2026-08-01 00:00:00
+    # A draft.
+    - id: 15
+      path: '0001000100010004'
+      depth: 4
+      numchild: 0
+      title: Draft Page Course
+      draft_title: Draft Page Course
+      seo_title: ''
+      search_description: ''
+      slug: draft-page-course
+      url_path: /home/courses/draft-page-course/
+      live: false
+      has_unpublished_changes: true
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 50
+      latest_revision_created_at: 2026-09-01 00:00:00
+    - id: 20
+      path: '0001000100020001'
+      depth: 4
+      numchild: 2
+      title: Local Fixtures Professional Certificate
+      draft_title: Local Fixtures Professional Certificate
+      seo_title: ''
+      search_description: ''
+      slug: local-fixtures-professional-certificate
+      url_path: /home/programs/local-fixtures-professional-certificate/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 51
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2026-09-15 12:30:00
+      latest_revision_created_at: 2026-09-15 12:30:00
+    - id: 21
+      path: '00010001000200010001'
+      depth: 5
+      numchild: 0
+      title: Certificate for Local Fixtures Professional Certificate
+      draft_title: Certificate for Local Fixtures Professional Certificate
+      seo_title: ''
+      search_description: ''
+      slug: certificate
+      url_path: /home/programs/local-fixtures-professional-certificate/certificate/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 52
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+    - id: 22
+      path: '00010001000200010002'
+      depth: 5
+      numchild: 0
+      title: Faculty
+      draft_title: Faculty
+      seo_title: ''
+      search_description: ''
+      slug: faculty
+      url_path: /home/programs/local-fixtures-professional-certificate/faculty/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 53
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+    - id: 23
+      path: '0001000100020002'
+      depth: 4
+      numchild: 0
+      title: External Leadership Program
+      draft_title: External Leadership Program
+      seo_title: ''
+      search_description: ''
+      slug: external-leadership-program
+      url_path: /home/programs/external-leadership-program/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 55
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2026-08-01 00:00:00
+    - id: 24
+      path: '0001000100020003'
+      depth: 4
+      numchild: 0
+      title: Retired Pricing Program
+      draft_title: Retired Pricing Program
+      seo_title: ''
+      search_description: ''
+      slug: retired-pricing-program
+      url_path: /home/programs/retired-pricing-program/
+      live: true
+      has_unpublished_changes: false
+      locked: false
+      expired: false
+      show_in_menus: false
+      content_type_id: 51
+      first_published_at: 2025-09-01 00:00:00
+      last_published_at: 2025-09-01 00:00:00
+  raw__xpro__app__postgres__wagtailimages_image:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      file: string
+      title: string
+      width: long
+      height: long
+      file_hash: string
+      file_size: long
+      created_at: timestamp
+      collection_id: long
+      focal_point_x: long
+      focal_point_y: long
+      focal_point_width: long
+      focal_point_height: long
+      uploaded_by_user_id: long
+      description: string
+    rows:
+    - id: 100
+      title: Local Fixtures I
+      file: original_images/local-fixtures-i.jpg
+      width: 1200
+      height: 675
+      file_size: 20480
+      file_hash: '0000000000000000000000000000000000000100'
+      collection_id: 1
+      created_at: 2025-09-01 00:00:00
+    - id: 101
+      title: Local Fixtures Professional Certificate
+      file: original_images/local-fixtures-professional-certificate.jpg
+      width: 1200
+      height: 675
+      file_size: 20480
+      file_hash: '0000000000000000000000000000000000000101'
+      collection_id: 1
+      created_at: 2025-09-01 00:00:00

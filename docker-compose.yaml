@@ -337,6 +337,10 @@ services:
       VAULT_TOKEN_CACHE_DIR: /vault/token-cache
       VAULT_OIDC_NONINTERACTIVE: "1"
       DAGSTER_ENVIRONMENT: dev
+      # The dev dlt profile writes to the local lake through localhost
+      # port-forwards, which this container cannot reach. ci keeps the parquet
+      # files in the container's /tmp.
+      DLT_PROFILE: ci
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       DAGSTER_PG_USERNAME: postgres

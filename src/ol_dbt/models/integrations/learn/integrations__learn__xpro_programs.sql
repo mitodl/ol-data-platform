@@ -113,7 +113,7 @@ select
     ) as last_modified
     , 'xpro' as etl_source
     , pages.page_description as description
-    , '{{ var("mitxpro_url") }}/programs/' || programs.program_readable_id || '/' as url
+    , {{ dbt.concat(["'" ~ var("mitxpro_url") ~ "/programs/'", "programs.program_readable_id", "'/'"]) }} as url
     , coalesce(pages.page_thumbnail_url, '{{ var("mitxpro_url") }}/static/images/mit-dome.png') as image_url
     , coalesce(program_products.price > 0, false) as published
     , programs.platform_name as platform

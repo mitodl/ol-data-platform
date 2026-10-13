@@ -21,6 +21,7 @@ with ticket_comment as (
             partition by ticket_comment.ticket_id
             order by ticket_comment.comment_created_at, ticket_comment.comment_id
         ) as turn_index
+        , {{ is_appzi_email('ticket_comment.comment_plain_body') }} as is_appzi
     from ticket_comment
     inner join ticket on ticket_comment.ticket_id = ticket.ticket_id
     where
@@ -28,25 +29,41 @@ with ticket_comment as (
         and ticket_comment.comment_author_user_id = ticket.ticket_requester_user_id
         -- Zendesk's own demo content, not feedback anyone gave us.
         and coalesce(ticket_comment.comment_source_channel, '') != 'sample_ticket'
+        and not {{ is_appzi_notice('ticket_comment.comment_plain_body') }}
+)
+
+, parsed_turns as (
+    select
+        requester_turns.*
+        , case
+            when requester_turns.is_appzi
+                then {{ appzi_feedback_text('requester_turns.comment_plain_body') }}
+            else requester_turns.comment_plain_body
+        end as text
+        , case
+            when requester_turns.is_appzi
+                then {{ appzi_page_url('requester_turns.comment_plain_body') }}
+        end as appzi_page_url
+    from requester_turns
 )
 
 select
     'zendesk' as source_slug
-    , requester_turns.comment_created_at as occurred_at
-    , cast(requester_turns.comment_id as varchar) as source_record_ref
-    , requester_turns.comment_plain_body as text
+    , parsed_turns.comment_created_at as occurred_at
+    , cast(parsed_turns.comment_id as varchar) as source_record_ref
+    , parsed_turns.text
     , ticket.ticket_subject as title
-    , cast(requester_turns.ticket_id as varchar) as conversation_ref
-    , requester_turns.turn_index
-    , requester_turns.turn_index = 1 as is_conversation_opening
+    , cast(parsed_turns.ticket_id as varchar) as conversation_ref
+    , parsed_turns.turn_index
+    , parsed_turns.turn_index = 1 as is_conversation_opening
     -- last-resort identity path: Zendesk exposes no openedx user id, only an email
-    , requester_turns.comment_author_email as subject_user_ref
+    , parsed_turns.comment_author_email as subject_user_ref
     , ticket.ticket_api_url as source_url
     -- An unmapped value stays null here but not downstream: generate_surrogate_key
     -- hashes the null, so it surfaces as an orphan feedback_channel_fk that fails the
     -- fact's relationships test. That is the intended loud failure, not a catch-all.
     --
-    , case requester_turns.comment_source_channel
+    , case parsed_turns.comment_source_channel
         when 'email' then 'email'
         when 'web' then 'web_form'
         when 'api' then 'api'
@@ -64,26 +81,24 @@ select
         when ticket.brand_subdomain = 'mitocw' then 'ocw'
         when ticket.brand_subdomain = 'mitx-micromasters' then 'micromasters'
     end as platform
-    -- The Appzi URL decode is not implemented: where Appzi stores the viewed URL is
-    -- unconfirmed, and guessing would populate subject_url with an untrustworthy value
-    , 'unspecified' as subject_type
+    , case when parsed_turns.appzi_page_url is not null then 'page_url' else 'unspecified' end as subject_type
     , cast(null as varchar) as subject_ref
-    , cast(null as varchar) as subject_url
+    , parsed_turns.appzi_page_url as subject_url
     , ticket.ticket_satisfaction_rating_score as explicit_rating
-    , requester_turns.comment_created_at as created_at
+    , parsed_turns.comment_created_at as created_at
     , ticket.ticket_updated_at as updated_at
     -- carried for bridge_feedback_tag to explode; not part of the event contract
     , ticket.ticket_tags
     -- Excludes ticket_satisfaction_rating_comment and custom_fields: both carry free
     -- text with the PII Presidio strips from title/text, and neither is profiled yet
-    , json_object(
-        'ticket_status': ticket.ticket_status
-        , 'ticket_priority': ticket.ticket_priority
-        , 'ticket_due_at': ticket.ticket_due_at
-        , 'brand_name': ticket.brand_name
-        , 'brand_subdomain': ticket.brand_subdomain
-        , 'group_name': ticket.group_name
-        , 'organization_name': ticket.organization_name
-    ) as source_metadata
-from requester_turns
-inner join ticket on requester_turns.ticket_id = ticket.ticket_id
+    , {{ json_object_from_pairs([
+        ['ticket_status', "ticket.ticket_status"]
+        , ['ticket_priority', "ticket.ticket_priority"]
+        , ['ticket_due_at', "ticket.ticket_due_at"]
+        , ['brand_name', "ticket.brand_name"]
+        , ['brand_subdomain', "ticket.brand_subdomain"]
+        , ['group_name', "ticket.group_name"]
+        , ['organization_name', "ticket.organization_name"]
+    ]) }} as source_metadata
+from parsed_turns
+inner join ticket on parsed_turns.ticket_id = ticket.ticket_id

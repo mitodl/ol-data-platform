@@ -17,7 +17,7 @@ with source as (
         , postal_code as user_address_postal_code
         , vat_id as user_vat_id
         , concat_ws(
-            chr(10)
+            {{ codepoint_char(10) }}
             , nullif(street_address_1, '')
             , nullif(street_address_2, '')
             , nullif(street_address_3, '')

@@ -70,7 +70,10 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
-from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
+from lakehouse.lib.dbt_environment import (
+    DBT_AUTOMATION_ENABLED,
+    STARROCKS_IS_LOCAL,
+)
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
@@ -103,9 +106,10 @@ trino_catalog_map = {
 }
 
 # Hosts match the starrocks_qa / starrocks_production target defaults in
-# src/ol_dbt/profiles.yml. dev/ci fall back to the QA FE for schema parity.
+# src/ol_dbt/profiles.yml. ci falls back to the QA FE for schema parity. dev is
+# the local-dev cluster, which Tilt forwards to this port on the host.
 starrocks_host_map = {
-    "dev": "lakehouse.qa.starrocks.ol.mit.edu",
+    "dev": "127.0.0.1",
     "ci": "lakehouse.qa.starrocks.ol.mit.edu",
     "qa": "lakehouse.qa.starrocks.ol.mit.edu",
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
@@ -669,6 +673,7 @@ resources_dict = {
         vault_mount_point=STARROCKS_VAULT_MOUNT,
         host=starrocks_host_map[DAGSTER_ENV],
         database="b2b_analytics",
+        static_username="root" if STARROCKS_IS_LOCAL else None,
     ),
     # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
     "starrocks_dbt": starrocks_dbt_cli,

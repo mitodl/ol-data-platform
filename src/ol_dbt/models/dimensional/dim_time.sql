@@ -30,19 +30,13 @@ select
         when hour % 12 = 0 then 12
         else hour % 12
     end as hour_12
-    , lpad(
-        cast(
-            case
-                when hour % 12 = 0 then 12
-                else hour % 12
-            end as varchar
-        ), 2, '0'
-    )
-    || ':'
-    || lpad(cast(minute as varchar), 2, '0')
-    || ' '
-    || case when hour < 12 then 'AM' else 'PM' end
-    as hour_of_day_label
+    , {{ dbt.concat([
+        "lpad(cast(case when hour % 12 = 0 then 12 else hour % 12 end as varchar), 2, '0')"
+        , "':'"
+        , "lpad(cast(minute as varchar), 2, '0')"
+        , "' '"
+        , "case when hour < 12 then 'AM' else 'PM' end"
+    ]) }} as hour_of_day_label
     , case
         when hour between 0 and 5 then 'Night'
         when hour between 6 and 11 then 'Morning'

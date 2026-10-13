@@ -18,6 +18,7 @@ import yaml
 from ol_dbt_cli.lib.inventory import (
     Unit,
     load_units,
+    local_ingest_sources,
     raw_metadata_column,
     raw_metadata_columns,
     render_dbt_metadata_columns,
@@ -247,7 +248,7 @@ class TestMirrorRules:
 
 
 class TestRules:
-    def test_local_ingest_requires_a_dlt_unit(self, inventory: Path) -> None:
+    def test_local_ingest_requires_a_dlt_source(self, inventory: Path) -> None:
         _mutate(
             inventory,
             "mitxonline__mysql",
@@ -255,9 +256,20 @@ class TestRules:
             strategies={"qa": "ingest", "local": "ingest"},
         )
         report = _run(inventory)
-        assert "not dlt-backed" in _messages(report)
+        assert "names no dlt source" in _messages(report)
 
-    def test_local_ingest_is_rejected_on_a_dagster_unit_too(self, inventory: Path) -> None:
+    def test_local_ingest_is_allowed_on_an_airbyte_unit_with_a_dlt_source(self, inventory: Path) -> None:
+        # `loader` records production. A unit whose dlt source is built but
+        # whose production load is still Airbyte can already ingest locally.
+        unit = copy.deepcopy(APP_UNIT)
+        unit["strategies"] = {"qa": "ingest", "local": "ingest"}
+        unit["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_app", "write_disposition": "replace"}
+        _write(inventory, "mitxonline__mysql", unit)
+        report = _run(inventory)
+        assert report.errors == [], _messages(report)
+        assert local_ingest_sources(load_units(inventory)) == {"mitxonline/mysql": "ol_dlt.sources.mitxonline_app"}
+
+    def test_local_ingest_is_rejected_on_a_dagster_unit(self, inventory: Path) -> None:
         # dlt is the only supported local ingest target. Adding `dagster`
         # (rule 7) did not add a second one, so reading the rule as "bans
         # Airbyte" would let a unit declare a local path nothing implements.
@@ -279,7 +291,7 @@ class TestRules:
         ]
         _write(inventory, "openedx__s3", unit)
         report = _run(inventory)
-        assert "not dlt-backed" in _messages(report)
+        assert "names no dlt source" in _messages(report)
 
     def test_mirror_requires_max_age(self, inventory: Path) -> None:
         _mutate(
@@ -388,14 +400,18 @@ class TestRules:
         assert report.errors == [], _messages(report)
 
     def test_loader_block_must_match_loader(self, inventory: Path) -> None:
-        unit = copy.deepcopy(APP_UNIT)
-        unit["dlt"] = {
-            "source_module": "ol_dlt.sources.edxorg_s3",
-            "write_disposition": "merge",
-        }
-        _write(inventory, "mitxonline__mysql", unit)
+        unit = copy.deepcopy(DLT_UNIT)
+        unit["airbyte"] = copy.deepcopy(APP_UNIT["airbyte"])
+        _write(inventory, "edxorg__s3", unit)
         report = _run(inventory)
-        assert "`dlt:` is present but loader is 'airbyte'" in _messages(report)
+        assert "`airbyte:` is present but loader is 'dlt'" in _messages(report)
+
+    def test_dlt_block_is_rejected_on_a_dagster_unit(self, inventory: Path) -> None:
+        unit = copy.deepcopy(DLT_UNIT)
+        unit["loader"] = "dagster"
+        _write(inventory, "edxorg__s3", unit)
+        report = _run(inventory)
+        assert "`dlt:` is present but loader is 'dagster'" in _messages(report)
 
     def test_table_carried_by_no_connection_is_rejected(self, inventory: Path) -> None:
         unit = copy.deepcopy(APP_UNIT)

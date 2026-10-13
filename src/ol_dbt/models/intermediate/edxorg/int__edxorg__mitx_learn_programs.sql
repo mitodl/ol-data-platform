@@ -38,8 +38,8 @@ with programs as (
         program_status = 'active'
         and lower(program_type) not like '%micromasters%'
         and (
-            '|' || replace(program_organization, ', ', '|') || '|' like '%|MITx|%'
-            or '|' || replace(program_organization, ', ', '|') || '|' like '%|MITx\_PRO|%' escape '\'
+            strpos({{ dbt.concat(["'|'", "replace(program_organization, ', ', '|')", "'|'"]) }}, '|MITx|') > 0
+            or strpos({{ dbt.concat(["'|'", "replace(program_organization, ', ', '|')", "'|'"]) }}, '|MITx_PRO|') > 0
         )
         and not (
             lower(trim(program_title)) like '%[delete]%'
@@ -82,7 +82,7 @@ with programs as (
                 partition by program_uuid, course_key order by run_start_on asc, run_key asc
             ) as run_rank
         from searchable_published_runs
-    )
+    ) as ranked_runs
     where run_rank = 1
 )
 
@@ -136,7 +136,8 @@ with programs as (
         program_uuid
         , case
             when bool_or(course_availability = 'dated') then 'dated'
-            when bool_and(coalesce(course_availability = 'anytime', false)) then 'anytime'
+            -- every course is anytime; written with bool_or because StarRocks has no bool_and
+            when not bool_or(not coalesce(course_availability = 'anytime', false)) then 'anytime'
         end as availability
     from course_attributes
     group by program_uuid

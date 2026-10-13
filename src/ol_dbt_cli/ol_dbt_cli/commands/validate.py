@@ -57,6 +57,7 @@ from ol_dbt_cli.lib.metric_registry import (
     check_metric_registry,
     load_metrics,
 )
+from ol_dbt_cli.lib.pipe_concat import PIPE_CONCAT_CHECK, check_pipe_concat
 from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
 from ol_dbt_cli.lib.qa_contract import (
     QA_CONTRACT_CHECK,
@@ -1018,7 +1019,7 @@ def validate(
             help=(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
-                "dimensional_layering, qa_branch_contract, data_contract, metric_registry."
+                "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat."
             ),
         ),
     ] = None,
@@ -1030,7 +1031,7 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry. "
+                "data_contract, metric_registry, pipe_concat. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1142,7 +1143,7 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs eleven checks:
+    Runs thirteen checks:
 
     1. yaml_sql_sync         — columns in YAML match columns in SQL SELECT output
     2. upstream_refs         — warns when an upstream ref()'s column list is unresolvable
@@ -1166,6 +1167,8 @@ def validate(
     12. metric_registry      — every metric in <repo>/metrics/ has a conventional, unique name,
                                sets only fields and enum values OpenMetadata accepts, and names
                                columns its implemented_by models still declare and select
+    13. pipe_concat          — no model, macro, test or YAML expression uses the || operator,
+                               which StarRocks evaluates as a logical OR (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1234,6 +1237,7 @@ def validate(
         QA_CONTRACT_CHECK,
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
+        PIPE_CONCAT_CHECK,
     }
     # Run once over the whole project whatever --model / --changed-only selects.
     global_checks = {
@@ -1242,6 +1246,7 @@ def validate(
         QA_CONTRACT_CHECK,
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
+        PIPE_CONCAT_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1567,6 +1572,11 @@ def validate(
     if METRIC_REGISTRY_CHECK not in skipped:
         metrics_dir = Path(metrics_dir_path).resolve() if metrics_dir_path else dbt_dir.parents[1] / DEFAULT_METRICS_DIR
         check_metric_registry(load_metrics(metrics_dir), yaml_registry, sql_models_by_name, report)
+
+    # Global because the operator is as wrong in a macro or a YAML expression as
+    # in a model, and --changed-only selects neither.
+    if PIPE_CONCAT_CHECK not in skipped:
+        check_pipe_concat(dbt_dir, report)
 
     # Output
     if output_format == "json":

@@ -34,7 +34,7 @@ select
     , videos.video_id                                        as youtube_id
     , videos.video_title                                     as title
     , videos.video_description                               as description_raw
-    , 'https://www.youtube.com/watch?v=' || videos.video_id  as url
+    , {{ dbt.concat(["'https://www.youtube.com/watch?v='", "videos.video_id"]) }} as url
     , videos.video_image_url                                 as image_url
     , {{ cast_timestamp_to_iso8601('videos.video_published_at') }} as last_modified
     , videos.video_duration                                  as duration

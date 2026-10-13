@@ -7,7 +7,8 @@ layer: app_postgres
 scope: scoped
 strategies:
   qa: ingest
-  local: fixture
+  # local-dev always runs Keycloak, so the source has a database to read.
+  local: ingest
 loader: dlt
 table_prefix: raw__keycloak__app__postgres__
 dlt:

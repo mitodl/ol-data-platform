@@ -45,14 +45,16 @@ select
     , coalesce(sitemetadata.sitemetadata_course_year, websites.metadata_course_year) as course_year
     , websitecontents.websitecontent_created_on as page_created_on
     , websitecontents.websitecontent_updated_on as page_updated_on
-    , websites.website_live_url || '/pages/' || websitecontents.websitecontent_filename as page_live_url
-    , 'https://ocw-studio.odl.mit.edu/sites/'
-    || websites.website_name
-    || '/type/'
-    || websitecontents.websitecontent_type
-    || '/edit/'
-    || websitecontents.websitecontent_text_id
-    || '/' as studio_url
+    , {{ dbt.concat(["websites.website_live_url", "'/pages/'", "websitecontents.websitecontent_filename"]) }} as page_live_url
+    , {{ dbt.concat([
+        "'https://ocw-studio.odl.mit.edu/sites/'"
+        , "websites.website_name"
+        , "'/type/'"
+        , "websitecontents.websitecontent_type"
+        , "'/edit/'"
+        , "websitecontents.websitecontent_text_id"
+        , "'/'"
+    ]) }} as studio_url
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid

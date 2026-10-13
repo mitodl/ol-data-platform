@@ -95,7 +95,7 @@ with current_courses as (
                     , courserun_readable_id asc
             ) as best_run_rank
         from ranked_runs
-    )
+    ) as ranked_best_runs
     where best_run_rank = 1
 )
 

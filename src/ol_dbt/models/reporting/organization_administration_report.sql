@@ -88,7 +88,7 @@ with enrollment_detail as (
         users.email as user_email
         , cast(chatbot_events.event_timestamp as date) as activity_date
         , chatbot_events.courserun_readable_id
-        , count(distinct chatbot_events.session_id || chatbot_events.block_id) as chatbot_used_count
+        , count(distinct {{ dbt.concat(["chatbot_events.session_id", "chatbot_events.block_id"]) }}) as chatbot_used_count
     from chatbot_events
     inner join users
         on chatbot_events.user_fk = users.user_pk
