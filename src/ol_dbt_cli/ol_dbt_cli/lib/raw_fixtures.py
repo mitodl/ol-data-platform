@@ -43,7 +43,7 @@ import math
 import re
 import struct
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Context, Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -379,6 +379,33 @@ def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
         # The connector writes an aware datetime's wall clock and drops its offset.
         return moment.replace(tzinfo=None)
     return value
+
+
+def coerce_value(value: Any, fixture_type: str) -> Any:
+    """Return a generated ``value`` as a column of ``fixture_type`` holds it.
+
+    A hand-written value is what YAML made of it. A generated one is whatever
+    its provider returned, so it is brought to the column's type here: a
+    ``decimal(p,s)`` is rounded to ``s`` places, an aware ``timestamp`` is moved
+    to UTC and loses its offset, and anything in a ``string`` column but a
+    mapping or a list (which the loader writes as JSON) becomes its ``str``.
+
+    :param value: The generated value, not ``None``.
+    :param fixture_type: The column's type in the fixture file.
+    :returns: The value to insert.
+    :raises ValueError: If the column cannot hold the value. Also
+        ``TypeError``, ``ArithmeticError`` or ``struct.error``, depending on
+        the type.
+    """
+    if fixture_type == "string":
+        return value if isinstance(value, (str, dict, list)) else str(value)
+    if match := _DECIMAL.match(fixture_type):
+        precision, scale = int(match.group(1)), int(match.group(2))
+        # Raises InvalidOperation when the rounded value has more than `precision` digits.
+        value = Decimal(str(value)).quantize(Decimal(1).scaleb(-scale), context=Context(prec=precision))
+    elif fixture_type == "timestamp" and isinstance(value, datetime.datetime) and value.tzinfo is not None:
+        value = value.astimezone(datetime.UTC)
+    return _stored_value(value, fixture_type)
 
 
 def _quote(identifier: str) -> str:

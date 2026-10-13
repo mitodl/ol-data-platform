@@ -29,13 +29,20 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
     one-to-one pairing and tree placement are ordinary Python in this function.
     A column a row leaves out is NULL, as in a hand-written row.
 
-Each factory names the table it fills and how many rows it makes at scale 1 in
-two class attributes, ``raw_table`` and ``default_count``. Default counts are
-tens of rows per table, enough for the dbt tests to have something to fail on.
-Volume comes from ``scale`` and nowhere else.
+Each factory is a :class:`ol_dbt_cli.lib.fixture_generation.RowFactory` that
+names the table it fills and how many rows it makes at scale 1 with
+``@table(raw_table, default_count=...)``, which sets them as the class
+attributes ``raw_table`` and ``default_count``. They cannot be written in the
+class body: factory_boy would read them as columns. Default counts are tens of
+rows per table, enough for the dbt tests to have something to fail on. Volume
+comes from ``scale`` and nowhere else.
 
-:func:`ol_dbt_cli.lib.raw_fixtures.validate_generated` checks what ``generate``
-returns against the fixture file's columns and the inventory unit's primary
-keys. Foreign keys are declared in neither, so a unit checks its own references
-in its tests.
+:mod:`ol_dbt_cli.lib.fixture_generation` holds what the packages share (seeded
+values, parent columns, per-table sequences, the draws ``generate`` wires
+tables with) and :func:`~ol_dbt_cli.lib.fixture_generation.generate_rows`,
+which runs a package. It brings every value to its column's fixture type, fills
+the loader's columns, and has
+:func:`ol_dbt_cli.lib.raw_fixtures.validate_generated` check the rows against
+the fixture file's columns and the inventory unit's primary keys. Foreign keys
+are declared in neither, so a unit checks its own references in its tests.
 """
