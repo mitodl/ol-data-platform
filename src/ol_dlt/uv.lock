@@ -812,6 +812,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "pyiceberg", extra = ["glue"] },
     { name = "requests" },
+    { name = "sqlglot" },
     { name = "youtube-transcript-api" },
 ]
 
@@ -832,6 +833,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pyiceberg", extras = ["glue"], specifier = ">=0.9" },
     { name = "requests", specifier = ">=2.32" },
+    { name = "sqlglot", specifier = "<30.22" },
     { name = "youtube-transcript-api", specifier = ">=1.0,<2" },
 ]
 
