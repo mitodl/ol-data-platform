@@ -155,12 +155,72 @@ def test_load_fixtures_reads_a_valid_file(tmp_path: Path) -> None:
         (_fixture({}, []), "fixture", "has no columns"),
         (_fixture({"id": "long"}, []), "omit", "strategies.local: omit, which takes no fixture"),
         ({"schema_version": 2, "tables": {}}, "fixture", "schema_version 2"),
+        (
+            _fixture({"id": "long", "n": "long"}, [{"id": 1}, {"id": 2, "n": "one"}]),
+            "fixture",
+            "things row 2 has 'one' in column n, which is not a long",
+        ),
+        (
+            _fixture({"id": "long", "n": "int"}, [{"id": 1, "n": 2**31}]),
+            "fixture",
+            "row 1 has 2147483648 in column n, which is not a int",
+        ),
+        (
+            _fixture({"id": "long", "n": "decimal(5,2)"}, [{"id": 1, "n": 1.234}]),
+            "fixture",
+            r"row 1 has 1.234 in column n, which is not a decimal\(5,2\)",
+        ),
+        (
+            _fixture({"id": "long", "at": "timestamp"}, [{"id": 1, "at": "yesterday"}]),
+            "fixture",
+            "row 1 has 'yesterday' in column at, which is not a timestamp",
+        ),
+        (
+            _fixture({"id": "long"}, [{"id": 1}, {"id": 2}, {"id": "1"}]),
+            "fixture",
+            "things row 3 repeats the primary key of row 1, id='1'",
+        ),
     ],
 )
 def test_load_fixtures_rejects(tmp_path: Path, fixture: dict[str, Any], local: str, message: str) -> None:
     inventory_dir = _inventory(tmp_path, fixture, local=local)
 
     with pytest.raises(ValueError, match=message):
+        load_fixtures(inventory_dir, load_units(inventory_dir))
+
+
+@pytest.mark.parametrize(
+    ("rows", "table"),
+    [
+        # A row that leaves its key out is NULL there, as in any other column.
+        ([{"name": "a"}, {"name": "a"}, {"id": None, "name": "a"}], {}),
+        ([{"id": 1}, {"id": 1}], {"primary_key": []}),
+        ([{"id": 1, "name": "a"}, {"id": 1, "name": "b"}], {"primary_key": [["id"], ["name"]]}),
+        ([{"id": 1}, {"id": 1, "name": "a"}], {"primary_key": [["id"], ["name"]]}),
+        # An append table holds every version of a row.
+        ([{"id": 1, "name": "a"}, {"id": 1, "name": "b"}], {"sync_mode": "incremental_append"}),
+        # Keys a fixture row cannot hold, which `validate_generated` reports.
+        ([{"id": 1}, {"id": 1}], {"primary_key": [["id", "nested"]]}),
+        ([{"id": 1}, {"id": 1}], {"primary_key": [["id"], ["undeclared"]]}),
+    ],
+)
+def test_hand_written_rows_that_are_not_compared_by_key(
+    tmp_path: Path, rows: list[dict[str, Any]], table: dict[str, Any]
+) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, rows))
+    (unit,) = load_units(inventory_dir)
+    unit.tables[0].update(table)
+
+    (loaded,) = load_fixtures(inventory_dir, [unit])
+
+    assert loaded.tables[0].rows == rows
+
+
+def test_a_hand_written_compound_key_is_compared_whole(tmp_path: Path) -> None:
+    rows = [{"id": 1, "name": "a"}, {"id": 2, "name": "a"}, {"id": 1, "name": "a"}]
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, rows), primary_key=("id", "name"))
+
+    with pytest.raises(ValueError, match="row 3 repeats the primary key of row 1, id=1, name='a'"):
         load_fixtures(inventory_dir, load_units(inventory_dir))
 
 
