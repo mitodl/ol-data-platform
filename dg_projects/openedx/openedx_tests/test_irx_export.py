@@ -487,6 +487,33 @@ def test_read_data_files_reports_a_data_file_dropped_before_it_is_opened(
         next(batches)
 
 
+def test_read_data_files_reports_manifests_dropped_before_planning(tmp_path) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    batches = read_data_files(table, table.current_snapshot().snapshot_id)
+    next(batches)
+    for manifest in tmp_path.rglob("*.avro"):
+        manifest.unlink()
+
+    with pytest.raises(SourceTableReplacedError):
+        next(batches)
+
+
+def test_read_data_files_raises_other_planning_errors_as_they_are(
+    tmp_path, monkeypatch
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    scan = table.scan()
+    monkeypatch.setattr(table, "scan", lambda **_kwargs: scan)
+    monkeypatch.setattr(
+        type(scan), "plan_files", lambda _self: (_ for _ in ()).throw(PermissionError)
+    )
+    batches = read_data_files(table, table.current_snapshot().snapshot_id)
+    next(batches)
+
+    with pytest.raises(PermissionError):
+        next(batches)
+
+
 class _DroppedMidRead:
     """An input file whose object is deleted after its first batch is decoded."""
 

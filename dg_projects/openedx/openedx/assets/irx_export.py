@@ -326,7 +326,13 @@ def read_data_files(
     scan = table.scan(snapshot_id=snapshot_id, selected_fields=tuple(columns))
     schema = schema_to_pyarrow(scan.projection())
     yield cast("pl.DataFrame", pl.from_arrow(schema.empty_table()))
-    for task in scan.plan_files():
+    try:
+        # Planning reads the snapshot's manifest list and manifests, which a
+        # dbt rebuild drops along with the data files.
+        tasks = list(scan.plan_files())
+    except FileNotFoundError as error:
+        raise SourceTableReplacedError(str(error)) from error
+    for task in tasks:
         # Reading the Parquet file directly skips what ArrowScan would apply.
         # The irx tables are rebuilt whole by dbt, so they never carry deletes.
         if task.delete_files:
