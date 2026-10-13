@@ -345,9 +345,19 @@ def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
     if match := _DECIMAL.match(fixture_type):
         precision, scale = int(match.group(1)), int(match.group(2))
         exact = Decimal(str(value))
-        # A value with more digits than the column has is rejected, not rounded
-        # as the engine might round it.
-        if exact != exact.quantize(Decimal(1).scaleb(-scale)) or exact.adjusted() >= precision - scale:
+        if not exact.is_finite():
+            raise ValueError(exact)
+        # In integers, because Decimal arithmetic rounds to the context's 28
+        # digits and a decimal(38,9) has more. A value with more digits than
+        # the column has is rejected, not rounded as the engine might round it.
+        _, digits, exponent = exact.as_tuple()
+        unscaled, shift = int("".join(map(str, digits))), int(exponent) + scale
+        dropped = 0
+        if shift >= 0:
+            unscaled *= 10**shift
+        else:
+            unscaled, dropped = divmod(unscaled, 10**-shift)
+        if dropped or unscaled >= 10**precision:
             raise OverflowError(exact)
         return exact
     if fixture_type == "boolean":

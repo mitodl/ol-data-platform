@@ -289,6 +289,9 @@ def test_validate_generated_compares_keys_as_the_column_holds_them(
         ("float", 1e39),
         ("decimal(5,2)", "1.234"),
         ("decimal(5,2)", 1000),
+        ("decimal(5,2)", "NaN"),
+        ("decimal(38,9)", "1" + "0" * 29),
+        ("decimal(3,3)", 1),
         ("boolean", "true"),
         ("boolean", 2),
         ("date", "yesterday"),
@@ -305,7 +308,16 @@ def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path,
 
 @pytest.mark.parametrize(
     ("fixture_type", "value"),
-    [("int", 2**31 - 1), ("long", -(2**63)), ("decimal(5,2)", "999.99"), ("decimal(5,2)", -0.5), ("boolean", False)],
+    [
+        ("int", 2**31 - 1),
+        ("long", -(2**63)),
+        ("decimal(5,2)", "999.99"),
+        ("decimal(5,2)", -0.5),
+        ("decimal(5,2)", "1.500"),
+        ("decimal(38,9)", "9" * 29 + ".123456789"),
+        ("decimal(3,3)", 0),
+        ("boolean", False),
+    ],
 )
 def test_validate_generated_accepts_a_key_at_the_edge_of_its_column(
     tmp_path: Path, fixture_type: str, value: Any
