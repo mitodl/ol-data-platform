@@ -11,7 +11,7 @@ classifiers = [
 ]
 dependencies = [
     "boto3>=1.42.42",
-    "cyclopts~=5.1.1",
+    "cyclopts~=5.2.0",
     "dbt-duckdb>=1.10.0",
     "httpx>=0.28",
     "hvac[parser]>=2.0.0,<3",
