@@ -298,6 +298,9 @@ def test_validate_generated_compares_keys_as_the_column_holds_them(
         ("boolean", "true"),
         ("boolean", 2),
         ("date", "yesterday"),
+        ("date", 20260101),
+        ("date", [2026, 1, 1]),
+        ("timestamp", 1767225600),
     ],
 )
 def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path, fixture_type: str, value: Any) -> None:

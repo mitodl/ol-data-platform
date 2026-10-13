@@ -369,6 +369,8 @@ def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
         return str(value)
     if fixture_type == "date":
         day = datetime.date.fromisoformat(value) if isinstance(value, str) else value
+        if not isinstance(day, datetime.date):
+            raise TypeError(day)
         return day.date() if isinstance(day, datetime.datetime) else day
     if fixture_type == "timestamp":
         moment = datetime.datetime.fromisoformat(value) if isinstance(value, str) else value
