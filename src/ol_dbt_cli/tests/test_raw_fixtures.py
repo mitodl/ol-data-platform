@@ -250,6 +250,11 @@ def test_validate_generated_compares_every_column_of_a_compound_key(tmp_path: Pa
         ("decimal(10,2)", "1.50", 1.5),
         ("date", datetime.date(2026, 1, 1), "2026-01-01"),
         ("timestamp", datetime.datetime(2026, 1, 1, 12), "2026-01-01 12:00:00"),  # noqa: DTZ001
+        ("timestamp", datetime.datetime(2026, 1, 1, 12), datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.UTC)),  # noqa: DTZ001
+        ("timestamp", datetime.datetime(2026, 1, 1), datetime.date(2026, 1, 1)),  # noqa: DTZ001
+        ("date", datetime.date(2026, 1, 1), datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.UTC)),
+        ("float", 0.1, 0.10000000001),
+        ("boolean", True, 1),
     ],
 )
 def test_validate_generated_compares_keys_as_the_column_holds_them(
@@ -261,6 +266,43 @@ def test_validate_generated_compares_keys_as_the_column_holds_them(
 
     with pytest.raises(ValueError, match="generated row 1 repeats primary key"):
         validate_generated(fixture, unit, {RAW_TABLE: [{"id": generated}]})
+
+
+@pytest.mark.parametrize(
+    ("fixture_type", "value"),
+    [
+        ("int", 2**31),
+        ("long", -(2**63) - 1),
+        ("long", 1.5),
+        ("float", 1e39),
+        ("decimal(5,2)", "1.234"),
+        ("decimal(5,2)", 1000),
+        ("boolean", "true"),
+        ("boolean", 2),
+        ("date", "yesterday"),
+    ],
+)
+def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path, fixture_type: str, value: Any) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": fixture_type}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match="generated row 1 has .* in primary key column id, which is not a"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
+
+
+@pytest.mark.parametrize(
+    ("fixture_type", "value"),
+    [("int", 2**31 - 1), ("long", -(2**63)), ("decimal(5,2)", "999.99"), ("decimal(5,2)", -0.5), ("boolean", False)],
+)
+def test_validate_generated_accepts_a_key_at_the_edge_of_its_column(
+    tmp_path: Path, fixture_type: str, value: Any
+) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": fixture_type}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
 
 
 def test_validate_generated_rejects_a_nested_primary_key_path(tmp_path: Path) -> None:

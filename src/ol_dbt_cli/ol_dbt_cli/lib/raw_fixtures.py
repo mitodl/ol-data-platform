@@ -39,7 +39,9 @@ from __future__ import annotations
 import datetime
 import importlib
 import json
+import math
 import re
+import struct
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -78,6 +80,7 @@ STARROCKS_TYPES: dict[str, str] = {
     "string": "STRING",
 }
 _DECIMAL = re.compile(r"^decimal\((\d+),\s*(\d+)\)$")
+_INTEGER_BITS = {"int": 32, "long": 64}
 
 # Hive type names as Glue reports them for an Iceberg table.
 _GLUE_TYPES: dict[str, str] = {
@@ -310,25 +313,52 @@ def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[
         value, fixture_type = row.get(column), table.columns[column]
         try:
             key.append(None if value is None else _stored_value(value, fixture_type))
-        except (ValueError, TypeError, ArithmeticError) as error:
+        except (ValueError, TypeError, ArithmeticError, struct.error) as error:
             msg = f"{label} has {value!r} in primary key column {column}, which is not a {fixture_type}"
             raise ValueError(msg) from error
     return tuple(key)
 
 
-def _stored_value(value: Any, fixture_type: str) -> Any:
-    if fixture_type in {"int", "long"}:
-        return int(value)
-    if fixture_type in {"float", "double"}:
+def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
+    if fixture_type in _INTEGER_BITS:
+        if isinstance(value, float) and not value.is_integer():
+            raise ValueError(value)
+        number = int(value)
+        limit = 2 ** (_INTEGER_BITS[fixture_type] - 1)
+        if not -limit <= number < limit:
+            raise OverflowError(number)
+        return number
+    if fixture_type == "float":
+        # Through single precision, so two doubles that share a FLOAT are one key.
+        single = struct.unpack("f", struct.pack("f", float(value)))[0]
+        if math.isinf(single) and not math.isinf(float(value)):
+            raise OverflowError(value)
+        return single
+    if fixture_type == "double":
         return float(value)
-    if _DECIMAL.match(fixture_type):
-        return Decimal(str(value))
+    if match := _DECIMAL.match(fixture_type):
+        precision, scale = int(match.group(1)), int(match.group(2))
+        exact = Decimal(str(value))
+        # A value with more digits than the column has is rejected, not rounded
+        # as the engine might round it.
+        if exact != exact.quantize(Decimal(1).scaleb(-scale)) or exact.adjusted() >= precision - scale:
+            raise OverflowError(exact)
+        return exact
+    if fixture_type == "boolean":
+        if value not in (0, 1):
+            raise ValueError(value)
+        return bool(value)
     if fixture_type == "string":
         return str(value)
-    if fixture_type == "date" and isinstance(value, str):
-        return datetime.date.fromisoformat(value)
-    if fixture_type == "timestamp" and isinstance(value, str):
-        return datetime.datetime.fromisoformat(value)
+    if fixture_type == "date":
+        day = datetime.date.fromisoformat(value) if isinstance(value, str) else value
+        return day.date() if isinstance(day, datetime.datetime) else day
+    if fixture_type == "timestamp":
+        moment = datetime.datetime.fromisoformat(value) if isinstance(value, str) else value
+        if not isinstance(moment, datetime.datetime):
+            moment = datetime.datetime.combine(moment, datetime.time())
+        # The connector writes an aware datetime's wall clock and drops its offset.
+        return moment.replace(tzinfo=None)
     return value
 
 
